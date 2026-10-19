@@ -15,7 +15,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The MENU arm of [tvDpadKeyConfig] (issue #174: "none of Up, Down, Left,
+ * The MENU arm of [tvDpadKeyConfig] (the TV-key gap: "none of Up, Down, Left,
  * Right, OK **or Menu** brings them back"): the first press summons the
  * controls and consumes the key; repeats, KeyUp and an already-visible
  * overlay stay unconsumed. MENU has no bindable control, so the arm carries

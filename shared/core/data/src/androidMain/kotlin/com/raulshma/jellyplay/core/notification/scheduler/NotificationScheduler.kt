@@ -36,7 +36,7 @@ class NotificationScheduler(
     }
 
     /**
-     * D12's *arr air-time accelerator: one deferred one-shot series check at
+     * The *arr air-time accelerator: one deferred one-shot series check at
      * [initialDelay] = airTime + buffer, keyed idempotently per
      * (series, episode) — a re-schedule of the same name is a KEEP no-op, so
      * the poller can re-run the accelerator pass every cycle without stacking

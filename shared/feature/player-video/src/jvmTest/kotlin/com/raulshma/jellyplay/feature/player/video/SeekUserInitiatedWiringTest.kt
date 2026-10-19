@@ -5,7 +5,7 @@ import kotlin.test.Test
 import java.io.File
 
 /**
- * Wiring ratchet for the skip-on-forward-seek gate: the clamp must
+ * Wiring guard for the skip-on-forward-seek gate: the clamp must
  * apply ONLY to user-initiated seeks. This pins the wiring at the source
  * (the [ControllerOwnershipTest] precedent). The seek funnel moved from the
  * ViewModel onto the session's router — the local arm body is
@@ -15,7 +15,7 @@ import java.io.File
  * segment-skip dispatch arms (skipSegment / autoSkipSegment /
  * dispatchSegmentSkip / executeSegmentSkip) were extracted into
  * SegmentDispatchController and have since been folded back into the VM
- * (the pure decision halves stay in SegmentSkipPolicy.kt), so the ratchet is
+ * (the pure decision halves stay in SegmentSkipPolicy.kt), so the guard is
  * pinned across the three sources:
  *
  *  1. the router's `seekLocal` carries the `userInitiated: Boolean`

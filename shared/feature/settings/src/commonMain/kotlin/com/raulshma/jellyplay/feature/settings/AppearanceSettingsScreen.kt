@@ -310,9 +310,7 @@ fun AppearanceSettingsScreen(
                 // Derived from the fused declarations (hiddenRowsFor): the
                 // theme group's advanced rows (the NotTv-forked layout row
                 // included off-TV) plus both performance/eye-care rows and
-                // the newsletter trio. The retired hand literal (14,
-                // "eight theme rows plus two per advanced group") under-
-                // counted from the day the third newsletter row landed.
+                // the newsletter trio.
                 HiddenSettingsHint(
                     hiddenCount = hiddenRowsFor(
                         appearanceScreenGroups,

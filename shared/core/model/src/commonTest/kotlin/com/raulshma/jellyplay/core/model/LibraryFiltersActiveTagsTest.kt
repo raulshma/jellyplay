@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
  * the shared active-filter bar (library + search screens). Companion to
  * [LibraryFiltersAlgebraTest]: that pins the WRITE algebra, this pins the
  * enumeration + per-tag clear semantics (the exact `copy(... minus x)` the
- * screens' hand-rolled dismiss lambdas used to perform).
+ * screens' dismiss lambdas perform).
  */
 class LibraryFiltersActiveTagsTest {
 

@@ -6,7 +6,7 @@ import kotlin.math.roundToInt
 
 /**
  * The phone shell's chrome-clearance placement fold — the bare dp numbers
- * PhoneContent's inline placement forks used to carry, named as one
+ * behind the floating chrome placement forks, named as one
  * declaration: which floating chrome element sits how far above the system
  * navigation bar in which layout (pure `element × layout → offset` dp math;
  * callers add the `systemNavBarBottom`/`statusBarTop` insets they already
@@ -54,11 +54,10 @@ internal fun shellChromeBottomClearance(
 }
 
 /**
- * The compact mini player's scroll-coupled vertical offset, px math exactly
- * as PhoneContent's offset block folded it: rise with the hiding floating
- * nav bar (the hide offset runs NEGATIVE — it animates toward
- * `-2 × navHeight` fully hidden), but never travel further than the bar's
- * own height. The expanded-width mini player does not move — no floating
+ * The compact mini player's scroll-coupled vertical offset, px math: rise
+ * with the hiding floating nav bar (the hide offset runs NEGATIVE — it
+ * animates toward `-2 × navHeight` fully hidden), but never travel further
+ * than the bar's own height. The expanded-width mini player does not move — no floating
  * bar exists to follow.
  *
  * @param bottomNavHideOffsetPx the live hide-on-scroll offset
@@ -74,9 +73,8 @@ internal fun miniPlayerNavCoupledOffsetYpx(
 
 /**
  * The floating nav bar's scroll-coupled vertical offset: the negated
- * hide-on-scroll offset, folded exactly as PhoneContent's nav-bar modifier
- * did (`-offset.roundToInt()` — the negation OUTSIDE the rounding, matching
- * the former expression bit for bit).
+ * hide-on-scroll offset, with the negation OUTSIDE the rounding
+ * (`-offset.roundToInt()`).
  */
 internal fun floatingNavBarOffsetYpx(bottomNavHideOffsetPx: Float): Int =
     -bottomNavHideOffsetPx.roundToInt()

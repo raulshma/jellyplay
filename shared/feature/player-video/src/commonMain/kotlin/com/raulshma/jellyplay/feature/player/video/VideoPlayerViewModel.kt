@@ -135,7 +135,7 @@ class VideoPlayerViewModel(
      */
     videoQueue: VideoQueueController? = null,
     /**
-     * D14 "Play (with pre-rolls)": the process-wide one-shot Cinema Mode
+     * "Play (with pre-rolls)": the process-wide one-shot Cinema Mode
      * override the detail screen arms; forwarded to the session, whose
      * user-open funnel consumes it into the load request. Nullable like
      * [videoQueue] so test graphs that don't wire it keep compiling.

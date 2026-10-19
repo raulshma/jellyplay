@@ -261,12 +261,11 @@ class PluginsViewModel(
      * The installation-progress poll, registered once and bound to screen
      * visibility by [startInstallationPolling]/[stopInstallationPolling]
      * (the LogsViewModel/JellyPlayTranscodesViewModel shape — the
-     * hand-rolled `collectLatest { while (active) { delay(5000); fetch } }`
-     * loop this VM used to start in init for its whole lifetime, back stack
-     * included, is the refresh-cycle module's exact prior shape). The gate is
-     * "installations are active": a closed round fetches nothing. The fetch
-     * arm stays the fire-and-forget [fetchActiveInstallations] launch, so a
-     * thrown fetch still cannot kill the loop — the old loop's kept-behavior.
+     * refresh-cycle module's gate/poll/fetch split, not a hand-rolled
+     * `collectLatest { while (active) { delay(5000); fetch } }` loop). The
+     * gate is "installations are active": a closed round fetches nothing. The
+     * fetch arm stays the fire-and-forget [fetchActiveInstallations] launch,
+     * so a thrown fetch cannot kill the loop.
      */
     private val installationPollCycle = RefreshCycle(
         scope = scope,

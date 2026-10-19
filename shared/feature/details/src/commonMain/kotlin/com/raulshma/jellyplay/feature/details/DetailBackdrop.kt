@@ -71,7 +71,7 @@ internal fun DetailBackdrop(
     localBackdropPath: String? = null,
     coverHero: BookCoverHero = BookCoverHero.NONE,
     /**
-     * D22: the resolved server ThemeVideo stream URL (the `themeVideo`
+     * The resolved server ThemeVideo stream URL (the `themeVideo`
      * enrichment's write; null = none resolved). When present — and the
      * platform can render ambient video — it is preferred OVER the YouTube
      * embed (the muted ExoPlayer surface degrades to the static backdrop on
@@ -79,7 +79,7 @@ internal fun DetailBackdrop(
      */
     themeVideoStreamUrl: String? = null,
     /**
-     * D22: the play-target focus port (DetailContent provides the instance
+     * The play-target focus port (DetailContent provides the instance
      * the Play button writes). Null = no gating wired — the non-gated
      * posture, so a call site that never heard of the port keeps today's
      * immediate mount.
@@ -95,7 +95,7 @@ internal fun DetailBackdrop(
     val scrollFractionState = scrollState.scrollFractionState
     val backgroundColorState = scrollState.backgroundColorState
 
-    // D3: the autoplay pick runs over the MERGED trailer list. With
+    // The autoplay pick runs over the MERGED trailer list. With
     // `preferLocalTrailers` on, a local clip wins the pick — but only the
     // pick: the embed below is the WebView YouTube mount and cannot play a
     // local file, and the ThemeVideo mount below takes only the server
@@ -108,7 +108,7 @@ internal fun DetailBackdrop(
     val trailerVideo = (trailerPick as? DetailUiState.TrailerEntry.Remote)?.video
     var autoplayEmbedFailed by remember(targetBackdropId) { mutableStateOf(false) }
 
-    // D22: the focus-gated mount decision (a no-op off TV — the pure
+    // The focus-gated mount decision (a no-op off TV — the pure
     // machine mounts immediately whenever `trailerAutoplay` holds and the
     // focus-preview semantic is not gating). The port being absent counts
     // as NOT focus-gated: an unwired call site keeps today's mount.
@@ -197,7 +197,7 @@ internal fun DetailBackdrop(
 
         // Trailer/clip preview rendered outside AnimatedContent so it composes
         // independently when the merged trailer list loads asynchronously.
-        // D22: the whole preview family is gated by [mountPreview] — autoplay
+        // The whole preview family is gated by [mountPreview] — autoplay
         // off mounts nothing, TV focus-gating unmounts on focus-exit (the
         // embed's own lifecycle observer handles an app backgrounding while
         // mounted). Within the family the server ThemeVideo clip is

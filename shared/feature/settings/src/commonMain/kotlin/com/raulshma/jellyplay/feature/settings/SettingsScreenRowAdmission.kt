@@ -79,11 +79,10 @@ internal sealed interface RowAdmission {
      * screen owns the gate in its emission `if` and adds the row's count term
      * explicitly. Counts NOTHING in [rowTotalFor] (the strict derivation) and
      * admits for emission ([SettingsSearchItemGroup.rowAdmitted]) — exactly
-     * the retired separate-admissions-maps' absent-entry semantics, promoted
+     * exactly the separate admissions maps' absent-entry semantics, promoted
      * to a declaration ON the row so the exception set is readable where the
-     * rows are declared. The fused-row endgame keeps this variant: every
-     * domain has content-gated rows; what deletes per domain is the separate
-     * map that used to carry the exception implicitly.
+     * rows are declared. Every domain has content-gated rows; per domain, the
+     * exception lives on the row instead of a separate map.
      */
     data object ContentGated : RowAdmission {
         override fun admitted(flags: RowAdmissionFlags): Boolean = true
@@ -182,11 +181,10 @@ internal fun rowTotalFor(
  * their row totals and emission `if`s read — the hint only renders while
  * advanced is off, which is the state the count describes.
  *
- * The retired hand literals this replaces drifted every time a gated row
- * landed without the count being re-run (appearance 14 vs 15/16, audio 19 vs
- * 20, language 5 vs 7, notifications 4 vs 6/8, storage 3 vs 5); the literals
- * that encode state the flags genuinely cannot express stay hand-written
- * beside their screens, marked frozen (playback's engine-dependent 9).
+ * Hand-written counts drift every time a gated row lands without the count
+ * being re-run; the literals that encode state the flags genuinely cannot
+ * express stay hand-written beside their screens, marked frozen (playback's
+ * engine-dependent 9).
  *
  * Pure (and internal) so `FusedRowsRatchetTest` pins each screen's
  * derivation against the row declarations.

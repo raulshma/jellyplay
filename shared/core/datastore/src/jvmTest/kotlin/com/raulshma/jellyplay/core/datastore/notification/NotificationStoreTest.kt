@@ -103,7 +103,7 @@ class NotificationStoreTest {
         assertTrue(np.newEpisodesEnabled)
     }
 
-    // ── D12: the per-series configs ─────────────────────────────────────
+    // ── The per-series configs ──────────────────────────────────────────
 
     @Test
     fun `seriesConfigs default to empty`() = runTest {

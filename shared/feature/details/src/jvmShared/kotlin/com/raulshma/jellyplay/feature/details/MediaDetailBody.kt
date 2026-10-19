@@ -487,7 +487,7 @@ private fun DetailRelatedVideosSection(
             getImageUrl = callbacks.artwork.getImageUrl,
             onVideoClick = callbacks.seerr.onVideoClick,
             onPlayLocal = { trailerId ->
-                // D3: a local (server-hosted) trailer plays through the
+                // A local (server-hosted) trailer plays through the
                 // full player session — the same route the Play button
                 // takes (the libmpv engine on desktop), never the
                 // WebView embed.
@@ -570,7 +570,7 @@ private fun VideosSection(
     val videoCardBorder = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
         themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
     }
-    // D3: the local-source badge resolved once (the merged row mixes the two
+    // The local-source badge resolved once (the merged row mixes the two
     // card variants; the badge marks the server-hosted entries).
     val localBadge = stringResource(Res.string.detail_trailer_badge_local)
     Column {

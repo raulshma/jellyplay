@@ -30,10 +30,10 @@ internal fun desktopOnboardingGateRoute(
 )
 
 /**
- * The gate's one-shot read + dispatch, extracted from DesktopNavScaffold's
- * inline `LaunchedEffect` body: the persisted `onboarding_completed` flag is
- * read ONCE per scaffold composition — i.e. once per authenticated session
- * entry — and a not-yet-onboarded session gets the shared wizard pushed (the
+ * The gate's one-shot read + dispatch: the persisted `onboarding_completed`
+ * flag is read ONCE per scaffold composition — i.e. once per authenticated
+ * session entry — and a not-yet-onboarded session gets the shared wizard
+ * pushed (the
  * same [Route.Onboarding] the Shortcuts entry and the settings "rerun setup"
  * row open). The [readOnboardingCompleted] one-shot suspend read (not the
  * eagerly-shared state flow, whose seed is all-defaults before the prefs

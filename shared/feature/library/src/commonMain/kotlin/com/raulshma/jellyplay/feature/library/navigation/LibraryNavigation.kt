@@ -16,8 +16,8 @@ import com.raulshma.jellyplay.feature.library.StudioDetailScreen
 /**
  * The [LibraryScreen] wiring every library entry shares — the tab
  * ([Route.Library]), the browse deep-link ([Route.LibraryBrowse]) and the
- * section deep-link ([Route.LibrarySection]) used to hand-copy this block
- * byte-for-byte. The `HomeCallbacks` precedent, bundle shape: the
+ * section deep-link ([Route.LibrarySection]). The `HomeCallbacks` precedent,
+ * bundle shape: the
  * navigator-derived lambdas are written once and remembered per navigator
  * lifetime so the screen subtree sees one stable instance instead of fresh
  * lambda allocations on every recomposition.
@@ -100,7 +100,7 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
     }
 
     // Route.PhotoAlbum / Route.PhotoViewer entries live in feature/photos'
-    // photosSection since the photo-suite extraction (appSections registers
+    // photosSection (appSections registers
     // it right after this builder).
 
     entry<Route.StudioDetail> { key ->

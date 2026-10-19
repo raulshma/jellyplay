@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.MediaItem
 
 /**
- * Bounds for the D6 "More in this collection" franchise rows: at most two
+ * Bounds for the "More in this collection" franchise rows: at most two
  * BoxSet ancestors render as rows, each hydrated with a bounded member page
  * in the server's default order (the same page shape the collection detail
  * screen's first page takes).

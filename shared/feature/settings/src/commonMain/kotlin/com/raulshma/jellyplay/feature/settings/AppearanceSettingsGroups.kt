@@ -42,8 +42,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summ
 
 @Composable
 private fun appearanceLibrarySummary(preferences: AppearanceScreenPreferences): String {
-    // The group's remaining rows (the home-discovery card-display quartet
-    // moved to HomeSettingsScreen — PS-4, so its terms left the summary).
+    // The group's remaining rows; the home-discovery card-display quartet
+    // lives on HomeSettingsScreen, so its terms stay out of the summary.
     val hideThumbnails = if (preferences.hideEpisodeThumbnails) stringResource(Res.string.settings_summary_hide_thumbnails) else null
     val skipSpecials = if (preferences.skipSpecials) stringResource(Res.string.settings_summary_skip_specials) else null
     val shareOpt = if (preferences.showShareMediaOption) stringResource(Res.string.settings_summary_share_button) else null
@@ -116,7 +116,7 @@ internal fun AppearanceLibraryGroup(
             onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
         )
 
-        // The H11/H12 card-badge rows: a second face on the home cards
+        // The card-badge rows: a second face on the home cards
         // group's prefs — these write the SAME HomeDiscoveryStore commands
         // (the cross-store shape the home-discovery fields in this group's
         // slice already establish), so either screen's toggle moves both.
@@ -444,10 +444,9 @@ internal fun AppearanceNewsletterGroup(
                         onCheckedChange = { viewModel.edit { scope -> scope.notification.setNewsletterEnabled(it) } }
         )
 
-        // The persisted newsletterDayOfWeek values are the legacy
-        // java.util.Calendar day numbers (SUNDAY=1 … SATURDAY=7) —
-        // the literals preserve that wire format now that the JVM
-        // type is gone.
+        // The persisted newsletterDayOfWeek values use java.util.Calendar day
+        // numbers (SUNDAY=1 … SATURDAY=7); the literals preserve that wire
+        // format.
         val daysOfWeek = listOf(
             CALENDAR_MONDAY to stringResource(Res.string.settings_day_monday),
             CALENDAR_TUESDAY to stringResource(Res.string.settings_day_tuesday),

@@ -147,8 +147,8 @@ class DetailPlayPoliciesTest {
 
     @Test
     fun dispatch_forceCinemaMode_recordsTheOverrideWithoutTouchingTheStreamTail() {
-        // D14 "Play (with pre-rolls)": the override record rides the dispatch
-        // and defaults false — every pre-D14 construction reads identical.
+        // "Play (with pre-rolls)": the override record rides the dispatch
+        // and defaults false — every default construction reads identical.
         assertFalse(
             DetailPlayPolicies.resolveDetailPlayDispatch(
                 origin = DetailOrigin.REMOTE,

@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
  * content kinds:
  *  - EPUB (reflowable): [href] carries the destination the EPUB host jumps
  *    to with its `goTo` (spine href, optionally with a fragment). Opaque —
- *    like the CFI anchors of ADR 0003, the native side only ever stores and
+ *    like CFI anchors, the native side only ever stores and
  *    hands it back.
  *  - Paged (PDF): [page] is the 0-based destination page index
  *    (`PdfOutlineParser` semantics). CBZ/CBR archives have no TOC story, so

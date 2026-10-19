@@ -43,7 +43,7 @@ class SettingsViewModel(
     editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
     /**
-     * The JellyPlay companion-plugin seams (ADR 0010). Nullable-with-default
+     * The JellyPlay companion-plugin seams. Nullable-with-default
      * keeps the direct-construction test harnesses compiling; the Koin
      * factory passes the real singles and the UI renders the sync section
      * only when both are present AND the probe reports AVAILABLE.
@@ -62,13 +62,13 @@ class SettingsViewModel(
      */
     private val jellyPlayFeatureGate: JellyPlayFeatureGate? = null,
     /**
-     * The plugin's push face (the push wave) — backs the `push` toggle row's
+     * The plugin's push face — backs the `push` toggle row's
      * dynamic subtitle (Registered / No distributor app / Server push
      * disabled). Same nullable-with-default discipline as the seams above.
      */
     private val jellyPlayPushRepository: com.raulshma.jellyplay.core.data.repository.JellyPushRepository? = null,
     /**
-     * The Wave-3 secrets-block seam: gathers the device's secret material for
+     * The secrets-block seam: gathers the device's secret material for
      * the "Export with secrets" flow. Nullable-with-default keeps the
      * direct-construction test harnesses compiling; a null seam with secrets
      * requested fails the export with a clear message.
@@ -177,7 +177,7 @@ class SettingsViewModel(
 
     /**
      * The plugin's live feature keys (the capability registry — the ONE
-     * gating mechanism, ADR 0010). The "Messages" entry gates on
+     * gating mechanism). The "Messages" entry gates on
      * [com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Messages]
      * being present, reactively.
      */
@@ -276,8 +276,7 @@ class SettingsViewModel(
 
     /**
      * The 30s `/Sessions` poll cycle, registered once — the hand-rolled
-     * cancel-delay-fetch + stop pair this field used to be (the refresh cycle
-     * module). The settings root screen binds it to visibility (STARTED,
+     * cancel-delay-fetch + stop pair (the refresh cycle module). The settings root screen binds it to visibility (STARTED,
      * admin-keyed) via [startSessionAutoRefresh]/[stopSessionAutoRefresh] so
      * polling does not run while settings sits in the back stack; the
      * non-admin branch of the user collector stops it reactively.
@@ -435,13 +434,12 @@ class SettingsViewModel(
         private set
 
     /**
-     * Exports the v2 backup to [uri]. With [includeSecrets] the Wave-3
-     * secrets block rides along: the payload is gathered from the secure
+     * Exports the v2 backup to [uri]. With [includeSecrets] the secrets block rides along: the payload is gathered from the secure
      * stores + server list, encrypted under [passphrase]
      * ([BackupSecretsCodec], PBKDF2-600k → AES-256-GCM), and attached to the
      * envelope together with the exporting session's origin ids. Without it
      * the written document carries no `secrets` key at all — byte-shape as
-     * every pre-Wave-3 export.
+     * every export without the secrets block.
      *
      * [passphrase] is consumed and zeroed before this returns; it is never
      * persisted anywhere. The KDF runs on [Dispatchers.Default] — a

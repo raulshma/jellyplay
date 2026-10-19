@@ -13,8 +13,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * State-machine pin for [DesktopAudioEffectsManager] — the desktop twin of the
- * Android `AudioEffectsProcessor` (legacy `:core:data`). Two invariants:
+ * State-machine pin for [DesktopAudioEffectsManager] — the desktop
+ * counterpart of the
+ * Android `AudioEffectsProcessor` (`:core:data`). Two invariants:
  *
  *  1. Every setter flips its flow (the audio effects controller persists
  *     the manager's `StateFlow.value` right after the apply leg — a missed

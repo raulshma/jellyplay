@@ -15,7 +15,7 @@ import kotlin.test.Test
 
 /**
  * Direct [HomeFeatureGate] tests — the shared spine of the VM's opt-in
- * decoration features (H17/H18/H19), extracted beside the suites it serves
+ * decoration features, extracted beside the suites it serves
  * (the [HomeRefresherTest] style: plain JUnit over a test-dispatcher scope,
  * no VM construction). Pins the two policies the holder owns:
  *  - the gate dedupe — one effect run per DISTINCT gate value;
@@ -80,7 +80,7 @@ class HomeFeatureGateTest {
 
     @Test
     fun parkedLoop_restartsOnEveryGateChange_thePollShape() = runTest {
-        // The H19 shape: the effect parks on the cadence delay; each distinct
+        // The poll shape: the effect parks on the cadence delay; each distinct
         // gate emission cancels the parked loop and starts fresh. Owns its
         // scope LOCALLY and cancels BEFORE the body returns — the parked
         // while(true)+delay loop never lets the shared scheduler converge,

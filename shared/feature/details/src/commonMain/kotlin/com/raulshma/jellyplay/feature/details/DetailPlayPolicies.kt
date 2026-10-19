@@ -35,7 +35,7 @@ internal object DetailPlayPolicies {
      * (see [resolvePlayStreamSelection]). The audio index is not policy —
      * threaded untouched.
      *
-     * [forceCinemaMode] (D14 "Play (with pre-rolls)"): the per-invocation
+     * [forceCinemaMode] ("Play (with pre-rolls)"): the per-invocation
      * override that plays the item with server intros regardless of the
      * global cinema-mode pref. The screen effects it by arming
      * [com.raulshma.jellyplay.core.data.playback.CinemaModeOverride] before
@@ -89,7 +89,7 @@ internal object DetailPlayPolicies {
 
 /**
  * The stream tail of a detail play dispatch: which subtitle index to carry
- * (origin-resolved) plus the pass-through audio index — and, since D14, the
+ * (origin-resolved) plus the pass-through audio index — and, the
  * per-invocation cinema-mode override record
  * ([DetailPlayPolicies.resolveDetailPlayDispatch]).
  */
@@ -100,7 +100,7 @@ internal data class DetailPlayDispatch(
 )
 
 /**
- * D3: where one [DetailUiState.TrailerEntry] dispatches:
+ * Where one [DetailUiState.TrailerEntry] dispatches:
  *
  *  - [PlayerSession] — a local (server-hosted) trailer plays through the
  *    full player session (the playbackRepository path; the libmpv engine on
@@ -136,7 +136,7 @@ internal fun resolveTrailerEntryDispatch(
 }
 
 /**
- * D14 trailer-then-feature: the local trailer to sequence BEFORE the feature
+ * Trailer-then-feature: the local trailer to sequence BEFORE the feature
  * for the item about to play, or null for a plain feature start. All gates:
  *
  *  - the global `playTrailerBeforeMovie` toggle (default off),
@@ -171,7 +171,7 @@ internal fun resolveTrailerPreroll(
 }
 
 /**
- * D14: the play click's ORDERED EFFECTS, decided once — the pure composition
+ * The play click's ORDERED EFFECTS, decided once — the pure composition
  * of [DetailPlayPolicies.resolveDetailPlayDispatch] (the stream tail) and
  * [resolveTrailerPreroll] (the trailer-then-feature gate) that
  * `MediaDetailScreen`'s `onPlayClick` lambda used to hand-sequence inline

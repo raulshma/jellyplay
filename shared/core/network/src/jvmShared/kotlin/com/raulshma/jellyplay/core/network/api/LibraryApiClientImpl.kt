@@ -129,7 +129,7 @@ class LibraryApiClientImpl(
     private val engine: JellyfinApiEngine,
     private val lyricsApi: LyricsApi,
     /**
-     * Clock seam (D3) for the discover-row window bound and the Next Up
+     * Clock seam for the discover-row window bound and the Next Up
      * date cutoff — same reads as the bare System.currentTimeMillis() /
      * LocalDateTime.now() before, through the injected clock.
      */
@@ -310,7 +310,7 @@ class LibraryApiClientImpl(
                 // so the two branches stay self-describing on the wire.
                 // Home-row projection (not the two-field minimum): the latest
                 // cards render the quality badges / NEW dot / trickplay
-                // preview from this same read (H11/H12/H13).
+                // preview from this same read.
                 val response = api.userLibraryApi.getLatestMedia(
                     parentId = parentId.toUUID(),
                     limit = limit,
@@ -419,7 +419,7 @@ class LibraryApiClientImpl(
             enableRewatching = enableRewatching,
             nextUpDateCutoff = cutoff,
             // Null keeps the server default (the home row's user-scoped
-            // read); the D12 series-scoped diff supplies both.
+            // read); the series-scoped diff supplies both.
             seriesId = seriesId?.let(java.util.UUID::fromString),
             enableResumable = enableResumable,
             fields = spec.fields.toItemFieldsList(),
@@ -434,7 +434,7 @@ class LibraryApiClientImpl(
     ): Result<List<MediaItem>> = engine.withApi { api ->
         // Same limit/projection shape as getNextUp (the shared resume spec —
         // Upcoming rides it with no kind narrowing and no date cutoff; the
-        // home-row projection carries the card-overlay fields, H4/H12).
+        // home-row projection carries the card-overlay fields).
         val spec = buildResumeQuerySpec(limit, kinds = null)
         val response = api.tvShowsApi.getUpcomingEpisodes(
             userId = userId?.toUUID(),
@@ -452,7 +452,7 @@ class LibraryApiClientImpl(
     ): Result<List<MediaItem>> = engine.withApi { api ->
         // The wire request is the exact pre-12 shape in BOTH modes (no
         // IncludeItemTypes — the 10.x video resume row never narrowed).
-        // excludeActiveSessions (H6) threads through the shared spec so the
+        // excludeActiveSessions threads through the shared spec so the
         // batch and refresh arms send the identical flag.
         val spec = buildResumeQuerySpec(limit, kinds = null, excludeActiveSessions = excludeActiveSessions)
         val response = api.itemsApi.getResumeItems(
@@ -853,7 +853,7 @@ class LibraryApiClientImpl(
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         engine.withApi { api ->
-            // + People (D18): the filmography rows extract the per-item role
+            // + People: the filmography rows extract the per-item role
             // from the person entry matching this id. Bounded by the
             // call-site limit (50) — one extra field on an existing query.
             val response = api.itemsApi.getItems(
@@ -867,7 +867,7 @@ class LibraryApiClientImpl(
 
     override suspend fun getBoxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
         engine.withApi { api ->
-            // D6 membership, resolved explicitly: Jellyfin never lists BoxSets
+            // BoxSet membership, resolved explicitly: Jellyfin never lists BoxSets
             // among /Items/{id}/Ancestors (verified against 12.2 — an item's
             // ancestors stop at the library folder), so enumerate the user's
             // boxsets (same query shape as getCollections) and probe each one
@@ -923,7 +923,7 @@ class LibraryApiClientImpl(
     override suspend fun getThemeVideos(itemId: String, inheritFromParent: Boolean): Result<List<MediaItem>> =
         engine.withApi { api ->
             // Same ThemeMediaResult envelope as getThemeSongs — the identical
-            // mapping and parental filter apply (H7 hero clip source).
+            // mapping and parental filter apply (the hero clip source).
             val response = api.libraryApi.getThemeVideos(
                 itemId = itemId.toUUID(),
                 inheritFromParent = inheritFromParent,
@@ -939,7 +939,7 @@ class LibraryApiClientImpl(
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
-            // MediaStreams projection (D11): the episode rows derive the
+            // MediaStreams projection: the episode rows derive the
             // subtitle/audio badges from it. Per-season only — the
             // all-episodes path below carries the same projection so the
             // series-detail snapshot renders the badges too. MEDIA_SOURCES is
@@ -954,7 +954,7 @@ class LibraryApiClientImpl(
 
     override suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
-            // MediaStreams projection (D11): the series-detail catalogue serves
+            // MediaStreams projection: the series-detail catalogue serves
             // its episode rows from this single round-trip, so the stream
             // badges must ride along. MEDIA_SOURCES is the field the mapper
             // actually reads (mediaSources.firstOrNull().mediaStreams) — on a
@@ -1122,7 +1122,7 @@ class LibraryApiClientImpl(
     }
 
     /**
-     * The home-layout DisplayPreferences slice (H20). Transport: the SDK's
+     * The home-layout DisplayPreferences slice. Transport: the SDK's
      * DisplayPreferencesApi keyed by (displayPreferencesId, user, client) —
      * the client value ("jellyplay") namespaces our store away from
      * jellyfin-web's; the payload rides the DTO's CustomPrefs string map

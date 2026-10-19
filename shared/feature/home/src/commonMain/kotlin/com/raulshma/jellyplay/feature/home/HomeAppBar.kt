@@ -221,8 +221,7 @@ internal fun HomeTopDock(
                             appBarIconColorFaded = appBarIconColorFaded,
                             // Both forward to the caller's HomeSearchSession
                             // close (collapse + clear + defocus as ONE
-                            // ordered sequence) — formerly each path here
-                            // hand-assembled a partial copy of that triple.
+                            // ordered sequence).
                             onBack = { callbacks.onSearchExpanded(false) },
                             onQueryChange = callbacks.onSearchQueryChange,
                             onClear = callbacks.onClearSearch,

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -20,7 +21,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The wave-2 section modules' enrichment arms + admissions, in the registry
+ * The registry section modules' enrichment arms + admissions, in the registry
  * fake-host style ([DetailSectionRegistryTest] — the [DetailSectionEnrichmentHost]
  * interface is the test surface): the cases moved out of
  * DetailViewModelEnrichmentsTest (franchise, upcoming, collectionItems) and
@@ -123,7 +124,7 @@ class DetailSectionEnrichmentArmsTest {
 
         override suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R> =
             items.mapNotNull { item ->
-                runCatching { transform(item) }.getOrNull()
+                runCatchingRethrowingCancellation { transform(item) }.getOrNull()
             }
     }
 
@@ -214,7 +215,7 @@ class DetailSectionEnrichmentArmsTest {
 
     @Test
     fun franchise_arm_gate_excludesEpisodeDetail() = runTest {
-        // The D6 gate is MOVIE || SERIES — an EPISODE detail never starts the
+        // The franchise gate is MOVIE || SERIES — an EPISODE detail never starts the
         // ancestor read (its BoxSet ancestry would key on the episode id).
         val host = FakeHost()
         val armInputs = inputs(item("e9", MediaType.EPISODE, seriesId = "s9"))

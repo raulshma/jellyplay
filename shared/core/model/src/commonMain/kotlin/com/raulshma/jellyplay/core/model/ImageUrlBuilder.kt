@@ -23,7 +23,7 @@ package com.raulshma.jellyplay.core.model
  * Lives in core:model (promoted from core:network's library package):
  * pure URL math with no transport dependency, consumed by feature modules
  * (home's user switcher, settings' avatar row) that deliberately keep
- * core:network off their dependency graphs — it used to leak to them
+ * core:network off their dependency graphs — it would otherwise leak to them
  * through core:data's api() edge.
  */
 

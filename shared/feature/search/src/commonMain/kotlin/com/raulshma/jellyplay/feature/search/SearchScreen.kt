@@ -165,10 +165,10 @@ import com.raulshma.jellyplay.feature.search.generated.resources.search_voice_se
 
 /**
  * This screen's active-filter bar vocabulary: which dimensions render as
- * dismiss tags, and in which order — preserved verbatim from the hand-rolled
- * bar this replaces (media types → genres → years → tags → min rating →
- * status; library passes its own list). The shared [ActiveFiltersBar] renders
- * whatever it is given, so per-screen subsets stay explicit.
+ * dismiss tags, and in which order — media types → genres → years → tags →
+ * min rating → status; library passes its own list. The shared
+ * [ActiveFiltersBar] renders whatever it is given, so per-screen subsets stay
+ * explicit.
  */
 private val searchActiveFilterDimensions = listOf(
     LibraryFilterDimension.MEDIA_TYPES,
@@ -309,7 +309,7 @@ internal fun SearchScreen(
     // shared intake (core/ui — see QuickActionIntake). The controller is
     // provided to every PosterCard below via CompositionLocal; the TV Menu
     // key opens the focused card's actions. Download / Remove download ride
-    // the same intake as the library grid (#147): a downloaded result flips
+    // the same intake as the library grid: a downloaded result flips
     // the slot to "Remove download".
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,

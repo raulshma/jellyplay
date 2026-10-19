@@ -23,9 +23,9 @@ import kotlinx.coroutines.sync.Semaphore
  *
  * Per registration:
  *  - [HomeRowTransportRegistration.read] — the row's direct port read with
- *    its wire parameters (the resume trio's limit and the H6
+ *    its wire parameters (the resume trio's limit and the
  *    exclude-active-sessions flag, Next Up's rewatching/maxDays params, the
- *    H4 Upcoming read shape), stated ONCE; the batch sub-call and the refresh
+ *    Upcoming read shape), stated ONCE; the batch sub-call and the refresh
  *    arm both call it, so they cannot disagree on the wire.
  *  - [HomeRowTransportRegistration.batchSubcall] — the batch fetch's per-type
  *    sub-call: the enabled gate (a disabled section makes ZERO port calls —
@@ -56,7 +56,7 @@ import kotlinx.coroutines.sync.Semaphore
  * re-derives the fold).
  */
 
-/** The fixed row limit the resume trio and the H4 Upcoming read send — stated once, shared by the batch sub-call and the refresh arm. */
+/** The fixed row limit the resume trio and the Upcoming read send — stated once, shared by the batch sub-call and the refresh arm. */
 private const val RESUME_ROW_LIMIT = 20
 
 /**
@@ -125,7 +125,7 @@ private val nextUpRead: HomeRowRead = { sources, query ->
     )
 }
 
-// H4: the catalog-wide unaired list — no per-user query parameters, uncached
+// The catalog-wide unaired list — no per-user query parameters, uncached
 // like its resume-trio siblings (the sub-call TTL memos are the latest/similar
 // rows' policy; watch-state rows stay live every refresh).
 private val upcomingRead: HomeRowRead = { sources, _ ->
@@ -194,7 +194,7 @@ private val nextUpRefreshArm = HomeRowRefreshArm { ctx, _ ->
         ?.let { HomeSectionType.NEXT_UP.descriptor.section(it) }
 }
 
-// H4: the batch sub-call's identical port read — no eligibility filters
+// The batch sub-call's identical port read — no eligibility filters
 // (upcoming is watch-state-blind by definition; there is nothing to
 // re-filter against), rebuilt under the descriptor's static identity.
 private val upcomingRefreshArm = HomeRowRefreshArm { ctx, _ ->

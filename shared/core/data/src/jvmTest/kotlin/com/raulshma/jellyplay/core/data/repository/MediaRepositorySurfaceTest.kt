@@ -67,7 +67,7 @@ class MediaRepositorySurfaceTest {
      * music member left on the union is getAlbumTracks: the detail provider's
      * session resolves detail + album tracks together and is a mixed consumer,
      * so its read rides the union. getMusicVideos (already seam-only, zero
-     * callers) retired from the seam outright in the same wave. 29 added
+     * callers) retired from the seam outright at the same time. 29 added
      * refreshHomeSection — the home-sections family's single-row refetch (the
      * home screen's edge-pull refresh), the same row-scoped reasoning as the
      * discover-row trio. 23 after the home-feed split: the whole home family

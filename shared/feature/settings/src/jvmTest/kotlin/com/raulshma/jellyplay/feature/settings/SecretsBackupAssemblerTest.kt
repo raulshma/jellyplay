@@ -28,7 +28,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The Wave-3 secrets gather/apply seam: [SecretsBackupAssembler] fans the
+ * The secrets gather/apply seam: [SecretsBackupAssembler] fans the
  * three secure credential stores + the token-free server list into a
  * [BackupSecrets] payload and applies a decrypted one back with MERGE-by-id
  * semantics (never wholesale-adopt — restoring must not erase locally-

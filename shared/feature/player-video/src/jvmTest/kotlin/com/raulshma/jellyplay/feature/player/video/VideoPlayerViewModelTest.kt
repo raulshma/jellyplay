@@ -23,7 +23,7 @@ import kotlin.test.Test
  * The VideoPlayerViewModel behavior surface — the pre-KMP
  * `feature/player/video` tree's suite reinstated against the KMP VM: the
  * command funs became [VideoPlayerUiEvent]s on the [VideoPlayerViewModel.onEvent]
- * funnel (the ownership ratchet), the stores bundled into [PlayerStores], the
+ * funnel (the ownership guard), the stores bundled into [PlayerStores], the
  * platform seams collapsed behind [VideoPlayerPlatform]. Construction lives
  * in [VideoPlayerViewModelTestHarness]; the EXTERNAL preferred-player
  * short-circuit keeps every load path engine-free, exactly as the original
@@ -34,7 +34,7 @@ import kotlin.test.Test
  *    `resolveOfflineResumeTicks` pass-through pins — that member moved INTO
  *    the session/resolver and is pinned there now
  *    (PlaybackSessionResumeTicksTest / PlaybackSourceTest);
- *  - the next-episode single-flight latch tests (#146) re-land against
+ *  - the next-episode single-flight latch tests re-land against
  *    [UpNextControllerTest]'s controller-level pinning; the
  *    latch's happy path is re-pinned here once at the VM level.
  */
@@ -57,7 +57,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(3_000L, viewModel.currentPositionMs.value)
     }
 
-    // ── Resume seeding (#122 regression: seed before the first engine tick) ─
+    // ── Resume seeding (seed before the first engine tick) ─
 
     @Test
     fun initialize_seedsResumePositionAndDurationBeforeEngineTick() {
@@ -222,7 +222,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(1.0f, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
-    // ── Next-episode single-flight latch (#146, VM level once) ──────────────
+    // ── Next-episode single-flight latch (VM level once) ──────────────
 
     /** Loads "item-1" (a series episode) via the EXTERNAL fast path so the
      *  VM has a mediaDetail with series/season ids and a bound currentItemId. */
@@ -246,7 +246,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
     @Test
     fun playNextEpisode_whileLoadInFlight_ignoresRetaps() {
         loadCurrentEpisodeExternally()
-        // The resolution hangs (the offline dead-air case from #146): the
+        // The resolution hangs (the offline dead-air case): the
         // request never completes, so the latch must stay held and every
         // re-tap during the window must be swallowed, not queued.
         var resolutionCalls = 0

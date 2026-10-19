@@ -32,7 +32,7 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Each test scripts the HTTP responses the loop will see and asserts the DAO
  * writes (status, errorMessage, bytes) + [TransferOutcome] that result,
- * pinning the parity with the pre-extraction inline branches.
+ * pinning the parity with the original inline branches.
  *
  * Moved verbatim from the legacy :core:data shim's Robolectric-free suite
  * (same assertions); the ListenableWorker Result assertions became

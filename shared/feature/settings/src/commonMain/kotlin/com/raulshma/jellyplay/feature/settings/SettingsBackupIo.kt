@@ -6,13 +6,12 @@ package com.raulshma.jellyplay.feature.settings
  * sink, open-document input source) and walks the internal/external cache
  * dirs; desktop maps the picker's `file:` URIs to plain JDK file IO.
  *
- * The seam is narrowed from raw `java.io.InputStream` /
- * `OutputStream` handles to a TEXT-LEVEL payload contract — the backup payload
- * is one JSON document, so the former `stream.writer().use { it.write(json) }`
- * and `stream.reader().readText()` bodies moved INSIDE the platform actuals
- * (byte-identical semantics: same stream openers, same UTF-8 writer/reader,
- * same failure mapping through the ViewModels' runCatching), keeping
- * `java.io` out of commonMain.
+ * The seam carries a TEXT-LEVEL payload rather than raw `java.io.InputStream` /
+ * `OutputStream` handles — the backup payload is one JSON document, so the
+ * `stream.writer().use { it.write(json) }` and `stream.reader().readText()`
+ * bodies live inside the platform actuals (byte-identical semantics: same
+ * stream openers, same UTF-8 writer/reader, same failure mapping through the
+ * ViewModels' runCatching), keeping `java.io` out of commonMain.
  *
  * [uri] handles are opaque strings (Android SAF / desktop file uris
  * serialised by the picker seam).

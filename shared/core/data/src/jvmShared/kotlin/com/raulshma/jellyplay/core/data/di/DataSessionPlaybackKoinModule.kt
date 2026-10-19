@@ -69,7 +69,7 @@ internal val dataSessionPlaybackModule: Module = module {
     // (playback flips) PlaybackSourceResolverImpl all moved off that
     // list as their ctor deps became Koin-resolvable.
 
-    // D3: the seam types moved to :shared:core:model (so core:network below
+    // The seam types moved to :shared:core:model (so core:network below
     // this module can adopt them); this module stays their Koin owner —
     // core:model deliberately carries no Koin module.
     single<TimeSource> { SystemTimeSource() }
@@ -341,7 +341,7 @@ internal val dataSessionPlaybackModule: Module = module {
         )
     } bind ProfileSyncAdapter::class
 
-    // The H20 DisplayPreferences home-layout sync bridge: collects the home
+    // The DisplayPreferences home-layout sync bridge: collects the home
     // store's layoutRevision dirty signal (armed by the home_layout_autopush
     // pref + sign-in state), debounces 2s, and pushes the current layout
     // through the preset codec — plus the manual Upload/Restore actions'
@@ -357,7 +357,7 @@ internal val dataSessionPlaybackModule: Module = module {
     }
 
     // The NON-SECRET integration settings under the general sync protocol
-    // (the settings-backup wave): the `integrations` namespace adapter over
+    // (the settings-backup cluster): the `integrations` namespace adapter over
     // the Seerr / *arr / subtitle-provider preference stores' sync-only
     // surfaces — the stores' allowlists are the single source of truth for
     // what may ride the wire (the credentials live in the encrypted stores
@@ -374,7 +374,7 @@ internal val dataSessionPlaybackModule: Module = module {
     } bind ProfileSyncAdapter::class
 
     // The per-item/per-series playback preferences under the general sync
-    // protocol (the settings-backup wave): the `itemprefs` namespace adapter
+    // protocol (the settings-backup cluster): the `itemprefs` namespace adapter
     // over the Room `item_playback_preferences` store — one `"{scope}/{key}"`
     // key per row, the full row as the payload, deletes roaming. The roam set
     // is capped at the 100 most-recent rows by updatedAt (the Room store
@@ -388,7 +388,7 @@ internal val dataSessionPlaybackModule: Module = module {
     } bind ProfileSyncAdapter::class
 
     // The playlist DEFINITIONS under the general sync protocol (the
-    // settings-backup wave): the `playlists` namespace adapter over the Room
+    // settings-backup cluster): the `playlists` namespace adapter over the Room
     // smart/mood playlist stores — smart/{id}, mood/{id} and
     // moodpref/{playlistId} keys, whole definition rows as payloads (no
     // cached item lists anywhere), deletes roaming so a deleted playlist
@@ -477,7 +477,7 @@ internal val dataSessionPlaybackModule: Module = module {
         )
     }
 
-    // The push face (the plugin's push wave): the SAME device identity as the
+    // The push face (the plugin's push support): the SAME device identity as the
     // events repository above (jpsync.device.id + name/platform/version), the
     // distributor seam resolved getOrNull — Android's notification module
     // registers the UnifiedPush connector impl, desktop registers nothing and
@@ -642,7 +642,7 @@ private fun appVersionString(): String =
 /**
  * The session-aware transport satisfying the home fetcher's
  * [com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources]
- * for the PLUGIN_ROW home rows and the plugin-curated hero (H9): the reads
+ * for the PLUGIN_ROW home rows and the plugin-curated hero: the reads
  * forward verbatim onto the plugin api client (ADR 0010's one-family rule —
  * every `jellyplay/` route rides the `JellyPlayRowsRoutes` role of the one
  * plugin client family), the item resolution forwards onto the

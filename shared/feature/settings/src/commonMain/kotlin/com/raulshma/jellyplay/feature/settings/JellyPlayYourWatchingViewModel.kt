@@ -48,7 +48,7 @@ data class JellyPlayYourWatchingState(
  * entry (plugin probe AVAILABLE + the `analytics` feature key + the user's
  * per-feature toggle), but the api calls are STILL feature-gated here — the
  * gate is re-checked at every call, so the api client is never touched without
- * it (ADR 0010's gating rule; the capabilities contract can degrade
+ * it (the plugin-gating contract; the capabilities contract can degrade
  * mid-session). The gate is the ONE seam ([JellyPlayFeatureGate.isAvailableNow]
  * — probe AND toggle); without the gate seam (direct-construction tests) the
  * probe-only read keeps the pre-toggle behavior.
@@ -70,7 +70,7 @@ class JellyPlayYourWatchingViewModel(
 
     /**
      * Reloads the selected window's aggregates (the screen fires one per chip
-     * select plus one on open). Failure AND the pre-wave 404 both degrade to
+     * select plus one on open). Failure AND a 404 both degrade to
      * the quiet null — the screen's "not available" state; a degraded gate
      * simply never fetches.
      */

@@ -304,8 +304,7 @@ class PlayerEngineStore constructor(
      * Bulk-restores the two per-item recall maps from a decoded backup,
      * applying the same neutral-entry stripping and 100-entry LRU eviction as
      * [setMediaStreamSelection] / [setVideoEffectsForItem] so the cap has a
-     * single owner. Previously the facade wrote these blobs directly, which
-     * bypassed the bound and let a restore grow storage unbounded.
+     * single owner and a restore can never grow storage past the bound.
      *
      * `MediaStreamSelection` entries with both indices `null` and neutral
      * `VideoEffectsConfig` entries are dropped, matching the per-item setters'

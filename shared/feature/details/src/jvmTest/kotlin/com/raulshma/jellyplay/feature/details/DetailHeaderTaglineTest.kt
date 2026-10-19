@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Tests [detailHeaderTagline] — the D2 admission behind the detail header's
+ * Tests [detailHeaderTagline] — the tagline admission behind the detail header's
  * tagline line: the first non-blank tagline when the show_tagline preference
  * is on, null otherwise — including the absent-taglines cases (older servers
  * / offline snapshots carry an empty list) so the line simply never renders.

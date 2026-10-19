@@ -13,10 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Android actual of the [StatisticsExport] seam — the pre-migration
- * UserStatisticsScreen / UserStatisticsDetailScreen share bodies, verbatim,
- * just funnelled through one object reached from the composable's
- * LocalContext.
+ * Android actual of the [StatisticsExport] seam — the
+ * UserStatisticsScreen / UserStatisticsDetailScreen share bodies, funnelled
+ * through one object reached from the composable's LocalContext.
  */
 internal class AndroidStatisticsExport(
     private val context: Context,

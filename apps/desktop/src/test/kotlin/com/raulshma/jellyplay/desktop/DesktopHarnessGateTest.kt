@@ -79,8 +79,8 @@ class DesktopHarnessGateTest {
 
     @Test
     fun `both harnesses share the same gate grammar`() {
-        // A runner script (tools/e2e/desktop-session-pass.sh and the
-        // native-dialog twin) injects the same JAVA_TOOL_OPTIONS shape into
+        // A runner script (tools/e2e/desktop-session-pass.sh and its
+        // native-dialog counterpart) injects the same JAVA_TOOL_OPTIONS shape into
         // both passes; the two gates must therefore decide identically for
         // every value.
         listOf(null, "true", "TRUE", "false", "1", "").forEach { value ->

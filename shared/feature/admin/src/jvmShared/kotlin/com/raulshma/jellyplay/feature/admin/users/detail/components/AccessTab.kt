@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 
 /**
  * Access tab: library access (AccessSection) plus channel/device access and
- * per-folder media-deletion editors (added in Task 6).
+ * per-folder media-deletion editors.
  */
 @Composable
 fun AccessTab(

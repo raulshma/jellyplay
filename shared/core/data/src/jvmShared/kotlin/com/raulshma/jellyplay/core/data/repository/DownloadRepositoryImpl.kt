@@ -49,9 +49,8 @@ import java.io.File
 // platform call (documented inline):
 //  - `@ApplicationContext context` dropped; its three uses became constructor
 //    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator] and Coil
-//    preloading → [OfflineImagePreloader] (the preloader rode with the
-//    offline-metadata cluster to [OfflineDownloadWriterCore] at the D6
-//    extraction). The third — the notification group summary →
+//    preloading → [OfflineImagePreloader] (now on [OfflineDownloadWriterCore]
+//    with the offline-metadata cluster). The third — the notification group summary →
 //    [DownloadProgressNotifier] — has since left entirely: the summary surface
 //    (DownloadSummarySurface) observes the in-flight count flow and posts on
 //    transitions, so this repository's state changes reach the shade through
@@ -64,7 +63,7 @@ import java.io.File
 //    series-seeding in the writer core); startDownload never touches it, so
 //    desktop single-item downloads work with a throwing provider.
 //  - `dagger.Lazy<DownloadDelegate>` → kotlin `Lazy<DownloadDelegate>` and
-//    now (D6) a plain [DownloadDelegate]: the artifact-write half moved to
+//    now a plain [DownloadDelegate]: the artifact-write half moved to
 //    [OfflineDownloadWriterCore] — a standalone single over the same DAOs and
 //    seams with NO back-reference to this repository — so the former
 //    construction cycle `DownloadRepositoryImpl → DownloadDelegate →
@@ -105,7 +104,7 @@ class DownloadRepositoryImpl(
      * The extracted artifact-write cluster ([OfflineDownloadWriterCore]): row
      * creation, offline metadata + baseline seeding, parent hierarchy seeding,
      * worker enqueue, and the sidecar/artifact surface — over its own DAO and
-     * seam dependencies, with no reference back to this repository (D6). The
+     * seam dependencies, with no reference back to this repository. The
      * inherited [OfflineDownloadWriter] members (and the local manifest /
      * segments / inventory reads) forward to it one-to-one; [downloadSeries]
      * reuses its metadata + series-artwork helpers.
@@ -113,8 +112,8 @@ class DownloadRepositoryImpl(
     private val writer: OfflineDownloadWriterCore,
     /**
      * The per-item download recipe (prepare + execute + artifact bundle).
-     * Resolved eagerly: the cycle it used to participate in is dissolved by
-     * the writer-core extraction, so the former `Lazy` deferral is gone.
+     * Resolved eagerly: no construction cycle remains, so the former
+     * `Lazy` deferral is gone.
      */
     private val downloadDelegate: DownloadDelegate,
 ) : DownloadRepository,

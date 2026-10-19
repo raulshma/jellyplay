@@ -28,21 +28,21 @@ import kotlinx.serialization.Serializable
  * projection (with JSON-decode memoisation), and its reset-key list end-to-end.
  * Mirrors the `PlaybackStore` / `AppearanceStore` shape.
  *
- * **Stage B spec derivation:** every key this store owns is declared exactly
+ * **Spec derivation:** every key this store owns is declared exactly
  * once as a row in [SubtitlePreferenceSpecs] (wire name, default, reset
  * category, read/write encoding) and the machinery below is derived from those
  * rows — each [Keys] member rebuilds its row's typed key from the row's wire
  * name, each [read] projection row delegates to its row encoding, the
  * plain-typed setters and the style-blob rows of [restore] delegate to the
  * rows' derived writes, and [resetKeysFor] filters the rows by reset category.
- * The blob decode memoisation lives in the rows now, beside the key it applies
- * to — every blob keeps this store's pre-promotion `MemoizeNull` policy (see
+ * The blob decode memoisation lives in the rows, beside the key it applies
+ * to — every blob keeps the store's `MemoizeNull` policy (see
  * [SubtitlePreferenceSpecs]).
  *
  * **Hand-written residuals (the documented opt-outs — a row encoding writes a
  * slot, it cannot remove one or carry per-item semantics):**
  *  - [setPreferredSubtitleLanguage] / [setPreferredAudioLanguage] /
- *    [setAppLanguage] keep the set-or-remove dance (their rows are Stage A
+ *    [setAppLanguage] keep the set-or-remove dance (their rows are plain
  *    [PreferenceSpec.string] declarations);
  *  - [setSubtitleDelayForItem] keeps the read-modify-write LRU invariant (a
  *    `delayMs == 0` REMOVES its entry so the map does not grow unbounded);
@@ -286,8 +286,8 @@ class SubtitleLanguageStore constructor(
  * [SubtitlePreferenceSpecs] row's declared default — read off the row via a
  * plain accessor, so a preference's default is stated once, in its spec, and
  * cannot drift between the spec (what an absent key reads) and the slice (what
- * a fresh in-memory instance serves). The HDR style default (formerly restated
- * on the read AND here) is the spec's [DEFAULT_HDR_SUBTITLE_STYLE] now. The
+ * a fresh in-memory instance serves). The HDR style default is the spec's
+ * [DEFAULT_HDR_SUBTITLE_STYLE]. The
  * spec-default equality is pinned field-for-field by
  * `SubtitleSpecDerivationTest`.
  */

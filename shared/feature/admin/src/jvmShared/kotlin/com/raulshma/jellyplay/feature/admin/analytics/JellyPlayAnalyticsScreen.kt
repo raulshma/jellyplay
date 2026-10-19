@@ -812,7 +812,7 @@ private fun GatedOffState(modifier: Modifier = Modifier) {
 
 /**
  * The quiet degraded state: the probe exposes `analytics` but the overview
- * route answered 404 (the server's plugin predates the analytics wave).
+ * route answered 404 (the server's plugin lacks the analytics routes).
  */
 @Composable
 private fun DegradedState(modifier: Modifier = Modifier) {

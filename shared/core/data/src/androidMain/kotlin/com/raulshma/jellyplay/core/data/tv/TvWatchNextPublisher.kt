@@ -38,7 +38,7 @@ class TvWatchNextPublisher(
     private val homeFeed: HomeFeed,
     /** Backdrop artwork URL for the row's poster (the ImageUrlProvider seam). */
     private val imageUrlProvider: ImageUrlProvider,
-    /** Clock seam (D3) for the row's last-engagement timestamp. */
+    /** Clock seam for the row's last-engagement timestamp. */
     private val timeSource: TimeSource,
 ) {
     private val prefs by lazy {

@@ -60,11 +60,10 @@ import com.raulshma.jellyplay.feature.library.components.LibraryListItem
  * Returns an empty string for [GroupBy.NONE] instead of throwing: although the caller
  * only mounts this composable when grouping is active, the persisted [GroupBy] value
  * flows in asynchronously and can transiently resolve to NONE while a grouped view is
- * still mounted. Throwing here crashed the app on every library open once a non-NONE
- * value had been persisted (issue #113).
+ * still mounted — throwing here would crash the app on every library open once a
+ * non-NONE value had been persisted.
  *
- * Delegates to the pure, tested [LibraryGrouper] — the logic was lifted out of this
- * Composable so it can be unit-tested (it was the site of two #113 crashes).
+ * Delegates to the pure, tested [LibraryGrouper] so the logic is unit-testable.
  */
 private fun MediaItem.groupKey(groupBy: GroupBy): String = LibraryGrouper.groupKey(this, groupBy)
 
@@ -74,7 +73,7 @@ private fun MediaItem.groupKey(groupBy: GroupBy): String = LibraryGrouper.groupK
  * Each variant exposes a unique Compose lazy [key]: items key on their stable item id,
  * headers key on a monotonically increasing sequence id. The sequence id guarantees key
  * uniqueness even if the same group label appears in non-contiguous positions (which
- * previously produced duplicate keys and crashed the app — issue #113).
+ * would otherwise produce duplicate keys and crash the app).
  */
 private sealed interface GroupedRow {
     val key: Any
@@ -124,7 +123,7 @@ fun GroupedLibraryContent(
 ) {
     // NOTE: do not throw for GroupBy.NONE here. The persisted group-by flows in
     // asynchronously (loadLayoutPrefs) and can transiently be NONE while a grouped
-    // view is mounted; throwing crashed the app (issue #113). The caller still guards
+    // view is mounted; throwing would crash the app. The caller still guards
     // `if (groupBy != GroupBy.NONE)` before composing this, but if NONE does slip
     // through we render the items ungrouped rather than crashing.
     // Flatten the loaded snapshot into an ordered list of (header | item) rows
@@ -133,9 +132,9 @@ fun GroupedLibraryContent(
     //
     // The snapshot is first sorted by the active group dimension so groups come out
     // contiguous. Without this, grouping a snapshot that is server-sorted by a
-    // different dimension (e.g. Name) scattered the same group key across the list
-    // and produced duplicate `"header_${key}"` lazy keys → IllegalArgumentException
-    // crash (issue #113). sortedBy is stable so the server order is preserved within
+    // different dimension (e.g. Name) scatters the same group key across the list
+    // and produces duplicate `"header_${key}"` lazy keys → IllegalArgumentException
+    // crash. sortedBy is stable so the server order is preserved within
     // each group. Header rows carry a monotonically increasing sequence id so their
     // lazy keys are unique regardless of the input order — a defensive guarantee
     // against future regressions in the grouping logic.

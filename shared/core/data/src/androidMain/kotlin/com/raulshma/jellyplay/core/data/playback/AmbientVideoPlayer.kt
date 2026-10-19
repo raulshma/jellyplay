@@ -8,10 +8,10 @@ import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.exoplayer.ExoPlayer
 
 /**
- * H7/D22: the ambient hero-clip transport — a MUTED-BY-CONTRACT, looping,
+ * The ambient hero-clip transport — a MUTED-BY-CONTRACT, looping,
  * control-less video player for the server-hosted ThemeVideo clips that back
- * the home hero billboard (H7) and the detail hero's ThemeVideo preview
- * (D22). A single dedicated [ExoPlayer] instance kept separate from the main
+ * the home hero billboard and the detail hero's ThemeVideo preview
+ * A single dedicated [ExoPlayer] instance kept separate from the main
  * audio/video players (the [ThemeMusicPlayer] pattern) so it never
  * interferes with active playback — and because it is a process-wide single,
  * starting a clip on one surface implicitly stops the previous one: the home

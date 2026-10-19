@@ -94,9 +94,9 @@ class PreferenceCategoryPresentationTest {
 
     @Test
     fun `detail display toggles are surfaced as changed fields`() {
-        // The library-slice detail prefs (plan D1–D23) diff in the
-        // HOME_DISCOVERY category beside the other library rows; the
-        // trailer-before-movie knob diffs in PLAYBACK beside cinema mode.
+        // The library-slice detail prefs diff in the HOME_DISCOVERY category
+        // beside the other library rows; the trailer-before-movie knob diffs
+        // in PLAYBACK beside cinema mode.
         val labels = mapOf(
             Res.string.settings_show_tagline to "Show Tagline",
             Res.string.settings_prefer_local_trailers to "Prefer Local Trailers",

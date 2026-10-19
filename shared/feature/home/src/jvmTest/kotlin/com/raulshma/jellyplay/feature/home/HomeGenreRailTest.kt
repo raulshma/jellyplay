@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * H18 genre rail: the VM-scoped TTL cache (refetch only past the sub-call
+ * Genre rail: the VM-scoped TTL cache (refetch only past the sub-call
  * TTL window, failure hides, identity-keyed so a previous user's list is
  * never served), the blank-name filter, and the route-construction parity
  * with the detail screen's genre chips.

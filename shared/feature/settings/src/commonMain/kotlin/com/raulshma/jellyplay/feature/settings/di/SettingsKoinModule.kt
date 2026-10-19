@@ -40,13 +40,11 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the settings feature (docs/kmp-migration-plan.md).
- * The HiltViewModel/@Inject/@ApplicationContext
- * annotations were stripped at the move — Koin is the single constructor owner
- * (one framework per type). Ctor deps split three ways:
+ * Koin construction owner for the settings feature. Koin is the single
+ * constructor owner (one framework per type). Ctor deps split three ways:
  *  - datastore projections/stores (PreferenceProjections, UserPreferencesStore,
  *    PreferencesEditor, AppearanceStore, HomeDiscoveryStore, ...) resolve from the
- *    C4 shared-datastore graph;
+ *    shared-datastore graph;
  *  - repository deps (AuthRepository/SeerrRepository/AdminRepository/MediaRepository/
  *    SearchHistoryRepository/...) resolve from shared :core:data — the Admin/
  *    Media-repository cluster impls flipped to Koin singles in dataJvmModule
@@ -56,19 +54,19 @@ import org.koin.dsl.module
  *    resolve from the androidMain/jvmMain platform modules
  *    (androidSettingsPlatformModule / desktopSettingsPlatformModule).
  *
- * Android APP-SIDE-REQUIRED defs (the wrapped types live in the legacy
- * core:data/core:notification Android remainders and app-side scheduler
- * classes — this module's androidMain cannot see them): the composition root
- * must register these four before the corresponding screens open (resolution
- * is lazy, so boot stays safe):
+ * Android APP-SIDE-REQUIRED defs (the wrapped types live in Android-only
+ * core:data/core:notification code and app-side scheduler classes — this
+ * module's androidMain cannot see them): the composition root must register
+ * these four before the corresponding screens open (resolution is lazy, so
+ * boot stays safe):
  *  - [com.raulshma.jellyplay.feature.settings.AutoDownloadSync] (wraps the
- *    legacy AutoDownloadScheduler WorkManager sync),
- *  - [com.raulshma.jellyplay.feature.settings.NotificationSync] (wraps the
- *    legacy NotificationScheduler.scheduleOrUpdate),
+ *    AutoDownloadScheduler WorkManager sync),
+ *  - [com.raulshma.jellyplay.feature.settings.NotificationSync] (wraps
+ *    NotificationScheduler.scheduleOrUpdate),
  *  - [com.raulshma.jellyplay.feature.settings.WatchNextRefresher] (wraps the
  *    Android TV Watch Next scheduler),
- *  - [com.raulshma.jellyplay.feature.settings.AudioCacheClearer] (wraps the
- *    legacy AudioStreamCache).
+ *  - [com.raulshma.jellyplay.feature.settings.AudioCacheClearer] (wraps
+ *    AudioStreamCache).
  * The desktop actuals of all four live in desktopSettingsPlatformModule.
  */
 val settingsModule: Module = module {
@@ -77,8 +75,7 @@ val settingsModule: Module = module {
     // The catalog object is the single SettingsSearchProvider implementation
     // (this module's own SettingsScreen uses direct object access; shared
     // consumers like feature/home resolve it from their own Koin module
-    // graphs — the interim app-side SettingsSearchInteropModule Hilt bridge
-    // died with the HomeViewModel flip).
+    // graphs).
     single<SettingsSearchProvider> { SettingsSearchCatalog }
 
     // One shared instance of the stateless advanced-settings gate (read flow
@@ -95,7 +92,7 @@ val settingsModule: Module = module {
             .apply { warm() }
     }
 
-    // The Wave-3 secrets-block gather/apply seam, shared by the export
+    // The secrets-block gather/apply seam, shared by the export
     // (SettingsViewModel) and the restore wizard's file arm. Resolves
     // the three secure credential stores (datastore platform modules) plus
     // core:data's ServerBackupMetadataStore (the token-free server-list seam).
@@ -110,12 +107,12 @@ val settingsModule: Module = module {
 
     viewModelOf(::SettingsViewModel)
 
-    // The companion-plugin inbox screen (ADR 0010). Reachability is gated at
+    // The companion-plugin inbox screen. Reachability is gated at
     // the settings root's "Messages" entry; the VM still re-checks the
     // `messages` gate (probe AND the user's toggle) before every api call.
     viewModelOf(::JellyPlayMessagesViewModel)
 
-    // The companion-plugin "My ratings" screen (ADR 0010). Reachability is
+    // The companion-plugin "My ratings" screen. Reachability is
     // gated at the settings root's entry; the VM still re-checks the
     // `user-ratings` gate (probe AND the user's toggle) before every api call.
     viewModelOf(::JellyPlayUserRatingsViewModel)
@@ -126,7 +123,7 @@ val settingsModule: Module = module {
     // admin route) before every api call.
     viewModelOf(::JellyPlayYourWatchingViewModel)
 
-    // The companion-plugin settings-sync screen (ADR 0010). Reachability is
+    // The companion-plugin settings-sync screen. Reachability is
     // gated at the settings root's "Sync" entry (probe AND the `settings-sync`
     // meta key — no user toggle exists for meta keys); the VM still re-checks
     // the same probe-only gate before every api call.
@@ -134,7 +131,7 @@ val settingsModule: Module = module {
 
     viewModelOf(::AppearanceSettingsViewModel)
 
-    // The H20 home-layout DisplayPreferences bridge (core:data) — the manual
+    // The home-layout DisplayPreferences bridge (core:data) — the manual
     // Upload/Restore actions + the autopush engine.
     viewModelOf(::HomeSettingsViewModel)
 
@@ -166,16 +163,15 @@ val settingsModule: Module = module {
         FactoryResetViewModel(
             snapshotReader = get(),
             editor = get(),
-            // Wave 6: the pre-reset safety restore point's api + gate seams.
+            // The pre-reset safety restore point's api + gate seams.
             pluginApiClient = get(),
             statusStore = get(),
         )
     }
 
-    // The unified restore wizard (Wave 5): ONE flow for restoring settings
-    // regardless of source. Replaces the retired ImportPreviewViewModel (the
-    // file arm ports its parser/diff/restore logic verbatim over the same
-    // seams) and absorbs the sync screen's import + one-click snapshot
+    // The unified restore wizard: ONE flow for restoring settings
+    // regardless of source — the file arm's parser/diff/restore logic over
+    // the same seams, plus the sync screen's import + one-click snapshot
     // restore rows.
     // Hand-written, not viewModelOf: diffLabelResolver/textResolver are
     // function-typed ctor defaults with no Koin binding — viewModelOf
@@ -191,7 +187,7 @@ val settingsModule: Module = module {
             snapshotReader = get(),
             secretsBackupAssembler = get(),
             // The server arm: restore points, current-state diff, apply batch,
-            // plus the Wave-6 pre-apply safety capture.
+            // plus the pre-apply safety capture.
             pluginApiClient = get(),
             statusStore = get(),
             syncRepository = get(),

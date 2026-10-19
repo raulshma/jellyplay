@@ -61,7 +61,7 @@ val playerLiveModule: Module = module {
             audio = get(),
             transcodeReasonsRenderer = get(),
             pip = get(),
-            // The video focus slice (ADR-0004): the module-owned exclusivity
+            // The video focus slice: the module-owned exclusivity
             // authority — Android binds DefaultPlaybackFocus (androidCoreData
             // focus module); the vacuous default covers a graph without one.
             playbackFocus = getOrNull()

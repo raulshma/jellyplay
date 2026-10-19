@@ -46,7 +46,7 @@ import java.io.IOException
  * policy), but it now rides the same [DownloadTransferClient] seam this runner
  * uses — one transfer plumbing for both paths. The byte,
  * notify, and poll cadence (64 KiB buffer, 2 s status-only poll) is reproduced
- * exactly from the pre-extraction loop — this is a behaviour-preserving move.
+ * exactly from the original inline loop — behaviour-preserving.
  *
  * V3 downloads conveyor: moved verbatim from the legacy :core:data shim (same
  * package). Transforms: `androidx.work.ListenableWorker.Result` returns became
@@ -204,7 +204,7 @@ class DownloadTransferRunner(
      * (pause/cancel/completion/error persist immediately), then verifying the
      * final byte count.
      *
-     * Reproduced exactly from the pre-extraction loop: 64 KiB buffer, 2 s
+     * Reproduced exactly from the original inline loop: 64 KiB buffer, 2 s
      * status-only poll (was a 23-col `SELECT *`), append on 206 / overwrite on
      * 200 — except the Room persist, now gated to >= 5 s and a >= 1% byte
      * delta, because each progress write invalidates every observing

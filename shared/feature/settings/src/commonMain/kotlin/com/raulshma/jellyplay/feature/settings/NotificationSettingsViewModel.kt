@@ -18,13 +18,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Platform seam behind [NotificationSettingsViewModel]'s reschedule poke: the
- * legacy NotificationScheduler (WorkManager enqueue/cancel over the
- * notification store) lives in the Hilt-owned Android-only :core:notification,
- * which this module cannot reach. The Android composition root provides the
- * wrapping impl at the Koin edge (downloads-conveyor interop pattern); desktop
- * has no notification worker and binds a no-op. Suspend + no-args, matching
- * the legacy `NotificationScheduler.scheduleOrUpdate()` signature exactly.
+ * Platform seam behind [NotificationSettingsViewModel]'s reschedule poke:
+ * `NotificationScheduler` (WorkManager enqueue/cancel over the notification
+ * store) lives in the Hilt-owned Android-only :core:notification, which this
+ * module cannot reach. The Android composition root provides the wrapping impl
+ * at the Koin edge (downloads-conveyor interop pattern); desktop has no
+ * notification worker and binds a no-op. Suspend + no-args, matching the
+ * `NotificationScheduler.scheduleOrUpdate()` signature exactly.
  */
 fun interface NotificationSync {
     suspend fun scheduleOrUpdate()
@@ -59,7 +59,7 @@ class NotificationSettingsViewModel(
         }
     }
 
-    // ── D12: the per-series notification management sheet ───────────────
+    // ── The per-series notification management sheet ─────────────────────
 
     /**
      * One "Series notifications" list row: the opted-in series' id plus the
@@ -96,7 +96,7 @@ class NotificationSettingsViewModel(
     private var seriesHydrateJob: Job? = null
 
     /**
-     * The hydration pass — the NextUpExcludedViewModel template verbatim:
+     * The hydration pass — the NextUpExcludedViewModel template:
      * one detail fetch at a time (the cached detail read), the failed-id
      * latch so a flaky fetch never retry-storms, and a cancel of the previous
      * pass so a rapid remove cannot leave a stray fetch writing into state.

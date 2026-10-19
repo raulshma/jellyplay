@@ -69,8 +69,8 @@ data class JellyPlaySyncHistoryKeyDetail(
     val isLoading: Boolean = false,
     /**
      * The changed keys, `ns`/`key` pairs. Empty = the server holds no diff
-     * for the entry (reset rows). null = the server's plugin predates the
-     * per-key history wave (404) — the quiet "—" degrade, never an error.
+     * for the entry (reset rows). null = the server's plugin does not serve the
+     * per-key history read (404) — the quiet "—" degrade, never an error.
      */
     val keys: List<JellyPlaySyncHistoryKey>? = null,
 )
@@ -80,8 +80,8 @@ data class JellyPlaySyncHistoryKeyDetail(
 data class JellyPlaySyncUiState(
     val isLoading: Boolean = true,
     /**
-     * The server's sync usage payload. null = the server's plugin predates the
-     * sync-status wave (404) — the usage/history sections degrade quietly.
+     * The server's sync usage payload. null = the server's plugin does not serve
+     * sync status (404) — the usage/history sections degrade quietly.
      */
     val status: JellyPlaySyncStatus? = null,
     val history: List<JellyPlaySyncHistoryEntry> = emptyList(),
@@ -96,7 +96,7 @@ data class JellyPlaySyncUiState(
     val historyKeyDetails: Map<Long, JellyPlaySyncHistoryKeyDetail> = emptyMap(),
     /**
      * The server's rolling restore points, newest first. null = the server's
-     * plugin predates the restore-points wave (or the read failed / the gate
+     * plugin does not serve restore points (or the read failed / the gate
      * closed) — the section hides quietly.
      */
     val snapshots: List<JellyPlaySnapshot>? = null,
@@ -107,7 +107,7 @@ data class JellyPlaySyncUiState(
     /** The last snapshot/export/import action failed — the banner's second face; cleared by the next action. */
     val actionError: Boolean = false,
     /**
-     * One-shot Wave-6 warning: the pre-destructive safety restore point could
+     * One-shot warning: the pre-destructive safety restore point could
      * not be captured before the namespace reset (the reset still ran — the
      * miss never blocks). Cleared by [JellyPlaySyncViewModel.clearSafetySnapshotMissed].
      */
@@ -115,14 +115,14 @@ data class JellyPlaySyncUiState(
 )
 
 /**
- * The companion-plugin settings-sync screen's model (ADR 0010): the sync
+ * The companion-plugin settings-sync screen's model: the sync
  * engine's toggle + manual cycles ([ProfileSyncRepository]) beside the
  * server-side usage / history / admin-overview reads, the conflict-resolution
  * intents, the selective-sync toggles, the device registry actions
  * (rename/revoke), the restore points (create only — restores route through
  * the unified [RestoreWizardViewModel]), and the JSON export.
  *
- * Wave 6: the destructive namespace reset captures a best-effort safety
+ * The destructive namespace reset captures a best-effort safety
  * restore point first ([captureSafetySnapshot] — the same helper the wizard
  * and the factory reset run); a miss surfaces as a one-shot warning face.
  *
@@ -130,8 +130,8 @@ data class JellyPlaySyncUiState(
  * "Sync" entry (plugin probe AVAILABLE + the `settings-sync` meta feature key
  * — meta keys carry no user toggle, so the gate is probe-only), but the api
  * calls are STILL gate-checked here — the gate is re-checked at every call,
- * so the api client is never touched without it (ADR 0010's gating rule; the
- * capabilities contract can degrade mid-session). A degraded gate collapses
+ * so the api client is never touched without it (the plugin-gating contract;
+ * the capabilities contract can degrade mid-session). A degraded gate collapses
  * the loaded state to the quiet "unavailable" shape instead of erroring.
  */
 class JellyPlaySyncViewModel(
@@ -140,8 +140,8 @@ class JellyPlaySyncViewModel(
     private val deviceRegistry: JellyPlayDeviceRegistryRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     /**
-     * The background flush scheduler (ADR 0011) — the disable edge of the
-     * sync toggle de-arms its 12h catch-up periodic here. Null in
+     * The background flush scheduler (the sync-flush contract) — the disable
+     * edge of the sync toggle de-arms its 12h catch-up periodic here. Null in
      * direct-construction tests.
      */
     private val syncScheduler: SettingsSyncScheduler? = null,
@@ -163,7 +163,7 @@ class JellyPlaySyncViewModel(
      * One pull of every server-side face (usage, history, devices, admin
      * overview, snapshots) plus the device-local selective-sync flags. Fired
      * by the screen on open and after each manual action. The usage/history
-     * reads degrade to null/empty on the pre-wave 404; the admin read
+     * reads degrade to null/empty on the 404; the admin read
      * degrades on 403 (non-admin) the same way.
      */
     fun refresh() {
@@ -255,7 +255,7 @@ class JellyPlaySyncViewModel(
      * their defaults (the prefs adapter's inbound-tombstone rule). Confirmed
      * by the screen's destructive dialog before reaching here.
      *
-     * Wave 6 hook #2: a best-effort safety restore point is captured first —
+     * A best-effort safety restore point is captured first —
      * a miss surfaces as the one-shot warning face, never a blocker.
      */
     fun resetNamespace() {
@@ -269,7 +269,7 @@ class JellyPlaySyncViewModel(
         }
     }
 
-    /** Acknowledges the one-shot Wave-6 warning (the screen surfaced it). */
+    /** Acknowledges the one-shot warning (the screen surfaced it). */
     fun clearSafetySnapshotMissed() {
         _uiState.update { it.copy(safetySnapshotMissed = false) }
     }

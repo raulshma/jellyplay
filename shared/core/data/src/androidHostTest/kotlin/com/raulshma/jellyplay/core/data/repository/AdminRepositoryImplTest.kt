@@ -28,7 +28,7 @@ import org.junit.Test
 
 class AdminRepositoryImplTest {
 
-    // D5: the ctor takes the family singles directly — this suite only
+    // The ctor takes the family singles directly — this suite only
     // exercises the admin + user families (relaxed, so unstubbed
     // pass-throughs like the live-tv/library tags members stay harmless).
     private val adminApiClient: AdminApiClient = mockk(relaxed = true)

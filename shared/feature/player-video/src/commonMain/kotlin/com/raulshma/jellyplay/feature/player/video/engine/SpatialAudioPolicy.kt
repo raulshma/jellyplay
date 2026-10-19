@@ -27,7 +27,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * mirrored on [com.raulshma.jellyplay.feature.player.video.engine.SpatialAudioState]
  * and [AudioEffectsConfig.spatialAudioEnabled] in the contract.)
  *
- * **Spec reliance (the C5 spec's "auto-disable when passthrough or ≥5.1
+ * **Spec reliance ("auto-disable when passthrough or ≥5.1
  * output is active"):** no dedicated branch exists because both cases are
  * excluded structurally. ExoPlayer cannot passthrough
  * (`EngineCapabilities.supportsAudioPassthrough = false` — it always decodes

@@ -70,19 +70,18 @@ class ArrQueueViewModel(
     val state: State<ArrQueueUiState> = _state.asState()
 
     /**
-     * One-shot action ack/failure feedback, screen-forward seam replacing the
-     * legacy UserMessageBus + Context ctor deps. Same one-shot semantics as
-     * the bus: buffered, single collector, never replayed — [ArrQueueScreen]
-     * resolves the resource text (compose-resources suspend getString, args
-     * included) and posts it to the shared UserMessageBus.
+     * One-shot action ack/failure feedback, screen-forward seam. Buffered,
+     * single collector, never replayed — [ArrQueueScreen] resolves the
+     * resource text (compose-resources suspend getString, args included) and
+     * posts it to the shared UserMessageBus.
      */
     private val messageChannel = Channel<ArrQueueMessage>(Channel.BUFFERED)
     val messages: Flow<ArrQueueMessage> = messageChannel.receiveAsFlow()
 
     /**
      * Whether the Direct *arr Integration experimental flag is enabled —
-     * [ExperimentalFeatureGate.directArrEnabled] verbatim (rationale and
-     * init-timing notes live on the gate).
+     * [ExperimentalFeatureGate.directArrEnabled] (rationale and init-timing
+     * notes live on the gate).
      */
     val featureEnabled: StateFlow<Boolean> = experimentalGate.directArrEnabled
 
@@ -164,9 +163,9 @@ class ArrQueueViewModel(
      * caller's (optional) success arm, or the collapsed failure arm (Raw when
      * the exception carries a message, the unknown-error resource otherwise).
      * The busy flag settles once after either arm. The success arm defaults
-     * to empty: the single-row delete's follow-up choreography moved into the
-     * repository's deep [ArrRepository.deleteQueueRow], so its ladder call
-     * has nothing left to run on success.
+     * to empty: the single-row delete's follow-up choreography lives in the
+     * repository's deep [ArrRepository.deleteQueueRow], so the ladder call
+     * has nothing to run on success.
      */
     private fun runQueueAction(
         action: suspend () -> Result<Unit>,
@@ -221,15 +220,15 @@ class ArrQueueViewModel(
             onSuccess = {
                 if (searchAgain) {
                     // Per-item searches at bounded parallelism — a
-                    // 30-row selection used to pay 30 sequential
-                    // round-trips while actionInProgress blocked
+                    // 30-row selection would otherwise pay 30 sequential
+                    // round-trips while actionInProgress blocks
                     // further actions. mapConcurrent awaits every
                     // search before returning, so clearSelection()
-                    // stays behind the whole fan-out exactly like the
-                    // old forEach; each searchForTmdb Result is
-                    // discarded per item (a failed search never aborts
-                    // the rest) and rows without a tmdbId are skipped.
-                    // Grouped bulk search is not exposed by the repository.
+                    // stays behind the whole fan-out; each searchForTmdb
+                    // Result is discarded per item (a failed search never
+                    // aborts the rest) and rows without a tmdbId are
+                    // skipped. Grouped bulk search is not exposed by the
+                    // repository.
                     searchSemaphore.mapConcurrent(selected) { item ->
                         item.tmdbId?.let { arrRepository.searchForTmdb(it, item.serverKind) }
                     }

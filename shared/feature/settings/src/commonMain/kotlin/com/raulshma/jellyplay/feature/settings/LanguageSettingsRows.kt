@@ -68,10 +68,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_v
  * The language domain's fused row declarations — the feature-side single home
  * of every language/subtitle row's presentation, ordering, and capability
  * (the [AppearanceRows] template), plus the screen's "Track Selection"
- * group ([TrackSelectionRows]). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `LanguageSettingsIds` /
- * `TrackSelectionIds` holder constants (all retired).
+ * group ([TrackSelectionRows]). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * The rows whose knobs live in the spec-backed subtitle store
  * ([SubtitleLanguageStore]) are SPEC-BACKED: their search semantics (keywords,
@@ -88,7 +86,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_v
  * font-size row compounds advanced with the HDR-style toggle. The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * drift; search results, catalog order, group membership and per-gate
- * visibility are byte-identical to the retired declarations.
+ * visibility derive from these declarations.
  */
 internal object LanguageRows {
 
@@ -245,7 +243,7 @@ internal object LanguageRows {
     )
 
     /**
-     * Every fused language row — the ratchet's vocabulary. A computed accessor
+     * Every fused language row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

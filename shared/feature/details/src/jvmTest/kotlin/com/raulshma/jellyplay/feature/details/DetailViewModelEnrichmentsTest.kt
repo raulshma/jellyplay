@@ -149,7 +149,7 @@ class DetailViewModelEnrichmentsTest {
         seerrRepository = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
         themeMusicPlayer = mockk(relaxed = true)
-        // D8: the VM folds the seam's playing flow into uiState — a real
+        // The VM folds the seam's playing flow into uiState — a real
         // StateFlow, not a relaxed mock.
         every { themeMusicPlayer.isPlaying } returns MutableStateFlow(false)
 
@@ -158,23 +158,23 @@ class DetailViewModelEnrichmentsTest {
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
-        // D6: the franchise rows' BoxSet-ancestor read — the injected
+        // The franchise rows' BoxSet-ancestor read — the injected
         // [catalogueEnrichments] fake defaults to success/empty (no ancestor
         // → no rows). Individual tests override via boxSetResults.
-        // D7: the "Airing next" strip fetch — empty keeps the strip absent.
+        // The "Airing next" strip fetch — empty keeps the strip absent.
         // Individual tests override.
         coEvery { libraryApiClient.getUpcoming(any(), any(), any()) } returns Result.success(emptyList())
-        // D3: the merged trailer list's local leg — empty keeps the list
-        // remote-only (every pre-D3 shape). Individual tests override.
+        // The merged trailer list's local leg — empty keeps the list
+        // remote-only (the remote-only shape). Individual tests override.
         coEvery { libraryApiClient.getLocalTrailers(any()) } returns Result.success(emptyList())
-        // D22: the ambient ThemeVideo leg — empty keeps the hero on the
-        // embed/static (every pre-D22 shape). Individual tests override.
+        // The ambient ThemeVideo leg — empty keeps the hero on the
+        // embed/static (every embed/static shape). Individual tests override.
         coEvery { libraryApiClient.getThemeVideos(any()) } returns Result.success(emptyList())
         coEvery { playbackRepository.getMediaSegments(any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbVideos(any(), any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.success(emptyList())
-        // D4: the externalRatings enrichment's Seerr leg — an empty payload
-        // keeps every pre-D4 behavior (the strip falls through to the TMDB
+        // The externalRatings enrichment's Seerr leg — an empty payload
+        // keeps every fallback behavior (the strip falls through to the TMDB
         // seam, unwired unless a test injects it, and stays absent).
         coEvery { seerrRepository.getRatings(any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrRatings())
@@ -202,7 +202,7 @@ class DetailViewModelEnrichmentsTest {
     /**
      * The setUp construction, extractable so a single test can flip a
      * pre-construction stub (the Seerr connection flags — the combine captures
-     * the preferences flow at construction time) or inject the D4 TMDB
+     * the preferences flow at construction time) or inject the TMDB
      * fallback seam before building.
      */
     private fun buildViewModel(
@@ -581,7 +581,7 @@ class DetailViewModelEnrichmentsTest {
         verify(exactly = 1) { themeMusicPlayer.playThemeFor(any()) }
     }
 
-    // ── D8: the themeMusic enrichment gate — the pref/mute matrix ────────
+    // ── the themeMusic enrichment gate — the pref/mute matrix ────────
 
     @Test
     fun themeMusic_gate_respectsGlobalPrefAndPerSeriesMute() = runTest(mainDispatcher) {
@@ -628,7 +628,7 @@ class DetailViewModelEnrichmentsTest {
         verify(exactly = 1) { themeMusicPlayer.playThemeFor("g4") }
     }
 
-    // ── D4: the externalRatings enrichment — source-fallback matrix ──────
+    // ── external-ratings: the externalRatings enrichment — source-fallback matrix ──────
 
     private fun tmdbRatedMovie(itemId: String = "er1") =
         MediaDetail(
@@ -776,7 +776,7 @@ class DetailViewModelEnrichmentsTest {
             ),
         )
         // ...and never lost when the plugin row is empty/absent — there the
-        // strip stands alone in the header (the D9 placement contract: merge
+        // strip stands alone in the header (the placement contract: merge
         // only "while the plugin row renders").
         assertTrue(
             externalRatingsStandaloneInHeader(
@@ -787,7 +787,7 @@ class DetailViewModelEnrichmentsTest {
         )
     }
 
-    // (The D6 franchise and D7 upcoming enrichment arms moved to their
+    // (The franchise and upcoming enrichment arms moved to their
     // section modules — their case suites live on in
     // DetailSectionEnrichmentArmsTest, the registry fake-host style where the
     // DetailSectionEnrichmentHost interface is the test surface. The VM-level

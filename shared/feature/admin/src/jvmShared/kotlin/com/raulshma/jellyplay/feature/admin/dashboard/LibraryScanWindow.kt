@@ -3,9 +3,9 @@ package com.raulshma.jellyplay.feature.admin.dashboard
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * The scan optimistic grace-window machine, extracted verbatim from
- * [AdminDashboardViewModel]'s private members (the mediacleanup
- * `MediaCleanupScanStateHolder` precedent: pure time logic leaves the VM).
+ * The scan optimistic grace-window machine — pure time logic kept out of
+ * [AdminDashboardViewModel] (the mediacleanup `MediaCleanupScanStateHolder`
+ * shape).
  *
  * The server takes a beat to flip the "Scan media library" scheduled task
  * IDLE → RUNNING after the start request, and a WS push landing in that
@@ -55,18 +55,17 @@ internal class LibraryScanWindow(
     }
 
     internal companion object {
-        /** The VM's former `scanOptimisticGraceMs` constant, moved with the machine. */
+        /** The default optimistic-hold window after a user tap. */
         const val DEFAULT_GRACE_MS = 15_000L
     }
 }
 
 /**
- * The WS-task-push freshness heuristic, extracted verbatim from
- * [AdminDashboardViewModel.wsTasksFresh] (same extraction precedent as
- * [LibraryScanWindow]): pushes arrive at 1 Hz, so [isFresh] trusts them over
- * a REST snapshot only within [staleAfterMs] of the channel's last push —
- * more silence than that means the socket is dead and REST may refresh the
- * running-task card again.
+ * The WS-task-push freshness heuristic — pure time logic like
+ * [LibraryScanWindow], from [AdminDashboardViewModel.wsTasksFresh]: pushes
+ * arrive at 1 Hz, so [isFresh] trusts them over a REST snapshot only within
+ * [staleAfterMs] of the channel's last push — more silence than that means
+ * the socket is dead and REST may refresh the running-task card again.
  *
  * Freshness is judged from the PUSH timestamp passed in, not from collection
  * time: the shared flow replays its last emission to every new collector,

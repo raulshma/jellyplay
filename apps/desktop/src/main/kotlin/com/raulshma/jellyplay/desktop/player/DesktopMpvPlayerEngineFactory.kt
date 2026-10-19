@@ -27,7 +27,7 @@ import kotlinx.coroutines.delay
  * is exactly one publishing surface at any time; engine teardown is owned by
  * PlayerSessionManager's release paths, not this factory.
  *
- * Surface selection (precedence inverted for the overlay fix): the
+ * Surface selection (software-first): the
  * SOFTWARE renderer wins whenever the prober smoke-passed. The SwingPanel/HWND
  * embed renders into a heavyweight child window that composites ABOVE all
  * Compose content — the overlay controls paint under the video and mouse
@@ -37,8 +37,8 @@ import kotlinx.coroutines.delay
  * compose tree, where controls stack correctly and pointer input reaches the
  * normal gesture layer. Only when the probe fails does the embedded HWND path
  * take over (a realized handle within the existing wait budget → MpvDesktopEngine
- * with `wid`), and when neither surface story applies does the pre-12B degrade
- * survive (no-wid engine → empty surface/audio-only).
+ * with `wid`), and when neither surface story applies, playback degrades to an
+ * audio-only engine (no wid → empty surface).
  *
  * Engine selection: mpv is the only real desktop backend, so media3/libVLC
  * picks ride it too (the decoder picker still functions as an engine-reload).
@@ -85,7 +85,7 @@ class DesktopMpvPlayerEngineFactory(
                 surface = SURFACE_NO_OP
             }
             PlayerType.MPV,
-            // mpv is the desktop stand-in until a media3/libVLC backend exists.
+            // mpv is the desktop stand-in for the media3/libVLC backends.
             PlayerType.EXO_PLAYER,
             PlayerType.LIBVLC,
             -> {
@@ -96,7 +96,7 @@ class DesktopMpvPlayerEngineFactory(
                     // the software renderer composites CPU RGB bitmaps and cannot
                     // pass HDR through. The sw-first precedence is therefore
                     // inverted: prefer the embedded window with `vo=gpu-next` and
-                    // `target-colorspace-hint=yes`; degrade to the historical
+                    // `target-colorspace-hint=yes`; degrade to the fallback
                     // chain (audio-only) only when no handle materializes.
                     val windowed = if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
                         awaitSurfaceHandle()
@@ -168,10 +168,10 @@ class DesktopMpvPlayerEngineFactory(
     }
 
     /**
-     * Legacy degrade chain: engine without wid → empty-surface audio-only
-     * playback, exactly the pre-12B behavior. On Windows this also means AWT
-     * never realized the child window inside the budget — worth a line of
-     * stderr ([warn]) because the session silently loses video otherwise.
+     * Fallback chain: engine without wid → empty-surface audio-only playback.
+     * On Windows this also means AWT never realized the child window inside
+     * the budget — worth a line of stderr ([warn]) because the session
+     * silently loses video otherwise.
      */
     private fun degradeToWidNull(warn: Boolean, shaderDir: String?): MpvDesktopEngine {
         if (warn) {

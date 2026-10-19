@@ -11,11 +11,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the D4 ratings strip's pure decision surface: the [DetailExternalRatings]
+ * Pins the external-ratings ratings strip's pure decision surface: the [DetailExternalRatings]
  * folds (Seerr payload → plain values; TMDB-only fallback + constructed link),
  * the chip order the shared [RatingsRow] renders, and the two placement
  * admissions — standalone in the header metadata row vs merged into the plugin
- * ratings row's FlowRow (D9, plugin sources first), including the
+ * ratings row's FlowRow (plugin sources first), including the
  * pluginSimilarSuppressesStock-mirror dedupe (suppression when the plugin row
  * exists).
  */
@@ -164,11 +164,11 @@ class DetailRatingsBlockTest {
         )
     }
 
-    // ── Placement: merged into the plugin row (D9 ordering) ────────────
+    // ── Placement: merged into the plugin row (plugin ordering) ────────────
 
     @Test
     fun `merge admits plugin row plus resolved chips without the plugin feature`() {
-        // The plugin row renders (mdblist data landed) but the D4
+        // The plugin row renders (mdblist data landed) but the external-ratings
         // enrichment's probe did NOT come back live (e.g. the feature reg
         // raced): the chips merge, plugin sources first.
         assertTrue(

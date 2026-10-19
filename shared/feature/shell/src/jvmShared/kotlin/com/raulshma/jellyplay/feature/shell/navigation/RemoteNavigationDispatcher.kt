@@ -9,18 +9,12 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The ONE remote-navigation ladder both shells run — the exhaustive
- * when([NavigationTarget]) the Android `NavRequestCollector` and the
- * desktop shell used to hand-copy beside the
- * [RemoteNavigationRouting] folds. The hand-copies had drifted (the
- * survey-measured fork): desktop routed [NavigationTarget.GoToTopLevel]
- * through its navigator, whose pop-to-root-when-already-on-tab behavior
- * (`Navigator.navigate`) the Android shell deliberately bypasses — so the
- * same remote "GoHome" popped desktop's current tab to its root while
- * Android only switched. This class owns the tab-vs-push policy ONCE
+ * when([NavigationTarget]) behind the Android `NavRequestCollector` and the
+ * desktop shell, beside the
+ * [RemoteNavigationRouting] folds. This class owns the tab-vs-push policy ONCE
  * ([dispatch] / [routeDispatch]): a route that names one of the shell's
  * [topLevelKeys] SWITCHES the tab (never pops, never runs the push filter —
- * tab switches are never playback routes), everything else pushes. Android
- * always had the select semantics; desktop inherited them with the fold.
+ * tab switches are never playback routes), everything else pushes.
  *
  * Per-shell seams are constructor lambdas (the [ShellHostHooks]
  * constructor-arg idiom, no interface): the push seam (desktop passes its
@@ -34,13 +28,13 @@ import kotlinx.coroutines.flow.Flow
  * synthesizes D-pad/center/menu keycodes, desktop moves the Compose
  * FocusManager / posts an AWT Enter). No compose, no navigator type — so the
  * ladder is JVM-pinnable through fake lambdas
- * (`RemoteNavigationDispatcherTest`; the RemoteNavigationRouting precedent).
+ * (`RemoteNavigationDispatcherTest`).
  *
  * The two per-shell collectors that are NOT part of this ladder (Android's
  * SyncPlay auto-open and now-playing snackbar loops) dispatch through the
  * same sinks and the companion folds below, so their policies live here too.
  * Desktop arms none of their flows DELIBERATELY: it has no SyncPlay
- * coordinator, and since the receiver port the shell arms the receiver's
+ * coordinator, and it arms the receiver's
  * other outputs instead — its DisplayMessages ride the user-message host
  * while its playEvents stay uncollected (the desktop dispatcher twins
  * already open the player for every remote Play, which is the confirmation

@@ -59,12 +59,11 @@ class SettingsSectionKeysGuardTest {
 
     /**
      * The converted domains' entrance keys — declaration-driven, invisible to
-     * the [callSite] scan. Each fused-conversion wave adds its domain's key
-     * here in the same change that splices its [SettingsEntranceSectionRow]
-     * into [SETTINGS_ENTRANCE_SECTIONS]. The whole fused-catalog wave is
-     * converted: appearance plus the home, playback, audio, language,
-     * notifications, storage, security, backup, integrations and about
-     * domains. The scan's reason persists for the sections with no fused row
+     * the [callSite] scan. Each converted domain adds its key here in the
+     * same change that splices its [SettingsEntranceSectionRow] into
+     * [SETTINGS_ENTRANCE_SECTIONS]: appearance plus the home, playback, audio,
+     * language, notifications, storage, security, backup, integrations and
+     * about domains. The scan still covers the sections with no fused row
      * domain — the composite profile/power-user/devices/account/activity/
      * system sections, privacy data, the capability-gated on-screen groups,
      * the experimental entry and what's-new.

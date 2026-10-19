@@ -20,11 +20,11 @@ import kotlinx.serialization.json.JsonElement
  * [BackupSliceKey]) plus an [extras] block for app-runtime state that no
  * preference domain owns (favorite channels, last live-TV channel, watch-later
  * playlist, onboarding flag, recent DLNA devices). Each slice is the canonical
- * `@Serializable XSlice` owned by its domain store, so export/import no longer
- * round-trips through the decommissioned `UserPreferences` aggregate and a
- * single domain can evolve its slice without touching the others.
+ * `@Serializable XSlice` owned by its domain store, so export/import reads and
+ * writes the slices directly and a single domain can evolve its slice without
+ * touching the others.
  *
- * **Wave-3 secrets block (additive, optional):** [secrets] carries the
+ * **Secrets block (additive, optional):** [secrets] carries the
  * passphrase-encrypted secrets block (see [SecretsEnvelope] / [BackupSecrets])
  * for LOCAL FILE backups only — server-held backups (plugin sync) never carry
  * secrets. [originUserId]/[originServerId] stamp the exporting session's
@@ -34,10 +34,10 @@ import kotlinx.serialization.json.JsonElement
  * keys), so [CURRENT_SCHEMA_VERSION] stays 2. The three are annotated
  * `@EncodeDefault(EncodeDefault.Mode.NEVER)` so a PLAIN export (all three at
  * their null default) omits the keys entirely — byte-shape parity with every
- * pre-Wave-3 export — while a secrets export still writes all three.
+ * secrets-free v2 export — while a secrets export still writes all three.
  *
- * Legacy v0/v1 (un-enveloped / single-aggregate) backups stopped importing in
- * v0.11 — [BackupParser.parse] rejects them with a clear message.
+ * Legacy v0/v1 (un-enveloped / single-aggregate) backups do not import —
+ * [BackupParser.parse] rejects them with a clear message.
  *
  * [CURRENT_SCHEMA_VERSION] is bumped only on a breaking change to the backup
  * shape; minor additive slice changes are covered by [PreferencesJson] ignoring
@@ -55,7 +55,7 @@ data class SettingsBackup(
     @SerialName("extras")
     val extras: AppRuntimeState = AppRuntimeState(),
 
-    // The three Wave-3 fields skip default-encoding (Mode.NEVER): a plain
+    // The three secrets-block fields skip default-encoding (Mode.NEVER): a plain
     // export must not emit `"secrets": null`-shaped keys — see the class KDoc.
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("secrets")
@@ -103,8 +103,7 @@ data class SecretsEnvelope(
 )
 
 /**
- * The plaintext secret payload a [SecretsEnvelope] protects. Contents (the
- * settled Wave-3 decision):
+ * The plaintext secret payload a [SecretsEnvelope] protects. Contents:
  *
  *  - [arrServers] — manually-entered Radarr/Sonarr configs incl. their API keys.
  *  - [subtitleCredentials] — per-provider credentials (Wyzie API key,
@@ -173,7 +172,7 @@ fun ArrServerConfig.toSecret(): ArrServerSecret = ArrServerSecret(
 /**
  * One subtitle provider's credentials, tagged with its [kind] so restore fans
  * back through the secure store's per-kind setter. [credentials] is the sealed
- * runtime credential type reused verbatim (its polymorphic `@SerialName`
+ * runtime credential type reused as-is (its polymorphic `@SerialName`
  * discriminator travels inside the ciphertext like any other field).
  */
 @Serializable
@@ -252,7 +251,7 @@ object BackupSliceKey {
     const val VOLUME_PROFILE = "volumeProfile"
 
     // ------------------------------------------------------------------
-    // Wave 2 — slices contributed OUTSIDE the domain-store fan-out (see
+    // Slices contributed OUTSIDE the domain-store fan-out (see
     // [com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice]):
     // Room-backed config and the non-secret integration settings. Additive
     // keys — an older app version ignores them (PreferencesJson ignores

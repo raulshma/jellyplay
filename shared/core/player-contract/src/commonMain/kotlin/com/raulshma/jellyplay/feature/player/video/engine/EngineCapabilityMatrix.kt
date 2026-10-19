@@ -61,7 +61,7 @@ object EngineCapabilityMatrix {
         // rewrites `Style: Default` before libass parses the track — ass-media
         // 0.5.0 binds no style-override JNI). Apply-at-load: the rewritten header
         // takes effect when the subtitle track next parses, not live like mpv.
-        // Scope (the C3 spec's "font/color/position" ask): covers
+        // Scope ("font/color/position" ask): covers
         // font/colors/border/size but NOT authored ASS positioning
         // (alignment/margins — rewriting them would break signage/karaoke
         // event positioning; the user's vertical position keeps applying via

@@ -783,9 +783,9 @@ fun StorageSettingsScreen(
                     val sdCardLabel = stringResource(Res.string.storage_sd_card)
                     val storageLocationTitle = rowTitle(StorageRows.DownloadStorageLocation)
                     // Build the picker from the *real*
-                    // available mounts (primary + any SD/USB) instead of the
+                    // available mounts (primary + any SD/USB) instead of a
                     // hardcoded INTERNAL/EXTERNAL pair. Falls back to the
-                    // legacy pair if mount enumeration hasn't resolved yet.
+                    // plain pair if mount enumeration hasn't resolved yet.
                     // NOTE: string resolution happens here in the @Composable
                     // body; the lambda below only closes over the resolved
                     // CharSequences so it can be invoked from non-composable
@@ -850,8 +850,7 @@ fun StorageSettingsScreen(
                 item {
                     HiddenSettingsHint(
                         // Derived from the fused declarations (hiddenRowsFor):
-                        // the cache group's five advanced tuning rows (the
-                        // retired hand literal 3 predated two of them; the
+                        // the cache group's five advanced tuning rows; the
                         // network/downloads groups carry no advanced gates).
                         hiddenCount = hiddenRowsFor(
                             listOf(

@@ -23,15 +23,13 @@ interface JellyPlayExtension {
      * Default: derived from the module's Gradle path — `:shared` dropped,
      * remaining segments joined with dots (directory hyphens become dots),
      * suffixed with `.generated.resources`. `:shared:feature:home` →
-     * `com.raulshma.jellyplay.feature.home.generated.resources` — the exact
-     * string every migrated module's legacy build file carried (the legacy
-     * per-module package, kept so migrated sources need no import churn).
+     * `com.raulshma.jellyplay.feature.home.generated.resources` — kept
+     * stable so shared sources need no import churn.
      *
-     * Override for modules whose legacy package breaks the derivation —
-     * today only `feature:player-book`, whose legacy Res package is
-     * `...feature.book...` (the `player` path segment was collapsed at the
-     * legacy module's creation and its generated accessors were shipped in
-     * that package ever since).
+     * Override for modules whose package breaks the derivation — today only
+     * `feature:player-book`, whose Res package is `...feature.book...`
+     * (derivation would insert a `player` segment the generated accessors
+     * do not use).
      */
     val resPackage: Property<String>
 }
@@ -42,19 +40,18 @@ interface JellyPlayExtension {
  * Compose Multiplatform distribution plugin (the only publisher of real JVM
  * compose binaries — see the catalog note on `composeMultiplatform`).
  *
- * Also owns the UNIVERSAL commonMain dependency bundle (XC-2) — the subset
- * every Compose module's build file used to repeat verbatim (~90% of the
- * per-module dependency blocks). This deliberately reverses the "every
- * module owns its dependency list" stance recorded in the base plugin's
- * KDoc for exactly this subset; everything outside it (project edges,
+ * Also owns the UNIVERSAL commonMain dependency bundle — the subset every
+ * Compose module needs. This deliberately reverses the "every module owns
+ * its dependency list" stance recorded in the base plugin's KDoc for
+ * exactly this subset; everything outside it (project edges,
  * coil/datetime/serialization/paging/saveable/activity/platform-lane deps,
  * test lanes, ...) stays declared per module.
  *
- * The bundle — `api` vs `implementation` mirrors what modules declared
- * themselves (core:designsystem api-exported the five JB compose artifacts
- * so every feature façade compiles against Compose; nothing else was ever
- * api-scoped, so keeping them implementation preserves each module's
- * exposed API byte-for-byte):
+ * The bundle — `api` vs `implementation` mirrors what modules declare
+ * (core:designsystem api-exports the five JB compose artifacts so every
+ * feature façade compiles against Compose; nothing else is api-scoped, so
+ * keeping them implementation preserves each module's exposed API
+ * byte-for-byte):
  *
  *  - `api`: jb-compose-runtime / ui / foundation / animation / material3
  *    (the JB CMP distribution — Android targets redirect to androidx).
@@ -68,11 +65,11 @@ interface JellyPlayExtension {
  * core:model/data/network/database/datastore/concurrency/player-contract/
  * test-fixtures — keeps its own hand-picked edges).
  *
- * The former per-module `compose.resources { packageOfResClass = ... }`
- * tail is centralized here as the [JellyPlayExtension.resPackage] default
- * (derived from the module path — see the property's KDoc). The generated
- * package strings are unchanged for every module; `player-book` overrides
- * via `jellyplay { resPackage = ... }`. `publicResClass` stays per-module
+ * The `compose.resources { packageOfResClass = ... }` tail is centralized
+ * here as the [JellyPlayExtension.resPackage] default (derived from the
+ * module path — see the property's KDoc); the default reproduces each
+ * module's declared package. `player-book` overrides via
+ * `jellyplay { resPackage = ... }`. `publicResClass` stays per-module
  * (only core:ui flips it, for cross-module string sharing).
  */
 class KmpLibraryComposePlugin : Plugin<Project> {
@@ -91,16 +88,15 @@ class KmpLibraryComposePlugin : Plugin<Project> {
 
         // Universal commonMain bundle. Version-catalog type-safe accessors
         // (libs.*) do not generate inside convention-plugin code, so the
-        // aliases resolve through the VersionCatalogsExtension — same pins
-        // the per-module build files used before the centralization.
+        // aliases resolve through the VersionCatalogsExtension.
         val libs = project.extensions.getByType(VersionCatalogsExtension::class.java).named("libs")
 
         project.extensions.configure(KotlinMultiplatformExtension::class.java) {
             sourceSets.getByName("commonMain").dependencies {
-                // api — core:designsystem exposed these to every consumer
-                // before the centralization; implementation would narrow its
-                // published API (every other module implementation-scoped
-                // them, and widening those is compile-safe).
+                // api — core:designsystem exposes these to every consumer;
+                // implementation would narrow its published API (every other
+                // module implementation-scopes them, and widening those is
+                // compile-safe).
                 api(libs.findLibrary("jb-compose-runtime").get())
                 api(libs.findLibrary("jb-compose-ui").get())
                 api(libs.findLibrary("jb-compose-foundation").get())
@@ -108,9 +104,8 @@ class KmpLibraryComposePlugin : Plugin<Project> {
                 api(libs.findLibrary("jb-compose-material3").get())
 
                 // Compose-resources runtime (stringResource/StringResource
-                // API). No catalog alias existed for the DSL notation
-                // compose.components.resources — added as
-                // jb-compose-components-resources on the same train.
+                // API), aliased as jb-compose-components-resources on the
+                // same train as the DSL notation compose.components.resources.
                 implementation(libs.findLibrary("jb-compose-components-resources").get())
 
                 // Icon packs (tabler, composables' CMP port).
@@ -118,9 +113,8 @@ class KmpLibraryComposePlugin : Plugin<Project> {
                 implementation(libs.findLibrary("tabler-icons-filled").get())
 
                 // Nav3 ships KMP variants from google maven directly — no
-                // mirror. (The legacy lifecycle-viewmodel-navigation3 edge
-                // was dropped module-by-module; navigation entries use
-                // entry<Route> from the runtime/ui artifacts only.)
+                // mirror. Navigation entries use entry<Route> from the
+                // runtime/ui artifacts only.
                 implementation(libs.findLibrary("navigation3-runtime").get())
                 implementation(libs.findLibrary("navigation3-ui").get())
 
@@ -129,8 +123,8 @@ class KmpLibraryComposePlugin : Plugin<Project> {
                 implementation(libs.findLibrary("lifecycle-viewmodel").get())
                 implementation(libs.findLibrary("lifecycle-runtime-compose").get())
 
-                // Koin owns the ViewModels (V3 feature conveyor: one
-                // framework per type — koinViewModel() in the nav entries).
+                // Koin owns the ViewModels (one framework per type —
+                // koinViewModel() in the nav entries).
                 implementation(libs.findLibrary("koin-core").get())
                 implementation(libs.findLibrary("koin-compose").get())
                 implementation(libs.findLibrary("koin-compose-viewmodel").get())

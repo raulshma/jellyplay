@@ -83,8 +83,8 @@ class MediaRepositoryDetailCacheGroupTest {
             // The home cache-maintenance port (inert here — this suite pins
             // the detail-cache key grammar).
             homeSectionsCachePort = mockk(relaxed = true),
-            // Snapshot-store extraction: the persisted home pipeline moved
-            // into the store single the Koin graph wires (inert here — this
+            // The persisted home pipeline is the store single the Koin graph
+            // wires (inert here — this
             // suite pins the detail-cache key grammar).
             homeSnapshotStore = HomeSectionsSnapshotStore(homeSectionCacheDao, homeSession, SystemTimeSource()),
             playedStateSync = playedStateSync,

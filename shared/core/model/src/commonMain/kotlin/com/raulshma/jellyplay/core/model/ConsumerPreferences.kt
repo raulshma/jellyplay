@@ -8,10 +8,10 @@ import kotlinx.serialization.Serializable
 //
 // Each type below is the *exact* field set one non-settings screen reads,
 // projected centrally by `PreferenceProjections` off the store-owned slices.
-// These are the successors to the bespoke `combine(...)` projections that the
-// feature ViewModels used to hand-roll (with vararg + `UNCHECKED_CAST`). Field
-// names are identical to the former local shadows on purpose: it keeps screen
-// bodies (`preferences.X`) untouched when a screen swaps to the projection.
+// These replace the bespoke `combine(...)` projections the feature ViewModels
+// hand-rolled (with vararg + `UNCHECKED_CAST`). Field names match the
+// per-screen local shadows on purpose: screen bodies (`preferences.X`) stay
+// untouched when a screen swaps to the projection.
 //
 // A field that several screens display (e.g. the four appearance-theme fields)
 // is projected into each screen's type; a write recomposes every owner, and
@@ -97,7 +97,7 @@ data class DetailPreferences(
     /** Play a series' ambient theme music on detail open. */
     val playThemeMusic: Boolean = true,
     /**
-     * D8: per-series "never play theme music here" memory (the detail top
+     * Per-series "never play theme music here" memory (the detail top
      * bar's mute chip wrote it). Projected from
      * `HomeDiscoveryStore.themeMusicMutedSeriesIds`; a muted series's theme
      * enrichment doesn't start playback at all.
@@ -122,7 +122,7 @@ data class DetailPreferences(
     /** Show live download progress on season episode rows. */
     val showDownloadProgress: Boolean = true,
 ) {
-    /** D8: whether [seriesId]'s theme music is per-series muted. */
+    /** Whether [seriesId]'s theme music is per-series muted. */
     fun isThemeMusicMutedFor(seriesId: String): Boolean = seriesId in themeMusicMutedSeriesIds
 }
 
@@ -238,17 +238,17 @@ data class MainPreferences(
     val showUnwatchedBadge: Boolean = true,
     val hideWatchedItems: Boolean = false,
     val showWatchedCheckmark: Boolean = true,
-    /** H11: quality badges (4K / HDR / DV / Atmos) on cards (home-discovery knob). */
+    /** Quality badges (4K / HDR / DV / Atmos) on cards (home-discovery knob). */
     val showQualityBadges: Boolean = true,
-    /** H12: "NEW" badges for items added since the last home visit (home-discovery knob). */
+    /** "NEW" badges for items added since the last home visit (home-discovery knob). */
     val showNewBadges: Boolean = true,
-    /** H15: anti-spoiler home master switch (home-discovery knob). */
+    /** Anti-spoiler home master switch (home-discovery knob). */
     val antiSpoilerHome: Boolean = false,
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,
     val navBarShowLabels: Boolean = true,
-    /** Manual adaptive-layout override (issue #166); AUTO follows the window. */
+    /** Manual adaptive-layout override; AUTO follows the window. */
     val layoutMode: LayoutMode = LayoutMode.AUTO,
     /** The TV overscan safe-area calibration; only consumed on the TV form factor. */
     val tvOverscan: TvOverscan = TvOverscan.FIVE,

@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * registration order IS the default layout order and stays pinned to the
  * wire-safe [HomeSectionType.CONFIGURABLE] list, and the per-type gate facts
  * every consumer layer reads (chassis, ordering use case, refresh arms) match
- * the membership the scattered dispatches used to spell.
+ * the membership each scattered dispatch expects.
  */
 class HomeRowModulesTest {
 
@@ -118,7 +118,7 @@ class HomeRowModulesTest {
         }
     }
 
-    // ── The v3 registrations (H4 Upcoming + H5 My Media) ──
+    // ── The Upcoming + My Media registrations ──
 
     @Test
     fun upcoming_rowFacts() {

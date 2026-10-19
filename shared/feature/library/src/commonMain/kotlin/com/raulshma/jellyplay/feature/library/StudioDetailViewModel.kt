@@ -96,7 +96,7 @@ internal class StudioDetailViewModel(
     val downloadedIds get() = quickDownloadActions.downloadedIds
 
     /**
-     * Long-press Download from a studio card (#147): inline start for
+     * Long-press Download from a studio card: inline start for
      * single-stream items; series selection and richer flows open the detail
      * screen plainly — this host's navigation cannot pre-present the series
      * sheet (unlike the library grid).

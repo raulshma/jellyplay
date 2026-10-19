@@ -38,31 +38,29 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * ArrQueue ViewModel coverage (requests/downloads conveyor test style, no
- * legacy suite existed): the DIRECT_ARR_INTEGRATION flag gate on refresh, the
- * queue-flow mirror, selection state (toggle/selectAll/clear incl. the rowKey
- * format with the empty-serverId fallback), pending-action dialog state, the
- * single-row delete's flag hand-off to the repository's deep deleteQueueRow
- * (the option mapping + follow-up search that used to live here moved there —
- * pinned in ArrRepositoryImplTest), the bulk delete-options mapping
+ * ArrQueue ViewModel coverage: the DIRECT_ARR_INTEGRATION flag gate on refresh,
+ * the queue-flow mirror, selection state (toggle/selectAll/clear incl. the
+ * rowKey format with the empty-serverId fallback), pending-action dialog state,
+ * the single-row delete's flag hand-off to the repository's deep deleteQueueRow
+ * (the option mapping and follow-up search are pinned in
+ * ArrRepositoryImplTest), the bulk delete-options mapping
  * (removeFromClient=true, skipRedownload=!searchAgain) with its
  * searchAgain→searchForTmdb fan-out (tmdbId-null rows skipped), bulk
  * filtering, and the ArrQueueMessage seal emissions per action outcome
- * (identity asserts on the generated StringResource, admin conveyor
- * precedent; cold first() works because the channel is BUFFERED — downloads
- * conveyor pattern).
+ * (identity asserts on the generated StringResource; cold first() works
+ * because the channel is BUFFERED).
  *
  * Init-timing note pinned by the flag tests: the gate's flow is
  * stateIn(Eagerly, initial = false) on the test Main scope, and init calls
  * refresh() synchronously BEFORE the sharing coroutine runs — so the very
- * first refresh always sees the initial false and no-ops, exactly like HEAD
- * (rationale now quoted once in ExperimentalFeatureGate's KDoc).
+ * first refresh always sees the initial false and no-ops (rationale lives in
+ * ExperimentalFeatureGate's KDoc).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (requests/downloads conveyor port pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var arrRepository: ArrRepository
@@ -242,8 +240,8 @@ class ArrQueueViewModelTest {
 
     // ── delete options mapping + searchAgain fan-out ──────────────────────
     // The dialog-flag → ArrQueueDeleteOptions mapping and the tmdb-ful
-    // replacement-search follow-up moved into the repository's deep
-    // deleteQueueRow (pinned in ArrRepositoryImplTest); this seam now pins
+    // replacement-search follow-up live in the repository's deep
+    // deleteQueueRow (pinned in ArrRepositoryImplTest); this seam pins
     // the flag hand-off and the guard ladder around it.
 
     @Test

@@ -15,13 +15,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Guards the Stage B derivation integrity for the playback domain: the
+ * Guards the derivation integrity for the playback domain: the
  * [PlaybackPreferenceSpecs] rows are the single declaration of every key's
  * wire name / storage type / reset category, and `PlaybackStore` derives its
  * `Keys` members, reset lists (and its read/restore machinery) from them — so
  * a wire-name, storage-type or reset-category drift would silently change
  * what is read from disk or wiped on reset. These tests pin the derivation to
- * the exact legacy strings the pre-spec hand-written store carried; the
+ * the exact legacy wire strings; the
  * behavioral safety net (defaults, round-trips, legacy migrations) stays in
  * [PlaybackStoreTest].
  */
@@ -185,7 +185,7 @@ class PlaybackSpecDerivationTest {
 
     @Test
     fun `every slice default equals its spec default`() {
-        // The single-default ratchet: each [PlaybackSlice] property's default
+        // The single-default guard: each [PlaybackSlice] property's default
         // reads its row's `.default`, so the value below IS the row's — if a
         // future edit restates a literal here (or on the slice) and the two
         // drift, this fails. PREFERRED_PLAYER's row default is deliberately the

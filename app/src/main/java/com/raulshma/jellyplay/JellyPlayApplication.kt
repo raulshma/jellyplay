@@ -30,10 +30,10 @@ private const val TAG = "JellyPlay"
 
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
-    // Memoized: the getter re-ran the Builder + three addFactory
-    // calls per access — WorkManager can read the property more than once
-    // during initialization/retry paths. Same lazy idiom the file already
-    // uses below.
+    // Memoized: the getter would otherwise re-run the Builder + three
+    // addFactory calls per access — WorkManager can read the property more
+    // than once during initialization/retry paths. Same lazy idiom the file
+    // already uses below.
     override val workManagerConfiguration: Configuration by lazy {
         Configuration.Builder()
             .setWorkerFactory(
@@ -50,11 +50,10 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             .build()
     }
 
-    // Deferred single access (Hilt removal): the former
-    // javax.inject.Provider fields deferred Hilt construction off the
-    // cold-start path; kotlin `by lazy` over the Koin container preserves that
-    // exactly (definitions are lazy, and each resolved single is the same
-    // memoized instance the rest of the graph sees).
+    // Deferred single access: `by lazy` over the Koin container keeps
+    // construction off the cold-start path (definitions are lazy, and each
+    // resolved single is the same memoized instance the rest of the graph
+    // sees).
     private val okHttpClient: OkHttpClient by lazyFromKoin()
     // Read by the image loader's lazily-sized DiskCache below
     // (maxCacheSizeMb); the cold-start prewarm of the same slice lives in
@@ -65,17 +64,16 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // recovery + the self-update APK sweep — is composed in
     // startup/AppStartupPrewarms (the CacheMaintenanceInitializer/
     // DownloadRecoveryInitializer idiom), over the same memoizing lazy
-    // collaborator access the former inline fields provided.
+    // collaborator access.
     private val appStartupPrewarms: AppStartupPrewarms by lazyFromKoin()
 
     private val applicationScope: CoroutineScope
         by lazy { KoinPlatform.getKoin()!!.get(DatastoreQualifiers.applicationScope) }
 
     /**
-     * Memoizing deferred access into the Koin container — the kotlin-lazy
-     * twin of the former javax.inject.Provider fields (a @Singleton-backed
-     * Hilt Provider returned the same instance per get(), which a memoizing
-     * lazy matches).
+     * Memoizing deferred access into the Koin container — the lazy memoizes,
+     * so every access resolves the same singleton instance the rest of the
+     * graph sees.
      */
     private inline fun <reified T : Any> lazyFromKoin() =
         lazy { KoinPlatform.getKoin()!!.get<T>() }
@@ -94,15 +92,14 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun onCreate() {
-        // Koin owns construction for every module —
-        // Hilt is fully gone from :app. MUST run before anything resolves a
+        // Koin owns construction for every module.
+        // MUST run before anything resolves a
         // dependency: the lazy fields and every Activity/Service/widget entry
         // point reach into this container, and definitions are lazy, so this
         // adds no cold-start construction cost.
         // The module list itself is AndroidKoinModules.kt (the fold): the
         // shared core graph, this shell's platform actuals, and the ONE
-        // spread of sharedFeatureModules both JVM shells consume — every
-        // per-registration comment moved there with its registration.
+        // spread of sharedFeatureModules both JVM shells consume.
         // Boot mark around the startKoin segment (module registration +
         // definition classloading): elapsed-realtime delta surfaced as the
         // same always-on "[JellyPlay][perf]" one-liner the desktop shell's
@@ -126,9 +123,9 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // 2 s-deferred background schedulers (all KEEP-idempotent enqueues),
         // (d) best-effort download recovery + the self-update APK sweep —
         // is owned by [AppStartupPrewarms] beside the other startup
-        // initializers. start() fires the same applicationScope launches, in
-        // the same order, at the same point of onCreate as the former inline
-        // blocks; the per-group rationale lives there now.
+        // initializers. start() fires the applicationScope launches, in
+        // the same order, at the same point of onCreate; the per-group
+        // rationale lives there.
         appStartupPrewarms.start()
     }
 
@@ -141,8 +138,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             // DiskCache (256 MB default), doubling disk writes for every poster
             // and bloating http_cache with binary data competing with the small
             // JSON responses it was sized for. `.cache(null)` leaves Coil's
-            // DiskCache as the sole owner of image bytes — functionally
-            // identical to the previous behavior for image rendering.
+            // DiskCache as the sole owner of image bytes.
             .cache(null)
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)

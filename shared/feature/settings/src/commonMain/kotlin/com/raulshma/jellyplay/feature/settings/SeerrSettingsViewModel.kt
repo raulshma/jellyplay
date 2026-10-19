@@ -63,7 +63,7 @@ class SeerrSettingsViewModel(
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val secureCredentialsStore: SeerrSecureCredentialsStore,
     /**
-     * The jellyfin-plugin-jellyplay "via server" seams (ADR 0010).
+     * The jellyfin-plugin-jellyplay "via server" seams.
      * Nullable-with-default (the [SettingsViewModel] plugin-dep pattern):
      * this VM is directly constructed in tests; the Koin factory passes the
      * real singles and the screen renders the mode selector only when the
@@ -74,8 +74,8 @@ class SeerrSettingsViewModel(
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store
      * above. Nullable-with-default; unwired, every bridge path fails CLOSED
-     * (ADR 0010 §6) — production always receives it from Koin, only direct
-     * test construction runs without it.
+     * (production always receives it from Koin; only direct test
+     * construction runs without it).
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
     /** Jellyfin Quick Connect source for the bridge link flow (the plugin authorizes a Jellyfin QC secret, then SSOs into Seerr). */
@@ -156,20 +156,14 @@ class SeerrSettingsViewModel(
     /**
      * Connection status via the shared [ConnectionProbe] board (single key —
      * one connection): the machine owns single-flight RESTART, the
-     * cancellation-never-lands-as-Error rule, and the localized fallback texts
-     * that replaced this VM's former English literals.
+     * cancellation-never-lands-as-Error rule, and the localized fallback texts.
      *
-     * Behavior changes vs the former hand-rolled status:
-     *  - `ConnectionStatus.isValid` died (every construction passed `true`
-     *    and no reader ever consumed it).
-     *  - a refused request (blank field) now SUPERSEDES an in-flight test —
-     *    the old flow let the in-flight result overwrite the fresh
-     *    validation error.
-     *  - superseding a test no longer flickers the spinner off/on between
-     *    probes (the screen's Testing flag derives from the status).
-     *  - an unexpected crash degrades to the localized UnexpectedError
-     *    fallback (same user-visible text as the old catch-all, now declared
-     *    once in the machine).
+     * Behavior:
+     *  - a refused request (blank field) SUPERSEDES an in-flight test, so a
+     *    stale in-flight result cannot overwrite the fresh validation error.
+     *  - superseding a test does not flicker the spinner between probes (the
+     *    screen's Testing flag derives from the status).
+     *  - an unexpected crash degrades to the localized UnexpectedError fallback.
      */
     private val connectionProbe = ConnectionProbe(
         scope = scope,
@@ -284,8 +278,7 @@ class SeerrSettingsViewModel(
     }
 
     /**
-     * The probe action per request variant. Declared persistence order is
-     * preserved from the former hand-rolled paths: the server URL is written
+     * The probe action per request variant. The server URL is written
      * up-front for every variant (the repository resolves it from saved
      * preferences when making the call), the API-key path persists its
      * credential before the call, and the login paths defer credential writes
@@ -401,7 +394,7 @@ class SeerrSettingsViewModel(
     }
 
     // ── via-server bridge actions ──
-    // The pane-level lifecycle of the plugin-brokered Seerr link (ADR 0010):
+    // The pane-level lifecycle of the plugin-brokered Seerr link:
     // mode persist + status fetch + Quick Connect link + logout. The direct
     // probe board above is untouched — the bridge has its own state block.
 
@@ -429,7 +422,7 @@ class SeerrSettingsViewModel(
     /**
      * The bridge surfaces' gate arm (probe AND the user's `seerr-bridge`
      * toggle). Fail-CLOSED on the unwired gate seam: the registry is the only
-     * gating mechanism (ADR 0010 §6). The saved via-server MODE pref stays put
+     * gating mechanism. The saved via-server MODE pref stays put
      * while off — the screen just renders the direct pane and the repository
      * stays in direct mode until the toggle (or the pref) comes back.
      */

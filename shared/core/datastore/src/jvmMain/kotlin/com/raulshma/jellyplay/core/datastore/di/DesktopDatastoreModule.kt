@@ -5,7 +5,7 @@ import okio.Path
 import org.koin.core.module.Module
 
 /**
- * Desktop platform Koin module (docs/kmp-migration-plan.md): the shared
+ * Desktop platform Koin module: the shared
  * [datastorePlatformModule] over this shell's two actuals. [dataDir] is the
  * app's writable data directory; preference files land under
  * `dataDir/datastore/` mirroring the Android `filesDir/datastore/` layout.

@@ -147,7 +147,7 @@ fun HomeLayoutPresetsScreen(
                     } else {
                         pluralStringResource(Res.plurals.settings_saved_presets_count, presets.size, presets.size)
                     }
-                    // H20: the cheap "also on server" state note — the
+                    // The cheap "also on server" state note — the
                     // current layout mirrors to the server while autopush is
                     // on (the full server state lives on the sync controller).
                     if (homeLayoutAutopush) {

@@ -24,7 +24,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The D9 Reviews screen's VM: the item resolution rides the cached
+ * The reviews Reviews screen's VM: the item resolution rides the cached
  * `getMediaDetail` path (the CastAndCrewViewModel pattern) and the reviews
  * ride the SAME cached TMDB seam the detail screen's reviews leg uses
  * ([SeerrRepository.getTmdbReviews]) — a cache hit, not a refetch, and the

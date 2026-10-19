@@ -27,7 +27,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 /**
  * The shared construction harness for the [PlaybackSession] behavioral suites
  * ([PlaybackSessionLifecycleTest] / [PlaybackSessionReportingTest]) after the
- * C6 wiring collapse made the session its own composition root: the session
+ * wiring collapse made the session its own composition root: the session
  * builds its whole collaborator graph internally, so the harness supplies the
  * constructor dependencies the same way the production
  * [VideoPlayerViewModelTestHarness] does — relaxed mocks at every

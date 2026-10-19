@@ -4,15 +4,15 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins [computeLibrarySurface] — the render-branch fold that replaced the
- * library screen's inline error-vs-content branch. Pure JVM over the fold's
- * inputs, the `SearchSurfaceTest` pattern: every precedence rule the screen
- * used to decide inline is asserted here. The full-screen empty and
+ * Pins [computeLibrarySurface] — the render-branch fold over the library
+ * screen's error-vs-content branch. Pure JVM over the fold's inputs, the
+ * `SearchSurfaceTest` pattern: every precedence rule the screen decides inline
+ * is asserted here. The full-screen empty and
  * initial-loading rungs are deliberately NOT part of the fold (the chassis
  * ladder inside [LibrarySurface.Content] owns them — `PagedCollectionLadderTest`
  * pins those), so "empty" here is the zero-item half of the error gate's
- * predicate; the fold is section-blind by construction (the shipped branch
- * never read the section mode).
+ * predicate; the fold is section-blind by construction (the screen's branch
+ * does not read the section mode).
  */
 class LibrarySurfaceTest {
 

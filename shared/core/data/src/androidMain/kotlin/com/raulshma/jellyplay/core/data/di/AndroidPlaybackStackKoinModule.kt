@@ -149,7 +149,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
-    // H7/D22: the ambient hero-clip transport (muted-by-contract, looping) —
+    // The ambient hero-clip transport (muted-by-contract, looping) —
     // one process-wide single so the home hero and the detail hero can never
     // both drive video (start implicitly stops the previous clip).
     single<AmbientVideoPlayer> { ExoAmbientVideoPlayer(context = context) }

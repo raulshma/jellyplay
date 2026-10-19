@@ -46,7 +46,7 @@ class SettingsMainThreadCatalogResolveGuardTest {
     }
 
     /**
-     * Removes line/block comments so the ratchet checks code, not KDoc prose
+     * Removes line/block comments so the guard checks code, not KDoc prose
      * (the sanctioned KDocs legitimately explain the resolve mechanics).
      */
     private fun String.stripComments(): String {

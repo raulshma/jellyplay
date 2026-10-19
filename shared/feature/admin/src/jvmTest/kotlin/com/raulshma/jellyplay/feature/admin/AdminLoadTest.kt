@@ -102,7 +102,7 @@ class AdminLoadTest {
         )
 
         // The failure arm saw the exception and settled the flag; the success
-        // arm never ran, so the previously-loaded items survive the error.
+        // arm never ran, so the already-loaded items survive the error.
         assertEquals(listOf("start", "fetch", "onFailure"), events)
         assertEquals("boom", screen.state.error)
         assertFalse(screen.state.isLoading)

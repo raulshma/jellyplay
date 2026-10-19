@@ -11,14 +11,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
- * The companion-plugin inbox screen's model (ADR 0010): the plugin's
+ * The companion-plugin inbox screen's model: the plugin's
  * admin-published messages with read state.
  *
  * The screen is reachable ONLY through the settings root's capability-gated
  * "Messages" entry (plugin probe AVAILABLE + the `messages` feature key + the
  * user's per-feature toggle), but the api calls are STILL feature-gated here —
  * the gate is re-checked at every call, so the api client is never touched
- * without it (ADR 0010's gating rule; the capabilities contract can degrade
+ * without it (the plugin-gating contract; the capabilities contract can degrade
  * mid-session). The gate is the ONE seam
  * ([JellyPlayFeatureGate.isAvailableNow]
  * — probe AND toggle); without the gate seam (direct-construction tests) the

@@ -35,11 +35,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_equa
 
 /**
  * The per-band equalizer editor sheet for [AudioSettingsScreen], co-located
- * beside it. This used to be the lone survivor of the per-screen dialog
- * hierarchies [PickerState] killed — a `sealed class AudioSettingsDialog
- * { None; EqualizerEditor }` identity tag plus an inline ~50-line
- * `TvSafeSheet` block inside the screen file. Now the screen opens it through
- * one boolean slot and this composable owns the whole sheet: band sliders
+ * beside it. The screen opens it through one boolean slot and this composable
+ * owns the whole sheet: band sliders
  * (-15…+15 dB per [EqualizerSettings.BAND_FREQUENCIES]), Cancel discarding
  * the edits, Apply committing one [EqualizerSettings] write.
  *

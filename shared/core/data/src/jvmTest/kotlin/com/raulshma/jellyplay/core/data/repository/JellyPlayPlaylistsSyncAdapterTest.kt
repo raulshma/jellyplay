@@ -36,7 +36,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Adapter tests for the `playlists` namespace (the settings-backup wave): a
+ * Adapter tests for the `playlists` namespace (the settings-backup cluster): a
  * real in-memory Room for the smart/mood playlist stores plus a temp-file
  * DataStore mirror — the three key families (`smart/{id}`, `mood/{id}`,
  * `moodpref/{playlistId}`), whole-row payload values, the mirror-based

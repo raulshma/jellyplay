@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 /**
  * Narrow port for the wholesale cache drop
- * ([MediaRepositoryImpl.invalidateCaches] — plan 08 demoted it off the public
+ * ([MediaRepositoryImpl.invalidateCaches] — demoted off the public
  * [MediaRepository] interface). The background sync workers (legacy
  * core:data — `UserDataSyncWorker` / `PlaybackSyncWorker`) used to
  * ctor-inject the concrete [MediaRepositoryImpl] just to reach that one

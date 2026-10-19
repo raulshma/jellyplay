@@ -5,11 +5,8 @@ import org.gradle.api.provider.Provider
 
 /**
  * The version/release-channel vocabulary the desktop shell's packaging
- * config (and the About screen, through desktop-build.properties) reads.
- * Relocated verbatim from :apps:desktop's build script when the packaging
- * mechanics became the [DesktopPackagingPlugin] convention plugin — the
- * grammar rules and their failure modes are unchanged (see the plugin's
- * KDoc for the relocated history).
+ * config (and the About screen, through desktop-build.properties) reads,
+ * published by the [DesktopPackagingPlugin] convention plugin.
  *
  * Managed type (abstract class + Gradle-instantiated properties); every
  * field is a [Property] (a kind of [Provider], so consumers just `.get()`
@@ -36,10 +33,9 @@ abstract class DesktopPackagingExtension {
     /**
      * "release" only when -PjellyplayVersion was EXPLICITLY passed (a CI
      * release lane produced this build); "dev" otherwise — including the
-     * 0.1.0 fallback. The desktop auto-update decision reads it (see
-     * docs/adr/desktop-auto-update.md): a dev build is up-to-date BY
-     * CONSTRUCTION because no feed entry can offer an update to a build
-     * that was never part of a release channel.
+     * 0.1.0 fallback. The desktop auto-update decision reads it: a dev
+     * build is up-to-date BY CONSTRUCTION because no feed entry can offer
+     * an update to a build that was never part of a release channel.
      */
     abstract val releaseChannel: Property<String>
 

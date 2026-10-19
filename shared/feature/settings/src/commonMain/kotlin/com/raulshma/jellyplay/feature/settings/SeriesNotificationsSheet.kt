@@ -53,7 +53,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seri
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_series_notifications_title
 
 /**
- * D12: the "Series notifications" management sheet — the notification
+ * The "Series notifications" management sheet — the notification
  * settings screen's per-series counterpart of its per-library picker
  * (opened the same way, a [TvSafeSheet] off a dialog state), with the row
  * anatomy lifted from feature/home's NextUpExcludedScreen: poster + name +

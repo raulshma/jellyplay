@@ -884,7 +884,7 @@ class MpvPlayerEngine(
                 try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
             }
         }
-        // Published-flow resets live in BasePlayerEngine (C5); mpv's residue
+        // Published-flow resets live in BasePlayerEngine; mpv's residue
         // (live-subtitle mirror + cached position/duration/buffer reads) goes
         // through the hook that reset fires.
         resetPublishedEngineState()
@@ -903,7 +903,7 @@ class MpvPlayerEngine(
     }
 
     /**
-     * The mpv residue cleared alongside the base published-state reset (C5):
+     * The mpv residue cleared alongside the base published-state reset:
      * the live-subtitle-text mirror (the one engine that publishes it) and
      * the cached native position/duration/buffer reads the ticker seeds from.
      */
@@ -959,7 +959,7 @@ class MpvPlayerEngine(
      * unsalvageable-key report. Refreshed at surface-create (before
      * initOptions runs, since init writes must already respect conf
      * ownership) and on every config change; every subtitle-style write site
-     * consults it so the user's value wins for the whole session (issue #165).
+     * consults it so the user's value wins for the whole session.
      */
     private fun refreshUserOwnedSubtitleKeys() {
         val confFile = java.io.File(mpvConfigDir, "mpv.conf")
@@ -1157,7 +1157,7 @@ class MpvPlayerEngine(
             ((mpvView?.mpv?.getPropertyDouble(MpvProperties.VOLUME) ?: 100.0) / 100.0).toFloat().coerceIn(0f, 1f)
         } catch (_: Exception) { 1f }
 
-    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // ── Volume / mute seams ────────────────────────────────────────────
     // The four command bodies are final templates in ReloadablePlayerEngine;
     // mpv contributes the percent-scaled property write/read, its real mute
     // flag, and the LEAVE_UNCHANGED vocabulary (the flag silences; the native
@@ -1795,7 +1795,7 @@ class MpvPlayerEngine(
         }
     }
 
-    // Ownership-gated variant (issue #165): a no-op when the key is user-owned
+    // Ownership-gated variant: a no-op when the key is user-owned
     // via mpv.conf / extra config, so no scalar write site can forget the
     // check the pair lists get from MpvUserSubtitleKeys.filterOwned. Keys the
     // app functionally drives at runtime (sub-visibility, sub-delay) never

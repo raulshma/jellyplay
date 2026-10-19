@@ -9,8 +9,8 @@ import kotlin.test.Test
 /**
  * Pins the Seerr status decision table ([effectiveMediaStatus], the
  * availability predicates, and the [seerrRequestButtonState] action-button
- * precedence) — the rules the requests list/sheet and the details action
- * buttons previously re-derived inline (verbatim, twice).
+ * precedence) — the rules shared by the requests list/sheet and the details
+ * action buttons (verbatim, twice).
  */
 class SeerrStatusDecisionsTest {
 

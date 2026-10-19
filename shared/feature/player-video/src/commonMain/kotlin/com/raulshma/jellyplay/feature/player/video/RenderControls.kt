@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
  * Like [SubtitleStyleController], this class never references
  * [VideoPlayerUiState] — the state lives in [state] ([SessionRenderState])
  * and every write flows through the narrow constructor lambdas below, so
- * the god-count ratchet stays at its baseline. The engine re-apply stays
+ * the god-count guard stays at its baseline. The engine re-apply stays
  * VM-side: this controller reports a dirty config through [onConfigDirty]
  * (the VM's `updateConfigWithUiState`), and the engines' diff caches apply
  * the delta.

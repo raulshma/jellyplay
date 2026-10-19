@@ -19,7 +19,7 @@ import com.sun.jna.ptr.PointerByReference
  * no overlay controls, no pointer input.
  *
  * Everything else — event pump, property surface, error taxonomy, release
- * discipline — is the [MpvDesktopEngine] contract verbatim, which is why this
+ * discipline — is the [MpvDesktopEngine] contract, which is why this
  * type SUBCLASSES rather than duplicates it (hooks: [liveMpvHandle],
  * [hwdecFor], [onBeforeContextDestroy]).
  *
@@ -38,18 +38,16 @@ import com.sun.jna.ptr.PointerByReference
  *    scaled+letterboxed by mpv itself into the caller's buffer. We do NOT pass
  *    BLOCK_FOR_TARGET_TIME=0, so render blocks up to `video-timing-offset`
  *    toward the true display time — that blocking IS the frame pacer and keeps
- *    the poller from redrawing identical frames faster than content fps
- *    (rationale in docs/spikes/x-desktop-video-surface-story.md).
+ *    the poller from redrawing identical frames faster than content fps.
  *  - no update callback / no ADVANCED_CONTROL / no report_swap — see the
  *    polling decision note on [MpvLibRender].
  *
- * Quirks observed empirically are recorded in the spike doc. Threading: only
- * one mpv_render_* call may be in flight (render.h L62-64); [pullFrame]
- * enforces that with a tryLock (a tick arriving while another render is still
- * running simply drops that tick — the next one catches up), and
- * [onBeforeContextDestroy] drains the same lock before freeing the context,
- * satisfying "free before the core is destroyed" (render.h L122-123) without
- * use-after-free either direction.
+ * Threading: only one mpv_render_* call may be in flight (render.h L62-64);
+ * [pullFrame] enforces that with a tryLock (a tick arriving while another
+ * render is still running simply drops that tick — the next one catches up),
+ * and [onBeforeContextDestroy] drains the same lock before freeing the
+ * context, satisfying "free before the core is destroyed" (render.h L122-123)
+ * without use-after-free either direction.
  */
 class MpvSoftwareRenderEngine(
     /**
@@ -166,7 +164,7 @@ class MpvSoftwareRenderEngine(
      * through GL/D3D interop that the sw renderer would have to copy back to
      * system memory anyway, and unsupported-interop combinations fail at VO
      * init instead of falling back cleanly. Revisit once real mac/linux
-     * hardware numbers exist (spike doc "unverified" section).
+     * hardware numbers exist.
      */
     override fun hwdecFor(mode: DecoderMode): String = "no"
 

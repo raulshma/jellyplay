@@ -12,7 +12,7 @@ import kotlin.test.Test
 import kotlin.test.fail
 
 /**
- * The spec↔diff cross-pin ratchet for the Factory Reset review (the
+ * The spec↔diff cross-pin guard for the Factory Reset review (the
  * PreferenceCategoryPresentationTest self-consistency pins' missing twin):
  * every SPEC row that participates in a reset category AND declares a search
  * face (a user-facing knob — the same search tier the settings screens
@@ -21,15 +21,15 @@ import kotlin.test.fail
  * spec's [PreferenceSearchSpec.titleKey] names. Without this pin a preference
  * added everywhere BUT the diff registry is silently absent from the
  * reset/import review — the user resets a knob they were never shown
- * (the layout-override pair this ratchet's first run surfaced: declared,
- * projected into the slice, diff-registered by no row).
+ * (e.g. a layout-override pair that is declared, projected into the slice,
+ * and diff-registered by no row).
  *
  * Match rule: key-level (spec titleKey == DiffField labelRes key) — the same
  * binding the fused rows' [verifyRowResourceKey] enforces between specs and
  * search faces, so a spec whose titleKey is a settings resource is covered by
  * exactly the resource its screen face uses. Sanctioned omissions live in
- * [exceptions] below, each with its reason; the list is derived from what
- * this test found, never pre-emptively grown to admit a lazy row.
+ * [exceptions] below, each with its reason; the list stays minimal rather
+ * than pre-emptively admitting a lazy row.
  *
  * Scope: the seven spec-backed stores. The spec-less stores (the audio /
  * effects / navigation / library residuals) have no spec tier to cross-pin —

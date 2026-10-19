@@ -40,16 +40,16 @@ class NewMediaCheckWorker(
     appContext: Context,
     private val workerParams: WorkerParameters,
     private val mediaRepository: MediaRepository,
-    /** D12: the series-notification family seam (the per-series Next Up diff read). */
+    /** The series-notification family seam (the per-series Next Up diff read). */
     private val seriesNotificationReads: SeriesNotificationReads,
     private val seenMediaRepository: SeenMediaRepository,
     private val notificationStore: NotificationStore,
     private val dispatcher: NotificationDispatcher,
     private val scheduler: NotificationScheduler,
-    /** Clock seam (D3) for the seen-media pruning window + seenAt stamps. */
+    /** Clock seam for the seen-media pruning window + seenAt stamps. */
     private val timeSource: TimeSource,
     /**
-     * D12's *arr air-time accelerator reads the existing calendar ingestion
+     * The *arr air-time accelerator reads the existing calendar ingestion
      * (the home "Coming Soon" source) through this seam. Best-effort: every
      * accelerator failure is swallowed — the periodic poller stays the safety
      * net.
@@ -75,7 +75,7 @@ class NewMediaCheckWorker(
 
         return try {
             checkForNewMedia(prefs)
-            // D12's second pass: per-series new-episode diffs + the *arr
+            // Second pass: per-series new-episode diffs + the *arr
             // accelerator re-schedule. Shares the master gate's failure
             // mapping (IO → retry, the one-shot cap applied below).
             checkSeriesNewEpisodes(prefs)
@@ -162,7 +162,7 @@ class NewMediaCheckWorker(
         }
     }
 
-    // ── D12: the per-series second pass ─────────────────────────────────
+    // ── the per-series second pass ─────────────────────────────────
 
     /**
      * The opted-in series' new-episode pass: for each series whose
@@ -385,7 +385,7 @@ class NewMediaCheckWorker(
          */
         private val MAX_CONCURRENT_SERIES_FETCHES = DEFAULT_FANOUT_PARALLELISM
 
-        // ── D12 series-pass constants ───────────────────────────────────
+        // ── series-pass constants ───────────────────────────────────
 
         /** The *arr calendar window the accelerator reads (days ahead). */
         private const val SERIES_ACCELERATOR_WINDOW_DAYS = 7

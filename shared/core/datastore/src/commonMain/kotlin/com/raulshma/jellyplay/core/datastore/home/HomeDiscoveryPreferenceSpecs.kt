@@ -109,15 +109,15 @@ object HomeDiscoveryPreferenceSpecs {
     const val DISCOVER_SHIPPED_AT_VERSION = 2
 
     /**
-     * The version at which [HomeSectionType.UPCOMING] (H4) shipped — same
-     * union-in mechanics as the shipped-at entries above. H4 and H5 land in
-     * ONE bump (both v3) so existing users get a single H21 announcement for
+     * The version at which [HomeSectionType.UPCOMING] shipped — same
+     * union-in mechanics as the shipped-at entries above. UPCOMING and MY_MEDIA land in
+     * ONE bump (both v3) so existing users get a single announcement for
      * the pair.
      */
     const val UPCOMING_SHIPPED_AT_VERSION = 3
 
     /**
-     * The version at which [HomeSectionType.MY_MEDIA] (H5) shipped — same
+     * The version at which [HomeSectionType.MY_MEDIA] shipped — same
      * union-in mechanics as [UPCOMING_SHIPPED_AT_VERSION], same bump.
      */
     const val MY_MEDIA_SHIPPED_AT_VERSION = 3
@@ -197,7 +197,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H7 video hero billboard (touch/default form factors): a muted looping
+     * Video hero billboard (touch/default form factors): a muted looping
      * clip (ThemeVideo → trailer-embed fallback) in the hero on dwell. Default
      * off — the static artwork hero stays the shipped behavior. The TV form
      * factor has its own switch ([HOME_HERO_VIDEO_TV_ENABLED]).
@@ -216,7 +216,7 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
-    /** H7's TV form-factor twin — same clip pipeline, separate switch. */
+    /** The TV form-factor twin — same clip pipeline, separate switch. */
     val HOME_HERO_VIDEO_TV_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "home_hero_video_tv_enabled",
         default = false,
@@ -232,7 +232,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H10 focus-driven ambient backdrop (Android TV): the focused card
+     * Focus-driven ambient backdrop (Android TV): the focused card
      * repaints the home ambient backdrop from its BlurHash/backdrop. Default
      * off — the backdrop stays hero-driven.
      */
@@ -250,7 +250,7 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
-    /** H17 personal stats card ("Your library week") between hero and the first row. */
+    /** Personal stats card ("Your library week") between hero and the first row. */
     val HOME_STATS_CARD: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "home_stats_card",
         default = false,
@@ -265,7 +265,7 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
-    /** H18 genre quick-access rail (chips above the first row). */
+    /** Genre quick-access rail (chips above the first row). */
     val HOME_GENRE_RAIL: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "home_genre_rail",
         default = false,
@@ -280,7 +280,7 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
-    /** H19 watch-party / presence chips ("Alex is watching Dune — join"). Admin-gated surface. */
+    /** Watch-party / presence chips ("Alex is watching Dune — join"). Admin-gated surface. */
     val HOME_PRESENCE_CHIPS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "home_presence_chips",
         default = false,
@@ -296,10 +296,10 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H21 new-section announcement toast: when a version bump auto-enables a
+     * New-section announcement toast: when a version bump auto-enables a
      * section, say so once instead of silently. Default on — the announcement
      * IS the discoverability fix; the stamped
-     * [HOME_ANNOUNCED_VERSION] makes it once-per-section-wave.
+     * [HOME_ANNOUNCED_VERSION] makes it once per version bump.
      */
     val HOME_NEW_SECTION_ANNOUNCEMENTS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "home_new_section_announcements",
@@ -428,7 +428,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H20 server-persisted home layout: after any layout-writing command,
+     * Server-persisted home layout: after any layout-writing command,
      * push the layout to the server's DisplayPreferences (debounced). Default
      * off — the MANUAL sync policy (explicit upload/restore actions) is the
      * shipped behavior; no auto-pull exists either way.
@@ -540,14 +540,14 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     // ------------------------------------------------------------------
-    // Card-display expansion (H11/H12/H13/H15): quality/new badges, TV
+    // Card-display expansion: quality/new badges, TV
     // trickplay preview and the anti-spoiler master switch. Consumed through
     // the CardDisplayPreferences composition local (provisioned from the
     // HomeDiscoverySlice beside the quartet above); their rows live in the
     // home hub's Cards group.
     // ------------------------------------------------------------------
 
-    /** H11 quality badges (4K / HDR / DV / Atmos) on poster + wide cards. */
+    /** Quality badges (4K / HDR / DV / Atmos) on poster + wide cards. */
     val SHOW_QUALITY_BADGES: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "show_quality_badges",
         default = true,
@@ -562,7 +562,7 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
-    /** H12 "NEW" badges for items added since the last home visit. */
+    /** "NEW" badges for items added since the last home visit. */
     val SHOW_NEW_BADGES: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "show_new_badges",
         default = true,
@@ -578,7 +578,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H13 trickplay preview on wide (resume/next-up) cards — TV-only v1: the
+     * Trickplay preview on wide (resume/next-up) cards — TV-only v1: the
      * focused card shows the trickplay tile at the resume position. Default
      * on (a pure enhancement); the row is hidden on non-TV form factors (the
      * [PreferencePlatformRule.ANDROID_ONLY] tag keeps the search hit off
@@ -601,7 +601,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H15 anti-spoiler home mode — the one master switch that hides
+     * Anti-spoiler home mode — the one master switch that hides
      * watch-state spoilers across home (progress bars, "Xm left", watched
      * checkmarks/unwatched counts, episode titles on resume cards). Default
      * off; when ON, the watched-checkmark/unwatched-badge knobs above are
@@ -655,7 +655,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * Classic (pre-Jellyfin-12) home-row semantics (#168): Continue Watching
+     * Classic (pre-Jellyfin-12) home-row semantics: Continue Watching
      * narrows to leaf items, latest-media rows pin to Series/Movie. Default
      * false — modern server behavior.
      */
@@ -674,7 +674,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H6 active-session-aware Continue Watching: don't offer "continue" for an
+     * Active-session-aware Continue Watching: don't offer "continue" for an
      * item currently playing on another device (server
      * `excludeActiveSessions` resume-query param). Default false — current
      * behavior preserved.
@@ -733,15 +733,15 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     // ------------------------------------------------------------------
-    // Home-wave internals + inline-curation slices. The internal stamps are
+    // Home internals + inline-curation slices. The internal stamps are
     // plain rows with no search entry (never surfaced); the two slices are
     // JSON string sets with no settings row yet — their management UI ships
-    // with the features that consume them (H5's config sheet, D8's
+    // with the features that consume them (the home config sheet, the
     // detail-screen mute chip), so the specs stay faceless.
     // ------------------------------------------------------------------
 
     /**
-     * H12 visit memory: when the user last saw home (epoch ms, stamped by the
+     * Visit memory: when the user last saw home (epoch ms, stamped by the
      * home screen's dwell timer). Items added after this render the NEW
      * badge. Internal bookkeeping — no settings row.
      */
@@ -752,7 +752,7 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H21 announce-once stamp: the enabled-set schema version whose
+     * Announce-once stamp: the enabled-set schema version whose
      * new-section announcement was last shown (or dismissed). Internal
      * bookkeeping — no settings row.
      */
@@ -763,10 +763,10 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * H5 "My Media" inline curation: libraries hidden from the My Media tiles
+     * "My Media" inline curation: libraries hidden from the My Media tiles
      * row (long-press a tile → hide). Stored as a JSON string-id set; managed
      * inline plus the section config sheet, and restored through the
-     * hidden-libraries drill-in (the settings-search surface GAP-1 added).
+     * hidden-libraries drill-in (the settings-search surface).
      */
     val MY_MEDIA_HIDDEN_LIBRARY_IDS: PreferenceSpec<Set<String>> = PreferenceSpec.custom(
         keyName = "my_media_hidden_library_ids",
@@ -783,10 +783,9 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
-     * D8 per-series theme-music memory: series whose ambient theme music the
+     * Per-series theme-music memory: series whose ambient theme music the
      * user muted on the detail screen ("never for this series"). Stored as a
-     * JSON string-id set; a later wave projects it into DetailPreferences and
-     * builds the mute chip — the store-side slice lands first.
+     * JSON string-id set that DetailPreferences projects into its mute chip.
      */
     val THEME_MUSIC_MUTED_SERIES_IDS: PreferenceSpec<Set<String>> = PreferenceSpec.custom(
         keyName = "theme_music_muted_series_ids",
@@ -938,8 +937,8 @@ object HomeDiscoveryPreferenceSpecs {
      * The per-type copy lists the namespace migration iterates, derived from
      * [migrationRows]' declared storage (the store's `copyIntoNamespace`
      * walks each list with the matching typed parse — booleans via
-     * `toBoolean`, ints via `toIntOrNull`, strings verbatim — exactly as the
-     * hand-written predecessor did). The STRING list is typed
+     * `toBoolean`, ints via `toIntOrNull`, strings verbatim). The STRING list
+     * is typed
      * `PreferenceSpec<String>` because every row on it persists a string
      * slot (the enum rows store the constant name); only the rows' canonical
      * keys are read off it.
@@ -967,7 +966,7 @@ object HomeDiscoveryPreferenceSpecs {
 
     /**
      * The domain's settings-search declarations, in the settings feature's
-     * catalog order (the order the retired hand records carried): every row
+     * catalog order: every row
      * above that carries a [PreferenceSearchSpec]. The settings feature
      * derives its spec-backed catalog rows from this list over its ordered
      * record spine — the home groups (display / next-up / layout / cards).

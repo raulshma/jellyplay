@@ -7,7 +7,7 @@ import kotlin.test.Test
 import java.io.File
 
 /**
- * Wiring ratchet for the SyncPlay -> cast -> local SEEK precedence: the
+ * Wiring guard for the SyncPlay -> cast -> local SEEK precedence: the
  * routing must exist exactly ONCE, in the session-owned router —
  * [TransportRouter.seek] (the [TransportRouter.play] companion) — with the
  * VM's `SeekTo` event arm and `seekByStep` both one-line forwards onto it,
@@ -16,7 +16,7 @@ import java.io.File
  * lambda and `seekByStep`'s when-ladder) into the one funnel — VM-side first,
  * then moved onto the session's router beside its PiP consumer — so the seek
  * bar, gesture commit, D-pad commit, chapter sheet, cast dashboard and PiP
- * SKIP steps can never route differently. The source ratchets pin the wiring
+ * SKIP steps can never route differently. The source guards pin the wiring
  * shape:
  *
  *  1. the VM's `SeekTo` / `TransportPlay` / `SeekByStep` / `RestartPlayback`
@@ -158,7 +158,7 @@ class SeekTransportRoutingWiringTest {
      * persist effect append to [calls], so a single list asserts which
      * transport a press landed on (and which it never reached). The clamp
      * reads are inert (no segments, gate off) — the clamp math is pinned by
-     * SegmentSeekClampTest and the source ratchets above; this rig exercises
+     * SegmentSeekClampTest and the source guards above; this rig exercises
      * the routing and the [TransportRouter.seekLocal] gating.
      */
     private fun routerWithCalls(

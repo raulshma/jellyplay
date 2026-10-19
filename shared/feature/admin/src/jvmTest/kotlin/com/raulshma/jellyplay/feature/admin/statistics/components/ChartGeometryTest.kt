@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 /**
  * Pins [ChartGeometry] — the Compose-free chart decision core extracted from
- * ChartComponents. Each test reproduces the pre-extraction inline behaviour:
+ * ChartComponents. Each test reproduces the original inline behaviour:
  * the two label-admission ladders (including their exact rung edges), the
  * normalization formulas and their clamps, the pie's 360° sweep conservation
  * and −90° start, the top-5 legend cut, and the number/duration formatter

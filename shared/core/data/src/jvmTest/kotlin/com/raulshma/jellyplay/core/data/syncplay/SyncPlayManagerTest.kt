@@ -177,7 +177,7 @@ class SyncPlayManagerTest {
         coVerify(exactly = 0) { apiClient.joinSyncPlayGroup("stale") }
     }
 
-    // ── H19 home presence-chip join seam ─────────────────────────────────
+    // ── home presence-chip join seam ─────────────────────────────────
 
     @Test
     fun `groupPlayingItem matches the visible group playing the item`() {

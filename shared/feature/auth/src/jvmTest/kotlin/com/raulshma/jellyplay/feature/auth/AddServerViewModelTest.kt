@@ -38,18 +38,17 @@ import org.junit.Test
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
- * NEW suite (downloads/syncplay conveyor precedent — the legacy module had no
- * AddServerViewModel tests): pins the connection-failure classifier 1:1 to
- * HEAD's branch table (message identity via [UiMessage.Resource] /
- * [UiMessage.Raw]), the blank-address guard, and the SSDP discovery flow's
- * dedupe/complete/failure behavior. The [LocalNetworkStatus] seam is faked
- * inline (hand-rolled lambda over the fun interface).
+ * Pins the connection-failure classifier to its branch table (message identity
+ * via [UiMessage.Resource] / [UiMessage.Raw]), the blank-address guard, and the
+ * SSDP discovery flow's dedupe/complete/failure behavior. The
+ * [LocalNetworkStatus] seam is faked inline (hand-rolled lambda over the fun
+ * interface).
  *
- *  extends the suite with the self-signed trust grant flow: TLS-trust
- * failures surface the trust dialog state, confirm persists the canonical
- * host through [NetworkOfflineStore] and retries the same connect. The store
- * is mockk'd (final DataStore-backed class — the pref→config mapping itself
- * is covered by OkHttpConfigProviderImplTest in core:data).
+ * Also covers the self-signed trust grant flow: TLS-trust failures surface the
+ * trust dialog state, and confirm persists the canonical host through
+ * [NetworkOfflineStore] and retries the same connect. The store is mockk'd
+ * (final DataStore-backed class — the pref→config mapping itself is covered by
+ * OkHttpConfigProviderImplTest in core:data).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddServerViewModelTest {
@@ -93,8 +92,8 @@ class AddServerViewModelTest {
             UiMessage.Resource(Res.string.auth_error_server_address_required),
             viewModel.uiState.value.connectError,
         )
-        // HEAD guard shape: the blank address returns BEFORE launching, so
-        // neither the repository nor the callback ever run.
+        // The blank address returns before launching, so neither the
+        // repository nor the callback ever run.
         assertFalse(resultInvoked)
         coVerify(exactly = 0) { authRepository.addServer(any()) }
     }
@@ -193,8 +192,8 @@ class AddServerViewModelTest {
 
     @Test
     fun connectToServer_orgPrefixedMessage_fallsBackToGenericResource() = runTest(testDispatcher) {
-        // HEAD filter: SDK exception messages starting with "org." are
-        // treated as noise — the user gets the generic failure string.
+        // SDK exception messages starting with "org." are treated as noise —
+        // the user gets the generic failure string.
         coEvery { authRepository.addServer("http://server") } returns
             Result.failure(RuntimeException("org.jellyfin.sdk.ApiException: something"))
 
@@ -330,7 +329,7 @@ class AddServerViewModelTest {
             Result.success(info)
         // Grant NOT visible yet: the test controls when the derived flow
         // republishes the new set (edit-done ≠ flow-propagated — the race the
-        //  review round closed).
+        // retry must wait out).
         val storeFlow = MutableStateFlow(NetworkOfflineSlice())
         every { networkOfflineStore.networkOffline } returns storeFlow
 
@@ -422,7 +421,7 @@ class AddServerViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        // The address-dupe is dropped (HEAD dedupe predicate: id OR address).
+        // The address-dupe is dropped (dedupe predicate: id OR address).
         assertEquals(listOf(a, b), state.discoveredServers)
         assertFalse(state.isDiscovering)
         assertFalse(state.discoveryFailed)

@@ -69,8 +69,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Direct [HomeRefresher] tests — the suite this extraction exists to enable:
- * refresh cadence, throttle, CW side-effects and user-data-push deferral
+ * Direct [HomeRefresher] tests: refresh cadence, throttle, CW side-effects and user-data-push deferral
  * tested WITHOUT the Android lifecycle stack (no Robolectric, no
  * ProcessLifecycleOwner, no VM construction). Plain JUnit +
  * [MainDispatcherRule] + MockK for the constructor interfaces;
@@ -83,14 +82,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  - every test calls [HomeRefresher.stop] before returning so no loop
  *    survives the body (runTest's teardown advances the shared scheduler
  *    until idle and would otherwise never converge). [stopRefresher] in
- *    @After additionally cancels the scope — the harness leak this ticket
- *    exists to fix must not reappear here.
+ *    @After additionally cancels the scope — keeping the harness leak from
+ *    reappearing here.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeRefresherTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
+    // MainDispatcherRule (:core:testing), inlined — jvmTest
+    // has no access to that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var homeFeed: HomeFeed
@@ -539,10 +538,10 @@ class HomeRefresherTest {
 
     @Test
     fun goingOnline_fetchTimeout_clearsLoaderInsteadOfHanging() = runTest {
-        // Regression pin: a hung getHomeSections call previously parked the
-        // handshake forever, leaving the full-screen loader stuck on. (The
-        // busy flag no longer depends on this cap — the manager clears it at
-        // the ONLINE emission, before the fetch starts.)
+        // Regression pin: a hung getHomeSections call must not park the
+        // handshake forever and leave the full-screen loader stuck on. (The
+        // busy flag depends on the manager, not this cap: the manager clears
+        // it at the ONLINE emission, before the fetch starts.)
         coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers {
             CompletableDeferred<Result<HomeSectionsResult>>().await() // never completes
         }
@@ -569,10 +568,10 @@ class HomeRefresherTest {
         // Regression pin: an external/auto offline→online flip (the nav ⋮
         // "Go Online" toggles the manager directly from the app shell;
         // auto-detect flips OFFLINE_AUTO→ONLINE on network return) lands in
-        // the observer WITHOUT a GoingOnline request. That transition used to
-        // mirror the field only — after the offline content drop the home sat
-        // on "No content available" until a manual refresh or the next
-        // periodic tick. Every reconnect must run the same drain+fetch
+        // the observer WITHOUT a GoingOnline request. Mirroring the field
+        // alone leaves the home on "No content available" after the offline
+        // content drop, until a manual refresh or the next periodic tick.
+        // Every reconnect must run the same drain+fetch
         // handshake as the user-initiated one.
         coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
@@ -852,7 +851,7 @@ class HomeRefresherTest {
 
     @Test
     fun userDataChange_writeOlderThanEchoWindow_staysForced() = runTest {
-        // A log entry past the echo window no longer demotes: the write is
+        // A log entry past the echo window does not demote: the write is
         // old enough that the push may as well be external (and a stale
         // entry must not pin the TTL path forever).
         coEvery {
@@ -879,7 +878,7 @@ class HomeRefresherTest {
         // Return-to-Home promptness: a change armed while backgrounded (or
         // deferred behind the player) must fetch IMMEDIATELY on start — the
         // user is looking at the screen now, so the anti-spam throttle does
-        // not apply. The throttle previously dropped this flush too whenever
+        // not apply. The throttle must not drop this flush when
         // the last refresh was <60s ago.
         coEvery {
             homeFeed.getHomeSections(any(), any())

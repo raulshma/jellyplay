@@ -14,7 +14,7 @@ import kotlinx.coroutines.test.runTest
 /**
  * Pins the two-phase contract of [settleDebounce]: arrival is immediate,
  * settlement waits out the full quiet window, and any value arriving
- * mid-window cancels the pending settlement (the H10/H13 refocus-cancel).
+ * mid-window cancels the pending settlement (refocus drops the pending fetch).
  */
 class SettleDebounceTest {
 

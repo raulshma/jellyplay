@@ -12,8 +12,8 @@ import kotlin.test.assertTrue
 /**
  * Pins the store-side provider-subtitle choreography
  * ([EditorSubtitleStore.saveUploadAndAttribute]) — the save → encode →
- * upload → reload → attribute sequencing EditorViewModel's
- * `handleDownloadProviderSubtitle` used to inline. A minimal event-recording
+ * upload → reload → attribute sequencing behind
+ * `handleDownloadProviderSubtitle`. A minimal event-recording
  * fake drives the REAL interface default body and pins its order, its
  * Base64 payload, and the pre-upload snapshot rule; the failure path pins
  * that a failed upload still leaves the durable copy and skips the reload +
@@ -117,8 +117,8 @@ class EditorSubtitleStoreChoreographyTest {
 
     @Test
     fun `non-external subtitle streams never enter the pre-upload match set`() = runTest {
-        // The snapshot filter mirrors the former inline one: only EXTERNAL
-        // subtitle streams are candidates for attribution matching.
+        // The snapshot filter admits only EXTERNAL subtitle streams — the
+        // candidates for attribution matching.
         val events = mutableListOf<String>()
         val store = RecordingStore(events)
         val streams = listOf(

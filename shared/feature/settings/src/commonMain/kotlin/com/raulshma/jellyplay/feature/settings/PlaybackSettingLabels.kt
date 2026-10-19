@@ -29,9 +29,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stre
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality_auto_adaptive
 
 // The enum→label resource mappings for the playback rows (streaming quality,
-// live-stream option, the libVLC skip-loop-filter / skip-frame levels), moved
-// verbatim out of PlaybackSettingsScreen.kt; `internal` only because the
-// advanced-video and libVLC-branch composables now live in their own files.
+// live-stream option, the libVLC skip-loop-filter / skip-frame levels);
+// `internal` only because the advanced-video and libVLC-branch composables
+// live in their own files.
 
 internal fun streamingQualityLabelRes(quality: StreamingQuality): StringResource = when (quality) {
     StreamingQuality.AUTO -> Res.string.settings_streaming_quality_auto_adaptive

@@ -40,7 +40,7 @@ import kotlin.test.assertTrue
  *
  *  - gating — the screen only touches the plugin routes when the real
  *    [JellyPlayPluginStatusStore] reports AVAILABLE **and** the capabilities
- *    carry the `analytics` feature key (ADR 0010: the capability registry is
+ *    carry the `analytics` feature key (the capability registry is
  *    the only gate; no fetches while gated off — the transcodes monitor's
  *    discipline over the analytics surface);
  *  - mapping — the overview payload resolves into humanized durations

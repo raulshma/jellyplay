@@ -275,7 +275,7 @@ public fun PlayerTvFocusGrabEffect(
 }
 
 /**
- * The TV key-sink seam (issue #174): while a player screen's TV D-pad layer
+ * The TV key-sink seam: while a player screen's TV D-pad layer
  * is up, publishes that screen's EXACT arm set ([config]) to the platform
  * key bridge ([installPlayerKeySink] → AndroidPlayerKeyBridge), so keys that
  * reach nothing — no Compose focus target left, PlayerActivity's

@@ -58,7 +58,7 @@ import kotlinx.datetime.todayIn
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The D7 "Airing next" strip: one horizontal episode card per unaired
+ * The "Airing next" strip: one horizontal episode card per unaired
  * episode. The geometry mirrors the chapter-tile row (MediaDetailBodySections'
  * ChapterTile) — a 16:9 thumbnail over the text stack — with the virtual-
  * episode badge vocabulary ([MissingEpisodeBadge.Airs]) as the in-thumbnail
@@ -71,7 +71,7 @@ import org.jetbrains.compose.resources.stringResource
  * horizontal rail geometry.
  *
  * The trailing slot is deliberate: each row carries a "Notify me" bell
- * (D12) composed to the card's right, so [UpcomingEpisodeCard] accepts an
+ * composed to the card's right, so [UpcomingEpisodeCard] accepts an
  * optional [UpcomingEpisodeCard.trailingContent] and keeps its own width
  * fixed — the bell never squeezes the thumbnail.
  */
@@ -329,7 +329,7 @@ private val UPCOMING_CARD_WIDTH = 240.dp
 private const val UPCOMING_THUMBNAIL_ASPECT = 16f / 9f
 
 /**
- * D12: the per-row bell's gate — the notification stack must exist (desktop:
+ * The per-row bell's gate — the notification stack must exist (desktop:
  * none, the bell hides outright) and the series opt-in only makes sense on
  * SERIES detail (the strip's admission already guarantees it; the gate keeps
  * the invariant local to the bell). Pure — pinned by the gating-matrix test.
@@ -340,7 +340,7 @@ internal fun showsSeriesNotifyBell(
 ): Boolean = platformSupported && mediaType == MediaType.SERIES
 
 /**
- * D12: the per-row "Notify me" bell composed into [UpcomingEpisodeCard]'s
+ * The per-row "Notify me" bell composed into [UpcomingEpisodeCard]'s
  * trailing slot. Toggles the same per-series config the ⋮ menu's entry
  * writes (every row of the strip belongs to the same series, so every bell
  * reflects one shared state). The D-pad-focusable trailing-button shape is

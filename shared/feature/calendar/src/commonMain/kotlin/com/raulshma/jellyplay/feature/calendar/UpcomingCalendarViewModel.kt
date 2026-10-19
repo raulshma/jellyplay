@@ -55,34 +55,33 @@ class UpcomingCalendarViewModel(
     val state: State<UpcomingCalendarUiState> = _state.asState()
 
     // The poster-enrichment map lives OUTSIDE the ui state (the
-    // DownloadsViewModel split): one settled lookup per tmdb id used to copy
-    // the whole-screen ui state per network-paced completion, so N sequential
-    // emissions recomposed the whole calendar N times during load. Cards read
-    // their moving value from this flow; the ui state carries only structure.
+    // DownloadsViewModel split): copying the whole-screen ui state per
+    // network-paced completion would recompose the whole calendar N times
+    // during load. Cards read their moving value from this flow; the ui state
+    // carries only structure.
     private val _enrichedPosters = MutableStateFlow<Map<Int, String>>(emptyMap())
     val enrichedPosters: StateFlow<Map<Int, String>> = _enrichedPosters.asStateFlow()
 
     /**
      * Whether the Direct *arr Integration experimental flag is enabled —
-     * [ExperimentalFeatureGate.directArrEnabled] verbatim (rationale and
-     * init-timing notes live on the gate). Exposed so the screen can render
+     * [ExperimentalFeatureGate.directArrEnabled] (rationale and init-timing
+     * notes live on the gate). Exposed so the screen can render
      * the feature-disabled state.
      */
     val featureEnabled: StateFlow<Boolean> = experimentalGate.directArrEnabled
 
     /**
-     * The poster enrichment fan-out (the former hand-copied semaphore ladder,
-     * now the [IdEnricher] core): Semaphore(4)-bounded Seerr lookups, per-item
-     * failures swallowed, and the merge is this screen's append-only rule —
-     * existing entries are never clobbered — written inside the enricher's
-     * snapshot-atomic block (the declared fix for the unsynchronized
-     * read-then-write the hand-rolled version did). The key carries the
-     * model-level [SeerrMediaKind] (mapped off the *arr item's ArrMediaType
-     * below), and the fetch fork reads [SeerrMediaKind.pick] — the same
-     * movie/TV fold the Seerr detail paths ride. The fetch resolves the TMDB
-     * poster path through the right details endpoint and flattens it to a URL
-     * via [buildPosterUrl] (blank paths → null → swallowed, so the *arr
-     * poster URL remains the card's primary source).
+     * The poster enrichment fan-out over the [IdEnricher] core:
+     * Semaphore(4)-bounded Seerr lookups, per-item failures swallowed, and the
+     * merge is this screen's append-only rule — existing entries are never
+     * clobbered — applied inside the enricher's snapshot-atomic block (which
+     * keeps the read-then-write race-free). The key carries the model-level
+     * [SeerrMediaKind] (mapped off the *arr item's ArrMediaType below), and
+     * the fetch fork reads [SeerrMediaKind.pick] — the same movie/TV fold the
+     * Seerr detail paths ride. The fetch resolves the TMDB poster path through
+     * the right details endpoint and flattens it to a URL via [buildPosterUrl]
+     * (blank paths → null → swallowed, so the *arr poster URL remains the
+     * card's primary source).
      */
     private val posterEnricher = IdEnricher<Pair<Int, SeerrMediaKind>, String>(
         scope = scope,
@@ -134,8 +133,8 @@ class UpcomingCalendarViewModel(
             val month = _state.value.visibleMonth
             val from = month.onDay(1)
             val to = month.lastDay
-            // The whole module runs kotlinx.datetime now —
-            // the repository boundary no longer converts.
+            // Dates stay kotlinx.datetime across the repository boundary —
+            // no conversion at this seam.
             arrRepository.calendar(from, to).collect { items ->
                 if (_state.value.visibleMonth == month) {
                     _state.value = _state.value.copy(items = items, error = null)
@@ -196,8 +195,8 @@ private fun ArrMediaType.toSeerrKind(): SeerrMediaKind = when (this) {
     /**
      * Shifts the visible month by [delta] months (negative = past). Restarts
      * the collector on the new window and refreshes. Swapping the month clears
-     * stale items immediately so the list doesn't briefly show the old month's
-     * rows during the fetch.
+     * stale items immediately so the list doesn't briefly show the stale
+     * month's rows during the fetch.
      */
     fun changeMonth(delta: Int) {
         val newMonth = _state.value.visibleMonth.plus(delta, DateTimeUnit.MONTH)

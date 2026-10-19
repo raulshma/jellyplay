@@ -49,9 +49,9 @@ internal object PreferenceCodec {
 
     fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        // Once the one-shot typed-key migration has run, the legacy string-key
-        // fallback is no longer needed — every key was rewritten in place — so
-        // skip the extra string lookup on every preference emission.
+        // Once the one-shot typed-key migration has run — every key was
+        // rewritten in place — the legacy string lookup can never match, so
+        // skip it on every preference emission.
         if (typed != null || prefs[TYPED_MIGRATION_DONE] != true) {
             return typed ?: prefs[stringPreferencesKey(name)]?.toBoolean() ?: default
         }

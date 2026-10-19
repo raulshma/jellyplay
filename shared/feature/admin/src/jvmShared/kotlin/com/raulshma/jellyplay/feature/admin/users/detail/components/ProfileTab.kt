@@ -14,8 +14,7 @@ import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 
 /**
  * Profile tab: identity toggles (GeneralSection), playback/feature permissions
- * (PermissionsSection), and security limits (LimitsSection). New permission
- * toggles, bitrate, and SyncPlay are added in Task 5.
+ * (PermissionsSection), and security limits (LimitsSection).
  */
 @Composable
 fun ProfileTab(

@@ -139,7 +139,7 @@ internal class ItemPlaybackPreferenceWriter(
     }
 
     /**
-     * Persists the last-selected track of [type] for the current series (G5
+     * Persists the last-selected track of [type] for the current series (
      * cross-episode scoring memory). SERIES-only: nothing is remembered for a
      * standalone movie.
      */

@@ -92,7 +92,7 @@ import okhttp3.OkHttpClient
  * [NavigationState]s (DesktopNavGuardTest), the app-level audio fixtures
  * (DesktopAudioQueueManagerFixtures), a real
  * [PreferenceDataStoreFactory.create]-backed file for the stores
- * (HomeDiscoveryStoreTest's Unconfined-scope shape), and the ADR-trap fake
+ * (HomeDiscoveryStoreTest's Unconfined-scope shape), and the check-only fake
  * shape for [AppUpdateRepository] (DesktopUpdateCheckControllerTest). The
  * two seams the holder consumes as plain lambdas/flows — MoveFocus and the
  * receiver's displayMessages — need no doubles at all.
@@ -179,7 +179,7 @@ class DesktopShellServicesTest {
             error("unreachable from DesktopShellServices — the holder consumes only the flows and the sign-out arms")
     }
 
-    /** The ADR-trap fake shape: only the check member is reachable. */
+    /** The check-only fake shape: only the check member is reachable. */
     private class FakeAppUpdateRepository : AppUpdateRepository {
         override suspend fun checkForUpdate(): Result<AppUpdateInfo> =
             Result.failure(IOException("offline"))

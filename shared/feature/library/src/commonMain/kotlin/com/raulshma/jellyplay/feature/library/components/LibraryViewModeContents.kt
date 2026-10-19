@@ -44,17 +44,17 @@ import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import kotlinx.coroutines.flow.Flow
 
 /**
- * The library screen's four flat view-mode contents, extracted verbatim from
- * the former inline [com.raulshma.jellyplay.feature.library.LibraryScreen]
- * `when (activeMode)` arms (the [com.raulshma.jellyplay.feature.library.GroupedLibraryContent]
- * grouped path was already separate).
+ * The library screen's four flat view-mode contents — the
+ * [com.raulshma.jellyplay.feature.library.LibraryScreen] `when (activeMode)`
+ * arms (the [com.raulshma.jellyplay.feature.library.GroupedLibraryContent]
+ * grouped path is separate).
  *
  * State OWNERSHIP stays at the screen root: the scaffold owns every scroll
  * state (`listState` / `gridState` / the hoisted `staggeredState`) because the
  * alphabet rail and the refresh reset drive them from the root, and passes the
  * active one down. Each composable owns only its branch-local focus wiring
- * (masonry's requesters + cursor index). Bodies are byte-identical to the
- * inline arms — same composables, same remember keys, same focus contract.
+ * (masonry's requesters + cursor index). The bodies match the screen's arms —
+ * same composables, same remember keys, same focus contract.
  */
 
 /** LIST mode: one row per item over [TvFocusablePagingColumn]'s TV focus contract. */
@@ -71,7 +71,7 @@ internal fun LibraryListContent(
 ) {
     // TvFocusablePagingColumn supplies the TV focus contract
     // (initial grab, cursor memory, refresh re-grab) the plain
-    // LazyColumn never had — LIST mode used to open with focus
+    // LazyColumn lacks — without it LIST mode opens with focus
     // orphaned straight to the drawer rail.
     TvFocusablePagingColumn(
         itemCount = pagedItems.itemCount,

@@ -66,13 +66,13 @@ val SeerrMediaStatus.isProcessing: Boolean
     get() = this == SeerrMediaStatus.PROCESSING
 
 /**
- * The single action button the Seerr detail screen shows for a media item —
+ * The single action button the Seerr detail screen shows for a media item -
  * the button-PRECEDENCE half of the decision table. The screen's
- * `SeerrActionButtons` previously folded this inline beside the (already
- * extracted) predicates above; core:ui's `seerrStatusBadgePresentation`
- * folds the identical precedence for the search card's corner badge
- * (available > processing > pending > bare requested). Both now read the
- * vocabulary below, so the precedence lives in exactly one place.
+ * `SeerrActionButtons` folds this beside the predicates above; core:ui's
+ * `seerrStatusBadgePresentation` folds the identical precedence for the
+ * search card's corner badge (available > processing > pending > bare
+ * requested). Both read the vocabulary below, so the precedence lives in
+ * exactly one place.
  *
  * Shape (from what the screen actually branches on): a media item is
  * [Available] (the "open in library" affordance), one of three [Requested]
@@ -141,8 +141,8 @@ fun seerrRequestButtonState(mediaInfo: SeerrMediaInfo?): SeerrRequestButtonState
 // ── the movie/TV kind fold ──────────────────────────────────────────────────
 
 /**
- * The movie/TV discriminator every Seerr surface used to re-parse from the
- * wire's own `type`/`mediaType` string ("movie"/"tv") — thirteen inline
+ * The movie/TV discriminator, so Seerr surfaces do not re-parse the wire's
+ * own `type`/`mediaType` string ("movie"/"tv") — thirteen inline
  * `equals("movie", …)` sites across requests/home/details/core:data/core:ui,
  * plus the calendar's ArrMediaType-keyed fetch fork. Gathered here beside the
  * status decisions for the same reason that table exists: one tested home,
@@ -209,8 +209,8 @@ inline fun <T> SeerrMediaKind.pick(movie: () -> T, tv: () -> T): T =
     if (this == SeerrMediaKind.MOVIE) movie() else tv()
 
 /**
- * The kind → [MediaType] mapping the request delegate and the detail load
- * used to write as `if (isMovie) MediaType.MOVIE else MediaType.SERIES`
+ * The kind → [MediaType] mapping written inline as
+ * `if (isMovie) MediaType.MOVIE else MediaType.SERIES`
  * ([UNKNOWN] rides the SERIES leg, same `else` fold as [pick]).
  */
 fun SeerrMediaKind.toMediaType(): MediaType =

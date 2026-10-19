@@ -111,7 +111,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             homeSession,
             sessionCacheRegistry,
         )
-        // Snapshot-store extraction: the repo delegates the persisted half of
+        // The repo delegates the persisted half of
         // the home pipeline to this store (the same single the Koin graph
         // wires); the suite's pins stay end-to-end through the real store.
         val homeSnapshotStore = HomeSectionsSnapshotStore(

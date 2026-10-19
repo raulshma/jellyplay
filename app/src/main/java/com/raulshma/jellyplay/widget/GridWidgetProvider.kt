@@ -10,8 +10,8 @@ import kotlinx.coroutines.cancel
 
 /**
  * The provider-lifecycle fold shared by the two recommendation-grid providers
- * (`LibraryRecommendationsWidget` / `SeerrRecommendationsWidget`), which used
- * to hand-copy the same five overrides. Each concrete provider supplies the
+ * (`LibraryRecommendationsWidget` / `SeerrRecommendationsWidget`), which would
+ * otherwise hand-copy the same five overrides. Each concrete provider supplies the
  * small spec values that actually differ plus two seams:
  *
  *  - [gridViewId] / [refreshAction] — the collection view the launcher notify

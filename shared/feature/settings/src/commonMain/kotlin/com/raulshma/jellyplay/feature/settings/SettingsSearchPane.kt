@@ -273,15 +273,14 @@ private val nonEntranceQuickCategories: Map<Route, Pair<StringResource, ImageVec
 
 /**
  * The pane's quick categories, in render order. The six domains with a fused
- * entrance declaration ([AppearanceEntrance] and its wave siblings) derive
+ * entrance declaration ([AppearanceEntrance] and the other entrance
+ * declarations) derive
  * their (title, icon) face from it — the same [SettingsEntranceSectionRow]
  * the settings root's entrance rows render, so this grid cannot drift from
- * the root screen (four of the six used to restate the icon with its own
- * literal, and had already drifted: headphones/language/download/shield-lock
- * against the declared music/language/database/lock). Server management and
+ * the root screen. Server management and
  * favorites keep their local faces in [nonEntranceQuickCategories]. The
  * routes stay call-site glue — the entrance declarations own the row face,
- * never the navigation. ADR-0009: this is DATA derivation only, no row
+ * never the navigation. This is DATA derivation only, no row
  * emission.
  */
 @Composable
@@ -376,8 +375,7 @@ private fun SettingsQuickCategoriesGrid(
 /**
  * The search-active pane: the category filter chip row above the four-way
  * result box (live matches / no-matches + quick categories / recent settings /
- * browse hint). Relocated verbatim from [SettingsScreen]'s inline
- * `if (searchPanel.isSearchActive)` subtree; [modifier] carries the
+ * browse hint). [modifier] carries the
  * Column-scope `weight(1f)` the result box needs (the chips row stays
  * unweighted above it, exactly as before).
  */

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.model.seerr
 
 /**
- * The TMDB `/details` slice the detail ratings strip reads (D4): the public
+ * The TMDB `/details` slice the detail ratings strip reads: the public
  * vote aggregate plus the overview TMDB hands back on the same call. This is
  * the no-plugin ratings source — TMDB serves it directly, independent of both
  * the JellyPlay plugin and a Seerr connection.

@@ -373,11 +373,10 @@ internal fun PowerUserModeCard(
 /**
  * Section scaffold: one lazy item wrapped in the staggered entrance. The
  * (phone, tv) steps derive from the ordered SETTINGS_ENTRANCE_SECTIONS
- * list — pinned by SettingsEntranceStepsTest to equal the hand-typed
- * literals this replaced — so inserting a section renumbers the followers
- * automatically. Hoisted out of [SettingsScreen] (it used to be a local fun
- * closing over the screen's isTv) so it reads the same value as an explicit
- * parameter; the entrance-step key check still throws on undeclared keys.
+ * list — pinned by SettingsEntranceStepsTest — so inserting a section
+ * renumbers the followers automatically. Hoisted out of [SettingsScreen] so
+ * `isTv` arrives as an explicit parameter; the entrance-step key check still
+ * throws on undeclared keys.
  */
 internal fun LazyListScope.settingsSection(
     key: String,

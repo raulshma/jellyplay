@@ -559,7 +559,7 @@ data class JellyPlayDevice(
 )
 
 /**
- * The `push` half of a device registration (the plugin's push wave): the
+ * The `push` half of a device registration (the plugin's push support): the
  * kind mirrors the plugin contract's `"generic" | "ntfy" | "fcm"` (the app
  * only ever sends `"generic"`; the others are server/admin surfaces) and
  * [endpoint] is the UnifiedPush endpoint URL the distributor handed out.

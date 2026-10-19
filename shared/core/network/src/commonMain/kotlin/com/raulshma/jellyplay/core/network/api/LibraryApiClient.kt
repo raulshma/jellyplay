@@ -55,7 +55,7 @@ interface LibraryApiClient {
     /**
      * The server's Next Up (`GET /Shows/NextUp`). [seriesId] scopes it to one
      * series and [enableResumable] overrides the server's resumable-episode
-     * inclusion (D12's per-series notification diff rides this with
+     * inclusion (the per-series notification diff rides this with
      * `enableResumable = false` — a half-watched episode is not "new");
      * leave both null to keep the home row's user-scoped, server-default
      * read.
@@ -70,9 +70,9 @@ interface LibraryApiClient {
 
     /**
      * Unaired episodes across the followed series (`GET /Shows/Upcoming`) —
-     * the watch-state-independent complement to [getNextUp] (H4 home row; D7
-     * re-scopes it with [parentId] = seriesId for the series "airing next"
-     * strip). Same [MediaItem] mapping and home-row projection as Next Up.
+     * the watch-state-independent complement to [getNextUp]; the series
+     * variant re-scopes with [parentId] = seriesId for the series "airing next"
+     * strip. Same [MediaItem] mapping and home-row projection as Next Up.
      */
     suspend fun getUpcoming(
         userId: String? = null,
@@ -90,9 +90,9 @@ interface LibraryApiClient {
          */
         classicRows: Boolean = false,
         /**
-         * H6: true adds the server-side `excludeActiveSessions` flag so an
+         * true adds the server-side `excludeActiveSessions` flag so an
          * item currently playing on another device stops being offered for
-         * "continue". Default false — the pre-H6 wire (current behavior).
+         * "continue". Default false — the legacy wire (current behavior).
          */
         excludeActiveSessions: Boolean = false,
     ): Result<List<MediaItem>>
@@ -173,7 +173,7 @@ interface LibraryApiClient {
 
     /**
      * Server-hosted local trailers for the item (`/Items/{id}/LocalTrailers`)
-     * — the play-through-the-player half of the trailer sources (D3): unlike
+     * — the play-through-the-player half of the trailer sources: unlike
      * the remote YouTube embeds these ride the full playback session and work
      * on desktop too. Empty when the item has no local trailers; parental
      * rating filtered like every list read.
@@ -228,7 +228,7 @@ interface LibraryApiClient {
      * the `/Persons` endpoint narrowed by an optional [searchTerm]. Returns
      * the id+name pair only: persons have no MediaItem surface (the item
      * mappers drop them), and the picker needs nothing else. [appearsInItemId]
-     * (D20) narrows the result to the people credited on that item — the
+     * narrows the result to the people credited on that item — the
      * "frequently appears with" co-star row.
      */
     suspend fun getPeople(
@@ -253,7 +253,7 @@ interface LibraryApiClient {
     /**
      * The BoxSets whose hierarchy contains the item (`GET /Items/{id}/Ancestors`,
      * filtered to `BaseItemKind.BoxSet`) — the "More in this collection"
-     * franchise row's sources (D6). Summaries only (id + name + poster tag,
+     * franchise row's sources. Summaries only (id + name + poster tag,
      * the [CollectionSummary] vocabulary); the members resolve through the
      * existing collection-members read, not duplicated here.
      */
@@ -263,8 +263,8 @@ interface LibraryApiClient {
 
     /**
      * Server-hosted theme videos for the item (`/Items/{id}/ThemeVideos`) —
-     * the home hero's ambient-clip source (H7; detail hero shares the seam,
-     * D22). Same shape and filtering as [getThemeSongs]. [inheritFromParent]
+     * the home hero's ambient-clip source (the detail hero shares the seam).
+     * Same shape and filtering as [getThemeSongs]. [inheritFromParent]
      * walks up to the series when the featured item itself carries no theme
      * video (an episode/season card inherits the show's clip); default on.
      */
@@ -322,7 +322,7 @@ interface LibraryApiClient {
     suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome>
 
     /**
-     * Reads the server-persisted home-layout slice (H20) from Jellyfin's
+     * Reads the server-persisted home-layout slice from Jellyfin's
      * DisplayPreferences API — the stored JSON payload plus its schema
      * version and write-time stamp (see [HomeLayoutServerState]). Never
      * fails on "nothing stored": a fresh user decodes to all-null state.
@@ -330,7 +330,7 @@ interface LibraryApiClient {
     suspend fun readHomeLayoutDisplayPreferences(userId: String): Result<HomeLayoutServerState>
 
     /**
-     * Writes the home-layout slice (H20) into the server's DisplayPreferences
+     * Writes the home-layout slice into the server's DisplayPreferences
      * store: the [json] payload under the `jellyplay.homeLayout` custom-pref
      * key, plus the [schemaVersion] and a write-time stamp companion keys —
      * the transport documented on the HomeLayoutSync constants. A manual

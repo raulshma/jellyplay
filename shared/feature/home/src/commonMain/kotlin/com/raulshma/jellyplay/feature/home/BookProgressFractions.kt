@@ -19,10 +19,9 @@ import kotlinx.coroutines.sync.Semaphore
  * never the row.
  *
  * The per-item lookups fan out over [DEFAULT_FANOUT_PARALLELISM] permits
- * (they are suspending Room reads that used to run sequentially on the
- * fetch's critical path, ahead of every sections write). The decode still
- * completes before the caller's write, and the outcome is byte-identical to
- * the sequential loop: [mapConcurrent] — not the catching variant — because
+ * (they are suspending Room reads fanned out off the fetch's critical path,
+ * ahead of every sections write). The decode still completes before the
+ * caller's write, and the fan-out preserves the sequential loop's result: [mapConcurrent] — not the catching variant — because
  * a null page count (miss, zero count, failed read) is a VALUE here, the
  * percent fallback's input, never a drop.
  */

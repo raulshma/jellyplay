@@ -4,8 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * programmatic cover for the tray menu actions extracted out of
- * Main.kt's inline lambdas (docs/perf/desktop-skia-baseline.md limits §6).
+ * Programmatic cover for the tray menu actions.
  *
  * Scope honesty: a real ComposeWindow is a java.awt Window subclass and
  * cannot be constructed in a headless test JVM, so the restore/focus half
@@ -25,8 +24,7 @@ class DesktopTrayActionsTest {
     @Test
     fun `showMainWindow with null window is a no-throw no-op`() {
         // Null = tray item fired while the window ref was empty (icon never
-        // composed, or disposed + CAS-cleared). The old inline code guarded
-        // with `if (w != null)`; the extraction must not regress that.
+        // composed, or disposed + CAS-cleared): must stay a no-throw no-op.
         DesktopTrayActions.showMainWindow(null)
     }
 }

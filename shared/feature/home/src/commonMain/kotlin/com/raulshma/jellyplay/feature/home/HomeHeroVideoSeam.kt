@@ -4,15 +4,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
- * H7 platform seam: whether this platform can render the ambient hero clip at
+ * Platform seam: whether this platform can render the ambient hero clip at
  * all. Android/TV (the ExoPlayer-backed [com.raulshma.jellyplay.core.data.playback.AmbientVideoPlayer]
  * via the Koin single) → true; desktop → false, so the loader never fetches
- * and the hero stays static (the documented desktop v1 posture).
+ * and the hero stays static (the desktop posture).
  */
 internal expect val heroVideoPlatformCapable: Boolean
 
 /**
- * H7 platform seam: the muted looping hero-clip surface. Android actual hosts
+ * Platform seam: the muted looping hero-clip surface. Android actual hosts
  * a `TextureView` bound to the process-wide
  * [com.raulshma.jellyplay.core.data.playback.AmbientVideoPlayer] single;
  * desktop actual renders nothing (static hero). The composable is dumb —
@@ -23,8 +23,8 @@ internal expect val heroVideoPlatformCapable: Boolean
 internal expect fun AmbientHeroVideoSurface(url: String, modifier: Modifier = Modifier)
 
 /**
- * H7's fallback leg: the muted YouTube trailer embed (the detail backdrop's
- * D22 pair). Android actual delegates to core:ui's WebView
+ * The fallback leg: the muted YouTube trailer embed (the same embed the
+ * detail backdrop uses). Android actual delegates to core:ui's WebView
  * `InlineTrailerPlayer` — muted, no controls, cropped to fill, and
  * [onEmbedFailed] folds back to the static hero; desktop actual reports the
  * failure immediately (the same fails-fast posture the details screen's

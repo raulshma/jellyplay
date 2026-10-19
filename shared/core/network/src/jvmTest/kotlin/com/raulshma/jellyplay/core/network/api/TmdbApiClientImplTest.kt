@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
  *     YouTube watch URL only for YouTube-hosted videos;
  *  2. `getReviews` uses the same shape for the reviews endpoint;
  *  3. `getDetails` targets the item root itself (`/3/{movie|tv}/{id}`) and
- *     maps the vote aggregate + overview (D4's no-plugin ratings source);
+ *     maps the vote aggregate + overview (the no-plugin ratings source);
  *  4. an HTTP status failure maps to a typed [ApiException] carrying the code,
  *     retryable for 5xx and NOT retryable for 4xx;
  *  5. a malformed body maps to the non-retryable TMDB parse error instead of
@@ -116,7 +116,7 @@ class TmdbApiClientImplTest {
     }
 
     @Test
-    fun `getDetails targets the item root and maps the vote aggregate (D4)`() = runBlocking {
+    fun `getDetails targets the item root and maps the vote aggregate`() = runBlocking {
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(
                 """

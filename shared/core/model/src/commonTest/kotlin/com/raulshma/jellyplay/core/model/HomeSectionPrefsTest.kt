@@ -7,9 +7,9 @@ import kotlin.test.Test
 
 /**
  * Pins [HomeSectionPrefs]' three write policies directly — the behaviour the
- * inline section-config sheet's toggle/move actions route through. Previously
- * these were reachable only through the full VM harness (33 collaborators +
- * Robolectric); the VM-level tests now pin only the event → store-command routing.
+ * inline section-config sheet's toggle/move actions route through. These are
+ * otherwise reachable only through the full VM harness (33 collaborators +
+ * Robolectric); the VM-level tests pin only the event → store-command routing.
  */
 class HomeSectionPrefsTest {
 

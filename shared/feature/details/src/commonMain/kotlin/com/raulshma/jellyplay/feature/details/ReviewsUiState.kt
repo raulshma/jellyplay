@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 
 /**
- * UI state for the Reviews screen (D9). Three-state sealed model mirroring
+ * UI state for the Reviews screen. Three-state sealed model mirroring
  * [CastAndCrewUiState] — avoids nullable field reads and the separate
  * `isLoading` flag the old per-field pattern forced.
  */
@@ -19,7 +19,7 @@ sealed interface ReviewsUiState {
 }
 
 /**
- * The detail screen's Reviews section split (D9): the preview cards shown
+ * The detail screen's Reviews section split: the preview cards shown
  * inline plus the "All reviews (N)" overflow. [preview] is the first
  * [PREVIEW_COUNT] entries; [allCount] is the full fetched size, null when the
  * button must NOT render — i.e. when every review is already visible (N ≤

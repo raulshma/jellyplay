@@ -647,7 +647,7 @@ class HomeSectionsFetcherTest {
     }
 
     @Test
-    fun `the H6 excludeActiveSessions flag reaches every resume read`() = runTest {
+    fun `the excludeActiveSessions flag reaches every resume read`() = runTest {
         val fake = FakeHomeSectionSources()
         // RECOMMENDATIONS rides the batch CW result as its seed pool; scripting
         // both resume reads empty keeps the chain alive to the suggestions
@@ -1279,7 +1279,7 @@ class HomeSectionsFetcherTest {
 
     @Test
     fun `refreshSection upcoming refetches verbatim under the static identity`() = runTest {
-        // H4: the single-row refetch is the batch sub-call's twin — same port
+        // The single-row refetch is the batch sub-call's twin — same port
         // read, no eligibility filters (watch-state-blind by definition), the
         // descriptor's static id/title preserved.
         val fake = FakeHomeSectionSources()
@@ -1299,7 +1299,7 @@ class HomeSectionsFetcherTest {
 
     @Test
     fun `refreshSection my media is not refreshable`() = runTest {
-        // H5: the tiles assemble the batch's shared folders read — a
+        // The tiles assemble the batch's shared folders read — a
         // single-row refetch has nothing of its own to fetch, so the type is
         // gate-off and an unguarded call fails with the caller-bug error.
         val fake = FakeHomeSectionSources()

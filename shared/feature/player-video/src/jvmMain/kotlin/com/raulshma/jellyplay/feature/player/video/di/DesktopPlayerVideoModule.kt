@@ -47,7 +47,7 @@ import org.koin.dsl.module
 val desktopPlayerVideoModule: Module = module {
     single<VideoPlayerPlatform> {
         DesktopVideoPlayerPlatform(
-            // The video focus slice (ADR-0004): the desktop graph binds
+            // The video focus slice: the desktop graph binds
             // DefaultPlaybackFocus (DesktopPlayerModule) — VIDEO claims ride
             // the wiring's play edge through it. No video surface is bound
             // here (the desktop executor's surface list registers only the
@@ -67,7 +67,7 @@ val desktopPlayerVideoModule: Module = module {
     single<ActivePlayerController> { DesktopActivePlayerController(get()) }
     single<PipController> { NoOpPipController() }
     single<PlayerVideoMessageBus> { NoOpPlayerVideoMessageBus }
-    // D14 "Play (with pre-rolls)": the one-shot Cinema Mode override the
+    // "Play (with pre-rolls)": the one-shot Cinema Mode override the
     // detail screen arms before the play dispatch (core:player-contract).
     single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
     single<FontProvider> { NoOpFontProvider }

@@ -39,7 +39,7 @@ enum class PlayerChromeBackVerdict {
  * flipped pref or an opened sheet is visible to an already-armed timer.
  *
  * The summon funnel is [summonForPlayPause] — the
- * [shouldSummonControlsOnPause] fold (jellyfin-androidtv #3924). The other
+ * [shouldSummonControlsOnPause] fold. The other
  * half of the summon guarantee,
  * [com.raulshma.jellyplay.core.model.PlayerInputMap.ensureControlsSummonable],
  * stays a read-time model repair (the datastore spec applies it when the map

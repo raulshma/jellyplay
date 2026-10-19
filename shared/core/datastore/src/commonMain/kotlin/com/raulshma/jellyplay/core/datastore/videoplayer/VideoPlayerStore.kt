@@ -35,7 +35,7 @@ import kotlinx.serialization.Serializable
  * keys, setters (including the bounds coercions below), read projection, legacy
  * migration, and reset-key list end-to-end.
  *
- * **Stage B spec derivation** (the [PlaybackStore] precedent): every key this
+ * **Spec derivation:** every key this
  * store owns is declared exactly once as a row in [VideoPlayerPreferenceSpecs]
  * (wire name, default, reset category, read/write encoding) and the machinery
  * below is derived from those rows — each [Keys] member rebuilds its row's
@@ -44,7 +44,7 @@ import kotlinx.serialization.Serializable
  * derived writes, and [resetKeysFor] filters the rows by reset category. The
  * migration semantics (the `video_gestures_enabled` → [GestureMode] fallback,
  * the segment-behaviour four-boolean fallback, the legacy string-key reads)
- * live in the rows' encodings now, next to the key they apply to.
+ * live in the rows' encodings, next to the key they apply to.
  *
  * **Cross-key invariants owned here (hand-written by decision — an invariant
  * or a bounds policy spanning more than a row encoding cannot be derived):**
@@ -539,7 +539,7 @@ data class VideoPlayerSlice(
     val videoSeekDurationMs: Long = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.default,
     val videoControlsTimeoutMs: Long = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.default,
     /**
-     * (jellyfin-androidtv #3924): pausing must not summon the control
+     * Pausing must not summon the control
      * overlay. Default **off** — today's show-on-pause behavior; on, only the
      * SUMMONS is suppressed (an already-visible overlay keeps its auto-hide).
      */

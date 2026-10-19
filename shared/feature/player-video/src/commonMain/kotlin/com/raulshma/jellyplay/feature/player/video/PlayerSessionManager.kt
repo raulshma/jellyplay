@@ -138,7 +138,7 @@ internal class PlayerSessionManager(
      */
     private val offlineMediaProbe: OfflineMediaProbe,
     /**
-     * Fail-fast gate for online resolution (#146): without it a dead network
+     * Fail-fast gate for online resolution: without it a dead network
      * made every load stage block on full OkHttp timeouts before silently
      * bailing, which read as "the Next button did nothing".
      */
@@ -360,7 +360,7 @@ internal class PlayerSessionManager(
 
         // Offline gate: an Online-resolved item cannot play without the server.
         // Fail fast with feedback instead of dead-airing through every network
-        // stage's timeout (#146). Offline (download) sources are unaffected —
+        // stage's timeout. Offline (download) sources are unaffected —
         // that is exactly the path offline mode exists for.
         // KMP seam: compose-resources' suspend resolver replaces
         // context.getString (loadMedia is suspend).
@@ -388,7 +388,7 @@ internal class PlayerSessionManager(
     /**
      * Fail a load: publish the not-ready state and surface the reason to the
      * user. Every [loadMedia] failure path converges here so the state write
-     * and the feedback emission cannot drift apart (#146).
+     * and the feedback emission cannot drift apart.
      */
     private fun failLoad(message: String) {
         _sessionState.update { it.copy(title = message, isReady = false) }
@@ -424,7 +424,7 @@ internal class PlayerSessionManager(
 
         var runTimeTicks = offlineItem?.runTimeTicks
         if (runTimeTicks == null || runTimeTicks <= 0L) {
-            //  seam: the MediaMetadataRetriever extraction moved behind
+            //  seam: the MediaMetadataRetriever read moved behind
             // OfflineMediaProbe (androidMain actual runs it verbatim).
             val extractedDurationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 offlineMediaProbe.extractDurationMs(localFile.absolutePath)
@@ -505,7 +505,7 @@ internal class PlayerSessionManager(
         sessionSubtitleSources.loadStreamingSubtitles(itemId, currentStreams = null)
 
         // Best-effort catch-up for sidecar subtitles added on the server AFTER
-        // the download was made (#144): the bundle is a download-time snapshot,
+        // the download was made: the bundle is a download-time snapshot,
         // so a newly added .srt never reached it, and offline sessions (empty
         // server streams, engine-tracks-only picker) would never show it. When
         // the server is reachable, re-fetch the detail in the background and
@@ -663,7 +663,7 @@ internal class PlayerSessionManager(
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
             // Surface the failure — the old silent bail left the user staring
-            // at a "loading" veil that had lifted over nothing (#146).
+            // at a "loading" veil that had lifted over nothing.
             // KMP seam: compose-resources' suspend resolver replaces
             // context.getString (loadOnline is suspend).
             failLoad(getString(Res.string.player_video_error_loading_media))

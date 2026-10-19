@@ -5,11 +5,10 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * Android actual of the [LogCollector] seam — the pre-migration
- * AboutViewModel.collectLogs body, verbatim (logcat -d --pid capture with the
- * diagnostics-header fallback write), except it returns the serialised
- * FileProvider Uri so the common ViewModel can hand it to
- * [PlatformIntents.shareLogFile] as an opaque string.
+ * Android actual of the [LogCollector] seam: logcat -d --pid capture with the
+ * diagnostics-header fallback write, returning the serialised FileProvider Uri
+ * so the common ViewModel can hand it to [PlatformIntents.shareLogFile] as an
+ * opaque string.
  */
 internal class AndroidLogCollector(
     private val context: Context,

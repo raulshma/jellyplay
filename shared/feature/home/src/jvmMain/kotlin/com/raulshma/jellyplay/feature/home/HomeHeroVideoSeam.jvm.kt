@@ -4,10 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
- * Desktop actual of the H7 hero-video seam (v1): desktop cannot render the
+ * Desktop actual of the hero-video seam: desktop cannot render the
  * ambient clip — [heroVideoPlatformCapable] is false so the loader never
  * fetches, and the surface actual renders nothing. The hero stays the static
- * backdrop image, exactly the pre-H7 behaviour.
+ * backdrop image.
  */
 internal actual val heroVideoPlatformCapable: Boolean = false
 

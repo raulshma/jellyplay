@@ -8,11 +8,10 @@ import java.awt.Toolkit
 import java.awt.Window
 
 /**
- * The undecorated window's placement choreography — the five rules that
- * used to live as scattered composable locals in Main.kt, extracted so the
- * dance has a test surface beside the [DesktopWindowStateStore] persistence
- * half it feeds (the store keeps load/sanitize/save; this controller owns
- * the WHEN and the WHAT of writes, plus the manual-maximize machine):
+ * The undecorated window's placement choreography — the five rules, with a
+ * test surface beside the [DesktopWindowStateStore] persistence half it
+ * feeds (the store keeps load/sanitize/save; this controller owns the WHEN
+ * and the WHAT of writes, plus the manual-maximize machine):
  *
  *  1. **Maximize fills the work area.** AWT's `MAXIMIZED_BOTH` is unusable
  *     on the undecorated frame (a WS_POPUP window is never zoomed natively
@@ -47,12 +46,9 @@ import java.awt.Window
  * rather than window geometry.
  *
  * [isMaximized] is snapshot state so DesktopTitleBar's toggle icon
- * re-composes exactly like the old inline `maximizedRestoreBounds` local
- * did. No declared deltas: every branch below is the inline original's,
- * verbatim (the shell now attaches its windowOpened listener
- * unconditionally where it used to skip registration for non-maximized
- * sessions — observable behavior identical, the controller's armed guard
- * makes those calls inert).
+ * re-composes. Every branch below is the placement rule itself; the shell
+ * attaches its windowOpened listener unconditionally — the controller's
+ * armed guard makes calls for non-maximized sessions inert.
  */
 internal class DesktopWindowPlacementController(
     private val host: DesktopWindowPlacementHost,

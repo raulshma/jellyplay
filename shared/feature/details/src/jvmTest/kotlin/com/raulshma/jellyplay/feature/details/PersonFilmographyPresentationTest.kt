@@ -12,7 +12,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * The D18 role extraction / group partition + D20 co-star selection, pure
+ * The role extraction / group partition + co-star selection, pure
  * (PersonFilmographyPresentation) — no ViewModel involved.
  */
 class PersonFilmographyPresentationTest {
@@ -26,7 +26,7 @@ class PersonFilmographyPresentationTest {
     private fun item(id: String, vararg people: PersonInfo) =
         MediaItem(id = id, name = "Title $id", mediaType = MediaType.MOVIE, people = people.toList())
 
-    // ── D18: role-group partition ─────────────────────────────────────────
+    // ── role: role-group partition ─────────────────────────────────────────
 
     @Test
     fun `role group partition buckets the typed kinds`() {
@@ -46,7 +46,7 @@ class PersonFilmographyPresentationTest {
         assertEquals(FilmographyRoleGroup.OTHER, filmographyRoleGroup("MysteryKind"))
     }
 
-    // ── D18: credit extraction + "as {Role}" label ────────────────────────
+    // ── role: credit extraction + "as {Role}" label ────────────────────────
 
     @Test
     fun `credit extraction matches the person id on the item's People`() {
@@ -102,7 +102,7 @@ class PersonFilmographyPresentationTest {
         assertEquals("Lead", creditRoleLabel(credits["m1"]))
     }
 
-    // ── D20: co-star selection ────────────────────────────────────────────
+    // ── co-star: co-star selection ────────────────────────────────────────────
 
     @Test
     fun `co-star selection excludes the person themselves and preserves order`() {

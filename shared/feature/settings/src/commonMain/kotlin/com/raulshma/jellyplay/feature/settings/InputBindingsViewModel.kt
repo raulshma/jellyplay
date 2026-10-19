@@ -151,8 +151,8 @@ class InputBindingsViewModel(
         edit { scope ->
             val prefs = uiState.value
             // defaultMap(...) seeds the touch rows' enabled flags from the
-            // mode + behavior flags directly — the same map the absent-blob
-            // legacy read produces, so a reset and a fresh read agree.
+            // mode + behavior flags directly — the same map an absent-blob
+            // read produces, so a reset and a fresh read agree.
             scope.videoPlayer.setVideoInputBindings(
                 PlayerInputDefaults.defaultMap(
                     gestureMode = prefs.gestureMode,

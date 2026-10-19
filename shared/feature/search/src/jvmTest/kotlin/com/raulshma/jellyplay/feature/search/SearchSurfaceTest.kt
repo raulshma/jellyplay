@@ -5,10 +5,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins [computeSearchSurface] — the render-branch fold that replaced the
- * search screen's six-term no-results predicate and refresh-state ladder.
+ * Pins [computeSearchSurface] — the render-branch fold over the search
+ * screen's six-term no-results predicate and refresh-state ladder.
  * Pure JVM over the fold's inputs, the `HomeSurfaceTest` pattern: every
- * precedence rule the screen used to decide inline is asserted here. The
+ * precedence rule the screen decides inline is asserted here. The
  * paging sub-decision is delegated to the core:ui chassis's
  * [PagedRefreshPhase] (its `LoadState` mapping is pinned by the chassis's
  * own `PagedCollectionLadderTest`), so the fold consumes the resolved phase.

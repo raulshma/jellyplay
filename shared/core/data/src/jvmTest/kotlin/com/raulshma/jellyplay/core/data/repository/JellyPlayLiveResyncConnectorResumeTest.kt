@@ -22,7 +22,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The settings stream's resume cursor (the Phase 1 `Last-Event-ID` wave),
+ * The settings stream's resume cursor,
  * driven through [JellyPlayLiveResyncConnector] on the test scheduler's
  * virtual time: the first connect resumes from the persisted per-user id, the
  * id seen on the wire is persisted and becomes the reconnect's `Last-Event-ID`

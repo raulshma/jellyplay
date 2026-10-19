@@ -23,10 +23,8 @@ import java.security.MessageDigest
 
 /**
  * Exercises the security &amp; access-control preference store, focusing on the
- * storage invariants (nullable pin-hash removal, round-trips) that previously
- * lived inline in the `UserPreferencesStore` god object with **no** unit
- * coverage. PIN *hashing* / verification logic is covered by `PinHasherTest`,
- * not here.
+ * storage invariants (nullable pin-hash removal, round-trips). PIN *hashing* /
+ * verification logic is covered by `PinHasherTest`, not here.
  */
 class SecurityStoreTest {
 

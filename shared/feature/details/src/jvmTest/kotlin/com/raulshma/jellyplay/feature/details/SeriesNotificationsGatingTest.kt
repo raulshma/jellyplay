@@ -7,13 +7,13 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The D12 gating matrices — the pure decision folds behind the three
+ * The notification gating matrices — the pure decision folds behind the three
  * notification surfaces (no Android / Compose):
  *
  *  - [offersSeriesNewEpisodeNotifications] — the ⋮ menu's "Notify me about
  *    new episodes" entry (SERIES-only, server-only, notification-stack
  *    platforms only — the offersPlayWithPrerolls template);
- *  - [showsSeriesNotifyBell] — the D7 upcoming rows' per-row bell (stack +
+ *  - [showsSeriesNotifyBell] — the upcoming rows' per-row bell (stack +
  *    SERIES);
  *  - [shouldRequestPostNotifications] — the Android 13+ runtime-prompt gate
  *    behind the first-enable flow.
@@ -65,7 +65,7 @@ class SeriesNotificationsGatingTest {
         )
     }
 
-    // ── the D7 bell's gate ──────────────────────────────────────────────
+    // ── the upcoming bell's gate ──────────────────────────────────────────────
 
     @Test
     fun `bell shows on a series with a notification stack`() {

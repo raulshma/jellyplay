@@ -35,7 +35,7 @@ internal class HomeSectionsAssemblyInputs(
     val continueWatchingResult: Result<List<MediaItem>> = Result.success(emptyList()),
     val continueReadingResult: Result<List<MediaItem>> = Result.success(emptyList()),
     val nextUpResult: Result<List<MediaItem>> = Result.success(emptyList()),
-    /** H4: the unaired-episodes sub-call result (empty when disabled/empty). */
+    /** The unaired-episodes sub-call result (empty when disabled/empty). */
     val upcomingResult: Result<List<MediaItem>> = Result.success(emptyList()),
     val foldersResult: Result<List<LibraryFolder>> = Result.success(emptyList()),
     /** Latest-media sub-results in folder order (music folders already filtered out by the caller). */
@@ -66,7 +66,7 @@ internal class HomeSectionsAssemblyInputs(
      */
     val pluginRowSections: List<HomeSection> = emptyList(),
     /**
-     * H9: the plugin-curated hero billboards, already resolved to entries by
+     * The plugin-curated hero billboards, already resolved to entries by
      * the fetcher (empty = gated off / unconfigured / unresolvable). NOT a
      * section — the result carries them beside the rows and the home screen's
      * hero candidate selection merges them ahead of the local pool.
@@ -121,7 +121,7 @@ internal object HomeRowAssembleArms {
 
     /**
      * The emission order: Continue Watching → Continue Reading → Next Up →
-     * Upcoming (H4) → My Media (H5) → the latest fan-out (one row per
+     * Upcoming → My Media → the latest fan-out (one row per
      * library, folder order) → Recently
      * Added (inserted right after the LAST Latest Media row) →
      * Recommendations (or the suggestions fallback) → the discover block →
@@ -203,7 +203,7 @@ internal object HomeRowAssembleArms {
             }
         },
 
-        // H4: unaired episodes across the followed series — the verbatim
+        // Unaired episodes across the followed series — the verbatim
         // sub-call result, no eligibility filters (upcoming is
         // watch-state-blind by definition; the CW-overlap and blocklist rules
         // are Next Up's alone).
@@ -222,7 +222,7 @@ internal object HomeRowAssembleArms {
             }
         },
 
-        // H5: the My Media tiles row — the shared folders fetch assembled into
+        // The My Media tiles row — the shared folders fetch assembled into
         // tile items, zero port calls of its own. Each library becomes a
         // FOLDER-typed MediaItem (id = library id, name = library name) so the
         // section rides the standard [HomeSection.items] channel; the render
@@ -387,7 +387,7 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
         result = HomeSectionsResult(
             ctx.sections.toList(),
             ctx.failedTypes.toSet(),
-            // H9: the curated hero rides beside the rows — never a section.
+            // The curated hero rides beside the rows — never a section.
             ctx.input.curatedHero,
         ),
         firstError = ctx.firstError,
@@ -425,7 +425,7 @@ internal fun List<MediaItem>.filterNextUpEligible(
     ContinueWatchingRowRule.nextUpEligible(this, continueWatchingIds, excludedSeriesIds)
 
 /**
- * The H5 My Media tile mapping — each Jellyfin library folder becomes one
+ * The My Media tile mapping — each Jellyfin library folder becomes one
  * FOLDER-typed [MediaItem] (id = library id, name = library name) so the tiles
  * row rides the standard [HomeSection.items] channel. Pure and Compose-free:
  * pinned by [HomeSectionsAssemblerTest], shared verbatim with the render side

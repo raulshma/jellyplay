@@ -141,8 +141,7 @@ internal fun PlaybackPlayerGroup(
                         }
                         // Localized labels for the trailing text + picker,
                         // resolved in composable scope (see the orientation
-                        // row) — this row used to show the localized subtitle
-                        // beside an English `displayName` value.
+                        // row).
                         val gestureModeLabels = GestureMode.entries.associateWith { it.localizedDisplayName() }
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.Gestures),
@@ -231,7 +230,7 @@ internal fun PlaybackPlayerGroup(
                         trailingText = if (preferences.videoHoldSpeedEnabled) "${preferences.videoHoldSpeedMultiplier}x" else holdSpeedOffLabel,
                         highlighted = highlightSettingId == PlaybackRows.HoldSpeedMultiplier.id,
                         onClick = {
-                            // 0f encodes "Off" — selecting it replaces the former Hold-to-Seek toggle
+                            // 0f encodes "Off" for hold-to-seek.
                             val speeds = listOf(0f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f)
                             activePicker.value = PickerState.List(
                                 title = holdSpeedTitle,

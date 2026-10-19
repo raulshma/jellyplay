@@ -7,15 +7,14 @@ package com.raulshma.jellyplay.core.model
  * `core:database` stale-while-revalidate snapshot) plus the feature-layer
  * refresh cadence that drives refills.
  *
- * Previously these were four uncoordinated clocks: a 2-minute constant in
- * `LibraryApiClientImpl`, a 60-second one in `MediaRepositoryImpl`, a
- * `fetchedAt` column written but never read, and cadence constants on
- * `HomeRefresher`. They lived in modules that cannot see each other
- * (`core:network`, `core:data`, `feature:home`), so every cross-layer
- * "keep these in lockstep" rule was a comment instead of code. All three
- * depend on `core:model`, so — same common-ancestor reasoning as
- * [TtlCache] — the canonical policy lives here and the duplicates were
- * removed.
+ * Four uncoordinated clocks — a 2-minute constant in `LibraryApiClientImpl`,
+ * a 60-second one in `MediaRepositoryImpl`, a `fetchedAt` column written but
+ * never read, and cadence constants on `HomeRefresher` — would drift because
+ * they live in modules that cannot see each other (`core:network`,
+ * `core:data`, `feature:home`), making every cross-layer "keep these in
+ * lockstep" rule a comment instead of code. All three depend on
+ * `core:model`, so — same common-ancestor reasoning as [TtlCache] — the
+ * canonical policy lives here.
  *
  * Passive-`now` API: like feature/home's `TtlCacheGate`, [isRoomSnapshotFresh]
  * takes the current time as a parameter instead of reading a clock. This

@@ -144,8 +144,8 @@ internal fun homeDisplayScreenRowTotal(hiddenCwItems: Int): Int =
     rowTotalFor(SettingsScreenGroups.homeDisplay, RowAdmissionFlags()) + if (hiddenCwItems > 0) 1 else 0
 
 /**
- * The cards group's `SettingsItemList(total = …)` row count: the PS-4 moved
- * card-display quartet plus the home-wave badge/spoiler/trickplay toggles.
+ * The cards group's `SettingsItemList(total = …)` row count: the
+ * card-display quartet plus the badge/spoiler/trickplay toggles.
  * Every row is declared [RowAdmission.Always] except the TV-only trickplay
  * row ([RowAdmission.Tv]), so the strict derivation counts all rows on TV and
  * all but the trickplay row off it.
@@ -154,7 +154,7 @@ internal fun homeCardsScreenRowTotal(isTv: Boolean): Int =
     rowTotalFor(SettingsScreenGroups.homeCards, RowAdmissionFlags(isTv = isTv))
 
 /**
- * The H20 restore confirmation dialog's content, pure for tests: the
+ * The restore confirmation dialog's content, pure for tests: the
  * timestamp-diff signal (the server write stamp) plus BOTH layouts'
  * enabled-section counts, so the dialog can show "server copy saved <date> —
  * N sections" against "this device — M sections" without any formatting
@@ -185,7 +185,7 @@ fun HomeSettingsScreen(
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
-    // H20 manual sync actions: one-shot toast texts pre-resolved at composable
+    // Manual sync actions: one-shot toast texts pre-resolved at composable
     // scope (the message bus takes plain Strings — the presets screen's
     // convention) plus the restore-confirmation dialog flag.
     val bus = LocalUserMessageBus.current
@@ -577,7 +577,7 @@ fun HomeSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setLayoutAutopush(it) } },
                     )
 
-                    // H20 manual sync actions — work regardless of the
+                    // Manual sync actions — work regardless of the
                     // autopush pref (the manual and automatic pushes serialize
                     // through the exact same codec inside the controller).
                     SettingListItem(
@@ -640,9 +640,8 @@ fun HomeSettingsScreen(
             }
 
             item {
-                // The card-display toggles moved off AppearanceSettingsScreen's
-                // "Library & Cards" group (PS-4): home-discovery knobs, now
-                // grouped beside the rest of the home hub — plus the home-wave
+                // The "Library & Cards" card-display toggles — home-discovery
+                // knobs grouped beside the rest of the home hub — plus the
                 // badge/spoiler/trickplay toggles (the trickplay row is
                 // TV-only, gated by its declared RowAdmission.Tv).
                 SettingsGroup(
@@ -744,7 +743,7 @@ fun HomeSettingsScreen(
             }
     }
 
-    // H20 restore confirmation: the timestamp-diff dialog (server write stamp
+    // Restore confirmation: the timestamp-diff dialog (server write stamp
     // vs both layouts' enabled-section counts). Shown only while a decoded
     // offer is pending — fetchServerLayout retained it on the VM. The apply
     // routes through the store's applyLayout — the SAME command the local

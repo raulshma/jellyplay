@@ -4,8 +4,7 @@ import androidx.compose.runtime.Composable
 
 /**
  * Android actual of the [PluginConfigHost] seam: the full WebView config
- * screen, unchanged from the legacy :feature:admin (it moved to this
- * module's androidMain verbatim, Hilt stripped, Koin-owned ViewModel).
+ * screen with a Koin-owned ViewModel.
  */
 @Composable
 actual fun PluginConfigHost(

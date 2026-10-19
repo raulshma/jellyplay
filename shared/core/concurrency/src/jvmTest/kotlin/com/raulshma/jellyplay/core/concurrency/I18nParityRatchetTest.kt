@@ -5,7 +5,7 @@ import kotlin.test.assertTrue
 import java.io.File
 
 /**
- * Ratchet against locale drift in Compose Multiplatform string resources:
+ * Guard against locale drift in Compose Multiplatform string resources:
  * every module ships `composeResources/values/strings.xml` (the default
  * locale) beside `values-<lang>/strings.xml` translations, and a key added
  * to the default file without its locale entries silently falls back to
@@ -16,9 +16,9 @@ import java.io.File
  * count never rises above the per-module+locale baseline in
  * [baselineMissingKeys]. Modules may split their strings across several
  * `strings_*.xml` family files per qualifier dir (CMP merges them) — the
- * ratchet reads every `*.xml` in the dir, so a split cannot hide a gap.
+ * the scan reads every `*.xml` in the dir, so a split cannot hide a gap.
  *
- * This is a RATCHET, not full parity enforcement of the raw key sets: the
+ * This is a drift guard, not full parity enforcement of the raw key sets: the
  * counted set already excludes the conventions below, so the goal is that
  * the numbers only ever go down. When a module reaches 0 for every locale,
  * full parity has arrived there.
@@ -30,11 +30,9 @@ import java.io.File
  *    untranslated (settings_radarr, auth_app_name, subtitle_tester_mode_hdr,
  *    …). The Android resource convention is that these carry no locale
  *    entries; requiring one would be wrong, so they never count.
- *  - keys starting with `diff_`: the recorded convention (CONTEXT.md,
- *    "diff" entries) for intentionally default-locale-only strings. All
- *    historically-defaulted `diff_` keys have since been translated into
- *    every locale, so the prefix is prophylactic — a new `diff_` key is
- *    exempt by convention, anything else must translate or baseline.
+ *  - keys starting with `diff_`: the recorded convention for intentionally
+ *    default-locale-only strings — the prefix is prophylactic: a new `diff_`
+ *    key is exempt by convention, anything else must translate or baseline.
  *  - [properNounExemptKeys]: product/service proper nouns that must not be
  *    translated. Belt-and-braces for the day one of them loses its
  *    `translatable="false"` marker.
@@ -47,9 +45,8 @@ import java.io.File
  *
  * To accept a (temporary) gap: add an entry to [baselineMissingKeys] keyed
  * `"relative/module/path:locale-tag"` with the current missing count. To
- * LOWER a baseline (the point of the ratchet): translate the keys, delete
- * or shrink the entry. Never raise a number except for an accepted gap,
- * and keep its KDoc pointed at the tracking issue.
+ * LOWER a baseline: translate the keys, delete
+ * or shrink the entry. Never raise a number except for an accepted gap.
  */
 class I18nParityRatchetTest {
 
@@ -67,8 +64,8 @@ class I18nParityRatchetTest {
      *
      * Accepted gaps recorded 2026-10-12 (multi-feature branch landed feature
      * strings ahead of their translation pass; the numbers must never rise):
-     *  - `shared/feature/details` 13 keys × 8 locales — home-detail plan
-     *    (docs/home-detail-implementation-plan.md) UI strings; translations
+     *  - `shared/feature/details` 13 keys × 8 locales — the home-detail
+     *    UI strings; translations
      *    tracked as a details-module follow-up.
      *  - `shared/feature/home` 6 keys × 8 locales — home section/hero strings
      *    from the same branch; translations tracked as a home-module follow-up.
@@ -177,7 +174,7 @@ class I18nParityRatchetTest {
             .sortedBy { it.name }
 
     /**
-     * The default-locale keys that COUNT for the ratchet: every `<string>`
+     * The default-locale keys that COUNT for the guard: every `<string>`
      * and `<plurals>` key except the exempt classes documented on the class
      * KDoc.
      */

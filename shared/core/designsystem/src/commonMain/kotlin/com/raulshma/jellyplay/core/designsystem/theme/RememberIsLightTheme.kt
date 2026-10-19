@@ -9,8 +9,7 @@ import androidx.compose.runtime.remember
  * using the standard luminance weights. Memoized on the background colour so it
  * does not recompute on every recomposition.
  *
- * Extracted from duplicate private copies previously inlined in
- * `MediaDetailScreen` and `SeerrDetailScreen`.
+ * Shared by `MediaDetailScreen` and `SeerrDetailScreen`.
  */
 @Composable
 fun rememberIsLightTheme(): Boolean {

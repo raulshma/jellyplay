@@ -228,7 +228,7 @@ class HomeRefresherFetchTest {
 
         // The follow-up fetch fails — the stale content must survive untouched,
         // but the failure is recorded so the offline gate can take over the
-        // rows the frozen snapshot can no longer refresh (CW / Next Up).
+        // rows the frozen snapshot cannot refresh (CW / Next Up).
         coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("flaky network"))
         refresher.fetchOnce()
@@ -589,10 +589,10 @@ class HomeRefresherFetchTest {
         assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)
     }
 
-    // ── custom Seerr rows: the fetch moved to core:network ──────────────────
-    // The feature-side Seerr-row pins this section used to carry (total vs
-    // partial failure, TTL stamping) moved with the fetch itself — the
-    // network layer now owns the fan-out, gate and last-known-good memo, and
+    // ── custom Seerr rows: the fetch lives in core:network ──────────────────
+    // The feature-side Seerr-row pins (total vs
+    // partial failure, TTL stamping) live with the fetch itself: the
+    // network layer owns the fan-out, gate and last-known-good memo, and
     // HomeSectionsFetcherTest pins them there. The refresher's WHAT/WHEN
     // voice for these rows is the query it hands to getHomeSections; with the
     // repository mocked there is no feature-side choreography left to pin.
@@ -601,7 +601,7 @@ class HomeRefresherFetchTest {
 
     @Test
     fun fetchFailed_isErrorRegardlesOfSectionsOnScreen() {
-        // Sections on screen no longer disqualify the implicit-offline
+        // Sections on screen do not disqualify the implicit-offline
         // fallback: they are the stale pre-failure snapshot, which is exactly
         // when the offline rows must take over.
         val state = HomeRefreshState(

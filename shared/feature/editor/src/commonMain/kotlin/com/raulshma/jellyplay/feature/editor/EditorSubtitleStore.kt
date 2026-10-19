@@ -53,10 +53,9 @@ internal interface EditorSubtitleStore {
     suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?)
 
     /**
-     * The provider-subtitle choreography the editor VM used to inline as ~40
-     * lines inside `handleDownloadProviderSubtitle` — it has exactly one
-     * caller and every half of it (persist/attribute) already lived here, so
-     * the sequencing belongs here too:
+     * The provider-subtitle choreography behind
+     * `handleDownloadProviderSubtitle` — persist/attribute both belong to this
+     * seam, so the sequencing does too:
      *
      * 1. [save] — the durable on-device copy FIRST, so the subtitle survives
      *    even if the server upload fails (e.g. offline; mirrors the player's
@@ -70,7 +69,7 @@ internal interface EditorSubtitleStore {
      *    post-upload [streams] snapshot — so a later server-side delete can
      *    purge exactly this local copy.
      *
-     * The upload Result is returned verbatim; the failure arm stays
+     * The upload Result is returned unchanged; the failure arm stays
      * caller-side (the VM owns the busy/error flags and the
      * "Saved to device only" degradation wording). A default body keeps the
      * seam's implementors (the JVM adapter and the tests' recording fake)

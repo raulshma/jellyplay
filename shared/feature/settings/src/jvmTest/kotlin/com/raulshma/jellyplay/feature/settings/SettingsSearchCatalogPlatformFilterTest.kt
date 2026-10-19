@@ -99,7 +99,7 @@ class SettingsSearchCatalogPlatformFilterTest {
 
     @Test
     fun `the mpv audio-device trio is the catalog's desktop-only set`() {
-        // The reverse ratchet of [androidOnlyIds]: the desktop audio-device
+        // The reverse guard of [androidOnlyIds]: the desktop audio-device
         // rows are DESKTOP-
         // backed (the desktop composition root binds the real enumerator) and
         // must never surface as search hits on Android.

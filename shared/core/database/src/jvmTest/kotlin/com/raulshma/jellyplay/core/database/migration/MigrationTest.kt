@@ -1155,7 +1155,7 @@ class MigrationTest {
 
     /**
      * Verifies the v50→v51 migration retires every stored metadata signature
-     * AND clears what a pre-upgrade retired-format comparison had left
+     * AND clears what a pre-upgrade legacy-format comparison had left
      * persisted — the metadata per-axis flag and its contribution to the
      * composite badge — while genuine other-axis badges survive. See
      * [MIGRATION_50_51]'s KDoc for the full rationale.
@@ -1228,7 +1228,7 @@ class MigrationTest {
             assertTrue(c.isNull(3))
             assertFalse(c.step())
         }
-        // The retired format's fallout is cleared at upgrade time instead of
+        // The legacy format's fallout is cleared at upgrade time instead of
         // lingering until each row's next TTL-gated check: item-1's stale
         // metadata flag and composite badge go dark immediately, item-2 stays
         // clean, and item-3/item-4's genuine non-metadata badges survive.

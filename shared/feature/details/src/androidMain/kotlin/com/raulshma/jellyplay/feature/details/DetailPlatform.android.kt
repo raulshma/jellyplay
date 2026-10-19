@@ -112,7 +112,7 @@ fun androidDetailsModule(context: Context): Module = module {
             pluginRecommendationsApi = get(),
             pluginMarkersApi = get(),
             jellyPlayFeatureGate = get(),
-            // D4: the direct-TMDB details fallback behind the externalRatings
+            // The direct-TMDB details fallback behind the externalRatings
             // enrichment (core:network single, NetworkKoinModules).
             tmdbApiClient = get(),
         )
@@ -169,7 +169,7 @@ internal actual fun InlineTrailerPlayerHost(
 }
 
 /**
- * Android actual of the D22 ambient-clip seam: a `TextureView` whose
+ * Android actual of the ambient-clip seam: a `TextureView` whose
  * `SurfaceTexture` is bound to the process-wide AmbientVideoPlayer single
  * (feature/home's `AmbientHeroVideoSurface` twin — the same start/stop
  * driver shape, url-guarded so a superseded hero's dispose cannot kill the
@@ -221,13 +221,13 @@ internal actual fun AmbientThemeVideoSurface(url: String, modifier: Modifier) {
 }
 
 /**
- * D12: Android/TV carries the full notification stack — the ⋮ menu's notify
- * entry and the D7 rows' bell render here.
+ * Android/TV carries the full notification stack — the ⋮ menu's notify
+ * entry and the upcoming rows' bell render here.
  */
 internal actual val platformHasNotificationStack: Boolean = true
 
 /**
- * D12: the app's cold-start permission prompt pattern (MainActivity:
+ * The app's cold-start permission prompt pattern (MainActivity:
  * `checkSelfPermission(POST_NOTIFICATIONS)` → `launcher.launch`) mirrored
  * into composition behind the activity-result launcher, so a first enable
  * from the ⋮ menu or the bell raises the Android 13+ system dialog when the

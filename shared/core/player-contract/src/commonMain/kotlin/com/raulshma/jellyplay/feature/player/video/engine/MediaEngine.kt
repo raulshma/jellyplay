@@ -336,7 +336,7 @@ data class EngineCapabilities(
      * mpv/LibVLC render through their own audio outputs with no observable
      * Spatializer surface, so they advertise `false`.
      *
-     * Spec reliance (the C5 spec's "auto-disable when passthrough or ≥5.1
+     * Spec reliance ("auto-disable when passthrough or ≥5.1
      * output is active"): covered structurally, no dedicated branch — this
      * engine cannot passthrough ([supportsAudioPassthrough] = `false`, it
      * always decodes to PCM), and ≥5.1 speaker/receiver routes fall outside

@@ -180,7 +180,7 @@ class HomeViewModelEventsTest {
     private val userFlow = MutableStateFlow<UserInfo?>(null)
 
     /**
-     * H17/H18 loader doubles — see [HomeViewModelTest]'s harness note: relaxed
+     * Loader doubles — see [HomeViewModelTest]'s harness note: relaxed
      * mocks with defensive null/empty stubs; the default pref state never
      * triggers them.
      */
@@ -417,8 +417,8 @@ class HomeViewModelEventsTest {
         )
         advanceTimeBy(701)
         runCurrent()
-        // The rolling mirror leaf-collects off the VM's spinner flow now —
-        // no longer a HomeUiState field.
+        // The rolling mirror leaf-collects off the VM's spinner flow, not a
+        // HomeUiState field.
         assertTrue(viewModel.refreshSpinners.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
         // The cache choreography is the repository's now (rerollDiscoverRow
         // owns invalidate → fetch → seed); the end-to-end pin here is that the

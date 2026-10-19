@@ -198,7 +198,7 @@ class JellyPlayPluginApiClientImpl(
                 // the wire REPLACES caps, so an omitted field must never be
                 // how a re-registration silently drops them.
                 put("caps", JsonArray(caps.map { JsonPrimitive(it) }))
-                // Additive push half (the plugin's push wave) — an explicit
+                // Additive push half (the plugin's push support) — an explicit
                 // tri-state: Keep omits the field so the legacy wire shape is
                 // byte-identical; Detach writes the JSON null that clears the
                 // server-held endpoint.

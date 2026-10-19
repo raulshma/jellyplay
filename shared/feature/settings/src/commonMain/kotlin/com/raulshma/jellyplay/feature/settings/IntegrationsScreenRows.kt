@@ -19,15 +19,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seerr_sett
 /**
  * The integrations domain's fused row declarations — the feature-side single
  * home of the integrations hub's rows (the [AppearanceRows] template). Each
- * [SettingsRow] replaces the trio the domain used to declare per row: the
- * `SettingsSearchBinding` entry, the `SettingsRowRecord` entry, and the
- * `IntegrationsScreenIds` holder constant (all retired).
+ * [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * HAND-MAINTAINED residuals: navigation facts whose knobs live in stores
  * without spec machinery — they carry their full hand search faces. The
  * projection ([List.toSearchItems]) is the pure hand-projection; search
- * results, catalog order and group membership are byte-identical to the
- * retired declarations.
+ * results, catalog order and group membership derive from these declarations.
  */
 internal object IntegrationsRows {
 
@@ -62,12 +60,12 @@ internal object IntegrationsRows {
         route = Route.Integrations().withHighlightSettingId("subtitle_provider_settings"),
         isAdvanced = true,
         // Advanced-tagged yet always rendered: the hub's hand-built rows carry
-        // explicit index/count, so the legacy tag the screen never honored gets
-        // the explicit Always override (the appearance HapticsEnabled shape).
+        // explicit index/count, so the explicit Always override wins over the
+        // tag (the appearance HapticsEnabled shape).
     )
 
     /**
-     * Every fused integrations row — the ratchet's vocabulary. A computed accessor
+     * Every fused integrations row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

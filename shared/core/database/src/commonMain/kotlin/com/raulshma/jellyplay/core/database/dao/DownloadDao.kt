@@ -26,10 +26,9 @@ interface DownloadDao {
 
     /**
      * One page of `COMPLETED` audio (`MUSIC`/`AUDIO`) downloads, newest
-     * first. The media-library DOWNLOADS browse page previously fetched
-     * [getAllDownloads]' full 500-row window and filtered/sliced it in
-     * Kotlin on every page request; this resolves the same filter, order,
-     * and window in one query.
+     * first. Resolves the page's filter, order, and window in one query
+     * instead of fetching [getAllDownloads]' full 500-row window and
+     * filtering/slicing it in Kotlin per request.
      */
     @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND mediaType IN ('MUSIC', 'AUDIO') ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
     suspend fun getCompletedAudioDownloads(limit: Int, offset: Int): List<DownloadEntity>
@@ -42,10 +41,10 @@ interface DownloadDao {
     suspend fun getDownloadById(id: String): DownloadEntity?
 
     /**
-     * Targeted single-column read of a download's status. Used by the
-     * per-2-s progress loop in DownloadWorker, which previously did a full
-     * `SELECT *` (23 cols incl. downloadUrl / errorMessage) just to detect a
-     * pause/cancel transition.
+     * Targeted single-column read of a download's status. The per-2-s progress
+     * loop in DownloadWorker needs only this column to detect a pause/cancel
+     * transition, not a full `SELECT *` (23 cols incl. downloadUrl /
+     * errorMessage).
      */
     @Query("SELECT status FROM downloads WHERE id = :id")
     suspend fun getStatus(id: String): String?
@@ -195,7 +194,7 @@ interface DownloadDao {
      * Same narrow-projection rationale as [getRecoveryRows] / [getStatus].
      * Served by the `status` index.
      *
-     * The projection also carries `mediaItemId` + `totalSizeBytes` (D16) so
+     * The projection also carries `mediaItemId` + `totalSizeBytes` so
      * the detail screen can join the live progress onto its episode rows:
      * the repository-boundary [DownloadProgress] re-keys by item and derives
      * the 0..1 fraction from the same two columns the ⋮ menu's
@@ -365,7 +364,7 @@ interface DownloadDao {
     /**
      * Single projected read of every `(seriesId, mediaItemId)` pair in the
      * table, intended for the periodic [com.raulshma.jellyplay.core.data.worker.AutoDownloadWorker]
-     * which previously issued N per-series queries (N+1) each decoding all 23
+     * which otherwise issues N per-series queries (N+1) each decoding all 23
      * columns when only `mediaItemId` is consumed. Returning every series's
      * rows in one round-trip lets the worker build an in-memory index once and
      * look it up per series. Movies/standalone items (seriesId IS NULL) are
@@ -492,8 +491,7 @@ data class SeriesSizeAggregate(
  * path — see [DownloadDao.getActiveDownloadProgress]. Carries only the
  * columns that move on a 2 s progress tick, plus the item join pair
  * (`mediaItemId` + the `totalSizeBytes` denominator) the detail screen's
- * episode rows need to re-key the map by item and derive a 0..1 fraction
- * (D16).
+ * episode rows need to re-key the map by item and derive a 0..1 fraction.
  */
 data class DownloadProgressRow(
     val id: String,

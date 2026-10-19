@@ -233,7 +233,7 @@ fun EpisodeChip(
     }
 }
 
-// ── Quality badges (H11) ─────────────────────────────────────────────────
+// ── Quality badges ─────────────────────────────────────────────────
 
 /**
  * The badge-worthy quality marks in render-priority order — the resolution
@@ -280,7 +280,7 @@ private fun ItemQualityBadge.renderLabel(): String = when (this) {
 }
 
 /**
- * The cards' compact resolution/audio quality chips (H11): a trailing Row of
+ * The cards' compact resolution/audio quality chips: a trailing Row of
  * glass badges — "4K" / "DV" / "HDR" / "Atmos" — ordered, capped
  * ([QUALITY_BADGE_CAP]) and admitted by [qualityBadgesToRender]. Renders
  * nothing for the "not fetched" null, the HD/SD-only sets, and callers that
@@ -312,10 +312,10 @@ fun QualityBadgeRow(
     }
 }
 
-// ── NEW badge (H12) ──────────────────────────────────────────────────────
+// ── NEW badge ──────────────────────────────────────────────────────
 
 /**
- * The "NEW" arrival chip (H12): a primary-tinted glass pill with an accent
+ * The "NEW" arrival chip: a primary-tinted glass pill with an accent
  * dot — same accent treatment as [EpisodeChip], so the card family reads one
  * design language. Rendered top-left on the cards that the row flagged as
  * added since the user's last home visit; the visit-stamp predicate lives on

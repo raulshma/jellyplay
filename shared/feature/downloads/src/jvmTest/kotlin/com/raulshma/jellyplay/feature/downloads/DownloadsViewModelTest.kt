@@ -41,8 +41,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var downloadRepository: DownloadQueue
@@ -179,8 +179,7 @@ class DownloadsViewModelTest {
         val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
         advanceUntilIdle()
 
-        // Throwable.message == null must hit the fallback literal (kept
-        // byte-identical from the legacy call site).
+        // Throwable.message == null must hit the fallback literal.
         assertEquals("Failed to load downloads", failingViewModel.uiState.value.error)
         assertFalse(failingViewModel.uiState.value.isLoading)
     }
@@ -237,10 +236,9 @@ class DownloadsViewModelTest {
         verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
-    // ── Bus→flow seam (V3 conveyor) ───────────────────────────────────────
-    // The legacy code posted UiText.Resource(R.string.downloads_deleted_message)
-    // through the Android-only UserMessageBus; the port pins the replacement
-    // one-shot DownloadsUserMessage flow.
+    // ── Bus→flow seam ─────────────────────────────────────────────────────
+    // The delete ack travels as a one-shot DownloadsUserMessage flow; the
+    // screen resolves it for the shared message bus.
 
     @Test
     fun deleteDownload_calls_repository_and_emits_Deleted_message() = runTest(mainDispatcher) {
@@ -251,10 +249,9 @@ class DownloadsViewModelTest {
         assertEquals(DownloadsUserMessage.Deleted, viewModel.messages.first())
     }
 
-    // ── Confirmation hosts (the screen's former remember{} machines) ─────
+    // ── Confirmation hosts ────────────────────────────────────────────────
     // DownloadsScreen drives its two delete dialogs off these hosts; the
-    // synchronous settle arm is the pinned fix for the documented
-    // "confirm write never cleared" bug.
+    // synchronous settle arm is pinned by the tests below.
 
     @Test
     fun pendingDelete_host_show_holds_the_item_for_the_dialog() = runTest(mainDispatcher) {
@@ -279,7 +276,7 @@ class DownloadsViewModelTest {
 
         assertEquals(target, confirmed)
         // The settle arm is INSIDE confirm: nothing stays armed for the next
-        // open (the old screen-held machine's documented failure mode).
+        // open.
         assertFalse(viewModel.pendingDelete.isPending)
         assertNull(viewModel.pendingDelete.item)
         assertNull(viewModel.pendingDelete.confirm())

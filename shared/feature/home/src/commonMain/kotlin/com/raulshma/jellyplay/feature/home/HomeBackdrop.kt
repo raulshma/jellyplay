@@ -75,17 +75,17 @@ internal fun resolveBackdropLayer(state: HomeBackdropState): BackdropLayer =
     if (!state.blurHash.isNullOrBlank()) BackdropLayer.BLUR_HASH else BackdropLayer.AMBIENT
 
 /**
- * The H10 settle window: D-pad focus must rest on a card this long before the
+ * The settle window: D-pad focus must rest on a card this long before the
  * cost-carrying half of the reaction (the backdrop-URL fetch, the trickplay
  * tile fetch) runs. Arrival-time reactions (the in-memory BlurHash paint) do
  * NOT wait it out — see [com.raulshma.jellyplay.core.concurrency.settleDebounce].
- * H13's card-level peek reuses the same cadence so the two focus reactions
+ * The card-level peek reuses the same cadence so the two focus reactions
  * move in lockstep.
  */
 internal const val HOME_FOCUS_SETTLE_MS = 400L
 
 /**
- * The focus-driven backdrop inputs (H10): what the currently-focused TV card
+ * The focus-driven backdrop inputs: what the currently-focused TV card
  * contributes to the ambient backdrop. [blurHash] arrives at focus arrival
  * (zero-cost — the string is already in memory); [backdropUrl] only at
  * settlement (it feeds the ambient palette extractor, which decodes a full
@@ -100,7 +100,7 @@ internal data class FocusBackdrop(
 }
 
 /**
- * H10: overlays the focus-driven inputs onto the hero-driven [HomeBackdropState].
+ * Overlays the focus-driven inputs onto the hero-driven [HomeBackdropState].
  * A focus with content replaces the hero's artwork pair wholesale — the
  * backdrop must read as THE focused card's, not a blend; a focus without
  * content (arrival on a card with no backdrop BlurHash, before the URL
@@ -114,7 +114,7 @@ internal fun HomeBackdropState.withFocusBackdrop(focus: FocusBackdrop?): HomeBac
 }
 
 /**
- * H10's focus → backdrop choreography: watches the screen's focused-card
+ * The focus → backdrop choreography: watches the screen's focused-card
  * stream through the shared settle debounce and produces the [FocusBackdrop]
  * the backdrop region applies via [withFocusBackdrop]. Per settlement phase:
  *  - **Arrival** — the focused card's in-memory BlurHash paints immediately
@@ -126,7 +126,7 @@ internal fun HomeBackdropState.withFocusBackdrop(focus: FocusBackdrop?): HomeBac
  *    takes over again.
  *
  * Disabled (non-TV or the `home_focus_backdrop` pref off) the inputs stay
- * null — the hero-driven behavior is byte-identical to pre-H10.
+ * null — the hero-driven behavior applies unchanged.
  *
  * @param focusedItem state-reading provider for the currently focused card
  *  (null when no card holds focus); read inside [snapshotFlow] so changes

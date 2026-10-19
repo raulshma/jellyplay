@@ -4,19 +4,17 @@ package com.raulshma.jellyplay.core.model
  * Tiny LRU + TTL cache used across layers (`core:network` HTTP clients,
  * `core:data` repositories) to memoise near-static server responses.
  *
- * Previously duplicated in `core:data` and `core:network` because each module
- * sits below the layer that owned the cache; both depend on `core:model`, so
- * the canonical implementation lives here and the duplicates were removed.
+ * Lives in `core:model` because `core:data` and `core:network` both sit below
+ * the layer that owns the cache and both depend on `core:model`, so one
+ * implementation serves both.
  *
- * Thread-safety regime (promotion to commonMain): on the JVM targets
- * (android + desktop) the backing map is a `Collections.synchronizedMap`
- * wrapper — the exact historical shape — and [withMapMonitor] takes that
- * wrapper's monitor, so every compound section below is mutually exclusive
- * exactly as before. One JVM-only
- * footnote: `withMapMonitor` cannot be `inline` (expect functions may not be),
- * so each section now allocates its lambda where the inline `synchronized`
- * previously did not — a negligible cost next to the cache-miss network reads
- * this class guards, and observably identical semantics.
+ * Thread-safety regime: on the JVM targets (android + desktop) the backing
+ * map is a `Collections.synchronizedMap` wrapper and [withMapMonitor] takes
+ * that wrapper's monitor, so every compound section below is mutually
+ * exclusive. One JVM-only footnote: `withMapMonitor` cannot be `inline`
+ * (expect functions may not be), so each section allocates its lambda where
+ * an inline `synchronized` would not — a negligible cost next to the
+ * cache-miss network reads this class guards.
  *
  * The `get`-check-`put` sequence is *not* atomic across threads — concurrent
  * callers may both observe a miss and re-fetch. For idempotent network reads

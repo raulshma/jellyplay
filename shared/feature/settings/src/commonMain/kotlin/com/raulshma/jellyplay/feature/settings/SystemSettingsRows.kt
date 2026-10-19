@@ -57,10 +57,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_setup_wiza
 /**
  * The system domain's fused row declarations — the feature-side single home
  * of every system row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `SettingsScreenIds` holder constant
- * (all retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * The SEMANTICS stay two-homed by design: the dream/desktop-shell rows'
  * keywords, advanced flag, platform rule and route kind live on the
@@ -71,7 +69,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_setup_wiza
  * the group decoration, the list itself stays whole. The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * row-spec drift; search results, catalog order, group membership and
- * per-gate visibility are byte-identical to the retired declarations.
+ * per-gate visibility derive from these declarations.
  */
 internal object SystemRows {
 
@@ -239,7 +237,7 @@ internal object SystemRows {
     )
 
     /**
-     * Every fused system row — the ratchet's vocabulary. A computed accessor
+     * Every fused system row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

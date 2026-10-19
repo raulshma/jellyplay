@@ -160,7 +160,7 @@ sealed interface HomeUiEvent {
     ) : HomeUiEvent
 
     /**
-     * H19 inline dismiss of one presence chip. The session id lands in the
+     * Inline dismiss of one presence chip. The session id lands in the
      * controller's in-memory, session-scoped set (never persisted) AND the
      * row folds the chip out immediately — the next poll re-filters with the
      * same memory.
@@ -168,7 +168,7 @@ sealed interface HomeUiEvent {
     data class DismissPresenceChip(val sessionId: String) : HomeUiEvent
 
     /**
-     * H19 presence chip's "Join" primary action: joins the visible SyncPlay
+     * Presence chip's "Join" primary action: joins the visible SyncPlay
      * group playing the chip's item (the [HomePresenceChipsController.join]
      * seam over SyncPlayManager). A failure surfaces on the message bus and
      * never navigates; on success [onJoined] fires once with the group's

@@ -87,14 +87,13 @@ internal class HeroBackdropPrefetcher {
 
 /**
  * Selects the hero "featured" candidate list from the home sections, in a single
- * pass. Previously this traversed all sections up to 3 times (filter+flatMap of
- * LATEST_MEDIA, then a full flatMap+filter fallback, then another bare flatMap).
+ * pass (a multi-pass filter/flatMap walk would traverse the sections up to 3
+ * times).
  *
  * Preference order: up to 3 movies/series total, taken from the LATEST_MEDIA
  * sections in order; if that yields nothing, every movie/series across all
- * sections; if that still yields nothing, every item. The result is identical
- * to the old multi-pass version but computed in one traversal with a single
- * fallback sweep.
+ * sections; if that still yields nothing, every item. Computed in one traversal
+ * with a single fallback sweep.
  */
 internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaItem> =
     buildList {
@@ -125,7 +124,7 @@ internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaIt
  * never renders a hero — and stale online sections painted by the user-switch
  * SWR path must not leak into it. Online rendering uses the server sections.
  *
- * H9: the plugin-curated billboards ride AHEAD of the local pool in the
+ * The plugin-curated billboards ride AHEAD of the local pool in the
  * online branch ([mergeCuratedHeroCandidates] — server order, dedupe by item
  * id, curated wins). Offline rendering never carries them: curated is
  * server data and the offline hero features downloads only.
@@ -143,7 +142,7 @@ internal fun selectHomeHeroCandidates(
 }
 
 /**
- * H9: the curated/local merge — the curated entries' items first (exactly the
+ * The curated/local merge — the curated entries' items first (exactly the
  * plugin's serve order; a duplicated curated id keeps its FIRST slot), then
  * the local candidates minus every id the curated list already features
  * (curated wins, no double rotation slot). Pure and synchronously testable.
@@ -176,7 +175,7 @@ internal fun rememberHeroHeight(): Dp {
 }
 
 /**
- * H7: the hero video's user gates read AT the hero — the pref mirror
+ * The hero video's user gates read AT the hero — the pref mirror
  * (`home_hero_video_enabled` touch/default, `home_hero_video_tv_enabled` TV;
  * the additive koinInject mirror, the HomeTrickplayPeek repository precedent,
  * because the hero composable sits below the screen orchestrator that carries
@@ -184,7 +183,7 @@ internal fun rememberHeroHeight(): Dp {
  * [com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode]).
  */
 internal class HeroVideoGates(
-    /** The per-form-factor H7 pref: the feature master gate. Default off. */
+    /** The per-form-factor pref: the feature master gate. Default off. */
     val prefEnabled: Boolean,
     /** Performance mode hard-gates the clip alongside the reduced-motion gate. */
     val performanceMode: Boolean,
@@ -210,9 +209,9 @@ internal fun rememberHeroVideoGates(): HeroVideoGates {
 }
 
 /**
- * H7's start gate, in its pure form (the [HeroController.rotationCadence]
+ * The start gate, in its pure form (the [HeroController.rotationCadence]
  * family of Compose-free decisions): the ambient clip plays only when the
- * pref is on AND the platform can render it (desktop v1: static hero), the
+ * pref is on AND the platform can render it (desktop: static hero), the
  * user has not paused it for the session, neither reduced-motion nor
  * performance mode holds, the hero is visible AND prominent AND still holds
  * focus (TV), the lifecycle is at least RESUMED, and the list is not
@@ -283,8 +282,7 @@ internal fun rememberIsLifecycleResumed(): Boolean {
  * controller once and runs the dumb collector shells: the candidate
  * composition-write, the launch-shortcut arm, the snapshotFlow/collectLatest
  * cadence collector (8s idle / 2s while scrolling, the `isAtLeast(RESUMED)`
- * gate passed as an argument, keys preserved from the inline implementation
- * previously in `MainHomeContent`), and the focus-keyed snap effect.
+ * gate passed as an argument), and the focus-keyed snap effect.
  */
 @Composable
 internal fun rememberHeroController(
@@ -292,7 +290,7 @@ internal fun rememberHeroController(
     listState: LazyListState,
     getBackdropUrl: (String) -> String,
 ): HeroController {
-    // Conveyor transform: the legacy Context.isTv() (UI_MODE check on
+    // Conveyor transform: Context.isTv() (UI_MODE check on
     // LocalContext) is Android-only; LocalTvMode is the shared core:ui
     // equivalent and is provided from the same device-class detection at the
     // composition root, so the value is identical wherever this runs.
@@ -356,8 +354,8 @@ internal fun rememberHeroController(
     // scroll-state change. The effect keys are [listState] plus the
     // candidates epoch, and autoRotateEnabled is read inside the
     // snapshotFlow instead — a pref or "Surprise Me" flip still re-evaluates
-    // the cadence immediately, while per-emission candidates churn no longer
-    // cancels a pending 8 s idle wait.
+    // the cadence immediately, while per-emission candidates churn does not
+    // cancel a pending 8 s idle wait.
     LaunchedEffect(listState, candidatesEpoch) {
         snapshotFlow { listState.isScrollInProgress to controller.autoRotateEnabled }
             .collectLatest { (isScrolling, _) ->
@@ -583,7 +581,7 @@ internal class HeroController(
         internal const val SCROLL_DEFER_DELAY_MS = 2_000L
     }
 
-    /** Notifies the controller that hero focus changed (used to drive the snap-to-top). */
+    /** Notifies the controller that hero focus changed (drives the snap-to-top). */
     fun onFocusChange(focused: Boolean) {
         focusInHero = focused
     }

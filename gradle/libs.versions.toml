@@ -10,7 +10,7 @@ composeMaterial3 = "1.5.0-alpha25"
 composeMaterial3Adaptive = "1.3.0-rc01"
 # material3-adaptive-navigation-suite lives in the androidx.compose.material3
 # group (NOT .adaptive) and tracks the material3 release line, not the adaptive
-# one. Previously keyed off composeMaterial3Adaptive — only worked by accident.
+# one.
 composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
 # JetBrains Compose Multiplatform distribution — the ONLY publisher of real
 # JVM compose binaries (androidx publishes Android AARs + IDE stubs only,
@@ -43,13 +43,11 @@ media3 = "1.11.1"
 # smoke test for software DTS/TrueHD decode is still pending.
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
-# Coil for ALL targets: the 3.4.0-shared / 3.5.0-android split
-# existed to keep v0.10.6's bitmap→swatch behavior byte-identical through
-# decode defaults. Both pins moved to 3.6.3 (Aug-Oct 2026 line, carries
+# Coil for ALL targets: both pins are 3.6.3 (Aug-Oct 2026 line, carries
 # decode-pipeline fixes; artwork/dominant-color is the hottest image path in
-# the app) — the artwork regression gate (ArtworkColorsTest /
-# ArtworkColorExtractorTest byte-identical swatch expectations + the visual
-# smoke of home/detail rows) is what signs off the bump. If a future bump
+# the app); the artwork tests (ArtworkColorsTest / ArtworkColorExtractorTest
+# swatch expectations + the visual smoke of home/detail rows) pin the decode
+# behavior that keeps v0.10.6's bitmap→swatch output stable. If a future bump
 # needs a split again, keep the android pin >= the shared pin.
 coil = "3.6.3"
 coilAndroid = "3.6.3"
@@ -94,8 +92,8 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 mockk = "1.14.11"
 # org.json for the jvmShared websocket-event path (android resolves the same
-# classes from android.jar). Moved off the 2024 pin (audit BIN-10) — 2026 line
-# carries two years of parser fixes; both consumers get it via this ref.
+# classes from android.jar). The 2026 line carries two years of parser fixes;
+# both consumers get it via this ref.
 orgJson = "20260814"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
@@ -105,7 +103,7 @@ playServicesCast = "22.3.1"
 mediarouter = "1.9.0-alpha01"
 slf4j = "2.0.18"
 libmpv = "0.1.12"
-# JNA for the desktop libmpv binding (Phase V2 MpvDesktopEngine)
+# JNA for the desktop libmpv binding (MpvDesktopEngine)
 jna = "5.17.0"
 libvlc = "3.7.5"
 assMedia = "0.5.0"
@@ -139,8 +137,8 @@ aboutLibraries = "15.0.4"
 # LeakCanary — debug-only memory leak detection for the Android app.
 # 2.14 is the latest stable (3.0 still alpha as of 2026-09).
 leakcanary = "2.14"
-# UnifiedPush android connector — the client half of the jellyplay plugin's
-# push wave: registers against the user's chosen UnifiedPush distributor app
+# UnifiedPush android connector — the client half of the jellyplay plugin:
+# registers against the user's chosen UnifiedPush distributor app
 # (e.g. ntfy) and delivers NEW_ENDPOINT/MESSAGE/UNREGISTERED events. 3.3.5 is
 # the latest stable (2026-08-22). Android-only: the connector ships no
 # JVM/desktop artifacts, so only core:data's androidMain consumes it.
@@ -325,7 +323,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 # Test-only: HandshakeCertificates/HeldCertificate for the self-signed-trust
-# TLS integration tests (mockwebserver 5.x no longer pulls okhttp-tls in
+# TLS integration tests (mockwebserver 5.x does not pull okhttp-tls in
 # transitively). Same version.ref as the OkHttp 5.4 pin.
 okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }

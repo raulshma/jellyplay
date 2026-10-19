@@ -7,23 +7,18 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the arrqueue feature (docs/kmp-migration-plan.md
- *,  V3 conveyor item). The HiltViewModel/@Inject annotations
- * were stripped at the move — Koin is the single constructor owner (one
- * framework per type). Both remaining ctor deps were already Koin-native
- * before this feature moved (no Hilt interop at all, calendar/requests class):
- *  - ArrRepository resolves from dataJvmModule (the legacy ArrModule @Provides
- *    is the reverse bridge, Hilt→Koin);
- *  - ExperimentalFeatureGate resolves from the C4 shared-datastore graph
- *    (datastoreCommonModule; SharedStoreModule bridges legacy injectors) — the
- *    shared eagerly-shared Direct-*arr gate, replacing this VM's hand-rolled
- *    `stateIn(Eagerly)` copy.
- * The Context + UserMessageBus ctor params were dropped at the move — their
- * only use was resolving ack/fallback strings, now carried unresolved through
- * the ArrQueueMessage screen-forward seam. The whole dep graph resolves on
- * BOTH platforms — the desktop startKoin (dataJvmModule +
- * datastoreCommonModule) can instantiate it directly once a desktop nav entry
- * exists.
+ * Koin construction owner for the arrqueue feature. Koin is the single
+ * constructor owner (one framework per type). Both ctor deps resolve from the
+ * shared graph:
+ *  - ArrRepository resolves from dataJvmModule (the ArrModule @Provides
+ *    binding bridges Hilt→Koin);
+ *  - ExperimentalFeatureGate resolves from the shared-datastore graph
+ *    (datastoreCommonModule; SharedStoreModule bridges Hilt injectors) — the
+ *    shared eagerly-created Direct-*arr gate.
+ *
+ * The whole dep graph resolves on BOTH platforms — the desktop startKoin
+ * (dataJvmModule + datastoreCommonModule) can instantiate it directly once a
+ * desktop nav entry exists.
  */
 val arrqueueModule: Module = module {
     viewModel {

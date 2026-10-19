@@ -159,7 +159,7 @@ fun ExpressiveFloatingNavigationBar(
             // ── 2. Joined action pill: Search + "More" toggle ──
             // Two circular tap targets sharing one bordered capsule container.
             // The container stays neutral; each side highlights individually so
-            // tapping one doesn't select the whole badge (#115).
+            // tapping one doesn't select the whole badge.
             if (searchEntry != null) {
                 val isSearchSelected = currentTopLevel is Route.Search
                 val searchTint by animateColorAsState(

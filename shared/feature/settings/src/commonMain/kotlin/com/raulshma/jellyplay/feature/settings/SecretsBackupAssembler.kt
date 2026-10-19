@@ -54,8 +54,8 @@ data class SecretsApplyResult(
  *
  * Lives in feature/settings (not core) by dependency direction: it needs the
  * three core:datastore secure stores AND core:data's
- * [ServerBackupMetadataStore] (the AuthRepositorySurfaceTest ratchet's narrow
- * server-list collaborator), and feature:settings is the only layer that
+ * [ServerBackupMetadataStore] (the narrow server-list collaborator), and
+ * feature:settings is the only layer that
  * already sees both — a core home would have dragged feature wiring down with
  * it. Stateless besides the injected stores; constructed once by the settings
  * Koin module and shared by the export ([SettingsViewModel]) and restore-wizard
@@ -67,7 +67,7 @@ data class SecretsApplyResult(
  *    never appears), Seerr direct-mode credentials, and the token-free server
  *    list. No Jellyfin access token, PIN hash, biometric flag, or auto-lock
  *    setting ever enters the payload.
- *  - [apply] is MERGE-by-id, deliberately gentler than the Wave-2 external
+ *  - [apply] is MERGE-by-id, deliberately gentler than the external
  *    slices' wholesale-adopt: incoming entries overwrite same-id entries and
  *    are added alongside local ones — restoring a friend's backup never
  *    erases the locally-configured credentials the backup knows nothing

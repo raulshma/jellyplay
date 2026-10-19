@@ -340,7 +340,7 @@ class UserPreferencesStoreRestoreCategoriesTest {
         val after = securityAfter()
         assertEquals(false, after.pinLockEnabled)
         // Hash is only WRITTEN when the incoming slice carries one — a null
-        // incoming hash leaves the previously stored hash in place (dormant
+        // incoming hash leaves the existing stored hash in place (dormant
         // while the lock is off). Pins the `slice.pinHash?.let` semantics.
         assertEquals("existing-hash", after.pinHash)
     }

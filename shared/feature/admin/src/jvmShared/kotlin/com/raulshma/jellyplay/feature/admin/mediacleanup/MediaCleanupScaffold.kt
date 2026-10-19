@@ -105,8 +105,8 @@ import org.jetbrains.compose.resources.stringResource
  * three-tab scaffold (Results / Configuration / Audit), the results tab
  * (error card, scanning card, permission banner, select-all row, "n selected"
  * chip, delete button, sort dropdown, results list, empty state), and the
- * delete-confirmation sheet. Everything that was byte-identical between
- * `StaleMediaScreen` and `WatchedMediaCleanupScreen` lives here once.
+ * delete-confirmation sheet. Everything the two screens share lives here
+ * once.
  *
  * Per-feature slots and labels:
  *  - [itemCard] — the feature's item row renderer;
@@ -117,12 +117,9 @@ import org.jetbrains.compose.resources.stringResource
  *  - [sheetItemSubtitle] — the confirmation-sheet row's second line;
  *  - [tvFocusTag] / [itemContentType] — per-feature focus/LazyColumn keys.
  *
- * Declared delta (visual unification, screens): the two former delete buttons
- * had drifted — stale had a press-scale animation with a smooth16 TV focus
- * ring, watched had a focusedScale=1.05f ring on smooth12. The chassis keeps
- * ONE treatment (the stale one: press-scale + smooth16 ring, matching both
- * config tabs' scan-button press-scale language); the watched variant is gone
- * as copy drift, not a product decision.
+ * Delete-button treatment: ONE treatment for both screens (press-scale +
+ * smooth16 TV focus ring, matching both config tabs' scan-button press-scale
+ * language).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

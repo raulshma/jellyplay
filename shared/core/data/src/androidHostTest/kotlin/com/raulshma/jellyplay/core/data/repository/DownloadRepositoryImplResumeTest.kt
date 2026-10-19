@@ -30,8 +30,7 @@ import org.robolectric.annotation.Config
  * V3 downloads conveyor: the impl moved to :shared:core:data jvmShared; this
  * legacy-side suite now constructs it through the seam ctor (mock coordinator /
  * notifier, a simple MediaRepositoryAccess fake, and a relaxed delegate —
- * the D6 writer-core extraction removed both the Lazy and the repo's own
- * write cluster). Robolectric stays because the shared Log
+ * the writer core owns the write cluster and no Lazy remains). Robolectric stays because the shared Log
  * facade's Android actual delegates to android.util.Log.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -47,8 +46,8 @@ class DownloadRepositoryImplResumeTest {
     private val imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider = mockk(relaxed = true)
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     // downloadSeries delegates the per-episode bundle here; the resume tests
-    // never exercise it, so a relaxed mock is sufficient. (D6: no longer a
-    // kotlin Lazy — the writer-core extraction dissolved the construction
+    // never exercise it, so a relaxed mock is sufficient. (No longer a
+    // kotlin Lazy — the writer core dissolved the construction
     // cycle the Lazy used to break.)
     private val downloadDelegate: DownloadDelegate = mockk(relaxed = true)
     // Storage cap + WorkManager enqueue were extracted out of the repo into
@@ -59,7 +58,7 @@ class DownloadRepositoryImplResumeTest {
     // The resume path never loads series episodes; a relaxed mock satisfies the
     // catalogue constructor param added alongside the seasons/episodes migration.
     private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue = mockk(relaxed = true)
-    // D6: the artifact-write cluster (start/metadata seeding/sidecars) lives in
+    // The artifact-write cluster (start/metadata seeding/sidecars) lives in
     // the writer core; the resume path touches only DAO reads + batch updates,
     // so a relaxed mock suffices.
     private val writer: OfflineDownloadWriterCore = mockk(relaxed = true)

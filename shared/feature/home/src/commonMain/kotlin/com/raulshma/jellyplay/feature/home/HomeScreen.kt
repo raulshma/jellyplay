@@ -155,7 +155,7 @@ data class HomeCallbacks(
      * overrides). Reached from the inline section-config sheet when a
      * per-library (LATEST_MEDIA) row is being configured. */
     val onConfigureLibraries: () -> Unit = {},
-    /** Open Home Settings from the H21 new-section announcement snackbar's
+    /** Open Home Settings from the new-section announcement snackbar's
      * Customize action (the config hub where the just-enabled sections are
      * reordered/toggled). */
     val onCustomizeHome: () -> Unit = {},
@@ -165,7 +165,7 @@ data class HomeCallbacks(
      * reproduce the home row's leaf item type + sort), and the resolved title. */
     val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
     /**
-     * Navigate to a caller-constructed route — H17/H18's in-feature routing:
+     * Navigate to a caller-constructed route — the in-feature routing:
      * the stats card's admin user-statistics detail and the genre rail's
      * filtered library section. Same Route-carrying shape as
      * [onSettingsSearchItemClick]; default no-op keeps every existing
@@ -256,8 +256,8 @@ private fun MainHomeContent(
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val serverHealth by LocalServerHealth.current.collectAsStateWithLifecycle()
     // The header chip reads the refresher's folded verdict
-    // ([HomeUiState.fetchFailed]) — not the raw `error` field, whose
-    // `!= null` restatement is exactly the split ADR-0008 closed.
+    // ([HomeUiState.fetchFailed]) — not the raw `error` field: the two stay
+    // separate by design.
     val headerStatus = remember(state.isLoading, state.fetchFailed, networkStatus, serverHealth) {
         resolveHeaderStatus(
             isLoading = state.isLoading,
@@ -296,7 +296,7 @@ private fun MainHomeContent(
     }
 
     // Offline home = the normal home content list fed with sections derived
-    // from the offline library (#147) — no dedicated offline screen. The whole
+    // from the offline library — no dedicated offline screen. The whole
     // render model (filtered lists, derived sections, id→item lookup) is
     // derived in ONE place (buildOfflineHomeContent) and passed down as a
     // single value; derived here (above the hero setup, not inside the content
@@ -349,7 +349,7 @@ private fun MainHomeContent(
     } else null
 
     // Hero featured-candidate selection — single-pass (was up to 3x flatMap/filter).
-    // H9: the plugin-curated billboards merge ahead of the local pool (server
+    // The plugin-curated billboards merge ahead of the local pool (server
     // order, dedupe by item id, curated wins); offline rendering ignores them.
     val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero) {
         selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero)
@@ -400,7 +400,7 @@ private fun MainHomeContent(
         getBackdropUrl = heroBackdropUrlBuilder,
     )
 
-    // Global nav overflow "Surprise Me" (#115): the hero controller lives here
+    // Global nav overflow "Surprise Me": the hero controller lives here
     // (it owns the hero LazyListState + featured candidates), so the app shell
     // emits a one-shot signal that Home forwards to it.
     androidx.compose.runtime.LaunchedEffect(heroController, surpriseRequests) {
@@ -662,9 +662,9 @@ private fun MainHomeContent(
                     },
                 ),
         ) {
-            // Recovery path for search-history delete/clear. Home
-            // previously had no SnackbarHost at all; this is the single host.
-            // H21: the new-section announcement rides the SAME host, mapped
+            // Recovery path for search-history delete/clear. This is the
+            // single SnackbarHost.
+            // The new-section announcement rides the SAME host, mapped
             // here from the VM's structural event to localized text (the VM
             // has no resource access); its Customize action adds the
             // navigation onto the VM's stamp closure (the VM cannot route),
@@ -700,7 +700,7 @@ private fun MainHomeContent(
             // gradient when no hero/blurhash is available. Sits behind all content
             // and above the flat background fill. Suppressed in performance mode.
             //
-            // H10: while a TV card holds focus (and `home_focus_backdrop` is on),
+            // While a TV card holds focus (and `home_focus_backdrop` is on),
             // the backdrop reads THE CARD's artwork instead — the in-memory
             // BlurHash crossfades in at focus arrival, the backdrop URL (the
             // ambient palette's source) only resolves after the settle window,
@@ -730,7 +730,7 @@ private fun MainHomeContent(
             )
             CompositionLocalProvider(
                 LocalMediaQuickActionController provides quickActionController,
-                // H13: the wide-card trickplay peek's pref gate.
+                // The wide-card trickplay peek's pref gate.
                 LocalHomeTrickplayPreview provides state.trickplayPreviewEnabled,
             ) {
                 Box(
@@ -853,12 +853,12 @@ private fun HomeSurfaceContent(
     onConfigureHomeLayout: () -> Unit,
     onConfigureLibraries: () -> Unit,
     onFocusedMediaItem: (MediaItem) -> Unit,
-    /** H10's focus-exit half: drops the screen's tracked card when focus
+    /** The focus-exit half: drops the screen's tracked card when focus
      * leaves the rows for the hero — the row reporting only ever names a card
      * that GAINED focus, so without this the tracked item (and the focus
      * backdrop) would go stale once the hero re-engages. */
     clearFocusedMediaItem: () -> Unit,
-    /** H9's curated billboard copy, keyed by item id (null copy = item metadata). */
+    /** The curated billboard copy, keyed by item id (null copy = item metadata). */
     curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry>,
     listState: LazyListState,
     density: Density,
@@ -894,13 +894,13 @@ private fun HomeSurfaceContent(
             musicContent()
         }
         is HomeSurface.Content -> {
-            // ── H17/H18 non-section home content ────────────────────────
+            // ── non-section home content ────────────────────────
             // The newsletter banner is the precedent for non-section home
             // content; that banner mounts as a gated LazyColumn item inside
             // HomeContentList, which this agent does not own — so the stats
             // card + genre rail mount here instead, directly above the
-            // content list (the closest HomeScreen-owned slot to the plan's
-            // "between hero and the first row"). Both are ONLINE-FEED-ONLY:
+            // content list (the closest HomeScreen-owned slot between the
+            // hero and the first row). Both are ONLINE-FEED-ONLY:
             // `s.feed is HomeRenderFeed.Online` is the same suppression posture the
             // banner's `online?.newsletterBannerVisible` gate applies (that
             // gate reads HomeContentState.online = feed as? HomeRenderFeed.Online),
@@ -913,8 +913,8 @@ private fun HomeSurfaceContent(
             val currentUser = state.currentUser
             val statsCardClick: (() -> Unit)? = if (currentUser != null && currentUser.isAdmin) {
                 // Tap → the admin area's user-statistics detail for the
-                // signed-in user (the plan's "Route.AdminStatistics user
-                // detail" — the route that exists is UserStatisticsDetail);
+                // signed-in user (the route that exists is
+                // UserStatisticsDetail);
                 // hidden for non-admins, per the admin gate.
                 remember(callbacks, currentUser.id) {
                     { callbacks.onOpenRoute(Route.UserStatisticsDetail(currentUser.id)) }
@@ -972,7 +972,7 @@ private fun HomeSurfaceContent(
                     onNewsletterClick = callbacks.onNewsletterClick,
                     onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                     onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
-                    // H10: the hero re-engaging means no card holds focus —
+                    // The hero re-engaging means no card holds focus —
                     // drop the tracked card (the focus backdrop reverts; the
                     // Menu key stops targeting a card the user left).
                     onFocusChange = remember {
@@ -1026,7 +1026,7 @@ private fun HomeSurfaceContent(
                 renderInputs = renderInputs,
                 listState = listState,
                 density = density,
-                // H19: the chips' own flow (see HomeViewModel.presenceChips) —
+                // The chips' own flow (see HomeViewModel.presenceChips) —
                 // collected at the chip row inside the content list, never
                 // mirrored through the whole uiState.
                 presenceChips = viewModel.presenceChips,
@@ -1092,7 +1092,7 @@ private fun HomeDockArea(
     }
 
     // Lift the HomeTopDock lambdas. The per-keystroke query string
-    // no longer flows through MainHomeContent (it's collected in the
+    // does not flow through MainHomeContent (it's collected in the
     // HomeTopDockScrim leaf via viewModel.searchQuery), but the
     // lambdas are still hoisted so HomeTopDock stays skippable on
     // the recompositions that DO reach it (scroll, search focus).
@@ -1231,8 +1231,8 @@ private fun HomeTailSheets(
     if (showSyncDetails) {
         // Collect pendingSyncEntries / pendingItemDetails ONLY while the sheet
         // is open. Hoisting these collections out of MainHomeContent (and
-        // gating them on showSyncDetails) means each outbox write no longer
-        // re-subscribes / invalidates the ~510-line orchestrator body — the
+        // gating them on showSyncDetails) keeps an outbox write from
+        // re-subscribing / invalidating the ~510-line orchestrator body — the
         // VM's own StateFlow(WhileSubscribed(5_000)) even pauses the upstream
         // flow while the sheet is closed.
         val entries by viewModel.pendingSyncEntries.collectAsStateWithLifecycle()
@@ -1371,8 +1371,7 @@ private fun HomeSeriesDeleteSheet(
  * Reads `scrollFraction` (a per-pixel-changing value over the first 140 dp of
  * hero scroll) inside its own scope, so only this composable + [HomeTopDock]
  * + the menu button recompose during scroll — [MainHomeContent] (450+ lines)
- * is left untouched. Previously the color computation lived in
- * `MainHomeContent`, which meant every scroll frame re-executed the entire
+ * is left untouched; otherwise every scroll frame re-executes the entire
  * function body.
  *
  * `scrollFraction` is passed as a `() -> Float` getter rather than a `Float`

@@ -51,7 +51,7 @@ data class EditorUiState(
     val error: String? = null,
     val isAdmin: Boolean = false,
     /** The metadata-editing session (live form + loaded original) — the ~30
-     *  flat metadata fields collapsed into one value slice, so the load/save
+     *  flat metadata fields live in one value slice, so the load/save
      *  maps and the dirty check have a single field declaration to follow. */
     val metadata: MetadataEditSession = MetadataEditSession(),
 ) {
@@ -82,12 +82,12 @@ internal class EditorViewModel(
     }
 
     /**
-     * The single command funnel (the HomeViewModel `onEvent` precedent):
+     * The single command funnel (the HomeViewModel `onEvent` pattern):
      * every user intent arrives as an [EditorUiEvent] and is routed once
      * here — the tabs (Metadata/Images/Subtitles) dispatch the events
      * directly. The `handle*` arms are the private handlers behind the
      * file-picker / provider events; the remaining events route to the
-     * former command funs, now private (their names are unchanged for the
+     * private command funs (their names are unchanged for the
      * internal reload callers).
      */
     fun onEvent(event: EditorUiEvent) {
@@ -252,10 +252,10 @@ internal class EditorViewModel(
 
     /**
      * Reads the bytes of a [file] (picked via the platform file-picker seam)
-     * and uploads them. The background-thread read moved into the platform
+     * and uploads them. The background-thread read lives in the platform
      * actuals of [EditorPickedFile.readBytes] (contentResolver on Android,
      * java.io.File on desktop); failures surface through
-     * [EditorUiState.error] exactly as the legacy contentResolver idiom did.
+     * [EditorUiState.error].
      */
     private fun handleUploadImageFromFile(file: EditorPickedFile, imageType: String) {
         launch {
@@ -306,10 +306,10 @@ internal class EditorViewModel(
     /**
      * Reads the bytes of a [file] (picked via the platform file-picker seam)
      * and uploads them. Falls back to the file name derived by the picker when
-     * [fileName] is blank. The background-thread read moved into the platform
+     * [fileName] is blank. The background-thread read lives in the platform
      * actuals of [EditorPickedFile.readBytes] (contentResolver on Android,
      * java.io.File on desktop); failures surface through
-     * [EditorUiState.error] exactly as the legacy contentResolver idiom did.
+     * [EditorUiState.error].
      */
     private fun handleUploadSubtitleFromFile(
         file: EditorPickedFile,
@@ -329,8 +329,8 @@ internal class EditorViewModel(
     private fun handleDeleteSubtitle(index: Int) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            // Capture the stream being deleted so legacy local copies (saved
-            // before serverStreamIndex linkage existed) can be attribute-matched.
+            // Capture the stream being deleted so local copies saved before
+            // serverStreamIndex linkage existed can be attribute-matched.
             val deletedStream = currentSubtitleStreams().firstOrNull { it.index == index }
             editorRepository.deleteSubtitle(itemId, index)
                 .onSuccess {
@@ -396,7 +396,7 @@ internal class EditorViewModel(
             }
             val query = SubtitleProviderIds.buildQuery(detail).copy(languages = listOf(language))
             // Streaming: each provider's results/errors land in state the instant
-            // it resolves, so a slow/retrying provider can no longer gate its
+            // it resolves, so a slow/retrying provider does not gate its
             // siblings.
             val merged = subtitleProviderRepository.searchAllStreaming(query, itemId, language) { partial ->
                 _uiState.update {
@@ -421,8 +421,8 @@ internal class EditorViewModel(
      * server so it persists as a media stream. Jellyfin rows route through the
      * server-side [handleDownloadRemoteSubtitle] path; external rows ride the
      * store's [EditorSubtitleStore.saveUploadAndAttribute] choreography (the
-     * save → encode → upload → reload → attribute sequencing the VM used to
-     * inline). This side keeps only the busy/error flags and the
+     * save → encode → upload → reload → attribute sequencing). This side
+     * keeps only the busy/error flags and the
      * "Saved to device only" degradation wording.
      */
     private fun handleDownloadProviderSubtitle(result: SubtitleSearchResult) {

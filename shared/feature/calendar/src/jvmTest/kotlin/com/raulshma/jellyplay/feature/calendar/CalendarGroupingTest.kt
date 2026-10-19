@@ -15,16 +15,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pure-function coverage for the calendar grouping helpers (no legacy suite
- * existed — written fresh at the V3 conveyor move): day-bucket ordering +
- * filtering, the ISO-prefix release-date parse, the relative-label boundary
- * window, and the month-membership check.
+ * Pure-function coverage for the calendar grouping helpers: day-bucket
+ * ordering + filtering, the ISO-prefix release-date parse, the relative-label
+ * boundary window, and the month-membership check.
  *
- * the helpers run kotlinx.datetime.LocalDate/YearMonth;
- * `plus`/`minus` take a DateTimeUnit since kotlinx 0.8 dropped
- * the plusDays/minusDays sugar. The header-label test pins the JVM default
- * locale for the CalendarDateLabels jvmShared actual (Locale.getDefault()
- * resolution).
+ * The helpers run kotlinx.datetime.LocalDate/YearMonth; `plus`/`minus` take a
+ * DateTimeUnit (no plusDays/minusDays sugar). The header-label test pins the
+ * JVM default locale for the CalendarDateLabels jvmShared actual
+ * (Locale.getDefault() resolution).
  */
 class CalendarGroupingTest {
 

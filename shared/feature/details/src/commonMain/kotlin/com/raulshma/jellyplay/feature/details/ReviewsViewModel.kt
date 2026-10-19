@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Loads the full TMDB review list for the Reviews screen (D9). Follows the
+ * Loads the full TMDB review list for the Reviews screen. Follows the
  * [CastAndCrewViewModel] shape — the item resolution rides the same cached
  * `getMediaDetail` path the detail screen warms (usually a cache hit when
  * arriving from a loaded detail screen) — and the reviews themselves ride the

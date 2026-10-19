@@ -46,12 +46,11 @@ val MediaType.isVideoType: Boolean
 val MediaType.isMusicTrack: Boolean
     get() = this == MediaType.AUDIO || this == MediaType.MUSIC
 
-// NOTE: User-facing display labels for MediaType previously lived here as
-// `displayName` / `displayNamePlural`. They were hardcoded English and could
-// not read string resources, so they were untranslatable. They have moved to
-// `core:ui` — see `mediaTypeDisplayName` / `mediaTypeDisplayNamePlural`
+// NOTE: User-facing display labels for MediaType live in `core:ui` as string
+// resources - see `mediaTypeDisplayName` / `mediaTypeDisplayNamePlural`
 // (and their `@StringRes` variants) in
-// com.raulshma.jellyplay.core.ui.model.MediaTypeNames.
+// com.raulshma.jellyplay.core.ui.model.MediaTypeNames. Hardcoded English
+// labels here could not be translated.
 
 val MediaType.isPhotoType: Boolean
     get() = this == MediaType.PHOTO || this == MediaType.PHOTO_FOLDER
@@ -114,7 +113,7 @@ data class MediaItem(
     /** Why the item is virtual; non-null exactly when [isVirtual] is true. */
     val missingReason: MissingEpisodeReason? = null,
     /**
-     * Compact stream summary (D11) for the season-episode rows' subtitle /
+     * Compact stream summary for the season-episode rows' subtitle /
      * audio badges. Populated only where the fetch actually projected
      * `MediaStreams` — the per-season [getEpisodes] call; the all-episodes
      * path (and any listing that carries no sources) maps to null so the
@@ -122,7 +121,7 @@ data class MediaItem(
      */
     val episodeStreamInfo: EpisodeStreamInfo? = null,
     /**
-     * When the item entered the library (epoch millis; H12 NEW-badge input).
+     * When the item entered the library (epoch millis; NEW-badge input).
      * Populated only where the fetch projected `DateCreated` (the
      * HOME_ROW_PROJECTION_FIELDS rows — resume / next-up / latest); every
      * other listing maps to null and the badge predicate treats it as
@@ -130,7 +129,7 @@ data class MediaItem(
      */
     val dateCreatedEpochMs: Long? = null,
     /**
-     * Compact resolution/audio quality summary (H11) for the cards'
+     * Compact resolution/audio quality summary for the cards'
      * [ItemQualityBadge] row, in render-priority order (resolution badge
      * first, then format badges — see [toQualityBadges] / QualityBadgeRow).
      * Populated only where the fetch projected `MediaStreams` (the home-row
@@ -140,7 +139,7 @@ data class MediaItem(
      */
     val qualityBadges: List<ItemQualityBadge>? = null,
     /**
-     * The item's credited People (D18) — the raw wire list retained so the
+     * The item's credited People — the raw wire list retained so the
      * person screen extracts the per-item role ("as {Role}") and role group
      * from the entry matching the queried person. Populated only where the
      * fetch projected the `People` field (the getItemsByPerson filmography
@@ -149,7 +148,7 @@ data class MediaItem(
      */
     val people: List<PersonInfo> = emptyList(),
     /**
-     * Compact trickplay sprite-sheet summary (H13) — everything a preview
+     * Compact trickplay sprite-sheet summary — everything a preview
      * overlay needs to request and crop the right tile: the tile-cell pixel
      * size ([TrickplayInfo.width]/[TrickplayInfo.height]), the per-sheet grid
      * shape ([TrickplayInfo.tileWidth]/[TrickplayInfo.tileHeight] — tiles per
@@ -164,7 +163,7 @@ data class MediaItem(
 )
 
 /**
- * The card-quality-badge vocabulary (H11). Derived client-side from the
+ * The card-quality-badge vocabulary. Derived client-side from the
  * projected MediaStreams in JellyfinDtoMappers — one resolution tier
  * ([FOUR_K] / [HD] / [SD]) plus independent format badges ([HDR] /
  * [DOLBY_VISION] / [ATMOS]). Only the first four are badge-worthy on the
@@ -178,7 +177,7 @@ enum class ItemQualityBadge { FOUR_K, HDR, DOLBY_VISION, ATMOS, HD, SD }
 
 /**
  * The compact per-episode stream summary behind the season rows' stream
- * badges (D11): whether any subtitle track exists ([hasSubtitles] → the CC
+ * badges: whether any subtitle track exists ([hasSubtitles] → the CC
  * chip), the best audio track's layout label ([audioLayout] — "Atmos" when
  * the codec/profile advertises it, else "7.1"/"5.1" from the channel count,
  * null for lesser layouts), and the count of distinct audio languages
@@ -197,7 +196,7 @@ data class EpisodeStreamInfo(
  * Whether this stream summary carries any displayable badge: CC
  * ([hasSubtitles]), a high-end audio layout ([audioLayout]), or more than
  * one audio language ([audioLanguageCount]). The season rows' badge row
- * (D11) renders nothing when false.
+ * renders nothing when false.
  */
 val EpisodeStreamInfo.hasDisplayableBadges: Boolean
     get() = hasSubtitles || audioLayout != null || audioLanguageCount > 1
@@ -236,10 +235,10 @@ val MediaItem.hasWatchProgress: Boolean
  * position ticks encode reading progress, not time, and the video runtime
  * math on that data produced bogus "0m left" labels).
  *
- * The card footers and the newsletter meta rows previously re-derived this
- * ladder per site and had drifted: the card footers excluded SERIES + BOOK,
- * the newsletter rows only SERIES (or neither), so a book with stray runtime
- * ticks rendered a duration in some sections and not others. Route every
+ * The card footers and the newsletter meta rows share this ladder: derived
+ * per site, they drift — the card footers exclude SERIES + BOOK, the
+ * newsletter rows only SERIES (or neither) — so a book with stray runtime
+ * ticks renders a duration in some sections and not others. Route every
  * "show a duration" gate through this predicate; the sub-minute floor lives
  * one step down in `formatRuntimeLabelFromTicks`.
  */
@@ -260,7 +259,7 @@ val MediaItem.seriesIdForDetail: String?
     }
 
 /**
- * H12's NEW-badge predicate in its pure form: the item entered the library
+ * The NEW-badge predicate in its pure form: the item entered the library
  * strictly after the user's last home visit. Both failure modes degrade to
  * false — a null [dateCreatedEpochMs] (the fetch didn't project DateCreated)
  * and a zero/never-stamped [lastVisitEpochMs] (first visit — everything in

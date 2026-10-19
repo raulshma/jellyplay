@@ -42,9 +42,8 @@ fun PluginStatusBadge(
     modifier: Modifier = Modifier,
 ) {
     val tint = badgeTint(status)
-    // The shared pill shell with the admin badge's own knobs — the smooth8 /
-    // labelMedium / h8-v3 chrome this badge always had, now without forking
-    // the tinted-surface draw.
+    // The shared pill shell with the admin badge's own knobs — smooth8 shape,
+    // labelMedium style, the standard tinted-surface draw.
     StatusPill(
         text = stringResource(tint.labelRes),
         color = tint.color,

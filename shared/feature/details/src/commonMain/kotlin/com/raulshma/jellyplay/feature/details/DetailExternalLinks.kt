@@ -23,7 +23,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 /**
- * The shared external-link chip row (D1), extracted verbatim from the Seerr
+ * The shared external-link chip row, extracted verbatim from the Seerr
  * family's private `ExternalLinksRow` (SeerrDetailScreen) and generalized
  * from Seerr DTO ids to plain [ExternalUrl] links — the core-model
  * label + url pair the media detail already carries. Both families render
@@ -102,7 +102,7 @@ internal fun externalLinkHost(url: String): String? {
 }
 
 /**
- * The media detail's merged external-link list (D1), pure → directly
+ * The media detail's merged external-link list, pure → directly
  * unit-testable (the [resolveTmdbId] pattern):
  *
  * 1. The server's [MediaDetail.externalUrls] first, in server order — they

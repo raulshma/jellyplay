@@ -30,8 +30,8 @@ import com.raulshma.jellyplay.core.ui.components.mouseScroll
 /**
  * A single display-only (non-user-scrollable) horizontal row of [SeerrMediaCard]s.
  *
- * This unifies the previously duplicated rendering for the Seerr "Discover"
- * grid rows and the *arr "Recently Grabbed / Coming Soon" row, which were
+ * This unifies the rendering for the Seerr "Discover"
+ * grid rows and the *arr "Recently Grabbed / Coming Soon" row, which are
  * near-identical: same `LazyRow` + `CompositionLocalProvider` + `SeerrMediaCard`
  * + onClick `when(mediaType)` block. The card onClick / request lambdas are
  * memoized once per row so they are not reallocated per-item per-recomposition.
@@ -64,8 +64,8 @@ internal fun SeerrDiscoverRow(
     onSeerrItemClick: (Int, String) -> Unit,
     onSeerrRequest: (SeerrSearchItem) -> Unit,
 ) {
-    // Memoize the per-card lambdas once per row. Previously these were allocated
-    // inside the `items {}` block, so every card got a fresh lambda (with the
+    // Memoize the per-card lambdas once per row. Allocating them
+    // inside the `items {}` block would give every card a fresh lambda (with the
     // `when(mediaType)` block) on every recomposition.
     val onCardClick = remember(seerrCardLoadingState, seerrPrefetch, onSeerrItemClick) {
         { item: SeerrSearchItem ->
@@ -117,7 +117,7 @@ internal fun SeerrDiscoverRow(
                 val seerrItem = items[idx]
                 // Per-card bindings, remembered on the item instance: the
                 // row-level closures above stay stable across recompositions,
-                // and these thin wrappers no longer reallocate per card per
+                // and these thin wrappers do not reallocate per card per
                 // recomposition (the loading-state flip invalidates this slot
                 // on every request star). Keyed on the instance so a reroll
                 // that replaces the item never keeps a stale capture.

@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the typed decode of the JS→native event channel: percent clamping,
- * status mapping, direction normalization, TOC flattening, the newer Wave 2
+ * status mapping, direction normalization, TOC flattening, the newer
  * events (relocated/tap/selected/selection/search/speech/autoScroll), the
  * array/quoted-string bridge payloads, malformed-input tolerance, and the
  * delivery-receipt decorator both platform hosts wrap the single-event seam

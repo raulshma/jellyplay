@@ -184,7 +184,7 @@ class SettingsBackupMigrationTest {
     }
 
     // ------------------------------------------------------------------
-    // Wave 2 — external backup slices (the ExternalBackupSlice seam)
+    // External backup slices (the ExternalBackupSlice seam)
     // ------------------------------------------------------------------
 
     @Test

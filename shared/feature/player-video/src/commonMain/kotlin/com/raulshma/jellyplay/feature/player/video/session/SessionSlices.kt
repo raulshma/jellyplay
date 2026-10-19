@@ -177,7 +177,7 @@ internal class OverlaySessionSlice(
      */
     val upNextCard: StateFlow<UpNextCard?> = upNext.upNextCard
 
-    /** True while a next-episode advance is in flight and unsettled (#146). */
+    /** True while a next-episode advance is in flight and unsettled. */
     val isNextEpisodeLoading: StateFlow<Boolean> = upNext.isNextEpisodeLoading
 
     /** The "Still watching?" confirm overlay's state surface; null = hidden (feature 1.3). */

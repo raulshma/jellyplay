@@ -13,7 +13,7 @@ import kotlinx.coroutines.CoroutineScope
  * [HomeSyncStatusFactory]: the holders' pure-DI collaborators are owned HERE
  * so a new series-sheet dependency widens this factory and the Koin single,
  * never [HomeViewModel]'s constructor (the test harness constructs the VM,
- * not Koin — every widened VM parameter used to drag both suites with it).
+ * not Koin — otherwise every widened VM parameter drags both suites with it).
  *
  * Deliberate double-ownership, same as the refresher factory's
  * `mediaRepository`: [episodeCatalogue], [downloadIntake], [userMessageBus]

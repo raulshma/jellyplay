@@ -584,7 +584,7 @@ private fun SeerrDetailContent(
                                 Spacer(Modifier.height(24.dp))
 
                                 // The former private ExternalLinksRow, generalized into the
-                                // shared DetailExternalLinksRow (D1) — same three brand chips,
+                                // shared DetailExternalLinksRow — same three brand chips,
                                 // same id sources and url construction, plain links now.
                                 val seerrMediaType = if (movieDetail != null) "movie" else "tv"
                                 val seerrTmdbId = movieDetail?.id ?: tvDetail?.id ?: 0

@@ -9,8 +9,7 @@ import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for the reader bookmark table
- * (docs/adr/0003-local-first-reader-marks.md). Follows the Flow-for-observe /
+ * DAO for the reader bookmark table. Follows the Flow-for-observe /
  * suspend-for-write convention used by the rest of this package (see
  * [SearchHistoryDao]); toggle-on-tap logic stays in the callers — the DAO
  * only persists and observes.

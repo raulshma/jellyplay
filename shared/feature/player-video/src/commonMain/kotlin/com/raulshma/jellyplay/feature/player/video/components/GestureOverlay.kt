@@ -138,7 +138,7 @@ internal fun GestureOverlay(
     volumeFlow: StateFlow<Float>,
     indicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     /**
-     * Per-arm swipe gates (the input mapping resolved; issue #171's split),
+     * Per-arm swipe gates (the input mapping resolved; per-arm split),
      * pre-ANDed with the screen lock — one immutable bundle key instead of
      * five loose booleans.
      */

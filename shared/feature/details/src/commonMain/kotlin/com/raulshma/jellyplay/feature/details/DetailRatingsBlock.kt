@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 
 /**
- * The D4 no-plugin external-ratings strip's plain values — the shape both
+ * The external-ratings strip's plain values — the shape both
  * rating sources fold into and the shared [RatingsRow] composable renders:
  *
  * 1. The Seerr detail-by-provider-id payload ([SeerrRatings]: RT critics +
@@ -72,7 +72,7 @@ data class DetailExternalRatings(
 }
 
 /**
- * The D4 strip's ordered chip plan — the pure expansion the shared
+ * The external-ratings strip's ordered chip plan — the pure expansion the shared
  * [RatingsRow] renders: RT critics, RT audience, IMDb, TMDB, in that order,
  * dropping every source the resolution didn't yield. Empty when [isEmpty].
  * Pure → directly unit-testable (the [DetailExternalLinksTest] convention).
@@ -86,7 +86,7 @@ internal fun externalRatingChipSources(ratings: DetailExternalRatings): List<Det
     ).filterNot { it.isEmpty }
 
 /**
- * Whether the D4 chips render STANDALONE in the header metadata row (after the
+ * Whether the external-ratings chips render STANDALONE in the header metadata row (after the
  * critic chip): the preference is on, the resolution yielded chips, and the
  * plugin ratings row is ABSENT — when it is present the chips merge into that
  * row's FlowRow instead ([externalRatingsMergedIntoPluginRow]), so the strip
@@ -99,12 +99,12 @@ internal fun externalRatingsStandaloneInHeader(
 ): Boolean = showExternalRatings && !hasPluginRatings && !external.isEmpty
 
 /**
- * Whether the D4 chips merge into the PLUGIN ratings row's FlowRow (D9: plugin
+ * Whether the external-ratings chips merge into the PLUGIN ratings row's FlowRow (plugin
  * sources first, then TMDB/IMDb): the plugin row is present, the resolution
  * yielded chips, and the plugin dedupe does not stand them down. The dedupe is
  * the [DetailUiState.pluginSimilarSuppressesStock] mirror — the enrichment's
  * synchronous Ratings-feature probe ([externalSuppressedByPlugin]) suppresses
- * the D4 chips exactly when the plugin row actually has content, so a probe
+ * the external-ratings chips exactly when the plugin row actually has content, so a probe
  * that returned true against an empty plugin row never hides the strip.
  * Pure → directly unit-testable.
  */

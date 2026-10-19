@@ -81,9 +81,9 @@ fun PluginsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
 
     // Pending uninstall confirmation. Unlike the per-plugin detail screen, the
-    // list-level uninstall previously fired immediately — a destructive server
-    // operation with no chance to cancel. `rememberSaveable` so an open
-    // confirmation survives config change (rotation) rather than silently
+    // list-level uninstall always confirms first — a destructive server
+    // operation with no chance to cancel afterwards. `rememberSaveable` so an
+    // open confirmation survives config change (rotation) rather than silently
     // dismissing a destructive-action dialog.
     var pendingUninstallId by rememberSaveable { mutableStateOf<String?>(null) }
 

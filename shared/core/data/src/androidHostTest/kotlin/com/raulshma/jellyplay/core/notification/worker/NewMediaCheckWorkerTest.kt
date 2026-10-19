@@ -360,7 +360,7 @@ class NewMediaCheckWorkerTest {
         assertTrue(result is ListenableWorker.Result.Failure)
     }
 
-    // ── D12: the per-series second pass ─────────────────────────────────
+    // ── the per-series second pass ─────────────────────────────────
 
     private fun seriesPrefs(config: SeriesNotificationConfig) = enabledPrefs(
         newEpisodesEnabled = true,

@@ -19,7 +19,7 @@ internal val EXPANDED_DISCOVER_PATTERN = listOf(5, 4, 6, 5)
 /**
  * The discover pattern for a window size — the single source for both read
  * sites ([rememberDiscoverRows]' partition and HomeContentList's per-row
- * target sizes), which previously duplicated the if/else.
+ * target sizes), so both share one if/else.
  */
 internal fun discoverPatternFor(windowSizeClass: WindowSizeClass): List<Int> =
     if (windowSizeClass == WindowSizeClass.Compact) COMPACT_DISCOVER_PATTERN else EXPANDED_DISCOVER_PATTERN
@@ -27,7 +27,7 @@ internal fun discoverPatternFor(windowSizeClass: WindowSizeClass): List<Int> =
 /**
  * The card width fitting [targetSize] cards (plus their [spacing] gaps) into
  * [rowWidth] — the single source for the discover rows and the *arr
- * recently-grabbed row, which previously duplicated the formula.
+ * recently-grabbed row, so both share one formula.
  */
 internal fun discoverItemWidth(rowWidth: Dp, spacing: Dp, targetSize: Int): Dp =
     (rowWidth - spacing * (targetSize - 1)) / targetSize

@@ -153,7 +153,7 @@ kotlin {
             // TV provider (Watch Next / preview channels) — R8 strips for
             // phone release.
             implementation(libs.tvprovider)
-            // UnifiedPush connector (the jellyplay plugin's push wave): the
+            // UnifiedPush connector (the jellyplay plugin's push support): the
             // receiver + distributor-seam impl in core/push talk to the user's
             // UnifiedPush distributor app (ntfy & co). Android-only library —
             // no JVM artifact exists, so jvmShared/commonMain never see it;

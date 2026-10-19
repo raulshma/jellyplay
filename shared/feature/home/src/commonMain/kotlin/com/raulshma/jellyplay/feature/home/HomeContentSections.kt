@@ -131,7 +131,7 @@ internal sealed interface HomeRenderFeed {
 }
 
 /**
- * Bundles the (previously 38) flat parameters of the home content list into a
+ * Bundles the home content list's flat parameters into a
  * single `@Immutable` value so the composable is skippable without relying on
  * every caller `remember`-ing dozens of unstable lambdas. Lambdas that must
  * remain stable across recompositions (image/url builders, click handlers) are
@@ -153,7 +153,7 @@ internal sealed interface HomeRenderFeed {
  *    offline feed with the offline-only masks (spinner, banners) and the
  *    FallbackPending loading window already applied,
  *  - [featuredItem]: the hero controller's featured pick,
- *  - [curatedHeroOverlay]: the H9 curated billboard copy keyed by item id,
+ *  - [curatedHeroOverlay]: the curated billboard copy keyed by item id,
  *    merged screen-side ahead of the local hero candidates,
  *  - [backgroundColor] / [contentPad] / [headerHeight]: the screen's layout
  *    resolutions,
@@ -171,7 +171,7 @@ internal data class HomeContentState(
     val feed: HomeRenderFeed,
     val featuredItem: MediaItem?,
     /**
-     * H9: the plugin-curated billboard copy keyed by item id — the hero looks
+     * The plugin-curated billboard copy keyed by item id — the hero looks
      * its featured item up here; a hit's headline/subhead override the item's
      * own title/kicker slots, a miss renders item metadata as today.
      */
@@ -219,18 +219,18 @@ internal data class HomeContentState(
         val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem> =
             emptyList(),
         /**
-         * H12 visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
+         * Visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
          * never). Read once per home session before the dwell timer stamps the
          * new one, so this session's own stamp can never clear the badges it
          * just showed. Feeds the arrival rows' NEW-badge predicate
          * ([HomeMediaRow.showNewBadges]); 0 (the default) badges nothing.
          */
         val homeLastVisitEpochMs: Long = 0L,
-        /** H17 personal stats card data — null hides the card. */
+        /** Personal stats card data — null hides the card. */
         val statsCard: HomeStatsCardData? = null,
         /** The `home_stats_card` pref mirror — the card's render gate. */
         val statsCardEnabled: Boolean = false,
-        /** H18 genre quick-access rail chips (server-ordered, top ~24). */
+        /** Genre quick-access rail chips (server-ordered, top ~24). */
         val genreChips: List<Genre> = emptyList(),
         /** The `home_genre_rail` pref mirror — the rail's render gate. */
         val genreRailEnabled: Boolean = false,
@@ -337,7 +337,7 @@ internal fun HomeContentList(
     listState: LazyListState,
     density: Density,
     /**
-     * H19 watch-party presence chips — the VM's dedicated flow (NOT a
+     * Watch-party presence chips — the VM's dedicated flow (NOT a
      * [HomeContentState] field, the search-query precedent): the poll loop
      * writes it on the home refresh cadence, so collecting it HERE (the row
      * is this composable's only reader) keeps the per-tick write off the
@@ -489,7 +489,7 @@ internal fun HomeContentList(
             if (state.featuredItem != null && state.core.homeHeroEnabled) {
                 item(key = "hero") {
                     val featured = state.featuredItem
-                    // H9: the curated billboard copy for whichever candidate is
+                    // The curated billboard copy for whichever candidate is
                     // featured — absent/null fields render the item's own
                     // metadata exactly as the local hero always has.
                     val curated = state.curatedHeroOverlay[featured.id]
@@ -519,7 +519,7 @@ internal fun HomeContentList(
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
-            // ── H19 presence chips ("Alex is watching Dune — join") ──────
+            // ── presence chips ("Alex is watching Dune — join") ──────
             val showPresenceChips = state.online != null && presenceChipList.isNotEmpty()
             if (showPresenceChips) {
                 item(key = "presence_chips") {
@@ -535,7 +535,7 @@ internal fun HomeContentList(
                 }
             }
 
-            // ── H17 stats card ("Your library week") ─────────────────────
+            // ── stats card ("Your library week") ─────────────────────
             val showStatsCard = state.online != null && state.core.statsCardEnabled && state.core.statsCard != null
             if (showStatsCard) {
                 item(key = "stats_card") {
@@ -546,7 +546,7 @@ internal fun HomeContentList(
                 }
             }
 
-            // ── H18 genre rail ──────────────────────────────────────────
+            // ── genre rail ──────────────────────────────────────────
             val showGenreRail = state.online != null && state.core.genreRailEnabled && state.core.genreChips.isNotEmpty()
             if (showGenreRail) {
                 item(key = "genre_rail") {
@@ -658,7 +658,7 @@ internal fun HomeContentList(
                 }
 
                 // "See All" pill for the poster rows: both the offline-mirrored
-                // and the online branch render it (#147), so the gate + click
+                // and the online branch render it, so the gate + click
                 // lambda is built once above the chassis dispatch and handed to
                 // whichever poster row runs.
                 val seeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
@@ -691,10 +691,10 @@ internal fun HomeContentList(
                 }
 
                 // Which row renders is the chassis dispatch's decision (see
-                // homeRowChassis): the offline-mirror rule (#147) and the
+                // homeRowChassis): the offline-mirror rule and the
                 // wide-row source split live in one pure, pinned place, so
-                // this `when` is exhaustive and decides nothing. The branches
-                // render exactly what the former if/else chain rendered.
+                // this `when` is exhaustive and decides nothing. Each branch
+                // renders one row shape.
                 //
                 // Seerr-sourced custom discover rows bypass the chassis
                 // entirely — they carry TMDB cards with request actions, not
@@ -922,7 +922,7 @@ private fun HomeSectionJellyPlayRow(
 }
 
 /**
- * H5: the My Media tiles row over the server feed — the chassis's
+ * The My Media tiles row over the server feed — the chassis's
  * [HomeRowChassis.OnlineTiles] arm. The section's items are the assembler's
  * FOLDER-typed library tiles; a tile tap routes into the library screen
  * through the existing "See All" carrier ([HomeContentCallbacks.onSeeAllClick],
@@ -1025,7 +1025,7 @@ private fun HomeSectionOfflinePosterRow(
         // only — same gate as the online branch).
         onSectionLongClick = sectionLongClick,
         // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
-        // online "See All" pill and play overlay (#147).
+        // online "See All" pill and play overlay.
         onSeeAllClick = seeAllClick,
         onPlayClick = remember(renderInputs.mediaOnPlayClick) {
             { item -> renderInputs.mediaOnPlayClick(item.toMediaItem()) }
@@ -1206,13 +1206,13 @@ private fun HomeSectionOnlinePosterRow(
         onRowFocused = ctx.onRowFocused,
         clippingEnabled = state.core.experimentalCardClippingEnabled,
         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
-        // H12 NEW badges: the arrival rows only (the H4 Upcoming row's items
+        // NEW badges: the arrival rows only (the Upcoming row's items
         // are also library arrivals — episodes added for airing shows).
         showNewBadges = section.type == HomeSectionType.LATEST_MEDIA ||
             section.type == HomeSectionType.RECENTLY_ADDED ||
             section.type == HomeSectionType.UPCOMING,
         homeLastVisitEpochMs = state.core.homeLastVisitEpochMs,
-        // H4: the air-date chip rides the Upcoming row's cards — its items
+        // The air-date chip rides the Upcoming row's cards — its items
         // are unaired episodes, the premiere date being the point of the row.
         showAirDateChips = section.type == HomeSectionType.UPCOMING,
         onSectionLongClick = sectionLongClick,
@@ -1266,8 +1266,8 @@ private fun HomeAskContinueDialog(
 }
 
 /**
- * The content list's ONE non-blocking notice row (the implicit-offline
- * banner and the partial-load banner used to duplicate this block verbatim).
+ * The content list's ONE non-blocking notice row, shared by the
+ * implicit-offline banner and the partial-load banner.
  * [onRetry] optional: the partial-load variant carries a Retry button.
  */
 @Composable

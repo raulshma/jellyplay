@@ -35,7 +35,7 @@ import kotlin.test.assertTrue
  * [HomeSectionsFetcher.refreshSection] (seasonal + the titled custom-row
  * plumbing, whose only blocker is the missing enumerate-rows capability).
  *
- * Beside them, H9's curated-hero arm ([HomeSectionsFetcher.fetchCuratedHero]):
+ * Beside them, the curated-hero arm ([HomeSectionsFetcher.fetchCuratedHero]):
  * same gate/memo posture, but resolution is a strict filter — an unresolved
  * id DROPS (a hero has no fallback tile; its fallback is the local pool) and
  * duplicate ids keep their first slot.
@@ -171,7 +171,7 @@ class HomeSectionsFetcherPluginRowTest {
         candidates: List<JellyPlayHeroCandidate>,
     ): Result<JellyPlayHeroResult?> = Result.success(JellyPlayHeroResult(candidates = candidates))
 
-    // ── the curated hero (H9) ───────────────────────────────────────────
+    // ── the curated hero ───────────────────────────────────────────
 
     @Test
     fun `curated hero gate off makes zero port calls and no candidates`() = runTest {

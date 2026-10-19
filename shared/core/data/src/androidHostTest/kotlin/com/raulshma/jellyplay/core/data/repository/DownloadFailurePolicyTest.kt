@@ -42,7 +42,7 @@ class DownloadFailurePolicyTest {
 
     @Test
     fun `Suppress does not retry — clean exit not wasteful retry`() {
-        // Pre-extraction the outer catches returned Result.retry() even when
+        // The outer catches used to return Result.retry() even when
         // the user had paused. Suppress → Result.success() is the fix.
         val outcome = DownloadFailurePolicy.decide(
             error = genericException,
@@ -88,7 +88,7 @@ class DownloadFailurePolicyTest {
 
     @Test
     fun `SocketTimeoutException is treated as IOException network class`() {
-        // The outer-catch bug pre-extraction: SocketTimeout fell into a catch
+        // The old outer-catch bug: SocketTimeout fell into a catch
         // that set no pausedReason, so reconnect auto-resume never picked it
         // up. Now it records NETWORK like any other IOException.
         val outcome = DownloadFailurePolicy.decide(
@@ -104,7 +104,7 @@ class DownloadFailurePolicyTest {
 
     @Test
     fun `IOException without progress marks failed with retry`() {
-        // Pre-extraction: inner/multi catches guarded on `madeProgress` and did
+        // The inner/multi catches used to guard on `madeProgress` and did
         // nothing when false, leaving the row DOWNLOADING with no mutation —
         // an orphaned row. Now: FAILED + retry.
         val outcome = DownloadFailurePolicy.decide(
@@ -228,7 +228,7 @@ class DownloadFailurePolicyTest {
     @Test
     fun `transient 503 deletes partial even on single-connection and retries`() {
         // The transient branch forces deletePartial=true regardless of strategy,
-        // mirroring the pre-extraction wipe-and-retry (avoids the stale-Range loop).
+        // mirroring the old wipe-and-retry (avoids the stale-Range loop).
         val outcome = DownloadFailurePolicy.decideForStatus(
             responseCode = 503,
             currentStatus = DownloadStatus.DOWNLOADING.name,

@@ -410,7 +410,7 @@ class DesktopAudioQueueManagerTest {
             "artist-a",
             h.manager.artistId.value,
             "declared delta of the tracker adoption: clear() never resets artistId (Android's stop " +
-                "behaved identically pre-extraction; the former desktop hand-rolled reset cleared it)",
+                "behaves identically; the former desktop hand-rolled reset cleared it)",
         )
     }
 

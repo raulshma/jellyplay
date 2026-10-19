@@ -15,8 +15,8 @@ import kotlin.test.assertTrue
 /**
  * Asserts the PRODUCTION pure helpers the card rows read —
  * [MediaItem.progressFraction], [fallbackImageUrls],
- * [photoFolderPrefetchTargets] — previously these were re-declared inline at
- * their (untested) call sites and asserted against the copy.
+ * [photoFolderPrefetchTargets] — asserted directly rather than through copies
+ * declared at their call sites.
  */
 class HomeMediaRowsTest {
 
@@ -166,7 +166,7 @@ class HomeMediaRowsTest {
         assertEquals(emptyList(), targets)
     }
 
-    // ── isNewForHome (H12 NEW-badge predicate) ──
+    // ── isNewForHome (NEW-badge predicate) ──
 
     private fun itemAddedAt(epochMs: Long?) = MediaItem(
         id = "i1",
@@ -208,7 +208,7 @@ class HomeMediaRowsTest {
         assertFalse(isNewForHome(dateCreatedEpochMs = 2_000L, lastVisitEpochMs = 0L))
     }
 
-    // ── upcomingAirDate (H4 air-date chip input) ──
+    // ── upcomingAirDate (air-date chip input) ──
 
     @Test
     fun upcomingAirDate_parsesAnIsoPremiereStamp() {

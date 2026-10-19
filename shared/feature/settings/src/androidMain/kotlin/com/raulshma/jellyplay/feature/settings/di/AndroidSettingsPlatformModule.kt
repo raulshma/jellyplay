@@ -28,9 +28,9 @@ import org.koin.dsl.module
  *
  * Deliberately NOT provided here (see the settingsModule kdoc): AutoDownloadSync,
  * NotificationSync, WatchNextRefresher, AudioCacheClearer — their Android impls
- * wrap Hilt-owned legacy :core:data/:core:notification types this module
- * cannot reach, so the composition root registers them app-side (downloads
- * phase's AndroidDownloadSeamsModule / EntryPointAccessors interop pattern).
+ * wrap Hilt-owned :core:data/:core:notification types this module cannot
+ * reach, so the composition root registers them app-side (AndroidDownloadSeamsModule /
+ * EntryPointAccessors interop pattern).
  */
 fun androidSettingsPlatformModule(context: Context): Module = module {
     single<SettingsBackupIo> { AndroidSettingsBackupIo(context) }

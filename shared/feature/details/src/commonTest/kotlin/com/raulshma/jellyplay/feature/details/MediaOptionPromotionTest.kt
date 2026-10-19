@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pure tests for the D23 promoted-rail option filters: the stable [MediaOption.id]
+ * Pure tests for the promoted-rail option filters: the stable [MediaOption.id]
  * contract, [promotedOptions] (fixed-order resolution, missing ids ignored) and
  * [excludingIds] (the ⋮-menu dupe suppression, pass-through when the rail is
  * hidden). No Android / Compose rendering — the filters only shuffle the list.

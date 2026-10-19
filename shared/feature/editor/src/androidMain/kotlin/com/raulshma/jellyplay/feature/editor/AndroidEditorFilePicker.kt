@@ -11,14 +11,11 @@ import java.io.IOException
 
 /**
  * Android actual of the [EditorFilePicker] seam: the SAF open-document
- * launchers moved verbatim from the pre-migration ImagesTab/SubtitlesTab, and
- * the deferred contentResolver byte read moved verbatim from the
- * pre-migration EditorViewModel.uploadImageFromUri/uploadSubtitleFromUri
- * (including the distinct "Cannot open input stream…" error messages, which
- * surface through uiState.error at upload time exactly as before).
- * androidx.activity.compose rides navigation3-ui's transitive edge
- * (settings BackupFilePicker / BackHandler-seam precedent), so this source set
- * needs no extra dependency.
+ * launchers plus the deferred contentResolver byte read (including the
+ * distinct "Cannot open input stream…" error messages, which surface through
+ * uiState.error at upload time). androidx.activity.compose rides
+ * navigation3-ui's transitive edge (settings BackupFilePicker / BackHandler-seam
+ * pattern), so this source set needs no extra dependency.
  */
 @Composable
 internal actual fun rememberImageFilePicker(

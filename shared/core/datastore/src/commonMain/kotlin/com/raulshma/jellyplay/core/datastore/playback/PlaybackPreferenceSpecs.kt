@@ -44,10 +44,10 @@ private var cachedAudioPassthroughCodecs: ParsedCache<Set<AudioPassthroughCodec>
     ParsedCache(null, DEFAULT_AUDIO_PASSTHROUGH_CODECS)
 
 /**
- * The media-delivery domain's single preference declaration (Stage B of the
- * spec machinery): one [PreferenceSpec] row per key `PlaybackStore` owns — the
- * canonical persisted key name (which is ALSO the legacy pre-typed-era wire
- * name, declared exactly once), the default, the reset category, and the
+ * The media-delivery domain's single preference declaration: one
+ * [PreferenceSpec] row per key `PlaybackStore` owns — the
+ * canonical persisted key name (which is ALSO the legacy string wire name,
+ * declared exactly once), the default, the reset category, and the
  * read/write encoding ([PreferenceSpec.plainBoolean] / [plainInt] /
  * [plainFloat] / [enumRow] / [derived]).
  *
@@ -158,7 +158,7 @@ object PlaybackPreferenceSpecs {
             resetCategory = PreferenceResetCategory.PLAYBACK,
             search = PreferenceSearchSpec(
                 id = "external_player_app",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_external_player_app",
                 subtitleKey = "ss_external_player_app_subtitle",
                 categoryKey = "ss_cat_playback",
@@ -525,8 +525,8 @@ object PlaybackPreferenceSpecs {
         /*
          * Whether leaving the player during playback auto-enters
          * picture-in-picture. Default `true` preserves the historical behaviour;
-         * turning it off makes Home/recents background the app normally instead
-         * (issue #167). The manual PiP button in the controls is unaffected.
+         * turning it off makes Home/recents background the app normally instead.
+         * The manual PiP button in the controls is unaffected.
          */
         PreferenceSpec.plainBoolean(
             keyName = "auto_enter_pip",
@@ -534,7 +534,7 @@ object PlaybackPreferenceSpecs {
             resetCategory = PreferenceResetCategory.PLAYBACK,
             search = PreferenceSearchSpec(
                 id = "auto_enter_pip",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_auto_pip",
                 subtitleKey = "ss_auto_pip_subtitle",
                 categoryKey = "ss_cat_playback",

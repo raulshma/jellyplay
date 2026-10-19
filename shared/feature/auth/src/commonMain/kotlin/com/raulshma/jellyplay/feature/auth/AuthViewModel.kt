@@ -65,7 +65,7 @@ class AuthViewModel(
      * addresses answers — primary first, then alternates — mirroring the
      * app's address failover. Servers fan out bounded by
      * [DEFAULT_FANOUT_PARALLELISM] (the MusicHomeViewModel/arrqueue
-     * pattern), so one slow server no longer delays the other rows' dots.
+     * pattern), so one slow server does not delay the other rows' dots.
      * Safe to call repeatedly; concurrent calls are guarded by cancelling
      * any in-flight batch.
      */

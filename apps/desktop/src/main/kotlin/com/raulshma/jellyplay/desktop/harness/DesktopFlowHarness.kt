@@ -74,7 +74,7 @@ import kotlinx.coroutines.delay
  *     redirects it into the isolated workspace) — asserted: new
  *     watch_progress_heatmap_<millis>.png with PNG magic bytes.
  *  5. FLOW6_PLAYER_SUBTITLE_UPLOAD — push the player, await real playback,
- *     SPACE (shows controls + pauses — session-harness finding), CLICK the
+ *     SPACE (shows controls + pauses), CLICK the
  *     subtitles trigger → hub Get tab → Upload sub-tab → Select file → the
  *     REAL "Choose subtitle file" LOAD dialog (advisory filter) → language
  *     typed → Upload clicked → asserted server-side like flow 4.
@@ -364,8 +364,8 @@ object DesktopFlowHarness {
                     }
                 } || error("playback never started (no playing sample after route push)")
                 screenshot("flow6-playing")
-                // SPACE shows the controls overlay (and pauses — the
-                // session-harness finding); the trigger button composes with it.
+                // SPACE shows the controls overlay (and pauses); the trigger
+                // button composes with it.
                 robot.injectKey(KeyEvent.VK_SPACE, "FLOW6 SPACE") ||
                     error("SPACE injection failed (Robot)")
                 awaitTarget("player-subtitles-trigger", 10_000)

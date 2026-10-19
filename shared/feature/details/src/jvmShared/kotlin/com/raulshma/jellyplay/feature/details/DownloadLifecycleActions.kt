@@ -58,7 +58,7 @@ internal data class DownloadLifecycleState(
     // is loaded; empty once loaded if no files resolved on disk.
     val downloadFileInventory: DownloadFileInventory? = null,
     val isLoadingDownloadFiles: Boolean = false,
-    // Live in-flight download fraction per EPISODE id (D16, 0..1) — the
+    // Live in-flight download fraction per EPISODE id (0..1) — the
     // seasons section's per-row determinate bar + percent chip. Re-keyed from
     // the repository's download-id-keyed [DownloadProgress] map via the
     // mediaItemId join; rows drop out on their own when a download leaves the
@@ -168,7 +168,7 @@ internal class DownloadLifecycleActions(
         .stateIn(scope, SharingStarted.Eagerly, DownloadRootState())
 
     init {
-        // Live in-flight download progress (D16): one collector for the screen's
+        // Live in-flight download progress: one collector for the screen's
         // lifetime, re-keying the repository's download-id-keyed projection onto
         // episode ids so the seasons section renders bars without a per-row
         // subscription. The upstream map is structurally deduped by the
@@ -461,7 +461,7 @@ internal class DownloadLifecycleActions(
 /**
  * Re-keys the repository's download-id-keyed live [DownloadProgress] rows onto
  * episode (item) ids as 0..1 fractions — the [DownloadLifecycleState.episodeDownloadProgress]
- * shape the seasons section's rows render (D16). Rows without an item join or
+ * shape the seasons section's rows render. Rows without an item join or
  * with an unknown total size (a PENDING row before its size probe — the same
  * `totalSizeBytes > 0` guard the ⋮ menu's percent label applies) drop out;
  * two in-flight rows for one item resolve to their latest fraction (last wins).

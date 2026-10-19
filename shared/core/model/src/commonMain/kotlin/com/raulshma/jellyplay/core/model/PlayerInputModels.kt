@@ -311,7 +311,7 @@ data class PlayerInputMap(
     /**
      * Add or fold [binding] into the map. A pattern no row owns yet appends
      * [binding] verbatim; a pattern an existing row already carries (default
-     * or previously captured) edits THAT row to [binding]'s action and
+     * or already captured) edits THAT row to [binding]'s action and
      * enabled flag — keeping its own id — because appending would mint a
      * duplicate pattern the write guard blocks. The editor's capture flow
      * never reaches the replace branch (an already-owned pattern writes
@@ -400,8 +400,8 @@ private val InputPattern.isRemoteFamily: Boolean
     get() = this is InputPattern.Key || this is InputPattern.DPad
 
 /**
- * Repair for the one unrecoverable binding state (issue #171's broken-editor
- * fallout): a map where NO input family (touch, remote) has an enabled,
+ * Repair for the one unrecoverable binding state (broken-editor fallout):
+ * a map where NO input family (touch, remote) has an enabled,
  * summon-capable row — the controls can never be shown again on any device,
  * and no in-player UI exists to fix the mapping. TOTAL lockout only: a
  * one-family lockout is reachable through the normal UI (GestureMode.NONE

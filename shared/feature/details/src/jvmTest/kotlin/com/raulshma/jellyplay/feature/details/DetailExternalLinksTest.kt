@@ -12,7 +12,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Tests [buildDetailExternalLinks] — the D1 merge behind the detail header's
+ * Tests [buildDetailExternalLinks] — the merge behind the detail header's
  * external-link chips: server external urls first, then TMDB/IMDb constructed
  * from the provider ids via the existing pure resolvers
  * ([resolveTmdbId] / [resolveImdbId], whose own orders are pinned by

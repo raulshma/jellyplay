@@ -10,7 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the H20 restore confirmation dialog's content contract — the pure
+ * Pins the restore confirmation dialog's content contract — the pure
  * [homeLayoutRestorePreview] builder the timestamp-diff dialog renders: the
  * server write stamp plus BOTH layouts' enabled-section counts, with no
  * formatting or compose dependencies (the dialog's string substitution reads

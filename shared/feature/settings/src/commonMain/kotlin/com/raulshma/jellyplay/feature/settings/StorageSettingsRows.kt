@@ -134,10 +134,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_wifi_only_
 /**
  * The storage domain's fused row declarations — the feature-side single home
  * of every storage row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `StorageSettingsIds` holder constant
- * (all retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * Every row is a HAND-MAINTAINED residual (the knobs live in spec-less
  * stores) and carries its full hand search faces; the schedule-window and
@@ -145,7 +143,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_wifi_only_
  * declaration both the derived totals and the screen emission `if`s read.
  * The projection ([List.toSearchItems]/[List.asRowGroup]) fails fast at
  * catalog init on any drift; search results, catalog order, group membership
- * and per-gate visibility are byte-identical to the retired declarations.
+ * and per-gate visibility derive from these declarations.
  */
 internal object StorageRows {
 
@@ -232,11 +230,9 @@ internal object StorageRows {
     )
 
     // The four advanced-tagged rows (cellular download warning, network
-    // timeout, verbose logging, user-data sync) carry a legacy isAdvanced tag
-    // the screen never honored — the "Network & Offline" group predates and
-    // outlives the advanced toggle (the shipped always-on behavior), so each
-    // row's explicit gate overrides its flag (the appearance HapticsEnabled
-    // shape).
+    // timeout, verbose logging, user-data sync) sit outside the advanced
+    // toggle, so each row's explicit gate overrides its isAdvanced flag (the
+    // appearance HapticsEnabled shape).
     // -- The "Network & Offline" group's eleven rows — every row renders unconditionally (the screen feeds the declaration size itself) — in catalog order. --
 
     val OfflineMode = SettingsRow(
@@ -536,7 +532,7 @@ internal object StorageRows {
     )
 
     /**
-     * Every fused storage row — the ratchet's vocabulary. A computed accessor
+     * Every fused storage row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

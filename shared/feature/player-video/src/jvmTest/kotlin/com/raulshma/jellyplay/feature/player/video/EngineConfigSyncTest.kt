@@ -33,7 +33,7 @@ import kotlin.test.assertTrue
  * [CONFIG_SYNC_DEBOUNCE_MS]; the coalesced build reads the state at FIRE
  * time and dispatches to the engine current at that moment (an engine swap
  * in flight never leaks the dispatch to the swapped-out engine — the
- * pre-extraction `configSyncJob` had no swap-cancellation path; its only
+ * original `configSyncJob` had no swap-cancellation path; its only
  * cancellation is its scope dying); and the immediate path stays
  * synchronous. StandardTestDispatcher + virtual time. No ViewModel, no
  * uiState.
@@ -208,7 +208,7 @@ class EngineConfigSyncTest {
         assertTrue(first.appliedConfigs.isEmpty(), "still inside the debounce window")
 
         // Engine swap (mode/quality reload, engine switch, retry) while the
-        // debounce is in flight. The pre-extraction `configSyncJob` had NO
+        // debounce is in flight. The original `configSyncJob` had NO
         // swap-cancellation path — the collector survived and dispatched
         // through the live engine read at fire time. Mirrored: the pending
         // dispatch is neither dropped nor leaked to the swapped-out engine.
@@ -226,7 +226,7 @@ class EngineConfigSyncTest {
     fun collectorJobDiesWithItsScope_pendingDispatchIsAbandoned() {
         // A dedicated scope for the collector (the production job lives in
         // the ViewModel scope — its ONLY cancellation path is that scope
-        // dying, exactly as the pre-extraction `configSyncJob` had), sharing
+        // dying, exactly as the original `configSyncJob` had), sharing
         // the test scheduler.
         val scopedCollector = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScope.testScheduler))
         val scopedController = buildController(scopedCollector)

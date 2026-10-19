@@ -82,7 +82,7 @@ class DiscoverRowsViewModelTest {
 
     // The browse-catalogue enrichments seam — the filter sheets' tag facet
     // reads this seam (off the wide repository surface); the fake records the
-    // call count the repository-mock verifications used to pin.
+    // call count the repository-mock verifications pin.
     private val catalogueEnrichments = object : MediaCatalogueEnrichments {
         var tagsResult: Result<List<String>> = Result.success(emptyList())
         var tagsCalls: Int = 0

@@ -1053,7 +1053,7 @@ public class MpvCore(
         hosts.onStyleApplied(style)
     }
 
-    // ── Ownership (issue #165) ──────────────────────────────────────────────
+    // ── Ownership ──────────────────────────────────────────────
 
     /**
      * Refreshes the user-owned `sub-*` key snapshot from the host's config

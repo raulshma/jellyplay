@@ -173,7 +173,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // The browse-catalogue enrichments (filter-sheet tags, the detail
     // franchise row) — same over-the-impl aliasing for their two screens.
     single<MediaCatalogueEnrichments> { get<MediaRepositoryImpl>() }
-    // D12: the series-notification family (the per-series Next Up diff read).
+    // The series-notification family (the per-series Next Up diff read).
     single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
     // The home-feed family (the sections payload, the single-row edge-pull
@@ -183,7 +183,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // refetchers take it beside the surfaces they are mixed consumers of.
     single<HomeFeed> { get<MediaRepositoryImpl>() }
     single<UserDataChanges> { get<MediaRepositoryImpl>() }
-    // Plan 08's module-internal cache-maintenance view (the former DataModule
+    // Module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
     // Worker port of the wholesale cache drop (same single, narrow seam — the
@@ -215,7 +215,7 @@ internal val dataMediaRepositoryModule: Module = module {
     }
     single<PlaylistRepository> { get<PlaylistRepositoryImpl>() }
     // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
-    // since the extraction from MediaRepositoryImpl — no longer a view of the
+    // since it left MediaRepositoryImpl — no longer a view of the
     // media single.
     single {
         LyricsRepositoryImpl(

@@ -12,8 +12,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 
 /**
- * Pins the dead-end guard adapter extracted from DesktopNavScaffold
- * ([desktopGuardedNavigator] + [desktopDeadEndMessage] — the desktop twin of
+ * Pins the dead-end guard adapter
+ * ([desktopGuardedNavigator] + [desktopDeadEndMessage] — the desktop
+ * counterpart of
  * the Android shell's PlaybackHostRouter navigateFilter, in the
  * DesktopUpdateCheckController idiom):
  *

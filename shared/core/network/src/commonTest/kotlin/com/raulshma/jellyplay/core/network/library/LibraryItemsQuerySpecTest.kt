@@ -347,14 +347,14 @@ class LibraryItemsQuerySpecTest {
     }
 
     @Test
-    fun `the resume spec defaults excludeActiveSessions off and threads it when asked (H6)`() {
-        // Default preserves the pre-H6 wire: the flag rides the request as
+    fun `the resume spec defaults excludeActiveSessions off and threads it when asked`() {
+        // Default preserves the legacy wire: the flag rides the request as
         // the server's own default (false), so batch + refresh arms agree
         // even when the pref has never been written.
         assertEquals(false, buildResumeQuerySpec(limit = 20, kinds = null).excludeActiveSessions)
 
         val excluding = buildResumeQuerySpec(limit = 20, kinds = null, excludeActiveSessions = true)
-        assertEquals(true, excluding.excludeActiveSessions, "the H6 toggle must reach the resume query")
+        assertEquals(true, excluding.excludeActiveSessions, "the toggle must reach the resume query")
     }
 
     @Test

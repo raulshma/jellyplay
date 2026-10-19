@@ -9,13 +9,11 @@ import kotlin.test.assertEquals
 import java.lang.reflect.Method
 
 /**
- * Coverage for the newsletter formatting helpers pinned by the conveyor
- * brief: formatCount's K/M suffixes (NewsletterAggregatedStats, hardcoded
- * English preserved from HEAD) and formatRelativeDate's Today/Yesterday/
- * formatted-date/parse-failure branches (NewsletterActivityDigest). Both are
- * file-private top-level functions — reached through reflection so the moved
- * screens stay byte-identical instead of being widened to internal for the
- * tests.
+ * Coverage for the newsletter formatting helpers: formatCount's K/M suffixes
+ * (NewsletterAggregatedStats, hardcoded English) and formatRelativeDate's
+ * Today/Yesterday/formatted-date/parse-failure branches
+ * (NewsletterActivityDigest). Both are file-private top-level functions —
+ * reached through reflection so the screens stay unwidened for the tests.
  */
 class NewsletterFormattingTest {
 

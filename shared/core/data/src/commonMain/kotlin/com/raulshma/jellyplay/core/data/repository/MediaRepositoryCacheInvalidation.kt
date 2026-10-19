@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 
 /**
  * Module-internal cache-maintenance seam on the [MediaRepositoryImpl]
- * singleton (plan 08). The per-type "which caches does this detail affect"
+ * singleton. The per-type "which caches does this detail affect"
  * dispatch used to exist twice — as the ordering rule in the
  * `invalidateUserDataCaches` KDoc on [MediaRepository] and as the
  * `invalidateByType` table in UnifiedMediaDetailProviderImpl — guaranteeing

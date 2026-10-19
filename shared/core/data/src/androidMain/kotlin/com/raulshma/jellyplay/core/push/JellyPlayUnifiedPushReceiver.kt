@@ -15,7 +15,7 @@ import org.unifiedpush.android.connector.data.PushMessage
 
 /**
  * The UnifiedPush connector's BroadcastReceiver for JellyPlay (the plugin's
- * push wave): the distributor delivers NEW_ENDPOINT / MESSAGE / UNREGISTERED /
+ * push support): the distributor delivers NEW_ENDPOINT / MESSAGE / UNREGISTERED /
  * REGISTRATION_FAILED broadcasts here (manifest-declared with the connector's
  * action intent filter, exported — the sender is the distributor app).
  *

@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.model.home.HomeRowModules
  * Which row chassis renders a home section — the per-section branch chain of
  * [HomeContentList] as data, so the render site's `when` is exhaustive and
  * decides nothing. The offline half of the dispatch is the offline-mirror
- * rule (#147): while the offline feed renders, every non-wide section is
+ * rule: while the offline feed renders, every non-wide section is
  * offline-derived (generic DOWNLOADED rows or cached-layout mirror rows typed
  * as their online counterparts) and renders through the offline rows with
  * local artwork. Online, only a DOWNLOADED section could ever hit the offline
@@ -35,7 +35,7 @@ internal sealed interface HomeRowChassis {
     data class OnlinePoster(override val section: HomeSection) : HomeRowChassis
 
     /**
-     * H5: the online My Media tiles row — home's only non-poster shape. The
+     * The online My Media tiles row — home's only non-poster shape. The
      * section's items are the libraries mapped to FOLDER-typed MediaItems by
      * the assembler; the renderer is [HomeLibraryTilesRow]. Offline the row is
      * inert (the mirror's id re-resolution finds no downloads for library
@@ -47,12 +47,11 @@ internal sealed interface HomeRowChassis {
 }
 
 /**
- * The ONE dispatch deciding a section's [HomeRowChassis] — extracted verbatim
- * from the former if/else chain in [HomeContentList] so the precedence lives
- * in one pure, tested place. The order is today's: DOWNLOADED wins outright
+ * The ONE dispatch deciding a section's [HomeRowChassis] — the if/else chain
+ * from [HomeContentList] as one pure, tested place. The order is fixed: DOWNLOADED wins outright
  * (first predicate, online feed included); then, while the offline feed
  * renders, the mirror claims every non-wide section; Continue Watching /
- * Next Up route by feed source (wide rows); the H5 My Media tiles claim their
+ * Next Up route by feed source (wide rows); the My Media tiles claim their
  * type online; and anything else falls to the online poster row.
  */
 internal fun homeRowChassis(section: HomeSection, hasOfflineContent: Boolean): HomeRowChassis {
@@ -85,7 +84,7 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
  * fetching, so they cannot drift.
  *
  * Per type: the direct-query sections (Continue Watching / Continue Reading /
- * Next Up / the H4 Upcoming row), the per-library latest rows, Recently Added
+ * Next Up / the Upcoming row), the per-library latest rows, Recently Added
  * (aggregate — its
  * refetch re-runs the fan-out), the Jellyfin discover rows, the pinned rows
  * and the plugin rows (PLUGIN_ROW — the fetcher's single-row plugin arm)

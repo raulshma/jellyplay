@@ -55,7 +55,7 @@ class HomeSectionIconTest {
     fun mapping_isExhaustiveOverTheEnum() {
         // If a new HomeSectionType is added this fails on the distinct-icon
         // count unless the mapping gains a branch (compiler enforces the when;
-        // this pins the test-side inventory). H4 (UPCOMING) + H5 (MY_MEDIA)
+        // this pins the test-side inventory). UPCOMING + MY_MEDIA
         // grew the registry to 14.
         assertEquals(HomeSectionType.entries.size, 14)
     }

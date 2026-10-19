@@ -50,7 +50,7 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 
 /**
  * Animated list of overflow destinations that expands upward from the nav bar's
- * "More" (⋮) 3-dot toggle (#115).
+ * "More" (⋮) 3-dot toggle.
  *
  * Designed using Material Design 3 Expressive Navigation and Library action chip
  * standards — pills feature interactive press scale, smooth shape morphing,

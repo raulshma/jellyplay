@@ -8,7 +8,7 @@ import kotlinx.coroutines.launch
 
 /**
  * One home feature-gate's reactive spine — the shape the VM's opt-in
- * decoration features repeat (H17 stats card, H18 genre rail, H19 presence
+ * decoration features repeat (stats card, genre rail, presence
  * poll): combine the feature's gate flows into ONE value (a small gate data
  * class so [distinctUntilChanged] compares every leg atomically), dedupe it,
  * then run the feature's effect once per distinct gate emission.

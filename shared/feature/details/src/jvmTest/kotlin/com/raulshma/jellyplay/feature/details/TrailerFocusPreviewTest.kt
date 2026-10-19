@@ -5,12 +5,12 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * D22: the trailer-preview focus-gating state machine — the pure mount
+ * The trailer-preview focus-gating state machine — the pure mount
  * decision (`trailerPreviewShouldMount`) and the port holder behind it:
  *
  *  - the interaction matrix's hard row: `trailerAutoplay` off mounts
  *    NOTHING, for every other input combination (the preview family is dead
- *    exactly as before D22);
+ *    exactly as before the ambient preview);
  *  - non-TV is unchanged: immediate mount regardless of focus or window
  *    visibility;
  *  - TV with the `trailer_preview_on_focus` semantic off: immediate mount;

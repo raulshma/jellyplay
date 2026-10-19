@@ -9,10 +9,10 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 /**
  * On-disk stale-while-revalidate snapshot of a user's home-screen sections.
  *
- * The home screen previously relied on a single in-memory 60s TTL cache
- * (`MediaRepositoryImpl.cachedHomeSections`), so every cold open past that
- * window re-fetched the full section set (8–20 network requests) before the
- * first frame. This table holds the last successful payload keyed by
+ * An in-memory 60s TTL cache (`MediaRepositoryImpl.cachedHomeSections`)
+ * cannot cover a cold open past that window, where the full section set
+ * (8–20 network requests) would otherwise be re-fetched before the first
+ * frame. This table holds the last successful payload keyed by
  * `(serverId, userId, cacheKey)` so the home screen can render instantly on
  * cold open while a network refresh runs in the background.
  *

@@ -34,7 +34,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Adapter tests for the `integrations` namespace (the settings-backup wave):
+ * Adapter tests for the `integrations` namespace (the settings-backup cluster):
  * the three preference stores over a temp-file DataStore plus a temp-file
  * DataStore mirror — the allowlist contract (only the stores' [SeerrPreferencesStore.SyncKeys]-
  * style keys ever snapshot or apply; hostile/stale names are inert), the

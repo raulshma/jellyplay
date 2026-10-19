@@ -29,12 +29,12 @@ import kotlinx.serialization.json.Json
  * These flows are not "preferences" — they are an I/O buffer between the
  * widget refresh workers (producers) and the AppWidget providers (consumers).
  * Persisting them in DataStore lets widgets render the last-known payload
- * across process death and cold start. Extracted from `UserPreferencesStore`
- * (where they accreted) so the god store no longer carries widget-I/O concerns.
+ * across process death and cold start. A separate store owns them so
+ * `UserPreferencesStore` carries no widget-I/O concerns.
  *
  * **Storage**: injects the shared `"user_prefs"` DataStore (Koin definition
- * in `di.DatastoreKoinModules` / platform `di.AndroidDatastoreModule` since
- * ) — same file as `UserPreferencesStore` and the other extracted
+ * in `di.DatastoreKoinModules` / platform `di.AndroidDatastoreModule`) — same
+ * file as `UserPreferencesStore` and the other
  * stores, never a second DataStore instance (AndroidX forbids that).
  */
 class WidgetDataStore constructor(

@@ -39,9 +39,8 @@ data class ExternalPlayerRequest(
  * launch, and the targeting state the result side needs: [preferredApp] is the user's choice,
  * [resolvedApp] the app actually targeted (null on the chooser arm — unset
  * preference or uninstalled app), which picks the result contract
- * (`ExternalPlayerResultPolicy`). Previously declared in the app root package
- * beside its only builder; moved beside [ExternalPlayerHost] so the extras
- * vocabulary has one home.
+ * (`ExternalPlayerResultPolicy`). Lives beside [ExternalPlayerHost] so the
+ * extras vocabulary has one home.
  */
 data class ExternalPlayerLaunch(
     val intent: Intent,

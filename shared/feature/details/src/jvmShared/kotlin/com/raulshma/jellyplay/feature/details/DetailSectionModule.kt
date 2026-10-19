@@ -180,7 +180,7 @@ internal interface DetailSectionEnrichmentHost {
 }
 
 /**
- * The PLUGIN_RATINGS section module (wave 1): the companion plugin's
+ * The PLUGIN_RATINGS section module: the companion plugin's
  * aggregated external-ratings row (ADR 0010). Admission is the silent-absence
  * contract (no plugin data → no slot at all); the renderer and the mdblist
  * fetch arm moved verbatim from MediaDetailBodySections.kt and
@@ -215,8 +215,8 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
 
     /**
      * One non-clickable chip per source the server sent, rendered verbatim
-     * ("Source Score"), plus the D4 no-plugin strip's chips merged into the
-     * same FlowRow (D9) while the plugin row renders. Silent absence is the
+     * ("Source Score"), plus the no-plugin strip's chips merged into the
+     * same FlowRow while the plugin row renders. Silent absence is the
      * plugin contract — there is no error or loading state by design.
      */
     @Composable
@@ -250,7 +250,7 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
                                 enabled = false,
                             )
                         }
-                        // The D4 chips, after the plugin sources (the D9 merge
+                        // The external-ratings chips, after the plugin sources (the merge
                         // order). Suppressed while the probe says the plugin owns
                         // ratings AND this row is rendering — never duplicated.
                         if (
@@ -278,10 +278,10 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
 }
 
 /**
- * The TMDB_REVIEWS section module (wave 1): the TMDB review cards (D9) — a
+ * The TMDB_REVIEWS section module: the TMDB review cards — a
  * preview of [REVIEWS_PREVIEW_COUNT] cards inline plus the "All reviews (N)"
  * jump to Route.Reviews. Fetched regardless of Seerr connection, so admission
- * is content + the D9 `show_reviews` preference alone.
+ * is content + the the `show_reviews` preference alone.
  */
 internal object TmdbReviewsSectionModule : DetailSectionModule {
 
@@ -453,7 +453,7 @@ internal object CollectionItemsSectionModule : DetailSectionModule {
 }
 
 /**
- * The UPCOMING_EPISODES section module (wave 2): the D7 "Airing next" strip,
+ * The UPCOMING_EPISODES section module (wave 2): the "Airing next" strip,
  * SERIES detail only. Admission is content + the `show_upcoming_strip`
  * preference (the fold row's terms — content-driven, NOT media-type-driven;
  * the SERIES-only rule lives on the enrichment's gate). The fetch arm moved
@@ -468,7 +468,7 @@ internal object UpcomingEpisodesSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.UPCOMING_EPISODES
 
-    /** The D7 strip's row bound (an "airing next" rail; small by design) — moved with the arm. */
+    /** The upcoming strip's row bound (an "airing next" rail; small by design) — moved with the arm. */
     private const val UPCOMING_STRIP_LIMIT = 12
 
     override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
@@ -502,7 +502,7 @@ internal object UpcomingEpisodesSectionModule : DetailSectionModule {
 }
 
 /**
- * The MORE_IN_COLLECTION section module (wave 2): the D6 "More in {collection}"
+ * The MORE_IN_COLLECTION section module (wave 2): the "More in {collection}"
  * franchise rows (BoxSet ancestors + members), declared just before the
  * similar rows and sharing their slot-10 band. Admission counts only VISIBLE
  * rows (a row the user eye-hid is excluded — not just render-side — so a
@@ -519,7 +519,7 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
 
     override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
         state.preferences.showMoreInCollection &&
-            // The D6 admission counts only VISIBLE rows: a row the user
+            // The franchise admission counts only VISIBLE rows: a row the user
             // eye-hid is excluded here (not just render-side) so a fully
             // hidden row family doesn't leave an empty admitted slot's gap in
             // the body column.
@@ -530,7 +530,7 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
     override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "franchise",
-            // D6: the "More in this collection" franchise rows. MOVIE/SERIES
+            // The "More in this collection" franchise rows. MOVIE/SERIES
             // only — BoxSet ancestry is a film-franchise concept, and the
             // members read is a per-collection page the other families have
             // no use for. Ancestors → up to [FRANCHISE_MAX_COLLECTIONS]

@@ -33,7 +33,7 @@ data class HomeSectionQuery(
      */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     /**
-     * Classic (pre-Jellyfin-12) home-row semantics (#168), true 1:1 with the
+     * Classic (pre-Jellyfin-12) home-row semantics, true 1:1 with the
      * pre-12 wire results: Continue Watching keeps the exact pre-12 request
      * (the Series/Season resume rollups a 12.x server reports are dropped by
      * a client-side fold), and TV latest rows re-run the 10.x grouping
@@ -46,14 +46,14 @@ data class HomeSectionQuery(
      */
     val classicRows: Boolean = false,
     /**
-     * H6: true adds the server-side `excludeActiveSessions` flag to the
-     * Continue Watching read, so an item currently playing on another device
-     * stops being offered for "continue". Default false — the pre-H6 wire.
-     * Rides [cacheKey] so a flip re-fetches.
+     * True adds the server-side `excludeActiveSessions` flag to the Continue
+     * Watching read, so an item currently playing on another device stops
+     * being offered for "continue". Default false — the classic wire. Rides
+     * [cacheKey] so a flip re-fetches.
      */
     val excludeActiveSessions: Boolean = false,
     /**
-     * H5: libraries the user hid from the My Media tiles row (the tiles'
+     * Libraries the user hid from the My Media tiles row (the tiles'
      * inline long-press curation). The assembler drops the matching folders
      * client-side — the hide is a layout fact, never a port call. Rides
      * [cacheKey] so a flip re-fetches (the SWR snapshot re-assembles too).

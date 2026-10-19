@@ -15,12 +15,12 @@ data class CardDisplayPreferences(
     val showUnwatchedBadge: Boolean = true,
     val showWatchedCheckmark: Boolean = true,
     val hideWatchedItems: Boolean = false,
-    /** H11: quality badges (4K / HDR / DV / Atmos) on poster + wide cards. */
+    /** Quality badges (4K / HDR / DV / Atmos) on poster + wide cards. */
     val showQualityBadges: Boolean = true,
-    /** H12: "NEW" dot for items added since the last home visit. */
+    /** "NEW" dot for items added since the last home visit. */
     val showNewBadges: Boolean = true,
     /**
-     * H15 anti-spoiler home mode — when on, the card render sites force-hide
+     * Anti-spoiler home mode — when on, the card render sites force-hide
      * watch-state spoilers (progress bars, "time left", watched checkmark,
      * unwatched count) regardless of the individual flags above.
      */
@@ -31,7 +31,7 @@ val LocalCardDisplayPreferences: ProvidableCompositionLocal<CardDisplayPreferenc
     compositionLocalOf { CardDisplayPreferences() }
 
 /**
- * The anti-spoiler mode's resolved card-render decisions (H15) — the ONE
+ * The anti-spoiler mode's resolved card-render decisions — the ONE
  * pure fold every suppression point consumes, so the policy (what counts as
  * a watch-state spoiler) lives in a single testable place instead of being
  * hand-derived at the scaffold, the footers, the poster overlays and the

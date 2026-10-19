@@ -23,7 +23,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Knob round-trips through the store (Stage A pilot): every knob read/write
+ * Knob round-trips through the store: every knob read/write
  * must ride the store's own persistence — the same `"user_prefs"` DataStore,
  * the same keys, the same encodings as the slice projection and setters —
  * and knob reads must observe writes made through the store setters (and

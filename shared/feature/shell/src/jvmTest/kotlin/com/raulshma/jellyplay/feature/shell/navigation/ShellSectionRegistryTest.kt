@@ -17,8 +17,8 @@ import kotlin.test.assertTrue
  * contentKey, unknown keys falling back to the blank [NavEntry] stamped with
  * the [UnregisteredEntryContentKey] sentinel. The graphs here are hand-wired
  * miniatures (the real graph needs ~20 feature sections plus Navigator /
- * ShellHostHooks collaborators), but the fallback block is copied verbatim
- * from [shellEntryProvider] so the sentinel-identity contract is pinned at
+ * ShellHostHooks collaborators), but the fallback block mirrors
+ * [shellEntryProvider]'s so the sentinel-identity contract is pinned at
  * the seam the registry actually consumes.
  */
 class ShellSectionRegistryTest {

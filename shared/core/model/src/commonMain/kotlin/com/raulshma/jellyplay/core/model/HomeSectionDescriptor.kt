@@ -7,13 +7,13 @@ import androidx.compose.runtime.Immutable
  * id, user-facing name/description (the name doubles as the rendered row
  * header for single-row sections) and configurability.
  *
- * Previously this identity was fragmented across three layers: the display
- * strings lived on the [HomeSectionType] enum, the row id/title literals were
- * hardcoded at every construction site in the network impl (and had already
- * drifted — NEXT_UP rendered "NextUp" while every other surface showed "Next
- * Up"), and the icon mapping was duplicated in core/ui and settings. The
- * descriptor puts all identity facts next to the enum so a new surface reads
- * them from one place instead of copying literals that silently rot.
+ * Identity would otherwise fragment across three layers: display strings on
+ * the [HomeSectionType] enum, row id/title literals hardcoded at every
+ * network-impl construction site (already drifting — NEXT_UP rendered
+ * "NextUp" while every other surface showed "Next Up"), and the icon mapping
+ * duplicated in core/ui and settings. The descriptor puts all identity facts
+ * next to the enum so a new surface reads them from one place instead of
+ * copying literals that silently rot.
  *
  * The enum's CONSTANT NAMES are frozen: they are persisted by `t.name` in
  * HomeDiscoveryStore (DataStore), embedded by name in the Room JSON snapshot

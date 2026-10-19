@@ -122,8 +122,8 @@ import androidx.lifecycle.viewModelScope
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
+    // MainDispatcherRule (:core:testing), inlined — jvmTest
+    // has no access to that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var homeFeed: HomeFeed
@@ -206,7 +206,7 @@ class HomeViewModelTest {
     private val userFlow = MutableStateFlow<UserInfo?>(null)
 
     /**
-     * H17/H18/H19 loader doubles — relaxed mocks (the default pref state is
+     * Loader doubles — relaxed mocks (the default pref state is
      * off, so the VM's collectors never fire for them) with defensive
      * null/empty stubs so an unexpected trigger can't throw from an
      * unstubbed suspend.
@@ -391,12 +391,11 @@ class HomeViewModelTest {
                 block()
             } finally {
                 if (::viewModel.isInitialized) {
-                    // The legacy suite called the VM's public onStop(owner)
-                    // observer override (app backgrounding); the conveyor move
-                    // replaced the observer surface with the process-lifecycle
-                    // seam, so the loop-kill onCleared performs is reproduced
-                    // here directly: cancelling viewModelScope cancels the
-                    // refresher's refreshJob child (the loop).
+                    // Cancel viewModelScope directly to reproduce app
+                    // backgrounding: the process-lifecycle seam exposes no
+                    // onStop to call, and cancelling viewModelScope cancels
+                    // the refresher's refreshJob child (the loop), as
+                    // onCleared does.
                     viewModel.viewModelScope.cancel()
                 }
             }
@@ -486,7 +485,7 @@ class HomeViewModelTest {
         assertTrue(viewModel.uiState.value.sections.isEmpty())
     }
 
-    // ── H17 stats card / H18 genre rail ──────────────────────────────────────
+    // ── Stats card / genre rail ──────────────────────────────────────
 
     @Test
     fun statsCard_loadsOnlyWhenPrefOn_andMirrorsLoaderResult() = vmTest {
@@ -603,9 +602,9 @@ class HomeViewModelTest {
     @Test
     fun offlineToOnline_clearsLoader_whenFetchTimesOut() = vmTest {
         // Regression: a hung getHomeSections call (half-open socket, unvalidated
-        // captive portal that still reports INTERNET, etc.) previously parked
+        // captive portal that still reports INTERNET, etc.) can park
         // fetchAndUpdateSections on refreshMutex forever, leaving the loader
-        // (and, before the flag moved to the manager, the busy spinner) stuck
+        // (and the busy spinner, owned by the manager) stuck
         // on indefinitely. The withTimeoutOrNull cap must force-clear the
         // loader on timeout. (The busy flag is immune by construction now:
         // the manager clears it at the ONLINE emission, before the fetch.)
@@ -693,7 +692,7 @@ class HomeViewModelTest {
         assertTrue(viewModel.uiState.value.homeBackdropEnabled)
     }
 
-    // ── H21: new-section announcement (announce-once state machine) ─────────
+    // ── new-section announcement (announce-once state machine) ─────────
 
     /** Gate-state slice: the read union contributed sections at stored version 3. */
     private fun announcedSlice(announcedVersion: Int = 0) = HomeDiscoverySlice(
@@ -768,7 +767,7 @@ class HomeViewModelTest {
         coVerify(exactly = 0) { homeDiscoveryStore.setHomeAnnouncedVersion(any()) }
     }
 
-    // ── H12: visit memory (dwell stamp + the previous-visit mirror) ─────────
+    // ── visit memory (dwell stamp + the previous-visit mirror) ─────────
 
     /** Sections-ready stub: one rendered row, loader down after the fetch. */
     private fun stubReadyHome() {

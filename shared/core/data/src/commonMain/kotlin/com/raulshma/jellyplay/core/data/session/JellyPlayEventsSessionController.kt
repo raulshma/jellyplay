@@ -58,7 +58,7 @@ class JellyPlayEventsSessionController(
     /** Platform tray-notification seam; null where no local-notification surface exists. */
     private val newMediaNotifier: JellyPlayNewMediaNotifier?,
     /**
-     * The push face (the plugin's push wave): armed on the session's auth
+     * The push face (the plugin's push support): armed on the session's auth
      * edge, INDEPENDENT of the `events` gate — its own `push` gate collector
      * (ADR 0010: one feature key per feature, the registry is the only gate)
      * decides whether a registration happens, so a user with `events` off

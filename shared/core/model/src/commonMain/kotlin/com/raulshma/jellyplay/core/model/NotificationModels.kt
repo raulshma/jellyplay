@@ -20,7 +20,7 @@ data class NotificationPreferences(
     /** Opt-in: route newly discovered episodes to the dedicated "New episodes" channel. */
     val newEpisodesEnabled: Boolean = false,
     /**
-     * D12: per-**series** new-episode opt-ins, keyed by Jellyfin series id —
+     * Per-**series** new-episode opt-ins, keyed by Jellyfin series id —
      * the direct analog of [libraryConfigs] at series granularity. The
      * periodic new-media check's second pass + the *arr calendar accelerator
      * both read this map; [newEpisodesEnabled] is the master switch that
@@ -30,7 +30,7 @@ data class NotificationPreferences(
 )
 
 /**
- * One series' new-episode notification state (D12). [enabled] is the opt-in
+ * One series' new-episode notification state. [enabled] is the opt-in
  * flag (the management UI removes the entry entirely on opt-out);
  * [lastNotifiedEpisodeId] is the diff baseline — the newest episode id the
  * last check saw, so a check notifies only when a NEWER id appears (and on

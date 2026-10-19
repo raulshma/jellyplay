@@ -18,7 +18,7 @@ import kotlin.test.fail
  * TWO registrations makes the definition ambiguous (Koin resolves the first
  * match and silently ignores the other). Hand-written `viewModel { … }` blocks
  * and `viewModelOf(::…)` one-liners are equally legitimate — this guard reads
- * BOTH, so the viewModelOf conversion wave can't regress the count.
+ * BOTH, so a registration-style change can't regress the count.
  *
  * Derivation, both directions:
  *  - every concrete `class XViewModel(…)` declared in the feature's commonMain
@@ -45,9 +45,9 @@ class SettingsKoinModuleViewModelTotalityGuardTest {
         "shared/feature/settings/src/commonMain/kotlin/com/raulshma/jellyplay/feature/settings/di/SettingsKoinModule.kt"
 
     /**
-     * Ratchet floor: concrete `*ViewModel` classes in the feature package
-     * (28 as of the viewModelOf conversion). A discovery-rot regression would
-     * otherwise make the totality check vacuously green on an empty set.
+     * Floor: concrete `*ViewModel` classes in the feature package (currently
+     * 28). A discovery-rot regression would otherwise make the totality check
+     * vacuously green on an empty set.
      */
     private val minDiscoveredViewModels = 28
 

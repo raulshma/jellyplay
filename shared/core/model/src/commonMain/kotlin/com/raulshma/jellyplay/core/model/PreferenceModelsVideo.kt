@@ -67,9 +67,9 @@ enum class DecoderMode(override val displayName: String) : HasDisplayName {
 
 /**
  * The default screen-orientation lock. Labels resolve through the
- * `PreferenceEnumNames` seam — this enum used to carry a hardcoded-English
- * `displayName` plus a raw wire `constant` that leaked verbatim into the
- * orientation picker's subtitles; both are gone.
+ * `PreferenceEnumNames` seam: this enum carries no hardcoded-English
+ * `displayName` and no raw wire `constant` — either would leak verbatim into
+ * the orientation picker's subtitles.
  */
 @Immutable
 @Serializable

@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.database.dao.OFFLINE_MEDIA_WITH_PLAYBACK_VIEW
 //
 // The freshness module (OfflineSyncManager) finally gets a persistence home of
 // its own: the baseline + result flags move off the metadata row, so a metadata
-// re-persist can no longer clobber them and the lossy 5-axis-→-1-flag projection
+// re-persist cannot clobber them and the lossy 5-axis-→-1-flag projection
 // is replaced by persisted per-axis change flags.
 //
 // SQLite (minSdk 28 framework) predates `ALTER TABLE … DROP COLUMN`, so the
@@ -190,7 +190,7 @@ val MIGRATION_47_48 = object : Migration(47, 48) {
 // index covers:
 //  - `downloads(status, mediaType, createdAt)` serves the completed-audio
 //    browse page query (filters `status = 'COMPLETED' AND mediaType IN (...)`,
-//    orders by `createdAt`), which previously had to pick between the
+//    orders by `createdAt`), which otherwise had to pick between the
 //    single-column `status`/`createdAt` indices or full-scan + sort.
 //  - `playback_outbox(deadLetter, createdAt)` serves the outbox drain/count
 //    queries, all of which filter `WHERE deadLetter = 0` and order by
@@ -209,7 +209,7 @@ val MIGRATION_48_49 = object : Migration(48, 49) {
 // from a sentinel value inside `syncedSubtitleSignature` to its own flag
 // column (`syncSubtitlesPending`), so the signature column stays a pure server
 // snapshot. Schema-additive only: the flag feature shipped alongside this
-// migration, so no existing row carries the retired sentinel and 0 (not
+// migration, so no existing row carries the legacy sentinel and 0 (not
 // pending) is the correct backfill for every pre-existing baseline.
 val MIGRATION_49_50 = object : Migration(49, 50) {
     override suspend fun migrate(db: SQLiteConnection) {
@@ -225,14 +225,14 @@ val MIGRATION_49_50 = object : Migration(49, 50) {
  *
  * Chapters also join the metadata resync signature payload, which changes the
  * digest for every item — including those without chapters — so stored v50
- * signatures are hashes of the retired payload format and can never match a
+ * signatures are hashes of the legacy payload format and can never match a
  * freshly computed one. Nulling them here hands every baseline to the
  * comparator's empty-baseline rule ("never recorded" never flags), making the
  * format change a one-time silent re-seed on each row's next freshness check
  * instead of a fleet-wide false "update available".
  *
  * And because that next check is TTL-gated by `lastSyncedAt`, anything the
- * retired-format comparison left persisted would stay visible until it fires:
+ * legacy-format comparison left persisted would stay visible until it fires:
  * the migration therefore also clears the metadata axis's own change flag and
  * recomputes the composite `syncUpdateAvailable` badge from the surviving
  * axes, so a pre-upgrade false flag goes dark at upgrade time while genuine
@@ -301,8 +301,8 @@ val MIGRATION_52_53 = object : Migration(52, 53) {
  * shared:core:data) for those rows ever since. This migration resolves that
  * fallback once, at upgrade time: for every row whose `container` is still
  * NULL, the injected [ContainerProbe] reads the row's `downloadPath` file
- * header and the recognized code is persisted — so the runtime sniffer can
- * eventually be retired.
+ * header and the recognized code is persisted — so the runtime sniffer remains
+ * only for rows the probe cannot resolve.
  *
  * Rows whose file is missing, unreadable or unrecognized stay NULL (the
  * playback-time fallback keeps covering them); a probe failure never aborts
@@ -334,7 +334,7 @@ class Migration53To54(
     }
 }
 
-// Reader marks (docs/adr/0003-local-first-reader-marks.md): the local-first
+// Reader marks: the local-first
 // bookmark + highlight/underline tables. Both keyed by itemId (indexed — the
 // reader sheet observes per item) with the same auto-increment Long id the
 // other append-only tables (seen_media, search_history) use. Fresh-table

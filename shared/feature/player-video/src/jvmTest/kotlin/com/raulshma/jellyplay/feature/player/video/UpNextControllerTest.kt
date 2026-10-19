@@ -198,7 +198,7 @@ class UpNextControllerTest {
         // runCurrent (not advanceUntilIdle): the settle timeout is under test.
         runCurrent()
         assertTrue(c.isNextEpisodeLoading.value, "the latch holds while the load is in flight")
-        // Single-flight (#146): a re-tap inside the window starts nothing.
+        // Single-flight: a re-tap inside the window starts nothing.
         c.playNextEpisode()
         runCurrent()
         assertEquals(1, initialized.size)

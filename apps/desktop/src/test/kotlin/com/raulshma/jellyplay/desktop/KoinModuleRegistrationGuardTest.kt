@@ -6,29 +6,26 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * Koin-registration ratchet guard (docs/kmp-migration-plan.md §, the
- * arrqueue + subtitle-tester lessons, plan lines ~1402-1408).
+ * Koin-registration guard.
  *
  * Koin module registration is runtime-only wiring: compile gates and
- * hiltJavaCompile are BLIND to it. Twice a shared feature module shipped
- * without being added to a startKoin module list — arrqueue (app-side
- * missing, caught post-merge) and shortcuts (app-side missing;
- * `Route.Shortcuts` navigation would NoDefinitionFound-crash on first open).
- * Neither broke any compile step.
+ * hiltJavaCompile are BLIND to it. A shared feature module missing from a
+ * startKoin module list compiles cleanly and fails at runtime — e.g.
+ * `Route.Shortcuts` navigation would NoDefinitionFound-crash on first open.
  *
- * Since the sharedFeatureModules fold, the ONE declaration both JVM shells
+ * The ONE declaration both JVM shells
  * consume is `shared/feature/shell`'s `val sharedFeatureModules = listOf(…)`:
- * Android's startKoin consumes it through the extracted AndroidKoinModules'
+ * Android's startKoin consumes it through AndroidKoinModules'
  * `androidKoinModules(…)` list (JellyPlayApplication.onCreate calls it),
  * desktop's Main.kt consumes it through DesktopKoinModules'
  * `desktopKoinModules(…)` list. This guard auto-derives the expected set
  * from that declaration with
  * set-equality in BOTH directions against the feature modules discovered
  * under `shared/feature/<module>/src/{commonMain,jvmShared}`:
- *  - a feature module the declaration FORGETS fails (the arrqueue/shortcuts
- *    lesson — compile gates are blind to Koin registration);
+ *  - a feature module the declaration FORGETS fails (compile gates are
+ *    blind to Koin registration);
  *  - a declared module that no longer resolves fails (rename/typo);
- *  - a shell re-growing a hand-copied inline feature list fails — the
+ *  - a shell with its own hand-copied inline feature list fails — the
  *    feature modules may ONLY flow through the declaration's spread;
  *  - every non-platform `<identifier>Module` in a registration list must
  *    resolve to a shared feature or shared core definition.
@@ -72,9 +69,8 @@ class KoinModuleRegistrationGuardTest {
     private val koinOwnModules = setOf("defaultModule", "loggerModule")
 
     /**
-     * Ratchet floor: the count of commonMain/jvmShared feature modules,
-     * re-measured at each housekeeping pass. 22 as of the
-     * sharedFeatureModules fold (23 features; subtitle-tester contributes
+     * Floor: the count of commonMain/jvmShared feature modules. 22 (23
+     * features; subtitle-tester contributes
      * none — androidMain-only — and player-video's defs live in its platform
      * modules androidPlayerVideoModule/desktopPlayerVideoModule, so its
      * commonMain declares no Module val). Bump when features land. A
@@ -84,10 +80,10 @@ class KoinModuleRegistrationGuardTest {
     private val minFeatureModuleCount = 22
 
     /**
-     * The shared declaration ratchet, derived (set-equality, both
+     * The shared declaration check, derived (set-equality, both
      * directions) against the discovered feature graph:
      *  - every declared module MUST resolve to a discovered shared feature
-     *    module (the arrqueue/shortcuts rename/typo lesson);
+     *    module (rename/typo);
      *  - every discovered feature module MUST be declared — a new feature's
      *    Module is only registered through this list, never inline.
      */
@@ -142,10 +138,10 @@ class KoinModuleRegistrationGuardTest {
     /**
      * Both JVM shells must consume the declaration BY SPREAD, and neither
      * may name a feature module directly (a hand-copied inline list is the
-     * drift the fold removed): Android's startKoin consumes
+     * drift this guard catches): Android's startKoin consumes
      * `androidKoinModules(…)` and desktop's startKoin consumes
-     * `desktopKoinModules(…)` — each extracted list is the only place its
-     * shell's spread may live.
+     * `desktopKoinModules(…)` — each shell's list is the only place its
+     * spread may live.
      */
     @Test
     fun bothJvmShells_consumeTheSharedDeclarationBySpread() {
@@ -287,7 +283,7 @@ class KoinModuleRegistrationGuardTest {
     /**
      * The text inside the `listOf( … )` of the function introduced by
      * [marker], with comments stripped. Mirrors [startKoinModulesBlock]'s
-     * balance scan for the shell module lists extracted out of Main.kt /
+     * balance scan for the shells' module lists in Main.kt /
      * JellyPlayApplication.kt.
      */
     private fun functionListBlock(file: File, marker: String): String {

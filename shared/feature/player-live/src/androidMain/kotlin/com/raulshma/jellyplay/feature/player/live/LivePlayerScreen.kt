@@ -350,7 +350,7 @@ fun LivePlayerScreen(
                 true
             },
             onMenu = {
-                // MENU — issue #174's last dead key: first press summons the
+                // MENU — last dead key: first press summons the
                 // overlay. Already-up stays unconsumed (unmapped key, pre-fix
                 // inertness).
                 if (!chrome.visible) {
@@ -360,7 +360,7 @@ fun LivePlayerScreen(
             },
         )
     }
-    // TV focus grab + re-assert (issue #174 parity with the VOD screen): this
+    // TV focus grab + re-assert (parity with the VOD screen): this
     // screen had NO hide-edge re-grab at all — when the overlay auto-hid (or a
     // sheet closed, or the error banner unmounted), nothing re-grabbed the root
     // Box and every D-pad key died until something else happened to take
@@ -375,7 +375,7 @@ fun LivePlayerScreen(
             targetHoldsFocus = liveLayerHoldsFocus,
         )
     }
-    // TV key-sink fallback (issue #174 parity with the VOD screen): publish
+    // TV key-sink fallback (parity with the VOD screen): publish
     // the EXACT arm set the Box's D-pad handler runs to the platform bridge,
     // so keys that reach nothing — no Compose focus target left, PlayerActivity's
     // dispatchKeyEvent finding nothing consumed — still zap/toggle/hide.
@@ -446,7 +446,7 @@ fun LivePlayerScreen(
                         PlayerView(ctx).apply {
                             player = media3Player
                             useController = false
-                            // Issue #174 hardening (the VOD EngineVideoSurface's
+                            // TV-key hardening (the VOD EngineVideoSurface's
                             // focus twin): media3's PlayerView is focusable by
                             // default and a View-level focus owner outside Compose
                             // swallows every D-pad key before Compose's dispatch
@@ -637,7 +637,7 @@ fun LivePlayerScreen(
  * never ran on TV at all ([dpadKeyHandler] is a no-op without a
  * [LocalTvMode] provider, which PlayerActivity only started supplying with
  * this fix — the no-guard shape was unobservable). With the arms live, the
- * pre-extraction shape is a bug: SELECT toggling on BOTH edges of one press
+ * no-guard shape is a bug: SELECT toggling on BOTH edges of one press
  * is a net no-op (the KeyDown summons the overlay, the KeyUp 32 ms later
  * hides it again), so SELECT/BACK act on the first KeyDown only and ignore
  * KeyRepeat (a held key must not re-toggle or walk the back ladder).

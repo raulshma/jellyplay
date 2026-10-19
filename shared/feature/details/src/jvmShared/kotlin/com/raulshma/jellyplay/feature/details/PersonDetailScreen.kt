@@ -84,7 +84,7 @@ private enum class PersonFilmographyFilter(val label: String, val match: (MediaI
 }
 
 /**
- * The D18 role-group dimension over the filmography — a second chip row that
+ * The role-group dimension over the filmography — a second chip row that
  * only renders when the fetch carried role data ([PersonDetailUiState.Success.filmographyCredits]
  * non-empty under the showFilmographyRoles gate). [group] is null for the
  * ALL entry, which matches every item including uncredited ones.
@@ -128,7 +128,7 @@ private fun PersonFilmography(
 ) {
     var filter by remember { mutableStateOf(PersonFilmographyFilter.ALL) }
     var roleFilter by remember { mutableStateOf(PersonFilmographyRoleFilter.ALL) }
-    // The group chips exist only when the fetch carried role data (D18) — an
+    // The group chips exist only when the fetch carried role data — an
     // empty credits map degrades the second dimension to a no-op ALL so a
     // stale selection can never strand the grid on an invisible filter.
     val showRoleGroups = credits.isNotEmpty()
@@ -219,7 +219,7 @@ private fun PersonFilmography(
                 animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             ),
         ) {
-            // The "as {Role}" subtitle (D18) rides under the poster in a cell
+            // The "as {Role}" subtitle rides under the poster in a cell
             // wrapper — PosterCard itself stays subtitle-free for every other
             // surface. No credit → no text, the card renders unchanged.
             androidx.compose.foundation.layout.Column(modifier = itemModifier) {
@@ -274,7 +274,7 @@ private fun PersonHeader(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = contentPad),
             )
         }
-        // D20 "frequently appears with" — avatars of the co-stars credited on
+        // "frequently appears with" — avatars of the co-stars credited on
         // the person's most-recent title, tap-through to that person's screen
         // (the same Route.PersonDetail jump the detail cast row uses). Hidden
         // entirely when the fetch produced none (pref off, empty, or failed).
@@ -318,7 +318,7 @@ private fun PersonHeader(
                 )
             }
         }
-        // D18 role-group dimension — a second chip row that only exists when
+        // Role-group dimension — a second chip row that only exists when
         // the filmography carried role data; no data → exactly the single row
         // above, as before.
         if (showRoleGroups) {
@@ -358,7 +358,7 @@ fun PersonDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val title = (state as? PersonDetailUiState.Success)?.name ?: ""
     val isLoading = state is PersonDetailUiState.Loading
-    // The D18/D20 gates — read through the VM's eagerly-shared projection so
+    // The filmography gates — read through the VM's eagerly-shared projection so
     // toggling a setting hides/shows the role subtitles, group chips, and
     // co-star row without waiting for a reload.
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -447,7 +447,7 @@ fun PersonDetailScreen(
             val filmography = remember(success.filmography) {
                 success.filmography.sortedByDescending { it.year ?: 0 }
             }
-            // The D18/D20 surfaces gate on the preferences here so a toggle
+            // The filmography surfaces gate on the preferences here so a toggle
             // takes effect on the already-loaded screen (an off pref reads as
             // absent data — the cards and header degrade to the role-less /
             // co-star-less render).

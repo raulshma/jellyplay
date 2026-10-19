@@ -15,9 +15,8 @@ import com.raulshma.jellyplay.core.data.playback.focus.FocusUsage
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
-// The shared MediaEngine double (fixtures merge): the desktop twin was
-// deleted — its hardcoded AUTO_PLAY personality is this class's
-// LoadBehavior.AUTO_PLAY, passed at every construction below.
+// The shared MediaEngine double: its hardcoded AUTO_PLAY personality is this
+// class's LoadBehavior.AUTO_PLAY, passed at every construction below.
 import com.raulshma.jellyplay.core.testfixtures.FakeImages
 import com.raulshma.jellyplay.core.testfixtures.FakeLyricsRepository
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
@@ -37,18 +36,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 
 /**
- * ADR-0004 slice-2 pins: the desktop claim-edge choreography. The manager
- * under test is wired EXACTLY as desktopPlayerModule wires production — a
- * REAL [DefaultPlaybackFocus] over the in-process [DesktopFocusArbiter]
- * twin and a [DesktopAudioQueueManagerSurface] wrapped around the very
- * manager being driven — because the whole point of the desktop leg is the
- * composition, not any one class: MUSIC claims publish live claim-state
- * (since the ADR-0004 migration slice MUSIC joins READ_ALOUD in
- * osLegClaimants, but desktop's binding arbitrates vacuously — its
- * arbiter always grants and never fires an event — so no OS seat is
- * actually held while the Held publication is real), read-aloud's claim
- * dispatches the MUSIC victim pause back through the surface, and nothing
- * ever auto-resumes. Determinism model is the semantics suite's: the
+ * The desktop claim-edge choreography (the playback-focus contract). The
+ * manager under test is wired EXACTLY as desktopPlayerModule wires
+ * production — a REAL [DefaultPlaybackFocus] over the in-process
+ * [DesktopFocusArbiter] counterpart and a [DesktopAudioQueueManagerSurface]
+ * wrapped around the very manager being driven — because the whole point of
+ * the desktop leg is the composition, not any one class: MUSIC claims publish
+ * live claim-state (MUSIC joins READ_ALOUD in osLegClaimants, but desktop's
+ * binding arbitrates vacuously — its arbiter always grants and never fires an
+ * event — so no OS seat is actually held while the Held publication is
+ * real), read-aloud's claim dispatches the MUSIC victim pause back through
+ * the surface, and nothing ever auto-resumes. Determinism model is the semantics suite's: the
  * UnconfinedTestDispatcher scope makes every claim/release edge fire
  * INLINE within the engine isPlaying write that triggered it, so each
  * choreography is asserted by direct reads — no polls.
@@ -58,7 +56,7 @@ class DesktopAudioQueueManagerFocusTest {
     /**
      * One manager + real focus module on the test dispatcher. `focusFor`
      * swaps the PlaybackFocus seam (the denial mirror needs a scripted
-     * verdict the vacuous desktop twin cannot produce); it runs during the
+     * verdict the vacuous desktop arbiter cannot produce); it runs during the
      * manager's initializer, AFTER [focus] is assigned (property order), so
      * the default `{ it.focus }` hands the manager the real module.
      */
@@ -69,7 +67,7 @@ class DesktopAudioQueueManagerFocusTest {
         private val dispatcher = UnconfinedTestDispatcher()
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
-        /** The production wiring: in-process twin + surface over THIS manager. */
+        /** The production wiring: in-process arbiter + surface over THIS manager. */
         val arbiter = DesktopFocusArbiter()
         val focus = DefaultPlaybackFocus(
             arbiter = arbiter,
@@ -104,7 +102,7 @@ class DesktopAudioQueueManagerFocusTest {
         }
     }
 
-    /** Scripted denial — the ONLY unreachable branch on the vacuous twin. */
+    /** Scripted denial — the ONLY unreachable branch on the vacuous arbiter. */
     private class DenyingFocus : PlaybackFocus {
         override val claimState = MutableStateFlow(FocusClaimState.Idle)
         override fun acquire(claimant: PlaybackSurfaceId): FocusOutcome = FocusOutcome.Denied

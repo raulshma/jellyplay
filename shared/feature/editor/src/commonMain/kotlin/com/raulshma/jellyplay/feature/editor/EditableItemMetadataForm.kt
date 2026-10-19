@@ -7,10 +7,9 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 
 /**
  * The metadata editor's editable form — ONE value whose properties are the
- * single declaration of the editor's metadata fields (the `VideoPlayerUiState`
- * value-slice idiom: [EditorUiState] embeds a [MetadataEditSession] over this
- * form instead of hand-syncing ~30 flat mirrors through the load map, the save
- * map and a dirty hash in four-site lockstep).
+ * single declaration of the editor's metadata fields: [EditorUiState] embeds
+ * a [MetadataEditSession] over this form rather than ~30 flat mirrors kept in
+ * four-site lockstep.
  *
  * Field names mirror [EditableItemMetadata] — the outbound save type — wherever
  * an outbound counterpart exists. The one deliberate divergence:
@@ -61,7 +60,7 @@ data class EditableItemMetadataForm(
 
     /**
      * The outbound projection submitted by the editor's save action: the same
-     * blank→null / numeric-string parses the old save map applied, plus the
+     * blank→null / numeric-string parses the save mapping applies, plus the
      * runtimeMinutes→ticks conversion and the singular-tagline preference
      * (`taglines` derives from [tagline]; the list field carries the loaded
      * values for display/dirty only). [dateCreated] is not editable — it rides
@@ -102,11 +101,10 @@ data class EditableItemMetadataForm(
     )
 
     companion object {
-        /** Seeds the form from the loaded detail — the old `loadEditorData`
-         *  field-by-field mapping, verbatim (nullable sources become empty
-         *  edit strings; ticks become minutes; the first tagline becomes the
-         *  singular tagline field). `endDate` has no `MediaDetail` source and
-         *  starts empty, as before. */
+        /** Seeds the form from the loaded detail: nullable sources become
+         *  empty edit strings, ticks become minutes, and the first tagline
+         *  becomes the singular tagline field. `endDate` has no `MediaDetail`
+         *  source and starts empty. */
         fun fromDetail(detail: MediaDetail): EditableItemMetadataForm {
             val item = detail.item
             return EditableItemMetadataForm(
@@ -156,18 +154,14 @@ data class EditableItemMetadataForm(
 /**
  * One editing session over [EditableItemMetadataForm]: the live [value] plus
  * the [original] snapshot it is dirty-checked against. `isDirty` is plain
- * structural equality — the former hand-ordered `computeDirtyHash` (whose
- * forgotten entry silently killed the dirty flag) is gone BY CONSTRUCTION:
- * every form field participates automatically.
+ * structural equality, so every form field participates automatically.
  *
- * Declared delta vs the old hash (both strictly widen correct detection, no
- * UI-reachable behavior changes): person `id`/`primaryImageTag` edits now trip
- * the dirty flag (the old hash joined only `name:role:type`), and `providerIds`
- * key-set changes are detected order-insensitively (the old hash hashed the
- * entries in map iteration order). Editing before a load completes also no
- * longer shows dirty — the metadata tab is gated on `isLoading`, so no edit
- * control exists there; the old behavior compared against a never-loaded hash
- * sentinel.
+ * Structural comparison detects the deltas a hand-ordered hash would miss
+ * (both strictly widen correct detection, no UI-reachable behavior changes):
+ * person `id`/`primaryImageTag` edits trip the dirty flag, and `providerIds`
+ * key-set changes are detected order-insensitively. Editing before a load
+ * completes does not show dirty either — the metadata tab is gated on
+ * `isLoading`, so no edit control exists there.
  */
 @Immutable
 data class MetadataEditSession(
@@ -177,7 +171,7 @@ data class MetadataEditSession(
     /** Structural: the live form differs from its loaded original. */
     val isDirty: Boolean get() = value != original
 
-    /** Applies [edit] to the live form (the typed replacement for the old
+    /** Applies [edit] to the live form (the typed replacement for the
      *  whole-UiState `updateField` mutator). */
     fun edit(edit: (EditableItemMetadataForm) -> EditableItemMetadataForm): MetadataEditSession =
         copy(value = edit(value))
@@ -187,6 +181,6 @@ data class MetadataEditSession(
         copy(value = form, original = form)
 
     /** Accepts the current form as the new clean baseline after a successful
-     *  save (the old post-save `isDirty = false` + hash recompute). */
+     *  save. */
     fun saved(): MetadataEditSession = copy(original = value)
 }

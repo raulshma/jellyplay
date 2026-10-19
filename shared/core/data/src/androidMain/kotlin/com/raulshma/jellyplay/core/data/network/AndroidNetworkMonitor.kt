@@ -96,7 +96,7 @@ class AndroidNetworkMonitor(
      * ride: emit the current value, register a
      * [NetworkCapabilities.NET_CAPABILITY_INTERNET] callback that re-emits on
      * available/capabilities-changed and re-probes on loss, unregister on
-     * close. Distinct-until-changed + conflated, matching the pre-extraction
+     * close. Distinct-until-changed + conflated, matching the former
      * chains byte-for-byte.
      */
     private fun <T> capabilityFlow(

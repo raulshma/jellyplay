@@ -140,7 +140,7 @@ class AudioPlayerViewModelTest {
         verify { engine.seekTo(12_000L) }
     }
 
-    /** Plan 03: the favorite toggle routes through the mutator; the resolved target drives the scalar flip. */
+    /** The favorite toggle routes through the mutator; the resolved target drives the scalar flip. */
     @Test
     fun toggleFavorite_delegatesToMutatorAndFlipsScalarFromResolvedTarget() {
         every { queueManager.currentPlayingItemId } returns MutableStateFlow("track-1")

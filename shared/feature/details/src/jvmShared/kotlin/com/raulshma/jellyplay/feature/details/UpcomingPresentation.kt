@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.ui.components.localDateFromIsoTimestamp
 import kotlinx.datetime.LocalDate
 
 /**
- * The D7 "Airing next" strip's pure presentation: the air-date badge decision
+ * The "Airing next" strip's pure presentation: the air-date badge decision
  * and the countdown arithmetic. Compose-free and directly unit-testable
  * (the [missingEpisodeBadge] / [EpisodeRowPresentation] pattern); the
  * renderer composes the labels around them, nothing else.

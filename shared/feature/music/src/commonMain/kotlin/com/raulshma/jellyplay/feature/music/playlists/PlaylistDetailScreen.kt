@@ -134,7 +134,7 @@ fun PlaylistDetailScreen(
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // "Removed 'X' from playlist — Undo" recovery for removals
-            // The screen previously had no SnackbarHost at all; this is the single host.
+            // The screen's single SnackbarHost.
             UndoSnackbarOverlay(
                 actions = viewModel.undoActions,
                 modifier = Modifier.align(Alignment.BottomCenter),

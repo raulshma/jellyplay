@@ -11,16 +11,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The About row's "Check for updates" controller (extracted from
- * DesktopAppRoot; docs/adr/desktop-auto-update.md). One command —
- * [checkForUpdate] — running the exact flow the scaffold used to inline:
+ * The About row's "Check for updates" controller. One command —
+ * [checkForUpdate] — runs the check flow:
  * repository check → shared message mapping
- * ([ShellSessionController.updateCheckMessage], ADR 0001's split) →, on
- * UpdateAvailable ONLY, [DesktopUpdateLinks.pick] + browser handoff
+ * ([ShellSessionController.updateCheckMessage], the shell-session split) →,
+ * on UpdateAvailable ONLY, [DesktopUpdateLinks.pick] + browser handoff
  * ([DesktopUpdateBrowser.openOrNull], off the event thread) → snackbar
  * wording through [desktopUpdateText].
  *
- * ADR CONTRACT (pinned by DesktopUpdateCheckControllerTest): there is NEVER
+ * CONTRACT (pinned by DesktopUpdateCheckControllerTest): there is NEVER
  * a silent download or install on desktop — this type has NO download/install
  * surface at all (it holds the check call only; `downloadUpdate` /
  * `getPendingUpdate` / `cleanupDownloadedUpdate` are unreachable from here
@@ -30,7 +29,7 @@ import kotlinx.coroutines.withContext
  * browser is reachable the snackbar names the releases page instead.
  *
  * @param scope the shell's composition scope — the launched job dies with
- *   the scaffold, exactly like the inline `scope.launch` it replaces.
+ *   the scaffold.
  * @param repository the Koin-resolved single (desktopAppUpdateModule:
  *   release-lane builds report genuine releases, dev builds stay
  *   "up to date" by construction).
@@ -64,10 +63,10 @@ internal class DesktopUpdateCheckController(
 }
 
 /**
- * Desktop rendering of the shared [UpdateCheckMessage] — ADR 0001's split:
- * the check→message mapping lives in ShellSessionController (commonMain),
- * the WORDING is this shell's own surface. The available branch is LIVE
- * (ADR desktop-auto-update: the desktop binding compares the real installed
+ * Desktop rendering of the shared [UpdateCheckMessage] — the shell-session
+ * split: the check→message mapping lives in ShellSessionController
+ * (commonMain), the WORDING is this shell's own surface. The available branch
+ * is LIVE (the desktop binding compares the real installed
  * version, so a release-lane build can genuinely report a newer release) and pairs the
  * version announcement with the browser-handoff outcome:
  * [openedReleasePage] means AWT already opened the release page, otherwise

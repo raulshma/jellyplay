@@ -43,19 +43,17 @@ import kotlinx.coroutines.delay
  *     through pointer clicks), and its sheets render IN-WINDOW
  *     (PlayerModalBottomSheet/InWindowPlayerSheet — not a separate dialog
  *     window), so key ordering is decided by DesktopNavScaffold's
- *     onPreviewKeyEvent. SPACE must toggle play/pause (a prior pass made this a
- *     REGRESSION GATE, ESC_SEQUENCE-style: the step captures the isPlaying
- *     flip + playhead freeze from the [EngineActivityRecorder] samples into
- *     the report and FAILS when playback does not toggle — originally
- *     the player Box held no focus while the controls were visible, so SPACE
- *     died at the scaffold's null-focus fallback chain and this exact gate
- *     was the original focus finding). Then a single ESC — the verified
+ *     onPreviewKeyEvent. SPACE must toggle play/pause — a REGRESSION GATE,
+ *     ESC_SEQUENCE-style: the step captures the isPlaying flip + playhead
+ *     freeze from the [EngineActivityRecorder] samples into the report and
+ *     FAILS when playback does not toggle (the failure mode: the player Box
+ *     holds no focus while the controls are visible, so SPACE dies at the
+ *     scaffold's null-focus fallback chain). Then a single ESC — the verified
  *     ordering on this platform is that the scaffold's back handling wins
  *     (the route pops; the screen's own Esc branch would only hide the
  *     controls). ESC_SEQUENCE is a REGRESSION GATE on that ordering: a
- *     not-popping run records the finding (it would answer the original ordering question
- *     the other way) and FAILS the step, so the tool goes red rather than
- *     silently re-baselining.
+ *     not-popping run records the finding and FAILS the step, so the tool
+ *     goes red rather than silently re-baselining.
  *  6. Report — `<logs>/session-harness.json` (steps, pass/fail, machine
  *     facts incl. the surface branch the factory used), then exitProcess(0).
  *
@@ -272,13 +270,12 @@ object DesktopSessionHarness {
 
             if (!fatalStop) runner.step("SCREENSHOT_MID_PLAY") { robot.screenshot("mid-play") }
 
-            //  question: no keyboard-reachable sheet exists (see KDoc);
-            // the SPACE-reachable controls overlay is the ordering probe.
-            // The SPACE leg became a regression gate (fail when
-            // playback does not toggle) — pre-fix runs recorded it as a
-            // "focus finding" because the player Box held no focus while the
-            // controls were visible, and the key died at the scaffold's
-            // null-focus fallback chain.
+            // The ordering question: no keyboard-reachable sheet exists (see
+            // KDoc); the SPACE-reachable controls overlay is the ordering
+            // probe. The SPACE leg is a regression gate (fail when playback
+            // does not toggle); a run that does not toggle usually means the
+            // player Box held no focus while the controls were visible, and
+            // the key died at the scaffold's null-focus fallback chain.
             runner.step("SHEET_TRIGGER_SCAN") {
                 mapOf(
                     "keyboardReachableSheet" to "none",

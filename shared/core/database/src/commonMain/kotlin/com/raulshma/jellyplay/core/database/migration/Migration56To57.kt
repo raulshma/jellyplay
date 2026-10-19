@@ -11,7 +11,7 @@ import androidx.sqlite.SQLiteConnection
 //    churns between episodes (labels change, codecs don't).
 //  - renderProfile — a serialized per-series/per-item rendering override blob
 //    (MpvRenderOverrides: shader pack / tone mapping) for the desktop
-//    render-profile feature (RenderProfileResolver/RenderSheet, same wave).
+//    render-profile feature (RenderProfileResolver/RenderSheet).
 val MIGRATION_56_57 = object : Migration(56, 57) {
     override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioCodec TEXT")

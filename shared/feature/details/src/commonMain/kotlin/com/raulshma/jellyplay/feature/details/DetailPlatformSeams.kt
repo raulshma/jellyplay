@@ -39,14 +39,14 @@ interface DetailThemeMusic {
     fun stop()
 
     /**
-     * D8: the top-bar mute chip's live-volume half — mute/unmute the playing
+     * The top-bar mute chip's live-volume half — mute/unmute the playing
      * theme immediately (no stop/restart). The per-series memory write is the
      * ViewModel's job; this only touches audio.
      */
     fun setMuted(muted: Boolean)
 
     /**
-     * D8: whether theme audio is currently playing — the mute chip's
+     * Whether theme audio is currently playing — the mute chip's
      * visibility gate (the chip exists only while something is audible to
      * mute).
      */
@@ -97,7 +97,7 @@ internal expect fun InlineTrailerPlayerHost(
 )
 
 /**
- * D22/H7: the ambient ThemeVideo clip surface behind the detail hero — the
+ * The ambient clip: the ambient ThemeVideo clip surface behind the detail hero — the
  * same muted-by-contract transport the home hero uses (core:data's
  * `AmbientVideoPlayer` ExoPlayer single; starting here stops the home hero's
  * clip and vice versa). Android actual binds a `TextureView` to the single;
@@ -109,15 +109,15 @@ internal expect fun InlineTrailerPlayerHost(
 internal expect fun AmbientThemeVideoSurface(url: String, modifier: Modifier = Modifier)
 
 /**
- * D12: whether the platform has a notification stack (Android/TV: yes — the
+ * Whether the platform has a notification stack (Android/TV: yes — the
  * WorkManager poller + the tray; desktop: no — the seams are no-ops). Gates
- * the ⋮ menu's "Notify me about new episodes" entry and the D7 upcoming
+ * the ⋮ menu's "Notify me about new episodes" entry and the upcoming
  * rows' per-row bell; on desktop both are hidden outright.
  */
 internal expect val platformHasNotificationStack: Boolean
 
 /**
- * D12: the POST_NOTIFICATIONS runtime-flow seam behind the per-series notify
+ * The POST_NOTIFICATIONS runtime-flow seam behind the per-series notify
  * toggle's first enable. Mirrors the app's cold-start prompt pattern
  * (MainActivity: checkSelfPermission → launcher.launch): the returned lambda
  * fires the Android 13+ system dialog when the permission is not yet

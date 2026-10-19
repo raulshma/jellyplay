@@ -79,7 +79,7 @@ import java.util.concurrent.atomic.AtomicLong
 //    (MultiConnectionDownloadStrategy precedent).
 class UnifiedMediaDetailProviderImpl(
     private val mediaRepository: MediaRepository,
-    // Plan 08: the per-type "which caches does this detail affect" dispatch is
+    // The per-type "which caches does this detail affect" dispatch is
     // owned by the repository; this internal seam (same module) is how the
     // force-refresh path reaches it without the repo exporting cache knobs.
     private val cacheInvalidation: MediaRepositoryCacheInvalidation,

@@ -14,7 +14,7 @@ import kotlin.math.roundToInt
  * ticks arithmetic; this codec owns the paged-vs-reflowable branch the
  * ViewModel used to hand-write at its match, encode and jump-decode sites.
  *
- * The one wrinkle is legacy: pre-Wave-3 reflowable rows stored percent ticks
+ * The one wrinkle is legacy: legacy reflowable rows stored percent ticks
  * with a NULL CFI, which by this rule read as paged rows. Matching absorbs
  * them (a null-CFI row matches by encoded percent against a reflowable
  * location); jumping cannot — the host exposes no display-by-percent after

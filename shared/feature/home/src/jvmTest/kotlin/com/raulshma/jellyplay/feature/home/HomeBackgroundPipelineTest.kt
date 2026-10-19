@@ -21,9 +21,8 @@ class HomeBackgroundPipelineTest {
     }
 
     /**
-     * Asserts the PRODUCTION [isLightBackdropTheme] — previously this test
-     * declared its own local copy of the luminance formula and asserted
-     * against that.
+     * Asserts the PRODUCTION [isLightBackdropTheme] — the test asserts the
+     * production function rather than a local copy of the luminance formula.
      */
     @Test
     fun luminanceCalculation_identifiesLightVsDarkColors() {
@@ -34,9 +33,8 @@ class HomeBackgroundPipelineTest {
     }
 
     /**
-     * Asserts the PRODUCTION [resolveHomeTargetBackgroundColor] — previously
-     * this test re-implemented the blend locally with `lerp` and asserted
-     * lerp's own endpoints.
+     * Asserts the PRODUCTION [resolveHomeTargetBackgroundColor] — the test
+     * asserts the blend's own endpoints rather than re-implementing it locally.
      */
     @Test
     fun targetBackgroundColor_lightTheme_usesThemeBackgroundUntinted() {

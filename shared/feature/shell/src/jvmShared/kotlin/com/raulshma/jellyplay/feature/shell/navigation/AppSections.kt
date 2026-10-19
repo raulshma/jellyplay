@@ -34,10 +34,9 @@ import com.raulshma.jellyplay.feature.syncplay.navigation.syncPlaySection
 
 /**
  * The canonical shared section graph: the ~20 commonMain `*Section` builders
- * both shells used to restate (JellyPlayApp's entryProvider vs
- * DesktopAppRoot's), registered ONCE here, in the Android shell's order.
- * (nav3 resolves entries by key, so registration order is not routing
- * behaviour — the desktop order change is a structural delta only.)
+ * (JellyPlayApp's entryProvider and DesktopAppRoot's both render this),
+ * registered ONCE here. (nav3 resolves entries by key, so registration order
+ * is not routing behaviour.)
  *
  * Shell-supplied inputs flow through [ShellHostHooks]; the MusicHomeScreen
  * wiring lives here because its seven navigate actions are identical per
@@ -81,8 +80,8 @@ fun EntryProviderScope<NavKey>.appSections(
         },
     )
     librarySection(navigator)
-    // The photo suite's Route.PhotoAlbum/Route.PhotoViewer entries — moved
-    // out of librarySection with the photo-suite extraction (feature/photos).
+    // The photo suite's Route.PhotoAlbum/Route.PhotoViewer entries
+    // (feature/photos).
     photosSection(navigator)
     searchSection(
         navigator = navigator,

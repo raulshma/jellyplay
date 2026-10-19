@@ -4,9 +4,9 @@ import org.koin.core.Koin
 import org.koin.mp.KoinPlatform
 
 /**
- * Accessor for the Koin container started by the app composition root
- * (Phase C4). startKoin runs before Application.super.onCreate(), so any
- * module Koin access for the worker factories (the Hilt-bridge era ended with).
+ * Accessor for the Koin container started by the app composition root.
+ * startKoin runs before Application.super.onCreate(), so any module Koin
+ * access for the worker factories resolves through here.
  */
 internal fun koin(): Koin =
     KoinPlatform.getKoin()

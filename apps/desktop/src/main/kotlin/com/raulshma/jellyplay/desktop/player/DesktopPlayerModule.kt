@@ -52,8 +52,8 @@ import org.koin.dsl.module
  * - [AudioQueueFacade] is the shared [DefaultAudioQueueFacade] over the
  *   desktop queue manager — every play/enqueue/instant-mix button in the
  *   music section is real.
- * - [PlaybackFocus] (ADR-0004 slice 2) is the REAL commonMain
- *   [DefaultPlaybackFocus] over the in-process [DesktopFocusArbiter] twin
+ * - [PlaybackFocus] is the REAL commonMain
+ *   [DefaultPlaybackFocus] over the in-process [DesktopFocusArbiter]
  *   and the [DesktopAudioQueueManagerSurface] music adapter — cross-player
  *   exclusivity (music vs book read-aloud) is arbitrated in-process on
  *   desktop.
@@ -72,8 +72,8 @@ import org.koin.dsl.module
  * without libmpv the app still boots and failures surface through
  * MediaEngine.errorFlow / playbackError respectively — matching how
  * missing-codec engines degrade on Android. The manager's app-lifetime
- * `start()` (queue restore + persistence observation, the Android
- * `manager.start()` twin) is invoked from Main.kt after startKoin.
+ * `start()` (queue restore + persistence observation, like Android's
+ * `manager.start()`) is invoked from Main.kt after startKoin.
  */
 val desktopPlayerModule: Module = module {
     //  session harness: app-lifetime recorder of everything the video
@@ -119,11 +119,11 @@ val desktopPlayerModule: Module = module {
         )
     }
 
-    // ── Cross-player exclusivity (PlaybackFocus, ADR-0004 slice 2) ─────────
-    // The desktop twin of androidCoreDataModule's focus block: the REAL
-    // commonMain module over the in-process arbiter (vacuous grants — there
-    // is no OS seat on desktop) and the music surface adapter. With this
-    // binding, PlayerBookKoinModule's `getOrNull() ?: NoopPlaybackFocus`
+    // ── Cross-player exclusivity (PlaybackFocus) ───────────────────────────
+    // The desktop counterpart of androidCoreDataModule's focus block: the
+    // REAL commonMain module over the in-process arbiter (vacuous grants —
+    // there is no OS seat on desktop) and the music surface adapter. With
+    // this binding, PlayerBookKoinModule's `getOrNull() ?: NoopPlaybackFocus`
     // fallback resolves a REAL module on desktop — claim-state publication
     // goes live. The surface defers the manager via the
     // same kotlin-Lazy cycle breaker the Android graph uses: the manager

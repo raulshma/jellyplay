@@ -9,7 +9,7 @@ import kotlin.test.Test
 /**
  * Pins the PRODUCTION quick-action routing table
  * ([homeQuickActionEffect]) — the series-vs-movie sheet/dialog/download
- * decisions that used to be welded inside a remembered composable lambda.
+ * decisions, pinned outside the composable lambda.
  */
 class HomeQuickActionsTest {
 

@@ -338,8 +338,7 @@ class PreferenceProjections constructor(
     /**
      * Fields read by `HomeSettingsScreen` — a single-store slice over
      * [HomeDiscoveryStore] so the home config hub recomposes only on
-     * home-discovery writes. Includes the card-display quartet since the
-     * finished Appearance → HomeSettings move (PS-4): the knobs are
+     * home-discovery writes. Includes the card-display quartet: the knobs are
      * home-discovery state and their rows render on the hub's Cards group.
      */
     val homeScreenPreferences: StateFlow<HomeScreenPreferences> =
@@ -388,10 +387,9 @@ class PreferenceProjections constructor(
     // -------------------------------------------------------------------------
     // Consumer-screen projections (non-settings surfaces).
     //
-    // These replace the bespoke `combine(...)` projections the feature
-    // ViewModels used to hand-roll (several with vararg + `UNCHECKED_CAST`).
-    // Field sets are a verbatim port of the former local shadows so the screen
-    // bodies keep reading `preferences.X`.
+    // These carry exactly the fields each screen reads, so the screen bodies
+    // keep reading `preferences.X` and no ViewModel needs its own
+    // `combine(...)` fan-out.
     // -------------------------------------------------------------------------
 
     /** Fields read by the audio player screen (lyrics toggle + artwork theme). */

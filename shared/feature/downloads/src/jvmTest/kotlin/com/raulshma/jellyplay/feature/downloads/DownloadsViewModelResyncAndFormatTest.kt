@@ -49,8 +49,8 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelResyncAndFormatTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (DownloadsViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (DownloadsViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var downloadRepository: DownloadQueue

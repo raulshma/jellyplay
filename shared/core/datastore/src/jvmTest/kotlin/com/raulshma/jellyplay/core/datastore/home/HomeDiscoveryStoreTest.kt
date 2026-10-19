@@ -102,7 +102,7 @@ class HomeDiscoveryStoreTest {
         assertEquals(ContinueWatchingClickBehavior.DETAILS, slice.continueWatchingClickBehavior)
         // Default off — current pinned behaviour until the user opts in.
         assertEquals(false, slice.hideTopHeaderOnScroll)
-        // The home-wave feature toggles: opt-ins default off …
+        // The home feature toggles: opt-ins default off …
         assertEquals(false, slice.excludeActiveSessions)
         assertEquals(false, slice.homeHeroVideoEnabled)
         assertEquals(false, slice.homeHeroVideoTvEnabled)
@@ -203,7 +203,7 @@ class HomeDiscoveryStoreTest {
         store.setHomeAnnouncedVersion(3)
         assertEquals(1_700_000_000_000, slice().homeLastVisitEpochMs)
         assertEquals(3, slice().homeAnnouncedVersion)
-        // Restamping overwrites (the announce-once gate re-arms per wave).
+        // Restamping overwrites (the announce-once gate re-arms per version bump).
         store.setHomeAnnouncedVersion(2)
         assertEquals(2, slice().homeAnnouncedVersion)
         // Internal bookkeeping: declared rows, but no settings-search entry.
@@ -255,7 +255,7 @@ class HomeDiscoveryStoreTest {
         assertEquals(HomeSectionType.CONFIGURABLE.toSet(), slice().enabledHomeSectionTypes)
     }
 
-    // ── inline-curation JSON slices (H5 My Media + D8 theme music) ──────────
+    // ── inline-curation JSON slices (My Media + theme music) ──────────
 
     @Test
     fun `my media hidden libraries hide show and clear round-trip`() = runTest {
@@ -410,7 +410,7 @@ class HomeDiscoveryStoreTest {
         )
     }
 
-    // ── H21: the version-union read exposes what the union contributed ──────
+    // ── The version-union read exposes what the union contributed ───────────
 
     @Test
     fun `a pre-version set reports every shipped section as added by the union`() = runTest {
@@ -467,7 +467,7 @@ class HomeDiscoveryStoreTest {
     @Test
     fun `a v2-stamped set unions only the v3 pair`() = runTest {
         activate("userA")
-        // A set written after DISCOVER shipped but before H4/H5: exactly the
+        // A set written after DISCOVER shipped but before UPCOMING/My Media: exactly the
         // v3 pair (Upcoming + My Media) is the union's — and therefore the
         // announcement's — contribution.
         dataStore.edit {
@@ -935,7 +935,7 @@ class HomeDiscoveryStoreTest {
     }
 
     // ------------------------------------------------------------------
-    // H20: the layoutRevision dirty signal + the applyLayout restore helper
+    // The layoutRevision dirty signal + the applyLayout restore helper
     // ------------------------------------------------------------------
 
     @Test

@@ -133,7 +133,7 @@ class HomeHeroControllerTest {
         assertEquals(listOf("m1"), candidates.map { it.id })
     }
 
-    // --- H9 plugin-curated hero (merge + offline exclusion) ---
+    // --- Plugin-curated hero (merge + offline exclusion) ---
 
     @Test
     fun mergeCuratedHeroCandidates_emptyCurated_keepsLocalUnchanged() {
@@ -486,10 +486,10 @@ class HomeHeroControllerTest {
         assertEquals("url/m2", controller.backdropUrl)
     }
 
-    // --- H7 hero-video gating (heroVideoShouldPlay, pure) ---
+    // --- Hero-video gating (heroVideoShouldPlay, pure) ---
     //
     // Every leg of the start gate flips the whole decision — the clip's
-    // absence must be reachable from each gate alone (the plan's controller
+    // absence must be reachable from each gate alone (the controller
     // gating matrix: visibility/lifecycle/perf + pref, motion, focus,
     // scroll-defer, platform).
 
@@ -546,7 +546,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroVideoShouldPlay_desktopPlatform_neverPlays() {
-        // Desktop v1: the platform seam reports incapable → static hero, and
+        // Desktop: the platform seam reports incapable → static hero, and
         // nothing downstream (the loader effect also gates on this leg).
         assertFalse(holding(platformCapable = false))
     }

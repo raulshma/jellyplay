@@ -87,9 +87,9 @@ fun AdminDashboardScreen(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
-    /** Gated on the companion plugin's `transcodes` feature (ADR 0010); off = no tile. */
+    /** Gated on the companion plugin's `transcodes` feature; off = no tile. */
     onTranscodes: () -> Unit = {},
-    /** Gated on the companion plugin's `analytics` feature (ADR 0010); off = no tile. */
+    /** Gated on the companion plugin's `analytics` feature; off = no tile. */
     onAnalytics: () -> Unit = {},
     viewModel: AdminDashboardViewModel = koinViewModel(),
 ) {
@@ -122,7 +122,7 @@ fun AdminDashboardScreen(
     var showRestartDialog by remember { mutableStateOf(false) }
     var showShutdownDialog by remember { mutableStateOf(false) }
 
-    // The "Send broadcast" composer state (ADR 0010): the three fields live
+    // The "Send broadcast" composer state: the three fields live
     // here so reopening keeps the draft, the in-flight flag spans the request
     // (Send/Cancel disabled until it settles), and a failure keeps the dialog
     // open over its inline error line. Success closes + posts the bus message
@@ -306,10 +306,10 @@ private fun DashboardContent(
     onBackups: () -> Unit = {},
     onTranscodes: () -> Unit = {},
     showTranscodes: Boolean = false,
-    /** Gated on the companion plugin's `events` feature (ADR 0010); off = no tile. */
+    /** Gated on the companion plugin's `events` feature; off = no tile. */
     onBroadcast: () -> Unit = {},
     showBroadcast: Boolean = false,
-    /** Gated on the companion plugin's `analytics` feature (ADR 0010); off = no tile. */
+    /** Gated on the companion plugin's `analytics` feature; off = no tile. */
     onAnalytics: () -> Unit = {},
     showAnalytics: Boolean = false,
     onStopSession: (SessionInfo) -> Unit = {},

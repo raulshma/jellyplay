@@ -58,15 +58,14 @@ import kotlin.test.assertTrue
  *    forwarding (incl. provider/startIndex pagination and the refresh mode
  *    being reused for both metadata and image refresh).
  *  - `updateField` (form-typed) dirty tracking, `clearError`, and image URL
- *    delegation. The per-field mapping/dirty drift-class pins live beside the
- *    form in [EditableItemMetadataFormTest].
+ *    delegation. The per-field mapping/dirty pins live beside the form in
+ *    [EditableItemMetadataFormTest].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelMetadataTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (same conveyor port pattern as the upload
-    // suite).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (same pattern as the upload suite).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var editorRepository: MetadataEditorRepository

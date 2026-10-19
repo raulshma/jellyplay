@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * H19 presence chips: the session filter (self-exclusion by user id, the
+ * Presence chips: the session filter (self-exclusion by user id, the
  * now-playing null/blank filter, the cap at 3), the probe-once /Sessions
  * capability gate (failure hides forever for the session; a transient poll
  * failure does not flip the verdict), the SyncPlay join-availability

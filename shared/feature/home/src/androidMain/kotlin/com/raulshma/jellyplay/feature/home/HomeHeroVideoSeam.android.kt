@@ -74,7 +74,7 @@ internal actual fun AmbientHeroVideoSurface(url: String, modifier: Modifier) {
 }
 
 /**
- * Android/TV actual of the H7 embed fallback: core:ui's WebView YouTube
+ * Android/TV actual of the embed fallback: core:ui's WebView YouTube
  * player with the detail backdrop's exact ambient configuration (muted, no
  * controls, cropped to fill) — [onEmbedFailed] folds the hero back to the
  * static image, the same degradation the detail screen uses.

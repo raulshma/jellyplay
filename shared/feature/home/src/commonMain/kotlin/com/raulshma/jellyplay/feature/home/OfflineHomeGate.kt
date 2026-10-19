@@ -30,10 +30,9 @@ import kotlinx.coroutines.launch
 /**
  * "When does the home render downloads?" as ONE module: the offline
  * collection gate, both gated collectors (library + episodes), and the
- * render-source fold that used to span five pieces across the VM — a combine,
- * a mutable `offlineGateState` mirror that existed only to dodge the uiState
- * one-hop lag, two `flatMapLatest` collectors in init, and a
- * [computeHomeRenderSource] call inside one of them.
+ * render-source fold (a combine, a mutable `offlineGateState` mirror that dodges
+ * the uiState one-hop lag, two `flatMapLatest` collectors in init, and a
+ * [computeHomeRenderSource] call inside one of them).
  *
  * Interface: [state] ([OfflineHomeState] carries the render source plus both
  * offline lists). Inputs: the offline mode and the refresher's
@@ -97,7 +96,7 @@ internal class OfflineHomeGate(
                 // The repository flow re-emits on every download-progress
                 // write; re-emissions whose render-relevant fingerprint
                 // (see [offlineRenderKey]) is unchanged are dropped here, so
-                // a progress tick no longer pays the O(n) whole-item
+                // a progress tick skips the O(n) whole-item
                 // structural compare and the suspend TOC decode below only
                 // runs for a real render change.
                 .distinctUntilChangedBy { (gate, emission) ->
@@ -202,7 +201,7 @@ internal data class OfflineHomeState(
      */
     val bookProgressFractions: Map<String, Float> = emptyMap(),
     /**
-     * The cached online home layout (issue #147): section types, titles,
+     * The cached online home layout: section types, titles,
      * per-library rows and order from the last successful online fetch. Empty
      * when no snapshot exists — the offline home then falls back to its
      * generic derived rows.

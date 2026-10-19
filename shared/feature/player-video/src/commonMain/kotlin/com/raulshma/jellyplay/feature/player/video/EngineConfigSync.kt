@@ -70,11 +70,11 @@ internal data class EngineConfigSlices(
  * Every fact the builder reads arrives in the [EngineConfigSlices] snapshot
  * the [slices] provider returns — read at BUILD time, so the coalesced
  * debounce lands on the last values (the uiState bag itself never crosses
- * this boundary; the god-count ratchet stays at its baseline; this class
+ * this boundary; the god-count guard stays at its baseline; this class
  * references no [VideoPlayerUiState] in code). `getEngine` is read at
  * DISPATCH time, so a debounce that settles after an engine swap (mode/
  * quality reload, engine switch, retry) lands on the NEW engine — the
- * pre-extraction `configSyncJob` collector dispatched through
+ * original `configSyncJob` collector dispatched through
  * `playerSessionManager.engine` at fire time and was itself never cancelled
  * outside the ViewModel scope; that semantics is preserved unchanged.
  *

@@ -62,8 +62,7 @@ internal data class PlaybackCoreBundle(
         videoGestureMode = video.videoGestureMode,
         // The binding editor renders from this projection; omitting the map
         // here read as the factory default on every emission, so every editor
-        // toggle snapped back while the write itself landed in the store
-        // (issue #171: "gesture detailed settings are unresponsive").
+        // toggle snapped back while the write itself landed in the store.
         videoInputBindings = video.videoInputBindings,
         videoDoubleTapHoldSeekEnabled = video.videoDoubleTapHoldSeekEnabled,
         videoHoldSpeedEnabled = video.videoHoldSpeedEnabled,

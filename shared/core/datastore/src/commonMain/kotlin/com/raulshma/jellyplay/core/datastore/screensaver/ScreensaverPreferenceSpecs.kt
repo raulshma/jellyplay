@@ -102,9 +102,9 @@ object ScreensaverPreferenceSpecs {
         encode = { PreferenceCodec.json.encodeToString(it) },
         search = PreferenceSearchSpec(
             id = "screensaver_categories",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_categories",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_categories_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "categories", "tv", "movies", "music", "content"),
@@ -118,9 +118,9 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_slideshow_interval",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_slideshow_interval",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_slideshow_interval_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "slideshow", "interval", "tv", "duration", "seconds"),
@@ -134,9 +134,9 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_ken_burns",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_ken_burns",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_ken_burns_on",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "ken burns", "pan", "zoom", "animation", "tv"),
@@ -150,7 +150,7 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_transition_style",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_transition_style",
             subtitleKey = "ss_screensaver_transition_style_subtitle",
             categoryKey = "ss_cat_system",
@@ -165,9 +165,9 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_show_title",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_show_title",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_display_media_title",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "title", "tv", "show", "media title", "display"),
@@ -192,7 +192,7 @@ object ScreensaverPreferenceSpecs {
             // catalog row declares no ss_*_title twin.
             titleKey = "settings_dream_max_parental_rating",
             id = "screensaver_max_parental_rating",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_dream_max_parental_rating_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "parental", "rating", "mature", "adult", "kids", "family", "filter"),
@@ -210,7 +210,7 @@ object ScreensaverPreferenceSpecs {
             // catalog row declares no ss_*_title twin.
             titleKey = "settings_dream_dim_after",
             id = "screensaver_dim_after",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_dream_dim_after_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "dim", "fade", "dark", "night", "delay", "timer", "tv"),
@@ -228,7 +228,7 @@ object ScreensaverPreferenceSpecs {
             // catalog row declares no ss_*_title twin.
             titleKey = "settings_dream_dim_percent",
             id = "screensaver_dim_percent",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_dream_dim_percent_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "dim", "brightness", "dark", "opacity", "percent", "tv"),
@@ -247,9 +247,9 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "idle_ambient_enabled",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_idle_ambient_enabled",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_idle_ambient_enabled_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("idle", "ambient", "ready to play", "screensaver", "desktop", "standby"),
@@ -264,9 +264,9 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "idle_ambient_timeout",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_idle_ambient_timeout",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             subtitleKey = "settings_idle_ambient_timeout_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("idle", "ambient", "timeout", "minutes", "screensaver", "desktop", "standby"),
@@ -432,7 +432,7 @@ object ScreensaverPreferenceSpecs {
 
     /**
      * The domain's settings-search declarations, in the settings feature's
-     * catalog order (the order the retired hand records carried): every row
+     * catalog order: every row
      * above that carries a [PreferenceSearchSpec]. The settings feature
      * derives its spec-backed catalog rows from this list over its ordered
      * record spine; the two navigation rows (admin dashboard, setup wizard)

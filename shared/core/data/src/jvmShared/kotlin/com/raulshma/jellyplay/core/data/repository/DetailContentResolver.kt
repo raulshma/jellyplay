@@ -40,13 +40,13 @@ import kotlinx.coroutines.flow.first
  *
  * Threading contract: [resolve] is called under the session's `resolveMutex`
  * (the session still owns the lock), so a resolution cannot race the session's
- * optimistic rewrites — the same serialization the pre-extraction bodies ran
+ * optimistic rewrites — the same serialization the former bodies ran
  * under.
  */
 internal class DetailContentResolver(
     private val itemId: String,
     private val mediaRepository: MediaRepository,
-    /** The per-type "which caches does this detail affect" dispatch (plan 08). */
+    /** The per-type "which caches does this detail affect" dispatch. */
     private val cacheInvalidation: MediaRepositoryCacheInvalidation,
     private val offlineRepository: OfflineRepository,
     private val downloadRepository: DownloadRepository,
@@ -92,7 +92,7 @@ internal class DetailContentResolver(
 
     private suspend fun resolveRemote(targetGen: Long, force: Boolean): ContentResolution =
         // Force read: the repository drops the item's cached detail before the
-        // fetch (plan 08's freshness lever), then the per-type dispatch below
+        // fetch, then the per-type dispatch below
         // drops the type-scoped caches (series catalogue, album tracks,
         // collection items) the snapshot derivation reads right after.
         coroutineScope {

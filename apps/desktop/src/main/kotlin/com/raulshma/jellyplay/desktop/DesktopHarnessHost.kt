@@ -13,9 +13,9 @@ import java.util.concurrent.atomic.AtomicReference
 import org.koin.compose.koinInject
 
 /**
- * The E2E harness arming point DesktopAppRoot hosts ONCE per composition
- * (containment: the three `requested()` blocks the root used to inline, one
- * per lane). Each lane composes NOTHING unless its `jellyplay.*.enabled`
+ * The E2E harness arming point DesktopAppRoot hosts ONCE per composition —
+ * one `requested()` block per lane. Each lane composes NOTHING unless its
+ * `jellyplay.*.enabled`
  * system property is `true` — on a normal boot every branch short-circuits
  * before its `koinInject` runs, so the harness surface costs three boolean
  * property reads.

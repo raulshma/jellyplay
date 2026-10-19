@@ -108,20 +108,19 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The unified restore wizard's model gate (Wave 5+6): source loading + degrade,
- * the file diff (the retired import preview's ported coverage), the snapshot
- * diff classification (changed/added/removed + prefs sub-grouping incl. the
- * "Other" bucket), the two-tier selection consistency, apply-path branching
- * (file vs snapshot vs old-plugin full restore), the reject-reason mapping,
- * cross-account detection, the best-effort pre-apply capture (Wave 6 — a miss
- * warns and never blocks), and the Wave-3 secrets unlock/apply port.
+ * The unified restore wizard's model gate: source loading + degrade, the file
+ * diff, the snapshot diff classification (changed/added/removed + prefs
+ * sub-grouping incl. the "Other" bucket), the two-tier selection consistency,
+ * apply-path branching (file vs snapshot vs old-plugin full restore), the
+ * reject-reason mapping, cross-account detection, the best-effort pre-apply
+ * capture (a miss warns and never blocks), and the secrets unlock/apply paths.
  *
- * Harness = the retired `ImportPreviewViewModelTest` idiom (stores mockk'd with
- * REAL `MutableStateFlow` slices, a REAL [PreferenceSnapshotReader] over the
- * mock bundle, StandardTestDispatcher + setMain/resetMain, `awaitUntil` pumping
- * across the real-thread hops) crossed with the [JellyPlaySyncViewModelTest]
- * api-mockk idiom. Wizard texts resolve through an injected seam so the
- * bus-message assertions stay deterministic without a resource loader.
+ * Harness = stores mockk'd with REAL `MutableStateFlow` slices, a REAL
+ * [PreferenceSnapshotReader] over the mock bundle, StandardTestDispatcher +
+ * setMain/resetMain, `awaitUntil` pumping across the real-thread hops, crossed
+ * with the [JellyPlaySyncViewModelTest] api-mockk idiom. Wizard texts resolve
+ * through an injected seam so the bus-message assertions stay deterministic
+ * without a resource loader.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RestoreWizardViewModelTest {
@@ -460,7 +459,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `gate open loads the restore points and a pre-wave 404 degrades to unavailable`() = runTest(testDispatcher) {
+    fun `gate open loads the restore points and an old-plugin 404 degrades to unavailable`() = runTest(testDispatcher) {
         gateOpen()
         coEvery { pluginApi.getSnapshots() } returns Result.success(
             listOf(JellyPlaySnapshot(id = 1L, createdAt = 1_700_000_000_000, origin = "manual", keys = 4)),
@@ -473,10 +472,10 @@ class RestoreWizardViewModelTest {
         assertFalse(vm.uiState.snapshotsUnavailable)
         assertEquals(1, vm.uiState.snapshots.size)
 
-        // The pre-wave 404 (null payload) degrades to the same quiet face.
+        // A 404 (null payload) degrades to the same quiet face.
         coEvery { pluginApi.getSnapshots() } returns Result.success(null)
         vm.refreshSource()
-        awaitUntil("the pre-wave 404 degrades") { vm.uiState.snapshotsUnavailable }
+        awaitUntil("the old-plugin 404 degrades") { vm.uiState.snapshotsUnavailable }
     }
 
     @Test
@@ -489,7 +488,7 @@ class RestoreWizardViewModelTest {
         assertTrue(vm.uiState.snapshot!!.groups.totalGroups > 0)
     }
 
-    // ---------------------------------------------------------------- file diff (ported preview coverage)
+    // ---------------------------------------------------------------- file diff
 
     @Test
     fun `v2 backup loads the file diff with current-version flags`() = runTest(testDispatcher) {
@@ -682,7 +681,7 @@ class RestoreWizardViewModelTest {
         assertTrue("search" in vm.uiState.snapshot!!.selection.namespaces)
     }
 
-    // ---------------------------------------------------------------- file apply (Wave 6 hook #1 inside)
+    // ---------------------------------------------------------------- file apply
 
     @Test
     fun `file apply fans to the store seams per selection and syncs after`() = runTest(testDispatcher) {
@@ -804,7 +803,7 @@ class RestoreWizardViewModelTest {
         assertFalse(unstamped.uiState.file!!.crossAccount)
     }
 
-    // ---------------------------------------------------------------- secrets (Wave 3 port)
+    // ---------------------------------------------------------------- secrets
 
     /** Real-codec fixture: one KDF per encrypt, counts pinned by the asserts below. */
     private fun secretsEnvelope(passphrase: String) = BackupSecretsCodec.encrypt(
@@ -1499,7 +1498,7 @@ class RestoreWizardViewModelTest {
     }
 
     @Test
-    fun `captureSafetySnapshot - a pre-wave null skip is quiet and only a failed capture warns`() = runTest {
+    fun `captureSafetySnapshot - an old-plugin null skip is quiet and only a failed capture warns`() = runTest {
         val api = mockk<com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes>()
         val store = mockk<JellyPlayPluginStatusStore>()
         every { store.status } returns MutableStateFlow(JellyPlayPluginStatus.AVAILABLE)

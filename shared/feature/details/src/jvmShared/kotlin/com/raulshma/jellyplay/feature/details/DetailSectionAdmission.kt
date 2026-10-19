@@ -57,7 +57,7 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     /** Series smart-play "Up Next" card, ahead of the series trio's shared slot 6. */
     UP_NEXT(6),
 
-    /** D7: the series' "Airing next" strip (unaired episodes, `/Shows/Upcoming`
+    /** The series' "Airing next" strip (unaired episodes, `/Shows/Upcoming`
      *  scoped to the series) — the middle member of the shared slot-6 band,
      *  between the smart-play card and the season tree. Admitted only when
      *  the strip actually has content (the enrichment's silent-absence
@@ -76,7 +76,7 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     /** Seerr "Videos" (trailers/extras mined from TMDB). */
     RELATED_VIDEOS(9),
 
-    /** D6: the "More in {collection}" franchise rows (BoxSet ancestors +
+    /** The "More in {collection}" franchise rows (BoxSet ancestors +
      *  members), declared just before the similar rows and sharing their
      *  slot-10 band. Admitted only when at least one row has content (the
      *  enrichment's silent-absence contract) AND the preference is on —

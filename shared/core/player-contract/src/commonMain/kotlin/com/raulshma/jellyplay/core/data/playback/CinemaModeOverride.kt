@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 /**
- * One-shot per-invocation Cinema Mode override (D14 "Play (with pre-rolls)").
+ * One-shot per-invocation Cinema Mode override ("Play (with pre-rolls)").
  *
  * The detail screen's ⋮ action plays the current item with server intros
  * FORCED for that single play — bypassing the global `cinemaModeEnabled`

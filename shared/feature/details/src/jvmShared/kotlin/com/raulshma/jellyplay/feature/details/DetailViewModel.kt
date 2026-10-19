@@ -208,7 +208,7 @@ class DetailViewModel internal constructor(
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
     /**
-     * The D4 TMDB-fallback seam: the direct-TMDB details read behind the
+     * The TMDB-fallback seam: the direct-TMDB details read behind the
      * `externalRatings` enrichment when Seerr is disconnected (or its ratings
      * fetch failed/returned nothing). Nullable-with-default like the plugin
      * seams — the Koin defs pass the core:network single and the enrichment
@@ -328,7 +328,7 @@ class DetailViewModel internal constructor(
                 )
             }
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
-        // Group 4 — D8: the theme-music seam's playing signal, folded so the
+        // Group 4 — the theme-music seam's playing signal, folded so the
         // top-bar mute chip exists only while audio is actually audible.
         val themePlaying = themeMusicPlayer.isPlaying
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
@@ -450,8 +450,8 @@ class DetailViewModel internal constructor(
                 _uiState.update { it.copy(canManageMetadata = isAdmin) }
             }
         }
-        // D12: mirror the CURRENT series' new-episode notification opt-in
-        // into the content bag, so the ⋮ entry's checkmark and the D7 rows'
+        // Mirror the CURRENT series' new-episode notification opt-in
+        // into the content bag, so the ⋮ entry's checkmark and the upcoming rows'
         // bell stay true to the store even when the config changes out from
         // under the screen (the notification settings' management sheet,
         // another device). An episode resolves to its parent series, a
@@ -834,7 +834,7 @@ class DetailViewModel internal constructor(
             sortedEpisodes = snapshot.sortedEpisodes,
         )
 
-        // Downloaded-episode ids load at SCREEN-OPEN (D16), not sheet-open:
+        // Downloaded-episode ids load at SCREEN-OPEN, not sheet-open:
         // the seasons section's rows read the set for the delete affordance
         // and the on-disk states, so in-flight + completed downloads must
         // render without the user ever opening the download sheet. The
@@ -910,7 +910,7 @@ class DetailViewModel internal constructor(
      * coroutines, so any declaration order that keeps the former remote
      * block's relative sequence (and [loadBookExtras] after the evaluator)
      * preserves the observable behavior. Later additions (the ADR 0010
-     * plugin family, D6 `franchise`, D7 `upcoming`) append after the
+     * plugin family, franchise `franchise`, upcoming `upcoming`) append after the
      * original entries for the same reason.
      *
      * Still inline by design (see reduceLoaded): [loadBookExtras] (lifecycle
@@ -980,7 +980,7 @@ class DetailViewModel internal constructor(
         listOf(
         DetailEnrichment(
             name = "themeMusic",
-            // D8 gate matrix: the global pref must be ON and the series not
+            // Gate matrix: the global pref must be ON and the series not
             // per-series muted (the mute chip's memory) on top of the shared
             // remote gate — a muted series's enrichment doesn't start
             // playback at all.
@@ -1090,8 +1090,8 @@ class DetailViewModel internal constructor(
         listOf(
         DetailEnrichment(
             name = "externalRatings",
-            // D4: the no-plugin ratings strip (RT/IMDb/TMDB chips when the
-            // plugin is absent). Source order mirrors the D4 spec: Seerr's
+            // The no-plugin ratings strip (RT/IMDb/TMDB chips when the
+            // plugin is absent). Source order mirrors the spec: Seerr's
             // detail-by-provider-id ratings first (the loadSeerrData path —
             // same repository, same tmdbId resolution), the direct-TMDB
             // vote aggregate as the fallback when Seerr is disconnected or
@@ -1108,7 +1108,7 @@ class DetailViewModel internal constructor(
             // The plugin dedupe probe, the pluginSimilarSuppressesStock
             // mirror: one synchronous Ratings-feature read (the store refresh
             // is latched — the pluginRatings enrichment above probed this
-            // item already), remembered on the state, and suppressing the D4
+            // item already), remembered on the state, and suppressing the external-ratings
             // chips at RENDER time only when the plugin row actually has
             // content. `!hasPluginRatings` cannot gate the START — the plugin
             // row's content lands asynchronously from the same fan-out.
@@ -1259,7 +1259,7 @@ class DetailViewModel internal constructor(
         },
         DetailEnrichment(
             name = "trailers",
-            // D3: the merged trailer list's local leg — the server-hosted
+            // The merged trailer list's local leg — the server-hosted
             // trailers (the parental-filtered getLocalTrailers wrapper) merged
             // with the TMDB/Seerr videos into `state.trailers`, ordered by the
             // `preferLocalTrailers` pref. The remote leg re-merges on its own
@@ -1267,7 +1267,7 @@ class DetailViewModel internal constructor(
             // enrichment fetches it independently and later), so whichever
             // source resolves first already leaves a correct list. A failed
             // local fetch degrades to the remote-only list (today's content);
-            // remote-only is exactly the pre-D3 shape.
+            // remote-only is exactly the no-local-trailer shape.
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             val local = libraryApiClient.getLocalTrailers(inputs.itemId).getOrNull().orEmpty()
@@ -1284,7 +1284,7 @@ class DetailViewModel internal constructor(
         },
         DetailEnrichment(
             name = "themeVideo",
-            // D22: the server ThemeVideo clip behind the detail hero's ambient
+            // The server ThemeVideo clip behind the detail hero's ambient
             // video (preferred over the YouTube embed when it resolves). Same
             // remote gate as the trailers leg — the user-pref half
             // (`trailerAutoplay`) rides the body: without the autoplay pref
@@ -1861,8 +1861,8 @@ class DetailViewModel internal constructor(
     }
 
     /**
-     * D12: toggles the CURRENT series' new-episode notification opt-in (the
-     * ⋮ menu entry and the D7 rows' bell both land here). An episode resolves
+     * Toggles the CURRENT series' new-episode notification opt-in (the
+     * ⋮ menu entry and the upcoming rows' bell both land here). An episode resolves
      * to its parent series, a series to itself — the hideFromNextUp keying.
      * The POST_NOTIFICATIONS runtime prompt is the screen seam's job (it
      * needs the activity), so only the store write + the snackbar happen
@@ -1885,7 +1885,7 @@ class DetailViewModel internal constructor(
     )
 
     /**
-     * D8: the top-bar mute chip — flips the live theme audio immediately
+     * The top-bar mute chip — flips the live theme audio immediately
      * (the seam's volume half, BEFORE the funnel's launch) and writes the
      * per-series memory (the store half), so a muted series's theme
      * enrichment never starts playback again. An episode resolves to its
@@ -1907,7 +1907,7 @@ class DetailViewModel internal constructor(
     }
 
     /**
-     * D6 inline eye-hide: records the collection id under the CURRENT item's
+     * Inline eye-hide: records the collection id under the CURRENT item's
      * key in [DetailUiState.hiddenFranchiseCollections] — the Up Next card
      * hide's pattern, per row and per item instead of one global switch.
      * Session memory by design (the map is a surviving leaf of
@@ -1977,7 +1977,7 @@ class DetailViewModel internal constructor(
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
-                    // D3 parity: the merged trailer list drops its (now
+                    // Parity: the merged trailer list drops its (now
                     // stale) remote entries and keeps the local ones — the
                     // videos leg re-merges on landing, exactly like the raw
                     // relatedVideos reset below.
@@ -2036,7 +2036,7 @@ class DetailViewModel internal constructor(
                 is TmdbCompanionLanding.Videos ->
                     it.copy(
                         relatedVideos = landing.videos,
-                        // D3: the merged trailer list re-merges with the
+                        // The merged trailer list re-merges with the
                         // fresh remote leg, keeping whichever local entries
                         // the `trailers` enrichment already wrote.
                         trailers = mergeTrailerEntries(

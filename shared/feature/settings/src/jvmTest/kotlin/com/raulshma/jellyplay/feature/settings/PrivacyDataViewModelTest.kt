@@ -26,9 +26,8 @@ import kotlin.test.assertEquals
  * The Privacy & Data hub's destructive one-shot actions: cache wipe
  * (image cache preserved), image-cache wipe, per-user search-history clear,
  * and the full factory reset — each must reach its store/repository seam AND
- * post exactly one [PrivacyUserMessage] confirmation (the buffered Channel is
- * the commonMain replacement for the legacy UserMessageBus, so the message IS
- * the observable "the action completed" contract).
+ * post exactly one [PrivacyUserMessage] confirmation (the buffered Channel
+ * makes the message the observable "the action completed" contract).
  *
  * All collaborators are mockk'd (interfaces / final classes); Main-dispatcher
  * rule inlined (StandardTestDispatcher + setMain/resetMain — module jvmTest

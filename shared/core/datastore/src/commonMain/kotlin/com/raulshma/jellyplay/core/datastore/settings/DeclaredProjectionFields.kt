@@ -53,8 +53,9 @@ import com.raulshma.jellyplay.core.model.ThemeMode
  */
 
 /**
- * The appearance-art theme quad, declared once. Formerly hand-built five
- * times (audio-player UI, Seerr detail, media detail, onboarding, main).
+ * The appearance-art theme quad, declared once — the one assembly every
+ * consumer (audio-player UI, Seerr detail, media detail, onboarding, main)
+ * reads.
  */
 internal fun AppearanceSlice.appearanceTheme(): AppearanceTheme = AppearanceTheme(
     dynamicTheming = dynamicTheming,
@@ -314,8 +315,8 @@ internal fun AppearanceCoreValues.toAppearancePreferences(): AppearancePreferenc
 /**
  * Appearance settings screen projection: the declared appearance-core set
  * plus this screen's accessibility / layout / library / newsletter fields.
- * (The home-discovery card-display quartet moved to `homeScreenPreferences`
- * with its rows — PS-4.)
+ * (The home-discovery card-display quartet lives in `homeScreenPreferences`
+ * with its rows.)
  */
 internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
     appearance: AppearanceSlice,
@@ -392,7 +393,7 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         showClockOnHome = home.showClockOnHome,
         showSettingsInHomeSearch = home.showSettingsInHomeSearch,
         hideTopHeaderOnScroll = home.hideTopHeaderOnScroll,
-        // The H11/H12 card-badge toggles read the same home-store prefs the
+        // The card-badge toggles read the same home-store prefs the
         // home cards group writes — the appearance screen's rows are a second
         // face on one pref, not a second pref.
         showQualityBadges = home.showQualityBadges,

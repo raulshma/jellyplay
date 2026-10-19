@@ -100,23 +100,23 @@ internal fun BaseItemDto.toMediaItem(now: DateTime = DateTime.now()) = MediaItem
     unplayedItemCount = userData?.unplayedItemCount,
     isVirtual = locationType == LocationType.VIRTUAL,
     missingReason = deriveMissingEpisodeReason(locationType, premiereDate, now),
-    // Stream badges (D11): derived from the item's own MediaStreams when the
+    // Stream badges: derived from the item's own MediaStreams when the
     // fetch projected them (the per-season getEpisodes call); every listing
     // without sources (all-episodes, list projections, older servers) has an
     // empty/null mediaSources list → null info → the rows render nothing.
     episodeStreamInfo = mediaSources?.firstOrNull()?.mediaStreams
         ?.takeIf { it.isNotEmpty() }
         ?.let(::toEpisodeStreamInfo),
-    // H12 NEW-badge input: the library-arrival timestamp, carried only where
+    // The NEW-badge input: the library-arrival timestamp, carried only where
     // the fetch projected DateCreated (the HOME_ROW_PROJECTION_FIELDS rows).
     dateCreatedEpochMs = dateCreated?.toEpochMillis(),
-    // H11 quality badges: the same projected-streams source as the episode
+    // The quality badges: the same projected-streams source as the episode
     // stream info above — listings without MediaStreams map to null and the
     // cards render nothing.
     qualityBadges = mediaSources?.firstOrNull()?.mediaStreams
         ?.takeIf { it.isNotEmpty() }
         ?.let(::toQualityBadges),
-    // D18: the credited People, retained only where the fetch projected the
+    // The credited People, retained only where the fetch projected the
     // People field (getItemsByPerson's filmography rows) — every other
     // listing has a null list → empty → the person screen's role extraction
     // degrades to null. Same projection shape as toMediaDetail.
@@ -129,7 +129,7 @@ internal fun BaseItemDto.toMediaItem(now: DateTime = DateTime.now()) = MediaItem
             primaryImageTag = person.primaryImageTag,
         )
     } ?: emptyList()).distinctBy { it.id },
-    // H13: the trickplay sprite-sheet summary, carried only where the fetch
+    // The trickplay sprite-sheet summary, carried only where the fetch
     // projected `Trickplay` (the HOME_ROW_PROJECTION_FIELDS resume/next-up
     // rows). The wire element is keyed by media-source id then width variant;
     // a row item previews one source, so the widest variant — toMediaDetail's
@@ -143,7 +143,7 @@ internal fun BaseItemDto.toMediaItem(now: DateTime = DateTime.now()) = MediaItem
 )
 
 /**
- * Derives the episode rows' compact stream summary ([EpisodeStreamInfo], D11)
+ * Derives the episode rows' compact stream summary ([EpisodeStreamInfo])
  * from a projected [org.jellyfin.sdk.model.api.MediaStream] list. Pure so the
  * subtitle/channel-layout/language-count derivations have a direct test
  * surface (JellyfinDtoMappersTest).
@@ -205,14 +205,14 @@ internal fun deriveMissingEpisodeReason(
 /**
  * The SDK's deserialized [DateTime] is a system-zone `LocalDateTime` (see
  * [toIsoInstantString]) — re-attach the zone and read the epoch millis. The
- * H12 NEW-badge comparison is always stamp-vs-stamp from this same device
+ * The NEW-badge comparison is always stamp-vs-stamp from this same device
  * clock, so the system-zone anchoring is consistent on both sides.
  */
 internal fun DateTime.toEpochMillis(): Long =
     atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
 /**
- * Derives the cards' compact quality summary ([ItemQualityBadge], H11) from a
+ * Derives the cards' compact quality summary ([ItemQualityBadge]) from a
  * projected [org.jellyfin.sdk.model.api.MediaStream] list. Pure so the
  * resolution/codec/video-range ladder has a direct test surface
  * (JellyfinDtoMappersTest). The list is built in render-priority order — one

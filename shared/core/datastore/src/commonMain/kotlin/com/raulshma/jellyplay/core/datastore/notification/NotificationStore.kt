@@ -223,7 +223,7 @@ class NotificationStore constructor(
     }
 
     /**
-     * Read-modify-write of the D12 per-series config map (the library-configs
+     * Read-modify-write of the per-series config map (the library-configs
      * aggregate transform's series-granularity twin). The worker's per-series
      * write-back (diff baseline + check stamp) and the opt-in/out UI commands
      * both funnel through here, so concurrent writers cannot drop each other's
@@ -243,7 +243,7 @@ class NotificationStore constructor(
     }
 
     /**
-     * Opt-in / opt-out command for one series (the ⋮ menu entry, the D7 bell
+     * Opt-in / opt-out command for one series (the ⋮ menu entry, the bell
      * and the management sheet all route here). Opt-out REMOVES the entry
      * (the management list shows opted-in series only — a disabled husk
      * would be dead weight), so a disable→re-enable pair starts with a fresh

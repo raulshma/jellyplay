@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * Exercises the reader preference store against the shared `"user_prefs"` test
  * DataStore: the LTR default for unvisited books, the per-book RTL override
  * round-trip, multi-book map coexistence, corrupt-blob degradation, the
- * Wave-1 appearance / pacing scalars (defaults, clamping, enum degradation)
+ * appearance / pacing scalars (defaults, clamping, enum degradation)
  * and both new per-book JSON maps, and [ReaderStore.clearAll].
  *
  * Value assertions go through the pure [ReaderStore.read] projection over a

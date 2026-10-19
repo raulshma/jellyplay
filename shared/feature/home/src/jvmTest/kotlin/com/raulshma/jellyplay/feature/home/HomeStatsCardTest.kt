@@ -19,7 +19,7 @@ import kotlin.test.assertNull
 import kotlin.test.Test
 
 /**
- * H17 stats card: the pure aggregation math plus the loader's admin /
+ * Stats card: the pure aggregation math plus the loader's admin /
  * non-admin gating. The loader is the only place the card's fetches live, so
  * the gating contract (admin-only richer stats, silent failure, probe-once)
  * is pinned end-to-end here against MockK client doubles.
@@ -105,7 +105,7 @@ class HomeStatsCardTest {
         assertEquals(12, data?.playedCount)
         assertEquals(34, data?.unplayedCount)
         assertEquals(90L, data?.approximateWatchMinutes)
-        // The v1 card is exact-free: no admin fields populated, and the
+        // The base card is exact-free: no admin fields populated, and the
         // admin repository was never consulted for a non-admin.
         assertNull(data?.exactWatchHours)
         assertNull(data?.currentStreakDays)

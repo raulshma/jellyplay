@@ -33,9 +33,9 @@ internal fun DownloadsDeleteDialogs(
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                // Settle: confirm clears the machine synchronously (the arm
-                // that makes the old never-cleared bug impossible), then the
-                // delete fires as a fire-and-forget VM call.
+                // Settle: confirm clears the machine synchronously (so it can
+                // never be left pending), then the delete fires as a
+                // fire-and-forget VM call.
                 val target = viewModel.pendingDelete.confirm() ?: return@ConfirmDialog
                 viewModel.deleteDownload(target)
             },

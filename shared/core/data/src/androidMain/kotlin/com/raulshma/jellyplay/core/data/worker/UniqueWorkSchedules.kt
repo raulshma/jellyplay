@@ -44,7 +44,7 @@ internal object UniqueWorkSchedules {
      * The one-shot ladder: CONNECTED-constrained [W] tagged [tag], enqueued
      * under [uniqueName] with [existingPolicy] (KEEP unless a caller
      * deliberately passes otherwise). [batteryNotLow] defaults off — only the
-     * auto-download foreground trigger sets it today. [initialDelay] (D12's
+     * auto-download foreground trigger sets it today. [initialDelay] (the
      * *arr air-time accelerator is the first consumer) defers the run to
      * [airTime + buffer]; null keeps the run-immediately-when-constraints-
      * allow behavior every existing caller relies on.

@@ -27,14 +27,13 @@ import org.junit.Test
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
- * Port of the legacy :feature:auth AuthViewModelTest (junit4 + mockk, kept on
- * the jvmTest source set — the conveyor test home). The two assertions that
- * checked user-facing copy via stubbed `context.getString` now assert exact
- * [UiMessage.Resource] identity against the generated accessors (admin
- * UserDetailViewModel test precedent): the seal carries the resource
- * unresolved, so the test compares `Res.string` objects instead of resolved
- * text — stronger than the legacy contains-check ("not enabled" / "timed
- * out") because it also pins the fallback-vs-exception-message choice.
+ * Covers [AuthViewModel] QuickConnect error mapping and state transitions
+ * (junit4 + mockk).
+ *
+ * Error-message assertions compare exact [UiMessage.Resource] identity against
+ * the generated accessors: the message carries the resource unresolved, so the
+ * test compares `Res.string` objects instead of resolved text, which also pins
+ * the fallback-vs-exception-message choice.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
@@ -82,8 +81,8 @@ class AuthViewModelTest {
         advanceUntilIdle()
         val state = viewModel.quickConnectState.value
         assertTrue("expected Error, was $state", state is QuickConnectUiState.Error)
-        // HEAD fallback semantics: a present exception message wins over the
-        // localized resource (legacy `?:` — the string was only a fallback).
+        // A present exception message wins over the localized resource: the
+        // string is only a fallback.
         assertEquals(
             UiMessage.Raw("boom"),
             (state as QuickConnectUiState.Error).message,

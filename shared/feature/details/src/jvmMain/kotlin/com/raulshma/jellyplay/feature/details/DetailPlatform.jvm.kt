@@ -95,7 +95,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             pluginRecommendationsApi = get(),
             pluginMarkersApi = get(),
             jellyPlayFeatureGate = get(),
-            // D4: the direct-TMDB details fallback behind the externalRatings
+            // The direct-TMDB details fallback behind the externalRatings
             // enrichment (core:network single, NetworkKoinModules).
             tmdbApiClient = get(),
         )
@@ -144,7 +144,7 @@ internal actual fun InlineTrailerPlayerHost(
 }
 
 /**
- * Desktop actual of the D22 ambient-clip seam (v1): no ambient video on
+ * Desktop actual of the ambient-clip seam: no ambient video on
  * desktop — the hero stays the backdrop image (the static-hero parity the
  * plan pins; the YouTube embed path degrades through its own actual above).
  */
@@ -155,15 +155,15 @@ internal actual fun AmbientThemeVideoSurface(url: String, modifier: Modifier) {
 }
 
 /**
- * D12: desktop has no notification stack — the ⋮ menu's notify entry and
- * the D7 rows' bell are hidden outright (the store-side config writes are
+ * Desktop has no notification stack — the ⋮ menu's notify entry and
+ * the upcoming rows' bell are hidden outright (the store-side config writes are
  * reachable only through the hidden surfaces, so nothing is ever
  * configured for a platform that cannot deliver).
  */
 internal actual val platformHasNotificationStack: Boolean = false
 
 /**
- * D12: desktop permission seam — no POST_NOTIFICATIONS runtime flow exists
+ * Desktop permission seam — no POST_NOTIFICATIONS runtime flow exists
  * off Android; the lambda is a no-op (the surfaces that would invoke it are
  * hidden by [platformHasNotificationStack] anyway).
  */

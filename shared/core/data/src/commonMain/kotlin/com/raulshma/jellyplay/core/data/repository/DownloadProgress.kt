@@ -19,7 +19,7 @@ data class DownloadProgress(
     val downloadedBytes: Long,
     val speedBytesPerSec: Long,
     /**
-     * The downloaded item id (the `downloads.mediaItemId` join column, D16) —
+     * The downloaded item id (the `downloads.mediaItemId` join column) —
      * lets item-keyed surfaces (the detail screen's episode rows) map live
      * progress onto their rows without a second query. Null only from tests
      * constructing the bare byte/speed triple.

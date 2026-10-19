@@ -20,7 +20,7 @@ interface HomeSectionCacheDao {
 
     /**
      * Most recently persisted snapshot for the identity, across cacheKeys.
-     * Backs the offline home's layout mirror (issue #147): while offline the
+     * Backs the offline home's layout mirror: while offline the
      * home reproduces the last-rendered online layout — section types, titles,
      * per-library rows, order — filtered to downloaded items. Key-agnostic on
      * purpose: a preference change made while offline shifts the cacheKey, and

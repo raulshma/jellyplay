@@ -11,7 +11,7 @@ import kotlin.test.fail
 
 /**
  * Pins the PRODUCTION row-chassis dispatch ([homeRowChassis]) — the
- * offline-mirror precedence that used to live only inside HomeContentList's
+ * offline-mirror precedence lifted out of HomeContentList's
  * if/else chain — plus the See-All gate ([sectionHasSeeAll]), the shared
  * CW click routing ([resumeRowClick]) the online and offline wide rows must not
  * drift apart on, and its poster-row selection ([posterRowClick]).
@@ -110,7 +110,7 @@ class HomeRowChassisTest {
 
     @Test
     fun myMedia_dispatchesOnlineTilesOnline_andTheOfflineMirrorOffline() {
-        // H5: the row's own tiles arm online; while the offline feed renders,
+        // The row's own tiles arm online; while the offline feed renders,
         // the non-wide mirror claim wins (and the mirrored row drops — no
         // offline library exists for a server library id).
         val online = section(HomeSectionType.MY_MEDIA)
@@ -305,13 +305,13 @@ class HomeRowChassisTest {
             HomeSectionType.CONTINUE_WATCHING,
             HomeSectionType.CONTINUE_READING,
             HomeSectionType.NEXT_UP,
-            // The H4 Upcoming row rides the batch sub-call's single-row twin.
+            // The Upcoming row rides the batch sub-call's single-row twin.
             HomeSectionType.UPCOMING,
             HomeSectionType.RECENTLY_ADDED,
             HomeSectionType.LATEST_MEDIA,
             HomeSectionType.PINNED,
             HomeSectionType.DISCOVER,
-            // The plugin rows (companion plugin, ADR 0010) ride the fetcher's
+            // The plugin rows (companion plugin) ride the fetcher's
             // single-row PLUGIN_ROW arm like the pins do.
             HomeSectionType.PLUGIN_ROW,
         )

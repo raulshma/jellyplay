@@ -5,11 +5,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins the extracted log-line parse ([parseLogLineSpans] + the token →
- * [LogLineRole] ladder) — the severity/color decision LogsScreen's
- * `parseLogLine` used to carry inline behind an [AnnotatedString] that kept
- * it off the JVM lane. The composable's role→color map is trivial by
- * construction; everything decidable is pinned here.
+ * Pins the log-line parse ([parseLogLineSpans] + the token →
+ * [LogLineRole] ladder) — the severity/color decision LogsScreen renders from
+ * [AnnotatedString] spans, kept separate so it is JVM-testable. The
+ * composable's role→color map is trivial by construction; everything
+ * decidable is pinned here.
  */
 class LogLineParseTest {
 

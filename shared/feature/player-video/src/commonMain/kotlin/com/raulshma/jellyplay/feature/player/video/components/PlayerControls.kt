@@ -279,7 +279,7 @@ internal data class SheetControls(
     val queueItemCount: Int = 0,
     val isInSyncPlaySession: Boolean = false,
     val onQueueClick: () -> Unit = {},
-    // Input-binding quick toggles (issue #171) — forwarded to the overflow
+    // Input-binding quick toggles — forwarded to the overflow
     // menu's tap-to-flip section. Defaulted empty so previews/tests are
     // unaffected.
     val inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),

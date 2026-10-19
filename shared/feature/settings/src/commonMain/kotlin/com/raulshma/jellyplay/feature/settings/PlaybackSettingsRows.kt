@@ -348,13 +348,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
 /**
  * The playback/video domain's fused row declarations — the feature-side single
  * home of every playback row's presentation, ordering, and capability (the
- * [AppearanceRows] template, applied to the wave's largest domain). Each
- * [SettingsRow] replaces the trio the domain used to declare per row: the
- * `SettingsSearchBinding` entry, the `SettingsRowRecord` entry, and the
- * `PlaybackSettingsIds` holder constant (all retired). One declaration per
- * row: id, title faces, icon, search faces, and the admission gate
- * ([SettingsRow.gate] — the one declaration both the group totals and the
- * screen emission `if`s read).
+ * [AppearanceRows] template, applied to the domain's largest row set). Each
+ * [SettingsRow] carries the search binding, the screen face and the row
+ * identity in one declaration: id, title faces, icon, search faces, and the
+ * admission gate ([SettingsRow.gate] — the one declaration both the group
+ * totals and the screen emission `if`s read).
  *
  * The SEMANTICS stay two-homed by design: each spec-backed row's keywords,
  * advanced flag, platform rule and route kind live on the datastore-side
@@ -364,9 +362,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
  * faces (their knobs live in spec-less stores). The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * row-spec drift; search results, catalog order, group membership and
- * per-gate visibility are byte-identical to the retired record+binding
- * declarations (`SpecDerivedSearchItemsTest`,
- * `SettingsCatalogScreenContractTest` keep pinning them).
+ * per-gate visibility derive from these declarations
+ * (`SpecDerivedSearchItemsTest`,
+ * `SettingsCatalogScreenContractTest` pin them).
  */
 internal object PlaybackRows {
 
@@ -436,7 +434,7 @@ internal object PlaybackRows {
     )
 
     /**
-     * The player input-binding editor entry (issue #171 generalized):
+     * The player input-binding editor entry:
      * per-input action assignment + enable switches. Every platform has some
      * input surface (touch, wheel/keyboard on desktop, D-pad on TV), so the
      * row is Always-admitted — unlike the touch-gesture rows beside it.
@@ -512,7 +510,7 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_controls_timeout_subtitle,
     )
 
-    // (jellyfin-androidtv #3924): pausing should not summon the control
+    // Pausing should not summon the control
     // overlay. Renders beside [ControlsTimeout] — the other controls-visibility
     // knob — in the advanced block, sharing its admission shape.
     val HideOsdOnPause = SettingsRow(
@@ -661,7 +659,7 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_background_audio_subtitle,
     )
 
-    // ── Auto-PiP on Home/recents (issue #167): Android-only — the declared
+    // ── Auto-PiP on Home/recents: Android-only — the declared
     // All(Advanced, Platform(Pip)) admission hides the row wholesale on
     // desktop, where NoOpPipController binds and windowing covers it.
     val AutoEnterPip = SettingsRow(
@@ -1088,9 +1086,9 @@ internal object PlaybackRows {
         keywords = listOf("mpv", "hdr", "hdr10", "passthrough", "gpu-next", "colorspace", "tv"),
         route = Route.PlaybackSettings(),
         isAdvanced = true,
-        // BOTH mpv hosts now: the desktop HWND-embed hint path AND Android's
+        // BOTH mpv hosts: the desktop HWND-embed hint path AND Android's
         // SurfaceView vo=gpu-next twin (evaluated against the shared
-        // video-target-params probe). Formerly desktop-only.
+        // video-target-params probe).
         platforms = null,
         // NOT the MpvRenderProfiles platform gate (Android has no render-
         // profile surface) — the passthrough property itself is fully wired on
@@ -1478,8 +1476,8 @@ internal object PlaybackRows {
 
     // Advanced-tagged yet always rendered: the DVR block sits outside the
     // advanced structural block and feeds the declaration size itself, so the
-    // legacy tag the screen never honored gets the explicit Always override
-    // (the appearance HapticsEnabled shape).
+    // explicit Always override wins over the tag (the appearance
+    // HapticsEnabled shape).
     val DvrRecordingQuality = SettingsRow(
         id = "dvr_recording_quality",
         icon = Tabler.Outline.BadgeHd,
@@ -1545,7 +1543,7 @@ internal object PlaybackRows {
     )
 
     /**
-     * Every fused playback row — the ratchet's vocabulary. A computed accessor
+     * Every fused playback row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

@@ -17,7 +17,7 @@ import kotlin.test.assertNull
 
 /**
  * Tests for [MediaContentProjector] — the `media` slice's single writer
- * (A8). All dependencies are plain constructor-lambda fakes over a real
+ * All dependencies are plain constructor-lambda fakes over a real
  * [MediaContentState] mirror; no ViewModel, no uiState. The headline pins:
  * the refreshed-detail ORDER (detail apply → session-manager re-sync →
  * streams write → track-rebuild fan-outs) and the session-state FOLD
@@ -25,7 +25,7 @@ import kotlin.test.assertNull
  * refresh THEN the fire-and-forget render poke) that used to live as the
  * VM's inline collector body.
  *
- * Since the C6 wiring collapse the projector OWNS the detail-application
+ * Since the wiring collapse the projector OWNS the detail-application
  * cluster ([MediaDetailProjection], the former construction-cycle sibling):
  * `applyDetail` is a real fun over that owned projection, so the cluster's
  * construction inputs are recording fakes here and the refreshed-detail

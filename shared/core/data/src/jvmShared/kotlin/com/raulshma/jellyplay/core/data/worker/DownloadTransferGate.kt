@@ -40,7 +40,7 @@ import java.io.File
  *     body hold one shared [DownloadConcurrencyLimiter] slot, so at most
  *     `maxConcurrentDownloads` transfers run at once; the rest block here.
  *     Releasing after the preamble alone would uncap the actual transfers —
- *     the pre-extraction code kept the entire transfer inside `withPermit`.
+ *     the original code kept the entire transfer inside `withPermit`.
  *  4. **Post-QUEUED re-check** — with a slot in hand, re-read the row's
  *     status: the user may have paused or cancelled while the row was
  *     QUEUED. An inactive row expresses through the caller's [onInactive]

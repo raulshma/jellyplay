@@ -77,7 +77,7 @@ class PlayerStores(
  * flowing to its single consumer under its original receiving name.
  *
  * These lived on the deleted `PlayerWiring` composition builder before the
- * builder dissolved into the session (the C6 collapse); they are the same
+ * builder dissolved into the session; they are the same
  * bundles at the same construction sites, re-homed beside [PlayerStores].
  */
 

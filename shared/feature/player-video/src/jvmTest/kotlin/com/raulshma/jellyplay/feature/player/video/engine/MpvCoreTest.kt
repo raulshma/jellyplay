@@ -823,7 +823,7 @@ class MpvCoreTest {
         assertEquals(7_500_000L, fallback.currentCues.value.single().startTimeUs, "position fallback when no sub-start")
     }
 
-    // ── Ownership (issue #165) ──────────────────────────────────────────────
+    // ── Ownership ──────────────────────────────────────────────
 
     @Test
     fun ownershipRefreshPopulatesTheSnapshotAndReportsUnsalvageableKeys() {

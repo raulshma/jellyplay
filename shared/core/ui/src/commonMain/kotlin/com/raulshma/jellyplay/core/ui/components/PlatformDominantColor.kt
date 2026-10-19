@@ -8,8 +8,7 @@ import coil3.PlatformContext
  * at 64px and classifies a dominant/vibrant swatch from the pixels.
  *
  * Android keeps the original Coil+Palette pipeline verbatim. Desktop returns
- * null until its classifier lands with the desktop shell polish pass (plan
- * §/V2); callers already render the fallback color.
+ * null until its classifier lands; callers already render the fallback color.
  */
 internal expect suspend fun extractDominantColor(context: PlatformContext, imageUrl: String): Color?
 

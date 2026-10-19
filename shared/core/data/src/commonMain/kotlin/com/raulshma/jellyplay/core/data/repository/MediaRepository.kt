@@ -216,7 +216,7 @@ interface MusicCatalogue {
 }
 
 /**
- * The D12 series-notification family seam of the media stack (the
+ * The series-notification family seam of the media stack (the
  * [MusicCatalogue] narrow-collaborator pattern): the per-series Next Up
  * diff read the `NewMediaCheckWorker`'s second pass rides. Its clean sole
  * consumer injects this seam instead of the union; the impl satisfies both

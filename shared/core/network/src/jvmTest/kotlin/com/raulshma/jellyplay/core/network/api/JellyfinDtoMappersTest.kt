@@ -111,7 +111,7 @@ class JellyfinDtoMappersTest {
         assertNull(real.missingReason)
     }
 
-    // ── credited-People retention (D18 role extraction input) ─────────────
+    // ── credited-People retention ─────────────
 
     @Test
     fun `toMediaItem retains the credited People projected on the item`() {
@@ -237,7 +237,7 @@ class JellyfinDtoMappersTest {
         assertEquals(MediaSourceType.DEFAULT, absent.toMediaSourceType())
     }
 
-    // ── episode stream-info derivation (season rows' stream badges, D11) ──
+    // ── episode stream-info derivation (season rows' stream badges) ──
 
     private fun wireStream(
         type: org.jellyfin.sdk.model.api.MediaStreamType,
@@ -430,7 +430,7 @@ class JellyfinDtoMappersTest {
         assertTrue(withStreams.episodeStreamInfo?.hasSubtitles == true)
     }
 
-    // ── quality-badge derivation (cards' 4K/HDR/DV/Atmos row, H11) ───────
+    // ── quality-badge derivation (cards' 4K/HDR/DV/Atmos row) ───────
 
     private fun videoStream(
         width: Int? = null,

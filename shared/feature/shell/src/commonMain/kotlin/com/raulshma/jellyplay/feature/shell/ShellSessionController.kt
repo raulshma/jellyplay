@@ -14,12 +14,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * The shell-message form of a completed app-update check (ADR 0001's
- * update-surface split): the check→message MAPPING is shared, the rendering is
+ * The shell-message form of a completed app-update check (the update-surface
+ * split): the check→message MAPPING is shared, the rendering is
  * each shell's own surface. Android never uses this — its [UpdateCoordinator]
  * (app module) maps the same repository result into a full update-sheet state
  * machine (pending-APK fallback, dismissal suppression, auto-download), a
- * structurally richer mapping that stays put per the desktop auto-update ADR.
+ * structurally richer mapping that stays per-shell.
  *
  * Desktop renders [UpdateAvailable] / [UpToDate] / [Failed] as snackbar text;
  * its no-self-update posture (no desktop self-update — the
@@ -38,16 +38,16 @@ sealed interface UpdateCheckMessage {
 }
 
 /**
- * The session-policy wiring both shells used to duplicate (ADR 0001, reversing
- * CONTEXT.md's old per-shell ruling): admin-status state +
- * [AdminRefreshGate] arbitration (shouldStart → refreshCurrentUser →
- * onRefreshCompleted → finally-reset), homeMode collect/persist, the
- * revoke/plain logout fork, and — as a pure mapping — the app-update
- * check→shell-message translation ([updateCheckMessage]).
+ * The session-policy wiring both shells share (the shell-session pattern):
+ * admin-status state + [AdminRefreshGate] arbitration (shouldStart →
+ * refreshCurrentUser → onRefreshCompleted → finally-reset), homeMode
+ * collect/persist, the revoke/plain logout fork, and — as a pure mapping —
+ * the app-update check→shell-message translation ([updateCheckMessage]).
  *
  * Lives in commonMain beside the gate it drives; constructed DIRECTLY by each
- * shell (no Koin binding — the same construction pattern [AdminRefreshGate]
- * had): Android's `MainViewModel` and desktop's `DesktopNavScaffold` both pass
+ * shell (no Koin binding — the same construction pattern as
+ * [AdminRefreshGate]): Android's `MainViewModel` and desktop's
+ * `DesktopNavScaffold` both pass
  * their own [CoroutineScope] and their own repository collaborators as plain
  * flows / suspend lambdas, so this module keeps its repository-free
  * dependency set (see the gate: pure policy over injected lambdas). What each
@@ -58,7 +58,7 @@ sealed interface UpdateCheckMessage {
  *
  * State:
  *  - [isAdmin] — the current user's admin flag, projected off [currentUser]
- *    exactly as both shells did (`user?.isAdmin == true`).
+ *    (`user?.isAdmin == true`).
  *  - [isRefreshingAdmin] — true while the admin refresh launched by
  *    [refreshAdminStatusNow] is in flight; the state the admin route's guard
  *    renders so it never flashes access-denied before the first refresh.
@@ -70,8 +70,7 @@ sealed interface UpdateCheckMessage {
  *    switch) and persist through [persistHomeMode] on [scope].
  *
  * Commands run on [scope] — Android passes the ViewModel scope, desktop the
- * scaffold composition scope, so every job dies with its shell exactly as the
- * inlined copies did.
+ * scaffold composition scope, so every job dies with its shell.
  *
  * @param scope the shell's own coroutine scope (see class KDoc).
  * @param nowMs wall-clock millis; injected like the gate's, so tests pin
@@ -100,8 +99,7 @@ class ShellSessionController(
     /**
      * The admin refresh dedupe policy (30 s window + in-flight guard). The
      * in-flight state is [isRefreshingAdmin] — owned here, read through the
-     * gate's lambda exactly as MainViewModel and the desktop scaffold each
-     * wired it before.
+     * gate's lambda.
      */
     private val adminRefreshGate = AdminRefreshGate(
         isRefreshInFlight = { _isRefreshingAdmin.value },

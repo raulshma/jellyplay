@@ -132,7 +132,7 @@ internal class SubtitleManager(
      * "usable", not merely "saved on the server" — every engine drops a
      * side-load silently (unmappable codec, failed fetch), and marking the row
      * usable before the track lands produced a "Use" button that did nothing
-     * (#144). Defaults to true so the row never blocks on the seam.
+     * Defaults to true so the row never blocks on the seam.
      */
     private val isSubtitleTrackAttached: (ReadySubtitleHint) -> Boolean = { true },
     /**
@@ -480,7 +480,7 @@ internal class SubtitleManager(
     }
 
     /**
-     * Verify-then-mark tail shared by every side-load download path (#144):
+     * Verify-then-mark tail shared by every side-load download path:
      * the engine side-load → track-list republish round-trip is asynchronous,
      * and every engine drops a side-load silently when it fails (unmappable
      * codec, engine-side fetch error), so marking a row usable before the

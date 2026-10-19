@@ -396,8 +396,8 @@ class LibraryApiClientImplTest {
 
     @Test
     fun `getUpcoming shapes the Shows Upcoming query with the home-row projection`() = runTest {
-        // H4: /Shows/Upcoming rides the shared resume-spec shape (limit + the
-        // home-row projection) and scopes to the parent when given (D7's
+        // /Shows/Upcoming rides the shared resume-spec shape (limit + the
+        // home-row projection) and scopes to the parent when given (the
         // series strip). The card-overlay reads ride the same fetch.
         val api = RecordingApiClient(
             responseBody = """
@@ -414,9 +414,9 @@ class LibraryApiClientImplTest {
         assertEquals("7", queryParam(api.queries[0], "limit"))
         assertEquals(LATEST_FOLDER_ID, queryParam(api.queries[0], "parentId"))
         val fields = queryParam(api.queries[0], "fields")
-        assertTrue(fields.contains("MediaStreams"), "quality badges read MediaStreams off the row fetch (H11)")
-        assertTrue(fields.contains("DateCreated"), "the NEW dot reads DateCreated off the row fetch (H12)")
-        assertTrue(fields.contains("Trickplay"), "the focus preview reads Trickplay off the row fetch (H13)")
+        assertTrue(fields.contains("MediaStreams"), "quality badges read MediaStreams off the row fetch")
+        assertTrue(fields.contains("DateCreated"), "the NEW dot reads DateCreated off the row fetch")
+        assertTrue(fields.contains("Trickplay"), "the focus preview reads Trickplay off the row fetch")
     }
 
     @Test
@@ -436,7 +436,7 @@ class LibraryApiClientImplTest {
         assertEquals(
             "true",
             queryParam(api.queries[0], "inheritFromParent"),
-            "an episode/season card inherits the series clip (H7)",
+            "an episode/season card inherits the series clip",
         )
     }
 
@@ -460,7 +460,7 @@ class LibraryApiClientImplTest {
 
     @Test
     fun `getBoxSetsContaining probes each boxset for membership`() = runTest {
-        // D6 on a real server: /Items/{id}/Ancestors never lists BoxSets, so
+        // On a real server: /Items/{id}/Ancestors never lists BoxSets, so
         // membership resolves explicitly — enumerate the user's boxsets
         // (includeItemTypes=BoxSet), then one id-filtered probe per boxset.
         // Members resolve through getCollectionItems — this stays
@@ -501,7 +501,7 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `getPeople threads appearsInItemId only when asked (D20)`() = runTest {
+    fun `getPeople threads appearsInItemId only when asked`() = runTest {
         val api = RecordingApiClient(
             // SDK 1.8.x deserializes the persons rows as BaseItemDto, whose
             // Type field is required — a bare Id/Name row no longer decodes.
@@ -519,7 +519,7 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `season and all-episodes fetches project MediaStreams (D11)`() = runTest {
+    fun `season and all-episodes fetches project MediaStreams`() = runTest {
         val api = RecordingApiClient(responseBody = emptyItemsBody)
         engine.updateApi(api)
 
@@ -540,7 +540,7 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `the resume query carries excludeActiveSessions with the H6 flag`() = runTest {
+    fun `the resume query carries excludeActiveSessions with the flag`() = runTest {
         val api = RecordingApiClient(responseBody = emptyItemsBody)
         engine.updateApi(api)
 
@@ -548,7 +548,7 @@ class LibraryApiClientImplTest {
         assertEquals(
             "false",
             queryParam(api.queries[0], "excludeActiveSessions"),
-            "default keeps the server default — the pre-H6 wire",
+            "default keeps the server default — the legacy wire",
         )
 
         client.getContinueWatching(limit = 20, excludeActiveSessions = true).getOrThrow()
@@ -560,7 +560,7 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `home layout display preferences decode the custom-pref payload (H20)`() = runTest {
+    fun `home layout display preferences decode the custom-pref payload`() = runTest {
         val api = RecordingApiClient(
             responseBody = """
                 {"Id":"${testUser.id}","RememberIndexing":false,"PrimaryImageHeight":0,"PrimaryImageWidth":0,
@@ -609,7 +609,7 @@ class LibraryApiClientImplTest {
     }
 
     @Test
-    fun `home layout write posts the payload under the jellyplay namespace (H20)`() = runTest {
+    fun `home layout write posts the payload under the jellyplay namespace`() = runTest {
         val api = RecordingApiClient(
             responseBody = "{}",
             bodiesByPath = mapOf("/DisplayPreferences/{displayPreferencesId}" to "{}"),

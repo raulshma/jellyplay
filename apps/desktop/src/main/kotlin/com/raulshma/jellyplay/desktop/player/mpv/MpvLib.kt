@@ -192,13 +192,12 @@ object MpvLib {
     /** Reads a NODE property into a plain Kotlin value (String/Boolean/Long/Double/List/Map). */
     fun readNode(ctx: Pointer, name: String): Any? {
         // Raw memory + manual offsets, NOT the MpvNode Structure.
-        // mpv writes the node tree in C layout and two things broke the old
-        // Structure path: top-level arrays arrive as MPV_FORMAT_NODE_ARRAY
-        // (format 7 — the old `when` matched only generic NODE), and JNA's
-        // nested-union marshalling never successfully followed the
-        // foreign-written memory anyway. Net effect: readNode returned null
-        // for every list/map property and the engine's track listing was
-        // empty since V2. Offsets are the x64 C layouts (constants below).
+        // mpv writes the node tree in C layout: top-level arrays arrive as
+        // MPV_FORMAT_NODE_ARRAY (format 7, which a generic NODE match misses),
+        // and JNA's nested-union marshalling cannot follow foreign-written
+        // memory. The Structure path therefore returns null for every
+        // list/map property, leaving the engine's track listing empty.
+        // Offsets are the x64 C layouts (constants below).
         val mem = Memory(NODE_BYTE_SIZE)
         val rc = mpv.mpv_get_property(ctx, name, FORMAT_NODE, mem)
         if (rc < 0) return null

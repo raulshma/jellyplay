@@ -96,7 +96,7 @@ class MediaRepositoryImplTest {
         )
         val internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry)
         val timeSource = SystemTimeSource()
-        // Snapshot-store extraction: the repo now ctor-injects the persisted
+        // The repo ctor-injects the persisted
         // half of the home pipeline (the same store the Koin graph wires);
         // this suite never touches home persistence, so the relaxed DAO
         // mock under the store is inert.
@@ -291,7 +291,7 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `markUnplayed on a series drops the catalogue snapshot so next load re-fetches`() = runTest {
-        // Plan 08 step 2: the seasons/episodes cache is dropped through the
+        // The seasons/episodes cache is dropped through the
         // mutation itself (was: invalidateSeriesCache, which had no production
         // callers outside this funnel).
         coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
@@ -821,19 +821,14 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // Plan 08 step 0 — characterization pins for self-invalidation
-    // (docs/architecture/plans/08-mediarepository-self-invalidation.md).
-    //
-    // The two original pins asserted the *future* mutation-owned invalidation
-    // and were @Ignore'd against the bare-passthrough mutations; steps 1 and 3
-    // un-ignored them (season marks own the parent-series drop; collection
-    // edits drop their items cache). The suite below keeps both assertions as
-    // permanent regression guards.
+    // Characterization pins for mutation-owned self-invalidation: season
+    // marks own the parent-series drop; collection edits drop their items
+    // cache. Both assertions stay as permanent regression guards.
     // ------------------------------------------------------------------
 
     @Test
     fun `markSeasonPlayed drops the series catalogue so re-entry re-fetches`() = runTest {
-        // Plan 08 step 0 pin, un-ignored by step 1: the series screen supplies
+        // The series screen supplies
         // both ids, so the season-aware mutation owns the parent-series
         // invalidation the reactor used to perform by hand.
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(
@@ -868,7 +863,7 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `addItemsToCollection then getCollectionItems re-fetches`() = runTest {
-        // Plan 08 step 0 pin, un-ignored by step 3: the mutation self-
+        // The mutation self-
         // invalidates, so DetailViewModel's manual compensation is gone.
         coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
@@ -918,7 +913,7 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // Playlist edits self-invalidate (plan 08 step 3): getPlaylistItems is an
+    // Playlist edits self-invalidate: getPlaylistItems is an
     // uncached passthrough, so the one cached projection of a playlist is its
     // detail entry — one drop per edit covers the playlist screen's refresh.
     // ------------------------------------------------------------------
@@ -966,7 +961,7 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // invalidateFor: the single per-type dispatch (plan 08 step 3) that
+    // invalidateFor: the single per-type dispatch that
     // absorbed the provider's invalidateByType table. One encoding of the
     // "what did this detail's type affect" rule, asserted per branch.
     // ------------------------------------------------------------------

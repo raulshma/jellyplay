@@ -38,7 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
  * narrow interface. Mirrors the `ServerIdentityStore` / `WidgetDataStore` /
  * `PinRateLimiter` shape.
  *
- * **Stage B spec derivation:** every key this store owns is declared exactly
+ * **Spec derivation:** every key this store owns is declared exactly
  * once as a row in [PlaybackPreferenceSpecs] (wire name, default, reset
  * category, read/write encoding) and the machinery below is derived from those
  * rows — each [Keys] member rebuilds its row's typed key from the row's wire
@@ -280,8 +280,8 @@ class PlaybackStore constructor(
     /**
      * Whether leaving the player during playback auto-enters
      * picture-in-picture. Default `true` preserves the historical behaviour;
-     * turning it off makes Home/recents background the app normally instead
-     * (issue #167). The manual PiP button in the controls is unaffected.
+     * turning it off makes Home/recents background the app normally instead.
+     * The manual PiP button in the controls is unaffected.
      */
     suspend fun setAutoEnterPip(enabled: Boolean) {
         dataStore.edit { PlaybackPreferenceSpecs.AUTO_ENTER_PIP.writeTo(it, enabled) }

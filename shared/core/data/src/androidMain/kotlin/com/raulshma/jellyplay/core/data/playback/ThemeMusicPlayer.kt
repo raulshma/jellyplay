@@ -55,7 +55,7 @@ class ThemeMusicPlayer(
     private var currentPlayerItemId: String? = null
 
     /**
-     * D8: the ambient mute level. Volume-only — playback keeps running while
+     * The ambient mute level. Volume-only — playback keeps running while
      * muted, so unmuting is instant and the fetch/prepare cycle is untouched.
      */
     @Volatile
@@ -63,7 +63,7 @@ class ThemeMusicPlayer(
 
     private val _isPlaying = MutableStateFlow(false)
 
-    /** D8: whether theme audio is currently playing (the mute chip's visibility gate). */
+    /** Whether theme audio is currently playing (the mute chip's visibility gate). */
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val playingListener = object : Player.Listener {
@@ -103,7 +103,7 @@ class ThemeMusicPlayer(
     }
 
     /**
-     * D8: the mute chip's live-volume half. Instant — adjusts the playing
+     * The mute chip's live-volume half. Instant — adjusts the playing
      * player's volume and arms the level for the next [playThemeFor]; no
      * stop/restart. The per-series memory write is the caller's job.
      */

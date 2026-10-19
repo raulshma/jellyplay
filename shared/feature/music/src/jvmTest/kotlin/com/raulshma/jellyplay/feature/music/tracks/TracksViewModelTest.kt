@@ -22,8 +22,8 @@ import kotlin.test.Test
 
 /**
  * Pins the dense-music-list width contract (MUSIC_MAX_WIDTH = 300) through
- * captured facade arguments (plan 04 risk 4: widths must not silently
- * homogenize during the facade migration).
+ * captured facade arguments: widths must not silently
+ * homogenize.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TracksViewModelTest {

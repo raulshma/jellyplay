@@ -143,9 +143,9 @@ fun AnimatedHeroHeader(
     onFocusChange: (Boolean) -> Unit = {},
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
-    /** H9: the curated headline override; null renders the item's own title. */
+    /** The curated headline override; null renders the item's own title. */
     headline: String? = null,
-    /** H9: the curated subhead (kicker) override; null renders nothing above the title. */
+    /** The curated subhead (kicker) override; null renders nothing above the title. */
     subhead: String? = null,
 ) {
     val isTv = LocalTvMode.current
@@ -191,14 +191,14 @@ fun AnimatedHeroHeader(
     val heroIsProminent by remember {
         derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < listState.layoutInfo.viewportSize.height / 2 }
     }
-    // H7: the clip's scroll-defer leg — while the list is scrolling the
+    // The clip's scroll-defer leg — while the list is scrolling the
     // ambient video unmounts (the same posture the rotation cadence takes to
     // scrolling). Derived like the gates above so it stays a draw-phase
     // read, not a per-scroll-frame recomposition of the header.
     val heroIsScrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
     }
-    // H7 inline control: the pause-video chip's session memory. Hoisted here
+    // Inline control: the pause-video chip's session memory. Hoisted here
     // (outside AnimatedContent) so it survives hero rotations AND navigation
     // (Home stays in the back stack) — per-hero-item state would reset on
     // every rotation tick and per-process state would outlive its screen.
@@ -266,17 +266,17 @@ fun HeroHeader(
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
     isProminent: Boolean = true,
-    /** H7: the list is mid-scroll — the clip's scroll-defer leg (rotation-cadence posture). */
+    /** The list is mid-scroll — the clip's scroll-defer leg (rotation-cadence posture). */
     isScrolling: Boolean = false,
-    /** H7: the pause-video chip's session latch (hoisted to [AnimatedHeroHeader]). */
+    /** The pause-video chip's session latch (hoisted to [AnimatedHeroHeader]). */
     videoPausedForSession: Boolean = false,
-    /** H7: chip tap — falls back to the static image for the session. */
+    /** Chip tap — falls back to the static image for the session. */
     onPauseVideoForSession: () -> Unit = {},
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
-    /** H9: the curated headline override; null renders the item's own title. */
+    /** The curated headline override; null renders the item's own title. */
     headline: String? = null,
-    /** H9: the curated subhead (kicker) override; null renders nothing above the title. */
+    /** The curated subhead (kicker) override; null renders nothing above the title. */
     subhead: String? = null,
 ) {
     val isTv = LocalTvMode.current
@@ -329,7 +329,7 @@ fun HeroHeader(
         item.communityRating?.let { formatFixed(it.toDouble(), 1) }
     }
 
-    // ── H7 video hero billboard ─────────────────────────────────────────
+    // ── Video hero billboard ─────────────────────────────────────────
     // The featured candidate's clip — the spec's two-tier source: the server
     // ThemeVideo clip first, the muted YouTube trailer embed second. The
     // loader effect runs as soon as the pref + platform gate hold (one
@@ -589,7 +589,7 @@ fun HeroHeader(
             size = CoilSize(1920, 1080),
         )
 
-        // H7: the ambient clip crossfades in OVER the static image (the mount
+        // The ambient clip crossfades in OVER the static image (the mount
         // point the plan pins: between the backdrop image and the legibility
         // scrim). The Crossfade is the whole image→video swap — no separate
         // opacity choreography — and nulling the target on any gate flip
@@ -605,7 +605,7 @@ fun HeroHeader(
                 is HomeHeroVideoLoader.HeroClip.ThemeVideo ->
                     AmbientHeroVideoSurface(url = clip.streamUrl, modifier = Modifier.fillMaxSize())
 
-                // H7's fallback leg: no ThemeVideo → the muted trailer embed
+                // The fallback leg: no ThemeVideo → the muted trailer embed
                 // (Android/TV; the desktop actual fails fast). An embed
                 // failure folds back to the static image for this candidate.
                 is HomeHeroVideoLoader.HeroClip.TrailerEmbed ->
@@ -661,7 +661,7 @@ fun HeroHeader(
                 )
         )
 
-        // H7 inline control: the pause-video chip — while the clip plays the
+        // Inline control: the pause-video chip — while the clip plays the
         // hero gains a small top-end affordance; tapping it drops the video
         // for the session (the latch lives on AnimatedHeroHeader). Touch-only
         // on purpose: a focusable chip in the TV hero would inject a stop in
@@ -704,7 +704,7 @@ fun HeroHeader(
                 .padding(horizontal = contentPadding)
                 .padding(bottom = 32.dp)
         ) {
-            // H9: the curated billboard's subhead — a kicker line above the
+            // The curated billboard's subhead — a kicker line above the
             // headline. Rendered only when the featured candidate carries a
             // curated subhead; the local hero's layout is unchanged otherwise.
             if (!subhead.isNullOrBlank()) {

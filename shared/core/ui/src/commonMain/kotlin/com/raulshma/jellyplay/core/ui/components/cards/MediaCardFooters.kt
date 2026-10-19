@@ -80,7 +80,7 @@ sealed interface MediaCardFooterMeta {
  * former hand-rolled `hasValidDuration` / `playbackPositionTicks != null &&
  * > 0 && !isPlayed` copies). Null when the footer shows no meta.
  *
- * [showTimeLeft] is the H15 anti-spoiler leg ([spoilerSafeCardState]'s
+ * [showTimeLeft] is the anti-spoiler leg ([spoilerSafeCardState]'s
  * `showTimeLeft`): when false, the "Xm left" remaining-time segment drops —
  * how much of a film is left is watch-state information — while the total
  * runtime and the book percent stay (the documented precedence: the plan

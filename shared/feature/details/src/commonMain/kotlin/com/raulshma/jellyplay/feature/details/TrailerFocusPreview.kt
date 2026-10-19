@@ -12,7 +12,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /**
- * D22: the TV focus-gated trailer preview's play-target port. The detail
+ * The TV focus-gated trailer preview's play-target port. The detail
  * hero's muted preview (ThemeVideo clip or YouTube embed, the backdrop
  * autoplay pipeline) mounts only while the Play/Trailer button holds focus
  * — so the button's focus state must travel from `DetailActionButtons`
@@ -34,7 +34,7 @@ internal class TrailerFocusPreviewState {
 internal val LocalTrailerFocusPreview = staticCompositionLocalOf { TrailerFocusPreviewState() }
 
 /**
- * D22's mount decision, in its pure form — the focus-gating state machine
+ * The mount decision, in its pure form — the focus-gating state machine
  * the TV preview rides:
  *
  *  - `trailerAutoplayEnabled` off → nothing mounts (today's content; the
@@ -62,7 +62,7 @@ internal fun trailerPreviewShouldMount(
 
 /**
  * The window's RESUMED state as composition state — the "window hidden" leg
- * of the D22 machine (a backgrounded app holds no focus, so the focus-gated
+ * of the machine (a backgrounded app holds no focus, so the focus-gated
  * mount drops instead of silently persisting).
  */
 @Composable

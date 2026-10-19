@@ -9,10 +9,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 /**
  * The shells' audio sources ARE the shared [NowPlayingSurface] (core:data
  * commonMain — AudioPlaybackManager on Android, DesktopAudioQueueManager on
- * desktop): the former per-shell private adapters that forwarded the same
- * four StateFlow members died with the surface, this module's core:data
- * dependency (the RealtimeSessionController precedent) making the type
- * nameable here directly.
+ * desktop): this module's core:data dependency makes the type nameable here
+ * directly, so no per-shell private adapter is needed.
  */
 
 /**
@@ -31,9 +29,9 @@ data class ShellAudioClicks(
 /**
  * The ONE construction site for the shell hooks' audio bundle
  * ([ShellAudioClicks] — ShellHostHooks.audio)
- * — the remember-key discipline both shells used to hand-copy beside the
- * [rememberShellHost] factory now lives HERE, so a third shell gets the pair
- * for one adapter plus one call.
+ * — the remember-key discipline lives HERE beside the
+ * [rememberShellHost] factory, so a new shell gets the pair for one adapter
+ * plus one call.
  *
  * REMEMBER-KEY DISCIPLINE (owned here, the same contract the rememberShellHost
  * factory's KDoc states): every parameter is a remember key, so the pair
@@ -49,9 +47,8 @@ data class ShellAudioClicks(
  * alone) nor rebuilds the hooks (keyed on the item).
  *
  * DECLARED NORMALIZATION: a blank album-art URL arrives as a null
- * [Route.Ambient.imageUrl] — desktop's long-standing `.ifEmpty { null }`
- * fold, promoted to shared behavior when the pair moved here. Android used
- * to forward the raw value (an empty string); AmbientScreen renders both as
+ * [Route.Ambient.imageUrl] — the `.ifEmpty { null }` fold both shells share.
+ * AmbientScreen renders both as
  * "no artwork" (rememberArtworkColors treats the blank as absent), so this
  * is a declared tightening, not a behavior fork.
  *

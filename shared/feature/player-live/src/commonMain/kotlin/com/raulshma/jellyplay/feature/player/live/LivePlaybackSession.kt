@@ -47,7 +47,7 @@ private const val TAG = "LivePlaybackSession"
 private const val CHANNEL_LIST_LIMIT = 200
 /**
  * This host's buffering-watchdog window, fed to the shared
- * [EngineEventCoordinator] at construction (candidate C4: the policy core is
+ * [EngineEventCoordinator] at construction (the policy core is
  * the VOD coordinator's, moved to player-contract; the timeout is a policy
  * KNOB here). If a live stream stays in BUFFERING this long without reaching
  * READY (common with flaky tuners that stall without raising a
@@ -529,7 +529,7 @@ internal class LivePlaybackSession(
     }
 
     /**
-     * The engine's raw-event slice feeding the coordinator (candidate C4): a
+     * The engine's raw-event slice feeding the coordinator a
      * per-tune fresh [EngineEventSource] over this engine's flows. The tuner
      * engine has no `EngineError` channel (errors surface as an ERROR state +
      * message/detail flows, handled in [observeEngine]) and no subtitle

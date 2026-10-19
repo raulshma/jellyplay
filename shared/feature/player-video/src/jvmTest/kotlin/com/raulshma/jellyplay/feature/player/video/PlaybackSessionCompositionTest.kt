@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Composition ratchet for [PlaybackSession], the composition root that
+ * Composition guard for [PlaybackSession], the composition root that
  * replaced the deleted two-phase `PlayerWiring` builder (the builder had
  * itself replaced the VM's ~1,400 lines of in-class collaborator wiring AND
  * the deleted [VideoSessionHost] pass-through layer). [VideoPlayerViewModel]
@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * PlaybackSessionReportingTest (a session member). What this suite pins is
  * what only the composition root still owns:
  *
- *  1. the post-collapse late-binding DISCIPLINE INVERSE — the former
+ *  1. the late-binding DISCIPLINE INVERSE — the former
  *     builder's five `lateinit` back-reference slots are GONE: the six
  *     mutual-recursion construction cycles dissolved by OWNERSHIP (the
  *     session KDoc's per-cycle map), so the composition root must declare
@@ -57,12 +57,12 @@ class PlaybackSessionCompositionTest {
         mainSources().first { it.name == "PlaybackSession.kt" }.readText()
     }
 
-    // ── the post-collapse late-binding discipline ────────────────────────────
+    // ── the late-binding discipline ────────────────────────────
 
     @Test
     fun `the composition root declares no late-bound cycle slots`() {
-        // The former builder bound five `…Ref` slots inside arm() (phase 2) to
-        // break six mutual-recursion construction cycles. The collapse
+        // The former builder bound five `…Ref` slots inside arm() to
+        // break six mutual-recursion construction cycles. The session
         // dissolved the cycles by OWNERSHIP instead (the projector owns its
         // detail projection; the reporter/hooks/track-helper reach the session
         // through self-references; the forward references are compile-time

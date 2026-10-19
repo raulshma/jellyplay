@@ -12,9 +12,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 
 /**
- * Pins the DesktopUpdateCheckController's ADR contract
- * (docs/adr/desktop-auto-update.md — accepted v1: **manual check + open the
- * release page**, never silent download-and-install):
+ * Pins the DesktopUpdateCheckController's contract
+ * (**manual check + open the release page**, never silent
+ * download-and-install):
  *
  *  - the check touches ONLY [AppUpdateRepository.checkForUpdate] — the fake
  *    below FAILS the test on download/pending/cleanup, so any drift toward
@@ -24,13 +24,12 @@ import kotlinx.coroutines.test.runTest
  *    [DesktopUpdateCheckController.openInBrowser] seam — so no test needs an
  *    AWT desktop;
  *  - the snackbar wording pairs the version with the handoff outcome
- *    ([com.raulshma.jellyplay.desktop.update.desktopUpdateText], moved here
- *    from DesktopAppRoot with the controller).
+ *    ([com.raulshma.jellyplay.desktop.update.desktopUpdateText]).
  */
 class DesktopUpdateCheckControllerTest {
 
     /**
-     * ADR-trap fake: every NON-check member of the repository throws — the
+     * Trap fake: every NON-check member of the repository throws — the
      * controller structurally holds no download/install surface, and if one
      * ever appears this fake turns the regression into a failing test.
      */
@@ -136,9 +135,9 @@ class DesktopUpdateCheckControllerTest {
 
     @Test
     fun updateAvailable_neverDownloadsOrInstalls_theCheckIsTheOnlyRepositoryTouch() = runTest {
-        // The ADR's core promise, stated as a test: even on a genuinely
+        // The core promise, stated as a test: even on a genuinely
         // available update, the flow is check → browser, and nothing else —
-        // ADRTrapRepository fails the test on ANY download/pending/cleanup
+        // the trap repository fails the test on ANY download/pending/cleanup
         // call, so reaching the snackbar proves the silent-install path stays
         // absent.
         val messages = mutableListOf<String>()

@@ -25,12 +25,10 @@ import kotlinx.coroutines.launch
  * The admin analytics dashboard's gate — plugin AVAILABLE **and** the
  * `analytics` feature key present **and** the user's per-feature toggle on
  * (the shared [JellyPlayCapabilityGate] verdict — the transcodes monitor's
- * gate shape, one home since the plugin capability gate module; ADR 0010: the
- * capability registry is the ONLY gating mechanism, the toggle rides
+ * gate shape, one home in the plugin capability gate module; the capability
+ * registry is the ONLY gating mechanism, the toggle rides
  * [JellyPlayFeatureGate], the ONE per-feature seam). Admin-ness is enforced
- * upstream by the admin area's AdminRouteContainer — the existing admin gate,
- * deliberately not re-built here. (The local `AnalyticsGate` enum this VM
- * used to declare is the shared [JellyPlayCapabilityState] now.)
+ * upstream by the admin area's AdminRouteContainer — the existing admin gate.
  */
 
 /** The window roll-up the totals row renders (durations pre-humanized). */
@@ -134,7 +132,7 @@ data class AnalyticsState(
  * Gating — admin && plugin AVAILABLE && `analytics` feature, the transcodes
  * monitor's exact seam: the admin half is the admin area's existing
  * AdminRouteContainer gate; the plugin half is the shared
- * [JellyPlayCapabilityGate] reading the store per ADR 0010 — no analytics
+ * [JellyPlayCapabilityGate] reading the store — no analytics
  * fetch is ever issued while the gate is off, so a stock server's plugin-route
  * 404 is never observed here. The nullable-with-default ctor deps mirror the
  * settings screen's plugin-seam pattern: direct construction (tests) may omit
@@ -166,8 +164,8 @@ class JellyPlayAnalyticsViewModel(
     /**
      * The shared capability gate (the plugin capability gate module) — the
      * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
-     * store discipline this VM used to re-wire inline, the transcodes
-     * monitor's exact seam. Null with the store: direct construction (tests)
+     * store discipline, the transcodes monitor's exact seam. Null with the
+     * store: direct construction (tests)
      * without the plugin seam is gated off, final.
      */
     private val capabilityGate = statusStore?.let { JellyPlayCapabilityGate(it, scope) }

@@ -8,9 +8,8 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.system.exitProcess
 
 /**
- *  Skia startup/memory baseline — measurement-only scaffold (no
- * optimization applied; the numbers this produces are the measuring stick,
- * see docs/perf/desktop-skia-baseline.md).
+ *  Skia startup/memory baseline — measurement-only scaffold. The numbers
+ * this produces are the measuring stick.
  *
  * Marks are plain AtomicLong stores (~zero cost, always on). Everything that
  * touches disk or schedules exit is gated behind `jellyplay.perf.*` system
@@ -97,7 +96,7 @@ class DesktopStartupPerf(
     /**
      * Called from the AWT event thread when the ComposeWindow becomes visible.
      *
-     * Persistence ordering (review round 1): whichever of window-shown /
+     * Persistence ordering: whichever of window-shown /
      * first-frame lands LAST triggers the single flush. Flushing from only one
      * site would CAS-lock a partial JSON whenever that mark ran first — e.g.
      * first-frame before AWT visibility would latch `windowShownMs: null`

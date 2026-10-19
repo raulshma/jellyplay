@@ -388,7 +388,7 @@ class SyncPlayManager(
                 ?: groups.firstOrNull { it.groupName == groupName }
         }
 
-    // ── H19 home presence-chip join seam ─────────────────────────────────
+    // ── home presence-chip join seam ─────────────────────────────────
 
     /**
      * The join-availability predicate behind the home presence chips: the
@@ -410,7 +410,7 @@ class SyncPlayManager(
         syncPlayApiClient.getSyncPlayGroups().getOrNull().orEmpty()
 
     /**
-     * The H19 JOIN flow — the counterpart of [createGroup]'s create flow for
+     * The JOIN flow — the counterpart of [createGroup]'s create flow for
      * a group that already exists: resolves the visible group playing
      * [itemId] (via [groupPlayingItem]) and joins it with [joinGroup]. No
      * matching group is a failure (never a silent no-op — the caller learns

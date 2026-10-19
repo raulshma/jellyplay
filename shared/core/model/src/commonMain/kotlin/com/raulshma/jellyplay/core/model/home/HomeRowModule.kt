@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.descriptor
 
 /**
  * Everything one [HomeSectionType] knows about itself — the "home row module"
- * deep module (ADR-0009 discipline): a row's identity, its per-type data
+ * deep module: a row's identity, its per-type data
  * gates and its offline projection live in ONE registration instead of being
  * smeared across the pipeline's per-type `when` dispatches. Adding a row type
  * becomes one module object + one registration line (plus the enum constant),
@@ -27,7 +27,7 @@ import com.raulshma.jellyplay.core.model.descriptor
  *    transport, so the module cannot hold those members; the split is
  *    deliberate, not a missing merge.
  *
- * NOT covered, on purpose (ADR-0009 protects hand-written emission): the
+ * NOT covered, on purpose: the
  * Compose rendering bodies, the localized row titles, the section
  * construction at the render sites, and the icon mapping (a UI-resource
  * concern in core/ui). The row module exposes the typed data those
@@ -182,7 +182,7 @@ public object NextUp : HomeRowModule {
 }
 
 /**
- * Upcoming (H4) — unaired episodes across the followed series, Next Up's
+ * Upcoming - unaired episodes across the followed series, Next Up's
  * watch-state-independent complement. Poster chassis (not wide), See All (the
  * full airing schedule lives behind a library browse) and edge refresh via the
  * batch sub-call's single-row twin. Inert offline: unaired air-times are a
@@ -196,7 +196,7 @@ public object Upcoming : HomeRowModule {
 }
 
 /**
- * My Media (H5) — the library-tiles row (jellyfin-web's SmallLibraryTiles);
+ * My Media - the library-tiles row (jellyfin-web's SmallLibraryTiles);
  * home's only non-poster shape (the chassis's OnlineTiles arm renders it).
  * Assembles the library folders the batch already fetched for the Latest
  * fan-out — no port call of its own — so edge refresh buys nothing (the row
@@ -266,7 +266,7 @@ public object Pinned : HomeRowModule {
     override val edgeRefreshable = true
 }
 
-/** Plugin Rows — the companion server plugin's capability-gated rows (ADR 0010); refreshable per row. */
+/** Plugin Rows — the companion server plugin's capability-gated rows; refreshable per row. */
 public object PluginRows : HomeRowModule {
     override val type = HomeSectionType.PLUGIN_ROW
     override val descriptor = type.descriptor

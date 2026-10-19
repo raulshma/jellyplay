@@ -39,7 +39,7 @@ import kotlinx.coroutines.test.runTest
  * repositories are relaxed mocks and the VM-facing seams
  * ([SessionLifecycleHooks], [SessionPositionStore]) are recording fakes. The
  * session builds its release scope internally ([PlaybackSession.releaseScope],
- * a real IO scope, the C6 composition-root behavior) — the per-test teardown
+ * a real IO scope, the composition-root behavior) — the per-test teardown
  * cancels it AFTER its work was verified: that teardown must outlive the
  * caller's scope, so it cannot run on the test dispatcher. The wall clock is
  * injected as a controllable fake ([nowMs]), so the seek-freshness window and
@@ -533,7 +533,7 @@ class PlaybackSessionReportingTest {
     }
 
     // [FakePositionStore] is the recording double (player-video jvmTest, the
-    // ADR-0006 rule-4 move out of test-fixtures) — this file's former
+    // the test-placement rule move out of test-fixtures) — this file's former
     // private variant (records persists, serves nulls) is its DEFAULT shape
     // (the saved*Value fields stay null).
 }

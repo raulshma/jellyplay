@@ -85,12 +85,10 @@ class LogsViewModel(
     /**
      * The 5 s selected-file view-refresh poll, registered once and bound to
      * screen visibility by [startLogPolling]/[stopLogPolling] (the
-     * JellyPlayTranscodesViewModel shape — the hand-rolled
-     * cancel-delay-fetch loop this VM used to run for its whole lifetime
-     * once a file was picked, back stack included, is the refresh-cycle
-     * module's exact prior shape). The user's pause toggle and "a file is
-     * selected" are the round gate: a closed round fetches nothing and does
-     * not advance the backoff.
+     * JellyPlayTranscodesViewModel shape — the refresh-cycle module's
+     * gate/poll/fetch split, not a hand-rolled cancel-delay-fetch loop). The
+     * user's pause toggle and "a file is selected" are the round gate: a
+     * closed round fetches nothing and does not advance the backoff.
      */
     private val logFilePollCycle = RefreshCycle(
         scope = scope,
@@ -356,10 +354,9 @@ class LogsViewModel(
     /**
      * Fetches the next activity page at `startIndex = currentSize`, routed
      * through the [PageAppender] guard: a call landing while an older-page
-     * fetch is in flight is suppressed — a fast fling used to fire this
-     * re-entrantly with the same startIndex before the buffer grew,
-     * double-appending the same server page (the screen's `!isLoadingMore`
-     * guard was fed a hardcoded `false`). The in-flight flag stays in
+     * fetch is in flight is suppressed — a fast fling can fire this
+     * re-entrantly with the same startIndex before the buffer grows,
+     * double-appending the same server page. The in-flight flag stays in
      * [LogsState] (the stateless guard reads the site's flag), raised
      * synchronously before the coroutine so both this guard and the
      * screen's infinite-list guard see it. The fetch offset stays the live

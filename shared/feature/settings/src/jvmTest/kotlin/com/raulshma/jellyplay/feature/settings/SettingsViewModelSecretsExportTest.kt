@@ -47,7 +47,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The Wave-3 EXPORT half: `exportSettings(uri, includeSecrets, passphrase)`
+ * The secrets EXPORT half: `exportSettings(uri, includeSecrets, passphrase)`
  * attaches the encrypted envelope + origin ids ONLY when the user opted in,
  * decrypts back to the gathered payload, zeroes the passphrase material, and
  * degrades to the standard "Export failed" surface when the assembler seam is
@@ -168,7 +168,7 @@ class SettingsViewModelSecretsExportTest {
         awaitUntil("the export completes") { vm.backupRestoreStatus != null }
 
         assertEquals("Settings exported successfully", vm.backupRestoreStatus)
-        // Raw wire shape: the opted-in export carries ALL THREE Wave-3 keys.
+        // Raw wire shape: the opted-in export carries ALL THREE secrets keys.
         val raw = writtenPayload.orEmpty()
         for (key in listOf("\"secrets\"", "\"originUserId\"", "\"originServerId\"")) {
             assertTrue(key in raw, "the secrets export must carry the $key key: $raw")
@@ -194,8 +194,8 @@ class SettingsViewModelSecretsExportTest {
 
         val raw = writtenPayload.orEmpty()
         // Raw wire shape: a PLAIN export must not carry any of the three
-        // Wave-3 keys — not even as explicit nulls (`@EncodeDefault(Mode.NEVER)`
-        // keeps the byte-shape parity with every pre-Wave-3 export).
+        // secrets keys — not even as explicit nulls (`@EncodeDefault(Mode.NEVER)`
+        // keeps the byte shape stable for exports without secrets).
         for (key in listOf("\"secrets\"", "\"originUserId\"", "\"originServerId\"")) {
             assertFalse(key in raw, "the plain export must not carry the $key key: $raw")
         }

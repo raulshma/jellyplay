@@ -152,7 +152,7 @@ class AlbumDetailViewModel(
             val tracksResult = tracksDeferred.await()
 
             // The tracks error wins when both halves fail (the half whose
-            // failure the screen used to surface last).
+            // failure the screen renders last).
             (tracksResult.exceptionOrNull() ?: detailResult.exceptionOrNull())?.let { throw it }
             AlbumContent(
                 detail = detailResult.getOrThrow(),

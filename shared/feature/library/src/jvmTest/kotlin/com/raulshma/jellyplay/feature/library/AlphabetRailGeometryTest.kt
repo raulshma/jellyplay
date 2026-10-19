@@ -75,7 +75,7 @@ class AlphabetRailGeometryTest {
             ),
         )
         // GRID/THUMB — and deliberately MASONRY, whose staggered index is not
-        // consulted (shipped behavior the extraction must not "fix").
+        // consulted (deliberately-pinned shipped behavior).
         for (mode in listOf(LibraryViewMode.GRID, LibraryViewMode.THUMB, LibraryViewMode.MASONRY)) {
             assertEquals(
                 42,

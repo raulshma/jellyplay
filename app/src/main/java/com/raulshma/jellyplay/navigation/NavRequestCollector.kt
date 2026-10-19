@@ -15,13 +15,12 @@ import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import kotlinx.coroutines.flow.Flow
 
 /**
- * One home for the Android shell's nav-request collectors — the five
- * collect-then-dispatch loops JellyPlayApp's `MainContent` used to hand-copy
- * composable-inline: the pending-route (deep link / shortcut) dispatch, the
+ * One home for the Android shell's nav-request collectors — the
+ * collect-then-dispatch loops the shell runs: the pending-route (deep link /
+ * shortcut) dispatch, the
  * remote-navigation collector, the remote-control now-playing snackbar, and
  * the SyncPlay auto-open guard. Beside them lives the message-surface
- * adapter ([shellUserMessagePresent] below) — the former sixth loop, the
- * hand-copied message collectors, now reduced to feeding the shared
+ * adapter ([shellUserMessagePresent] below), feeding the shared
  * `rememberShellUserMessages` seam over the ONE commonMain bus. Every loop
  * is the same shape — collect an
  * external request, apply one small policy fork, drive the navigator or the
@@ -34,12 +33,12 @@ import kotlinx.coroutines.flow.Flow
  * choreography is pinned here through fake lambdas
  * (`NavRequestCollectorTest`; the PinGateController shape).
  *
- * Capture semantics the shell relies on, preserved from the inline loops:
+ * Capture semantics the shell relies on:
  * this controller is STATELESS — the remembered `NavRequestController`
  * (MainContent's request-dispatch holder) constructs it once per holder
  * instance over the holder's stable seams — and each `LaunchedEffect`
- * captures the instance current when it (re)launches, exactly as the former
- * inline collectors captured `navigator`, whose `navigateFilter` carries the
+ * captures the instance current when it (re)launches. The `navigator` seam's
+ * `navigateFilter` carries the
  * playback-host decision (external player / dedicated activity / in-nav). The
  * value-keyed pending-route effect therefore re-captures on every new route,
  * while the flow-keyed collectors hold their launch-time instance.
@@ -70,7 +69,7 @@ import kotlinx.coroutines.flow.Flow
  *   route (`MainViewModel.consumePendingRoute`).
  * @param presentSnackbar the now-playing surface — the shell's
  *   `SnackbarHostState` (dismiss action on), duration left to the host
- *   default exactly as the inline collector did.
+ *   default.
  */
 internal class NavRequestCollector(
     private val topLevelKeys: Set<Route>,
@@ -86,8 +85,8 @@ internal class NavRequestCollector(
     /**
      * The shared ladder (feature.shell.navigation
      * [RemoteNavigationDispatcher]) over this collector's seams — the
-     * exhaustive when(NavigationTarget) and the tab-vs-push fork are ITS now,
-     * not a hand-copy. The Android-specific arms are lambdas over
+     * exhaustive when(NavigationTarget) and the tab-vs-push fork live in the
+     * dispatcher. The Android-specific arms are lambdas over
      * [dispatchKey], keeping the keycode vocabulary in the :app
      * `RemoteNavigationRouting.kt`: D-pad directions and the select arm
      * synthesize their keycodes unconditionally, while the context-menu arm
@@ -95,8 +94,7 @@ internal class NavRequestCollector(
      * standard message. Pushes ride the filter-carrying [navigate] seam; tab
      * switches ride [selectTopLevelTab] (bypassing the Navigator — no
      * pop-to-root on the selected tab); the context-menu fallback presents
-     * through [presentSnackbar], exactly as this class's former inline
-     * ladder did.
+     * through [presentSnackbar].
      */
     private val remoteNavigation = RemoteNavigationDispatcher(
         topLevelKeys = topLevelKeys,

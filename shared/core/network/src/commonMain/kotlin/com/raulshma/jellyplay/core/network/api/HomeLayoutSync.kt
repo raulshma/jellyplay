@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 /**
  * The home-layout slice read back from the server's DisplayPreferences store
- * (H20 — the wrapper pair
+ * (the wrapper pair
  * [LibraryApiClient.readHomeLayoutDisplayPreferences] /
  * [LibraryApiClient.writeHomeLayoutDisplayPreferences]). Every field is
  * nullable: a user who never synced has none of the keys, and a partially
@@ -19,7 +19,7 @@ data class HomeLayoutServerState(
 )
 
 /**
- * The wire vocabulary of the home-layout DisplayPreferences slice (H20).
+ * The wire vocabulary of the home-layout DisplayPreferences slice.
  *
  * Transport choice: the SDK's `DisplayPreferencesApi` stores a
  * [org.jellyfin.sdk.model.api.DisplayPreferencesDto] keyed by

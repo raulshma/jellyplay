@@ -25,10 +25,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.serializer
 
 /**
- * The in-player video domain's single preference declaration (Stage B of the
- * spec machinery, the [PlaybackPreferenceSpecs] migration precedent): one
+ * The in-player video domain's single preference declaration: one
  * [PreferenceSpec] row per key `VideoPlayerStore` owns — the canonical
- * persisted key name (which is ALSO the legacy pre-typed-era wire name,
+ * persisted key name (which is ALSO the legacy string wire name,
  * declared exactly once), the default, the reset category, and the read/write
  * encoding ([PreferenceSpec.plainBoolean] / [plainInt] / [plainLong] /
  * [plainFloat] / [enumRow] / [derived]).
@@ -52,7 +51,7 @@ import kotlinx.serialization.serializer
  * declared row fails fast at [row] instead, and the accessor↔row binding is
  * pinned by the JVM `VideoPlayerSpecDerivationTest` (which rebuilds every
  * [VideoPlayerStore.Keys] member through these accessors and compares it to
- * the group-declared rows, the same ratchet the sibling domains run).
+ * the group-declared rows, the same guard the sibling domains run).
  *
  * `VideoPlayerStore` is derived from these rows: the `Keys` members rebuild
  * each row's typed key from its wire name, the `read` projection delegates
@@ -60,15 +59,14 @@ import kotlinx.serialization.serializer
  * delegate to the rows' derived writes, and `resetKeysFor` filters the rows by
  * reset category — so a row cannot drift from the machinery that reads or
  * writes it. The [VideoPlayerSlice] property defaults read the rows too
- * (`.default`) — a preference's default is stated once, in its spec, instead
- * of being restated on the slice. The reads that carry migration or
+ * (`.default`) — a preference's default is stated once, in its spec, not
+ * restated on the slice. The reads that carry migration or
  * legacy-fallback logic ([VIDEO_GESTURE_MODE]'s legacy boolean dance,
  * [SEGMENT_BEHAVIORS]'s four-boolean fallback, the raw-string aspect ratio)
  * carry it as [PreferenceSpec.derived] lambdas, documented in place below.
  *
- * Not derivable by design (the accepted Stage B residuals, the
- * [PlaybackStore] precedent — see the [PreferenceSpec] KDoc's no-reflection
- * rule):
+ * Not derivable by design (the no-reflection rule — see the [PreferenceSpec]
+ * KDoc):
  *  - the `Keys` aliases stay hand-built (they are the reflection anchor for
  *    the JVM reset-coverage guard), as do the store's `read`/`restore` rows,
  *    its setters and its clamps;
@@ -76,7 +74,7 @@ import kotlinx.serialization.serializer
  *    `setVideoSkipBackOnResumeMs`, `setStillWatchingEpisodeThreshold`) and the
  *    read-modify-write `setSegmentBehavior` stay hand-written in the store;
  *  - the derived `restore` keeps ONE hand-written line beside the
- *    [VIDEO_GESTURE_MODE] row — clearing the superseded legacy
+ *    [VIDEO_GESTURE_MODE] row — clearing the legacy
  *    `video_gestures_enabled` boolean so a restored snapshot cannot disagree
  *    with the row's read fallback.
  *
@@ -158,7 +156,7 @@ object VideoPlayerPreferenceSpecs {
             ),
         ),
         /*
-         * (jellyfin-androidtv #3924): pausing should not summon the control
+         * Pausing should not summon the control
          * overlay. Default **off** — today's show-on-pause behavior. On, the
          * pause arm of a play/pause transport toggle leaves the overlay hidden
          * (the play arm keeps summoning, and an already-visible overlay is never
@@ -170,7 +168,7 @@ object VideoPlayerPreferenceSpecs {
             resetCategory = PreferenceResetCategory.PLAYBACK,
             search = PreferenceSearchSpec(
                 id = "hide_osd_on_pause",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_hide_osd_on_pause",
                 subtitleKey = "ss_hide_osd_on_pause_subtitle",
                 categoryKey = "ss_cat_playback",
@@ -190,7 +188,7 @@ object VideoPlayerPreferenceSpecs {
             resetCategory = PreferenceResetCategory.PLAYBACK,
             search = PreferenceSearchSpec(
                 id = "resume_on_headset_plug",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_resume_headset_plug",
                 subtitleKey = "ss_resume_headset_plug_subtitle",
                 categoryKey = "ss_cat_playback",
@@ -323,7 +321,7 @@ object VideoPlayerPreferenceSpecs {
             resetCategory = PreferenceResetCategory.PLAYBACK,
             search = PreferenceSearchSpec(
                 id = "double_tap_hold_seek",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_double_tap_hold_seek",
                 subtitleKey = "ss_double_tap_hold_seek_subtitle",
                 categoryKey = "ss_cat_playback",
@@ -333,7 +331,7 @@ object VideoPlayerPreferenceSpecs {
             ),
         ),
         /*
-         * The whole player input mapping (issue #171 generalized): the free-form
+         * The whole player input mapping: the free-form
          * pattern → action rows over touch / wheel / keyboard / D-pad, persisted
          * as one whole-object JSON blob (the `segment_behaviors` precedent). When
          * the blob is absent the read derives the default map from the legacy
@@ -370,9 +368,9 @@ object VideoPlayerPreferenceSpecs {
             },
             search = PreferenceSearchSpec(
                 id = "input_bindings",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_input_bindings",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 subtitleKey = "settings_input_bindings_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("controls", "buttons", "gesture", "bindings", "remap", "customize", "input", "keyboard", "swipe", "brightness", "volume"),
@@ -467,7 +465,7 @@ object VideoPlayerPreferenceSpecs {
             resetCategory = PreferenceResetCategory.PLAYBACK,
             search = PreferenceSearchSpec(
                 id = "still_watching_mode",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_still_watching_mode",
                 subtitleKey = "ss_still_watching_mode_subtitle",
                 categoryKey = "ss_cat_playback",
@@ -482,7 +480,7 @@ object VideoPlayerPreferenceSpecs {
             min = 0,
             search = PreferenceSearchSpec(
                 id = "still_watching_episodes",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 titleKey = "settings_still_watching_episodes",
                 subtitleKey = "ss_still_watching_episodes_subtitle",
                 categoryKey = "ss_cat_playback",
@@ -689,7 +687,7 @@ object VideoPlayerPreferenceSpecs {
                 // the catalog row declares no ss_*_title twin.
                 titleKey = "settings_video_cache_size",
                 id = "video_cache_size",
-                // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+                // One-key family: a single screen-face key.
                 subtitleKey = "settings_video_cache_size_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("cache", "video cache", "size", "storage", "stream cache"),
@@ -762,19 +760,20 @@ object VideoPlayerPreferenceSpecs {
      */
     private val mediaSegments: List<PreferenceSpec<*>> = listOf(
         /*
-         * Reads [VideoPlayerSlice.segmentBehaviors] — the headline migration,
-         * verbatim from the store's former hand-written reader. When the JSON
+         * Reads [VideoPlayerSlice.segmentBehaviors] — the headline migration
+         * from the legacy booleans. When the JSON
          * `segment_behaviors` blob is present it is decoded and merged over
          * [SegmentBehavior.DEFAULT_BEHAVIORS] (stored values win). When the blob
          * is absent this falls back from the four legacy booleans
          * (`skip_intro_enabled` / `skip_outro_enabled` / `auto_skip_intro` /
          * `auto_skip_outro`) into INTRO/OUTRO SegmentBehaviors, merged over the
-         * defaults — so a pre-blob install keeps its prior intro/outro behaviour.
+         * defaults — so an install with only the legacy booleans keeps its prior
+         * intro/outro behaviour.
          * When neither is present the defaults are returned unchanged.
          *
-         * The derived write re-encodes the enum-keyed map as the JSON object the
-         * former setter/restore wrote (enum names as keys and values — identical
-         * bytes from either former encoder, since enum serialization is
+         * The derived write re-encodes the enum-keyed map as the JSON object
+         * the setter/restore wrote (enum names as keys and values — identical
+         * bytes either way, since enum serialization is
          * name-based regardless of the `encodeDefaults` setting).
          */
         PreferenceSpec.derived(
@@ -896,9 +895,8 @@ object VideoPlayerPreferenceSpecs {
         PreferenceCodec.json.decodeFromString<PlayerInputMap>(raw)
 
     /**
-     * The `segment_behaviors` row's blob decode + legacy-boolean fallback —
-     * extracted verbatim from the store's former private reader so the row's
-     * `parse`/`onNull` closures route through it (the null-raw leg IS the
+     * The `segment_behaviors` row's blob decode + legacy-boolean fallback: the
+     * row's `parse`/`onNull` closures route through it (the null-raw leg IS the
      * legacy fallback; the decode leg owns its own corrupt-blob tolerance).
      */
     private fun readSegmentBehaviors(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> {

@@ -120,9 +120,9 @@ data class PlaybackPreferences(
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
     /**
-     * (jellyfin-androidtv #3924): pausing must not summon the control
-     * overlay. Default **off** — today's behavior; on, only the summons is
-     * suppressed (an already-visible overlay keeps its auto-hide timeout).
+     * Pausing must not summon the control overlay. Default **off**; on, only
+     * the summons is suppressed (an already-visible overlay keeps its
+     * auto-hide timeout).
      */
     val videoHideOsdOnPause: Boolean = false,
     val videoGestureMode: GestureMode = GestureMode.ALL,
@@ -194,10 +194,10 @@ data class PlaybackPreferences(
     val audioDelayMs: Long = 0L,
     val backgroundVideoAudioEnabled: Boolean = false,
     /**
-     * Whether leaving the player during playback auto-enters picture-in-picture
-     * (issue #167). Default `true` keeps the historical behaviour; off makes
-     * Home/recents background the app normally. Manual PiP entry via the
-     * controls button is unaffected. Android-only surface (no desktop PiP).
+     * Whether leaving the player during playback auto-enters picture-in-picture.
+     * Default `true`; off makes Home/recents background the app normally.
+     * Manual PiP entry via the controls button is unaffected. Android-only
+     * surface (no desktop PiP).
      */
     val autoEnterPip: Boolean = true,
     val autoPlayCountdownSec: Int = 10,

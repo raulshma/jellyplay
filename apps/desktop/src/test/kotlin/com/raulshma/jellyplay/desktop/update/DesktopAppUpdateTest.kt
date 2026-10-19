@@ -13,8 +13,8 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 /**
- * Pure-logic tests for the desktop auto-update client
- * (docs/adr/desktop-auto-update.md): the installed-version classification
+ * Pure-logic tests for the desktop auto-update client: the installed-version
+ * classification
  * from the generated build-info channel, the dev-build suppression in
  * [DesktopAppUpdateRepository], and the browser-link picker (with the
  * Android-APK false-attach guard). The network feed itself is the shared
@@ -209,7 +209,7 @@ class DesktopAppUpdateTest {
 
     @Test
     fun androidApkAsset_neverBecomesADesktopLink() {
-        // The ADR's false-attach guard: GitHubReleasesApiImpl.selectAsset's
+        // The false-attach guard: GitHubReleasesApiImpl.selectAsset's
         // last-resort branch can attach an Android -universal.apk to a desktop
         // result. An APK must never be handed to a desktop user. (The URLs are
         // allow-listed shapes — the extension guard, not the allow-list, is

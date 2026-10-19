@@ -276,7 +276,7 @@ internal fun DownloadProgressRow.toDownloadProgress() = DownloadProgress(
     id = id,
     downloadedBytes = downloadedBytes,
     speedBytesPerSec = speedBytesPerSec,
-    // D16 item join pair: lets item-keyed consumers re-key the live map and
+    // Item join pair: lets item-keyed consumers re-key the live map and
     // derive the 0..1 fraction (see DownloadProgress.progressFraction).
     mediaItemId = mediaItemId,
     totalSizeBytes = totalSizeBytes,

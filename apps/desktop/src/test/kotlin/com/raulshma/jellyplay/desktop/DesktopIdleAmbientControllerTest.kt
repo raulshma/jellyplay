@@ -16,16 +16,16 @@ import org.json.JSONObject
  * ladder itself stays pinned by [DesktopIdleMonitorTest]):
  *
  *  - the session-count collector: only `Sessions` pushes count, only while
- *    idle (the gate the inlined scaffold effect had), the count is the
+ *    idle (the gate the scaffold applies), the count is the
  *    sessions carrying a `NowPlayingItem`, a malformed push degrades to 0
  *    without killing the collector, and a non-idle period's pushes are
  *    dropped;
- *  - [resolveIdleOverlayIdentity]: the legacy two-key server match
+ *  - [resolveIdleOverlayIdentity]: the two-key server match
  *    (stored id OR address) and the signed-out null pair.
  *
  * Steps via `runCurrent` — never `advanceUntilIdle`, which would spin the
  * monitor's endless 1 s delay loop forever under virtual time (the settle
- * trap CONTEXT.md warns about); `isIdle` is driven by hand through
+ * trap); `isIdle` is driven by hand through
  * [DesktopIdleAmbientController.tick].
  */
 class DesktopIdleAmbientControllerTest {

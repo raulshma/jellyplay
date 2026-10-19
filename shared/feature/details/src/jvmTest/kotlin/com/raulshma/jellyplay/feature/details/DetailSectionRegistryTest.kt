@@ -264,7 +264,7 @@ class DetailSectionRegistryTest {
                 detail,
             ),
         )
-        // show_reviews off hides the section even with reviews fetched (D9).
+        // show_reviews off hides the section even with reviews fetched.
         assertFalse(
             TmdbReviewsSectionModule.isAdmitted(
                 state(tmdbReviews = listOf(TmdbReview(id = "r1")), showReviews = false),

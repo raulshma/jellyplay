@@ -26,11 +26,10 @@ internal val DEFAULT_HDR_SUBTITLE_STYLE: SubtitleStyle = SubtitleStyle(
 )
 
 /**
- * The subtitle &amp; language domain's single preference declaration (Stage B of
- * the spec machinery, the [com.raulshma.jellyplay.core.datastore.playback
- * .PlaybackPreferenceSpecs] migration precedent): one [PreferenceSpec] row per
+ * The subtitle &amp; language domain's single preference declaration: one
+ * [PreferenceSpec] row per
  * key `SubtitleLanguageStore` owns — the canonical persisted key name (which is
- * ALSO the legacy pre-typed-era wire name, declared exactly once), the default,
+ * ALSO the legacy string wire name, declared exactly once), the default,
  * the reset category, and the read/write encoding ([PreferenceSpec.plainBoolean]
  * / [string] / [derived]).
  *
@@ -53,7 +52,7 @@ internal val DEFAULT_HDR_SUBTITLE_STYLE: SubtitleStyle = SubtitleStyle(
  * declared row fails fast at [row] instead, and the accessor↔row binding is
  * pinned by the JVM `SubtitleSpecDerivationTest` (which rebuilds every
  * [SubtitleLanguageStore.Keys] member through these accessors and compares it
- * to the group-declared rows, the same ratchet the sibling domains run).
+ * to the group-declared rows, the same guard the sibling domains run).
  *
  * `SubtitleLanguageStore` is derived from these rows: the `Keys` members
  * rebuild each row's typed key from its wire name, the `read` projection
@@ -62,22 +61,20 @@ internal val DEFAULT_HDR_SUBTITLE_STYLE: SubtitleStyle = SubtitleStyle(
  * `resetKeysFor` filters the rows by reset category — so a row cannot drift
  * from the machinery that reads or writes it. The [SubtitleSlice] property
  * defaults read the rows too (`.default`) — a preference's default is stated
- * once, in its spec, instead of being restated on the slice (the HDR style
- * default, formerly restated on the read AND the slice, collapses onto
- * [DEFAULT_HDR_SUBTITLE_STYLE]). Every JSON blob decode keeps this store's
- * pre-promotion memoisation policy ([CachedJsonNullPolicy.MemoizeNull] at
+ * once, in its spec, not restated on the slice (the HDR style default
+ * collapses onto [DEFAULT_HDR_SUBTITLE_STYLE]). Every JSON blob decode keeps
+ * the store's memoisation policy ([CachedJsonNullPolicy.MemoizeNull] at
  * every site — a null raw is a cacheable input here; the playback domain's
  * NoMemoOnNull choice belongs to its legacy-migration reads, which the
  * subtitle blobs don't have).
  *
- * Not derivable by design (the accepted Stage B residuals, the
- * [com.raulshma.jellyplay.core.datastore.playback.PlaybackStore] precedent —
- * see the [PreferenceSpec] KDoc's no-reflection rule):
+ * Not derivable by design (the no-reflection rule — see the [PreferenceSpec]
+ * KDoc):
  *  - the `Keys` aliases stay hand-built (they are the reflection anchor for
  *    the JVM reset-coverage guard), as do the store's `read`/`restore` rows
  *    for the opted-out rows, its setters and its invariants;
  *  - the three nullable language overrides (`preferred_subtitle_lang` /
- *    `preferred_audio_lang` / `app_language`) are Stage A [string] rows whose
+ *    `preferred_audio_lang` / `app_language`) are plain [string] rows whose
  *    setters are the set-or-remove dance — a row encoding writes a slot, it
  *    cannot remove one — so the store keeps those hand lines;
  *  - the three identity-by-absence / param-dependent blobs keep hand setters
@@ -251,17 +248,14 @@ object SubtitlePreferenceSpecs {
     )
 
     /*
-     * The SDR + HDR subtitle style blobs. **Memoized decode beside the row**
-     * (the playback domain's passthrough-codecs precedent): the decode is a
-     * pure function of the raw string, so the holder moved here from a
-     * per-`SubtitleLanguageStore` field with the row it belongs to. The
-     * absent/corrupt slot serves the row's declared default — the HDR row's
-     * being [DEFAULT_HDR_SUBTITLE_STYLE], stated once instead of the former
-     * restatements. The derived write is the whole-object JSON encode the
-     * former restore wrote ([PreferenceCodec.encodeDefaultsJson]) — the
-     * single-key setters ride it too, which changes their previously
-     * default-omitting bytes but not any decoded value (the read side fills
-     * serializer defaults either way).
+     * The SDR + HDR subtitle style blobs. **Memoized decode beside the row:**
+     * the decode is a pure function of the raw string, so its holder sits
+     * beside the row it belongs to. The absent/corrupt slot serves the row's
+     * declared default — the HDR row's being [DEFAULT_HDR_SUBTITLE_STYLE].
+     * The derived write is the whole-object JSON encode
+     * ([PreferenceCodec.encodeDefaultsJson]) — the single-key setters ride it
+     * too, so their bytes omit serializer defaults; no decoded value changes
+     * (the read side fills serializer defaults either way).
      */
 
     /** Memoisation holder for the [SUBTITLE_STYLE] row's JSON decode. */

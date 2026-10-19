@@ -64,11 +64,7 @@ private data class NavItemDescriptor(
 // registry: the customizable-route subset (the video/music top-level union —
 // Home, Library, Search, LiveTv, MusicBrowse — plus Shortcuts, i.e. exactly
 // the routes the floating bar renders) in registry row order, each row's
-// persisted key and icon read from its registry entry. The former hand list
-// mirrored the registry and had already drifted twice on icons (Shortcuts
-// rendered Apps vs the registry's Bolt, Library LayoutList vs Library) —
-// registry wins, so those two drifts die here (the same unification the
-// registry KDoc records for the shells).
+// persisted key and icon read from its registry entry.
 // The genuinely local facts are the faces the registry does not carry:
 // localized label/subtitle resources per route (the "Browse" wording the
 // customization row shares with TOP_LEVEL_LABEL_OVERRIDES' music-bar
@@ -116,7 +112,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = NAV_DESTINATIONS
  * [com.raulshma.jellyplay.core.model.UserPreferences.navItemOrder] /
  * hideBottomNavOnScroll, which every nav shell applies through
  * [com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization] — Android
- * floating bar and desktop rail alike (#152).
+ * floating bar and desktop rail alike.
  */
 @Composable
 fun NavigationCustomizationGroup(

@@ -6,18 +6,15 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the calendar feature (docs/kmp-migration-plan.md
- *  conveyor). The HiltViewModel/@Inject annotations were stripped at
- * the move — Koin is the single constructor owner (one framework per type).
- * Unlike every earlier conveyor module, ALL three ctor deps are already
- * Koin-native in the shared graph — no platform interop edges at all:
+ * Koin construction owner for the calendar feature. Koin is the single
+ * constructor owner (one framework per type). All three ctor deps resolve
+ * from the shared graph — no platform interop edges:
  *  - ArrRepository + SeerrRepository resolve from dataJvmModule
  *    (:shared:core:data) on both platforms;
  *  - ExperimentalFeatureGate resolves from datastoreCommonModule
- *    (:shared:core:datastore) — the shared eagerly-shared Direct-*arr gate,
- *    replacing this VM's hand-rolled `stateIn(Eagerly)` copy.
- * The desktop registration is therefore fully live (first conveyor
- * module with zero platform-shaped defs): nav v1 renders calendarSection in
+ *    (:shared:core:datastore) — the shared eagerly-created Direct-*arr gate.
+ *
+ * The desktop registration is fully live: nav v1 renders calendarSection in
  * the rail.
  */
 val calendarModule: Module = module {

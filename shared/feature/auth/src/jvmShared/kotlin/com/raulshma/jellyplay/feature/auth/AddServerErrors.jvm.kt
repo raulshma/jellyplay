@@ -12,17 +12,16 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_error_ssl
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
- * JVM/android actuals of the add-server failure classification (moved
- * verbatim out of AddServerViewModel.kt's commonMain; the javax/java.net
- * types stay behind the JVM seam), so android + desktop behavior is
- * byte-identical — pinned by jvmTest.
+ * JVM/android actuals of the add-server failure classification: the
+ * javax/java.net types stay behind the JVM seam, so android + desktop
+ * behavior is identical — pinned by jvmTest.
  */
 internal actual fun tlsTrustPromptFor(address: String, throwable: Throwable): String? {
     val normalized = normalizeServerAddress(address)
     if (!normalized.startsWith("https://")) return null
     // SSLHandshakeException / SSLPeerUnverifiedException are both SSLException
     // subclasses. The network probe wraps TLS-trust failures in a plain
-    // RuntimeException marker (non-retryable, review round) —
+    // RuntimeException marker (non-retryable) —
     // getRootCause walks past the wrapper to the underlying SSLException.
     return if (getRootCause(throwable) is javax.net.ssl.SSLException) normalized else null
 }

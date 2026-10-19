@@ -19,7 +19,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 
 /**
- * The unified restore wizard's pure model layer (Wave 5) — everything the
+ * The unified restore wizard's pure model layer — everything the
  * [RestoreWizardViewModel] and its screen consume that needs no Composition
  * and no I/O, so the diff classification, the two-tier selection algebra and
  * the reject-reason mapping stay pin-able without a VM.
@@ -375,7 +375,7 @@ data class SnapshotProfileBatch(
  * device clock >5min ahead of the server is rejected for every client-stamped
  * write alike — the plugin's `clock-skew` bucket — and is not special to the
  * restore; the contract's server-stamped `restore` route is the
- * clock-immune alternative, ridden as the pre-wave degrade below.)
+ * clock-immune alternative.)
  *
  * Pure: `[now]` is injected (the VM passes [com.raulshma.jellyplay.core.model.wallNowMillis]).
  */
@@ -425,13 +425,13 @@ fun buildSnapshotWrites(
 }
 
 // ---------------------------------------------------------------------------
-// Wave 6 — the shared pre-destructive restore-point capture
+// The shared pre-destructive restore-point capture
 // ---------------------------------------------------------------------------
 
 /**
  * Best-effort safety restore point before a destructive settings write — the
- * ONE helper every Wave-6 hook site runs (wizard apply, namespace reset,
- * factory reset). The sync gate is re-checked first (ADR 0010's gating rule:
+ * ONE helper every hook site runs (wizard apply, namespace reset,
+ * factory reset). The sync gate is re-checked first (the plugin-gating contract:
  * the api client is never touched without it); a closed gate means there is
  * no server store to snapshot, which is NOT a failure. Only a FAILED call
  * (transport error, plugin 5xx) returns false — the caller warns and

@@ -61,7 +61,7 @@ data class HomeUiState(
      */
     val sections: ImmutableList<HomeSection> = persistentListOf(),
     /**
-     * H9: the plugin-curated hero billboards (the refresher's resolved
+     * The plugin-curated hero billboards (the refresher's resolved
      * entries — see [HomeRefreshState.curatedHero]). The screen merges them
      * ahead of the local hero candidates and reads the headline/subhead
      * overrides for the featured item from here.
@@ -108,7 +108,7 @@ data class HomeUiState(
      */
     val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
     /**
-     * The cached ONLINE home layout (issue #147): section types, titles,
+     * The cached ONLINE home layout: section types, titles,
      * per-library rows and order from the last successful online fetch,
      * collected under the same gate as [offlineLibrary]. The offline home
      * mirrors it filtered to downloaded items (see buildOfflineHomeSections);
@@ -192,7 +192,7 @@ data class HomeUiState(
      */
     val seriesDownload: HomeSeriesDownloadState? = null,
     /**
-     * H12 visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
+     * Visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
      * never stamped), read ONCE per home session — before this session's
      * dwell timer writes its own stamp — so the NEW-badge predicate compares
      * arrivals against the last visit, never against the in-progress one
@@ -201,7 +201,7 @@ data class HomeUiState(
      */
     val homeLastVisitEpochMs: Long = 0L,
     /**
-     * H17 personal stats card data — null hides the card. Loaded only while
+     * Personal stats card data — null hides the card. Loaded only while
      * the `home_stats_card` pref is on and a user is signed in; a load
      * failure resolves to null too (the card hides silently — no error
      * surface for an opt-in decoration).
@@ -210,7 +210,7 @@ data class HomeUiState(
     /** The `home_stats_card` pref mirror — the card's render gate. */
     val statsCardEnabled: Boolean = false,
     /**
-     * H18 genre quick-access rail chips (server-ordered, top ~24). Empty
+     * Genre quick-access rail chips (server-ordered, top ~24). Empty
      * hides the rail: pref off, offline suppression, or a failed/empty
      * fetch.
      */
@@ -218,19 +218,19 @@ data class HomeUiState(
     /** The `home_genre_rail` pref mirror — the rail's render gate. */
     val genreRailEnabled: Boolean = false,
     /**
-     * The `home_focus_backdrop` pref mirror (H10) — the TV focus-driven
+     * The `home_focus_backdrop` pref mirror — the TV focus-driven
      * ambient backdrop's render gate. Default off; the backdrop region gates
      * the focus choreography on it (beside the existing backdrop gates).
      */
     val focusBackdropEnabled: Boolean = false,
     /**
-     * The `home_trickplay_preview` pref mirror (H13) — the TV wide-card peek
+     * The `home_trickplay_preview` pref mirror — the TV wide-card peek
      * loader's gate. Default on; TV-only behavior (non-TV never provides the
      * loader with a live gate).
      */
     val trickplayPreviewEnabled: Boolean = true,
     /**
-     * H19 watch-party presence chips no longer live here — see the NOTE on
+     * Watch-party presence chips live outside [HomeUiState] — see the NOTE on
      * [HomeSearchState] for the pattern: the poll loop writes the whole
      * state on the home refresh cadence, so a per-tick field meant copying
      * the ~45-field object (and racing the refresher's emissions on the same
@@ -249,7 +249,7 @@ data class HomeUiState(
 ) {
     /**
      * The refresher's verdict — the ONE meaning of "the fetch failed"
-     * (ADR-0008's single-carrier rule), the same derivation as
+     * (the single-carrier rule), the same derivation as
      * [HomeRefreshState.fetchFailed] carried through the refresher fold.
      * Readers (the header status chip) consume this named verdict instead of
      * restating `error != null` from the raw field.
@@ -312,14 +312,14 @@ data class HomeSearchState(
     val seerrResults: List<SeerrSearchItem> = emptyList(),
     val isSearching: Boolean = false,
 ) {
-    // NOTE: the live query string no longer lives here. It is the per-keystroke
+    // NOTE: the live query string does not live here. It is the per-keystroke
     // value of the search field, and holding it inside this @Immutable state
     // object meant _uiState changed equality on every keystroke, recomposing
-    // the ~510-line MainHomeContent body. The source of truth is now the VM's
+    // the ~510-line MainHomeContent body. The source of truth is the VM's
     // `searchQuery` StateFlow (read in a leaf), with `isSearchActive` carrying
     // only the rarely-changing blank/nonblank signal to the orchestrator.
     //
-    // NOTE: settings results also no longer live here — the local
+    // NOTE: settings results also do not live here — the local
     // settings-search pipeline is computed in the UI layer
     // (HomeTopDockScrim via `settingsSearchResults`), which resolves the
     // registry's Compose-Resources strings through the suspend resolver.

@@ -20,7 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * H7 hero video: the TTL-memoised two-tier clip probe — the ThemeVideo leg
+ * Hero video: the TTL-memoised two-tier clip probe — the ThemeVideo leg
  * first, the trailer-embed leg (detail TMDB id → Seerr videos → a YouTube
  * key) only on a theme miss and only for movie/series candidates. One probe
  * chain per candidate per window (rotation revisit and pause-chip re-mount

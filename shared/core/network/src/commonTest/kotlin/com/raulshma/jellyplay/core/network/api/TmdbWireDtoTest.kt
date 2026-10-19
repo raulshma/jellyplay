@@ -74,7 +74,7 @@ class TmdbWireDtoTest {
     }
 
     @Test
-    fun `details response decodes snake_case vote fields and tolerates a vote-less body (D4)`() {
+    fun `details response decodes snake_case vote fields and tolerates a vote-less body`() {
         val details = parseTmdbDetailsWire(
             """
             {"id":550,"overview":"A clockwork salesman.","vote_average":8.4,"vote_count":12345,

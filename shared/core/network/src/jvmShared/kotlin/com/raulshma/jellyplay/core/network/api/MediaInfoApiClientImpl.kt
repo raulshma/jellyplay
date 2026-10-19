@@ -41,7 +41,7 @@ private fun TimeSource.nowLocalDateTime(): java.time.LocalDateTime =
 class MediaInfoApiClientImpl(
     private val engine: JellyfinApiEngine,
     /**
-     * Clock seam (D3) for the stale/watched scans' `now` reference — the
+     * Clock seam for the stale/watched scans' `now` reference — the
      * daysSincePlayed filtering is behaviour-bearing (what the cleanup
      * suggestion shows), so it reads the injected clock, not the machine's.
      */

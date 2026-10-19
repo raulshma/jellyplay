@@ -271,7 +271,7 @@ class ExperimentalStore constructor(
     }
 
     // ------------------------------------------------------------------
-    // Typed knob access (Stage A spec machinery)
+    // Typed knob access (plain spec declarations)
     // ------------------------------------------------------------------
 
     // Each knob binds a spec from [ExperimentalPreferenceSpecs] to THIS

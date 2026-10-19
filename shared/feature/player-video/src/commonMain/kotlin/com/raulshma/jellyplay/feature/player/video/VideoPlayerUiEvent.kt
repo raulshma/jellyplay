@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  * precedent): the VM exposes no per-action command methods beyond it and the
  * state flows/sync getters, so new
  * intents are added here (and routed once in the `when`) rather than as new
- * public members on the VM (whose member ratchet the fold created).
+ * public members on the VM (whose member guard the fold created).
  *
  * Deliberately NOT here:
  *  - controller-slice commands — the screen drives the exposed `cast` /

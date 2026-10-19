@@ -20,8 +20,8 @@ import com.sun.jna.ptr.PointerByReference
  * dll map if libmpv wasn't loaded yet — tens to low hundreds of ms, once per
  * process. DesktopAppRoot touches this exactly twice (nav entry registration +
  * dead-end predicate), both during composition; the result is cached here so
- * subsequent reads are free. Never throws: any failure degrades to `false`,
- * which restores the pre-12B dead-end behavior instead of crashing boot.
+ * subsequent reads are free. Never throws: any failure degrades to `false`
+ * — the dead-end guard stays in place instead of crashing boot.
  */
 object MpvSoftwareSurfaceSupport {
 

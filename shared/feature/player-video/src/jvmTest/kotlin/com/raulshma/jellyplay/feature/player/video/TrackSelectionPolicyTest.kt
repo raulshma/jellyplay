@@ -453,7 +453,7 @@ class TrackSelectionPolicyTest {
     // ─── The remembered-track re-matching ladder ───────────────────────
     //
     // Documented order: stored index (validated in the helper) → language +
-    // indexWithinLanguage → language + label (G5 scoring) → language + codec →
+    // indexWithinLanguage → language + label (scoring) → language + codec →
     // language-first (matcher) → default. The codec rung rescues label churn.
 
     @Test

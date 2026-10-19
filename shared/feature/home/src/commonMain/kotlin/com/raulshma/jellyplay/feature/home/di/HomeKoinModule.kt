@@ -16,9 +16,8 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the home feature (V3 conveyor transform — one
- * framework per type: the Hilt ViewModel annotations were stripped at
- * the move, Koin is the single constructor owner).
+ * Koin construction owner for the home feature (conveyor transform — one
+ * framework per type: Koin is the single constructor owner).
  *
  * Dep resolution:
  *  - the VM's ctor deps are Koin-native singles from the
@@ -67,7 +66,7 @@ val homeModule: Module = module {
             offlineRepository = get(),
         )
     }
-    // H17 stats card: the non-admin-safe primitives live on the user-scoped
+    // Stats card: the non-admin-safe primitives live on the user-scoped
     // MediaInfoApiClient single; the richer admin+plugin upgrade reads the
     // core:data AdminStatisticsRepository single (consumed as-is).
     single {
@@ -76,7 +75,7 @@ val homeModule: Module = module {
             adminStatisticsRepository = get(),
         )
     }
-    // H18 genre rail: the VM-scoped TTL cache over the user-scoped
+    // Genre rail: the VM-scoped TTL cache over the user-scoped
     // LibraryApiClient single, stamped by the same HomeClock bean the
     // refresher's throttle/TTL math reads. A FACTORY (not a single) so each
     // HomeViewModel instance owns its cache — a shared singleton would serve
@@ -87,7 +86,7 @@ val homeModule: Module = module {
             clock = get(),
         )
     }
-    // H7 hero video billboard: the TTL-memoised clip probe (ThemeVideo →
+    // Hero video billboard: the TTL-memoised clip probe (ThemeVideo →
     // trailer-embed fallback) behind the hero's ambient video. A SINGLE
     // (unlike the genre cache) because the hero composable has no VM identity
     // to key a factory on — the user-switch staleness the factory avoids is
@@ -102,7 +101,7 @@ val homeModule: Module = module {
             clock = { get<HomeClock>().nowEpochMillis() },
         )
     }
-    // H19 presence chips: the VM-scoped controller (probe-once /Sessions
+    // Presence chips: the VM-scoped controller (probe-once /Sessions
     // verdict + per-chip dismiss memory — see its KDoc), FACTORY for the
     // same reason as HomeGenreRailCache above: the memory must die with the
     // home session, never leak across user switches. Consumes the core:data

@@ -8,9 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * Android actual of the [PlatformIntents] seam — the pre-migration
- * AboutScreen / NotificationSettingsScreen intent bodies, verbatim, just
- * funnelled through one object reached from the composable's LocalContext.
+ * Android actual of the [PlatformIntents] seam, funnelled through one object
+ * reached from the composable's LocalContext.
  */
 internal class AndroidPlatformIntents(
     private val context: Context,

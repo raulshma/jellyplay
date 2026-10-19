@@ -266,7 +266,7 @@ internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
  * Focus diagnostic: logcat under `JellyPlayFocus` while the harness gate is
  * armed (`jellyplay.harness.enabled=true` — the desktop actual's zero-cost
  * gate, same property, so one flag speaks on both platforms), silent on every
- * normal boot. Issue #174's reporter supplied clean logcat; these lines make
+ * normal boot. The TV-key report supplied clean logcat; these lines make
  * the Compose-side focus story (grab attempts, layer focus transitions, sink
  * installs) part of the next field report.
  */
@@ -280,7 +280,7 @@ internal actual fun harnessFocusDiag(message: String) {
  * Deterministic Android key delivery: delegate to [AndroidPlayerKeyBridge].
  * PlayerActivity.dispatchKeyEvent offers every key the normal dispatch chain
  * did not consume (the null-focus case) to the bridge — the Android half of
- * the issue #174 fix.
+ * the fix.
  */
 internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
     AndroidPlayerKeyBridge.install(sink)
@@ -407,7 +407,7 @@ internal actual fun EngineVideoSurface(
                     // Non-View-surface engine (desktop-style, impossible on Android
                     // today): empty surface, audio-only playback continues.
                     ?: android.view.View(ctx)
-                // Issue #174 hardening: the engine's View must never participate
+                // TV-key hardening: the engine's View must never participate
                 // in focus. media3's PlayerView is focusable by default (its
                 // constructor calls setFocusable(true)) and a View-level focus
                 // owner outside Compose swallows every key before Compose's

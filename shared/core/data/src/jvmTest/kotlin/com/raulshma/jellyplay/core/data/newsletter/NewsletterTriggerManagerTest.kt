@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 /**
  * Unit tests for [NewsletterTriggerManager.shouldShowBanner]'s weekday-window
- * logic. D3 routed the manager's calendar read through the injected
+ * logic. The manager's calendar read routes through the injected
  * TimeSource, so the suite pins a FIXED today (Wednesday 2026-01-07) via
  * FakeTimeSource and derives every expectation from it — the *relative*
  * contract, now deterministic rather than machine-clock dependent:

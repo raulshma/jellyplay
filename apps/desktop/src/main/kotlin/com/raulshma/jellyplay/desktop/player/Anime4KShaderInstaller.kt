@@ -138,10 +138,9 @@ class Anime4KShaderInstaller(
                 ?.getResourceAsStream("$RESOURCE_ROOT/$name")
 
         /**
-         * The pure version-bump decision, split out for the extraction
-         * policy tests: install when the manifest is missing/corrupt, its
-         * version differs from the bundled one, or any bundled file went
-         * missing on disk.
+         * The pure version-bump decision behind the extraction policy tests:
+         * install when the manifest is missing/corrupt, its version differs
+         * from the bundled one, or any bundled file went missing on disk.
          */
         fun needsInstall(manifest: Manifest?, bundledVersion: String, allFilesPresent: Boolean): Boolean =
             manifest == null || manifest.version != bundledVersion || !allFilesPresent

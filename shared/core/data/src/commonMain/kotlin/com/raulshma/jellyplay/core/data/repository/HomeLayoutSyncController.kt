@@ -29,7 +29,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 
 /**
- * The slice→payload mapping of the H20 home-layout sync — the SAME projection
+ * The slice→payload mapping of the home-layout sync — the SAME projection
  * the presets machinery snapshots ([HomeLayoutConfig] is
  * `HomeLayoutPreset.config`'s type): what the share button exports, what the
  * autopush uploads, what a restore applies, all one vocabulary. A second
@@ -73,7 +73,7 @@ sealed interface HomeLayoutRestoreFetch {
 }
 
 /**
- * The H20 home-layout ↔ server DisplayPreferences bridge — the layer that owns
+ * The home-layout ↔ server DisplayPreferences bridge — the layer that owns
  * the network client (the store layer deliberately cannot: [HomeDiscoveryStore]
  * stays transport-free and bumps its observable [HomeDiscoveryStore.layoutRevision]
  * instead; THIS class collects that signal). Local-first policy, per decision:
@@ -228,7 +228,7 @@ internal fun serializeLayout(config: HomeLayoutConfig): String =
     PreferencesJson.export.encodeToString(HomeLayoutConfig.serializer(), config)
 
 /**
- * The lenient server-payload decode (H20 contract: unknown sections dropped —
+ * The lenient server-payload decode (contract: unknown sections dropped —
  * the same tolerance the store's version-union read applies to its persisted
  * set): the section-typed positions ([HomeLayoutConfig.enabledHomeSectionTypes],
  * [HomeLayoutConfig.homeSectionOrder], the [HomeLayoutConfig.libraryHomeSectionOverrides]

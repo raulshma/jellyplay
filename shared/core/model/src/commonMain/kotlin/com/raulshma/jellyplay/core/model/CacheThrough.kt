@@ -4,13 +4,11 @@ package com.raulshma.jellyplay.core.model
  * The ONE guarded cache-through read: hit-check → (optional force) → fetch →
  * epoch-guarded memoise-write.
  *
- * This exact shape used to exist twice, hand-copied across modules with drifted
- * homes — `IdentityCacheFetch.fetchThrough` (core:data, behind the
- * `getOrFetch` family) and `HomeSectionsFetcher.cachedHomeSubCall`
- * (core:network, behind the home sub-call caches) — because each sat below the
- * layer that could own the twin. Both depend on `core:model`, so the guard
- * lives here beside [TtlCache], exactly the precedent that promoted
- * [TtlCache] itself out of those two modules.
+ * The shape is shared by `IdentityCacheFetch.fetchThrough` (core:data, behind
+ * the `getOrFetch` family) and `HomeSectionsFetcher.cachedHomeSubCall`
+ * (core:network, behind the home sub-call caches). Both modules depend on
+ * `core:model`, so the guard lives here beside [TtlCache], for the same
+ * reason [TtlCache] lives here.
  *
  * The piece worth concentrating is the WRITE GUARD, and it is subtle enough to
  * state once: the epoch is captured AFTER the miss, BEFORE the fetch, and the

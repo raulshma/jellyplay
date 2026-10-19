@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The [ProfileSyncAdapter] that roams the NON-SECRET integration settings
- * (the settings-backup wave's `integrations` namespace): the Seerr connection
+ * (the settings-backup cluster's `integrations` namespace): the Seerr connection
  * config and feature toggles ([SeerrPreferencesStore.SyncKeys]), the *arr
  * polling config ([ArrPreferencesStore.SyncKeys]), and the subtitle-provider
  * enable toggles ([SubtitleProviderPreferencesStore.SyncKeys]) — the stores'

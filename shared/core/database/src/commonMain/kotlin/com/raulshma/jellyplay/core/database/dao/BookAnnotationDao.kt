@@ -9,8 +9,7 @@ import com.raulshma.jellyplay.core.database.entity.BookAnnotationEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for the reader highlight/underline table
- * (docs/adr/0003-local-first-reader-marks.md). Follows the Flow-for-observe /
+ * DAO for the reader highlight/underline table. Follows the Flow-for-observe /
  * suspend-for-write convention used by the rest of this package (see
  * [SearchHistoryDao]). Lists order by creation (`createdAt`, not
  * `updatedAt`) so an edited highlight does not jump to the top of the sheet.

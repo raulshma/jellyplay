@@ -3,11 +3,10 @@ package com.raulshma.jellyplay.feature.settings
 import android.content.Context
 
 /**
- * Android actual of the [AppMetaProvider] seam — the pre-migration
- * AboutViewModel bodies, verbatim: versionName from the package info,
- * FLAG_DEBUGGABLE from the application info, and runtime min/target SDK read
- * from the same application info so the About screen never drifts from the
- * actual build configuration in app/build.gradle.kts.
+ * Android actual of the [AppMetaProvider] seam: versionName from the package
+ * info, FLAG_DEBUGGABLE from the application info, and runtime min/target SDK
+ * read from the same application info so the About screen never drifts from
+ * the actual build configuration in app/build.gradle.kts.
  */
 internal class AndroidAppMetaProvider(
     private val context: Context,

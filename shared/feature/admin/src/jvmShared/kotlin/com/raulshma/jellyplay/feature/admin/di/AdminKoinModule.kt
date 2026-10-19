@@ -25,15 +25,12 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the admin feature (docs/kmp-migration-plan.md
- *,  admin conveyor — eighth feature). The HiltViewModel/@Inject
- * annotations were stripped at the move — Koin is the single constructor
- * owner (one framework per type). Ctor deps all resolve from the shared
- * core:data Koin graph (dataJvmModule) on BOTH platforms since the admin
- * repo flip:
+ * Koin construction owner for the admin feature (the admin conveyor). Koin is
+ * the single constructor owner (one framework per type). Ctor deps all resolve
+ * from the shared core:data Koin graph (dataJvmModule) on BOTH platforms:
  *  - AdminRepository + AdminStatisticsRepository are dataJvmModule singles
- *    (impls moved out of legacy :core:data; the app's DataModule only keeps
- *    koin().get() @Provides bridges for its remaining Hilt injectors);
+ *    (the app's DataModule only keeps koin().get() @Provides bridges for its
+ *    remaining Hilt injectors);
  *  - AuthRepository likewise resolves from dataJvmModule.
  *
  * The Android-only PluginConfigViewModel (WebView quartet, Context ctor dep)
@@ -45,8 +42,8 @@ val adminModule: Module = module {
             adminRepository = get(),
             jellyPlayStatusStore = get(),
             jellyPlayFeatureGate = get(),
-            // The broadcast composer's api seam (ADR 0010, the `events`
-            // family's POST jellyplay/broadcast).
+            // The broadcast composer's api seam (the `events` family's
+            // POST jellyplay/broadcast).
             jellyPlayPluginApiClient = get(),
         )
     }

@@ -132,7 +132,7 @@ class TrackResolutionEngineTest {
         val rules = LanguageRuleSet(preset = TrackSelectionPreset.SUBBED_SHOWS)
         assertNull(TrackResolutionEngine.resolve(rules, movieContext))
         // With global rule-set languages configured, the movie still picks
-        // them up — via the GLOBAL rung (plan rung order), not the preset.
+        // them up — via the GLOBAL rung of the ladder, not the preset.
         val withLanguages = LanguageRuleSet(
             preset = TrackSelectionPreset.SUBBED_SHOWS,
             subtitleLanguages = listOf("eng"),

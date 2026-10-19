@@ -121,7 +121,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.Res
  * Home row for the offline-derived poster-card sections: the same chrome as
  * [HomeMediaRow] — title, card width, spacing, TV/mobile scroller, focus
  * wiring — but cards render via [OfflineMediaCard] so artwork resolves from
- * local files and no server image URL is ever built (issue #147: the offline
+ * local files and no server image URL is ever built (the offline
  * home is the normal home, populated from downloads). Rows are either generic
  * ([HomeSectionType.DOWNLOADED]) or cached-layout mirror rows typed as their
  * online counterparts; the latter pass [onSectionLongClick] so the section
@@ -141,7 +141,7 @@ internal fun OfflineHomeMediaRow(
     clippingEnabled: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
     // "See All" pill for the section types that get one online (mirrored rows
-    // keep the affordance — same visual row as the online layout, #147).
+    // keep the affordance — same visual row as the online layout).
     onSeeAllClick: (() -> Unit)? = null,
     // Play overlay on the card, mirroring HomeMediaRow's onPlayClick.
     onPlayClick: ((OfflineMediaItem) -> Unit)? = null,
@@ -157,7 +157,7 @@ internal fun OfflineHomeMediaRow(
     val cardPrefs = LocalCardDisplayPreferences.current
     val metrics = homeRowMetrics()
     // Same hide-watched row filter as HomeMediaRow, so mirrored rows behave
-    // identically to their online counterparts (#147).
+    // identically to their online counterparts.
     val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
         hideWatchedFilter(items, cardPrefs.hideWatchedItems) { it.toMediaItem().isPlayed }
     }
@@ -217,7 +217,7 @@ internal fun OfflineHomeMediaRow(
 /**
  * Shared poster-row chrome — the pieces [OfflineHomeMediaRow] mirrors from
  * [HomeMediaRow] so offline rows behave identically to their online
- * counterparts (#147). Extracted so the two rows cannot drift apart.
+ * counterparts. Extracted so the two rows cannot drift apart.
  */
 
 /** Drops watched items when the pref is on, so the whole card slot disappears. */
@@ -277,10 +277,10 @@ internal fun homeRowMetrics(widthScale: Float? = null): HomeRowMetrics {
 /**
  * The home rows' TV/touch chassis — the ONE implementation of the
  * [TvFocusableItemRow] (TV) / [HorizontalMediaScroller] (touch) branch that
- * every home row previously duplicated, with the card as a slot. The slot
+ * every home row shares, with the card as a slot. The slot
  * receives the focus modifier on TV and an empty one on touch; append
- * [cardWidth] to it so both branches size identically. Fixing card-rendering
- * or scroller behavior now lands once per row instead of twice.
+ * [cardWidth] to it so both branches size identically. Card-rendering
+ * or scroller behavior lands in one place.
  */
 @Composable
 internal fun <T> HomeItemRow(
@@ -480,7 +480,7 @@ internal fun <T> ContinueWatchingRow(
             val mediaItem = toMediaItem(item)
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-            // H13: the slot tracks its own TV focus for the trickplay peek.
+            // The slot tracks its own TV focus for the trickplay peek.
             // The loader's gate (pref ∧ TV ∧ ¬performance ∧ projected
             // Trickplay ∧ resume position) keeps it inert everywhere else, so
             // touch and suppressed cards render exactly as before.
@@ -521,7 +521,7 @@ internal fun HomeMediaRow(
     clippingEnabled: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
     /**
-     * H12 NEW-badge seam: only the arrival rows (LATEST_MEDIA /
+     * NEW-badge seam: only the arrival rows (LATEST_MEDIA /
      * RECENTLY_ADDED — UPCOMING joins here when its row lands) pass true;
      * [homeLastVisitEpochMs] carries the PREVIOUS visit's stamp (the
      * session's own stamp must not clear the badges it just showed).
@@ -531,7 +531,7 @@ internal fun HomeMediaRow(
     showNewBadges: Boolean = false,
     homeLastVisitEpochMs: Long = 0L,
     /**
-     * H4: renders each card's air-date chip ([HomeAirsDateChip], the details
+     * Renders each card's air-date chip ([HomeAirsDateChip], the details
      * screen's "Airs <date>" vocabulary) in the poster's top-start
      * corner. The Upcoming row is the only caller — its items are unaired
      * episodes whose [MediaItem.premiereDate] is the point of the row.
@@ -621,7 +621,7 @@ internal fun HomeMediaRow(
         ) { item, mod ->
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
-            // H12: the per-card NEW decision — the row's section flag ∧ the
+            // The per-card NEW decision — the row's section flag ∧ the
             // card prefs' global toggle ∧ the item's arrival-vs-previous-visit
             // predicate. Resolved here (not in the card) so the card stays a
             // pure renderer and the remember slots stay in the row.
@@ -656,7 +656,7 @@ internal fun HomeMediaRow(
                 seriesBackdropResolver = seriesBackdropResolver,
                 showEpisodeSeriesBadge = showEpisodeSeriesBadge,
             )
-            // H4: Upcoming air-date badge — rendered in the poster's top-left
+            // Upcoming air-date badge — rendered in the poster's top-left
             // overlay stack via [PosterCard.topStartBadge].
             val airDate = if (showAirDateChips) {
                 remember(item.id, item.premiereDate) { upcomingAirDate(item.premiereDate) }
@@ -691,7 +691,7 @@ internal fun HomeMediaRow(
 }
 
 /**
- * The H5 My Media tiles row — home's only non-poster shape. One landscape
+ * The My Media tiles row — home's only non-poster shape. One landscape
  * tile per Jellyfin library ([HomeLibraryTile]): the library's Primary image
  * over a legibility scrim, the library name, and — when a payload ever
  * carries one — the item count. Everything else mirrors [HomeMediaRow]
@@ -826,7 +826,7 @@ private fun HomeLibraryTile(
 }
 
 /**
- * The H4 air-date chip's pure input: the Upcoming card's premiere stamp
+ * The air-date chip's pure input: the Upcoming card's premiere stamp
  * parsed to a [LocalDate], or null (absent / unparseable) — the chip simply
  * doesn't render, never lies. Shares the core-ui date decoders the details
  * screen's MissingEpisodeBadge.Airs uses, so both surfaces agree on what a

@@ -6,7 +6,7 @@ package com.raulshma.jellyplay.feature.player.video
  * epoch) behind read accessors, so the session can persist and restore a
  * process-death resume position without touching the handle type.
  *
- * Live since B3: the production implementation
+ * the production implementation
  * (`SavedStateHandlePositionStore`, player-video) is constructed by the
  * ViewModel (which keeps the handle as a constructor parameter solely to
  * build the store) and injected into [PlaybackSession].
@@ -17,7 +17,7 @@ package com.raulshma.jellyplay.feature.player.video
  * it — a test-fixtures → player-video edge would have been both a first
  * core→feature dependency and a project cycle with player-video's
  * jvmTest → test-fixtures edge. The double has since moved to player-video's
- * jvmTest itself (ADR-0006 rule 4: its only consumers were that module's
+ * jvmTest itself (the test-placement rule: its only consumers were that module's
  * suites); this interface stays put — same package, its single consumer.
  */
 interface SessionPositionStore {

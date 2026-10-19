@@ -87,8 +87,8 @@ internal fun WhatsNewSheetOverlay(
 /**
  * Single audio mini-player host for every form-factor shell (TV overlay,
  * phone NavigationRail, phone compact floating-nav). Owns the playback-flow
- * collects and the [MiniPlayer] transport wiring that all three shells used
- * to paste verbatim; [title] stays a parameter because [TvContent] hoists its
+ * collects and the [MiniPlayer] transport wiring shared by all three shells;
+ * [title] stays a parameter because [TvContent] hoists its
  * own title collect to feed the drawer's Now Playing row. Per-shell placement —
  * alignment, bottom padding and the compact shell's scroll-coupled offset —
  * arrives via [modifier]; the `showMiniPlayer` gate stays at the call sites.

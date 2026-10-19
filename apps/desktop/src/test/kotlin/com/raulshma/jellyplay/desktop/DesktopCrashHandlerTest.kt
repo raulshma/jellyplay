@@ -103,8 +103,8 @@ class DesktopCrashHandlerTest {
         val handler = DesktopCrashHandler(logsDir)
 
         // No sleeps: on coarse Windows clocks these often land on the same
-        // epoch-milli, which used to silently truncate the first report under
-        // CREATE/TRUNCATE defaults. CREATE_NEW + seq suffix must preserve both.
+        // epoch-milli, where CREATE/TRUNCATE defaults would silently drop the
+        // first report. CREATE_NEW + seq suffix must preserve both.
         handler.coroutineExceptionHandler.handleException(
             kotlin.coroutines.EmptyCoroutineContext,
             Boom("collision-a"),

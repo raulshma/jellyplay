@@ -229,12 +229,11 @@ fun libraryBackAction(
 
 /**
  * This screen's active-filter bar vocabulary: which dimensions render as
- * dismiss tags, and in which order — preserved verbatim from the hand-rolled
- * bar this replaces (media types → status → downloaded → genres; search passes
- * its own list). The shared [ActiveFiltersBar] renders whatever it is given,
- * so a dimension only one screen surfaces stays a caller decision. Note the
- * Status sheet's resumable toggle deliberately does NOT add a tag here (same
- * as before): an active resumable filter shows the bar with just the clear-all
+ * dismiss tags, and in which order — media types → status → downloaded →
+ * genres; search passes its own list. The shared [ActiveFiltersBar] renders
+ * whatever it is given, so a dimension only one screen surfaces stays a caller
+ * decision. Note the Status sheet's resumable toggle deliberately does NOT add
+ * a tag here: an active resumable filter shows the bar with just the clear-all
  * chip.
  */
 private val libraryActiveFilterDimensions = listOf(
@@ -271,13 +270,11 @@ internal fun LibraryScreen(
     DeferredRefreshEffect(viewModel.deferredRefresher)
 
     // One browser-state object owns {folder, filters, viewMode, groupBy,
-    // posterSize, sectionContext, title} — replacing 13 individual
-    // collectAsStateWithLifecycle reads that re-derived presentation from
-    // scattered sources. "In section mode" now derives from the state, unifying
-    // the two drift-prone sources (screen used to trust the nav-arg, the VM
-    // trusted its own _sectionContext). The nav-arg still drives the
-    // LaunchedEffect below; it just stops being a parallel source of truth for
-    // gating.
+    // posterSize, sectionContext, title} — one subscription, not 13 individual
+    // collectAsStateWithLifecycle reads that re-derive presentation from
+    // scattered sources. "In section mode" derives from the state alone, the
+    // single source of truth (not the nav-arg). The nav-arg still drives the
+    // LaunchedEffect below.
     val browser by viewModel.browserState.collectAsStateWithLifecycle()
     // Destructured from the single browser subscription above (one state read,
     // not 13). The body keeps the plain field names for readability.
@@ -291,7 +288,7 @@ internal fun LibraryScreen(
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val resetDialogVisible by viewModel.resetDialogVisible.collectAsStateWithLifecycle()
-    // Offline mode auto-filters the grid to downloads (#147); the flag pins
+    // Offline mode auto-filters the grid to downloads; the flag pins
     // the Downloaded chip and swaps the empty-state copy.
     val offlineAutoFilter by viewModel.offlineAutoFilter.collectAsStateWithLifecycle()
 
@@ -300,7 +297,7 @@ internal fun LibraryScreen(
     // safe. In tab mode (sectionContext == null) clear any leftover section state
     // so the Library tab shows its default view — the VM is shared across the
     // tab and the section deep-link, so without this reset the "Latest X"
-    // filters/sort would leak into the tab (issue #113).
+    // filters/sort would leak into the tab.
     LaunchedEffect(sectionContext) {
         if (sectionContext != null) {
             viewModel.onEvent(LibraryUiEvent.ConfigureSection(sectionContext))
@@ -312,10 +309,10 @@ internal fun LibraryScreen(
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
 
     // Prefetch photo-folder child urls on load-state transitions (append/refresh)
-    // instead of snapshot-list identity. Keying on the snapshot re-fired the
-    // prefetch on every page boundary, and each merge produced a new Map in
-    // _photoFolderChildUrls — which used to invalidate the whole screen (now
-    // mitigated by per-item collection). Gating on loadState also lets
+    // instead of snapshot-list identity: keying on the snapshot re-fires the
+    // prefetch on every page boundary, and each merge produces a new Map in
+    // _photoFolderChildUrls. Per-item collection keeps that from invalidating
+    // the whole screen. Gating on loadState also lets
     // us skip non-photo libraries entirely.
     val appendState = pagedItems.loadState
     LaunchedEffect(appendState) {
@@ -339,7 +336,7 @@ internal fun LibraryScreen(
     // the staggered grid's scroll state from the screen root.
     val staggeredState = rememberLazyStaggeredGridState()
     // Derives from the browser state (the single source of truth), not the
-    // nav-arg parameter — the two used to drift. The nav-arg still drives the
+    // nav-arg parameter. The nav-arg still drives the
     // configureSection/clearSectionMode LaunchedEffect above.
     val inSectionMode = browser.isSection
     // Which (if any) auxiliary sheet is open (filter/poster-size/group-by).
@@ -348,9 +345,8 @@ internal fun LibraryScreen(
     // [libraryBackAction].
     var openSheet by remember { mutableStateOf<LibrarySheet?>(null) }
     // The canonical fold on [LibraryFilters] — the same one the search screen
-    // reads. Previously this hand-rolled copy omitted years/tags/minRating/
-    // sort/resumable, so the badge and BackHandler guard under-reported the
-    // active set.
+    // reads, so the badge and BackHandler guard see the full active set
+    // (years/tags/minRating/sort/resumable included).
     val hasActiveFilters by remember {
         derivedStateOf { browser.filters.hasActiveFilters() }
     }
@@ -658,7 +654,7 @@ internal fun LibraryScreen(
                     // dedicated selection sheet (immediate-apply); "All Filters"
                     // falls back to the legacy full sheet.
                     LibraryFilterChipRow(
-                        // Offline mode pins the Downloaded filter on (#147): the
+                        // Offline mode pins the Downloaded filter on: the
                         // chip renders selected and Tags stay hidden while the
                         // grid is served from the local store. The toggle is a
                         // no-op then — the grid is downloads-only until the app
@@ -1009,8 +1005,8 @@ internal fun LibraryScreen(
                     // in the floating toolbar so the app bar stays clean.
                     // Music-library-only on all form factors: these actions target
                     // music playlists, so showing them for a video library reads as
-                    // clutter ("seems more for the music side", #113). TV now
-                    // matches phone — filters stay reachable via the pinned filter
+                    // clutter ("seems more for the music side"). TV matches
+                    // phone — filters stay reachable via the pinned filter
                     // chip row above.
                     val isMusicLibrary = selectedFolder?.collectionType == "music"
                     if (isMusicLibrary && pagedItems.itemCount > 0) {
@@ -1161,7 +1157,7 @@ internal fun LibraryScreen(
 
     if (showFilters) {
         LibraryFilterSheet(
-            // Same offline pinning as the chip row (#147): the Downloaded
+            // Same offline pinning as the chip row: the Downloaded
             // toggle renders on while the grid is auto-served from the local
             // store, so the sheet can't claim it's off.
             currentFilters = if (offlineAutoFilter) filters.copy(isDownloaded = true) else filters,

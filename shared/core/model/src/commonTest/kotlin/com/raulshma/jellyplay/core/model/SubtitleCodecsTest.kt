@@ -107,7 +107,7 @@ isImageSubtitleCodec(codec),
 
     @Test
     fun `image codecs never masquerade as srt`() {
-        // The regression: image bytes used to fall through to `.srt`.
+        // Regression guard: image bytes must never fall through to `.srt`.
         IMAGE_SUBTITLE_CODECS.forEach { codec ->
             val ext = subtitleSidecarExtension(codec)
             assertTrue(

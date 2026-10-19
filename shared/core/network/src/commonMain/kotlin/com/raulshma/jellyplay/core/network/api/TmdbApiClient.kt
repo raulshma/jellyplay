@@ -13,7 +13,7 @@ interface TmdbApiClient {
 
     /**
      * Details for a movie/series, straight from TMDB (`/3/{movie|tv}/{id}`) —
-     * the vote aggregate + overview (D4): the ratings strip's no-plugin,
+     * the vote aggregate + overview: the ratings strip's no-plugin,
      * no-Seerr source. Null vote fields mean the item has no votes yet.
      */
     suspend fun getDetails(tmdbId: Int, mediaType: MediaType): Result<TmdbDetails>

@@ -59,7 +59,7 @@ class LocalBookTocProber(
     }
 
     /**
-     * Speculative outline parse — non-suspend on purpose (the ratchet keeps
+     * Speculative outline parse — non-suspend on purpose (the guard keeps
      * bare runCatching out of suspend bodies): a parse failure degrades to no
      * outline, the probe's never-an-error-surface contract.
      */

@@ -28,14 +28,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_factory_re
 /**
  * The backup domain's fused row declarations — the feature-side single home
  * of the backup screen's rows (the [AppearanceRows] template). Each
- * [SettingsRow] replaces the trio the domain used to declare per row: the
- * `SettingsSearchBinding` entry, the `SettingsRowRecord` entry, and the
- * `BackupSettingsIds` holder constant (all retired).
+ * [SettingsRow] carries the search binding, the screen face
+ * and the row identity in one declaration.
  *
  * HAND-MAINTAINED residuals: the backup actions live in stores without spec
  * machinery — they carry their full hand search faces. The projection
  * ([List.toSearchItems]) is the pure hand-projection; search results, catalog
- * order and group membership are byte-identical to the retired declarations.
+ * order and group membership derive from these declarations.
  */
 internal object BackupRows {
 
@@ -53,7 +52,7 @@ internal object BackupRows {
     )
 
     /**
-     * Wave 3 — the secrets-carrying export: same file sink as [BackupExport],
+     * The secrets-carrying export: same file sink as [BackupExport],
      * plus the passphrase-encrypted secrets block (third-party API keys + the
      * saved Jellyfin server list; never access tokens). Opens the passphrase
      * dialog between the file pick and the write.
@@ -93,7 +92,7 @@ internal object BackupRows {
     )
 
     /**
-     * Every fused backup row — the ratchet's vocabulary. A computed accessor
+     * Every fused backup row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Ratchet against the ViewModel regrowing into a god object (the library
+ * Guard against the ViewModel regrowing into a god object (the library
  * module's LibraryViewModelOwnershipTest pattern): the count of
  * LiveTvPlayerViewModel's public + internal members (properties and
  * functions, primary-constructor parameters and private members excluded)
@@ -51,7 +51,7 @@ class LiveTvPlayerViewModelOwnershipTest {
     }
 
     /**
-     * Removes line and block comments so the ratchet checks *code*, not KDoc
+     * Removes line and block comments so the guard checks *code*, not KDoc
      * prose (the ViewModel legitimately mentions its members in
      * documentation), while leaving string literals intact.
      */

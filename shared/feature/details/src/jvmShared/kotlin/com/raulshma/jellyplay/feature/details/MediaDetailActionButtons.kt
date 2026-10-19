@@ -477,7 +477,7 @@ private fun PlayButton(
 ) {
     val isTv = LocalTvMode.current
     val playFocusState = rememberTvFocusState(focusedScale = 1.05f)
-    // D22: report the play target's focus into the trailer-preview port —
+    // Report the play target's focus into the trailer-preview port —
     // on TV (with `trailer_preview_on_focus` on) the hero's muted preview
     // mounts exactly while this button holds focus. The write is a no-op
     // for non-gated consumers (non-TV ignores the flag in the mount

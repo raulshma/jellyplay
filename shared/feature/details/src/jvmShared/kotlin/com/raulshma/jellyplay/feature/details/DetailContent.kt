@@ -116,7 +116,7 @@ internal fun DetailContent(
         chooserTitle = stringResource(Res.string.detail_share_via),
     )
 
-    // D22: the TV focus-gated trailer preview's port — the single holder
+    // The TV focus-gated trailer preview's port — the single holder
     // instance the Play button (deep in the body) writes and DetailBackdrop
     // reads; provided below so the button's writes reach it on both the
     // touch and TV branches.
@@ -140,7 +140,7 @@ internal fun DetailContent(
         if (next) videoQueue.enqueueNext(queueItem) else videoQueue.enqueueLast(queueItem)
     }
 
-    // D14 "Play (with pre-rolls)": the SyncPlay veto is host-level (the
+    // "Play (with pre-rolls)": the SyncPlay veto is host-level (the
     // process-wide SyncPlayManager, the videoQueue koinInject precedent) — a
     // group session owns the playback order, so the per-invocation intro
     // override is meaningless there. The media-type + offline gates live
@@ -204,7 +204,7 @@ internal fun DetailContent(
         onShowFromContinueWatching = callbacks.userData.onShowFromContinueWatching,
         onHideDetailUpNext = callbacks.userData.onHideDetailUpNext,
         onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
-        // D12: the per-series notify entry rides the platform seam — desktop
+        // The per-series notify entry rides the platform seam — desktop
         // (no notification stack) never sees it.
         seriesNotificationsEnabled = state.core.seriesNotificationsEnabled,
         platformSupportsNotifications = platformHasNotificationStack,
@@ -220,7 +220,7 @@ internal fun DetailContent(
         onStartWatchParty = callbacks.playback.onStartWatchParty,
     )
 
-    // ── D23 promoted rail resolution ─────────────────────────────────────
+    // ── promoted rail resolution ─────────────────────────────────────
     // The fixed promoted subset of [mediaOptions] lifts into the landscape
     // rail; the ⋮ menu suppresses exactly those ids while the rail shows them
     // (no dupes). Effective only where the rail exists — the landscape body —
@@ -314,7 +314,7 @@ internal fun DetailContent(
             trailerFocusPreview = trailerFocusPreview,
         )
 
-        // D22: the port reaches the Play button through the composition
+        // The port reaches the Play button through the composition
         // local (the holder itself travels to the backdrop as a parameter
         // above) — the local scopes exactly the body subtrees that render
         // the button.
@@ -369,7 +369,7 @@ internal fun DetailContent(
             mediaOptions = overflowOptions,
             contentFocusRequester = contentFocusRequester,
             scrollBehavior = scrollBehavior,
-            // D8: the mute chip exists only while theme audio is actually
+            // The mute chip exists only while theme audio is actually
             // audible; its icon reflects the per-series memory (the same
             // theme-source keying the VM's enrichment gate uses).
             themeMusicVisible = state.core.themeMusicPlaying,
@@ -423,7 +423,7 @@ private fun DetailScrollContent(
     item: com.raulshma.jellyplay.core.model.MediaItem?,
     isAudio: Boolean,
     isAlbum: Boolean,
-    /** D23: the ⋮ options' promoted subset for the landscape rail (empty = none). */
+    /** The ⋮ options' promoted subset for the landscape rail (empty = none). */
     promotedActions: List<MediaOption>,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current

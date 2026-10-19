@@ -98,7 +98,7 @@ import org.koin.compose.viewmodel.koinViewModel
 private const val COLLISION_FLASH_CLEAR_MS = 2_600L
 
 /**
- * The player input-binding editor (issue #171 generalized): one row per
+ * The player input-binding editor: one row per
  * bindable input, each carrying its action (the picker) and its enabled
  * flag (the switch; the picker's "Unbound" arms it off without erasing the
  * action). Sections group the surfaces: touch, mouse & scroll, keyboard,

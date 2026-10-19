@@ -48,7 +48,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_see_all
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * One D6 "More in {collection}" franchise row: a titled poster row of the
+ * One "More in {collection}" franchise row: a titled poster row of the
  * collection's members (server-default order, the loaded item filtered out)
  * with three header actions —
  *

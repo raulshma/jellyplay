@@ -45,7 +45,7 @@ import kotlinx.coroutines.sync.withLock
  *
  * The merge paths (`loadSeasonEpisodes`'s season merge, `updateSeasonEpisodes`'
  * rewrite) serialize on [mergeMutex] rather than the fetcher's internal lock:
- * like the pre-extraction code, they guard merge-vs-merge only — flight
+ * like the original inline code, they guard merge-vs-merge only — flight
  * cache writes land outside that lock and stay epoch-guarded.
  *
  * ## Online vs offline

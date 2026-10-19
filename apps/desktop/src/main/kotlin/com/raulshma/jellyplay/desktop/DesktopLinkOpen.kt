@@ -203,8 +203,8 @@ internal class DesktopLinkOpenQueue {
 
 /**
  * The system-clipboard text read behind the Ctrl+Shift+V accelerator (the
- * ONE AWT touchpoint of the link-open seam, split out so the policy above
- * stays JVM-pure). Returns `null` when the clipboard is unreadable
+ * ONE AWT touchpoint of the link-open seam, kept separate so the policy
+ * above stays JVM-pure). Returns `null` when the clipboard is unreadable
  * (headless session, clipboard briefly held by another process — Windows
  * fails the open transiently) or holds no string flavor; the caller maps
  * `null` to the same [DesktopOpenLinkEvent.NoLinkFound] outcome as

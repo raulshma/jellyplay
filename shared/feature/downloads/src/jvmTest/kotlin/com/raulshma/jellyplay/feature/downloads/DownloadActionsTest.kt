@@ -11,9 +11,7 @@ import kotlin.test.assertTrue
 /**
  * Pins the [DownloadActions] admission table, the selected/all/item targeting
  * fold, the per-item availability fold the row renderer consumes, and the
- * COMPLETED-is-playable fold — the tables the former hand-written filter
- * lambdas in [DownloadsViewModel] and the row's per-status button branches
- * encoded action-by-action, now in one place.
+ * COMPLETED-is-playable fold.
  */
 class DownloadActionsTest {
 
@@ -30,7 +28,7 @@ class DownloadActionsTest {
         priority = 0,
     )
 
-    // ── Admission table (derived from the former VM filters) ──────────────
+    // ── Admission table ───────────────────────────────────────────────────
 
     @Test
     fun pause_admits_only_downloading() {
@@ -155,7 +153,7 @@ class DownloadActionsTest {
         }
     }
 
-    // ── All-scope targeting (the former global actions) ──────────────────
+    // ── All-scope targeting (global actions) ─────────────────────────────
 
     @Test
     fun all_scope_targets_every_admitted_item_without_selection() {
@@ -176,7 +174,7 @@ class DownloadActionsTest {
         )
     }
 
-    // ── Item-scope targeting (the former per-row actions) ────────────────
+    // ── Item-scope targeting (per-row actions) ───────────────────────────
 
     @Test
     fun item_scope_targets_the_matching_id_only_when_admitted() {
@@ -208,8 +206,8 @@ class DownloadActionsTest {
 
     /**
      * The full status × action matrix, stated explicitly: this IS the row
-     * renderer's placement input, so the test reads as the table the inline
-     * clusters used to re-encode branch by branch. Order is the enum's
+     * renderer's placement input, so the test reads as the table the row
+     * clusters encode. Order is the enum's
      * declaration order (the cluster renders in it).
      */
     @Test

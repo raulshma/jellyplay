@@ -110,7 +110,7 @@ class NotificationSchedulerTest {
         assertTrue(workInfos.isEmpty() || workInfos.all { it.state == WorkInfo.State.CANCELLED })
     }
 
-    // ── D12: the *arr accelerator's per-(series, episode) one-shots ─────
+    // ── the *arr accelerator's per-(series, episode) one-shots ─────
 
     @Test
     fun `series one-shot lands under the derived unique name with the series tag and a delay`() = runTest {

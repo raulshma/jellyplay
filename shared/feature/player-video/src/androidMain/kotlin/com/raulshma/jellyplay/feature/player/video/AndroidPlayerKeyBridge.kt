@@ -5,7 +5,7 @@ import androidx.compose.ui.input.key.KeyEvent
 /**
  * Android deterministic player-key bridge — the Android twin of
  * [DesktopPlayerKeyBridge]. The TV focus grab
- * ([PlayerTvFocusGrabEffect]) recovers focus per loss, but issue #174 proved
+ * ([PlayerTvFocusGrabEffect]) recovers focus per loss, but the TV-key bug proved
  * recovery can still leave windows — races at the hide edge, overlay
  * unmounts, View-level focus sitting outside Compose — in which a D-pad press
  * finds no Compose focus target — and on Android Compose's null-focus

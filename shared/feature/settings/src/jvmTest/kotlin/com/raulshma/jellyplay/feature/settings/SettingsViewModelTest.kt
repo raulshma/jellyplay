@@ -34,9 +34,9 @@ import kotlin.test.assertTrue
 /**
  * Pins the settings-root ViewModel's non-Composable surface: the cache-size
  * computation off the [SettingsBackupIo] seam, the secrets-carrying export
- * pass, and the recent-settings tracking. (The import flow moved wholly into
- * the unified restore wizard — [RestoreWizardViewModelTest] pins it — so the
- * ViewModel no longer stages import uris.)
+ * pass, and the recent-settings tracking. Import is handled by the unified
+ * restore wizard ([RestoreWizardViewModelTest] pins it); the ViewModel does
+ * not stage import uris.
  *
  * Stores/repositories are mockk'd with real [MutableStateFlow] stubs for the
  * init-block collectors. Main-dispatcher rule inlined

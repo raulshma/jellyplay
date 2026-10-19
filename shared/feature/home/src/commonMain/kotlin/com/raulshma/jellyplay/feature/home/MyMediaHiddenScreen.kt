@@ -66,7 +66,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.my_media_hidden_u
 
 /**
  * Settings → Home → "Hidden libraries": the management screen for the
- * libraries hidden from the home My Media tiles row (H5). Rows show the
+ * libraries hidden from the home My Media tiles row . Rows show the
  * library name with a per-row restore; the top bar carries Restore-all
  * behind a confirmation. Empty state when nothing is hidden. The screen is
  * reachable from TV settings, so every interactive surface is D-pad focusable

@@ -69,7 +69,7 @@ object LibraryBrowserReducer {
         // Sections default to "Recently Added Content" (DateLastContentAdded) so a
         // series that just gained a new episode rises to the top even if the series
         // itself was added long ago — matches the user's mental model of "Latest"
-        // for compound items (#113).
+        // for compound items.
         val sectionSort = ctx.sortBy?.let { api ->
             SortOption.entries.firstOrNull { it.apiValue == api || it.name == api }
         } ?: SortOption.DATE_LAST_CONTENT_ADDED
@@ -85,7 +85,7 @@ object LibraryBrowserReducer {
             tags = listOfNotNull(ctx.tag),
         )
         // Reset grouping so a leftover "Group by Year" from a previous section can't
-        // supersede the latest-first sort on the next "Latest X" open (#113).
+        // supersede the latest-first sort on the next "Latest X" open.
         return current.copy(
             folder = folder,
             title = ctx.title,

@@ -33,7 +33,7 @@ data class LoadRequest(
     val subtitleStreamIndex: Int?,
     val audioStreamIndex: Int?,
     /**
-     * D14 "Play (with pre-rolls)": forces the cinema gate past the global
+     * "Play (with pre-rolls)": forces the cinema gate past the global
      * `cinemaModeEnabled` pref for THIS load (the per-invocation override the
      * detail screen's ⋮ action arms through [CinemaModeOverride]). Every
      * other veto of [shouldAttemptCinemaMode] still applies — fresh start,
@@ -63,11 +63,11 @@ sealed interface LoadOutcome {
  * deleted [VideoSessionHost]; then the deleted `PlayerWiring` builder; today
  * [PlaybackSession], the composition root the builder collapsed into
  * that implements it) can take the transform through the command-lambda
- * split: ControllerOwnershipTest's migrated-controller ratchet forbids the
+ * split: ControllerOwnershipTest's migrated-controller guard forbids the
  * literal type name in the migrated controllers (KDoc prose is exempt; the
- * builder — the VM's construction surface — is not ratchet-listed, so its
+ * builder — the VM's construction surface — is not guard-listed, so its
  * override spells the alias for continuity). The alias is transparent —
- * overrides may spell either form. This is the ratchet's ONE declared
+ * overrides may spell either form. This is the guard's ONE declared
  * state-transformer exception (see that suite's KDoc): the projection is
  * the pipeline's load-stage vocabulary — the seed the implementer forwards
  * for the VM to apply — not state the implementer reads or owns.
@@ -256,7 +256,7 @@ internal class SessionLoadPipeline(
         restoreRememberedMuted(agg)
 
         if (request.allowCinemaMode &&
-            // D14: the per-invocation override ORs past the global pref — the
+            // the per-invocation override ORs past the global pref — the
             // session-level gate and the remaining vetoes below still apply.
             (agg.videoPlayer.cinemaModeEnabled || request.forceCinemaMode) &&
             shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
@@ -379,7 +379,7 @@ internal class SessionLoadPipeline(
     /**
      * Cinema Mode is only attempted on fresh starts (never on resume /
      * next-episode auto-advance / SyncPlay / external player / mini-mode
-     * reclaim). The global pref / D14 force-flag admission is decided by the
+     * reclaim). The global pref / force-flag admission is decided by the
      * single caller (the `cinemaModeEnabled || forceCinemaMode` OR) — not
      * re-checked here. Server-side intros are best-effort: any failure
      * returns an empty list and falls back to normal playback.

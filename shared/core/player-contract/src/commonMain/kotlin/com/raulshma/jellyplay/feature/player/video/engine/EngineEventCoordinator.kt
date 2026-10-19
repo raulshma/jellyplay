@@ -142,7 +142,7 @@ class EngineEventSource(
  * The VOD engines' adapter: every [MediaEngine] already exposes exactly the
  * slice [EngineEventSource] needs, so the mapping is a closure over the
  * engine instance (note [currentPositionMs] stays a live read of the engine,
- * matching the pre-extraction semantics).
+ * matching the original semantics).
  */
 fun MediaEngine.toEngineEventSource(): EngineEventSource = EngineEventSource(
     isPlaying = isPlaying,
@@ -182,7 +182,7 @@ fun MediaEngine.toEngineEventSource(): EngineEventSource = EngineEventSource(
  * over its tuner engine — each host pins its historically-pinned behavior
  * via [Config] knobs instead of a hand-rolled copy.
  *
- * Policy semantics are pinned verbatim from the pre-extraction ViewModel,
+ * Policy semantics are pinned verbatim from the former ViewModel,
  * including the watchdog's per-engine-instance latch quirk under
  * [WatchdogScope.INITIAL_BUFFER_ONLY] (see the coordinator suite's
  * `watchdog_*` quirk pins) and the fallback latch's re-arm inputs
@@ -282,7 +282,7 @@ class EngineEventCoordinator(
      * Guards the FORCE_DIRECT_PLAY → FORCE_TRANSCODE fallback so the runtime
      * error triggered by an undecodable direct-played codec only retries once.
      * Reset by [onNewItem] (new item load) and [onPlaybackModeChanged]
-     * (explicit user mode change), matching the pre-extraction semantics.
+     * (explicit user mode change), matching the original semantics.
      * Never consulted under [FallbackPolicy.EXTERNAL_REQUEST_ONLY].
      */
     @Volatile
@@ -400,7 +400,7 @@ class EngineEventCoordinator(
                         watchdogJob = coordinatorScope.launch {
                             delay(config.bufferingTimeoutMs)
                             // Fire guard, per scope pin: INITIAL_BUFFER_ONLY
-                            // keeps the pre-extraction latch read;
+                            // keeps the original latch read;
                             // EVERY_BUFFERING_EPISODE re-reads the live state
                             // so a flip away from BUFFERING that raced the
                             // expiry never fires (the live tuner's original

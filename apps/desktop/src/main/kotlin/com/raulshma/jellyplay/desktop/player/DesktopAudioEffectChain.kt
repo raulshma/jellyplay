@@ -15,24 +15,24 @@ import kotlin.math.pow
 
 /**
  * The desktop mpv `af` (audio filter chain) builder for the audio player's
- * effect stack — the mpv-side twin of the Android
+ * effect stack — the mpv-side counterpart of the Android
  * `AudioEffectChain`/`AudioEffectsProcessor` DSP half. Pure functions, no
  * mpv handle: [MpvDesktopEngine] applies the produced strings as runtime
  * properties (`af`, `audio-channels`, `pitch`), which mpv re-inits live.
  *
  * ## Android effect → mpv filter parity table
  *
- * Every Android application path (`AudioEffectsProcessor` for the media3
- * audio player + the mpv branches of Android's `MpvPlayerEngine`) was the
- * semantics source; filters were probed present in the bundled libmpv
- * (`tools/mpv`, full libavfilter build) before committing to them.
+ * The Android application paths (`AudioEffectsProcessor` for the media3
+ * audio player + the mpv branches of Android's `MpvPlayerEngine`) define the
+ * semantics this chain matches; the bundled libmpv (`tools/mpv`, full
+ * libavfilter build) provides every filter used below.
  *
  * | Android effect (mechanism) | mpv equivalent (this chain) | Notes |
  * |---|---|---|
  * | Equalizer (priority-0 `Equalizer`, 10 bands) | one `lavfi=[equalizer=f=<Hz>:t=q:w=1:g=<dB>]` peaking stage per non-zero band, `EqualizerSettings.BAND_FREQUENCIES` | band levels are MILLIBELS everywhere in the shared model (preset tables like 600 = 6 dB, UI slider ±1500 with a `/100.0` dB label, dialogue offsets in mB), so `g = level_mB / 100` clamped ±15 dB. Divergence, deliberate: Android's `EqualizerHelper` multiplies the mB levels by ANOTHER 100 and clamps, which pins every non-zero band at full-scale ±15 dB — the desktop applies the levels the UI actually labels |
  * | Dialogue boost (EQ vocal offsets + 80 Hz high-pass in-sink) | offsets folded into the EQ stages (same ±15 dB clamp as `EqualizerHelper` intends) + `lavfi=[highpass=f=80]` | the Android MPV path already used `highpass=f=80`; the co-enable rule (EQ live while EITHER EQ or boost is on) is preserved |
  * | Bass boost (`BassBoost` strength 0..1000) | `lavfi=[bass=g=<dB>:f=100]` low-shelf, `strength/1000 * 9 dB` | Android's strength scale has no exact filter analog; linear 0–9 dB mapping (LOW 3.6 / MODERATE 6.3 / HIGH 9.0), documented approximation |
- * | Virtualizer (`Virtualizer` strength 0..1000) | `lavfi=[extrastereo=m=<1 + strength/1000>]` | stereo-image widening; `crossfeed` (binaural) was rejected as a different effect. Documented approximation |
+ * | Virtualizer (`Virtualizer` strength 0..1000) | `lavfi=[extrastereo=m=<1 + strength/1000>]` | stereo-image widening; `crossfeed` (binaural) is a different effect, not a substitute. Documented approximation |
  * | Reverb (`PresetReverb` presets 1..6) | `lavfi=[aecho=<preset table>]` | no true reverb filter in libavfilter (`afir` needs an IR file); echo-delay tables approximate room→hall→plate. Documented approximation |
  * | Night mode (`player.volume` cut + `LoudnessEnhancer` boost) | single `lavfi=[volume=<net dB>]` (`20·log10(attenuation) + documented gain dB`) | same `EffectStrengthMapping` attenuation table. Its gain table (`nightModeGainMb`) is DOCUMENTED as +1.5/+3.0/+4.5 dB, but the constants (1500/3000/4500 mB) are a 10× literal `LoudnessEnhancer` gain (+30 dB at MODERATE — audibly broken as a night mode); the desktop applies the documented dB labels. Micro-divergence: the engine `volume` property (user slider) is NOT clobbered — Android overwrites it |
  * | ReplayGain TRACK/ALBUM (`ReplayGainAudioProcessor` per-track gain + pre-amp) | `lavfi=[volume=<effective dB>]` from [AudioEffectsConfig.replayGainEffectiveDb] | the host manager pre-computes the Android rule (`trackGain ?: 0 + preAmp`; ALBUM+shuffled → 0) |
@@ -40,7 +40,7 @@ import kotlin.math.pow
  * | Channel mix (in-sink ITU BS.775 matrix) | mpv `audio-channels` property (`stereo`/`mono`/`5.1`/`auto`) | the Android MPV path's own mapping (`channelMixModeToAudioChannels`), not an `af` filter |
  * | L/R balance (`BalanceAudioProcessor` per-channel gains) | `lavfi=[pan=stereo|c0=c0*<gL>|c1=c1*<gR>]` | only when the live output is STEREO: `pan` pins the output layout, so a fixed layout string would force downmixes/upmixes. Mono = no-op (Android deactivates too); other layouts = documented cut |
  * | Pitch (media3 `PlaybackParameters(speed, 2^(st/12))`) | mpv `pitch` runtime property = `2^(st/12)` | set via [pitchRatio], not in the `af` chain; `rubberband` filter exists in this build but the native property is live-settable without a chain rebuild |
- * | Visualizer (`AudioVisualizerHelper` fft/waveform taps) | none | no mpv equivalent without an in-sink PCM tap; the desktop manager keeps `fftData`/`waveformData` empty (declared divergence, unchanged) |
+ * | Visualizer (`AudioVisualizerHelper` fft/waveform taps) | none | no mpv equivalent without an in-sink PCM tap; the desktop manager keeps `fftData`/`waveformData` empty (declared divergence) |
  */
 internal object DesktopAudioEffectChain {
 

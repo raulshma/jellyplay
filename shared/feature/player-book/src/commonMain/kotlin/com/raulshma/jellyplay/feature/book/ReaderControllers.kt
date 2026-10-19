@@ -182,7 +182,7 @@ internal class ReflowableReaderSession(
     }
 
     /**
-     * Exact resume (ADR 0003 point 4): once READY, jump to the locally
+     * Exact resume (the local-first resume rule): once READY, jump to the locally
      * stored CFI — exactly once. A deep-link destination (detail "Contents"
      * tap) outranks the resume anchor; a null pair consumes the latch with
      * no jump (the percent resume stands). A failed display degrades

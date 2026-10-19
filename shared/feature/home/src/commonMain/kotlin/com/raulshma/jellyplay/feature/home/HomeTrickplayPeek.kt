@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 /**
- * The `home_trickplay_preview` pref mirror (H13), provided by the home screen
+ * The `home_trickplay_preview` pref mirror, provided by the home screen
  * next to the other screen-scoped locals (the quick-action controller). The
  * default is the feature-off posture: only a host that read the pref provides
  * `true`, so a wide row hosted outside home renders no peek.
@@ -45,8 +45,8 @@ private const val PEEK_HOLD_MS = 2_500L
 private const val PEEK_SHEET_MAX_EDGE_PX = 2_048
 
 /**
- * H13's gate, in its pure form: the TV focus peek loads only when every
- * suppression leg holds — non-TV never (touch: v1 none), the pref off never,
+ * The gate, in its pure form: the TV focus peek loads only when every
+ * suppression leg holds — non-TV never (touch: none), the pref off never,
  * performance mode never, and an item without the projected `Trickplay`
  * element or without a resume position has no tile to show (and no position
  * to resolve one at). Null `trickplayInfo` means "not fetched / offline row",
@@ -94,9 +94,9 @@ internal fun trickplayTileAt(positionMs: Long, info: TrickplayInfo): TrickplayTi
 }
 
 /**
- * H13's per-card peek loader for the TV focus: resolves the focused wide
+ * The per-card peek loader for the TV focus: resolves the focused wide
  * card's resume-position tile into a [TrickplayPeekTile], or null while
- * nothing should show. The choreography reuses the H10 settle debounce
+ * nothing should show. The choreography reuses the settle debounce
  * ([HOME_FOCUS_SETTLE_MS]) so the backdrop repaint and the peek move in
  * lockstep:
  *  - the gate (pref ∧ TV ∧ ¬performance ∧ projected Trickplay ∧ resume

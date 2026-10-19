@@ -5,8 +5,8 @@ import com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes
 import java.util.Locale
 
 /**
- * Compose-free geometry and policy core for the statistics charts, extracted
- * verbatim from [ChartComponents] (the insights `HeatmapGridModel` precedent):
+ * Compose-free geometry and policy core for the statistics charts — the pure
+ * half of [ChartComponents] (the insights `HeatmapGridModel` precedent):
  * the bar/trend label-admission ladders, the value→pixel normalizations, the
  * pie's sweep/start-angle accumulation + top-5 legend + percentage math, and
  * the number/duration formatters. The composables keep only the Canvas
@@ -14,9 +14,8 @@ import java.util.Locale
  * model — chartWidth/chartHeight are parameters, so every decision here is
  * deterministically testable without composition.
  *
- * Everything is a verbatim move: the formulas, the `coerceAtLeast(1L)`
- * clamps, and the ladder rungs reproduce the pre-extraction inline code
- * exactly (pinned by ChartGeometryTest).
+ * The formulas, the `coerceAtLeast(1L)` clamps, and the ladder rungs are
+ * pinned by ChartGeometryTest.
  */
 internal object ChartGeometry {
 
@@ -33,7 +32,7 @@ internal object ChartGeometry {
     /**
      * One activity bar's pixel height: the point's share of [maxValue] scaled
      * into [chartHeight], times the entrance [animProgress]. A non-positive
-     * [maxValue] contributes nothing (the pre-extraction `if (maxValue > 0)`
+     * [maxValue] contributes nothing (the original `if (maxValue > 0)`
      * guard).
      */
     fun barHeight(value: Long, maxValue: Long, chartHeight: Float, animProgress: Float = 1f): Float =

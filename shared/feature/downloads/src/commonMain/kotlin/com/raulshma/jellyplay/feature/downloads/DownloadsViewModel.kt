@@ -83,17 +83,15 @@ class DownloadsViewModel(
     // ── Delete confirmations ─────────────────────────────────────────────
     // Deleting a completed download removes the file from disk, so we confirm
     // first — matching the unified MediaDetailScreen delete confirmations.
-    // The machines moved here out of the screen's remember{} state; both use
-    // ConfirmationHost's synchronous settle arm.
+    // Both machines use ConfirmationHost's synchronous settle arm.
 
     /**
      * Pending single-item delete. Settle arm: [ConfirmationHost.confirm]'s
      * synchronous clear — the deletes are fire-and-forget VM calls, so the
      * machine settles at the confirm tap and the guard's in-flight arm is
-     * unreachable (dismiss/confirm pass `inFlight = false`). The screen's
-     * old machine documented "previously the confirm write never cleared" —
-     * with the settle arm inside [ConfirmationHost.confirm] that delta is
-     * structurally impossible.
+     * unreachable (dismiss/confirm pass `inFlight = false`). A confirm write
+     * that never cleared is structurally impossible with the settle arm
+     * inside [ConfirmationHost.confirm].
      */
     val pendingDelete = ConfirmationHost<DownloadItem>()
 
@@ -101,9 +99,8 @@ class DownloadsViewModel(
     val pendingBulkDelete = ConfirmationHost<Unit>()
 
     /**
-     * One-shot delete feedback, screen-forward seam replacing the legacy
-     * UserMessageBus ctor dep. Same one-shot semantics as the bus: buffered,
-     * single collector, never replayed — [DownloadsScreen] resolves the
+     * One-shot delete feedback, screen-forward seam. Buffered, single
+     * collector, never replayed — [DownloadsScreen] resolves the
      * resource text and posts it to the shared UserMessageBus.
      */
     private val messageChannel = Channel<DownloadsUserMessage>(Channel.BUFFERED)
@@ -134,9 +131,9 @@ class DownloadsViewModel(
 
     /**
      * Live per-row byte/speed for in-flight downloads, keyed by download id —
-     * the moving half of the split uiState. The 2 s transfer tick
-     * used to re-emit the whole list (and re-execute the entire screen) per
-     * progress event; rows now read their moving values from here while the
+     * the moving half of the split uiState. Re-emitting the whole list (and
+     * re-executing the entire screen) per progress event would be too
+     * costly; rows read their moving values from here while the
      * list itself only re-emits on structural change. The backing StateFlow
      * is conflated by construction (stateIn), so a burst of ticks collapses
      * to the latest map.
@@ -300,8 +297,8 @@ class DownloadsViewModel(
             // Change-filtering lives in two layers. The repository's filter
             // (id order + per-item bytes/status) still forwards byte movement
             // because other consumers render live progress from the item list
-            // itself (album detail's per-track bars). This screen no longer
-            // does — bytes/speed arrive through [progressById] — so a second
+            // itself (album detail's per-track bars). Bytes/speed arrive
+            // through [progressById] here, so a second
             // projection drops the per-tick fields and only list-structure
             // changes (ids in order, per-item status) re-emit uiState.
             queue.getAllDownloads()
@@ -344,13 +341,12 @@ class DownloadsViewModel(
     /**
      * The single dispatch for every [DownloadBulkAction]. Target selection is
      * the pure [DownloadActions] fold (scope ∩ live list ∩ admission table);
-     * a no-target call is a guarded no-op, exactly like the per-action funs it
-     * replaced. RESUME and RETRY_FAILED are the queue's composite verbs
-     * (status flip + enqueue inside — see [DownloadQueue.resumeDownload]); the
-     * VM dispatches one verb per target and no longer hand-pairs the enqueue
-     * follow-up. DELETE additionally clears the selection (bulk scope only)
-     * and emits the one-shot Deleted message at every scope — the former
-     * deleteSelected/deleteDownload side effects.
+     * a no-target call is a guarded no-op. RESUME and RETRY_FAILED are the
+     * queue's composite verbs (status flip + enqueue inside — see
+     * [DownloadQueue.resumeDownload]); the VM dispatches one verb per target
+     * rather than pairing the enqueue follow-up itself. DELETE additionally
+     * clears the selection (bulk scope only) and emits the one-shot Deleted
+     * message at every scope.
      */
     fun applyBulkAction(action: DownloadBulkAction, scope: DownloadActionScope) {
         val state = _uiState.value
@@ -454,15 +450,14 @@ class DownloadsViewModel(
     }
 
     // ── Bulk actions ─────────────────────────────────────────────────────
-    // The former pauseSelected/resumeSelected/cancelSelected/deleteSelected
-    // and global pauseAll/retryAllFailed funs folded into [applyBulkAction]
-    // above; [DownloadActions] owns the shared admission table.
+    // Every selected/global verb folds into [applyBulkAction] above;
+    // [DownloadActions] owns the shared admission table.
 
     /**
      * Runs [action] for every target concurrently instead of serially — each
      * repository call bundles WorkManager ops + file cleanup + a DB
-     * transaction, so a 50-item selection paid 50 sequential round-trips.
-     * Same shape as OfflineRepositoryImpl.deleteArtifactsParallel.
+     * transaction, so a 50-item selection would pay 50 sequential
+     * round-trips. Same shape as OfflineRepositoryImpl.deleteArtifactsParallel.
      */
     private suspend inline fun <T> bulkMap(
         targets: List<T>,

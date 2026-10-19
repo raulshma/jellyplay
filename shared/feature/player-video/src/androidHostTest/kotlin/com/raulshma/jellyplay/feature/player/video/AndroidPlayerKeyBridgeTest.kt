@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /**
  * Unit tests for [AndroidPlayerKeyBridge] — the Android twin of
- * DesktopPlayerKeyBridge (issue #174): the deterministic last-resort path
+ * DesktopPlayerKeyBridge: the deterministic last-resort path
  * where PlayerActivity.dispatchKeyEvent offers every key the normal dispatch
  * chain did not consume (the null-focus case) to the composing player
  * screen's own arms. Pins the delivery semantics the screens and the Activity

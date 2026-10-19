@@ -10,28 +10,22 @@ kotlin {
     sourceSets {
         // ── what this module is ──────────────────────────────────────────
         // Test doubles needed by MORE THAN ONE module's test lane — today
-        // FakeTimeSource (livetv + core:data — the per-module copies were
-        // single-homed here),
-        // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
-        // MediaEngine double for the session + audio-queue jvmTest suites;
-        // apps/desktop's app-side copy was adopted in the fake-twin merge —
-        // its suites construct AUTO_PLAY instances of this class. The fake's
-        // wall-clock pollUntil helper (and FakePositionStore, the session
-        // recording double) have since moved back OUT — ADR-0006 rule 4:
-        // each's only consumers were a single module's test lane, so each
-        // lives in that module's test sources again (apps/desktop tests and
-        // player-video jvmTest, respectively).
-        // The desktop audio-queue fakes joined under ADR-0006 rule 4 proper:
-        // the file existed VERBATIM in core:data jvmTest and apps/desktop's
-        // test set (the app-side KDoc itself said "kept in sync by review"),
-        // so both lanes now consume the single canonical copy here.
+        // FakeTimeSource (livetv + core:data), FakeUserDataMutator
+        // (details + home) and FakeMediaEngine (the one MediaEngine double
+        // for the session + audio-queue jvmTest suites; apps/desktop's
+        // suites construct AUTO_PLAY instances of this class). Doubles whose
+        // only consumers are a single module's test lane live in that
+        // module's test sources (apps/desktop tests and player-video
+        // jvmTest, respectively).
+        // The desktop audio-queue fakes are also canonical here, so both
+        // lanes consume the single copy.
         // AGP 9 has no KMP testFixtures support, so this is a
         // plain library module declared inside consumers' test source-set
         // blocks ONLY.
         //
-        // The dissolved :core:testing lesson: a central test module
-        // accretes every helper anyone ever copied twice and becomes a
-        // production-looking dependency nobody can audit. House rules:
+        // A central test module accretes every helper anyone ever copied
+        // twice and becomes a production-looking dependency nobody can
+        // audit. Rules:
         //  - per-touch adoption: a double moves here when a SECOND module
         //    needs it, never in bulk;
         //  - NEVER add this module to a main source set — the
@@ -41,15 +35,15 @@ kotlin {
         //    redesign at the move.
         //
         // The doubles live in jvmShared, not commonMain: FakeTimeSource
-        // implements core:model's TimeSource (D3 moved the seam there from
-        // core:data), which lives in THAT module's jvmShared
+        // implements core:model's TimeSource (the core:data seam), which
+        // lives in THAT module's jvmShared
         // (java.time-flavored) and is therefore equally invisible to
         // commonMain here. One home for all doubles keeps the story simple;
         // a future common-safe double would add a commonMain file when a
         // commonTest consumer actually exists.
 
         getByName("jvmShared").dependencies {
-            // TimeSource (core:model jvmShared, the D3 move) FakeTimeSource
+            // TimeSource (core:model jvmShared) FakeTimeSource
             // implements. implementation, not api: every consumer already
             // carries its own core:model edge — this module must never
             // become a reason to widen one.

@@ -8,11 +8,11 @@ import kotlin.test.assertTrue
 
 /**
  * Covers the pure decision functions behind the card-surface features:
- *  - [spoilerSafeCardState] (the H15 anti-spoiler suppression policy, consumed
+ *  - [spoilerSafeCardState] (the anti-spoiler suppression policy, consumed
  *    by the scaffold's progress gate, the footers' time-left leg, the poster
  *    overlays' watched corner and the wide card's title) — the HomeBackdrop
  *    decision-test shape;
- *  - [qualityBadgesToRender] (H11's admission/order/cap fold for the quality
+ *  - [qualityBadgesToRender] (the admission/order/cap fold for the quality
  *    chip row).
  *
  * No Compose needed — plain functions over data classes.

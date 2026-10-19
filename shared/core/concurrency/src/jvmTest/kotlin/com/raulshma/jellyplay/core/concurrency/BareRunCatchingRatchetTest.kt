@@ -5,35 +5,30 @@ import kotlin.test.assertTrue
 import java.io.File
 
 /**
- * Ratchet against reintroducing the cancellation-swallowing bug class: a bare
+ * Guard against reintroducing the cancellation-swallowing bug class: a bare
  * stdlib `runCatching` inside a `suspend fun` body captures
  * CancellationException like any other Throwable, masking structured
  * cancellation (a cancelled call reports as a failed Result instead of
  * stopping — broken worker retries, half-applied sync flips, zombie prewarms).
- * The pre-ratchet history included repeated per-site fixes of exactly
- * this; the fix is [runCatchingRethrowingCancellation], and this test keeps
+ * The fix is [runCatchingRethrowingCancellation], and this test keeps
  * the converted set converted.
  *
- * Guarded module set: DISCOVERED from the build itself (before
- * that, ~40 hand-listed roots that a new module would silently escape):
+ * Guarded module set: DISCOVERED from the build itself:
  * every `include(":…")` module declared in settings.gradle.kts, plus every
  * directory under shared/ and apps/ that carries its own build.gradle.kts
  * (catches a module mid-wiring before its settings include lands), each
  * mapped to its source root — the whole `src` tree for KMP modules,
  * `src/main` for legacy single-variant modules (app, the legacy core tree,
- * baselineprofile, apps/desktop). The hand list this discovery replaced is
- * kept as [legacyHandMaintainedRoots]; a canary test pins that discovery
- * still covers all of its on-disk roots. (the guard has since gone
- * repo-complete; the formerly unguarded roots carried one live hazard —
- * AddToTargetActions.resolveTargetItemIds, since converted — plus the
- * deliberate baseline entries below). Non-suspend
+ * baselineprofile, apps/desktop). The hand list is kept as
+ * [legacyHandMaintainedRoots]; a canary test pins that discovery
+ * still covers all of its on-disk roots. Non-suspend
  * bodies (pure JSON/enum/number parses in mappers, framework glue) are
  * legitimate stdlib `runCatching` territory and simply don't count — the
-     * heuristic only counts occurrences inside `suspend fun` bodies, and
-     * bodyless `suspend fun` declarations (interface members) are skipped,
-     * not grafted onto the next function's body — the grafting once
-     * swallowed a KDoc'd non-suspend site (MultiConnectionDownloadStrategy's
-     * deletePartialQuietly) and failed the ratchet at a stable 3 > 2.
+ * heuristic only counts occurrences inside `suspend fun` bodies, and
+ * bodyless `suspend fun` declarations (interface members) are skipped,
+ * not grafted onto the next function's body (a KDoc'd non-suspend site
+ * like MultiConnectionDownloadStrategy's deletePartialQuietly must not be
+ * swallowed into the preceding window).
  *
  * Known deliberate baseline entries (do not convert without a design note):
  * HomeDiscoveryStore.ensureNamespacedMigration (best-effort migration
@@ -43,9 +38,7 @@ import java.io.File
  * Heuristic limitation, known and accepted: the scan matches literal
  * `suspend fun` declarations, so a bare `runCatching` inside a suspend
  * LAMBDA (e.g. a `fetch = { runCatching { … } }` argument) is invisible
- * to it. A later review pass converted the two sites
- * found this way (AdminDashboardViewModel's and LogsViewModel's loadInto
- * fetch variants) — keep new suspend-lambda fetches on
+ * to it. Keep suspend-lambda fetches on
  * [runCatchingRethrowingCancellation] by discipline; widening the
  * heuristic to suspend lambdas would need a fresh baseline census.
  *
@@ -71,9 +64,8 @@ import java.io.File
  * Ambiguous tokens that are suspend in one idiom and blocking in another are
  * deliberately NOT markers (OkHttp's blocking `.execute()`/`.enqueue()`,
  * stdlib `.toList()`/`.single()`/`.join()`), so a try-block whose only
- * suspend call is e.g. a bespoke repository function stays invisible —
- * the one known-live site of this kind (DlnaCastStrategy.fetchDeviceDetails)
- * has since been converted by hand; keep new bespoke-callee try/catches
+ * suspend call is e.g. a bespoke repository function stays invisible;
+ * keep new bespoke-callee try/catches
  * compliant by discipline. Like the first arm, only
  * `suspend fun` bodies are scanned, so suspend LAMBDAS inside non-suspend
  * functions (a `scope.launch { try { … } catch (…: Exception) { } }`) are
@@ -318,7 +310,7 @@ class BareRunCatchingRatchetTest {
                 // declaration's opening brace (a class body, e.g.) reads as
                 // this fun's body — swallowing every following top-level
                 // declaration into the window (observed: a companion object's
-                // non-suspend parse helper counted against the ratchet).
+                // non-suspend parse helper counted against the baseline).
                 if (ch == '}' && depthParen <= 0) break
                 if (ch == '\n' && !sawOpenParen) break // expression body / property
                 j++
@@ -396,13 +388,13 @@ class BareRunCatchingRatchetTest {
         return hits
     }
 
-    /** All `suspend fun` body windows, reusing the first ratchet's windowing rules. */
+    /** All `suspend fun` body windows, reusing the first arm's windowing rules. */
     private fun suspendFunWindows(src: String): List<Pair<Int, Int>> {
         val windows = mutableListOf<Pair<Int, Int>>()
         var searchFrom = 0
         while (true) {
             val funRange = src.indexOf("suspend fun", searchFrom).let { if (it < 0) return windows else it }
-            // Same bodyless-declaration guard as the first ratchet: stop the
+            // Same bodyless-declaration guard as the first arm: stop the
             // signature walk at the next `fun` keyword.
             val nextDecl = Regex("""\bfun\b""").find(src, funRange + "suspend fun".length)
                 ?.range?.first ?: src.length

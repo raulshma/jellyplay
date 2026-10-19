@@ -17,9 +17,9 @@ const val DEFAULT_POSTER_SIZE: Float = 1.0f
  * consistent unit: which folder, which filters, which view mode, grouping,
  * poster size, the active section context, and the toolbar title.
  *
- * This collapses the swarm of individual StateFlows that previously lived in
- * `LibraryViewModel` (the 18-flow "swarm"). The invariants the VM used to enforce
- * by hand-scattered guards now live as properties/derivation rules:
+ * This collapses `LibraryViewModel`'s 18 individual StateFlows into one state.
+ * The invariants the VM enforced with hand-scattered guards live here as
+ * properties/derivation rules:
  *
  * - "is the user in a See-All deep-link section?" → [isSection] (derived from
  *   [sectionContext]), replacing the hand-written `_sectionContext.value == null`

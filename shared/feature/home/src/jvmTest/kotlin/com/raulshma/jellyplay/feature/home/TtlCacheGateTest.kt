@@ -5,9 +5,9 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * Tests [TtlCacheGate] — the TTL freshness decision previously hand-rolled as
- * two mutable fields + an inline arithmetic check on HomeViewModel. Extracted
- * so the cache policy (never-invalidates / refresh-loops-forever bug class) has
+ * Tests [TtlCacheGate] — the TTL freshness decision, kept here as one gate
+ * rather than two mutable fields + an inline arithmetic check on HomeViewModel.
+ * The cache policy (never-invalidates / refresh-loops-forever bug class) has
  * a direct test.
  */
 class TtlCacheGateTest {

@@ -9,11 +9,11 @@ kotlin {
     }
 
     sourceSets {
-        // The jvmShared slice (now empty of Kotlin — the QuickDownloadActions
-        // wrapper/fragment actuals were deleted when core:data took over the
-        // seam), kept so android + desktop share any future JVM-only Kotlin
-        // like the newsletter/requests jvmShared source sets. (The jvmShared
-        // middle source set comes from the convention plugin.)
+        // The jvmShared slice is empty of Kotlin (core:data owns the
+        // QuickDownloadActions seam), kept so android + desktop share any
+        // future JVM-only Kotlin like the newsletter/requests jvmShared source
+        // sets. (The jvmShared middle source set comes from the convention
+        // plugin.)
 
         commonMain.dependencies {
             implementation(project(":shared:core:model"))
@@ -42,6 +42,5 @@ kotlin {
 }
 
 // The compose-resources `packageOfResClass`
-// (`...feature.search.generated.resources`, same as the legacy value) is a
-// path-derived default from the convention plugin now — see
-// KmpLibraryComposePlugin.
+// (`...feature.search.generated.resources`) is a path-derived default from
+// the convention plugin — see KmpLibraryComposePlugin.

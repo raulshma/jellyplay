@@ -14,13 +14,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_now_subtitle
 
 /**
- * The JellyPlay companion-plugin sync rows (ADR 0010) — residual rows (the
+ * The JellyPlay companion-plugin sync rows — residual rows (the
  * knob lives on `ProfileSyncRepository`, no datastore spec): the opt-in
- * toggle and the manual sync-now action. The on-screen face moved onto the
- * [Route.JellyPlaySync] screen ([JellyPlaySyncScreen], the consolidation
- * wave); these declarations stay the search catalog's single home — a search
- * hit now navigates to the sync screen (their `route`), keeping the
- * declarations / ratchets byte-stable through the move.
+ * toggle and the manual sync-now action. The on-screen face lives on the
+ * [Route.JellyPlaySync] screen ([JellyPlaySyncScreen]); these declarations
+ * stay the search catalog's single home — a search hit navigates to the sync
+ * screen (their `route`).
  */
 internal object JellyPlaySyncRows {
 
@@ -43,7 +42,7 @@ internal object JellyPlaySyncRows {
         route = Route.JellyPlaySync,
     )
 
-    /** The whole declaration — the ratchet tests' vocabulary entry. */
+    /** The whole declaration — the tests' vocabulary entry. */
     val all: List<SettingsRow> = listOf(SyncEnabled, SyncNow)
 }
 

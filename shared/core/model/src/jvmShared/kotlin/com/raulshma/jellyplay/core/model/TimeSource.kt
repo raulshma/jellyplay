@@ -10,22 +10,19 @@ import java.time.ZoneId
  * The system implementation delegates to this module's platform seams
  * ([wallNowMillis] / [monotonicNowMillis]).
  *
- * split: the epoch-millis slice was promoted to the commonMain
- * [EpochMillisSource] seam (the promoted commonMain repository impls take
- * that type — java.time cannot cross into commonMain), so this interface
- * extends it. Every existing `TimeSource` fake across the repo therefore
- * satisfies [EpochMillisSource] unchanged, and the `today(zone)` java.time
- * surface stays available to the JVM-only consumers (feature/home's
- * commonMain, NewsletterTriggerManager, StatisticsMath, ...).
+ * Split: this interface extends the commonMain [EpochMillisSource] seam (the
+ * commonMain repository impls take that type — java.time cannot cross into
+ * commonMain). Every `TimeSource` fake across the repo therefore satisfies
+ * [EpochMillisSource] unchanged, and the `today(zone)` java.time surface
+ * stays available to the JVM-only consumers (feature/home's commonMain,
+ * NewsletterTriggerManager, StatisticsMath, ...).
  *
- * D3 move note: born as `:core:data` jvmShared `util/TimeSource.kt`; moved
- * down to :shared:core:model jvmShared (same file/package root as the
+ * Lives in :shared:core:model jvmShared (same file/package root as the
  * platform clock seams it delegates to) because core:network sits BELOW
- * core:data in the module graph and could never adopt a seam living there.
- * Lives in jvmShared, not commonMain, for exactly the reason the
- * [EpochMillisSource] KDoc records: the `today(zone)` surface is java.time.
- * The old FQIN survives as a deprecated typealias in core:data until the
- * not-yet-migrated imports move per-touch.
+ * core:data in the module graph and cannot adopt a seam living there.
+ * jvmShared, not commonMain, because the `today(zone)` surface is java.time.
+ * A deprecated typealias in core:data keeps the legacy FQIN importable until
+ * per-touch migration completes.
  */
 interface TimeSource : EpochMillisSource {
     /** Current wall-clock time in epoch milliseconds. */

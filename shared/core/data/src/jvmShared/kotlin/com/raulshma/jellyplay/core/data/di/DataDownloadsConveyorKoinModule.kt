@@ -44,7 +44,7 @@ internal val dataDownloadsConveyorModule: Module = module {
     // OfflinePlaybackFacade, AudioLibraryBrowser, workers, feature modules)
     // resolve this single from Koin directly.
     //
-    // D6: the artifact-write half lives in the OfflineDownloadWriterCore
+    // The artifact-write half lives in the OfflineDownloadWriterCore
     // single below — over its own DAOs and seams with NO back-reference to
     // the repository — so the graph is a straight line (writer → delegate →
     // repo, writer → repo) and the repository's former Lazy<DownloadDelegate>
@@ -156,7 +156,7 @@ internal val dataDownloadsConveyorModule: Module = module {
     // directly — the DownloadIntake precedent, no verbatim-forward adapter).
     single<QuickDownloadActions> { get<MediaDownloadActions>() }
 
-    // D5: the cold-start row-state recovery policy moved here from the app
+    // The cold-start row-state recovery policy moved here from the app
     // module's DownloadRecoveryInitializer (which injected DownloadDao
     // directly — the one non-test DAO consumer above core:data). The app's
     // startup shell now resolves this port and only fires recover(); the

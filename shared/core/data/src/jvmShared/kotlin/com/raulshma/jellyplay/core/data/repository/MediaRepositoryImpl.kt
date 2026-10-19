@@ -312,12 +312,12 @@ class MediaRepositoryImpl internal constructor(
         photoFolderChildUrlSpec,
     )
 
-    // Plan 08: private — the detail-cache group is repo-internal machinery;
+    // Private — the detail-cache group is repo-internal machinery;
     // reads that need freshness use getMediaDetail(force = true) and mutations/
     // invalidations run through the composite + per-type dispatch below, all
     // delegating to [detailCaches].
 
-    // Plan 08: funnels to the catalogue so the composite user-data eviction
+    // Funnels to the catalogue so the composite user-data eviction
     // (and the internal per-type dispatch) can drop a series' seasons/episodes
     // snapshot + epoch together. Private — seasons/episodes caches now live in
     // [episodeCatalogue] and no external caller needs this knob.
@@ -325,7 +325,7 @@ class MediaRepositoryImpl internal constructor(
         episodeCatalogue.invalidateSeries(seriesId)
     }
 
-    // Plan 08: private funnel — collection edits self-invalidate, so no
+    // Private funnel — collection edits self-invalidate, so no
     // external caller needs this knob anymore.
     private fun invalidateCollectionItemsCache(collectionId: String) {
         // Prefix of [collectionItemsKey] for every page — one evict drops all
@@ -338,8 +338,8 @@ class MediaRepositoryImpl internal constructor(
         "collection_${collectionId}_$startIndex" + "_$limit"
 
     /**
-     * Single owner of the "what did this detail's type affect" mapping (plan
-     * 08). Absorbs the provider's old `invalidateByType` table and the
+     * Single owner of the "what did this detail's type affect" mapping.
+     * Absorbs the provider's old `invalidateByType` table and the
      * series-resolution rule that used to live in the interface KDoc: one
      * encoding, no caller-side re-derivation. Reached through the module-
      * internal [MediaRepositoryCacheInvalidation] seam.
@@ -816,7 +816,7 @@ class MediaRepositoryImpl internal constructor(
         }
 
     override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
-        // Plan 08: collection edits self-invalidate — the detail screen used to
+        // Collection edits self-invalidate — the detail screen used to
         // compensate with a manual invalidateCollectionItemsCache call.
         collectionApiClient.createCollection(name, itemIds)
             .onSuccess { invalidateCollectionItemsCache(it) }
@@ -844,7 +844,7 @@ class MediaRepositoryImpl internal constructor(
     // (detailCaches.invalidateItem per playlist edit) is unchanged — it now
     // runs in the extracted impl against the SAME single-backed group.
 
-    //  Facade split, second wave: the nine uncached browse-read members left
+    //  Facade split: the nine uncached browse-read members left
     // the union outright — every one a stateless forward this class cached
     // nothing for (zero TtlCache involvement), so their consumers inject the
     // [LibraryApiClient] family single directly (getIntros/getSpecialFeatures,
@@ -1053,7 +1053,7 @@ class MediaRepositoryImpl internal constructor(
     // pass-through seam later retired to the client family entirely).
 
     /**
-     * Wholesale in-memory cache drop (plan 08: demoted off the public
+     * Wholesale in-memory cache drop (demoted off the public
      * [MediaRepository] interface, kept on the impl — the
      * [MediaCacheInvalidator] port is its cross-module seam for the legacy
      * sync workers). The only production caller is the background user-data
@@ -1126,8 +1126,8 @@ class MediaRepositoryImpl internal constructor(
 }
 
 // ── The cache-spec vocabulary ─────────────────────────────────────────────
-// File-private: the spec registry is repo-internal machinery (the Plan 08
-// rule) — no external caller needs the knobs, and the ladders stay the only
+// File-private: the spec registry is repo-internal machinery — no external
+// caller needs the knobs, and the ladders stay the only
 // writers of group semantics.
 
 /**

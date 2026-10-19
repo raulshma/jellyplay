@@ -70,7 +70,7 @@ import kotlin.test.assertTrue
  *     negative-result sentinel) and the sleep-timer expiry pause contract;
  *  6. effects persistence sourcing: a toggle persists the value computed from
  *     the manager's StateFlow (AudioEffectsController), NOT the lagging
- *     uiState mirror — the hazard the controller extraction fixed.
+ *     uiState mirror — the hazard the controller seam fixes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioPlayerViewModelGapsTest {

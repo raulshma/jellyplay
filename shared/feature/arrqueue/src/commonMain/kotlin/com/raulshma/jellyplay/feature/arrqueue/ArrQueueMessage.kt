@@ -5,18 +5,13 @@ import org.jetbrains.compose.resources.StringResource
 
 /**
  * One-shot action feedback emitted by [ArrQueueViewModel] and rendered by
- * [ArrQueueScreen], which posts the resolved text to the shared UserMessageBus
- * — the commonMain-safe replacement for the legacy `context.getString(...)`
- * values the ViewModel used to post through the Android-only UserMessageBus
- * (LiveTvUserMessage screen-forward pattern, livetv conveyor).
+ * [ArrQueueScreen], which posts the resolved text to the shared UserMessageBus.
  *
- * This seal EXTENDS the prior message seals (livetv / newsletter / admin /
- * settings were args-free `data object` + `Raw` shapes): the *arr acks carry
- * a format argument — `arrqueue_grab_sent` / `arrqueue_import_sent` interpolate
- * the release title — so the resource variants keep their [args] unresolved
- * until render time (locale resolves at display, music MixErrorMessage
- * semantics). Severity is carried by the variant: [Info] maps to the legacy
- * bus's `info(...)`, [Error] and [Raw] to `error(...)`.
+ * The resource variants keep their [args] unresolved until render time
+ * (locale resolves at display, music MixErrorMessage semantics) — e.g.
+ * `arrqueue_grab_sent` / `arrqueue_import_sent` interpolate the release
+ * title. Severity is carried by the variant: [Info] maps to an informational
+ * message, [Error] and [Raw] to an error.
  */
 @Immutable
 sealed interface ArrQueueMessage {

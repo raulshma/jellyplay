@@ -123,10 +123,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_volume_nor
 /**
  * The audio domain's fused row declarations — the feature-side single home of
  * every audio row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `AudioSettingsIds` holder constant (all
- * retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * Every row is a HAND-MAINTAINED residual (the audio knobs live in spec-less
  * stores) and carries its full hand search faces; the effect-dependent rows
@@ -137,7 +135,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_volume_nor
  * `audioRowAdmissionFlags` builder translates. The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * drift; search results, catalog order, group membership and per-gate
- * visibility are byte-identical to the retired declarations.
+ * visibility derive from these declarations.
  */
 internal object AudioRows {
 
@@ -544,7 +542,7 @@ internal object AudioRows {
     )
 
     /**
-     * Every fused audio row — the ratchet's vocabulary. A computed accessor
+     * Every fused audio row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

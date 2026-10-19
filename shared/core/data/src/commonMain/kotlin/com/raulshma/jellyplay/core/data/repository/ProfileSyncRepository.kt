@@ -369,12 +369,12 @@ class ProfileSyncRepository(
     private suspend fun runCycle(forceRemoteWins: Boolean = false) = withContext(syncDispatcher) {
         // The gate is the probe ladder AND the registry's `settings-sync` key —
         // the ONE gating mechanism (ADR 0010 §1/§6): a server whose handshake
-        // omits the key (admin-disabled, or the plugin predates the sync wave)
+        // omits the key (admin-disabled, or the plugin predates sync support)
         // ends the cycle the same quiet way a stock server does.
         if (!statusStore.ensureAvailable() || !statusStore.hasFeature(FEATURE_SETTINGS_SYNC)) {
             // ADR 0010 §1: probe failure = UNAVAILABLE, never an error
             // surface. lastError is the sync screen's failure row; a
-            // pre-wave (or merely down) plugin ends the cycle quietly —
+            // older (or merely down) plugin ends the cycle quietly —
             // nothing synced, nothing claimed, lastSyncAt keeps its
             // previous value.
             _state.value = _state.value.copy(inFlight = false)

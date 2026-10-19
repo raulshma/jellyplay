@@ -50,8 +50,8 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 // The diff rows' label sources: the settings-search titles (ss_* — plus the
-// settings_* keys whose verbatim ss_* twins collapsed into one key family)
-// plus the diff_* residue — extension accessors on Res.string, imported in bulk.
+// settings_* keys that carry the same row titles) plus the diff_* residue —
+// extension accessors on Res.string, imported in bulk.
 import com.raulshma.jellyplay.feature.settings.generated.resources.*
 
 /**
@@ -92,16 +92,15 @@ class PreferenceDiffSnapshot(
 /**
  * One declared diff row of a category: the localized label source, the slice
  * read, and the value formatter. The per-category lists below are the ONE
- * declaration of "what the reset/import review surfaces per category" — they
- * replaced ~246 hand-written label+format rows that re-listed the fields off
- * the retired `UserPreferences` aggregate.
+ * declaration of "what the reset/import review surfaces per category", one
+ * row per user-facing field read straight off the slices.
  *
  * @param labelRes an EXISTING localized string resource — a settings-search
  *   row title (`ss_*`) where the preference has one — so the review screens
  *   render the same wording the settings screens use.
  * @param read the field off [PreferenceSliceSnapshot]; the same slice field
  *   the corresponding screen consumes.
- * @param format the value rendering, ported verbatim from the former rows.
+ * @param format the value rendering used when [enumLabel] is unset.
  * @param enumLabel the enum-label seam for enum-valued rows
  *   (`PreferenceEnumNames.labelResource`): the value maps to a localized
  *   resource instead of the [format] fallback, so the review screens show the
@@ -117,7 +116,7 @@ class DiffField<V>(
     /**
      * The formatted value for [slices] — the diff compares these strings.
      * Seam-covered enum rows resolve [enumLabel] through [resolve]; every
-     * other row runs the ported [format]. [resolve] defaults to the same
+     * other row runs [format]. [resolve] defaults to the same
      * resource-`toString` fallback a label-table miss produces, so pure
      * tests can call this without a resolved table.
      */
@@ -171,8 +170,8 @@ class PreferenceCategoryView(
 }
 
 // ---------------------------------------------------------------------------
-// Formatting helpers (value text is ported verbatim from the former rows;
-// only the LABELS are new-localized).
+// Formatting helpers for the diff rows' value text; labels resolve through
+// [PreferenceDiffSnapshot].
 // ---------------------------------------------------------------------------
 
 private fun Boolean.onOff(): String = if (this) "On" else "Off"
@@ -224,9 +223,9 @@ private fun EqualizerSettings.summary(): String =
 // ---------------------------------------------------------------------------
 // Declared per-category diff rows. Each row: label resource (existing ss_*
 // search-item title where one exists, else a diff_* default-locale string),
-// the slice read, and the formatter. Order matches the former hand-written
-// rows; `PreferenceCategoryPresentationTest` pins both the diff behavior and
-// the row coverage.
+// the slice read, and the formatter. Order is the display order;
+// `PreferenceCategoryPresentationTest` pins both the diff behavior and the
+// row coverage.
 // ---------------------------------------------------------------------------
 
 private val appearanceDiffFields: List<DiffField<*>> = listOf(
@@ -250,9 +249,8 @@ private val appearanceDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_scheduled_end_title, { it.appearance.scheduledThemeEndHour }, ::hour),
     DiffField(Res.string.ss_color_blind_mode_title, { it.appearance.colorBlindMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_hand_mode_title, { it.appearance.handMode }, { v -> v.enumDisplay() }),
-    // The layout-override pair the reset review had silently dropped (the
-    // spec↔diff ratchet's first findings): the spec-backed rows exist, the
-    // slice fields exist, only the diff rows were never added.
+    // The layout-override pair: the settings rows and slice fields exist;
+    // these are their diff rows.
     DiffField(Res.string.settings_layout_mode, { it.appearance.layoutMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.settings_screen_fit, { it.appearance.tvOverscan }, { v -> v.enumDisplay() }),
 )
@@ -307,9 +305,8 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_duck_on_transient_focus_loss_title, { it.playback.duckOnTransientFocusLoss }, Boolean::onOff),
     DiffField(Res.string.ss_tv_zoom_mode_title, { it.videoPlayer.tvZoomModePercent }, Float::pct),
     DiffField(Res.string.diff_segment_behaviors, { it.videoPlayer.segmentBehaviors }, Map<*, SegmentBehavior>::segmentSummary),
-    // The spec↔diff ratchet's findings: PLAYBACK-category spec rows the
-    // review had silently dropped (declared, projected into the slices,
-    // diff-registered by no row).
+    // PLAYBACK-category rows that are declared and projected into the slices,
+    // registered here as diff rows.
     DiffField(Res.string.settings_external_player_app, { it.playback.preferredExternalPlayer }, { v -> v.enumDisplay() }),
     DiffField(Res.string.settings_offline_playback, { it.playback.offlinePlaybackPreference }, { v -> v.enumDisplay() }),
     DiffField(Res.string.settings_max_audio_channels, { it.playback.maxAudioChannels }, { v -> v.enumDisplay() }),
@@ -449,9 +446,9 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.settings_show_frequent_costars, { it.library.showFrequentCostars }, Boolean::onOff),
     DiffField(Res.string.ss_clock_home_title, { it.homeDiscovery.showClockOnHome }, Boolean::onOff),
     DiffField(Res.string.ss_settings_in_home_search_title, { it.homeDiscovery.showSettingsInHomeSearch }, Boolean::onOff),
-    // The home-screen feature wave (H5-H21): one row per new user-facing
-    // toggle; the internal stamps and the not-yet-surfaced slices stay off
-    // the registry (internal bookkeeping keys are intentionally omitted).
+    // One row per user-facing home-screen toggle; internal stamps and
+    // not-yet-surfaced slices stay off the registry (internal bookkeeping
+    // keys are intentionally omitted).
     DiffField(Res.string.settings_exclude_active_sessions, { it.homeDiscovery.excludeActiveSessions }, Boolean::onOff),
     DiffField(Res.string.settings_home_hero_video, { it.homeDiscovery.homeHeroVideoEnabled }, Boolean::onOff),
     DiffField(Res.string.settings_home_hero_video_tv, { it.homeDiscovery.homeHeroVideoTvEnabled }, Boolean::onOff),
@@ -465,7 +462,7 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.settings_show_new_badges, { it.homeDiscovery.showNewBadges }, Boolean::onOff),
     DiffField(Res.string.settings_home_trickplay_preview, { it.homeDiscovery.homeTrickplayPreview }, Boolean::onOff),
     DiffField(Res.string.settings_anti_spoiler_home, { it.homeDiscovery.antiSpoilerHome }, Boolean::onOff),
-    // Ratchet findings: HOME_DISCOVERY spec rows that had no alias row.
+    // HOME_DISCOVERY rows not covered by the rows above.
     DiffField(Res.string.ss_home_backdrop_title, { it.homeDiscovery.homeBackdropEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_discover_rows_title, { it.homeDiscovery.discoverRows.size }, Int::toString),
     DiffField(Res.string.ss_classic_rows_title, { it.homeDiscovery.classicRows }, Boolean::onOff),
@@ -510,10 +507,10 @@ private val screensaverDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.settings_ken_burns, { it.screensaver.dreamKenBurnsEnabled }, Boolean::onOff),
     DiffField(Res.string.settings_show_title, { it.screensaver.dreamShowTitle }, Boolean::onOff),
     DiffField(Res.string.settings_slideshow_interval, { it.screensaver.dreamSlideshowIntervalMs }, Long::millisToSeconds),
-    // Ratchet findings: the SCREENSAVER category's remaining spec rows —
-    // the parental cap, the dim pair, the desktop idle-ambient/Discord/
-    // shell-hook rows (empty command = that hook disabled, so the command
-    // rows render Off instead of a blank).
+    // The SCREENSAVER category's remaining rows — the parental cap, the dim
+    // pair, the desktop idle-ambient/Discord/shell-hook rows (empty command
+    // = that hook disabled, so the command rows render Off instead of a
+    // blank).
     DiffField(Res.string.settings_dream_max_parental_rating, { it.screensaver.dreamMaxParentalRating }, { v -> v?.toString() ?: "None" }),
     DiffField(Res.string.settings_dream_dim_after, { it.screensaver.dreamDimAfterMs }, Long::millisToSeconds),
     DiffField(Res.string.settings_dream_dim_percent, { it.screensaver.dreamDimPercent }, Int::toString),
@@ -546,8 +543,8 @@ private val syncplayCastingDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_dvr_pre_padding_title, { it.syncPlayCast.dvrPrePaddingMinutes }, Int::toString),
     DiffField(Res.string.ss_dvr_post_padding_title, { it.syncPlayCast.dvrPostPaddingMinutes }, Int::toString),
     DiffField(Res.string.ss_dvr_recording_quality_title, { it.syncPlayCast.dvrRecordingQuality }, ::identity),
-    // Ratchet finding: the live-stream option rides the playback slice (the
-    // knob's store) but resets with SYNCPLAY_CASTING — the spec's category.
+    // The live-stream option rides the playback slice (the knob's store) but
+    // resets with SYNCPLAY_CASTING.
     DiffField(Res.string.ss_live_stream_option_title, { it.playback.liveStreamOption }, { v -> v.enumDisplay() }),
 )
 
@@ -680,7 +677,7 @@ suspend fun resolveDiffLabels(resources: List<StringResource>): (StringResource)
 }
 
 // ---------------------------------------------------------------------------
-// External backup slices (Wave 2) — the Room-backed / allowlisted-config
+// External backup slices — the Room-backed / allowlisted-config
 // cards the import preview renders beside the category cards. Like the
 // app-runtime fields above, they live here because the presentation registry
 // is this file and the slice KEYS are stable wire contracts owned by
@@ -696,10 +693,9 @@ data class ExternalSliceCardView(
 )
 
 /**
- * The four Wave-2 external slices in card order. A backup from an app version
+ * The four external slices in card order. A backup from an app version
  * without them simply carries none of these keys — the preview renders no
- * cards (the old-preview forward-compat rule: unknown/missing slice keys are
- * ignored, never a crash).
+ * cards (unknown/missing slice keys are ignored, never a crash).
  */
 val ExternalSliceCardViews: List<ExternalSliceCardView> = listOf(
     ExternalSliceCardView(BackupSliceKey.INTEGRATIONS, Tabler.Outline.Plug, Res.string.settings_import_slice_integrations),

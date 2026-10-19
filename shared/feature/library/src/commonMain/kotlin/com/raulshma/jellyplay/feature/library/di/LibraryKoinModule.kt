@@ -9,25 +9,22 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the library feature (docs/kmp-migration-plan.md
- *,  second conveyor item after search). The HiltViewModel/@Inject
- * annotations were stripped at the move — Koin is the single constructor owner
- * (one framework per type). Ctor deps split three ways:
- *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are still
- *    Hilt-owned in the legacy data shim and reach Koin through the app
- *    composition root's Hilt interop module (dies at );
+ * Koin construction owner for the library feature. Koin is the single
+ * constructor owner (one framework per type). Ctor deps split three ways:
+ *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are Hilt-owned
+ *    and reach Koin through the app
+ *    composition root's Hilt interop module;
  *  - ImageUrlProvider (shared data) and LibraryStore (shared datastore)
- *    resolve from the C4 shared-module graph;
- *  - PhotoExport came from the per-platform export module
- *    (androidPhotoExportModule / desktopPhotoExportModule) — the whole photo
- *    suite (PhotoAlbum/PhotoViewer VMs + the export seam) since moved to
- *    feature/photos' photosModule, which carries those platform modules now.
+ *    resolve from the shared-module graph;
+ *  - PhotoExport resolves from feature/photos' photosModule, which carries the
+ *    per-platform export modules (androidPhotoExportModule /
+ *    desktopPhotoExportModule) along with the photo suite (PhotoAlbum/PhotoViewer
+ *    VMs + the export seam).
  *
  * StudioDetailViewModel's SavedStateHandle is pulled from the definition
  * parameters: on Android, Koin synthesizes it from the CreationExtras of the
  * LocalViewModelStoreOwner current at the call site (nav3 1.1.5 installs no
- * per-entry ViewModelStoreOwner, so that owner is the Activity — the exact
- * same extras source the Hilt factory consumed at HEAD).
+ * per-entry ViewModelStoreOwner, so that owner is the Activity).
  *
  * QuickDownloadActions is core:data's own wall-crossing seam (declared,
  * implemented and bound there — jvmShared adapter in

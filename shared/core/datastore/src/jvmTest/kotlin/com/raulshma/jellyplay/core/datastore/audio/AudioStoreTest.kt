@@ -21,9 +21,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the audio-player preference store, focusing on the legacy
- * `REPLAYGAIN` → `TRACK` normalization-mode alias and round-trips that
- * previously lived inline in the `UserPreferencesStore` god object with **no**
- * unit coverage.
+ * `REPLAYGAIN` → `TRACK` normalization-mode alias and round-trips.
  */
 class AudioStoreTest {
 

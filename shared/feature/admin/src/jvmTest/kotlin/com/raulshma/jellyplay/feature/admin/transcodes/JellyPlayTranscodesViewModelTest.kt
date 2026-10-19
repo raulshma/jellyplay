@@ -36,7 +36,7 @@ import kotlin.test.assertTrue
  *
  *  - gating — the screen only touches the plugin route when the real
  *    [JellyPlayPluginStatusStore] reports AVAILABLE **and** the capabilities
- *    carry the `transcodes` feature key (ADR 0010: the capability registry is
+ *    carry the `transcodes` feature key (the capability registry is
  *    the only gate; no fetches, polls or cancels while gated off);
  *  - mapping — the `playMethod` wire string resolves to Direct/Transcode,
  *    codecs ride along, the bitrate label is deterministic;

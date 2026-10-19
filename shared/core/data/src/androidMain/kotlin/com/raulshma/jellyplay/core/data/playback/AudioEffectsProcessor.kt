@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
  * it, so every flow, strength accessor and command is inherited unchanged
  * (same instances, same source surface for [AudioEffectsManager] consumers,
  * [AudioPlaybackManager], [AudioCrossfader] and the widget/visualizer taps).
- * Each hook override below performs exactly the DSP write the pre-extraction
+ * Each hook override below performs exactly the DSP write the former inline
  * setter performed after flipping state; the declared state-level
  * divergences (unconditional hook fire, the CUSTOM-preset `levelsRewritten`
  * flag, the null-context ReplayGain shims) are pinned in the core's KDoc.

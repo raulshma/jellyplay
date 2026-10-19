@@ -37,7 +37,7 @@ internal fun isBroadcastUrlValid(url: String): Boolean =
     url.isBlank() || (!url.any { it.isWhitespace() } && url.contains("://"))
 
 /**
- * The "Send broadcast" composer dialog (ADR 0010): title + body + optional
+ * The "Send broadcast" composer dialog: title + body + optional
  * link URL, fanned out to every connected client as a toast-style broadcast
  * event over the plugin's events stream. The CreateUserDialog precedent —
  * [ImeAlertDialog] so the soft keyboard lifts the fields, Send disabled until

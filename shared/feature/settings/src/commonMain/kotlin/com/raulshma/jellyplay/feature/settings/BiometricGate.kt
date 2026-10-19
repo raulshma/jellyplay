@@ -6,7 +6,7 @@ import androidx.compose.runtime.Composable
  * Platform seam for the biometric unlock toggle on the security screen
  * (expect/actual platform-seam pattern). The common screen only needs two operations:
  * "can I show the biometric row" and "launch the crypto-bound system prompt
- * with these resolved strings and callbacks" — exactly the shape of the legacy
+ * with these resolved strings and callbacks" — matching the
  * BiometricAuthHelper call sites. A null gate (desktop, or no FragmentActivity
  * host on Android) means the row takes its existing unavailable path and stays
  * hidden.

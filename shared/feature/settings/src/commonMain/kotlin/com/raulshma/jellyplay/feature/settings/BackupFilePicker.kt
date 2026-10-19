@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 /**
  * Platform file-picker seam for [BackupSettingsScreen]: the
  * create-document (export target) and open-document (import source) launchers
- * live behind one nullable handle. Android wires the verbatim SAF
+ * live behind one nullable handle. Android wires the SAF
  * `ActivityResultContracts` bodies; desktop shows native AWT
  * `FileDialog`s — SAVE pre-filled with the suggested export name, LOAD for
  * the import source — and delivers `file:` URIs, so the export/import rows

@@ -67,10 +67,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_not
 /**
  * The notifications domain's fused row declarations — the feature-side single
  * home of every notification row's presentation, ordering, and capability
- * (the [AppearanceRows] template). Each [SettingsRow] replaces the trio the
- * domain used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `NotificationSettingsIds` holder
- * constant (all retired).
+ * (the [AppearanceRows] template). Each [SettingsRow] carries the search
+ * binding, the screen face and the row identity in one declaration.
  *
  * Every row is a HAND-MAINTAINED residual (the knobs live in the spec-less
  * notification store) and carries its full hand search faces; every id
@@ -78,11 +76,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_not
  * behind it ride it, the quiet-hours trio compounds the quiet-hours toggle,
  * the rest ride advanced mode, and the system-settings row the
  * platform-intent capability. The whole list is Android-only (no desktop
- * notification backend exists — the rows carry the platform tag the retired
+ * notification backend exists — the rows carry the platform tag the
  * list-level `androidOnly()` applied). The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * drift; search results, catalog order, group membership and per-gate
- * visibility are byte-identical to the retired declarations.
+ * visibility derive from these declarations.
  */
 internal object NotificationRows {
 
@@ -264,7 +262,7 @@ internal object NotificationRows {
     )
 
     /**
-     * D12: the per-series new-episode notification management entry — opens
+     * The per-series new-episode notification management entry — opens
      * the "Series notifications" sheet next to the per-library list (the same
      * gate shape: notifications on + advanced). Android-only: no desktop
      * notification stack exists.
@@ -284,7 +282,7 @@ internal object NotificationRows {
     )
 
     /**
-     * Every fused notifications row — the ratchet's vocabulary. A computed accessor
+     * Every fused notifications row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

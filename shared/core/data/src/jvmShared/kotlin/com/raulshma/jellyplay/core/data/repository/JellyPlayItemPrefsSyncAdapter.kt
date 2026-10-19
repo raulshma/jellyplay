@@ -18,7 +18,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 /**
  * The [ProfileSyncAdapter] that backs the per-item/per-series playback
  * preferences up onto the general settings-sync protocol (the settings-backup
- * wave's `itemprefs` namespace): one key per row — `"{scope}/{key}"` (the
+ * cluster's `itemprefs` namespace): one key per row — `"{scope}/{key}"` (the
  * [com.raulshma.jellyplay.core.model.PlaybackPrefScope] name + the item or
  * series id) — and a value carrying the row's full [ItemPlaybackPreferencePayload]
  * (an opaque JSON object to the server; install-local Room ids omitted).

@@ -31,8 +31,8 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReleaseSearchViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (requests/downloads conveyor port pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var arrReleaseOperations: ArrReleaseOperations
@@ -134,7 +134,7 @@ class ReleaseSearchViewModelTest {
     @Test
     fun `an unsuperseded search still lands its outcome`() = runTest {
         // Guard sanity: the identity check only discards superseded runs — a
-        // plain open's rows land (the ConnectionProbe inline-start precedent).
+        // plain open's rows land (the ConnectionProbe inline-start shape).
         coEvery { arrReleaseOperations.searchReleases(any()) } returns Result.success(listOf(release("only")))
         val viewModel = ReleaseSearchViewModel(arrReleaseOperations)
 

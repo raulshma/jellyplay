@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
  * handled that identically (extract id → bail if invalid → init VM → set OK
  * result → mount the themed [ConfigScreen]), so the base owns it once.
  *
- * The base also owns the save tail every kind hand-copied:
+ * The base also owns the save tail every kind would otherwise hand-copy:
  * `AppWidgetManager.getInstance` → [updateWidget] push → grid notify
  * ([gridViewId], when the kind renders a collection view) → [refreshNow]
  * (the scheduler kick, when the kind has one) → `finish()` — the declared
@@ -105,8 +105,8 @@ abstract class BaseWidgetConfigActivity : ComponentActivity() {
     /**
      * The save tail (see the class KDoc): resolve the manager once, push the
      * kind's RemoteViews, notify the grid when there is one, kick the
-     * refresh when there is one, then finish. Call order matches the four
-     * former hand copies exactly.
+     * refresh when there is one, then finish. Call order is part of the
+     * contract.
      */
     protected suspend fun saveAndFinish() {
         val manager = AppWidgetManager.getInstance(this)

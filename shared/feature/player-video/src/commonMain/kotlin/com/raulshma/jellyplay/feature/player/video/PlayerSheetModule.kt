@@ -27,22 +27,22 @@ import com.raulshma.jellyplay.feature.player.video.session.SheetsSessionSlice
  * is collected only while its sheet is open, so the router root never ticks
  * with the stats cadence).
  *
- * NOT covered, on purpose (the staged migration's later waves): the sheet's
+ * NOT covered, on purpose: the sheet's
  * commands (the VM event arms — the glossary's "commands" half migrates when
  * the sheet does) and its slice region ([SessionSlices] stays VM-side). The
  * inbound entry points keep their raw-key lambdas at their call sites
  * (PlayerControls' HDR chip, the gear menu's Rendering entry): the bundle
- * those lambdas ride ([SheetControls]) is a later wave, and a module-side
- * declaration today would be ceremony without a consumer. What DID fold is
- * the sheet's address: the two pilot entry lambdas and the HDR→Render
+ * those lambdas ride ([SheetControls]) is not declared here yet, and a
+ * module-side declaration today would be ceremony without a consumer. What
+ * DID fold is the sheet's address: the two entry lambdas and the HDR→Render
  * cross-sheet link reference the module's [sheet] identity instead of
  * restating the raw constant.
  *
- * Wave 1 is the pilot: exactly two sheets ([HdrSheetModule],
+ * Exactly two sheets are implemented so far ([HdrSheetModule],
  * [RenderSheetModule], chosen because they cross-link). The remaining
  * branches stayed hand-written in [PlayerSheetRouter]'s `when` and migrate
- * as touched — the Detail section module precedent (wave 2:
- * [SubtitleHubSheetModule], its own file).
+ * as touched — the Detail section module precedent
+ * ([SubtitleHubSheetModule], its own file).
  */
 internal interface PlayerSheetModule {
 
@@ -50,7 +50,7 @@ internal interface PlayerSheetModule {
     val sheet: PlayerSheet
 
     /**
-     * The content slot: the router branch's body, moved verbatim. [scope]
+     * The content slot: the router branch's body. [scope]
      * bundles the region params the router already holds; a module reads what
      * its sheet needs and keeps its own remembers sheet-local.
      */

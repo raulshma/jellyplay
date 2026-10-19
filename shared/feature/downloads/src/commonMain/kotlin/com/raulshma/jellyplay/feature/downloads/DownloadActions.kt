@@ -34,9 +34,7 @@ sealed interface DownloadActionScope {
  * Pure write-algebra for [DownloadBulkAction]: the admission table (which
  * [DownloadStatus] values an action may act on), the target fold (which
  * concrete items a scope admits), the per-item availability fold the row
- * renderer consumes, and the COMPLETED-is-playable fold. Derived verbatim
- * from the former hand-written filter lambdas in [DownloadsViewModel] and the
- * row's former per-status button encoding — no new semantics:
+ * renderer consumes, and the COMPLETED-is-playable fold:
  *
  *  - PAUSE        admits DOWNLOADING;
  *  - RESUME       admits PAUSED;
@@ -78,13 +76,12 @@ object DownloadActions {
 
     /**
      * The COMPLETED-is-playable fold: a download backs offline playback only
-     * once its artifact set is complete — the gate the row's tap-to-detail and
-     * Play actions, the stream-instead offer, and the group header's play
-     * target all previously restated as raw `status == COMPLETED` checks.
-     * Connectivity is deliberately NOT part of this fold: streaming-instead is
-     * a presentation concern (the row's stream entry drops while offline) and
-     * the gate stays at the call site — only the COMPLETED half is module
-     * vocabulary.
+     * once its artifact set is complete — the single gate behind the row's
+     * tap-to-detail and Play actions, the stream-instead offer, and the group
+     * header's play target. Connectivity is deliberately NOT part of this
+     * fold: streaming-instead is a presentation concern (the row's stream
+     * entry drops while offline) and the gate stays at the call site — only
+     * the COMPLETED half is module vocabulary.
      */
     fun isPlayable(item: DownloadItem): Boolean = item.status == DownloadStatus.COMPLETED
 

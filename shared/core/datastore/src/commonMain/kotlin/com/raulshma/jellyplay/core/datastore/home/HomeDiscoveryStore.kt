@@ -469,8 +469,8 @@ class HomeDiscoveryStore constructor(
             HomeDiscoveryPreferenceSpecs.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
             // v2: the custom discover rows block (Home Screen settings hub)
             HomeDiscoveryPreferenceSpecs.DISCOVER_SHIPPED_AT_VERSION to HomeSectionType.DISCOVER,
-            // v3: the H4 + H5 pair — Upcoming (Next Up's complement) and the
-            // My Media tiles row — one bump, one H21 announcement for both.
+            // v3: Upcoming (Next Up's complement) and the My Media tiles
+            // row — one bump, one announcement for both.
             HomeDiscoveryPreferenceSpecs.UPCOMING_SHIPPED_AT_VERSION to HomeSectionType.UPCOMING,
             HomeDiscoveryPreferenceSpecs.MY_MEDIA_SHIPPED_AT_VERSION to HomeSectionType.MY_MEDIA,
         )
@@ -486,7 +486,7 @@ class HomeDiscoveryStore constructor(
          * version, so absence from a CURRENT set is the user's disabled
          * choice, not a not-yet-shipped section, and stays respected.
          *
-         * H21: the read EXPOSES the union's contribution ([EnabledSectionTypesRead.addedByUnion])
+         * The read EXPOSES the union's contribution ([EnabledSectionTypesRead.addedByUnion])
          * alongside the effective set, so the announcement gate can name the
          * sections a version bump just turned on instead of silently adding
          * them. Same lenient decode as before — unknown names dropped, a
@@ -692,7 +692,7 @@ class HomeDiscoveryStore constructor(
         }
 
     /**
-     * The layout-writing twin of [editForUser] — the H20 hook point: after the
+     * The layout-writing twin of [editForUser]: after the
      * edit commits (and only when it actually landed in a user namespace), the
      * monotonic [layoutRevision] bumps once. Every command that writes a
      * domain the [HomeLayoutConfig] payload carries routes through HERE, so
@@ -707,7 +707,7 @@ class HomeDiscoveryStore constructor(
     }
 
     /**
-     * H20: the layout-dirty signal. Bumped by [editLayoutForUser] after every
+     * The layout-dirty signal. Bumped by [editLayoutForUser] after every
      * layout-writing command's edit commits — the
      * `HomeLayoutSyncController`'s debounced autopush collects it (armed by
      * the `home_layout_autopush` pref + sign-in state) and pushes the current
@@ -731,42 +731,42 @@ class HomeDiscoveryStore constructor(
         prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = enabled
     }
 
-    /** H7 video hero billboard (touch/default form factors) — default off. */
+    /** Video hero billboard (touch/default form factors) — default off. */
     suspend fun setHeroVideoEnabled(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.userKey(userId)] = enabled
     }
 
-    /** H7 video hero billboard (TV form factor) — default off. */
+    /** Video hero billboard (TV form factor) — default off. */
     suspend fun setHeroVideoTvEnabled(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = enabled
     }
 
-    /** H10 focus-driven ambient backdrop (Android TV) — default off. */
+    /** Focus-driven ambient backdrop (Android TV) — default off. */
     suspend fun setFocusBackdrop(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.userKey(userId)] = enabled
     }
 
-    /** H17 personal stats card — default off. */
+    /** Personal stats card — default off. */
     suspend fun setStatsCard(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.userKey(userId)] = enabled
     }
 
-    /** H18 genre quick-access rail — default off. */
+    /** Genre quick-access rail — default off. */
     suspend fun setGenreRail(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.userKey(userId)] = enabled
     }
 
-    /** H19 watch-party / presence chips — default off (admin-gated surface). */
+    /** Watch-party / presence chips — default off (admin-gated surface). */
     suspend fun setPresenceChips(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.userKey(userId)] = enabled
     }
 
-    /** H21 new-section announcement toast — default on. */
+    /** New-section announcement toast — default on. */
     suspend fun setNewSectionAnnouncements(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS.userKey(userId)] = enabled
     }
 
-    /** H20 layout DisplayPreferences auto-push — default off (MANUAL sync policy). */
+    /** Layout DisplayPreferences auto-push — default off (MANUAL sync policy). */
     suspend fun setLayoutAutopush(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.userKey(userId)] = enabled
     }
@@ -941,22 +941,22 @@ class HomeDiscoveryStore constructor(
         prefs[HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.userKey(userId)] = enabled
     }
 
-    /** H11 quality badges (4K / HDR / DV / Atmos) on cards — default on. */
+    /** Quality badges (4K / HDR / DV / Atmos) on cards — default on. */
     suspend fun setShowQualityBadges(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.userKey(userId)] = enabled
     }
 
-    /** H12 "NEW" badges with visit memory — default on. */
+    /** "NEW" badges with visit memory — default on. */
     suspend fun setShowNewBadges(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.userKey(userId)] = enabled
     }
 
-    /** H13 trickplay preview on wide cards (TV focus) — default on, TV-only behavior. */
+    /** Trickplay preview on wide cards (TV focus) — default on, TV-only behavior. */
     suspend fun setTrickplayPreview(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.userKey(userId)] = enabled
     }
 
-    /** H15 anti-spoiler home master switch — default off. */
+    /** Anti-spoiler home master switch — default off. */
     suspend fun setAntiSpoilerHome(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.userKey(userId)] = enabled
     }
@@ -977,7 +977,7 @@ class HomeDiscoveryStore constructor(
         prefs[HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.userKey(userId)] = enabled
     }
 
-    /** H6: continue watching must not offer items playing on another device — default off. */
+    /** Continue watching must not offer items playing on another device — default off. */
     suspend fun setExcludeActiveSessions(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.userKey(userId)] = enabled
     }
@@ -1003,7 +1003,7 @@ class HomeDiscoveryStore constructor(
         prefs.remove(HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId))
     }
 
-    // ── My Media hidden libraries (H5 inline curation) ──────────────────────
+    // ── My Media hidden libraries (inline curation) ──────────────────────
 
     /**
      * Wholesale replace of the hidden-from-My-Media library set (the section
@@ -1032,7 +1032,7 @@ class HomeDiscoveryStore constructor(
         prefs.remove(HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId))
     }
 
-    // ── Theme-music per-series mute memory (D8) ─────────────────────────────
+    // ── Theme-music per-series mute memory ─────────────────────────────
 
     /** Wholesale replace of the theme-music muted-series set (backup restore). */
     suspend fun setThemeMusicMutedSeriesIds(ids: Set<String>) = editForUser { prefs, userId ->
@@ -1053,7 +1053,7 @@ class HomeDiscoveryStore constructor(
         prefs[key] = json.encodeToString(current - seriesId)
     }
 
-    // ── Internal home stamps (H12 visit memory / H21 announce-once) ─────────
+    // ── Internal home stamps (visit memory / announce-once) ─────────
 
     /**
      * Stamps the home visit time (epoch ms) — the home screen's dwell timer
@@ -1065,7 +1065,7 @@ class HomeDiscoveryStore constructor(
 
     /**
      * Stamps the enabled-set schema version whose new-section announcement was
-     * shown (or dismissed) — the announce-once gate for H21.
+     * shown (or dismissed) — the announce-once gate.
      */
     suspend fun setHomeAnnouncedVersion(version: Int) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.userKey(userId)] = version
@@ -1229,7 +1229,7 @@ class HomeDiscoveryStore constructor(
     }
 
     /**
-     * The H20 restore-apply helper — ONE command that applies a whole
+     * The restore-apply helper — ONE command that applies a whole
      * [HomeLayoutConfig] (the layout payload the presets machinery serializes
      * and the server sync carries) by routing through the SAME store setters
      * the local preset-restore path has always used. There is deliberately no
@@ -1270,30 +1270,30 @@ class HomeDiscoveryStore constructor(
 data class HomeDiscoverySlice(
     val homeMode: HomeMode = HomeMode.VIDEO,
     val homeHeroEnabled: Boolean = true,
-    /** H7 video hero billboard (touch/default form factors). Default off — static hero. */
+    /** Video hero billboard (touch/default form factors). Default off — static hero. */
     val homeHeroVideoEnabled: Boolean = false,
-    /** H7 video hero billboard (TV form factor). Default off. */
+    /** Video hero billboard (TV form factor). Default off. */
     val homeHeroVideoTvEnabled: Boolean = false,
     val homeBackdropEnabled: Boolean = true,
-    /** H10 focus-driven ambient backdrop (Android TV). Default off. */
+    /** Focus-driven ambient backdrop (Android TV). Default off. */
     val homeFocusBackdrop: Boolean = false,
-    /** H17 personal stats card ("Your library week"). Default off. */
+    /** Personal stats card ("Your library week"). Default off. */
     val homeStatsCard: Boolean = false,
-    /** H18 genre quick-access rail. Default off. */
+    /** Genre quick-access rail. Default off. */
     val homeGenreRail: Boolean = false,
-    /** H19 watch-party / presence chips. Default off (admin-gated surface). */
+    /** Watch-party / presence chips. Default off (admin-gated surface). */
     val homePresenceChips: Boolean = false,
-    /** H21 new-section announcement toast. Default on. */
+    /** New-section announcement toast. Default on. */
     val homeNewSectionAnnouncements: Boolean = true,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     /**
      * The schema version the persisted enabled-set was last written at —
      * derived by the version-union read, never written back ([restore]
-     * stamps CURRENT through the write fold). The H21 announce-once gate
+     * stamps CURRENT through the write fold). The announce-once gate
      * compares it against [homeAnnouncedVersion].
      */
     val enabledHomeSectionTypesVersion: Int = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION,
-    /** H21: the sections the read's version-union contributed — empty once the persisted stamp is current. */
+    /** The sections the read's version-union contributed — empty once the persisted stamp is current. */
     val sectionsAddedByUnion: Set<HomeSectionType> = emptySet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
@@ -1301,30 +1301,30 @@ data class HomeDiscoverySlice(
     /** The user's custom Discover rows; empty until the user creates one. */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
-    /** H20 layout DisplayPreferences auto-push. Default off (MANUAL sync policy). */
+    /** Layout DisplayPreferences auto-push. Default off (MANUAL sync policy). */
     val homeLayoutAutopush: Boolean = false,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
     val showUnwatchedBadge: Boolean = true,
     val hideWatchedItems: Boolean = false,
     val showWatchedCheckmark: Boolean = true,
     val showExternalRatings: Boolean = true,
-    /** H11 quality badges (4K / HDR / DV / Atmos) on cards. Default on. */
+    /** Quality badges (4K / HDR / DV / Atmos) on cards. Default on. */
     val showQualityBadges: Boolean = true,
-    /** H12 "NEW" badges for items added since the last home visit. Default on. */
+    /** "NEW" badges for items added since the last home visit. Default on. */
     val showNewBadges: Boolean = true,
-    /** H13 trickplay preview on wide cards (TV focus). Default on, TV-only behavior. */
+    /** Trickplay preview on wide cards (TV focus). Default on, TV-only behavior. */
     val homeTrickplayPreview: Boolean = true,
-    /** H15 anti-spoiler home master switch. Default off. */
+    /** Anti-spoiler home master switch. Default off. */
     val antiSpoilerHome: Boolean = false,
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
     /**
-     * Classic (pre-Jellyfin-12) home-row semantics (#168). Default `false` —
+     * Classic (pre-Jellyfin-12) home-row semantics. Default `false` —
      * modern server behavior. Projected into [HomeSectionQuery.classicRows].
      */
     val classicRows: Boolean = false,
-    /** H6: exclude items with an active playback session from Continue Watching / Next Up. Default off. */
+    /** Exclude items with an active playback session from Continue Watching / Next Up. Default off. */
     val excludeActiveSessions: Boolean = false,
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
@@ -1336,13 +1336,13 @@ data class HomeDiscoverySlice(
      * (resolved in `SeasonStartResolver`).
      */
     val lastViewedSeasonBySeries: Map<String, String> = emptyMap(),
-    /** H5: libraries hidden from the My Media tiles row (inline long-press curation). */
+    /** Libraries hidden from the My Media tiles row (inline long-press curation). */
     val myMediaHiddenLibraryIds: Set<String> = emptySet(),
-    /** D8: series whose ambient theme music stays muted ("never for this series" memory). */
+    /** Series whose ambient theme music stays muted ("never for this series" memory). */
     val themeMusicMutedSeriesIds: Set<String> = emptySet(),
-    /** H12: when the user last saw home (epoch ms; 0 = never stamped). NEW-badge threshold. */
+    /** When the user last saw home (epoch ms; 0 = never stamped). NEW-badge threshold. */
     val homeLastVisitEpochMs: Long = 0L,
-    /** H21: the enabled-set schema version whose new-section announcement was last shown. */
+    /** The enabled-set schema version whose new-section announcement was last shown. */
     val homeAnnouncedVersion: Int = 0,
     val showClockOnHome: Boolean = false,
     val showSettingsInHomeSearch: Boolean = true,
@@ -1379,7 +1379,7 @@ fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
         hiddenCwItemIds = hiddenCwItemIds,
         pinnedSections = pinnedHomeSections,
         discoverRows = discoverRows,
-        // H5: the tiles row's hidden-library curation rides the fetch query,
+        // The tiles row's hidden-library curation rides the fetch query,
         // so the assembler's filter and the SWR cache key see it together.
         myMediaHiddenLibraryIds = myMediaHiddenLibraryIds,
     ),
@@ -1393,7 +1393,7 @@ fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
  * always carried); [storedVersion] is the schema stamp the persisted
  * set was written at; [addedByUnion] is the part of [sections] THE
  * UNION ITSELF contributed — non-empty exactly when the persisted set
- * predates a shipped section, which is the H21 announce-once signal
+ * predates a shipped section, which is the announce-once signal
  * (a section the user already had, or disabled after seeing it, never
  * appears here).
  */

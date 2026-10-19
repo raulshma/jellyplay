@@ -38,22 +38,21 @@ import org.jetbrains.compose.resources.StringResource
  *  - **Single-flight** — a declared policy arm ([SingleFlight]):
  *    [SingleFlight.RESTART] (the default) makes a [probe] request while the
  *    same key is already Testing CANCEL the in-flight probe and start a new
- *    one (Seerr's former `launchTest` discipline, generalized; the refused
- *    alternative was rejected because it would have changed Seerr's
- *    rapid-retry UX). [SingleFlight.CALLER_GATED] leaves an in-flight probe
- *    running — the caller's own UX gates concurrency (the Seerr pane's
- *    buttons-disabled-while-testing contract), so the machine neither cancels
- *    nor restarts; the job-identity guard below still guarantees a
- *    superseded/lost-the-registration probe NEVER lands its outcome. A
+ *    one (the rapid-retry UX). [SingleFlight.CALLER_GATED] leaves an
+ *    in-flight probe running — the caller's own UX gates concurrency (the
+ *    Seerr pane's buttons-disabled-while-testing contract), so the machine
+ *    neither cancels nor restarts; the job-identity guard below still
+ *    guarantees a superseded/lost-the-registration probe NEVER lands its
+ *    outcome. A
  *    refusal ([refused] pre-flight validation) supersedes an in-flight probe
  *    on the same key under BOTH arms — the fresh validation error must win
  *    over any in-flight outcome.
  *  - **Cancellation never lands as Error** — the action runs under
  *    [runCatchingRethrowingCancellation]; a [CancellationException] propagates
- *    (Seerr's rethrow discipline, ported to all three integrations), leaving
+ *    (Seerr's rethrow discipline, shared by all three integrations), leaving
  *    the state the probe had. A non-cancellation crash is folded to
  *    [Failure.Declared] [FallbackText.UnexpectedError] instead of killing the
- *    scope — previously only Seerr caught it; *arr/subtitle probes crashed.
+ *    scope.
  *  - **Fallback error text** — failures either carry the integration's own
  *    message ([Failure.Reported], rendered verbatim — server text is assumed
  *    already readable) or one of the declared [FallbackText]s
@@ -86,16 +85,16 @@ class ConnectionProbe<R : Any, K : Any, D>(
     /**
      * Synchronous pre-flight validation: a non-null [FallbackText] refuses the
      * probe (fail-fast Error, no Testing frame, no action call) — the
-     * blank-credentials guards the Seerr/subtitle integrations used to run by
-     * hand. Null = the request is acceptable.
+     * blank-credentials guards for the Seerr/subtitle integrations.
+     * Null = the request is acceptable.
      */
     private val refused: ((R) -> FallbackText?)? = null,
     /**
      * The declared single-flight arm (see the class KDoc): [SingleFlight.RESTART]
      * cancels an in-flight probe when a new one is accepted for the same key;
      * [SingleFlight.CALLER_GATED] trusts the caller's UX to keep probes
-     * non-concurrent and leaves the in-flight job running. Default RESTART —
-     * every existing integration keeps its exact former behavior.
+     * non-concurrent and leaves the in-flight job running. Default RESTART,
+     * which matches every integration's behavior.
      */
     private val singleFlight: SingleFlight = SingleFlight.RESTART,
 ) {
@@ -152,8 +151,7 @@ class ConnectionProbe<R : Any, K : Any, D>(
             val outcome = runCatchingRethrowingCancellation { action(request) }.fold(
                 onSuccess = { it },
                 // Non-cancellation crash: declared fallback instead of a dead
-                // scope (only Seerr used to catch this; the *arr/subtitle
-                // probes used to crash).
+                // scope.
                 onFailure = { Outcome.Failed(Failure.Declared(FallbackText.UnexpectedError)) },
             )
             // Restart guard: only the CURRENT job for this key may settle it.
@@ -222,8 +220,7 @@ class ConnectionProbe<R : Any, K : Any, D>(
         /**
          * A transport-reported failure outcome. A non-null [message] is surfaced
          * verbatim ([Failure.Reported]); a null message degrades to the
-         * localized [fallback] text — the former `err.message ?: "Connection
-         * failed"` folds, now declared here instead of per-VM.
+         * localized [fallback] text.
          */
         fun <D> unreachable(
             message: String?,
@@ -268,9 +265,9 @@ class ConnectionProbe<R : Any, K : Any, D>(
     enum class FallbackText {
         /** Probe failed with no usable message. Reuses the existing `settings_connection_failed` entry. */
         ConnectionFailed,
-        /** Login-specific probe failure with no usable message (former Seerr literal). */
+        /** Login-specific probe failure with no usable message. */
         LoginFailed,
-        /** The probe crashed unexpectedly (former Seerr catch-all literal). */
+        /** The probe crashed unexpectedly. */
         UnexpectedError,
         /** Seerr: blank server URL. */
         ServerUrlRequired,
@@ -308,7 +305,7 @@ class ConnectionProbe<R : Any, K : Any, D>(
         /**
          * A probe while the same key is Testing cancels the in-flight probe
          * and starts a new one; a superseded probe's late outcome never lands.
-         * The default (the Seerr ViewModel's former `launchTest` discipline).
+         * The default.
          */
         RESTART,
 

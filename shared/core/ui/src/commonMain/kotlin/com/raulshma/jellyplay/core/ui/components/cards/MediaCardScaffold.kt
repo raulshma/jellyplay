@@ -155,7 +155,7 @@ fun MediaCardScaffold(
     val themeVariant = LocalThemeVariant.current
     val cardShape = ShapeCache.smooth12
 
-    // H15 anti-spoiler: the scaffold owns the card's progress surfaces (the
+    // Anti-spoiler: the scaffold owns the card's progress surfaces (the
     // bottom bar AND the play ring's arc), so it owns the suppression gate —
     // force-false when anti-spoiler home is on, regardless of the caller's
     // showProgress. The composition-local read keeps every call site unchanged.

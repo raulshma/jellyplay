@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the D9 reviews preview/all split: the detail screen's reviews section
+ * Pins the reviews preview/all split: the detail screen's reviews section
  * renders [REVIEWS_PREVIEW_COUNT] preview cards and the "All reviews (N)"
  * button only when the fetched list hides reviews behind the preview — the
  * count N is the FULL fetched size (the Route.Reviews screen shows every

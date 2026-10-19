@@ -54,7 +54,7 @@ class DesktopNavSavedStateConfigurationTest {
         val leaves = listOf<NavKey>(
             Route.ServerList, // signed-out host seed
             Route.Home, // the start tab
-            Route.Settings, // conveyor drill-ins push from here
+            Route.Settings, // drill-ins push from here
             Route.SubtitleTester, // android-only leaf, dead-end-guarded on desktop
         )
         leaves.forEach { route ->

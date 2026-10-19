@@ -40,7 +40,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the H20 home-layout ↔ server DisplayPreferences bridge:
+ * Pins the home-layout ↔ server DisplayPreferences bridge:
  *
  *  1. the codec — [serializeLayout]/[decodeServerLayout] round-trip (the
  *     presets machinery's exact pair), the LENIENT decode (unknown section /

@@ -74,7 +74,7 @@ fun EntryProviderScope<NavKey>.detailsSection(
         PersonDetailScreen(
             personId = key.personId,
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
-            // D20 co-star tap-through: same person jump the detail cast row takes.
+            // Co-star tap-through: same person jump the detail cast row takes.
             onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
             onBack = { navigator.goBack() },
         )

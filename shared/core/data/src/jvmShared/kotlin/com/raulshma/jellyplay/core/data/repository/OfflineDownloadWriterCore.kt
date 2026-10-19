@@ -37,7 +37,7 @@ import java.util.UUID
  * start the transfer row, enqueue the worker, and persist every sibling
  * artifact (offline metadata row, local images, trickplay, subtitles,
  * intro/outro segments) that makes a download usable offline. Extracted
- * verbatim from [DownloadRepositoryImpl] (D6) so the former construction
+ * verbatim from [DownloadRepositoryImpl] so the former construction
  * cycle `DownloadRepositoryImpl → DownloadDelegate → OfflineDownloadWriter →
  * DownloadRepositoryImpl` — broken by a `Lazy<DownloadDelegate>` deferral —
  * dissolves into a straight line: this core takes its DAOs and seams

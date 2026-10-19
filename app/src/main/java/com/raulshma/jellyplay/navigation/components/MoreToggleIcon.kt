@@ -17,7 +17,7 @@ import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.R
 
 /**
- * The ⋮/✕ glyph used by the "More" overflow toggle in the nav bar (#115) —
+ * The ⋮/✕ glyph used by the "More" overflow toggle in the nav bar —
  * [ExpressiveFloatingNavigationBar] (joined Search+More pill and the standalone
  * no-Search variant). Centralizes the DotsVertical↔X swap and the localized
  * content description so both sites stay in sync and don't drift back to a

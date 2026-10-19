@@ -10,7 +10,7 @@ import androidx.security.crypto.MasterKey
  * pre-KMP wiring (AES256_GCM master key, AES256_SIV key encryption, AES256_GCM
  * value encryption) so existing installs read their secrets unchanged.
  *
- * SELF-HEALING on undecryptable state (issue #171's fresh-install crash loop):
+ * SELF-HEALING on undecryptable state:
  * the master key lives in AndroidKeystore, which NEVER survives uninstall,
  * backup restore or device transfer — but `allowBackup` happily restores the
  * encrypted XML files. Opening or reading such a file throws

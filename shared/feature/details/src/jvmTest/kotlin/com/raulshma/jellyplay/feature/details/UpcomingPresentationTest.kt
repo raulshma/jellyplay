@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pure tests for the D7 strip's presentation folds ([upcomingAirBadge] and
+ * Pure tests for the upcoming strip's presentation folds ([upcomingAirBadge] and
  * [airingCountdownDays]) — the badge/countdown decisions the
  * [UpcomingEpisodeCard] composes. The renderer supplies `today`, so both
  * folds are clock-free and directly assertable. No Android / Compose.

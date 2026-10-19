@@ -21,13 +21,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 /**
- * Sort vocabulary shared by the two media-cleanup screens (stale + watched).
- * Declared delta vs the pre-chassis code: the enum used to live in
- * `stalemedia/StaleMediaViewModel.kt` while `watchedremoval` imported it from
- * there — it moved to this chassis package so neither feature owns it. The
- * labels are NOT carried here: the scaffold maps each entry to its
- * `Res.string.admin_sort_*` resource (the old English literals were the
- * twins' copy drift).
+ * Sort vocabulary shared by the two media-cleanup screens (stale + watched);
+ * it lives in this chassis package so neither feature owns it. The labels are
+ * NOT carried here: the scaffold maps each entry to its
+ * `Res.string.admin_sort_*` resource.
  */
 enum class MediaSortOption {
     DEFAULT,
@@ -42,10 +39,9 @@ enum class MediaSortOption {
 /**
  * The one observable snapshot of a media-cleanup scan screen (the
  * `SeerrRequestStateHolder` / `InstantMixStateHolder` shape). Everything the
- * results/configuration/audit tabs render is here; the twins' former
- * per-feature state classes (`StaleMediaState` / `WatchedMediaState`) were
- * field-identical except for the config default — which is now the adapter's
- * [MediaCleanupScanStateHolder.initialConfig] constructor argument.
+ * results/configuration/audit tabs render is here; the per-feature config
+ * default is the adapter's [MediaCleanupScanStateHolder.initialConfig]
+ * constructor argument.
  */
 @Immutable
 data class MediaCleanupScanState(
@@ -57,8 +53,8 @@ data class MediaCleanupScanState(
     val rawScanResults: List<MediaItemStub> = emptyList(),
     val selectedItems: Set<String> = emptySet(),
     /**
-     * Delete-confirmation machine (replaces the old showDeleteConfirmation
-     * boolean); the payload is the selected-id set held at dialog open.
+     * Delete-confirmation machine backing [showDeleteConfirmation]; the
+     * payload is the selected-id set held at dialog open.
      * Settle arm: clears on BOTH outcomes — a failure also closes the dialog
      * while keeping the selection. Guard source: the machine's dismiss/
      * confirm rule; [isDeleting] is the caller-owned in-flight fact.
@@ -87,34 +83,31 @@ data class MediaCleanupScanState(
 }
 
 /**
- * Deep module for the media-cleanup scan lifecycle the admin twins
- * (`stalemedia` / `watchedremoval`) used to carry as two ~200-line
- * field-identical ViewModels: the scan cascade (start → detect → progress
- * observe → COMPLETED → result-JSON decode), the selection machine, the
- * confirm/delete choreography, the delete-permission mirror, and the audit
- * history fold.
+ * Deep module for the media-cleanup scan lifecycle shared by the admin twins
+ * (`stalemedia` / `watchedremoval`): the scan cascade (start → detect →
+ * progress observe → COMPLETED → result-JSON decode), the selection machine,
+ * the confirm/delete choreography, the delete-permission mirror, and the
+ * audit history fold.
  *
  * The repository seam is constructor lambdas (the repository interfaces stay
  * untouched): each feature's ViewModel adapter supplies its own detect call
  * and bakes its `CleanupActionType` into the delete/audit lambdas — the
  * action-type divergence lives in the adapters, not the chassis.
  *
- * Declared deltas vs the two former hand-copies:
- *  - **Progress re-collect race fixed.** The twins launched a fresh progress
- *    collector per `startScan` without cancelling the previous one, so a late
- *    emission from an abandoned scan could overwrite the live scan's progress
- *    and results. The holder cancels the previous collector single-flight
- *    before observing the new scan (pinned in
+ * Design notes:
+ *  - **Single-flight progress collector.** A fresh progress collector per
+ *    `startScan` would let a late emission from an abandoned scan overwrite
+ *    the live scan's progress and results; the holder cancels the previous
+ *    collector before observing the new scan (pinned in
  *    `MediaCleanupScanStateHolderTest`).
- *  - **Dead tab state dropped.** `StaleMediaState.selectedTabIndex` +
- *    `selectTab` had no reader — the screen drove its tab row from local
- *    `remember` state (unlike Logs/Plugins, whose VMs genuinely own tab
- *    state). The chassis holds no tab index.
+ *  - **No tab state.** The screen drives its tab row from local `remember`
+ *    state (unlike Logs/Plugins, whose VMs genuinely own tab state); the
+ *    chassis holds no tab index.
  *  - **Selection algebra.** `toggleItemSelection` rides core/model's
  *    [SelectionState.toggled]; the results-tab select-all is an all↔none
- *    TOGGLE, which is deliberately NOT [SelectionState.selectAll] (an
- *    unconditional select) — the screen checkbox's second click clears, and
- *    that behaviour predates the chassis, so it stays chassis-side.
+ *    TOGGLE, deliberately NOT [SelectionState.selectAll] (an unconditional
+ *    select) — the screen checkbox's second click clears, so the toggle stays
+ *    chassis-side.
  */
 class MediaCleanupScanStateHolder(
     private val scope: CoroutineScope,

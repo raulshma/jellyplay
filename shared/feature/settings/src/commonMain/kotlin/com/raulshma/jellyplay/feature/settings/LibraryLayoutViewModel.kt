@@ -87,8 +87,7 @@ class LibraryLayoutViewModel(
     /**
      * Enables or disables a home sub-section ([type]) for a single library
      * ([libraryId]). Delegates to the store's section-prefs command — the
-     * shared toggle/override algebra home's inline sheet also routes through
-     * (this used to hold a verbatim policy copy that could drift).
+     * shared toggle/override algebra home's inline sheet also routes through.
      */
     fun setLibrarySectionEnabled(libraryId: String, type: HomeSectionType, enabled: Boolean) {
         launch { homeDiscoveryStore.setLibrarySectionVisible(libraryId, type, enabled) }
@@ -204,7 +203,7 @@ class LibraryLayoutViewModel(
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * H20: whether the current layout mirrors to the Jellyfin server (the
+     * Whether the current layout mirrors to the Jellyfin server (the
      * autopush pref) — the presets screen's cheap "also on server" note; the
      * full server-state fetch lives on the sync controller.
      */
@@ -230,10 +229,9 @@ class LibraryLayoutViewModel(
     }
 
     /**
-     * Applies a preset's layout to the current preferences. ONE command now:
-     * the store's [applyLayout] — the same setter sequence this method used to
-     * hand-list, promoted into the store so the H20 server-restore action runs
-     * the identical path and the two can never drift.
+     * Applies a preset's layout to the current preferences. ONE command:
+     * the store's [applyLayout] — the same setter sequence the server-restore
+     * action runs, so the two can never drift.
      */
     fun applyPreset(config: HomeLayoutConfig) {
         editor.edit { homeDiscovery.applyLayout(config) }
@@ -289,8 +287,8 @@ class LibraryLayoutViewModel(
     }
 
     /**
-     * The slice→[HomeLayoutConfig] projection — now the shared
-     * [toHomeLayoutConfig] extension (the H20 sync controller serializes the
+     * The slice→[HomeLayoutConfig] projection — the shared
+     * [toHomeLayoutConfig] extension (the sync controller serializes the
      * exact same mapping, so an autopushed layout equals a shared preset).
      */
     private fun currentLayoutConfig(): HomeLayoutConfig =

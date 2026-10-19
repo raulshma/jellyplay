@@ -12,9 +12,7 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
  * promoted-commonMain `AudioQueueOutcome`/`TrackWithAlbumFallback` types need
  * no mapping — android/desktop behavior unchanged).
  *
- * The former JvmMusicTrackDownloads adapter (over the `DownloadRepository`
- * single) was deleted with the download-actions seam consolidation: the
- * music screens' download reads resolve from core:data's own seams now
+ * The music screens' download reads resolve from core:data's own seams
  * (TrackDownloadStatusWindow for the album rows, ActiveDownloadCount for the
  * home badge — both bound in dataJvmModule).
  */

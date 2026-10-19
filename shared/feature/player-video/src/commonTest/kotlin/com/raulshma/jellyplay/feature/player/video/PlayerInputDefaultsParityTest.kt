@@ -30,7 +30,7 @@ import kotlin.test.fail
  * Pins the DEFAULT mapping ([PlayerInputDefaults]) — one assertion per input
  * the player handles. The retired decision tables (`mediaKeyAction`, the
  * D-pad branch, `PlayerWheelPolicy`'s shift-seek fold, the swipe arms, the
- * tap zones) became this data (issue #171's generalized input mapping): each
+ * tap zones) became this data (generalized input mapping): each
  * row here pins that the retired behavior is exactly what a fresh install
  * resolves, so the mapping can never silently drift from the historical
  * semantics — keyboard AND wheel AND D-pad. Runtime resolution runs through

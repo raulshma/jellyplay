@@ -7,8 +7,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 /**
- * Base convention plugin for every `shared/` KMP library module. Replaces the
- * skeleton that was copy-pasted across all ~34 module build files:
+ * Base convention plugin for every `shared/` KMP library module, centralizing
+ * the skeleton every module build file needs:
  *
  *  - applies `org.jetbrains.kotlin.multiplatform` + AGP 9's dedicated
  *    `com.android.kotlin.multiplatform.library` (AGP 9 forbids combining the
@@ -26,22 +26,21 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *    — the JVM-semantics middle layer every module shares code through.
  *    Modules that carry no jvmShared sources simply leave the directory
  *    empty; the wiring is inert there.
- *  - adds kotlin("test") to commonTest and jvmTest. Test-lane selection
- *    follows docs/adr/0006-test-lane-selection.md: pure common logic →
- *    commonTest, JVM-only seams (threading, java.time, file IO) → jvmTest,
- *    exercising androidMain actuals → androidHostTest (Robolectric host
- *    lane), shared doubles → :shared:core:test-fixtures (test-scoped only).
+ *  - adds kotlin("test") to commonTest and jvmTest. Test-lane selection:
+ *    pure common logic → commonTest, JVM-only seams (threading, java.time,
+ *    file IO) → jvmTest, exercising androidMain actuals → androidHostTest
+ *    (Robolectric host lane), shared doubles → :shared:core:test-fixtures
+ *    (test-scoped only).
  *
  * NOT centralized here (stays per module): the namespace, `withHostTest`/
  * `withDeviceTest` lanes and the Robolectric dependency wiring, the Room KSP
  * setup, and the non-universal remainder of every module's dependency list
  * (project edges, coil/datetime/serialization/paging/saveable, platform-lane
- * deps, test lanes). Two things USED to be per-module and moved into
- * `jellyplay.kmp.library.compose` (XC-2, deliberately reversing the earlier
- * "every module owns its dependency list" stance for this subset): the
- * universal Compose dependency bundle every Compose module repeated verbatim,
- * and the compose-resources `packageOfResClass` (now a path-derived default
- * on the `jellyplay` extension, overridable per module — `feature:player-book`
+ * deps, test lanes). Two things live in `jellyplay.kmp.library.compose`
+ * instead (deliberately reversing the "every module owns its dependency
+ * list" stance for this subset): the universal Compose dependency bundle,
+ * and the compose-resources `packageOfResClass` (a path-derived default on
+ * the `jellyplay` extension, overridable per module — `feature:player-book`
  * legacy package). Modules needing Compose + compose-resources apply
  * `jellyplay.kmp.library.compose` instead, which applies this plugin first.
  */
@@ -68,8 +67,8 @@ class KmpLibraryBasePlugin : Plugin<Project> {
 
             applyDefaultHierarchyTemplate()
 
-            // JVM-semantics middle source set shared verbatim by android +
-            // desktop (TtlCache, OkHttp/Jellyfin implementations, java.time
+            // JVM-semantics middle source set shared by android + desktop
+            // (TtlCache, OkHttp/Jellyfin implementations, java.time
             // actuals, ...). Registered through the KotlinSourceSetContainer
             // API directly — type-safe accessors do not generate for source
             // set manipulation inside convention-plugin code, so the wiring
@@ -99,7 +98,7 @@ class KmpLibraryBasePlugin : Plugin<Project> {
             compileSdk = 37
             minSdk = 28
 
-            // Compose-resources packaging (device-pass finding): with the
+            // Compose-resources packaging: with the
             // AGP-9 KMP library plugin, android resources are OFF by default, so
             // copyAndroidMainComposeResourcesToAndroidAssets never runs and the
             // app APK ships this module's Res accessors with NO backing .cvr

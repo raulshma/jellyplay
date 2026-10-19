@@ -24,7 +24,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 
 /**
  * The [ProfileSyncAdapter] that backs the playlist DEFINITIONS up onto the
- * general settings-sync protocol (the settings-backup wave's `playlists`
+ * general settings-sync protocol (the settings-backup cluster's `playlists`
  * namespace): three key families over the Room playlist stores —
  * `smart/{id}` for smart-playlist definitions ([SmartPlaylistPayload]),
  * `mood/{id}` for mood-playlist definitions ([MoodPlaylistPayload]), and

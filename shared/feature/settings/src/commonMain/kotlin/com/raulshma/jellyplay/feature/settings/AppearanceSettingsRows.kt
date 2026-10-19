@@ -166,12 +166,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_styl
 
 /**
  * The appearance domain's fused row declarations — the feature-side single
- * home of every appearance row's presentation, ordering, and capability (the
- * converted template of the fused-catalog wave). Each [SettingsRow] replaces
- * the trio the domain used to declare per row: the `SettingsSearchBinding`
- * entry, the `SettingsRowRecord` entry, and the `AppearanceSettingsIds`
- * holder constant (all deleted). One declaration per row: id, title faces,
- * icon, route kind, capability gate ([SettingsRow.gate] — the admission the
+ * home of every appearance row's presentation, ordering, and capability. Each
+ * [SettingsRow] carries the search binding, the screen face and the row
+ * identity in one declaration: id, title faces, icon, route kind, capability
+ * gate ([SettingsRow.gate] — the admission the
  * group totals AND the screen emissions read), and the admission exceptions
  * ([RowAdmission.ContentGated] — the theme-state-gated rows).
  *
@@ -182,15 +180,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_styl
  * the presentation tier only, and the projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * row↔spec drift. The residual rows (Library/Navigation/Newsletter-store
- * knobs — stores the spec tier does not cover yet) carry their full hand
- * search faces here until their stores migrate.
+ * knobs — stores the spec tier does not cover) carry their full hand search
+ * faces here.
  *
  * Search results, catalog order, group membership, and per-gate visibility
- * are byte-identical to the retired record+binding declarations
- * (`SpecDerivedSearchItemsTest`, `SettingsSearchCatalogTest` keep pinning
- * them); `FusedRowsRatchetTest` ratchets the conversion module-wide
- * (zero records/bindings/ids-holder entries in production source, every
- * group derived).
+ * derive from these declarations (`SpecDerivedSearchItemsTest`,
+ * `SettingsSearchCatalogTest` pin them); `FusedRowsRatchetTest` guards the
+ * fused catalog module-wide (zero records/bindings/ids-holder entries in
+ * production source, every group derived).
  */
 internal object AppearanceRows {
 
@@ -463,16 +460,16 @@ internal object AppearanceRows {
     )
 
     // ── RESIDUAL rows (HomeDiscoveryStore — the spec machinery lives in the
-    // home domain, and the catalog ids are unique): the H11/H12 card-badge
-    // toggles ALSO surfaced here per the plan's registry (§3 puts the rows in
-    // Appearance → Library & Cards; Home Settings' Cards group carries the
+    // home domain, and the catalog ids are unique): the card-badge
+    // toggles ALSO surfaced here (the rows live in Appearance → Library &
+    // Cards; Home Settings' Cards group carries the
     // same prefs — these write the SAME store commands, so the two faces can
     // never disagree). The search hit restates the screen faces (the fold;
-    // the `settings_*` keys are the shared home-wave strings, not duplicated
+    // the `settings_*` keys are the shared home strings, not duplicated
     // copy) and the ids are namespaced so the deep-link highlights THIS
     // group's row, not the home hub's.
 
-    /** H11 quality badges (4K / HDR / DV / Atmos) on poster + wide cards. Default on. */
+    /** Quality badges (4K / HDR / DV / Atmos) on poster + wide cards. Default on. */
     val QualityBadges = SettingsRow(
         id = "appearance_quality_badges",
         icon = Tabler.Outline.Badge4k,
@@ -484,7 +481,7 @@ internal object AppearanceRows {
         gate = RowAdmission.Always,
     )
 
-    /** H12 "NEW" badges for items added since the last home visit. Default on. */
+    /** "NEW" badges for items added since the last home visit. Default on. */
     val NewBadges = SettingsRow(
         id = "appearance_new_badges",
         icon = Tabler.Outline.Sparkles,
@@ -566,7 +563,7 @@ internal object AppearanceRows {
     )
 
     // ── RESIDUAL rows (LibraryStore — no spec machinery): the detail-screen
-    // display toggles (plan features D1–D23). The search hit restates each
+    // display toggles. The search hit restates each
     // row's screen title/subtitle (the fold: no separate ss_* twins). ─────
 
     val ShowTagline = SettingsRow(
@@ -824,7 +821,7 @@ internal object AppearanceRows {
     )
 
     /**
-     * Every fused appearance row — the ratchet's vocabulary. A computed
+     * Every fused appearance row. A computed
      * accessor (not an initializer): the group row lists are top-level vals
      * declared later in this file, and an eager field would turn the
      * object↔file-facade initialization order into a cycle.
@@ -840,8 +837,8 @@ internal object AppearanceRows {
 // ([AppearancePreferenceSpecs]) plus the cross-domain knobs the library group
 // renders (the experimental share-media / hide-search-history toggles). The
 // row lists below are the ordered spine — presentation faces, catalog order,
-// gates. (The home-discovery watch-state quartet moved to the home cards
-// group — PS-4.)
+// gates. (The home-discovery watch-state quartet lives in the home cards
+// group.)
 // ═══════════════════════════════════════════════════════════════════════
 
 private val searchRoutes: Map<String, Route> = mapOf(
@@ -891,8 +888,7 @@ internal val AppearanceNavigationRows: List<SettingsRow> = listOf(
  * The "Library & Cards" group's rows: the library-content residuals (episode
  * + detail-screen display toggles) + the appearance haptics toggle and the
  * experimental share-media / hide-search-history toggles (spec-backed).
- * (The home-discovery watch-state quartet moved to the home cards group —
- * PS-4.)
+ * (The home-discovery watch-state quartet lives in the home cards group.)
  */
 internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.HideEpisodeThumbnails,
@@ -992,11 +988,11 @@ internal val AppearanceNewsletterSearchItems: List<SettingsSearchItem> = Appeara
  * that drives BOTH the settings root's `item_appearance` section emission
  * (icon/title/route id) and its entrance-step index (the [section] entry
  * spliced into [SETTINGS_ENTRANCE_SECTIONS] at this domain's render
- * position). The retired hand pair — the literal entry in the sections list
+ * position). A hand-written pair — the literal entry in the sections list
  * plus the hand-written call site — could drift only by failing the
  * SettingsEntranceStepsTest pins; the declaration-driven shape cannot drift
- * at all (both faces read this object). The per-domain rollout recipe: each
- * converted domain declares one of these, splices [section] into the list,
+ * at all (both faces read this object). The per-domain shape: each
+ * domain declares one of these, splices [section] into the list,
  * consumes the faces at the call site, and adds its key to the guard test's
  * converted set (the regex scanner cannot see declaration-driven call sites).
  */

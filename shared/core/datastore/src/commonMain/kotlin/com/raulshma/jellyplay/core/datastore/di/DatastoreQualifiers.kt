@@ -4,14 +4,12 @@ import org.koin.core.qualifier.Qualifier
 import org.koin.core.qualifier.named
 
 /**
- * Koin qualifiers mirroring the legacy javax.inject qualifiers of the Android
- * shim one-to-one (docs/kmp-migration-plan.md). Cross-module: the
+ * Koin qualifiers for the datastore graphs: the process-wide application
+ * scope and one per DataStore file. Cross-module: the
  * shared data/network Koin modules resolve
  * the application scope through [applicationScope].
  *
- * commonMain since § (was jvmShared): the qualifiers are pure Koin
- * naming with no platform symbols. Same package as before the move, so no consumer
- * import changes.
+ * Pure Koin naming with no platform symbols.
  */
 object DatastoreQualifiers {
 

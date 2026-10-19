@@ -355,7 +355,7 @@ internal fun ReflowableReaderContent(
         )
     }
     // The VM's speech loop + sleep timer execute their host-side halves
-    // through this port (the collapsed command channel's replacement).
+    // through this port (replacing the former command channel).
     LaunchedEffect(session) { viewModel.attachReaderSession(session) }
     // The full appearance bundle: rides the chunked load protocol on boot
     // AND re-fires the hosts' change push whenever any axis moves (their
@@ -385,7 +385,7 @@ internal fun ReflowableReaderContent(
     // the position flow, so it lives in the rail leaf ([ReflowableTocRail]).
     val tocTicks = remember(session.tocItems) { epubTocTicks(session.tocItems) }
 
-    // Exact resume (ADR 0003 point 4): the latch + jump decision are the
+    // Exact resume (the local-first resume rule): the latch + jump decision are the
     // session's (see [ReflowableReaderSession.resumeJump]); this shell just
     // re-offers the anchors whenever the boot status or either anchor moves.
     LaunchedEffect(session.status, content.resumeCfi, content.jumpHref) {

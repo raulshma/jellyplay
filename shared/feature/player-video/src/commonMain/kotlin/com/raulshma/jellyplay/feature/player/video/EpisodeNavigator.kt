@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** How long [EpisodeNavigator.next] keeps the single-flight latch held while the session settles (#146). */
+/** How long [EpisodeNavigator.next] keeps the single-flight latch held while the session settles. */
 internal const val NEXT_EPISODE_SETTLE_TIMEOUT_MS = 90_000L
 
 /**
@@ -201,7 +201,7 @@ internal class EpisodeNavigator(
     fun next() {
         val anchor = anchorOf(getDetail()) ?: return
         val currentItemId = anchor.currentItemId ?: return
-        // Single-flight latch (#146): every tap used to launch an independent
+        // Single-flight latch: every tap used to launch an independent
         // resolve → mark-played → initialize chain. Offline, each stage blocked
         // on a full network timeout, so re-taps landed minutes later as
         // staggered teardown+reload passes — one visible restart per extra tap.
@@ -235,7 +235,7 @@ internal class EpisodeNavigator(
                 // Keep holding the latch until the load actually settles — the
                 // session binds a different, non-null item or an error surfaces
                 // — so taps landing inside this window are ignored rather than
-                // queued as a second teardown+reload of the same episode (#146).
+                // queued as a second teardown+reload of the same episode.
                 // The non-null guard matters: initialize()'s per-item teardown
                 // resets PlayerSessionState (currentItemId = null) BEFORE the
                 // pipeline rebinds the new item, and that transient must not

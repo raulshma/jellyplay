@@ -87,9 +87,9 @@ internal data class LibraryItemsQuerySpec(
     val minDateLastSavedMs: Long? = null,
     val minPremiereDateMs: Long? = null,
     /**
-     * The `/Items/Resume`-only excludeActiveSessions flag (H6): true omits
+     * The `/Items/Resume`-only excludeActiveSessions flag: true omits
      * items currently playing in another session's playback from the resume
-     * row. Defaults false — the pre-H6 wire (the server's own default).
+     * row. Defaults false — the legacy wire (the server's own default).
      */
     val excludeActiveSessions: Boolean = false,
 )
@@ -271,9 +271,9 @@ internal fun buildItemsByStudioQuerySpec(
  *
  * The rows project [HOME_ROW_PROJECTION_FIELDS] (not the two-field minimum):
  * the resume / Next Up cards are exactly the surfaces the quality-badge,
- * NEW-dot and trickplay-preview overlays read (H11/H12/H13), so the shared
+ * NEW-dot and trickplay-preview overlays read, so the shared
  * spec carries the home-row composition — batch and refresh arms agree by
- * construction. [excludeActiveSessions] threads the H6 toggle so both arms
+ * construction. [excludeActiveSessions] threads the toggle so both arms
  * send the same flag.
  */
 internal fun buildResumeQuerySpec(

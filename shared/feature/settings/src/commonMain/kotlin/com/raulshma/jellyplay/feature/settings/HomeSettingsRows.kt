@@ -118,10 +118,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_
 /**
  * The home domain's fused row declarations — the feature-side single home of
  * every home-hub row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `HomeSettingsIds` holder constant (all
- * retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * The SEMANTICS stay two-homed by design: every row is backed by a
  * [HomeDiscoveryPreferenceSpecs] spec entry — the keywords, advanced flag,
@@ -132,12 +130,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_
  * flags do not carry, so it counts in no total and the screen adds the +1
  * explicitly (the shipped shape). The projection fails fast at catalog init
  * on any row-spec drift; search results, catalog order, group membership and
- * per-gate visibility are byte-identical to the retired declarations.
+ * per-gate visibility derive from these declarations.
  */
 internal object HomeRows {
 
-    // -- The "Home Display" group's rows (the display toggles, the home-wave
-    //    H7/H10/H17/H18/H19/H21 features, and the CW/Next-Up curation trio),
+    // -- The "Home Display" group's rows (the display toggles, the hero/backdrop/
+    //    stats/rail/presence/announcement features, and the CW/Next-Up curation trio),
     //    in catalog order (every row spec-backed). --
 
     val HomeMode = SettingsRow(
@@ -165,7 +163,7 @@ internal object HomeRows {
     )
 
     /**
-     * H7 video hero billboard (touch/default form factors): muted looping
+     * Video hero billboard (touch/default form factors): muted looping
      * ThemeVideo → trailer-embed fallback on dwell. Default off. The search
      * title folds to the screen title (the one-key family: the spec's
      * titleKey names the `settings_*` resource — no ss_* twin).
@@ -177,7 +175,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_home_hero_video_subtitle,
     )
 
-    /** H7's TV form-factor twin — same clip pipeline, separate switch. */
+    /** The video hero's TV form-factor twin — same clip pipeline, separate switch. */
     val HeroVideoTv = SettingsRow(
         id = "home_hero_video_tv",
         icon = Tabler.Outline.DeviceTv,
@@ -186,7 +184,7 @@ internal object HomeRows {
     )
 
     /**
-     * H10 focus-driven ambient backdrop (Android TV): the focused card
+     * Focus-driven ambient backdrop (Android TV): the focused card
      * repaints the ambient backdrop. Default off.
      */
     val FocusBackdrop = SettingsRow(
@@ -196,7 +194,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_home_focus_backdrop_subtitle,
     )
 
-    /** H17 personal stats card ("Your library week") between hero and the first row. Default off. */
+    /** Personal stats card ("Your library week") between hero and the first row. Default off. */
     val StatsCard = SettingsRow(
         id = "home_stats_card",
         icon = Tabler.Outline.ChartBar,
@@ -204,7 +202,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_home_stats_card_subtitle,
     )
 
-    /** H18 genre quick-access rail (chips above the first row). Default off. */
+    /** Genre quick-access rail (chips above the first row). Default off. */
     val GenreRail = SettingsRow(
         id = "home_genre_rail",
         icon = Tabler.Outline.Category,
@@ -212,7 +210,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_home_genre_rail_subtitle,
     )
 
-    /** H19 watch-party / presence chips ("Alex is watching Dune — join"). Default off; admin-gated. */
+    /** Watch-party / presence chips ("Alex is watching Dune — join"). Default off; admin-gated. */
     val PresenceChips = SettingsRow(
         id = "home_presence_chips",
         icon = Tabler.Outline.Users,
@@ -220,7 +218,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_home_presence_chips_subtitle,
     )
 
-    /** H21 new-section announcement toast ("New on Home: … — Customize"). Default on. */
+    /** New-section announcement toast ("New on Home: … — Customize"). Default on. */
     val NewSectionAnnouncements = SettingsRow(
         id = "home_new_section_announcements",
         icon = Tabler.Outline.Speakerphone,
@@ -288,7 +286,7 @@ internal object HomeRows {
     )
 
     /**
-     * H5's restore surface: libraries hidden from the My Media tiles row (the
+     * The hidden-libraries restore surface: libraries hidden from the My Media tiles row (the
      * per-library config sheet's hide action), with per-library and bulk
      * restore behind the Route.MyMediaHidden drill-in.
      */
@@ -329,7 +327,7 @@ internal object HomeRows {
     )
 
     /**
-     * H6 active-session-aware Continue Watching: don't offer "continue" for an
+     * Active-session-aware Continue Watching: don't offer "continue" for an
      * item currently playing on another device. Default off.
      */
     val ExcludeActiveSessions = SettingsRow(
@@ -339,7 +337,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_exclude_active_sessions_subtitle,
     )
 
-    // -- The "Home Screen Layout" group's four drill-in rows + the H20
+    // -- The "Home Screen Layout" group's four drill-in rows + the
     //    auto-push toggle, in catalog order. --
 
     val PinnedHomeSections = SettingsRow(
@@ -378,7 +376,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.ss_discover_rows_subtitle,
     )
 
-    /** H20 layout DisplayPreferences auto-push (after any layout-writing command, debounced). Default off. */
+    /** Layout DisplayPreferences auto-push (after any layout-writing command, debounced). Default off. */
     val LayoutAutopush = SettingsRow(
         id = "home_layout_autopush",
         icon = Tabler.Outline.CloudUpload,
@@ -386,8 +384,8 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_home_layout_autopush_subtitle,
     )
 
-    // -- The "Cards" group's rows: the PS-4 moved card-display quartet plus
-    //    the home-wave badge/spoiler/trickplay toggles, in catalog order. --
+    // -- The "Cards" group's rows: the card-display quartet plus
+    //    the badge/spoiler/trickplay toggles, in catalog order. --
 
     val ShowUnwatchedBadge = SettingsRow(
         id = "show_unwatched_badge",
@@ -425,7 +423,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.ss_show_external_ratings_subtitle,
     )
 
-    /** H11 quality badges (4K / HDR / DV / Atmos) on poster + wide cards. Default on. */
+    /** Quality badges (4K / HDR / DV / Atmos) on poster + wide cards. Default on. */
     val ShowQualityBadges = SettingsRow(
         id = "show_quality_badges",
         icon = Tabler.Outline.Badge4k,
@@ -434,7 +432,7 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.settings_show_quality_badges_subtitle,
     )
 
-    /** H12 "NEW" badges for items added since the last home visit. Default on. */
+    /** "NEW" badges for items added since the last home visit. Default on. */
     val ShowNewBadges = SettingsRow(
         id = "show_new_badges",
         icon = Tabler.Outline.Sparkles,
@@ -444,7 +442,7 @@ internal object HomeRows {
     )
 
     /**
-     * H13 trickplay preview on wide (resume/next-up) cards — TV-only v1: the
+     * Trickplay preview on wide (resume/next-up) cards — TV-only v1: the
      * row renders only on the TV form factor ([RowAdmission.Tv]; the spec's
      * ANDROID_ONLY tag keeps the search hit off desktop). Default on.
      */
@@ -456,7 +454,7 @@ internal object HomeRows {
         gate = RowAdmission.Tv,
     )
 
-    /** H15 anti-spoiler home master switch — force-hides watch-state spoilers across home. Default off. */
+    /** Anti-spoiler home master switch — force-hides watch-state spoilers across home. Default off. */
     val AntiSpoilerHome = SettingsRow(
         id = "anti_spoiler_home",
         icon = Tabler.Outline.EyeOff,
@@ -466,7 +464,7 @@ internal object HomeRows {
     )
 
     /**
-     * Every fused home row — the ratchet's vocabulary. A computed accessor
+     * Every fused home row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

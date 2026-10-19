@@ -102,8 +102,8 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeSession,
             sessionCacheRegistry,
         )
-        // Snapshot-store extraction: the persisted home pipeline (whose pins
-        // moved to HomeSectionsSnapshotStoreTest) rides this store — the same
+        // The persisted home pipeline (whose pins live in
+        // HomeSectionsSnapshotStoreTest) rides this store — the same
         // single the Koin graph wires. The suite's remaining pins are the
         // repo-level IN-MEMORY choreography, which never touches the rows.
         val homeSnapshotStore = HomeSectionsSnapshotStore(
@@ -170,7 +170,7 @@ class MediaRepositoryHomeSectionsCacheTest {
 
     @Test
     fun `getHomeSections re-fetches on a forced read`() = runBlocking {
-        // Plan 08: the pull-to-refresh freshness lever is the force parameter
+        // The pull-to-refresh freshness lever is the force parameter
         // (the old global invalidateCaches knob is module-internal now; the
         // internal variant's wholesale coverage is asserted in
         // MediaRepositoryImplTest).

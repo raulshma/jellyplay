@@ -18,9 +18,9 @@ import kotlinx.serialization.Serializable
  * This is also the library/search filter WRITE ALGEBRA (same pattern as
  * [HomeSectionPrefs]): the `withX` transforms below are the single policy
  * behind every filter toggle/set/clear, and [hasActiveFilters] is the one
- * "is anything non-default" fold. The library and search screens used to
- * hand-roll these — the active-filter predicates had drifted (library's
- * omitted years/tags/minRating/sort), so both now read through the fold here.
+ * "is anything non-default" fold. The library and search screens read through
+ * the fold here: hand-rolled active-filter predicates drift (library's omits
+ * years/tags/minRating/sort), so both must share this fold.
  */
 @Immutable
 @Serializable

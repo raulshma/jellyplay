@@ -147,7 +147,7 @@ internal fun MainContent(
     // offline it is hidden from the floating nav. Home is the offline hub,
     // Search has an offline-results path, Shortcuts are device-local,
     // MusicBrowse's home surfaces the downloaded music library, and Library
-    // auto-filters to downloads (#147) — all stay visible.
+    // auto-filters to downloads — all stay visible.
     val offlineMode by model.offlineMode.collectAsStateWithLifecycle()
     val isGoingOnline by model.isGoingOnline.collectAsStateWithLifecycle()
     val downloadCount by model.activeDownloadCount.collectAsStateWithLifecycle()
@@ -156,7 +156,7 @@ internal fun MainContent(
     // Memoize the route filter+reorder so it only re-runs when homeMode /
     // hiddenNavItems / navItemOrder / offline actually change. MainContent
     // recomposes frequently (it reads audioTitle/artist/... for the mini
-    // player), so the previous eager `when{}` allocated a fresh LinkedHashMap +
+    // player), so an eager `when{}` would allocate a fresh LinkedHashMap +
     // intermediate entry lists + KClass.simpleName lookups on every
     // recomposition.
     val activeTopLevelRoutes: LinkedHashMap<Route, String> by remember(
@@ -184,7 +184,7 @@ internal fun MainContent(
     // Stable on purpose: this is a key of the shellHost construction below
     // (the rememberShellHost factory keys on it) and a ShellNavParams field,
     // so a fresh lambda per recomposition would make both compare unequal
-    // (the former allocation made the section-graph memoization always
+    // (a fresh allocation makes the section-graph memoization always
     // miss). Remembered on the model, whose activity scope is the lambda's
     // only capture.
     val onModeChange: (HomeMode) -> Unit = remember(model) { model::setHomeMode }
@@ -203,14 +203,13 @@ internal fun MainContent(
     }
 
     // The request-dispatch effects (NavRequestCollector's loops, driven
-    // through the remembered holder above). Keying preserved exactly from the
-    // former inline collectors: the value-keyed pending-route effect
-    // re-launches — and re-captures the holder's collector — on every new
-    // route, while the flow-keyed collectors hold their launch-time instance
-    // (NavRequestCollector's documented capture semantics; the holder's
-    // remember keys are the collector's captured seams, so the only way
-    // those captures go stale is a holder rebuild, which any re-keying effect
-    // picks up). The policy forks are pure and pinned in
+    // through the remembered holder above). The value-keyed pending-route
+    // effect re-launches — and re-captures the holder's collector — on every
+    // new route, while the flow-keyed collectors hold their launch-time
+    // instance (NavRequestCollector's documented capture semantics; the
+    // holder's remember keys are the collector's captured seams, so the only
+    // way those captures go stale is a holder rebuild, which any re-keying
+    // effect picks up). The policy forks are pure and pinned in
     // NavRequestCollector's suite; the effects are one-line launchers.
 
     // Deep links / launcher shortcuts / shared-text targets
@@ -283,8 +282,7 @@ internal fun MainContent(
     // plain overload. Collection lives with this composition and restarts
     // only if the bus instance is swapped; a TV/phone flip re-arms the
     // surface adapter in place instead of cancelling and relaunching the
-    // collector (the former (bus, isTv) keys — the deliberate delta
-    // documented on the seam).
+    // collector.
     val userMessageBus = LocalUserMessageBus.current
     val presentUserMessage = shellUserMessagePresent(
         context = context,
@@ -294,7 +292,7 @@ internal fun MainContent(
 
     rememberShellUserMessages(presentUserMessage, userMessageBus.messages)
 
-    // The manual layout override (issue #166) clamps the measured width class
+    // The manual layout override clamps the measured width class
     // BEFORE anything consumes it: the shell's isExpanded fork below, the TV/
     // phone DeviceClass tokens, and every downstream LocalAdaptiveInfo reader
     // (rail vs bottom bar, two-pane details, grids) all follow the override
@@ -358,8 +356,8 @@ internal fun MainContent(
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives
-            // transitions between phone <-> TV <-> full-screen layouts. Previously each
-            // MainNavDisplay call site created its own holder, so saveable state was lost on
+            // transitions between phone <-> TV <-> full-screen layouts. A holder
+            // created per MainNavDisplay call site would lose saveable state on
             // every layout-branch switch (e.g. entering the player and back).
             val saveableStateHolder = rememberSaveableStateHolder()
             val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
@@ -412,8 +410,7 @@ internal fun MainContent(
             // recomposition (the groups are data classes and compare
             // structurally) as long as its members are remembered/stable
             // (the discipline the factory's KDoc states) — the graph
-            // rebuilds only when these identities change, the same
-            // triggers the former inline remember keyed on.
+            // rebuilds only when these identities change.
             // The admin reads are the shared rememberShellAdminGate outputs —
             // lazy .value reads, so admin refreshes don't rebuild the graph.
             val adminGate = rememberShellAdminGate(isAdminState, isRefreshingAdminState)
@@ -427,14 +424,12 @@ internal fun MainContent(
             // The shared home module narrows the Play-On surface to its
             // HomePlayOnRedirect seam (the concrete strategy is Android-
             // bound); the probe + fling choreography lives on the controller
-            // (flingIfConnected), so the strategy never leaves it. Declared
-            // delta: the redirect is active on EVERY host now —
-            // it used to be phone-layout-only (the TV and full-screen
-            // MainNavDisplay calls passed no strategy). Only observable when
+            // (flingIfConnected), so the strategy never leaves it. The
+            // redirect is active on EVERY host — TV and full-screen
+            // MainNavDisplay calls included. Only observable when
             // a remote session is already connected, which itself can only
             // be initiated from the phone layout's Play On device sheet.
-            // Remembered on the controller — the same trigger the former
-            // inline remember keyed on (playOn).
+            // Remembered on the controller, keyed on playOn.
             val playOnRedirect = remember(playOn) { HomePlayOnRedirect(playOn::flingIfConnected) }
             val shellHost = rememberShellHost(
                 navigator = navigator,

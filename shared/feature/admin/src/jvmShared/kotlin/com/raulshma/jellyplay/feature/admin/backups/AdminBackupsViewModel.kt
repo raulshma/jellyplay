@@ -172,9 +172,8 @@ class AdminBackupsViewModel(
      * Polls the health probe until the restarting server answers again. The
      * probe is the address-failover machinery's reachability check
      * (`GET /System/Info/Public` against the exact address — never rerouted
-     * to an alternate while the server is down). The hand-rolled
-     * repeat-delay-probe loop this used to be is one [boundedPoll]
-     * registration now: [PollSpec.initialDelayMs] keeps the downtime gap
+     * to an alternate while the server is down). One [boundedPoll]
+     * registration: [PollSpec.initialDelayMs] keeps the downtime gap
      * BEFORE the first probe (the server needs its 3s to restart — probing
      * straight after the 204 is known-useless), the round cap is the
      * downtime budget.

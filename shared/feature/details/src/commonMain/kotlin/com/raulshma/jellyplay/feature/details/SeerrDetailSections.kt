@@ -88,9 +88,9 @@ import org.jetbrains.compose.resources.stringResource
  * because their callers ([SeerrDetailBody] / [SeerrDetailContent]) stayed
  * in the screen file; the row-level helpers keep `private` (single in-file
  * consumers) — except the ratings strip, whose plain-value body is `internal`
- * since D4 (the media-detail family renders the same chip vocabulary; the
+ * the media-detail family renders the same chip vocabulary; the
  * [SeerrRatings]-taking overload below is the family-local adapter). No
- * behaviour change beyond D4's deep-linking chips. The video CARD body is the
+ * behaviour change beyond the deep-linking chips. The video CARD body is the
  * shared [YouTubeVideoCard] (DetailSectionVocabulary) — collapsed with the
  * media family's identical copy; only the row scaffolding stays family-local.
  */
@@ -140,7 +140,7 @@ private fun RatingsRow(ratings: SeerrRatings?) {
 }
 
 /**
- * The shared ratings strip (D4), extracted verbatim from the Seerr family's
+ * The shared ratings strip, extracted verbatim from the Seerr family's
  * private `RatingsRow` and widened from a [SeerrRatings] payload to PLAIN
  * values — the [DetailExternalRatings] tuple the media-detail family's
  * enrichment resolves (Seerr first, TMDB-only fallback) and the same leg
@@ -152,8 +152,8 @@ private fun RatingsRow(ratings: SeerrRatings?) {
  * The chips flow (`FlowRow`) instead of the former hand-rolled scrolling
  * `Row`: with the four short chips either shape renders on one line at every
  * realistic width, and the flow shape lets the strip nest as a group inside
- * the media header's metadata FlowRow (D4) and the plugin ratings row's
- * merged FlowRow (D9).
+ * the media header's metadata FlowRow and the plugin ratings row's
+ * merged FlowRow.
  *
  * Rendering order — RT critics, RT audience, IMDb, TMDB — is the
  * [externalRatingChipSources] contract, pinned by DetailRatingsBlockTest.

@@ -9,9 +9,9 @@ import androidx.room3.PrimaryKey
  * Freshness baseline + per-axis result flags for an offline item — the
  * persistence home of the offline freshness module.
  *
- * Split out of the historical `offline_media` row so the freshness state has a
- * single owner (decision + persistence + projection live together) and a
- * metadata re-persist can no longer clobber it. The fragile "copy the sync
+ * Split from the `offline_media` row so the freshness state has a single
+ * owner (decision + persistence + projection live together) and a metadata
+ * re-persist cannot clobber it. The fragile "copy the sync
  * columns forward on every upsert" block disappears with the split.
  *
  * **Per-axis flags.** The historical shape collapsed five resyncable content

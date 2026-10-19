@@ -42,7 +42,7 @@ import kotlin.test.assertSame
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
- * First ViewModel test in feature/music (plan 04): verifies delegation to
+ * Verifies delegation to
  * [MusicQueuePlayer] and the outcome → UI-state mapping. Queue building
  * itself is covered by AudioQueueFacadeTest in core/data.
  */
@@ -470,10 +470,9 @@ class AlbumDetailViewModelTest {
         assertEquals(albumTracks, viewModel.tracks)
     }
 
-    // The no-stack/skip-re-arm choreography pair this suite used to re-pin is
-    // module behaviour now — DeferredFetchCoordinatorTest owns that table;
-    // this suite pins the host adapter's own surfaces (pair publish, heal,
-    // guard, spinner).
+    // The no-stack/skip-re-arm choreography pair is module behaviour —
+    // DeferredFetchCoordinatorTest owns that table; this suite pins the host
+    // adapter's own surfaces (pair publish, heal, guard, spinner).
 
     // ── Instant mix event consumption ────────────────────────────────────────
 

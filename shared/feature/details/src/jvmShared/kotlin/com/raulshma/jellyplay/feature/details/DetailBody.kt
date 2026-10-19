@@ -54,7 +54,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
  * behaviour is identical. [DetailContentBody] is invoked once with
  * `showActionButtons = false` because actions live in the left rail.
  *
- * [promotedActions] is the D23 rail slice of the ⋮ options list — the fixed
+ * [promotedActions] is the promoted rail slice of the ⋮ options list — the fixed
  * promoted set resolved by the caller (which owns the display-preference gate
  * and the matching ⋮-menu suppression); empty = nothing renders under the
  * action buttons.
@@ -119,7 +119,7 @@ internal fun DetailBodyLandscape(
                         vertical = true,
                         contentFocusRequester = contentFocusRequester,
                     )
-                    // D23 promoted rail: the fixed option subset lifted out of
+                    // Promoted rail: the fixed option subset lifted out of
                     // the ⋮ menu (which suppresses exactly these while the rail
                     // shows them). Sits under the action buttons so the TV
                     // focus order reads poster → play → rail actions → body.
@@ -330,7 +330,7 @@ private fun DetailPoster(
 }
 
 /**
- * The landscape/TV detail rail's promoted actions (D23): the fixed subset of
+ * The landscape/TV detail rail's promoted actions: the fixed subset of
  * the ⋮ options list ([PromotedMediaOptionIds]) rendered as icon+label rows
  * under [DetailActionButtons], so the top actions escape the overflow sheet
  * where TV D-pad cost is highest. Availability logic is unchanged — an option

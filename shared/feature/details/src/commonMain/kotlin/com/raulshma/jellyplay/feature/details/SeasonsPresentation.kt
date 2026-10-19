@@ -40,9 +40,9 @@ internal data class SeasonsPresentation(
     val episodesDescending: Boolean,
     /** Compact vertical episode list (offered only on compact-width, non-TV form factors). */
     val compactEpisodeList: Boolean,
-    /** D11: render the CC / audio-layout / language-count chips on episode rows. */
+    /** Render the CC / audio-layout / language-count chips on episode rows. */
     val showStreamBadges: Boolean = true,
-    /** D16: render the in-flight download bar + percent chip on episode rows. */
+    /** Render the in-flight download bar + percent chip on episode rows. */
     val showDownloadProgress: Boolean = true,
     /**
      * Downloaded episode ids — gates the per-episode delete badge. Null hides
@@ -99,7 +99,7 @@ internal data class SeasonsPresentation(
                 showDownloadProgress = state.preferences.showDownloadProgress,
                 // Downloaded-episode set: for a LOCAL origin every episode is
                 // downloaded; for a REMOTE series we surface the loaded
-                // downloadedEpisodeIds (populated at screen-open since D16, and
+                // downloadedEpisodeIds (populated at screen-open, and
                 // re-read on sheet open) so the trash badge matches the
                 // on-disk truth.
                 downloadedEpisodeIds = when {

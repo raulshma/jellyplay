@@ -15,15 +15,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_about_vers
 /**
  * The about domain's fused row declaration — the feature-side single home of
  * the about screen's row (the [AppearanceRows] template). The one
- * [SettingsRow] replaces the trio the domain used to declare: the
- * `SettingsSearchBinding` entry, the `SettingsRowRecord` entry, and the
- * `AboutScreenIds` holder constant (all retired).
+ * [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * HAND-MAINTAINED residual: the about row is a navigation fact whose knob
  * lives in a store without spec machinery — it carries its full hand search
  * face. The projection ([List.toSearchItems]) is the pure hand-projection;
- * search results, catalog order and group membership are byte-identical to
- * the retired declarations.
+ * search results, catalog order and group membership derive from this declaration.
  */
 internal object AboutRows {
 
@@ -40,7 +38,7 @@ internal object AboutRows {
     )
 
     /**
-     * Every fused about row — the ratchet's vocabulary. A computed accessor
+     * Every fused about row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

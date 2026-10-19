@@ -277,7 +277,7 @@ fun VideoPlayerScreen(
     // ANYTHING under the keyboard layer holds focus; drives the grab seam's
     // re-assert-on-loss against the mpv surface-mount focus drop.
     var keyboardLayerHoldsFocus by remember { mutableStateOf(false) }
-    // TV twin (issue #174): whether ANYTHING under the surface Box holds
+    // TV twin: whether ANYTHING under the surface Box holds
     // focus — fed by the TV branch's onFocusChanged in
     // [playerBoxKeyInputModifier], controls buttons included (hasFocus, not
     // isFocused). Drives [PlayerTvFocusGrabEffect]'s re-assert-on-loss: the
@@ -359,7 +359,7 @@ fun VideoPlayerScreen(
     // been rebuilt by the parent).
     val currentOnBack by rememberUpdatedState(onBack)
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    // Issue #145: programmatic closes must never run against a STOPPED
+    // Programmatic closes must never run against a STOPPED
     // activity. The old collectors were plain LaunchedEffects, which keep
     // collecting behind the keyguard — an episode ending (background audio,
     // SyncPlay, a lockscreen play) or a late PiP-dismiss signal while the
@@ -509,7 +509,7 @@ fun VideoPlayerScreen(
     val activeSegmentBehavior = segmentOverlay.activeSegmentBehavior
     val cinemaIntroState = uiState.cinemaIntroState
     // Drives the Up Next overlay's in-flight state: play button shows progress
-    // and stops accepting clicks until the next-episode load settles (#146).
+    // and stops accepting clicks until the next-episode load settles.
     val isNextEpisodeLoading by viewModel.sessionSlices.overlay.isNextEpisodeLoading.collectAsStateWithLifecycle()
     // The "Still watching?" confirm overlay (feature 1.3) — collected at the
     // root like the other controller-owned slices and passed into the tier.
@@ -558,9 +558,9 @@ fun VideoPlayerScreen(
         if (isTv && !chrome.visible) {
             // The overlay-priority handoff: overlays own focus while visible,
             // the surface Box otherwise. [PlayerTvFocusGrabEffect] below owns
-            // the plain Box case with retry + re-assert (issue #174 — the
-            // single un-retried attempt here was the whole recovery path and
-            // it lost races); this effect stays the overlay-targeting arm.
+            // the plain Box case with retry + re-assert (the single
+            // un-retried attempt here was the whole recovery path and it lost
+            // races); this effect stays the overlay-targeting arm.
             when {
                 isCinemaIntroVisible -> tvCinemaIntroFocusRequester.tryRequestFocus("tv_cinema_intro")
                 isNextEpisodeVisible -> tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
@@ -577,7 +577,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // TV focus grab + re-assert (issue #174): the surface Box's D-pad tier
+    // TV focus grab + re-assert: the surface Box's D-pad tier
     // receives keys only while its subtree holds focus. The grab runs whenever
     // the layer SHOULD own focus — controls hidden, sheet closed, no overlay
     // claiming focus — and the re-assert recovers any later loss (the
@@ -729,7 +729,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // ── Input mapping resolution (issue #171 generalized) ──────────────────
+    // ── Input mapping resolution (generalized) ──────────────────
     // Every input tier — touch arms, tap zones, wheel rows, keyboard keys,
     // TV D-pad controls — resolves through the ONE persisted mapping
     // (uiState.gestures.inputMap). [inputGates] snapshots the per-arm
@@ -737,7 +737,7 @@ fun VideoPlayerScreen(
     // the input dispatcher consults (the reader-lambda rule above).
     val inputGates = remember(uiState.gestures.inputMap) { PlayerInputGates.of(uiState.gestures.inputMap) }
     val currentInputMap by rememberUpdatedState(uiState.gestures.inputMap)
-    // The overflow menu's quick toggles (issue #171): the six high-frequency
+    // The overflow menu's quick toggles: the six high-frequency
     // gesture gates (both edge-swipe halves included), tap-to-flip
     // mid-playback. Labels resolve through the core:ui input-label seam
     // against the CURRENT map — a swapped side pairing relabels in place
@@ -963,7 +963,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    // TV sink (issue #174): while the TV D-pad layer is up, publish its EXACT
+    // TV sink: while the TV D-pad layer is up, publish its EXACT
     // arm set ([tvDpadConfig] — the SAME instance the focused-dispatch
     // modifier runs, so the two dispatch paths can never diverge) to the
     // platform key bridge, so keys that reach nothing — Compose's null-focus

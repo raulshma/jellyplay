@@ -37,18 +37,16 @@ internal object ExperimentalSettingsIds {
 }
 
 /**
- * Settings-search items for the "Experimental" group, derived (Stage A
- * pilot) from the domain's spec declarations in
+ * Settings-search items for the "Experimental" group, derived from the
+ * domain's spec declarations in
  * [ExperimentalPreferenceSpecs.searchEntries]: the semantics (ids, keywords,
  * category keys, isAdvanced, platform rules, route kinds) are declared once
  * next to
  * [com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore];
  * this file is only the id → resource/icon binding table, the domain's
- * routeKind → Route map, plus the derivation call. The ids below are
- * IDENTICAL to the retired hand-written list (the screen entry, the three
- * feature toggles, the *arr settings hub) so deep-linking,
- * `SettingsScreenGroups` membership and the
- * `SettingsCatalogScreenContractTest` source scan keep passing unchanged.
+ * routeKind → Route map, plus the derivation call. The ids below cover the
+ * screen entry, the three feature toggles and the *arr settings hub, so
+ * deep-linking and `SettingsScreenGroups` membership stay stable.
  * Aggregated in [SettingsSearchCatalog] via [SettingsScreenGroups].
  */
 private val searchRoutes: Map<String, Route> = mapOf(

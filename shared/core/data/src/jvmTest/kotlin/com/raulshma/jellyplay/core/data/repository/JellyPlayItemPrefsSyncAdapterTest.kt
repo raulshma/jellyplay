@@ -33,7 +33,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Adapter tests for the `itemprefs` namespace (the settings-backup wave): a
+ * Adapter tests for the `itemprefs` namespace (the settings-backup cluster): a
  * real in-memory Room for the `item_playback_preferences` store plus a
  * temp-file DataStore mirror — the `"{scope}/{key}"` keying with full payload
  * values, the mirror-based dirty/deleted detection, both delete directions,

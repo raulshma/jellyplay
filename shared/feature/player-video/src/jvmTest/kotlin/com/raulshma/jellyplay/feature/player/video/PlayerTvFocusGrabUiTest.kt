@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
 
 /**
  * TV twin of [PlayerKeyboardFocusGrabUiTest] for [PlayerTvFocusGrabEffect]
- * (issue #174): the surface Box's D-pad tier only receives keys while its
+ * The surface Box's D-pad tier only receives keys while its
  * subtree holds Compose focus, and on Android there is no topmost key-input
  * node above the player for the null-focus fallback to land on — so a lost
  * focus after the controls auto-hide silenced EVERY remote key while Back
@@ -134,7 +134,7 @@ class PlayerTvFocusGrabUiTest {
     @Test
     fun `re-assert recovers focus when an outside node steals it after the grab`() =
         runComposeUiTest {
-            // Issue #174's post-hide reality: after the controls auto-hid, focus
+            // The post-hide reality: after the controls auto-hid, focus
             // could be taken by something outside the layer (the exiting play
             // button's disposal, an overlay, an engine-surface shuffle) with no
             // re-grab — every subsequent key died. A sibling focusable steals

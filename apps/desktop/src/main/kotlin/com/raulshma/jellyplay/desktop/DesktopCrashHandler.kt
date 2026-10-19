@@ -81,7 +81,7 @@ class DesktopCrashHandler(
     }
 
     /**
-     * Scope-level twin of the default handler. Deliberately does NOT rethrow:
+     * Scope-level counterpart of the default handler. Deliberately does NOT rethrow:
      * logging is the contract, recovery policy belongs to the scope.
      */
     val coroutineExceptionHandler: kotlinx.coroutines.CoroutineExceptionHandler =

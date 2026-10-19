@@ -65,7 +65,7 @@ class SearchViewModelTest {
 
     // The browse-catalogue enrichments seam — the filter sheets' tag facet
     // reads this seam (off the wide repository surface); the fake records the
-    // call count the repository-mock verifications used to pin.
+    // call count the tests pin.
     private val catalogueEnrichments = object : MediaCatalogueEnrichments {
         var tagsResult: Result<List<String>> = Result.success(emptyList())
         var tagsCalls: Int = 0
@@ -85,7 +85,7 @@ class SearchViewModelTest {
     private lateinit var mediaRepository: MediaRepository
     private lateinit var libraryApiClient: LibraryApiClient
 
-    /** Plan 03: silent grid mutations delegate here; relaxed mock is enough. */
+    /** Silent grid mutations delegate here; relaxed mock is enough. */
     private val userDataMutator: UserDataMutator = mockk(relaxed = true)
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var seerrRepository: SeerrRepository

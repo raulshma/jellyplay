@@ -441,10 +441,9 @@ class ArtistDetailViewModelTest {
         assertEquals(albums, viewModel.albums)
     }
 
-    // The no-stack/skip-re-arm choreography pair this suite used to re-pin is
-    // module behaviour now — DeferredFetchCoordinatorTest owns that table;
-    // this suite pins the host adapter's own surfaces (pair publish, heal,
-    // guard, spinner).
+    // The no-stack/skip-re-arm choreography pair is module behaviour —
+    // DeferredFetchCoordinatorTest owns that table; this suite pins the host
+    // adapter's own surfaces (pair publish, heal, guard, spinner).
 
     @Test
     fun refreshArtist_bypassesTheDetailCache() = runTest(mainDispatcher) {

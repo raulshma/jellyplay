@@ -39,7 +39,7 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
  *  footer's "% complete" label (the [PosterCard] parity param; the whole
  *  book-vs-time meta decision — admission, percent math, remaining/total
  *  ladder — lives in [mediaCardFooterMeta]).
- * @param trickplayPeek H13's loaded preview tile for the TV focus peek; null
+ * @param trickplayPeek the loaded preview tile for the TV focus peek; null
  *  (the default — touch never loads one) renders nothing. The overlay mounts
  *  on TV whenever the row passes a loader, so its fade-out survives the peek
  *  flipping to null.
@@ -64,7 +64,7 @@ fun WideMediaCard(
     // (was recomputed on every recomposition of the card).
     val progressPercent = item.rememberProgressFraction() ?: 0f
     val playButtonSize = if (isTv) 44.dp else 36.dp
-    // H15 anti-spoiler: the one decision fold the title and the footer both
+    // Anti-spoiler: the one decision fold the title and the footer both
     // consume (see [spoilerSafeCardState]) — episode titles on resume/next-up
     // cards are watch-state spoilers, so the title degrades to the series
     // name when the mode is on.
@@ -75,7 +75,7 @@ fun WideMediaCard(
     } else {
         item.seriesName.orEmpty()
     }
-    // H11 quality chips: gated on the card prefs AND suppressed in
+    // Quality chips: gated on the card prefs AND suppressed in
     // performance mode — the same gate the dominant-color extraction uses.
     val qualityBadges = if (!LocalPerformanceMode.current && cardPrefs.showQualityBadges) {
         item.qualityBadges
@@ -132,7 +132,7 @@ fun WideMediaCard(
         showProgress = progressPercent > 0f,
         progressFraction = progressPercent,
         overlays = {
-            // H13: the TV focus peek, anchored just above the progress bar
+            // The TV focus peek, anchored just above the progress bar
             // (z-order: under the bar itself, same stack as the badges — the
             // bar draws last in the scaffold). TV-only mount; the peek fades
             // itself out, so it stays mounted while [trickplayPeek] is null.
@@ -144,7 +144,7 @@ fun WideMediaCard(
                         .padding(bottom = TrickplayPeekBottomPadding),
                 )
             }
-            // Top-left stack: the H11 quality chips below the rating badge
+            // Top-left stack: the quality chips below the rating badge
             // (the poster card's column shape — a lone child renders exactly
             // where the former standalone rating badge sat). Rating badges
             // are never spoilers; quality chips are pre-suppressed via the
@@ -165,7 +165,7 @@ fun WideMediaCard(
             // The whole book-vs-time meta decision is [mediaCardFooterMeta]'s
             // (see MediaCardFooters.kt); this shell only renders it — with the
             // wide card's "•"-only-after-leading-text rule and labelSmall style.
-            // The H15 anti-spoiler mode drops the "Xm left" segment.
+            // The anti-spoiler mode drops the "Xm left" segment.
             val footerMeta = remember(item, bookProgressFractionOverride, spoilerSafe) {
                 mediaCardFooterMeta(
                     item,

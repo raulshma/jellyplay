@@ -105,7 +105,7 @@ class NotificationDispatcher(
     }
 
     /**
-     * The companion-plugin's UnifiedPush payload (the push wave) — the same
+     * The companion-plugin's UnifiedPush payload (push support) — the same
      * tray surface as [dispatchPluginNewMedia], fed by the push receiver.
      * The generic payload contract is
      * `{"title": …, "body": …, "kind": "new-media"|"broadcast"|"message", "itemId": …?}`:
@@ -199,7 +199,7 @@ class NotificationDispatcher(
     }
 
     /**
-     * D12: one opted-in series' new-episode announcement — posted to the
+     * One opted-in series' new-episode announcement — posted to the
      * shared [NotificationChannelManager.CHANNEL_NEW_EPISODES] channel (the
      * per-series path reuses that fixed channel so the channel count stays
      * bounded), with the same series/season/episode framing the library
@@ -589,7 +589,7 @@ class NotificationDispatcher(
             PLUGIN_NOTIFICATION_ID_BASE +
                 ((itemId.hashCode().toLong() and 0xFFFFFFFFL).toInt() % PLUGIN_NOTIFICATION_ID_SLOTS)
 
-        // UnifiedPush message pushes (the push wave) sit one slot-family above
+        // UnifiedPush message pushes (push support) sit one slot-family above
         // the new-media family so a hashed itemId and a hashed (title, body)
         // pair can never collide.
         private const val PLUGIN_PUSH_MESSAGE_ID_BASE =
@@ -601,14 +601,14 @@ class NotificationDispatcher(
                 (((31 * title.hashCode()) + body.hashCode()).toLong() and 0xFFFFFFFFL)
                     .toInt() % PLUGIN_NOTIFICATION_ID_SLOTS
 
-        // D12's series-episode family sits one slot-family above the push
+        // The series-episode family sits one slot-family above the push
         // message family so a hashed (series, episode) pair can never collide
         // with a push text id.
         private const val SERIES_EPISODE_NOTIFICATION_ID_BASE =
             PLUGIN_PUSH_MESSAGE_ID_BASE + PLUGIN_NOTIFICATION_ID_SLOTS
 
         /**
-         * Stable per-(series, episode) id for a D12 series notification —
+         * Stable per-(series, episode) id for a series notification —
          * re-delivery of the same episode coalesces instead of stacking.
          */
         internal fun seriesEpisodeNotificationIdFor(seriesId: String, episodeId: String): Int =

@@ -174,7 +174,7 @@ internal fun PlayerWindowSessionEffects(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Issue #145: the screen lock has no lifecycle reset anywhere, and its
+    // The screen lock has no lifecycle reset anywhere, and its
     // overlay is a transparent fillMaxSize layer that consumes every
     // pointer event (LockScreenOverlay). If it stayed engaged across a system
     // lock/unlock, the player silently swallowed all input after unlock.

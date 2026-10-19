@@ -14,24 +14,22 @@ import org.jetbrains.compose.resources.StringResource
 
 /**
  * The scheduled-task state presentation table — the [ScheduledTasksScreen]
- * state `when`s folded into one tested home (the module's presentation-table
+ * state decisions in one tested home (the module's presentation-table
  * precedent: the requests/arrqueue label+color tables). Three consumers read
  * it: the row's [TaskStateBadge] (label + tint), the row's per-state action
  * (`cancellable` → Stop, `startable` → Run, neither → the static
  * "Cancelling..." text) and the dashboard's [com.raulshma.jellyplay.feature.admin.dashboard.components.RunningTasksCard]
- * state dot (same tint ladder). Labels are the badge's former hardcoded
- * strings, single-sited here — i18n is a follow-up, NOT a string-resource
- * migration.
+ * state dot (same tint ladder). Labels are single-sited here, not yet string
+ * resources.
  *
  * Color rides a [TaskColorRole] rather than a resolved [Color] because the
  * RUNNING/MUTED arms are MaterialTheme roles (composable reads — a pure
  * table cannot name them) while WARNING is a static [StatusColors] value;
  * [toColor] is the trivial composable-side map. The MUTED arm is
  * parameterized: the dashboard's dot renders it `outline`, the screen's text
- * `onSurfaceVariant` — both former behaviors preserved verbatim.
+ * `onSurfaceVariant`.
  *
- * Declared delta: none — every decision is byte-identical to the `when`s this
- * replaces. The dashboard scan machine's `state == TaskState.RUNNING`
+ * The dashboard scan machine's `state == TaskState.RUNNING`
  * special-case deliberately stays raw-enum code: it reads the domain fact
  * "the server reports the task running", not a presentation row (the table's
  * `cancellable` happens to coincide today but could legitimately drift).

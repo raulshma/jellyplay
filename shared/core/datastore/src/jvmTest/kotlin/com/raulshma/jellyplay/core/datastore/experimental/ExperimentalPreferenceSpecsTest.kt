@@ -11,12 +11,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 /**
- * Pins the Experimental domain's spec declarations (Stage A pilot): the
- * search entries must stay byte-equivalent to the retired hand-written
- * `ExperimentalSettingsSearchItems` list (ids, order, category keys,
- * keywords, isAdvanced, platform rules — the derivation source), and every
- * knob spec must bind the store's canonical key names / defaults / reset
- * categories, so the specs cannot drift the store they decorate.
+ * Pins the Experimental domain's spec declarations: the
+ * search entries must keep the `ExperimentalSettingsSearchItems` ids, order,
+ * category keys, keywords, isAdvanced and platform rules (the derivation
+ * source), and every knob spec must bind the store's canonical key names /
+ * defaults / reset categories, so the specs cannot drift the store they
+ * decorate.
  */
 class ExperimentalPreferenceSpecsTest {
 
@@ -52,7 +52,7 @@ class ExperimentalPreferenceSpecsTest {
 
         val peek = entry("MEDIA_CARD_PEEK")
         assertEquals("ss_MEDIA_CARD_PEEK_title", peek.titleKey)
-        // One-key family: the verbatim ss_ twin was deleted — the screen-face key survives.
+        // One-key family: a single screen-face key.
         assertEquals("settings_exp_press_hold_preview_subtitle", peek.subtitleKey)
         assertEquals("ss_cat_experimental", peek.categoryKey)
         assertEquals(listOf("press", "hold", "peek", "preview", "media card", "long press", "experimental"), peek.keywords)
@@ -78,7 +78,7 @@ class ExperimentalPreferenceSpecsTest {
         assertEquals("arr_settings", arrSettings.routeKind)
         assertFalse(arrSettings.isAdvanced)
 
-        // Every entry rides the default platform rule (the retired list set no platforms).
+        // Every entry rides the default platform rule (no entry sets platforms).
         ExperimentalPreferenceSpecs.searchEntries.forEach {
             assertEquals(PreferencePlatformRule.ALL, it.platformRule, "entry ${it.id} changed platform availability")
         }

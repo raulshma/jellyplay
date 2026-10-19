@@ -84,7 +84,7 @@ internal fun YouTubeVideoCard(
 }
 
 /**
- * D3: the local-trailer variant of [TrailerVideoCard] — same geometry, but
+ * The local-trailer variant of [TrailerVideoCard] — same geometry, but
  * the thumbnail is the library item's primary image (no YouTube key) and the
  * card wears the "Local" badge so the two sources read apart in one row.
  */
@@ -114,7 +114,7 @@ internal fun LocalTrailerVideoCard(
  * The shared card body behind [YouTubeVideoCard] and [LocalTrailerVideoCard]:
  * 240dp 16:9 artwork over the bottom scrim, one-line [title] (falling back to
  * [fallbackLabel] when null), the center play glyph, and the optional
- * top-end [badgeLabel] pill (the D3 "Local" source badge). Empty
+ * top-end [badgeLabel] pill (the "Local" source badge). Empty
  * [thumbnailUrl] renders the placeholder box (the former null-thumbnail
  * branch).
  */

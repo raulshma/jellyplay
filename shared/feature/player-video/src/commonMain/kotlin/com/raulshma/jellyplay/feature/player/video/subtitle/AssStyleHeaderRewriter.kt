@@ -26,7 +26,7 @@ import kotlin.math.roundToInt
  * unchanged, and non-FORCE styles are never rewritten (SCALE mode keeps
  * today's `AssRender.setFontScale` behavior).
  *
- * Scope (the C3 spec asked about "font/color/position" overrides): this
+ * Scope ("font/color/position" overrides): this
  * rewrite deliberately covers font/colors/border/size but NOT authored ASS
  * positioning (alignment/margins) — rewriting those would break
  * signage/karaoke event positioning; the user's vertical position keeps

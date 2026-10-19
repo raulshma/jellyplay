@@ -10,12 +10,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Android actual of the [StorageMountsProvider] seam. The legacy
- * `DownloadStorageLayout.availableMounts()` body is pure framework
- * (filesDir + `Context.getExternalFilesDirs` + `Environment.isExternalStorageRemovable`
- * + `StatFs`), so it is inlined here verbatim against this module's
- * module-local [StorageMount]/[StorageMountKind] — no legacy core:data types
- * (they are not visible from this module), no app-side Koin override needed.
+ * Android actual of the [StorageMountsProvider] seam. Mount enumeration is
+ * pure framework (filesDir + `Context.getExternalFilesDirs` +
+ * `Environment.isExternalStorageRemovable` + `StatFs`), so it lives here
+ * against this module's module-local [StorageMount]/[StorageMountKind] — no
+ * core:data types (they are not visible from this module), no app-side Koin
+ * override needed.
  *
  * Enumerates the storage mounts the user can pick for downloads, in a stable
  * order: INTERNAL first, then each app-private external root (primary emulated

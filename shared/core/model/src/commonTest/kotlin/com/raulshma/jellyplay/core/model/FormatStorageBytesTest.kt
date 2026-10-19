@@ -5,8 +5,8 @@ import kotlin.test.assertEquals
 
 /**
  * Pins the ONE storage-byte table ([toStorageBytesValue] + [formatBytes]) that
- * the four formerly-drifted formatters (admin Logs, PhotoViewer,
- * DetailDownloadDialog, ArrQueue) now read instead of declaring their own
+ * the four storage formatters (admin Logs, PhotoViewer,
+ * DetailDownloadDialog, ArrQueue) read instead of declaring their own
  * divisor/rounding conventions: band boundaries on the ÷1024 ladder, the
  * deliberately-no-TB-band policy (terabyte counts stay in the GB arm), and
  * negative/zero handling (any value below 1024 — including negatives — stays

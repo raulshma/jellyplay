@@ -49,7 +49,7 @@ internal object EngineConfigBuilder {
      * enters through [buildFromSlices] directly — the EngineConfigSync
      * controller takes the slices as narrow constructor lambdas, so the
      * state bag never crosses the controller boundary (the ownership
-     * ratchet).
+     * guard).
      */
     fun build(
         state: VideoPlayerUiState,

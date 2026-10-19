@@ -5,7 +5,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins the D14 one-shot semantics: exactly one consume per arm, and a
+ * Pins the one-shot semantics: exactly one consume per arm, and a
  * never-armed holder reads false (the "tests that don't wire it" default).
  */
 class CinemaModeOverrideTest {

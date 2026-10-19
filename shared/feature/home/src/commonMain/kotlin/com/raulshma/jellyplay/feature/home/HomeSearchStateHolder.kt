@@ -17,9 +17,8 @@ import kotlinx.coroutines.launch
 /**
  * Owns the home search bar's entire state surface: the live query, the
  * result slice, the active flag, the recent-history list and the
- * recoverable-action (undo) channel for history deletes. Everything here was
- * previously scattered across HomeViewModel fields and collectors; it is one
- * concern — "what the search bar shows" — and now has one owner.
+ * recoverable-action (undo) channel for history deletes. It is one
+ * concern — "what the search bar shows" — with one owner.
  *
  * Recomposition architecture (see the HomeSearchState KDoc): the per-keystroke
  * query and the results slice live in their own [searchQuery]/[searchState]
@@ -79,15 +78,14 @@ internal class HomeSearchStateHolder(
     val searchHistory: StateFlow<List<SearchHistoryItem>> = mediaSearchEngine.recentHistory()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Recoverable-action snackbars for home (search-history delete/clear).
-     * Home previously had no SnackbarHost at all */
+    /** Recoverable-action snackbars for home (search-history delete/clear). */
     private val _undoActions = undoActionChannel()
     val undoActions = _undoActions.receiveAsFlow()
 
     init {
         // Feed the engine's debounced preview results into the search slice.
-        // The local settings-search collector that used to sit beside it moved
-        // to the UI layer (HomeTopDockScrim), which owns the Android Context.
+        // The local settings-search collector lives in the UI layer
+        // (HomeTopDockScrim), which owns the Android Context.
         scope.launch {
             mediaSearchEngine.preview(_searchQuery).collect { state ->
                 _searchState.update {

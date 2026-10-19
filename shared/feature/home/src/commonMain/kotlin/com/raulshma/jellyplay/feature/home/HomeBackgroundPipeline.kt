@@ -20,8 +20,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
  * In light themes the raw `colorScheme.background` is used directly. The nav
  * bar mirrors the resolved background so the OS chrome melts into the app.
  *
- * Extracted verbatim from the former `MainHomeContent` so that composable no
- * longer owns the theme pipeline.
+ * The theme pipeline lives here rather than in `MainHomeContent`.
  *
  * @param dynamicTheming whether artwork-derived theming is enabled.
  * @param backdropUrl the current hero backdrop URL used to extract palette

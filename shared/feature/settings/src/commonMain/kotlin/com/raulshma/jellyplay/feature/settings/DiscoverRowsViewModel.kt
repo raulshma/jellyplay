@@ -208,9 +208,9 @@ class DiscoverRowsViewModel(
             mediaRepository.getLibraryFolders().onSuccess { _libraryFolders.value = it }
             mediaRepository.getStudios().onSuccess { _studios.value = it }
         }
-        // Genres/tags ride the shared holder (independent coroutines + retry),
-        // instead of the former sequential no-retry reads inside the launch
-        // above — same end state, one retry on transient failures.
+        // Genres/tags ride the shared holder (independent coroutines + retry)
+        // instead of sequential reads inside the launch above — same end
+        // state, one retry on transient failures.
         filterDimensions.load()
     }
 

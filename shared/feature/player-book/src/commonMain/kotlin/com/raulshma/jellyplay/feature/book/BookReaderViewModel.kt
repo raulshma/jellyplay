@@ -63,7 +63,7 @@ import kotlin.math.roundToInt
  * Marking a book read stays a user action (see docs/book-reader.md): nothing
  * here auto-sets the played flag at the last page or a percent threshold.
  *
- * Reader marks (Wave 3) live in [ReaderAnnotationsRepository] and are exposed
+ * Reader marks live in [ReaderAnnotationsRepository] and are exposed
  * per loaded item through [bookmarks]/[annotations] (re-subscribed per load);
  * position bookmarks additionally mirror to the companion plugin through
  * [BookmarksSyncRepository] (push on toggle/delete, pull on [load] — both
@@ -77,7 +77,7 @@ import kotlin.math.roundToInt
  * screen (which jumps once the host is READY), and every debounced progress
  * flush re-persists the current anchor.
  *
- * Read aloud + sleep timer (Wave 5) follow the same split: the speech LOOP
+ * Read aloud + sleep timer follow the same split: the speech LOOP
  * ([ReaderSpeechController]) and the timer ([ReaderSleepTimer]) live here
  * over the [BookSpeechEngine] seam, while every host touch runs through the
  * attached [ReaderSessionPort] (the screen's reflowable session, bound by
@@ -123,12 +123,12 @@ class BookReaderViewModel(
     /**
      * Cross-player exclusivity (PlaybackFocus): read-aloud claims the audio
      * floor so background music pauses instead of mixing with the spoken
-     * word (ADR-0004). Defaulted to the vacuous [NoopPlaybackFocus] so tests
+     * word. Defaulted to the vacuous [NoopPlaybackFocus] so tests
      * and platforms without a binding keep single-player semantics.
      */
     private val playbackFocus: PlaybackFocus = NoopPlaybackFocus,
     /**
-     * Companion-plugin bookmark sync (ADR 0010, `bookmarks` feature): push
+     * Companion-plugin bookmark sync (the companion-plugin bookmarks feature): push
      * rides the toggle/delete marks actions, pull rides [load]. Defaulted to
      * the vacuous [NoopBookmarksSyncRepository] so tests and graphs without
      * the plugin cluster compile unchanged.
@@ -170,7 +170,7 @@ class BookReaderViewModel(
      */
     private val marksItemId = MutableStateFlow<String?>(null)
 
-    /** Read aloud (Wave 5) + sleep timer + auto-scroll coordination. */
+    /** Read aloud + sleep timer + auto-scroll coordination. */
 
     /**
      * The screen session seam: the reflowable composition attaches its
@@ -249,7 +249,7 @@ class BookReaderViewModel(
                 }
             }
         }
-        // Displaced claimant (newest-wins, ADR-0004): the user started music
+        // Displaced claimant (newest-wins): the user started music
         // (or later, video) while read-aloud held the floor — pause the loop.
         // Speech NEVER auto-resumes; the module ignores regains too, so the
         // user's next play tap is the only way back.

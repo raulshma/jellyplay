@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.PersonRef
 
 /**
  * The credit-group partition behind the person screen's second chip row
- * (D18). Jellyfin distinguishes the role kind only by the free-form
+ *. Jellyfin distinguishes the role kind only by the free-form
  * [PersonInfo.type] string (Actor, GuestStar, Director, Writer, Producer,
  * Composer, …) — the same vocabulary [partitionCastAndCrew] splits. The
  * free-text [PersonInfo.role] stays the "as {Role}" card label; this enum is
@@ -42,7 +42,7 @@ internal fun filmographyCreditFor(item: MediaItem, personId: String): PersonInfo
     item.people.firstOrNull { it.id == personId }
 
 /**
- * The filmography card's "as {Role}" subtitle text (D18): the credit's
+ * The filmography card's "as {Role}" subtitle text: the credit's
  * free-text role, trimmed. Null when there is no matching credit or the role
  * text is blank (crew credits usually carry only the typed kind) — those
  * cards render unchanged.
@@ -67,11 +67,11 @@ internal fun filmographyCredits(items: List<MediaItem>, personId: String): Map<S
         }
     }
 
-/** Default co-star cap for the D20 "frequently appears with" row. */
+/** Default co-star cap for the "frequently appears with" row. */
 internal const val COSTAR_LIMIT = 10
 
 /**
- * The D20 co-star selection, pure: drop the person themselves (the appearsIn
+ * The co-star selection, pure: drop the person themselves (the appearsIn
  * query returns everyone credited on the anchor item, including them),
  * preserve the server's order, cap at [limit].
  */

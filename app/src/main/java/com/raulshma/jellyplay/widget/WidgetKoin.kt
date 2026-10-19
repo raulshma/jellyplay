@@ -29,7 +29,7 @@ internal object WidgetKoin {
     val audioPlaybackManager: AudioPlaybackManager get() = get()
     val nowPlayingWidgetUpdater: NowPlayingWidgetUpdater get() = get()
 
-    /** The raw application-container resolution every site used to restate. */
+    /** The raw application-container resolution shared by every site. */
     inline fun <reified T : Any> get(): T = KoinPlatform.getKoin()!!.get()
 }
 

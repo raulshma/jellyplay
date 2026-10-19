@@ -51,7 +51,7 @@ import kotlinx.coroutines.flow.Flow
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * H19 — one watch-party/presence chip's render model: ANOTHER user's active
+ * One watch-party/presence chip's render model: ANOTHER user's active
  * session that is currently playing something, with the SyncPlay group id
  * ([joinableGroupId]) when a visible group is playing the same item — the
  * chip then offers the "Join" primary action beside the default open-details
@@ -83,7 +83,7 @@ data class HomePresenceChip(
  */
 internal object HomePresenceChipsMath {
 
-    /** The plan's cap — at most 3 presence chips render on home. */
+    /** At most 3 presence chips render on home. */
     const val MAX_CHIPS: Int = 3
 
     /**
@@ -153,7 +153,7 @@ internal object HomePresenceChipsMath {
 }
 
 /**
- * The H19 presence-chips controller — the one place the chips' data policy
+ * The presence-chips controller — the one place the chips' data policy
  * lives (the [HomeGenreRailCache] precedent: an internal, VM-scoped feature
  * class wired as a Koin factory; NOT a core/data controller — home keeps its
  * opt-in decoration surfaces feature-local). Owns:
@@ -162,15 +162,14 @@ internal object HomePresenceChipsMath {
  *    in practice, so the FIRST [refresh] of a home session probes it — a
  *    failed probe (non-admin / offline server) flips the controller to
  *    unavailable and every later [refresh] short-circuits to empty WITHOUT
- *    touching the network again (hide-forever-per-session, the plan's
- *    degradation pattern). A user switch re-arms the probe: the identity
+ *    touching the network again (hide-forever-per-session). A user switch re-arms the probe: the identity
  *    swap underneath the admin client can change the answer, so the new
  *    user's session probes afresh (and the dismiss memory resets with it).
  *  - the session filter + cap + SyncPlay join availability
  *    ([HomePresenceChipsMath], one group-list read per refresh, only when a
  *    candidate chip exists).
  *  - the per-chip dismiss memory: an in-memory, session-scoped set —
- *    deliberately NOT persisted (the plan's inline-dismiss contract).
+ *    deliberately NOT persisted (the inline-dismiss contract).
  *
  * Live updates: POLL on the home refresh cadence
  * (`HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS`, driven by [poll] — the
@@ -310,7 +309,7 @@ internal class HomePresenceChipsController(
 }
 
 /**
- * The H19 poll gate — pref on, online mode, the signed-in user id (the
+ * The poll gate — pref on, online mode, the signed-in user id (the
  * probe's identity key) and the app-foreground mirror (the cadence must not
  * poll from a backgrounded process). One value so the combine's
  * [kotlinx.coroutines.flow.distinctUntilChanged] compares all four
@@ -326,7 +325,7 @@ internal data class PresenceGate(
 )
 
 /**
- * Phone layout: not TV and a compact window — the H19 row's Column-vs-LazyRow
+ * Phone layout: not TV and a compact window — the row's Column-vs-LazyRow
  * switch. Pure over its inputs so the layout test pins this predicate, not a
  * re-implementation of it.
  */
@@ -334,9 +333,9 @@ internal fun isPhoneLayout(isTv: Boolean, windowSizeClass: WindowSizeClass): Boo
     !isTv && windowSizeClass == WindowSizeClass.Compact
 
 /**
- * The H19 presence-chip row — a LazyRow of [HomePresenceChipEntry]s (or a full-width
+ * The presence-chip row — a LazyRow of [HomePresenceChipEntry]s (or a full-width
  * Column in phone layout), mounted under the top dock (the first HomeScreen-owned
- * slot of the content column, above the H17 stats card). Hidden by the caller whenever
+ * slot of the content column, above the stats card). Hidden by the caller whenever
  * the list is empty (prop off, offline, probe failure, no qualifying sessions).
  */
 @Composable
@@ -384,7 +383,7 @@ internal fun HomePresenceChipRow(
  * One "Alex is watching Dune" chip: the label (tap → item detail), the
  * Join primary action when a SyncPlay group covers the session, and the
  * per-chip dismiss. Visual language follows [HomeStatsCard] (the glass
- * surface tile) with the H18 rail's row shape.
+ * surface tile) with the rail's row shape.
  */
 @Composable
 private fun HomePresenceChipEntry(

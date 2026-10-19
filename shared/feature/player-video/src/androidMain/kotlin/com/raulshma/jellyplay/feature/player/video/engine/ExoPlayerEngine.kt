@@ -820,7 +820,7 @@ class ExoPlayerEngine(
     }
 
     /**
-     * The ExoPlayer residue cleared alongside the base resets (C5): stale
+     * The ExoPlayer residue cleared alongside the base resets: stale
      * cues from the previous item would linger into the new one's loading
      * window, and the previous episode's buffered position, decoder counters,
      * and "Stats for Nerds" snapshot would surface briefly on the new item.
@@ -1182,7 +1182,7 @@ class ExoPlayerEngine(
 
     override val volume: Float get() = cachedVolume
 
-    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // ── Volume / mute seams ────────────────────────────────────────────
     // The four command bodies are final templates in ReloadablePlayerEngine;
     // ExoPlayer contributes only the native write/read, the Media3 mute
     // vocabulary (zero the handle on mute, restore it to full on unmute — the

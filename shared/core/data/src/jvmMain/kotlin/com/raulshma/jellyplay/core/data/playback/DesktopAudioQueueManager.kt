@@ -165,7 +165,7 @@ import kotlinx.coroutines.launch
  *  - **[stopAndRelease] no longer resets `artistId`** — declared delta of the
  *    [NowPlayingTracker] adoption: the tracker's `clear()` returns the five
  *    display fields to their defaults but deliberately keeps the artist id
- *    (Android's stop behaved identically pre-extraction; the desktop's former
+ *    (Android's stop behaves identically; the desktop's former
  *    hand-rolled reset cleared all six). Harmless surface — the flow is only
  *    read while a now-playing row renders — and it keeps ONE clear shape
  *    shared by both managers.

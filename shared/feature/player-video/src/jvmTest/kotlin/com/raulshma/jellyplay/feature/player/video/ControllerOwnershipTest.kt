@@ -7,7 +7,7 @@ import kotlin.test.Test
 import java.io.File
 
 /**
- * Ratchet against reintroducing the god-state wiring pattern.
+ * Guard against reintroducing the god-state wiring pattern.
  *
  * 1. The twenty migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
@@ -25,11 +25,11 @@ import java.io.File
  *    SubtitleStyleController, the background-cast pair into the VM as two
  *    private funs. VideoSessionHost left the list with its deletion; the
  *    `PlayerWiring` builder inherited its composition-surface exemption and
- *    handed it to [PlaybackSession] at the C6 collapse — the composition
+ *    handed it to [PlaybackSession] — the composition
  *    root is the one module besides the VM that legitimately carries the
  *    sanctioned god-state wirings (the SettingsProjector pair; see
  *    godStateWiringCount_neverIncreases).)
- *    DECLARED EXCEPTION (the ratchet's ONE sanctioned state transformer):
+ *    DECLARED EXCEPTION (the guard's ONE sanctioned state transformer):
  *    the prefs projection [SessionLoadOutputs.onPrefsProjected] forwards is
  *    spelled through the transparent `PrefsProjection` alias declared beside
  *    the outputs interface it exists to satisfy. The projection is the
@@ -96,7 +96,7 @@ class ControllerOwnershipTest {
     private fun File.sourceText(): String = readText(Charsets.UTF_8)
 
     /**
-     * Removes line and block comments so the ratchet checks *code*, not KDoc
+     * Removes line and block comments so the guard checks *code*, not KDoc
      * prose (the controllers legitimately mention VideoPlayerUiState in
      * documentation explaining what they do NOT take).
      */
@@ -148,7 +148,7 @@ class ControllerOwnershipTest {
                 "$controller must not reference VideoPlayerUiState (its interface is its state class + commands)",
             )
             // The composition root's sanctioned exception: the session carries
-            // the SettingsProjector god-state wiring PAIR since the C6
+            // the SettingsProjector god-state wiring PAIR since the 
             // collapse (the former PlayerWiring builder's — the count is
             // pinned unchanged by godStateWiringCount_neverIncreases). A
             // controller taking a transformer is still a violation.
@@ -183,12 +183,12 @@ class ControllerOwnershipTest {
 
     @Test
     fun videoPlayerViewModel_totalLineCeiling() {
-        // The size ratchet companion to the member-count ceiling in
+        // The size guard companion to the member-count ceiling in
         // VideoPlayerViewModelOwnershipTest: the VM shrinks only by moving
         // clusters into extracted modules (constructor-lambda controllers),
-        // so its TOTAL line count is a one-way ratchet too. Baseline: 1_752
+        // so its TOTAL line count is a one-way guard too. Baseline: 1_752
         // — the then-current 1_751 lines plus one line of slack, pinned
-        // EXACTLY like every other ratchet in this suite. Lowered to 1_637
+        // EXACTLY like every other guard in this suite. Lowered to 1_637
         // when the 2026-10-14 session-slice migration deleted the eight
         // controller pass-throughs (their reads moved to the
         // session/SessionSlices.kt projections). Lower the ceiling when a
@@ -209,11 +209,11 @@ class ControllerOwnershipTest {
     @Test
     fun playbackSession_totalLineCeiling() {
         // The composition-root companion to videoPlayerViewModel_totalLineCeiling:
-        // the C6 collapse folded the former PlayerWiring builder INTO the
+        // the former PlayerWiring builder folded INTO the
         // session, making it the player's largest surface, so its TOTAL line
-        // count is a one-way ratchet too. Baseline: 3_022 — the current
+        // count is a one-way guard too. Baseline: 3_022 — the current
         // line count by this suite's lineSequence count plus one line of
-        // slack, pinned EXACTLY like every other ratchet in this suite.
+        // slack, pinned EXACTLY like every other guard in this suite.
         // Lowered from 3_054 when the pure resume resolver
         // (resolveResumeTicks + its staleness constant) moved out to
         // ResumeTicks.kt. Lower the ceiling when a cluster moves out; never
@@ -236,8 +236,8 @@ class ControllerOwnershipTest {
         // The engine-flow collector launched from the VM's init used to call
         // into trackSelectionHelper, and the SessionEvent forwarder collected
         // playbackSession.events — so those properties had to be declared
-        // before the VM's init block. Since the `PlayerWiring` move — and,
-        // after the C6 collapse, the move INTO [PlaybackSession] itself — the
+        // before the VM's init block. Since the `PlayerWiring` fold INTO
+        // [PlaybackSession] itself, the
         // invariant is pinned at the composition root's source: every
         // collaborator the arm phase's collectors drive is constructed in the
         // class body BEFORE the arm function exists in the file, so no

@@ -8,7 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The Wave-3 secrets-block crypto: round-trip, the typed wrong-passphrase
+ * The secrets-block crypto: round-trip, the typed wrong-passphrase
  * outcome (GCM tag mismatch — also covers tampering), envelope parameter
  * checks (version/iterations/salt/nonce sizes, fresh randomness per call),
  * and the structural-failure guards. Real `PBKDF2WithHmacSHA256` at the

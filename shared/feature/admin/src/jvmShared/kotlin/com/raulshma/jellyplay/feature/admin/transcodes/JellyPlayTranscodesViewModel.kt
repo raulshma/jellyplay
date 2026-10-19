@@ -19,12 +19,10 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * The admin transcodes monitor's gate — plugin AVAILABLE **and** the
  * `transcodes` feature key present **and** the user's per-feature toggle on
- * (ADR 0010: the capability registry is the ONLY gating mechanism; the shared
+ * (the capability registry is the ONLY gating mechanism; the shared
  * [JellyPlayCapabilityGate] verdict, the toggle riding [JellyPlayFeatureGate],
  * the ONE per-feature seam). Admin-ness is enforced upstream by the admin
- * area's AdminRouteContainer — the existing admin gate, deliberately not
- * re-built here. (The local `TranscodesGate` enum this VM used to declare is
- * the shared [JellyPlayCapabilityState] now — same constants, one home.)
+ * area's AdminRouteContainer — the existing admin gate.
  */
 
 /** UI resolution of a session's `playMethod` wire string. */
@@ -70,7 +68,7 @@ data class TranscodesState(
  * Gating — admin && plugin AVAILABLE && `transcodes` feature. The admin half
  * is the admin area's existing AdminRouteContainer gate (this screen is only
  * reachable through it); the plugin half is the shared [JellyPlayCapabilityGate]
- * reading [JellyPlayPluginStatusStore] per ADR 0010 ("the capability registry
+ * reading [JellyPlayPluginStatusStore] ("the capability registry
  * is the ONLY gating mechanism"): no transcode fetch is ever issued while the
  * gate is off, so a stock server's plugin-route 404 is never observed here.
  *
@@ -102,7 +100,7 @@ class JellyPlayTranscodesViewModel(
     /**
      * The shared capability gate (the plugin capability gate module) — the
      * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
-     * store discipline this VM used to re-wire inline. Null with the store:
+     * store discipline. Null with the store:
      * direct construction (tests) without the plugin seam is gated off, final.
      */
     private val capabilityGate = statusStore?.let { JellyPlayCapabilityGate(it, scope) }
@@ -119,9 +117,8 @@ class JellyPlayTranscodesViewModel(
     private var initialLoadStarted = false
 
     /**
-     * The 5s gate-predicated auto-refresh cycle, registered once — the
-     * hand-rolled cancel-delay-fetch + stop pair this field used to be (the
-     * refresh cycle module). Each iteration fetches only while the gate is on
+     * The 5s gate-predicated auto-refresh cycle (the refresh cycle module),
+     * registered once. Each iteration fetches only while the gate is on
      * ([RefreshCycle] gate round): a stock server (or a missing feature key)
      * never produces a plugin-route request. The screen binds the cycle to
      * visibility via [start]/[stop].

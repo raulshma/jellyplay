@@ -30,9 +30,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  *    restoration, and
  *  - the TV back-stack pop focus-restore effect.
  *
- * Behaviour is identical to the inline implementation previously in
- * `HomeScreen.kt`; this groups it so `MainHomeContent` no longer owns scroll
- * plumbing.
+ * Grouping it here keeps scroll plumbing out of `MainHomeContent`.
  */
 class HomeScrollState internal constructor(
     val listState: LazyListState,
@@ -72,7 +70,7 @@ internal fun rememberHomeScrollState(
 
     // Persist the scroll position as the user scrolls (debounced) so it
     // survives process death. distinctUntilChanged runs BEFORE the debounce:
-    // unchanged frames (the common no-op emission) no longer keep
+    // unchanged frames (the common no-op emission) do not keep
     // resetting the debounce timer — the save lands 500 ms after the position
     // actually settles instead of after the stream goes quiet.
     LaunchedEffect(listState) {
@@ -91,8 +89,8 @@ internal fun rememberHomeScrollState(
  * Restores D-pad focus to the last-visited content row when returning to Home
  * (e.g. on a back-stack pop). `LaunchedEffect(Unit)` re-fires via the saveable
  * -state holder. Scrolled the saved row fully into view (so its FocusRequester
- * is attached, avoiding the half-clipped hero a minimal bring-into-view caused
- * previously) then re-requests focus.
+ * is attached, avoiding the half-clipped hero a minimal bring-into-view would
+ * cause) then re-requests focus.
  *
  * The scroll is deferred one frame (`withFrameNanos`) so the first frame
  * paints before the measure/layout work `scrollToItem` performs, avoiding

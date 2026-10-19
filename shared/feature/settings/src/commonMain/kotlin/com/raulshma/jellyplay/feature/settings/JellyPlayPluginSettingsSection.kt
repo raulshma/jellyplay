@@ -49,10 +49,9 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * The `group_jellyplay` section: the companion plugin's whole root-screen face
- * (ADR 0010) in ONE grouped row — the navigation entries (Sync across devices,
+ * in ONE grouped row — the navigation entries (Sync across devices,
  * Messages, My ratings, Your watching) above the per-feature switches, inside
- * a single [SettingsGroup] card instead of the five sibling sections these
- * used to be scattered across. The section hides unless the probe reports
+ * a single [SettingsGroup] card. The section hides unless the probe reports
  * AVAILABLE, and each row inside still rides its own gate: the sync entry
  * needs the `settings-sync` meta key exposed; the Messages / My ratings /
  * Your-watching entries need their feature key exposed AND the user's toggle
@@ -79,9 +78,7 @@ import org.jetbrains.compose.resources.stringResource
  * collector (running with the events session) performs the register/unregister
  * half.
  *
- * The Messages unread count — previously the messages entry's trailing text —
- * rides the collapsed group's header badge, so the signal survives the
- * consolidation. The inbox is refreshed once each visit where the messages
+ * The Messages unread count rides the collapsed group's header badge. The inbox is refreshed once each visit where the messages
  * gate is open (the session controller only refreshes it at stream start).
  *
  * Probing rides the section's visibility: opening settings is the only moment
@@ -126,7 +123,7 @@ internal fun SettingsJellyPlayPluginSection(
     val visibleToggles = JellyPlayFeatureRows.declared.filter { declared ->
         declared.featureKey in features && (!declared.adminOnly || isAdmin)
     }
-    // rowCount is a documented non-derivable (ADR 0009 rule 2): the four
+    // rowCount is a documented non-derivable: the four
     // navigation entries carry content gates with no admission vocabulary,
     // and the toggle half's membership comes from the LIVE probe registry,
     // so no declared group can count it.
@@ -203,13 +200,13 @@ internal fun SettingsJellyPlayPluginSection(
                     onClick = onOpenYourWatching,
                 )
             }
-            // ADR 0009 carve-out: unlike the static per-row emission bodies the
-            // ADR keeps hand-written, these rows are PROBE-DRIVEN — membership
+            // Unlike the static per-row emission bodies, these rows are
+            // PROBE-DRIVEN — membership
             // comes from the live `features` registry, not a static list, and
             // every row is the SAME uniform toggle payload. The only dynamic
             // faces (the admin lock and the push state machine's subtitle)
-            // stay inline at this emission site, per the ADR's "dynamic value
-            // reads stay at emission sites" rule.
+            // stay inline at this emission site (dynamic value reads stay at
+            // emission sites).
             visibleToggles.forEach { declared ->
                 val row = declared.row
                 val locked = jellyPlayFeatureLocked(declared.featureKey, forcedKeys)

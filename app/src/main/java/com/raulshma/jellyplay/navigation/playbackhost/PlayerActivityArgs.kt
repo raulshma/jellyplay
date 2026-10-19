@@ -8,10 +8,9 @@ import com.raulshma.jellyplay.PlayerActivity
  * Typed launch contract for [PlayerActivity] — the single adapter that both
  * **builds** and **parses** the intent extras the activity consumes.
  *
- * Producers and consumers that previously joined only through loose string
- * literals (the intent-building block formerly in JellyPlayApp's
- * `navigateFilter` and PlayerActivity's own hand-written parser) now share
- * this one file:
+ * Producers and consumers share this one file instead of joining only
+ * through loose string literals (an intent-building block and
+ * PlayerActivity's own hand-written parser):
  *
  *  - [buildIntent] writes the extras for the dedicated-activity host
  *    ([PlaybackHostRouter] answers [HostDecision.DedicatedActivity]).

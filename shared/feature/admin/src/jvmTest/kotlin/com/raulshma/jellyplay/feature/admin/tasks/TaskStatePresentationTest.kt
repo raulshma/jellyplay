@@ -13,10 +13,10 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the scheduled-task presentation tables ([TaskStatePresentation] state
- * rows and [triggerLabel] trigger chips) — the `when`s the tasks screen and
- * the dashboard's RunningTasksCard used to carry inline (the
- * ArrQueuePresentationTest rule: every arm pinned, resource objects compared
- * by identity). A table edit must update this file in lockstep.
+ * rows and [triggerLabel] trigger chips) — the decisions the tasks screen and
+ * the dashboard's RunningTasksCard read (the ArrQueuePresentationTest rule:
+ * every arm pinned, resource objects compared by identity). A table edit must
+ * update this file in lockstep.
  */
 class TaskStatePresentationTest {
 

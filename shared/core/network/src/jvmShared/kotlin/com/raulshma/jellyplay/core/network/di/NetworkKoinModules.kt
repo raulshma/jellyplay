@@ -148,7 +148,7 @@ val networkJvmModule: Module = module {
     single { AuthApiClientImpl(get(), get()) }
     single<AuthApiClient> { get<AuthApiClientImpl>() }
     // The get()-resolved TimeSource single is dataJvmModule's SystemTimeSource
-    // (D3: the seam moved to core:model precisely so this module below
+    // (the seam moved to core:model precisely so this module below
     // core:data could adopt it; Koin resolves it from the merged graph).
     // The 4th arg is the Seerr discover-row leaf source for the home fetcher
     // (SeerrHomeSectionSourcesImpl below — session-aware, built here because

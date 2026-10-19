@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
  * Deep module: the pure preference→effect diff that drives audio-effects
  * application.
  *
- * **Why this lives here.** Pre-extraction [AudioPlaybackManager.init] carried
+ * **Why this lives here.** [AudioPlaybackManager.init] once carried
  * a ~77-line `preferences.collect { ... }` block that hand-tracked 14 stale
  * `prev*` locals and diffed each preference field against its predecessor to
  * decide which effect setter to call. Adding a new effect field meant
@@ -36,7 +36,7 @@ object AudioPreferencesReducer {
      * Computes the ordered list of [EffectCommand]s that transform the
      * `prev` effect state into the `next` effect state.
      *
-     * Ordering contract (matches the pre-extraction init-block comment
+     * Ordering contract (matches the original init-block comment
      * "Strengths must be applied before their enabled flag so the effect uses
      * the correct value when it attaches"):
      *

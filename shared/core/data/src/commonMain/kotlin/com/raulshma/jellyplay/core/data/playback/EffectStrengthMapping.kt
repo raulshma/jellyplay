@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
  * night-mode (volume attenuation + loudness-enhancer gain) and dialogue-boost /
  * bass-boost (per-band short levels).
  *
- * **Why this lives here.** Pre-extraction the night-mode gain table
+ * **Why this lives here.** The night-mode gain table
  * (`NONE=0, LOW=1500, MODERATE=3000, HIGH=4500` millibels) was duplicated in
  * two places that could — and did — drift: [NightModeHelper.targetGainForStrength]
  * and [AudioEffectsProcessor.nightModeGainForStrength]. The volume-attenuation

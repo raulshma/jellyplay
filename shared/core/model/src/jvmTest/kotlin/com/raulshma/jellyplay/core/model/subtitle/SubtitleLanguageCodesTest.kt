@@ -10,10 +10,9 @@ import kotlin.test.Test
  * lets a single user-selected ISO 639-3 culture feed Wyzie (639-1),
  * OpenSubtitles (639-2B), and Jellyfin (639-3).
  *
- * Test-lane note (docs/adr/0006-test-lane-selection.md): pure string
- * normalization against a commonMain subject — no JVM dependency in test or
- * subject — so this is a commonTest candidate; its jvmTest placement is
- * historical drift, not a JVM requirement.
+ * Test-lane note: pure string normalization against a commonMain subject —
+ * no JVM dependency in test or subject — so this is a commonTest candidate
+ * despite its jvmTest placement.
  */
 class SubtitleLanguageCodesTest {
 

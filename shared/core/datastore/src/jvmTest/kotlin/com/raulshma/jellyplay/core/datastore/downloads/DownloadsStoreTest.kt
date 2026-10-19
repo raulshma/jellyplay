@@ -22,9 +22,7 @@ import kotlin.test.assertTrue
 
 /**
  * Exercises the downloads preference store, focusing on the
- * `MAX_CONCURRENT_DOWNLOADS` coerce-in(1, 6) read + write invariant that
- * previously lived inline in the `UserPreferencesStore` god object with no unit
- * coverage.
+ * `MAX_CONCURRENT_DOWNLOADS` coerce-in(1, 6) read + write invariant.
  */
 class DownloadsStoreTest {
 

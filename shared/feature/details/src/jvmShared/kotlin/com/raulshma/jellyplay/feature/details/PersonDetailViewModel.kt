@@ -41,12 +41,12 @@ class PersonDetailViewModel constructor(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
-    /** Preference projections — the D18/D20 gates (SeerrDetailViewModel's smallest pattern). */
+    /** Preference projections — the filmography gates (SeerrDetailViewModel's smallest pattern). */
     private val projections: PreferenceProjections,
 ) : JellyPlayViewModel() {
 
     /**
-     * The D18/D20 gates ([DetailPreferences.showFilmographyRoles] /
+     * The filmography gates ([DetailPreferences.showFilmographyRoles] /
      * [DetailPreferences.showFrequentCostars]), re-shared eagerly so the
      * fetch-time gate read below sees live values even while the screen is
      * away (the projection's own sharing idles after 5s unsubscribed — an
@@ -115,8 +115,8 @@ class PersonDetailViewModel constructor(
      * cache-bypass flag (the silent regeneration always runs forced —
      * getItemsByPerson is uncached, so force has no bearing on it).
      *
-     * The D18 role credits ride the filmography response itself (its People
-     * field); the D20 co-star leg runs after the filmography lands (it is
+     * The role credits ride the filmography response itself (its People
+     * field); the co-star leg runs after the filmography lands (it is
      * anchored on the most-recent entry) but is failure-tolerant — a miss
      * hides the row silently instead of failing the all-or-nothing content.
      */
@@ -137,7 +137,7 @@ class PersonDetailViewModel constructor(
             val detail = detailResult.getOrThrow()
             val items = itemsResult.getOrThrow()
 
-            // D20 "frequently appears with": anchored on the person's
+            // "frequently appears with": anchored on the person's
             // most-recent filmography entry (the same year-descending read
             // the screen sorts by), gated on the preference, self-excluded
             // and capped by [selectCostars]. Failure / empty → empty list,

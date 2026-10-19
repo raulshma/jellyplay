@@ -45,7 +45,7 @@ class LibraryFiltersSerializationTest {
 
     @Test
     fun `decodes the legacy SavedLibraryFilters wire format`() {
-        // Exact JSON shape the deleted String-typed mirror used to emit:
+        // Exact JSON shape of the legacy String-typed wire format:
         // enum fields stored as their .name, everything else as-is.
         val legacy = """
             {

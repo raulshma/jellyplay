@@ -77,7 +77,7 @@ import org.jetbrains.compose.resources.stringResource
  * and the TV [TvSafeSheet] so the two menus can never drift apart.
  *
  * [id] is a stable snake_case action key ("download", "watch_party", …) the
- * D23 promoted-rail filter keys on: the landscape rail lifts a fixed id set
+ * Promoted-rail filter keys on: the landscape rail lifts a fixed id set
  * out of this list and the ⋮ menu suppresses exactly those ids while the rail
  * shows them, so an id must identify the menu SLOT (never the label — the
  * download slot's label legitimately varies download → downloading → delete
@@ -93,7 +93,7 @@ internal data class MediaOption(
 
 /**
  * The fixed option-id set the landscape/TV detail rail promotes out of the ⋮
- * menu (D23, v1 — per-item customization is explicitly out of scope). Ids the
+ * menu (per-item customization is explicitly out of scope). Ids the
  * current menu does not carry are ignored: "mark_watched" and "trailer" act
  * from the action row / videos row today, so the rail renders only the
  * entries that actually resolve.
@@ -107,7 +107,7 @@ internal val PromotedMediaOptionIds: List<String> = listOf(
 
 /**
  * This list minus every option whose [MediaOption.id] is in [promotedIds] —
- * the ⋮-menu half of the D23 no-dupes rule (applied only while the rail
+ * the ⋮-menu half of the no-dupes rule (applied only while the rail
  * actually shows the promoted set; an empty [promotedIds] is a pass-through).
  * Pure and order-preserving.
  */
@@ -129,7 +129,7 @@ internal fun List<MediaOption>.promotedOptions(
 ): List<MediaOption> = promotedIds.mapNotNull { id -> firstOrNull { it.id == id } }
 
 /**
- * D14: the "Play (with pre-rolls)" entry's gate — server intros are
+ * The "Play (with pre-rolls)" entry's gate — server intros are
  * meaningful only for MOVIE/EPISODE plays (a SERIES has nothing of its own
  * to pre-roll; intros are episode-scoped), need the server (never offline),
  * and the caller resolves the host-level SyncPlay veto into [canPlay].
@@ -143,7 +143,7 @@ internal fun offersPlayWithPrerolls(
     (mediaType == MediaType.MOVIE || mediaType == MediaType.EPISODE)
 
 /**
- * D12: the "Notify me about new episodes" entry's gate — a per-SERIES opt-in
+ * The "Notify me about new episodes" entry's gate — a per-SERIES opt-in
  * (an episode's notifications key off its parent series; nothing else has a
  * "new episode"), needs the server (the worker reads Jellyfin + optionally
  * *arr), and only where a notification stack exists (desktop: none — the
@@ -221,7 +221,7 @@ internal fun rememberMediaOptions(
     onPlayNextInQueue: () -> Unit = {},
     onPlayLastInQueue: () -> Unit = {},
     /**
-     * D14: the host-level half of the "Play (with pre-rolls)" gate (SyncPlay
+     * The host-level half of the "Play (with pre-rolls)" gate (SyncPlay
      * + remote-origin resolution; the media-type/offline terms live in
      * [offersPlayWithPrerolls]).
      */
@@ -229,7 +229,7 @@ internal fun rememberMediaOptions(
     /** Plays the current item with server intros forced for this single play. */
     onPlayWithPrerolls: () -> Unit = {},
     /**
-     * D12: the current series' new-episode notification opt-in (the menu
+     * The current series' new-episode notification opt-in (the menu
      * entry's checkmark state) and the write. Only rendered where
      * [platformSupportsNotifications] holds — desktop hides the entry.
      */
@@ -444,7 +444,7 @@ internal fun rememberMediaOptions(
                     onClose(); onPlayLastInQueue()
                 })
             }
-            // Play (with pre-rolls) — D14: the item plays with server intros
+            // Play (with pre-rolls) — the item plays with server intros
             // FORCED for this single play (bypasses the global cinema-mode
             // pref; the pipeline's remaining vetoes still apply). Suppressed
             // for SERIES (intros are episode-scoped), offline (intros are a
@@ -504,7 +504,7 @@ internal fun rememberMediaOptions(
                     }
                 )
             }
-            // D12: "Notify me about new episodes" — the checkmark mirrors the
+            // "Notify me about new episodes" — the checkmark mirrors the
             // per-series opt-in (same label/icon state flip as the visibility
             // entries above; the menu carries no checkbox renderer). The gate
             // (SERIES-only, server-only, notification-stack platforms only)

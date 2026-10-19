@@ -72,14 +72,13 @@ class NewsletterViewModel(
                 )
             }
 
-            // Pull-to-refresh needs no cache bypass (plan 08): newsletter data
-            // is not cached by this repository, so the old global
-            // invalidateCaches() call was a no-op for this screen.
+            // Pull-to-refresh needs no cache bypass: newsletter data
+            // is not cached by this repository, so invalidateCaches()
+            // would be a no-op for this screen.
 
-            // kotlinx LocalDate replaces java.time's ISO_LOCAL_DATE_TIME chain:
-            // it prints ISO "yyyy-MM-dd" zero-padded, so the
-            // hand-built "T00:00:00" suffix is byte-identical to the string
-            // the server has always received ("2026-09-05T00:00:00").
+            // kotlinx LocalDate prints ISO "yyyy-MM-dd" zero-padded, so the
+            // hand-built "T00:00:00" suffix produces the string the server
+            // expects ("2026-09-05T00:00:00").
             val sinceDate =
                 "${Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 7))}T00:00:00"
 

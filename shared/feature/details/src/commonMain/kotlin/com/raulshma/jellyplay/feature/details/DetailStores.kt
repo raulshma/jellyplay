@@ -19,6 +19,6 @@ internal class DetailStores constructor(
     val homeDiscoveryStore: HomeDiscoveryStore,
     val experimentalStore: ExperimentalStore,
     val engineStore: PlayerEngineStore,
-    /** D12: the per-series new-episode notification opt-ins (read + toggle). */
+    /** The per-series new-episode notification opt-ins (read + toggle). */
     val notificationStore: NotificationStore,
 )

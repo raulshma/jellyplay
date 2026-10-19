@@ -46,7 +46,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                         // instead of opening the local video player. Mirrors
                         // jellyfin-web's "remote is current player" routing.
                         // (Probe + fling live behind the HomePlayOnRedirect
-                        // seam — see its KDoc for the legacy-shape rationale.)
+                        // seam — see its KDoc.)
                     } else if (mediaType == MediaType.CHANNEL || mediaType == MediaType.LIVE_TV) {
                         // Live channels must go through the live TV player (tuner
                         // playback), not the generic video player. Mirrors the
@@ -72,14 +72,14 @@ fun EntryProviderScope<NavKey>.homeSection(
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },
                 onSettingsSearchItemClick = { route -> navigator.navigate(route) },
-                // H17/H18 in-feature routing (stats card → admin user detail,
+                // In-feature routing (stats card → admin user detail,
                 // genre chips → filtered library section) — one generic
                 // Route-carrier beside the settings-search carrier above.
                 onOpenRoute = { route -> navigator.navigate(route) },
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
                 onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
                 onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
-                // H21 announcement snackbar's Customize — Home Settings root.
+                // The announcement snackbar's Customize — Home Settings root.
                 onCustomizeHome = { navigator.navigate(Route.HomeSettings()) },
                 onSeeAllClick = { _, libraryId, collectionType, title ->
                     // Per-library "Latest X" sorts by DateLastContentAdded so a

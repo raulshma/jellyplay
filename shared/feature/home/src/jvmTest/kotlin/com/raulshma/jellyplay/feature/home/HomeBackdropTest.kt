@@ -10,7 +10,7 @@ import kotlin.test.Test
  * Covers the pure decision functions backing [HomeBackdrop]:
  *  - [shouldRenderBackdrop] (enable + performance gate)
  *  - [resolveBackdropLayer] (blurhash vs ambient)
- *  - [withFocusBackdrop] (H10's focus overlay + throttle fallback)
+ *  - [withFocusBackdrop] (the focus overlay + throttle fallback)
  *
  * No Compose/Robolectric needed — these are plain functions over a data class.
  */
@@ -90,11 +90,11 @@ class HomeBackdropTest {
         )
     }
 
-    // -- withFocusBackdrop (H10) ----------------------------------------------
+    // -- withFocusBackdrop ----------------------------------------------
 
     @Test
     fun `no focus keeps the hero-driven state`() {
-        // The pre-H10 shape: no TV focus (or the pref off → the controller
+        // No TV focus (or the pref off → the controller
         // never produces inputs) must leave the hero artwork pair untouched.
         val hero = state(blurHash = "HERO", backdropUrl = "http://x/hero")
         assertEquals(hero, hero.withFocusBackdrop(focus = null))

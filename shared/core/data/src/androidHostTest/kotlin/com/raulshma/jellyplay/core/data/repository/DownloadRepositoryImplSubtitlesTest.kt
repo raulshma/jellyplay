@@ -38,7 +38,7 @@ import java.io.File
 /**
  * Pins the non-destructive contract of the offline subtitle bundle —
  * [DownloadRepositoryImpl.downloadExternalSubtitles] and now its host
- * [OfflineDownloadWriterCore] (D6 extracted the write cluster; the repository
+ * [OfflineDownloadWriterCore] (the repository
  * forwards the writer surface to it one-to-one):
  *
  * - a genuine server-side removal (no deliverable subtitle streams) mirrors to

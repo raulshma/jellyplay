@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * aspect ratio ([setAspectRatio] is a pure mirror write), everything else
  * writes a datastore slice after (or beside) the uiState mirror.
  *
- * The state bag never crosses (the migrated-controller ratchet): every
+ * The state bag never crosses (the migrated-controller guard): every
  * uiState read/write arrives as a slice-scoped lens lambda — the
  * [PlayerUiPrefsState]/[VideoFxState]/[GesturePrefsState]/[AutoplayState]
  * reads + transforms the session derives over its [PlayerStateHandles] — the
@@ -243,7 +243,7 @@ internal class PlayerUiCommands(
 
 /**
  * The composition wiring for [PlaybackSession.uiCommands] — moved out of the
- * session body (the composition root's line ratchet) into the module being
+ * session body (the composition root's line guard) into the module being
  * wired, the [transportRouter] move's twin. Reads the session's internal
  * collaborators through the receiver (lazily — the lambdas defer every read
  * of the later-declared autoplay/effects controllers, the usual

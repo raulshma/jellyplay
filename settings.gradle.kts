@@ -45,9 +45,8 @@ include(":app")
 
 include(":baselineprofile")
 
-// KMP shell (docs/kmp-migration-plan.md): the parallel tree that legacy modules
-// migrate into, phase by phase. Lives beside (not inside) the Android tree so
-// the existing app keeps building untouched until cutover.
+// KMP shell: the parallel shared tree. Lives beside (not inside) the Android
+// tree so the existing app keeps building untouched.
 include(":shared:core:concurrency")
 include(":shared:core:model")
 include(":shared:core:designsystem")
@@ -63,11 +62,10 @@ include(":shared:core:player-contract")
 // only — never a main source set dependency (see its build.gradle.kts).
 include(":shared:core:test-fixtures")
 
-// Feature conveyor: one shared feature module per migration
-// PR, same shape as the shared core stack above.
+// Shared feature modules, same shape as the shared core stack above.
 include(":shared:feature:search")
 include(":shared:feature:library")
-// Photo suite (album/viewer + PhotoExport seam), extracted from library.
+// Photo suite (album/viewer + PhotoExport seam).
 include(":shared:feature:photos")
 include(":shared:feature:music")
 include(":shared:feature:livetv")
@@ -104,10 +102,9 @@ include(":shared:feature:player-live")
 include(":shared:feature:player-video")
 include(":shared:feature:details")
 
-// Shell-graph aggregator (CONTEXT.md "Shared appSections nav graph"): the one
-// module that depends on every feature whose *Section builder the two shells
-// used to restate — appSections + ShellHostHooks + the derived registration
-// ledger the desktop dead-end guard reads.
+// Shell-graph aggregator: the one module that depends on every feature whose
+// *Section builder both shells consume — appSections + ShellHostHooks + the
+// derived registration ledger the desktop dead-end guard reads.
 include(":shared:feature:shell")
 
 include(":shared:feature:auth")

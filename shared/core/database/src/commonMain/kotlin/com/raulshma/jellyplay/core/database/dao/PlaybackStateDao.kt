@@ -45,7 +45,7 @@ interface PlaybackStateDao {
      * to `false` by a progress write. A tick that races the watched-threshold
      * flip (threshold callback sets `true`, a later sub-threshold tick reports
      * `false`) must not un-watch the row — only the explicit unwatch path
-     * ([applyPlayedStateToHierarchy]) clears the flag (#153). `false` still
+     * ([applyPlayedStateToHierarchy]) clears the flag. `false` still
      * lands on rows that were never watched.
      */
     @Query(

@@ -11,15 +11,13 @@ import kotlinx.coroutines.flow.StateFlow
  * availability (each shell reads its own audio core) or by state owner
  * (Android wires MainViewModel, desktop wires AuthRepository + stores).
  *
- * The flat thirteen-constructor era is grouped: the members were consumed by
+ * Its members are consumed by
  * disjoint sections, so each cohesive group is its own pre-assembled value
  * bundle — [home] for homeSection, [audio] for the music home cards (the
  * rememberShellAudioClicks output), [settings] for settingsSection, [admin]
  * for adminSection, [search] for searchSection — and [ShellAdminHooks]'s
- * reads stay lazy for the same reason as before (admin refreshes don't
- * rebuild the graph). The constructor having five parameters is the honest
- * measure of how much of the old per-shell entryProvider blocks was already
- * shell policy rather than graph shape. A constructor-arg bundle (the
+ * reads stay lazy (admin refreshes don't
+ * rebuild the graph). A constructor-arg bundle (the
  * HomeCallbacks / SettingsNavActions idiom), not an interface: shells build
  * it inside `remember` (through [rememberShellHost]), and the bundle fields
  * reference the shell's own locals without any member-name shadowing.

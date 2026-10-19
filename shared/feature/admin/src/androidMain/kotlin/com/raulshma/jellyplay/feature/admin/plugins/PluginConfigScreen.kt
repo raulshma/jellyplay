@@ -272,7 +272,6 @@ private fun PicoWebView(
     }
 }
 
-// The pure halves this screen used to carry — colorToHex, buildPicoOverrides
-// and buildWrappedHtml — live in commonMain beside PluginBridgeScript.kt
-// (`PicoConfigHtml.kt`, pinned by PicoConfigHtmlTest); this file keeps only
-// the Android WebView wiring.
+// The pure halves — colorToHex, buildPicoOverrides and buildWrappedHtml —
+// live in commonMain beside PluginBridgeScript.kt (`PicoConfigHtml.kt`, pinned
+// by PicoConfigHtmlTest); this file keeps only the Android WebView wiring.

@@ -63,9 +63,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelSubtitlesTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (same conveyor port pattern as the upload
-    // suite).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (same pattern as the upload suite).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var editorRepository: MetadataEditorRepository
@@ -220,7 +219,7 @@ class EditorViewModelSubtitlesTest {
 
         coVerify(exactly = 1) { editorRepository.deleteSubtitle(itemId, 2) }
         // The removed server stream is captured before the delete so the store
-        // can attribute-match legacy local copies.
+        // can attribute-match local copies saved before stream linkage.
         val expectedPurge: List<Triple<String, Int, MediaStream?>> =
             listOf(Triple(itemId, 2, subtitleStream))
         assertEquals(expectedPurge, subtitleStore.purgedCopies)

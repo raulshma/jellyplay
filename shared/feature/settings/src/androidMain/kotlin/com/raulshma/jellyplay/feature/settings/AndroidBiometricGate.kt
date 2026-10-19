@@ -8,11 +8,11 @@ import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
 
 /**
- * Wraps the legacy :core:ui BiometricAuthHelper verbatim: availability comes
- * from rememberBiometricAvailability(), the FragmentActivity from the ambient
- * context exactly like the legacy screen did. Gate is non-null only when a
- * prompt could actually be launched (activity present AND biometric strong
- * available), so the screen can treat null as "unavailable".
+ * Wraps the core:ui BiometricAuthHelper: availability comes from
+ * rememberBiometricAvailability(), the FragmentActivity from the ambient
+ * context. Gate is non-null only when a prompt could actually be launched
+ * (activity present AND biometric strong available), so the screen can treat
+ * null as "unavailable".
  */
 @Composable
 internal actual fun rememberBiometricGate(): BiometricGate? {

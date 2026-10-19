@@ -42,7 +42,7 @@ import kotlin.test.assertTrue
  *     engine/channel state. (The plugin family's compositions moved to
  *     PluginAdminRepositoryImplTest at the facade split.)
  *
- * D5: the ctor injects the family singles directly (admin + user clients in
+ * The ctor injects the family singles directly (admin + user clients in
  * these tests; the live-tv/library clients carry the two remaining
  * pass-throughs and are omitted here) — the JellyfinApiClient union it used
  * to inject was a pure delegation over these same singles.

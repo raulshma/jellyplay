@@ -725,7 +725,7 @@ private fun SubtitleFreeFormColorPickerHost(
 /**
  * The custom-mpv-config ownership notice: a warning-tinted card that spells
  * out, case by case, what the user's config wins versus what stays app-driven
- * (issue #165, UI half).
+ * (UI half).
  *
  * Structure, top to bottom:
  *  - Title row (warning icon) — the card's reason to exist at a glance.

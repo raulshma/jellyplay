@@ -71,7 +71,7 @@ class HomeDiscoverySpecDerivationTest {
      * The legacy wire name → stored value type each slot must keep — the exact
      * expectations the hand-written pre-spec store encoded at every read/write
      * site (the JSON blobs and enum slots are STRING-typed on disk). The
-     * home-wave rows (H5-H21) follow the same storage spellings: the two JSON
+     * home rows follow the same storage spellings: the two JSON
      * string-set slices are STRING, the internal visit stamp is LONG, the
      * announce-once stamp is INT, and the feature toggles are BOOLEAN.
      */
@@ -166,7 +166,7 @@ class HomeDiscoverySpecDerivationTest {
     fun `resetKeysFor returns exactly the HOME_DISCOVERY-category keys`() {
         val storeKeys = store.resetKeysFor(PreferenceResetCategory.HOME_DISCOVERY).map { it.name }
         // The exact keys the declaration carries (the legacy/canonical flat
-        // keys — the home-wave rows included — plus the hidden-library
+        // keys — the home rows included — plus the hidden-library
         // migration source and the global namespace marker).
         assertEquals(expectedStoredType.keys.sorted(), storeKeys.sorted())
         PreferenceResetCategory.entries
@@ -193,7 +193,7 @@ class HomeDiscoverySpecDerivationTest {
 
         // The per-type copy lists, exactly the hand-written predecessor's
         // three lists (booleans, ints, strings — enum slots included) plus
-        // the home-wave rows. The LONG visit stamp
+        // the home rows. The LONG visit stamp
         // (`home_last_visit_epoch_ms`) rides NO copy list by design: it is a
         // brand-new key with no legacy flat presence to migrate.
         assertEquals(

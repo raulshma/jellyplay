@@ -13,19 +13,20 @@ import kotlin.test.assertTrue
 /**
  * Pins the OFFLINE Continue Watching row's membership contract
  * ([buildOfflineHomeSections]) — the local mirror of the server's
- * `/Items/Resume` rules. This is the offline half of the #157 regression
- * class ("Continue watching shows already watched episode"): the offline row
+ * `/Items/Resume` rules. This pins the offline half of the
+ * "Continue watching shows already watched episode" regression
+ * class: the offline row
  * has ALWAYS dropped played/finished rows (`!it.isPlayed &&
  * !it.isFinishedOffline`); these tests make that contract load-bearing so the
- * online row's matching filter (the #157 fix in
- * LibraryApiClientImpl) cannot drift away from it unnoticed.
+ * online row's matching filter in
+ * LibraryApiClientImpl cannot drift away from it unnoticed.
  *
  * The mirror rules under test, in the order the implementation applies them:
  *  1. `IsResumable` position rule — `playbackPositionTicks > 0`;
  *  2. the server's MinResumePct analog — a ~1% progress floor;
  *  3. the watched rules — `isPlayed` OR the app's 95% finished-offline
  *     threshold (a sticky mirror row at ≥95% is "watched" even before the
- *     played flip lands, per the #153 mirror semantics);
+ *     played flip lands, per the sticky mirror semantics);
  *  4. downloaded SERIES rows are hierarchy echoes, never resume points;
  *  5. the user's hidden-CW list and the 20-item cap.
  *
@@ -101,7 +102,7 @@ class OfflineHomeSectionsContinueWatchingTest {
         assertEquals(listOf("newer", "older"), row)
     }
 
-    // ── The #157 mirror rules: watched items never occupy the row ─────
+    // ── The mirror rules: watched items never occupy the row ─────
 
     @Test
     fun `played item with a leftover position is dropped`() {
@@ -114,7 +115,7 @@ class OfflineHomeSectionsContinueWatchingTest {
 
     @Test
     fun `finished-offline row is dropped even before the played flip lands`() {
-        // Sticky mirror semantics (#153): the progress mirror writes
+        // Sticky mirror semantics: the progress mirror writes
         // isPlayed=true at ≥95%, but a lost flip can leave playedPercentage
         // high while isPlayed is still false — isFinishedOffline catches it.
         val row = continueWatching(item("finished", playedPercentage = 97.0))
@@ -126,7 +127,7 @@ class OfflineHomeSectionsContinueWatchingTest {
     fun `the finished-offline threshold is inclusive at exactly 95 percent`() {
         // Boundary pins: 95.0 (OFFLINE_WATCHED_THRESHOLD_PERCENT) IS watched;
         // 94.9 is still an in-progress resume point. A drifted comparison
-        // operator here silently re-admits watched rows (#157 regression).
+        // operator here silently re-admits watched rows (the regression this pins).
         val dropped = continueWatching(item("at-boundary", playedPercentage = 95.0))
         val kept = continueWatching(item("just-below", playedPercentage = 94.9))
 

@@ -45,7 +45,7 @@ class AndroidPdfDocument private constructor(
     }
 
     /**
-     * The pure page-box read — non-suspend on purpose (the ratchet keeps bare
+     * The pure page-box read — non-suspend on purpose (the guard keeps bare
      * runCatching out of suspend bodies, the [renderPageLocked] precedent):
      * a read failure maps to null, the same cannot-open contract [open]
      * hands back.
@@ -67,7 +67,7 @@ class AndroidPdfDocument private constructor(
         }
 
     /**
-     * The pure raster step — non-suspend on purpose (the ratchet keeps bare
+     * The pure raster step — non-suspend on purpose (the guard keeps bare
      * runCatching out of suspend bodies): a render failure maps to null, the
      * same cannot-open contract [open] hands back.
      */

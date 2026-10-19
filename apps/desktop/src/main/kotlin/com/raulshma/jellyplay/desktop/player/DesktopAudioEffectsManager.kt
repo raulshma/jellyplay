@@ -17,10 +17,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * [DesktopAudioEffectChain] (Android effect → mpv filter parity table
  * there).
  *
- * Also implements [AudioEffectsSession] — the narrow port the relocated
- * queue manager (core:data jvmMain) ctor-injects instead of this concrete
- * app-side type. The three port members are the historical surface,
- * widened from `internal` to `override` (public) for the cross-module
+ * Also implements [AudioEffectsSession] — the narrow port the core:data
+ * jvmMain queue manager ctor-injects instead of this concrete app-side
+ * type. The three port members are `override` (public) for the cross-module
  * seam; same signatures, same bodies.
  *
  * Why the core still flips the flows (rather than freezing them): the audio
@@ -29,15 +28,14 @@ import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
  * back to the store, silently undoing every toggle.
  *
  * Declared desktop divergences (state-level, encoded in the core):
- *  - out-of-range equalizer band indices no-op — the guard is now
- *    unconditional in the core (both hosts construct guarded; the historical
- *    Android IndexOutOfBoundsException is retired);
+ *  - out-of-range equalizer band indices no-op — the guard is
+ *    unconditional in the core (both hosts construct guarded; no host can
+ *    surface an IndexOutOfBoundsException);
  *  - the visualizer stays fully inert — `fftData`/`waveformData` stay empty
  *    (mpv offers no in-sink PCM tap without a full render-API audio pull)
  *    and `enableVisualizer` neither notifies nor mutates.
- * Genuinely-desktop-only state: none survives — the private per-track
- * ReplayGain context turned out to be a mirror of the Android call-site
- * context and folded into the core as `setReplayGainContext`.
+ * Genuinely-desktop-only state: none — the per-track ReplayGain context is
+ * shared state in the core (`setReplayGainContext`).
  */
 class DesktopAudioEffectsManager : AudioEffectsStateCore(),
     AudioEffectsSession {

@@ -35,17 +35,16 @@ import org.koin.dsl.module
  *    the home badge — both bound by core:data on both platforms);
  *  - ImageUrlProvider / MoodPlaylistRepository / SmartPlaylistRepository
  *    (shared data), HomeDiscoveryStore (shared datastore) and
- *    OfflineModeManager resolve from the C4 shared-module graph;
- *  - MusicMessageBus is app-provided on Android (bridge to the legacy
+ *    OfflineModeManager resolve from the shared-module graph;
+ *  - MusicMessageBus is app-provided on Android (bridge to the Koin-owned
  *    UserMessageBus) and a buffering relay on desktop
  *    (desktopMusicMessageBusModule — the desktop shell's snackbar host
- *    collects it since then).
+ *    collects it).
  *
  * GenreDetailViewModel's SavedStateHandle is pulled from the definition
  * parameters: on Android, Koin synthesizes it from the CreationExtras of the
  * LocalViewModelStoreOwner current at the call site (nav3 1.1.5 installs no
- * per-entry ViewModelStoreOwner, so that owner is the Activity — the exact
- * same extras source the Hilt factory consumed at HEAD).
+ * per-entry ViewModelStoreOwner, so that owner is the Activity).
  */
 val musicModule: Module = module {
     includes(platformMusicModule())

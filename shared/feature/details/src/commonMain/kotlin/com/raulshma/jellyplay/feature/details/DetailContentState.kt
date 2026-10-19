@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
- * Live in-flight download fraction per episode id (D16, 0..1), provided by
+ * Live in-flight download fraction per episode id (0..1), provided by
  * [MediaDetailScreen] from the download-lifecycle slice and read directly by
  * the seasons section's episode rows. Rides a composition local — NOT
  * [DetailContentState] — on purpose: the map moves on every ~2 s transfer
@@ -133,7 +133,7 @@ internal data class DetailContentState(
         val isDownloadingSeries: Boolean = false,
         /**
          * Downloaded episode ids for the current series (loaded at screen-open —
-         * D16 — and re-read when the download sheet opens). Drives the per-episode
+         * — and re-read when the download sheet opens). Drives the per-episode
          * delete badge in the seasons section for a REMOTE series with downloads.
          * Empty for a plain remote series with no downloads (the badge is hidden);
          * a LOCAL origin ignores this and treats every episode as downloaded.
@@ -204,7 +204,7 @@ internal data class PlaybackCallbacks(
      */
     val onStartWatchParty: () -> Unit = {},
     /**
-     * D14 "Play (with pre-rolls)": plays the current item with server
+     * "Play (with pre-rolls)": plays the current item with server
      * intros FORCED for this single play (the ⋮ action bypassing the global
      * cinema-mode pref). The screen arms the one-shot
      * [com.raulshma.jellyplay.core.data.playback.CinemaModeOverride] and
@@ -214,7 +214,7 @@ internal data class PlaybackCallbacks(
     /** Open the version picker sheet (multi-version items only). */
     val onOpenVersionPicker: () -> Unit = {},
     /**
-     * D6 "Play collection in order": queues the franchise row's members
+     * "Play collection in order": queues the franchise row's members
      * after the first-unwatched start entry (the manual up-next queue,
      * queue-first semantics; suppressed under SyncPlay by the player's
      * advance routing) and starts playback on the start entry. Composition
@@ -303,11 +303,11 @@ internal data class UserDataCallbacks(
     val onShowFromContinueWatching: () -> Unit = {},
     val onShowDetailUpNext: () -> Unit = {},
     val onHideDetailUpNext: () -> Unit = {},
-    /** D6 inline eye-hide: hides one franchise row for the current item (session memory). */
+    /** Inline eye-hide: hides one franchise row for the current item (session memory). */
     val onHideFranchiseRow: (collectionId: String) -> Unit = {},
     /**
-     * D12: toggles the current series' new-episode notification opt-in (the
-     * ⋮ entry and the D7 rows' bell both land here; the screen arms the
+     * Toggles the current series' new-episode notification opt-in (the
+     * ⋮ entry and the upcoming rows' bell both land here; the screen arms the
      * POST_NOTIFICATIONS prompt beside the write).
      */
     val onToggleSeriesNotifications: (enabled: Boolean) -> Unit = {},
@@ -397,7 +397,7 @@ internal data class ScreenCallbacks(
     val onMediaQuickActions: (MediaItem) -> Unit = {},
     /** Track the TV-focused row item so the Menu key can open its quick actions. */
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
-    /** D8: the top-bar mute chip — mute/unmute the playing theme + write the per-series memory. */
+    /** The top-bar mute chip — mute/unmute the playing theme + write the per-series memory. */
     val onToggleThemeMusicMuted: (Boolean) -> Unit = {},
 )
 

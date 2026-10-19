@@ -12,7 +12,7 @@ import androidx.media3.common.util.UnstableApi
  * Buffer scaffolding lives in [BasePcmAudioProcessor]; this class is just the
  * balance gain math. Output format is identical to input (passthrough processor).
  *
- * Note: pre-extraction, the 16-bit path multiplied raw shorts directly (no
+ * Note: originally the 16-bit path multiplied raw shorts directly (no
  * normalize/denormalize round-trip). The base normalizes to float and back,
  * which changes quantization by one ULP on gain change — audibly identical
  * for a balance adjustment and buys ~80 LOC of shared scaffolding.

@@ -40,7 +40,7 @@ class SeerrPreferencesStore constructor(
 
         /**
          * The Seerr settings-surface connection MODE (direct fields vs the
-         * jellyfin-plugin-jellyplay "via server" bridge, ADR 0010). Its
+         * jellyfin-plugin-jellyplay "via server" bridge). Its
          * consumer is the data-path switch: with the mode on AND the
          * `seerr-bridge` gate open, the Seerr client's calls ride the plugin
          * proxy — see [SeerrPreferences.useServerBridge] and the SeerrBridge

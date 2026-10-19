@@ -32,7 +32,7 @@ class UserDataSyncWorker(
     params: WorkerParameters,
     // Reads (the home-sections refetch) go through the home-feed seam; the
     // wholesale invalidateCaches is deliberately off every public interface
-    // (plan 08) and arrives through the narrow [MediaCacheInvalidator] port —
+    // and arrives through the narrow [MediaCacheInvalidator] port —
     // both Koin-bound to the same MediaRepositoryImpl single, so the drop
     // hits the same caches.
     private val homeFeed: HomeFeed,

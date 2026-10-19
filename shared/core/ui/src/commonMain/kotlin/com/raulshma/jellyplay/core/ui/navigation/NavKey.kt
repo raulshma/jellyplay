@@ -157,7 +157,7 @@ sealed class Route : NavKey {
         override val isDetail = true
     }
 
-    /** Full TMDB reviews screen reached from "All reviews (N)" on a detail screen's reviews preview (D9). */
+    /** Full TMDB reviews screen reached from "All reviews (N)" on a detail screen's reviews preview. */
     @Serializable data class Reviews(val itemId: String) : Route() {
         override val isDetail = true
     }

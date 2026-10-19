@@ -31,7 +31,7 @@ import kotlin.io.path.createTempDirectory
 /**
  * Unit tests for [OfflineArtworkResolver] — the disk-backed local-artwork
  * resolution subsystem extracted verbatim from the offline repository's read
- * paths (D4) — exercised DIRECTLY over its two DAO seams and a temp dir.
+ * paths — exercised DIRECTLY over its two DAO seams and a temp dir.
  *
  * The offline screens render `posterPath`/`backdropPath` verbatim, so rows that
  * persist blank or remote URLs (legacy downloads, or episodes that by design

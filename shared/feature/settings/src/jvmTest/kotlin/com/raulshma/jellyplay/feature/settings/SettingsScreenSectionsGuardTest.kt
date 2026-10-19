@@ -8,7 +8,7 @@ import kotlin.test.fail
 
 /**
  * Screen↔declaration cross-check for the advanced screen-shape declarations
- * ([SettingsScreenSection], the ADR-0009-safe payload-free projection).
+ * ([SettingsScreenSection], the payload-free projection).
  *
  * [deriveAdjustForAdvanced] folds a screen's `advancedOnly` flags into the
  * deep-link scroll adjust — but the flag and the screen's actual emission gate

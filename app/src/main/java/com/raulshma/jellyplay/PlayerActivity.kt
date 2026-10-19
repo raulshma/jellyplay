@@ -58,19 +58,19 @@ import org.koin.mp.KoinPlatform
 
 /**
  * Dedicated host Activity for fullscreen playback — VOD ([VideoPlayerScreen])
- * and, since then, Live TV ([LivePlayerScreen]; the host table moved live
- * out of the nav shell so system PiP serves it — see [PlaybackHostRouter]).
+ * and Live TV ([LivePlayerScreen]; live is hosted here so system PiP serves
+ * it — see [PlaybackHostRouter]).
  *
- * Introduced so that system Picture-in-Picture floats over the browse UI
- * (architecture): this Activity shares the default `taskAffinity` with
+ * System Picture-in-Picture floats over the browse UI: this Activity shares
+ * the default `taskAffinity` with
  * [MainActivity], so when it enters PiP the previous task entry — the Compose
  * browse UI in [MainActivity] — is revealed behind the floating window. A
  * single-Activity app cannot reproduce this (Android renders PiP as that
  * Activity's own window content; there is no sibling to show through).
  *
- * The PiP apparatus (param builder, remote actions, lifecycle coordination) is
- * ported from the former single-Activity implementation so the feature set is
- * preserved: RemoteActions (play/pause/skip/next), auto-enter on home, auto-exit
+ * The PiP apparatus (param builder, remote actions, lifecycle coordination)
+ * covers the full feature set:
+ * RemoteActions (play/pause/skip/next), auto-enter on home, auto-exit
  * on END/ERROR, source-rect hint, aspect-ratio clamp. The pure halves beside
  * this Activity: [PipLifecyclePolicy] owns the ordering machine and param
  * folds, [PipActionSet] owns the remote-action decision tables (the action-set
@@ -92,16 +92,15 @@ import org.koin.mp.KoinPlatform
  * [redirectToLockGateIfNeeded].
  */
 // FragmentActivity for parity with MainActivity: androidx.biometric's prompt
-// requires a FragmentActivity host (see issue #162).
+// requires a FragmentActivity host.
 class PlayerActivity : FragmentActivity() {
 
     // PlayerActivity is the SOLE driver of the shared PlayerLifecycleManager
-    // single (onPause/onResume/onTopResumed/onStop below). MainActivity
-    // deliberately stopped calling it: the singleton has one @Volatile
-    // activeCallbacks slot with no owner identity, so a second host pausing
-    // here would reach across Activities into this activity's engine. Keep it
-    // that way until per-host engine scoping lands (see Plan 01/02).
-    // Resolved from the Koin container (Hilt removal).
+    // single (onPause/onResume/onTopResumed/onStop below). The singleton has
+    // one @Volatile activeCallbacks slot with no owner identity, so a second
+    // host pausing would reach across Activities into this activity's engine;
+    // every other host must leave it alone.
+    // Resolved from the Koin container.
     private val playerLifecycleManager: PlayerLifecycleManager by lazy { KoinPlatform.getKoin()!!.get() }
 
     private val pipController: AndroidPipController by lazy { KoinPlatform.getKoin()!!.get() }
@@ -122,7 +121,7 @@ class PlayerActivity : FragmentActivity() {
     private val launchArgs = mutableStateOf<PlayerActivityArgs?>(null)
 
     /**
-     * Issue #174: the player's D-pad handlers are Compose focus-dependent
+     * The player's D-pad handlers are Compose focus-dependent
      * (`.focusable()` + `onPreviewKeyEvent` on the surface Box), and when no
      * Compose focus target exists — the controls auto-hid and the hide-edge
      * focus handoff lost its race, an overlay unmount orphaned focus, or a
@@ -153,17 +152,16 @@ class PlayerActivity : FragmentActivity() {
      * tracking → `onBackPressed`) would run the SAME ladder a second time on
      * the identical press. The second run reads the first run's own effect as
      * new state — controls it just hid, a sheet it just closed — and falls
-     * through to `onBack()`: one press hid the controls AND exited the player
-     * (the "BACK exits with controls visible" bug, reproduced on an API 36 TV
-     * image with the ladder stack trace).
+     * through to `onBack()`: one press hides the controls AND exits the player
+     * (the "BACK exits with controls visible" failure mode).
      *
      * The registration test matters: when NO callback is registered — the
      * live TV screen composes no JellyPlayBackHandler (its D-pad BACK arm IS
      * the ladder), and it is also down in mid-swap/transient windows — the
-     * predictive pipeline ran nothing, and early-returning here used to kill
-     * BACK entirely in exactly those windows (the D-pad arm/sink had already
+     * predictive pipeline runs nothing, so early-returning here would kill
+     * BACK entirely in exactly those windows (the D-pad arm/sink has already
      * declined). Falling through lets the dispatcher's no-callback fallback
-     * run: the activity finishes, the pre-fix exit behavior. Android <33 has
+     * run: the activity finishes. Android <33 has
      * no platform back callback at all: this legacy path IS the dispatch and
      * must super through.
      */
@@ -207,12 +205,12 @@ class PlayerActivity : FragmentActivity() {
         setContent {
             // The TV-mode composition local: MainActivity's shell provides it
             // (MainContent), but this host composes the players DIRECTLY —
-            // without this provider LocalTvMode.current was false on every TV
-            // device here, so the players ran their PHONE branches: the TV
-            // D-pad arms, the TV focus grab/key sink (issue #174 machinery)
-            // and the back ladder's "TV: hide controls on back" step were all
-            // dead code, and BACK always exited (the "back exits with
-            // controls visible" bug) because `isTv && showControls` could
+            // without this provider LocalTvMode.current reads false on every TV
+            // device here, so the players run their PHONE branches: the TV
+            // D-pad arms, the TV focus grab/key sink
+            // and the back ladder's "TV: hide controls on back" step stay
+            // dead code, and BACK always exits (the "back exits with
+            // controls visible" bug) because `isTv && showControls` can
             // never hold.
             val isTvDevice = isTv()
             androidx.compose.runtime.CompositionLocalProvider(
@@ -227,9 +225,9 @@ class PlayerActivity : FragmentActivity() {
                     .collectAsStateWithLifecycle()
                 val darkTheme = rememberPreferenceDarkTheme(preferences)
                 // Subtitle tester overlays the player (keeps the video engine alive
-                // underneath) rather than navigating away, mirroring the old nav-push
-                // behaviour. The tester builds its own preview engine, so it is
-                // self-contained. Video-only — live has no subtitle side-loading.
+                // underneath) rather than navigating away to it. The tester builds
+                // its own preview engine, so it is self-contained. Video-only —
+                // live has no subtitle side-loading.
                 var showSubtitleTester by remember { mutableStateOf(false) }
                 // Hoisted launch args so onNewIntent (re-selection while this
                 // singleTask activity is alive, e.g. picking another item while in
@@ -282,7 +280,7 @@ class PlayerActivity : FragmentActivity() {
         // only other in-player subscriber — the PiP params collector below —
         // runs just on S+ with system PiP. Warm it on every API level so
         // shouldAutoEnterPipNow() reads persisted state, not the default,
-        // after a cold start straight into the player (issue #167).
+        // after a cold start straight into the player.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 preferenceProjections.playbackPreferences.collect {
@@ -389,10 +387,10 @@ class PlayerActivity : FragmentActivity() {
         // Auto-enter guard lives in PipLifecyclePolicy.userLeaveAutoEnter:
         // `!isControlsLocked` so swiping home while the lock overlay is up
         // doesn't yank the user into PiP, and `!isScreenOffOrLocked()` because
-        // several OEMs fire this callback for the power button too (issue
-        // #145). Deliberately no isPlaying term — the fallback below adds it.
+        // several OEMs fire this callback for the power button too.
+        // Deliberately no isPlaying term — the fallback below adds it.
         // shouldAutoEnterPipNow() folds the user's auto-PiP preference
-        // (issue #167) with the engine-armed flag: off means Home/recents
+        // with the engine-armed flag: off means Home/recents
         // simply backgrounds the app.
         if (PipLifecyclePolicy.onUserLeaveHint(
                 shouldAutoEnter = shouldAutoEnterPipNow(),
@@ -409,7 +407,7 @@ class PlayerActivity : FragmentActivity() {
     // activity loses the top-resumed position during active playback, enter PiP
     // — PipLifecyclePolicy.topResumedLossAutoEnter is the same guard predicate
     // PLUS the isPlaying term (the documented divergence between the two
-    // hand-copied guards).
+    // guards).
     override fun onTopResumedActivityChanged(isTopResumed: Boolean) {
         super.onTopResumedActivityChanged(isTopResumed)
         val decision = PipLifecyclePolicy.onTopResumedChanged(
@@ -420,8 +418,7 @@ class PlayerActivity : FragmentActivity() {
             isPlaying = pipController.isPlaying.value,
             controlsLocked = pipController.isControlsLocked,
             // Same lock guard as onUserLeaveHint: the keyguard stealing the
-            // top-resumed position is not a "leave" worth auto-PiP for
-            // (issue #145).
+            // top-resumed position is not a "leave" worth auto-PiP for.
             screenOffOrLocked = isScreenOffOrLocked(),
             justExitedPip = justExitedPip,
         )
@@ -445,11 +442,11 @@ class PlayerActivity : FragmentActivity() {
     // Closes the media-notification bypass: the video MediaSession pins its
     // session-activity PendingIntent to this class BY NAME
     // (AndroidMediaSessionController), so a notification tap while the app is
-    // locked used to reach full playback (video since the dedicated-host
-    // split, live TV too since then) without ever hitting MainActivity's
-    // lock gate. When a gate is configured and the app-scoped AppLockState
-    // says locked, this host hands off to MainActivity — whose own gate then
-    // renders AuthChallengeScreen — and finishes before composing anything.
+    // locked would otherwise reach full playback without ever hitting
+    // MainActivity's lock gate. When a gate is configured and the app-scoped
+    // AppLockState says locked, this host hands off to MainActivity — whose
+    // own gate then renders AuthChallengeScreen — and finishes before
+    // composing anything.
     //
     // Note: this is the APP lock, not the in-player "screen lock" overlay
     // (usePinForPlayerLock / SlideToUnlockOverlay inside VideoPlayerScreen) —
@@ -495,8 +492,8 @@ class PlayerActivity : FragmentActivity() {
         // cold-start race this read exists to close whenever the read is
         // merely slow. Treating "unknown" as gate-configured still lets an
         // UNLOCKED holder through (that user authenticated this process);
-        // a locked one lands on the lock screen. Residual (pre-existing and
-        // equivalent on both hosts): a CORRUPT prefs read inside
+        // a locked one lands on the lock screen. Residual (equivalent on
+        // both hosts): a CORRUPT prefs read inside
         // SecurityStore degrades to emptyPreferences → no gate — MainActivity's
         // own lock screen reads the same store and shows no gate either.
         val gateConfigured = if (persisted != null) {
@@ -719,7 +716,7 @@ class PlayerActivity : FragmentActivity() {
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     /**
-     * The user's auto-PiP preference (issue #167) folded with the engine-armed
+     * The user's auto-PiP preference folded with the engine-armed
      * flag — the single gate all three auto-entry paths consume:
      * `onUserLeaveHint`, the top-resumed-loss fallback, and the pre-arm
      * `setAutoEnterEnabled` value in [buildPipParams]. Off means leaving the
@@ -747,8 +744,8 @@ class PlayerActivity : FragmentActivity() {
      * intact, so audio continues under the revealed MainActivity and the
      * now-playing notification stays up. Mirrors the fullscreen→home minimise
      * semantics of [PlayerLifecycleManager.onActivityPause] (a no-op when the
-     * setting is on); a lock/screen-off inside the dismissal transition keeps
-     * the old finish behaviour.
+     * setting is on); a lock/screen-off inside the dismissal transition takes
+     * the finish path.
      */
     private fun keepPlayerAliveAfterPipDismiss(): Boolean =
         playerLifecycleManager.isBackgroundAudioEnabled && !isScreenOffOrLocked()

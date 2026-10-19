@@ -82,9 +82,7 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_st
  * buttons exist exactly when the table admits them); only PLACEMENT — which
  * slot a button renders in, its icon, tint, and order — stays this file's
  * per-status code, and dispatch flows through the single [onAction] sink
- * instead of a callback per verb. The former shape encoded the admission
- * table visually as one hand-written button per status branch (re-encoding
- * what the table already knew); this shape asks the module first.
+ * instead of a callback per verb.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -113,8 +111,8 @@ internal fun DownloadItemRow(
     onStream: (() -> Unit)? = null,
     /**
      * The single sink for every [DownloadBulkAction] the row's inline cluster
-     * offers (pause / resume / cancel / retry / delete). One callback replaces
-     * the former one-per-verb fan (the screen's sink decides the per-verb
+     * offers (pause / resume / cancel / retry / delete). One callback covers
+     * the whole verb fan (the screen's sink decides the per-verb
      * policy — e.g. delete confirms before it dispatches).
      */
     onAction: (DownloadBulkAction) -> Unit,
@@ -499,7 +497,7 @@ private fun RowActionSlot(
 /**
  * A row's inline action button — compact (32dp box, 18dp icon, TrackRow's
  * row-menu pattern) so up to three of them don't starve the text column on a
- * phone. The reduced touch target matches the music row precedent; TV focus
+ * phone. The reduced touch target matches the music row's; TV focus
  * still rings via [tvFocusIndicator].
  */
 @Composable

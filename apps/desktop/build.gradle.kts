@@ -6,12 +6,10 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
     // Packaging mechanics — fetchBundledLibmpv + writeDesktopBuildInfo (task
-    // names byte-compatible with the former inline definitions; CI release
-    // lanes reference them), the numeric packageVersion grammar, the release
-    // channel, and the macOS bundle-version shift — live in the
-    // build-logic-convention included build now. The relocated history and
-    // the dependency-conveyor notes are appended to
-    // docs/kmp-migration-plan.md ("Desktop packaging history").
+    // names are stable API; CI release lanes reference them), the numeric
+    // packageVersion grammar, the release channel, and the macOS
+    // bundle-version shift — live in the build-logic-convention included
+    // build.
     id("jellyplay.desktop.packaging")
 }
 
@@ -19,12 +17,8 @@ kotlin {
     jvmToolchain(17)
 }
 
-// Desktop shell (docs/kmp-migration-plan.md): Compose Window + tray
-// + menubar + shortcuts over the shared core stack. Feature modules land here
-// one conveyor step at a time (§V1c/V3); the per-feature LIVE/latent notes
-// that used to run alongside these declarations moved to that doc's
-// "Desktop packaging history" section — the dependency set below is complete
-// and unchanged.
+// Desktop shell: Compose Window + tray + menubar + shortcuts over the shared
+// core stack. The dependency set below is complete.
 dependencies {
     implementation(compose.desktop.currentOs)
 
@@ -41,8 +35,7 @@ dependencies {
     // MediaEngine contract for the desktop player engine.
     implementation(project(":shared:core:player-contract"))
 
-    // Feature conveyor (V3) — every module's LIVE/latent story is in
-    // docs/kmp-migration-plan.md; player-live is the one LATENT registration
+    // Shared feature modules; player-live is the one latent registration
     // (Android-only engine seams; its jvm target exists for its shared
     // ViewModel's jvmTest suite).
     implementation(project(":shared:feature:search"))
@@ -51,9 +44,9 @@ dependencies {
     implementation(project(":shared:feature:livetv"))
     implementation(project(":shared:feature:downloads"))
     implementation(project(":shared:feature:syncplay"))
-    // …settings — the harness names SettingsViewModel directly (the shell's
-    // own screens only render settingsSection, so the ViewModel supertype
-    // was never on the shell classpath before).
+    // …settings — the harness names SettingsViewModel directly; the shell's
+    // own screens only render settingsSection, so this edge is what puts the
+    // ViewModel supertype on the shell classpath.
     implementation(project(":shared:feature:settings"))
     implementation(libs.lifecycle.viewmodel)
     implementation(project(":shared:feature:admin"))
@@ -114,13 +107,10 @@ dependencies {
     // wall clocks — mpv runs its own threads — but no polling races there.
     testImplementation(libs.coroutines.test)
     testImplementation(kotlin("test"))
-    // The shared MediaEngine double (the fake-twin merge): the desktop's
-    // app-side FakeMediaEngine copy was deleted; its suites now construct the
-    // fixtures class with LoadBehavior.AUTO_PLAY — the same personality the
-    // deleted twin hardcoded. The fake-twin merge's wall-clock pollUntil
-    // helper has since moved back into THIS module's test sources
-    // (ADR-0006 rule 4: the desktop suites were its only consumers).
-    // Test-scoped edge per the test-fixtures house rules.
+    // The shared MediaEngine double: the suites construct the fixtures class
+    // with LoadBehavior.AUTO_PLAY, and the wall-clock pollUntil helper lives
+    // in THIS module's test sources (the desktop suites are its only
+    // consumers). Test-scoped edge per the test-fixtures house rules.
     testImplementation(project(":shared:core:test-fixtures"))
     // Real org.json for the WebSocketEvent fixtures (DesktopIdleAmbientControllerTest):
     // WebSocketEvent.data is a non-null org.json.JSONObject — the same
@@ -146,9 +136,8 @@ configurations.all {
     }
 }
 
-// The committed packaging icon assets (drawn once by the since-deleted
-// generatePackagingIcons task — placeholder brand art whose outputs are real
-// committed files ordinary builds never regenerate; PackagingIconAssetsTest
+// The committed packaging icon assets (placeholder brand art committed as
+// real files that ordinary builds never regenerate; PackagingIconAssetsTest
 // validates the bytes structurally).
 val packagingIconsDir = layout.projectDirectory.dir("packaging/icons")
 
@@ -178,8 +167,7 @@ compose.desktop {
         // tools/perf/desktop-baseline.sh.
 
         buildTypes.release.proguard {
-            // READY-TO-FLIP (TOOLCHAIN-BLOCKED, see below): shrink-only first
-            // round (obfuscate stays OFF so the
+            // Shrink-only (obfuscate stays OFF so the
             // reflective seams — JNA name-mapped natives, kotlin-reflect,
             // Koin by-type — hold without the full Android keep book); rules
             // in proguard-rules.pro; measurement gate via
@@ -192,9 +180,9 @@ compose.desktop {
             // 7.8.0 (latest, `version` below) reads ≤2.3 → dies on the
             // kotlin-stdlib 2.4.10 the desktop runtime classpath resolves
             // (the Compose/Kotlin 2.4 toolchain side of the same story as
-            // the klib notes). UNLOCK: a ProGuard with kotlin-metadata-jvm
-            // ≥2.4 (or CMP moving to R8) — re-attempt alongside the toolchain
-            // toolchain upgrade, then run the A/B + e2e smoke.
+            // the klib notes). A ProGuard with kotlin-metadata-jvm ≥2.4
+            // (or CMP moving to R8) unblocks this; then run the A/B + e2e
+            // smoke.
             version = "7.8.0"
             isEnabled = false
             obfuscate = false

@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pure tests for [franchisePlayOrder] — the D6 "Play collection in order"
+ * Pure tests for [franchisePlayOrder] — the "Play collection in order"
  * plan. Pins the first-unwatched start rule and the queue tail that the
  * caller appends via `VideoQueueController.enqueueLast` (queue-first
  * semantics; the manual queue is suppressed under SyncPlay by the player's

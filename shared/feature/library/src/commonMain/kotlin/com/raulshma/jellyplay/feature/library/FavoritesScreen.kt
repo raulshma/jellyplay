@@ -112,7 +112,7 @@ internal fun FavoritesScreen(
 
     // Long-press / TV-Menu quick actions for favorite cards, on the shared
     // intake (core/ui — see QuickActionIntake). Download / Remove download
-    // ride the same intake as the library grid (#147): a downloaded favorite
+    // ride the same intake as the library grid: a downloaded favorite
     // flips the slot to "Remove download".
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
@@ -175,8 +175,8 @@ internal fun FavoritesScreen(
             PagedCollectionGrid(
                 items = pagingItems,
                 itemKey = { it.id },
-                // Device-class default cache window: this override
-                // used to drop the cache window entirely on every platform.
+                // Device-class default cache window: the override supplies the
+                // platform default instead of dropping the window entirely.
                 state = rememberLazyGridState(cacheWindow = defaultGridCacheWindow()),
                 columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                 contentPadding = PaddingValues(

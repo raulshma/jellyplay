@@ -42,7 +42,7 @@ import kotlin.test.assertTrue
  *    to per-day aggregation over the user's played items;
  *  - the year-window pagination stop in [WatchHistoryRepositoryImpl.getPlayedItems].
  *
- * D3: the calendar reads went through the injected TimeSource, so the suite
+ * The calendar reads went through the injected TimeSource, so the suite
  * pins a fixed today (2026-03-10) — the current-year day count and the
  * malformed-date year fallback are deterministic, not machine-calendar
  * dependent.

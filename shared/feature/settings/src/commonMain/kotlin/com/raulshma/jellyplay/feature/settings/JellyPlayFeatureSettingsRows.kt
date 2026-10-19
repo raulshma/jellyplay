@@ -50,7 +50,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_feature_user_ratings_subtitle
 
 /**
- * The "Server plugin" section's per-feature toggle rows (ADR 0010) — one
+ * The "Server plugin" section's per-feature toggle rows — one
  * switch per USER-FACING capability key, each emitted ONLY where the
  * capabilities probe currently exposes it (the section itself hides whenever
  * the plugin is UNAVAILABLE/UNKNOWN — never dead switches). The meta keys
@@ -184,7 +184,7 @@ internal object JellyPlayFeatureRows {
     )
 
     /**
-     * The push wave's toggle (the plugin's `push` key — exposed only where the
+     * The push toggle (the plugin's `push` key — exposed only where the
      * server admin enabled push). The section renders this row's subtitle
      * DYNAMICALLY from the push repository's state machine (Registered / No
      * distributor app / Server push disabled); this static search subtitle is
@@ -200,7 +200,7 @@ internal object JellyPlayFeatureRows {
     )
 
     /**
-     * The analytics wave's toggle (the plugin's `analytics` key — an
+     * The analytics toggle (the plugin's `analytics` key — an
      * admin-context surface like [Transcodes], so the row is admin-only: the
      * switch switches the admin dashboard's analytics tile and screen).
      */

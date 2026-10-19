@@ -56,7 +56,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_impo
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The Wave-3 passphrase dialog for the LOCAL FILE backup secrets block — the
+ * The passphrase dialog for the LOCAL FILE backup secrets block — the
  * one dialog in the backup flow that embeds text fields. Follows the
  * [com.raulshma.jellyplay.core.ui.components.ConfirmDialog] visual register
  * (floating [ShapeCache.smooth28] surface, tone-tinted squircle icon badge,

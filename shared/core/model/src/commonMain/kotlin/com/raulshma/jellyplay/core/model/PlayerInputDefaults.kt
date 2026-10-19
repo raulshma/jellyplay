@@ -107,9 +107,9 @@ object PlayerInputDefaults {
     }
 
     /**
-     * The single-finger swipe tier: the four behaviors `GestureMode`'s
-     * `swipesEnabled` used to gate as one lump (swipe seek / brightness /
-     * volume / edge swipe). [GestureMode.TAP_ONLY] disables exactly these.
+     * The single-finger swipe tier: the four behaviors `GestureMode.swipesEnabled`
+     * gates as one lump (swipe seek / brightness / volume / edge swipe).
+     * [GestureMode.TAP_ONLY] disables exactly these.
      */
     fun isSwipeTierPattern(pattern: InputPattern): Boolean = when (pattern) {
         is InputPattern.VerticalSwipe,
@@ -163,7 +163,7 @@ object PlayerInputDefaults {
         // to notched volume steps — PlayerWheelPolicy's calibration).
         PlayerBinding(ID_WHEEL_VOLUME, InputPattern.Wheel(WheelAxis.VERTICAL), PlayerAction.SWIPE_VOLUME),
         // Shift+wheel / horizontally-dominant delta: the seek-notch rows. The
-        // vertical+Shift row is its own default (the retired PlayerWheelPolicy
+        // vertical+Shift row is its own default (the legacy PlayerWheelPolicy
         // seeked on Shift regardless of axis); the horizontally-dominant case
         // folds into the HORIZONTAL row.
         PlayerBinding(ID_WHEEL_SEEK, InputPattern.Wheel(WheelAxis.HORIZONTAL), PlayerAction.SWIPE_SEEK),
@@ -183,8 +183,8 @@ object PlayerInputDefaults {
     )
 
     /**
-     * The keyboard rows — the retired `mediaKeyAction`/`mediaKeySeek` tables
-     * verbatim. Seek-family keys carry ONE canonical (modifier-less) row: the
+     * The keyboard rows — the legacy `mediaKeyAction`/`mediaKeySeek`
+     * behavior. Seek-family keys carry ONE canonical (modifier-less) row: the
      * modifier steps (Shift/Ctrl/Alt over the configured jump) are event-time
      * semantics the seek site folds in, not separate bindings.
      */
@@ -210,7 +210,7 @@ object PlayerInputDefaults {
         PlayerBinding(ID_KEY_M, InputPattern.Key(PlayerInputKey.M), PlayerAction.TOGGLE_MUTE),
         PlayerBinding(ID_KEY_V, InputPattern.Key(PlayerInputKey.V), PlayerAction.TOGGLE_SUBTITLES),
         // Subtitle delay (plain brackets + G/H) and audio delay (Ctrl+brackets).
-        // The retired table folded ANY Ctrl+bracket press — Shift/Alt held
+        // The legacy table folded ANY Ctrl+bracket press - Shift/Alt held
         // alongside made no difference — so every Ctrl combo carries its own
         // row: the exact-modifier candidate must hit the audio-delay row, not
         // fall through the ladder to the plain subtitle row.
@@ -316,7 +316,7 @@ object PlayerInputDefaults {
      *
      * The hold-speed and double-tap-hold rows flip with the tap tier like
      * every other touch row: NONE must kill the whole touch surface (the
-     * retired tier gate did, and the absent-blob legacy read seeds those rows
+     * legacy tier gate did, and the absent-blob legacy read seeds those rows
      * off the mode too — a preset flip and a fresh read must agree). The two
      * behaviors' own preference rows stay authoritative through the runtime
      * AND gates at their fire sites, so re-enabling a row the user's

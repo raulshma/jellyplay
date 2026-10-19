@@ -31,20 +31,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Hand-rolled collaborators for the desktop audio queue tests — the ONE
- * copy of the fixture set that used to exist verbatim in TWO lanes:
+ * Hand-rolled collaborators for the desktop audio queue tests, shared by
  * core:data jvmTest (the manager-semantics + state-core suites, beside the
- * relocated manager) and apps/desktop's test source set (the two app-level
- * suites that stayed behind — the focus composition suite and the
- * real-mpv engine suite — whose own KDoc called this set canonical and
- * its copy "kept in sync by review"). ADR-0006 rule 4: a fake needed by
- * more than one module's test lane belongs here; both copies dissolved
- * into this file with their bodies untouched (only the package and the
- * visibility changed — module-internal would strand them in this module).
+ * manager) and apps/desktop's test source set (the focus composition suite
+ * and the real-mpv engine suite). A fake needed by more than one module's
+ * test lane belongs here.
  *
  * Public top-level so both lanes' suites share them, same convention as
- * [FakeMediaEngine]; the MediaEngine double itself had already merged
- * here in the fake-twin merge.
+ * [FakeMediaEngine].
  *
  * JVM-only home (jvmMain, NOT the module's usual jvmShared): the set
  * references core:data's JVM-only [AudioEffectsSession] (that module's

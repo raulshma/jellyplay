@@ -124,7 +124,7 @@ internal fun isExcludedTvDrawerFolder(folder: LibraryFolder): Boolean {
 }
 
 /**
- * TV-drawer primary destinations in display order (#152).
+ * TV-drawer primary destinations in display order.
  *
  * The drawer has no overflow menu, so Shortcuts rides as an explicit primary
  * item — but its *position* still comes from the stored nav customization like

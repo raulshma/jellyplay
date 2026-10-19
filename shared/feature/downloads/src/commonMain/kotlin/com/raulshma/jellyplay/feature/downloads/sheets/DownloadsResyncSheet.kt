@@ -71,9 +71,9 @@ internal fun DownloadsResyncSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Header: just the title + icon. The "Force resync" action moved to
-            // the bottom action row beside Close so the two terminal controls
-            // live together (matches the force-resync sheet's footer).
+            // Header: just the title + icon. The "Force resync" action sits
+            // in the bottom action row beside Close so the two terminal
+            // controls live together (matches the force-resync sheet's footer).
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Tabler.Outline.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Text(

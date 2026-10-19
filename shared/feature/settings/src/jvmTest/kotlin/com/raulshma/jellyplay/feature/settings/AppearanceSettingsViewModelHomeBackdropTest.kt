@@ -27,10 +27,9 @@ import kotlin.test.Test
  * [AppearanceSettingsViewModel] — mirroring [LibraryLayoutViewModelTest]'s
  * mockk style — without touching the DataStore.
  *
- * Ported from the legacy Android unit test: the :core:testing
- * MainDispatcherRule is inlined (StandardTestDispatcher + setMain/resetMain —
- * downloads-conveyor jvmTest pattern) because jvmTest has no access to that
- * module.
+ * The :core:testing MainDispatcherRule is inlined
+ * (StandardTestDispatcher + setMain/resetMain — downloads-conveyor jvmTest
+ * pattern) because jvmTest has no access to that module.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppearanceSettingsViewModelHomeBackdropTest {

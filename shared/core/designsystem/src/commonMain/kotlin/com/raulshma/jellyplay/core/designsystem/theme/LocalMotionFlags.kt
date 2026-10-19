@@ -8,7 +8,7 @@ import androidx.compose.runtime.compositionLocalOf
  * The ONE home of the motion/performance flags. These locals are the single
  * source of truth for the fold: [JellyPlayTheme] derives its
  * `MotionScheme` from them directly (see [motionSchemeFor]), so the scheme and
- * every call-site guard can no longer disagree — there is exactly one channel
+ * every call-site guard cannot disagree — there is exactly one channel
  * carrying the flags. `JellyPlayPreferenceTheme` (core/ui) provides them once,
  * above [JellyPlayTheme]; everything below reads them.
  *

@@ -44,7 +44,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The full TMDB reviews screen (D9) — the "All reviews (N)" destination of the
+ * The full TMDB reviews screen — the "All reviews (N)" destination of the
  * detail screen's preview section. The [CastAndCrewScreen] shape: a lightweight
  * scaffold whose VM rides the cached detail + TMDB seams (see
  * [ReviewsViewModel]), rendering the same review-card vocabulary the detail
@@ -109,7 +109,7 @@ private fun tmdbAvatarUrl(avatarPath: String?): String? =
 
 /**
  * One TMDB review card — the shared vocabulary of the detail body's preview
- * section and this screen (D9's split; the card body moved here verbatim from
+ * section and this screen (the split; the card body moved here verbatim from
  * the former detail-local `ReviewsSection` so the two surfaces cannot drift).
  * Informational only: no click. [contentMaxLines] caps the review body — the
  * detail preview passes the former 6-line cap; the full screen renders whole.

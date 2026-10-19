@@ -203,7 +203,7 @@ internal fun playerBoxKeyInputModifier(
  * never diverge: the surface Box's focused-dispatch modifier
  * ([playerBoxKeyInputModifier] via [dpadKeyHandler]) and the key-sink fallback
  * ([PlayerTvKeySinkEffect]) the screen publishes for keys that reach nothing
- * (issue #174's null-focus death — no Compose focus target left after the
+ * (null-focus death — no Compose focus target left after the
  * controls auto-hide, so the Activity-level bridge runs the same arms). Every
  * arm is EXACTLY the inline body this file carried before the extraction.
  *
@@ -301,7 +301,7 @@ internal fun tvDpadKeyConfig(
             }
         }
         onKeyEvent(DpadAction.Menu) { dpadKey ->
-            // MENU — the last key on issue #174's dead list ("none of Up,
+            // MENU — the last key on dead list ("none of Up,
             // Down, Left, Right, OK or Menu brings them back"): the first
             // press summons the controls. MENU has no row in the
             // customizable D-pad catalog (no DpadControl value), so this arm

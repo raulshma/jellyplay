@@ -55,7 +55,7 @@ class ItemSwitchResetOrderTest {
 
     @Test
     fun releaseInternalsVmPart_rebuildsUiState_beforeTheNavigatorResetsTheEpisodeSlice() {
-        // The VM half moved session-side with the C6 collapse (every
+        // The VM half moved session-side (every
         // collaborator it touches is session-internal now) — the order pin
         // moved with it.
         val session = moduleSource("PlaybackSession.kt")
@@ -82,7 +82,7 @@ class ItemSwitchResetOrderTest {
         // Only whitespace may sit between the session half's call and the VM
         // half's hook: the pair is one synchronous call chain on both the
         // per-item re-initialization path and the full-release path. The VM
-        // half rides the session's own lifecycleHooks override since the C6
+        // half rides the session's own lifecycleHooks override since the 
         // collapse (the former wiring builder's receiver).
         val adjacency = Regex("releaseInternalsSessionPart\\(\\)\\s*\\n\\s*lifecycleHooks\\.releaseInternalsVmPart\\(\\)")
         val sites = adjacency.findAll(session).toList()

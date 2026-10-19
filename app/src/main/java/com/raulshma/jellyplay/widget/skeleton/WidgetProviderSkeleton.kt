@@ -24,8 +24,8 @@ internal fun resolveWidgetDataStore(): WidgetDataStore? = try {
 }
 
 /**
- * The choreography the four `AppWidgetProvider`s used to carry as hand
- * copies, now owned once. Each provider instance keeps its OWN scope
+ * The choreography shared by the four `AppWidgetProvider`s,
+ * owned once. Each provider instance keeps its OWN scope
  * instance (the framework constructs a fresh receiver per broadcast; the
  * scope outlives the broadcast only through its in-flight jobs):
  *
@@ -101,8 +101,7 @@ abstract class WidgetProviderSkeleton : AppWidgetProvider() {
      * the SAME runnable, so the system never sees the broadcast complete
      * before the push landed. Not a `finally`: a failure in [work] closes
      * the window immediately via the catch (the push never happened), while
-     * a failure inside the returned runnable crashes exactly as the former
-     * inline hand copy did.
+     * a failure inside the returned runnable propagates and crashes.
      */
     protected fun launchFinishingOnMain(
         context: Context,
@@ -146,7 +145,7 @@ abstract class WidgetProviderSkeleton : AppWidgetProvider() {
 /**
  * Resolves the ids of every bound instance of [providerClass] — the
  * `AppWidgetManager.getInstance` → `ComponentName` → `getAppWidgetIds`
- * triple the widget package used to hand-copy per provider. Empty when no
+ * triple shared by every provider. Empty when no
  * instance is bound.
  */
 internal fun widgetIdsFor(

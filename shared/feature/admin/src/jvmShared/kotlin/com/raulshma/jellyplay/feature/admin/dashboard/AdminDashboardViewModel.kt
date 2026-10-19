@@ -46,7 +46,7 @@ data class AdminDashboardState(
 class AdminDashboardViewModel(
     private val adminRepository: AdminRepository,
     /**
-     * The JellyPlay companion-plugin seam (ADR 0010), nullable-with-default
+     * The JellyPlay companion-plugin seam, nullable-with-default
      * (SettingsViewModel pattern) so the direct-construction test harnesses
      * compile. Backs the Quick Actions "Transcodes" tile's gate — the tile is
      * offered only when the probe reports AVAILABLE **and** the `transcodes`
@@ -60,8 +60,8 @@ class AdminDashboardViewModel(
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
     /**
-     * The plugin api client behind the "Send broadcast" composer (ADR 0010 —
-     * POST jellyplay/broadcast, riding the `events` stream). Nullable-with-
+     * The plugin api client behind the "Send broadcast" composer (POST
+     * jellyplay/broadcast, riding the `events` stream). Nullable-with-
      * default like the seams above; the send is refused while either gate is
      * unwired, so direct construction (tests) simply can't broadcast.
      */
@@ -74,7 +74,8 @@ class AdminDashboardViewModel(
     /**
      * The shared capability gate (the plugin capability gate module) — the
      * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
-     * store discipline the tiles' gates used to re-wire per flow. Null with
+     * store discipline that the tiles' gates would otherwise re-wire per
+     * flow. Null with
      * the store: tiles whose seams are unwired (direct construction, tests)
      * simply never render.
      */

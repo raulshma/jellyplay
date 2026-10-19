@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
- * H18 — the exact `Route.LibrarySection` construction a detail-screen genre
+ * The exact `Route.LibrarySection` construction a detail-screen genre
  * chip navigates with (`MediaDetailBodySections.kt`'s DetailChipRow onClick:
  * `Route.LibrarySection(title = genre, genre = genre)`). The builder lives
  * inline in the details feature and is not importable from home, so the
@@ -26,7 +26,7 @@ internal fun homeGenreRoute(genreName: String): Route.LibrarySection =
     Route.LibrarySection(title = genreName, genre = genreName)
 
 /**
- * H18 genre-rail fetch + TTL cache — the plan's "mirror the sub-call TTL
+ * The genre-rail fetch + TTL cache — mirrors the sub-call TTL
  * pattern least-invasively": a VM-scoped cache over
  * [LibraryApiClient.getGenres] with the shared
  * [HomeFreshness.NETWORK_SUBCALL_TTL_MS] window (the same policy constant the
@@ -88,7 +88,7 @@ internal class HomeGenreRailCache(
     }
 
     companion object {
-        /** The plan's "top ~24 genres". */
+        /** The genre rail's cap (~24 genres). */
         const val GENRE_RAIL_LIMIT: Int = 24
 
         /** Same TTL window as the network module's home sub-call caches. */
@@ -97,7 +97,7 @@ internal class HomeGenreRailCache(
 }
 
 /**
- * The H18 genre quick-access rail — a LazyRow of [GlassFilterChip] (the
+ * The genre quick-access rail — a LazyRow of [GlassFilterChip] (the
  * shared expressive chip, D-pad focus included). Hidden by the caller when
  * the pref is off, the feed is offline, or the cache is empty.
  */

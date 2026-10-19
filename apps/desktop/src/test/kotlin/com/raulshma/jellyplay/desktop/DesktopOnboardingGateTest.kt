@@ -15,12 +15,12 @@ import kotlinx.coroutines.test.runTest
  * JellyPlayApp branch it mirrors — gate fires only for a signed-in user that
  * never completed the wizard, never for a completer or a signed-out session.
  *
- * The decision itself moved to the shared
+ * The decision comes from the shared
  * [onboardingGateRoute] (:shared:feature:shell — the Android shell runs the
  * same fn with the TV delta); these pins stay on the desktop wrapper, whose
- * job is now exactly the `isTv = false` specialization (the desktop build is
- * never the TV build). [runDesktopOnboardingGateOnce] — the extracted
- * one-shot read + dispatch the scaffold's LaunchedEffect delegates to — is
+ * job is exactly the `isTv = false` specialization (the desktop build is
+ * never the TV build). [runDesktopOnboardingGateOnce] — the one-shot read +
+ * dispatch the scaffold's LaunchedEffect delegates to — is
  * pinned here too: the persisted flag is read EXACTLY once and the wizard is
  * pushed only for a not-yet-onboarded session.
  */

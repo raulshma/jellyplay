@@ -10,13 +10,13 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
  *
  * Stateless by design — the dialog state itself ([HomeUiState.seerrRequestState],
  * the sync sheet's entries/details flows) lives in the VM where it survives
- * configuration change; what was missing was an owner for the ORDERING and
+ * configuration change; this owns the ORDERING and
  * CASCADES around it. Opening the Seerr dialog must fire the service-details
  * load, plus the season load for TV only; dismissing must clear the pending
  * item BEFORE dropping the request result, or a stale result banner can flash
- * into the next dialog's state. That choreography used to live as
- * LaunchedEffect/onDismiss bodies inside HomeScreen — reachable by no test;
- * here each sequence is one method pinned by [HomeDialogSessionTest].
+ * into the next dialog's state. As LaunchedEffect/onDismiss bodies inside
+ * HomeScreen, this choreography is reachable by no test; here each sequence is
+ * one method pinned by [HomeDialogSessionTest].
  *
  * Compose-free: the screen keeps the `requestItem?.let` gating and the
  * sheet-open `if` — this module only owns what firing those intents MEANS.

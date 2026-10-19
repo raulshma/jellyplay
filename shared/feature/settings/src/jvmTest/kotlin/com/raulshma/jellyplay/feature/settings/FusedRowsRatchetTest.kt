@@ -26,19 +26,17 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * The fused-conversion ratchet for the WHOLE settings module — the enforcement
- * teeth of the single-homing wave, generalized from the appearance-domain
- * template it started as. Every domain but the experimental screen converted:
- * its visible behavior must stay derivable from the fused rows alone, and the
- * retired three-home machinery must stay retired:
+ * The fused-rows guard for the WHOLE settings module: every domain but the
+ * experimental screen declares its rows as fused [SettingsRow] lists, so its
+ * visible behavior must stay derivable from those declarations alone.
  *
- *  1. ZERO retired declarations in production source: no `SettingsSearchBinding`
+ *  1. ZERO second-home declarations in production source: no `SettingsSearchBinding`
  *     table, no `SettingsRowRecord` list, no `*Ids` holder, no separate
  *     admissions map — outside the ONE documented exception (the experimental
  *     screen's spec-direct binding derivation and its holder). A resurrected
  *     table or holder is a second home by definition; compilation cannot catch
- *     it (the retired types that remain — the binding data class, the
- *     experimental holder — are live), so this is a source scan.
+ *     it (the binding data class and the experimental holder are live), so
+ *     this is a source scan.
  *  2. The ordered row lists ARE the spine: every screen group carries exactly
  *     its row list's ids in order, the vocabulary is exactly their union
  *     (duplicate-free), and every id resolves to exactly one catalog item.
@@ -52,10 +50,10 @@ import kotlin.test.fail
  *     desktop-only mpv rows) survive the projection.
  *  5. The entrance single-homing: every converted domain's
  *     [SettingsEntranceSectionRow] is the list entry (spliced once, at the
- *     pinned render position) and its (phone, tv) steps stay the retired
- *     literals — the emission faces read the one declaration.
+ *     pinned render position) and its (phone, tv) steps match the pinned
+ *     entrance order — the emission faces read the one declaration.
  *
- * Behavior byte-identity (search results, catalog order, totals, gates under
+ * Behavior identity (search results, catalog order, totals, gates under
  * every flag permutation) is pinned where it is strongest: the absolute
  * number pins in `SettingsCatalogScreenContractTest` read the derived
  * admissions through [rowTotalFor], and `SpecDerivedSearchItemsTest` /
@@ -63,7 +61,7 @@ import kotlin.test.fail
  */
 class FusedRowsRatchetTest {
 
-    // ── 1. Zero retired declarations in production source ───────────────
+    // ── 1. Zero second-home declarations in production source ──────────
 
     private fun repoRoot(): File {
         var dir: File? = File(System.getProperty("user.dir")).absoluteFile
@@ -90,7 +88,7 @@ class FusedRowsRatchetTest {
     }
 
     /**
-     * The documented exceptions to the zero-retired-machinery scan: the
+     * The documented exceptions to the zero-second-home scan: the
      * experimental screen's spec-direct binding derivation (its per-row
      * search categories differ, so its five rows cannot fold into a
      * single-category fused row list) and its ids holder.
@@ -127,10 +125,9 @@ class FusedRowsRatchetTest {
 
     @Test
     fun `the retired per-domain ids holders are gone from production sources`() {
-        // The holders' deletion is the wave's identity single-homing; a name
-        // reappearing in PRODUCTION code means a second identity home came
-        // back. The experimental holder is the documented exception (its
-        // binding derivation names its own ids).
+        // A holder name reappearing in PRODUCTION code means a second
+        // identity home came back. The experimental holder is the documented
+        // exception (its binding derivation names its own ids).
         val retiredHolders = listOf(
             "AppearanceSettingsIds", "PlaybackSettingsIds", "HomeSettingsIds", "AudioSettingsIds",
             "StorageSettingsIds", "LanguageSettingsIds", "TrackSelectionIds", "NotificationSettingsIds",
@@ -192,9 +189,9 @@ class FusedRowsRatchetTest {
         "system.idleAmbient" to SystemIdleAmbientRows,
         "system.discordPresence" to SystemDiscordPresenceRows,
         "system.hooks" to SystemHooksRows,
-        // jellyplay companion-plugin sync (ADR 0010)
+        // jellyplay companion-plugin sync
         "jellyplay.sync" to JellyPlaySyncRows.all,
-        // jellyplay companion-plugin per-feature switches (ADR 0010)
+        // jellyplay companion-plugin per-feature switches
         "jellyplay.features" to JellyPlayFeatureRows.all,
         // account / activity-insights
         "account" to AccountRowsList,
@@ -334,8 +331,7 @@ class FusedRowsRatchetTest {
     @Test
     fun `androidOnly projections stay android-only and desktop rows stay desktop-only`() {
         // The Vlc/Exo engine branches and notifications: items tagged
-        // ANDROID-only (the retired list-level androidOnly preserved through
-        // the projection as the rows' platform tags); the desktop mpv
+        // ANDROID-only (the rows' platform tags); the desktop mpv
         // render/audio-device rows keep their per-row DESKTOP tag.
         listOf(VlcEngineSearchItems, ExoPlayerEngineSearchItems, NotificationSettingsSearchItems).forEach { items ->
             assertTrue(items.all { it.platforms == setOf(PlatformKind.ANDROID) })
@@ -350,8 +346,8 @@ class FusedRowsRatchetTest {
 
     /**
      * Every converted domain's entrance: the section spliced exactly once, at
-     * the pinned render position (the retired literal numbering — the same
-     * pairs `SettingsEntranceStepsTest` pins for the whole list).
+     * the pinned render position (the same pairs `SettingsEntranceStepsTest`
+     * pin for the whole list).
      */
     @Test
     fun `every converted domain's entrance section is the one declaration driving emission and step index`() {
@@ -420,9 +416,7 @@ class FusedRowsRatchetTest {
     /**
      * The five screens' HiddenSettingsHint counts, derived through
      * [hiddenRowsFor] from the same declarations the emission `if`s read —
-     * the retired hand literals this replaced drifted on every gated-row
-     * landing (appearance 14, audio 19, language 5, notifications 4, storage
-     * 3 — the derived values below are the declarations' truth). Playback's
+     * the derived values below are the declarations' truth. Playback's
      * 9 is the documented FROZEN exception (engine-/platform-dependent; the
      * flags vocabulary cannot express it) and is deliberately NOT pinned
      * here. Capabilities are passed explicitly so the pins are hermetic —

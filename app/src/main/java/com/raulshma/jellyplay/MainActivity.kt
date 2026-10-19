@@ -57,9 +57,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 // FragmentActivity is load-bearing: androidx.biometric.BiometricPrompt hosts its
 // dialog in a support fragment, so AuthChallengeScreen's findFragmentActivity()
-// resolves the prompt host from this activity. The v0.11.0 ComponentActivity
-// migration returned null there and left fingerprint-only users on an empty
-// (black) lock screen — see issue #162.
+// resolves the prompt host from this activity. A plain ComponentActivity returns
+// null there and leaves fingerprint-only users on an empty (black) lock screen.
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels { KoinViewModelFactory }
@@ -68,20 +67,18 @@ class MainActivity : FragmentActivity() {
     // instead of re-exported through MainViewModel — the ViewModel exposes
     // only the signals it owns. The bundle below is the composition's ONE
     // coordinator resolution path too: the shell coordinators ride it as
-    // lazy providers (their former standalone lazy fields + the three-param
-    // threading through JellyPlayApp → MainContent are gone; MainViewModel
-    // keeps its constructor injection only for the start-on-scope side
-    // effects). Every ShellInfra member is a Lazy PROVIDER (mirroring
-    // audioPlaybackManagerLazy below) so MainActivity.onCreate constructs
-    // none of them — JellyPlayApp resolves the shared UserMessageBus through
-    // the bundle at its first composition and
+    // lazy providers (no standalone lazy fields, no extra threading through
+    // JellyPlayApp → MainContent); MainViewModel keeps its constructor
+    // injection only for the start-on-scope side effects. Every ShellInfra
+    // member is a Lazy PROVIDER (mirroring audioPlaybackManagerLazy below) so
+    // MainActivity.onCreate constructs none of them — JellyPlayApp resolves
+    // the shared UserMessageBus through the bundle at its first composition and
     // the network status flow / remote-control pair inside their
     // composition branches and post-frame collection effects, keeping
     // NetworkMonitor's
     // connectivity-callback registration and the remote-control objects off
     // the cold-start critical path (and out of auth/onboarding-only
-    // sessions entirely). Memoizing lazies preserve the old deferred
-    // field-inject timing.
+    // sessions entirely).
     private val pinRateLimiter: PinRateLimiter by lazy { KoinPlatform.getKoin()!!.get() }
     private val securityStore: SecurityStore by lazy { KoinPlatform.getKoin()!!.get() }
     private val networkMonitor: NetworkMonitor by lazy { KoinPlatform.getKoin()!!.get() }
@@ -97,19 +94,18 @@ class MainActivity : FragmentActivity() {
     private val audioPlaybackManagerLazy: kotlin.Lazy<ShellAudioSurface> =
         lazy { KoinPlatform.getKoin()!!.get<ShellAudioSurface>() }
 
-    // App-scoped lock flag: hoisted off the former compose-local
-    // `isPinUnlocked` mutableStateOf so PlayerActivity's redirect check (the
-    // media-notification class-name-PendingIntent bypass fix) reads the SAME
+    // App-scoped lock flag: PlayerActivity's redirect check (the
+    // media-notification class-name-PendingIntent bypass) reads the SAME
     // flag this gate renders. Same resolution pattern as the shell infra
-    // above; same default (locked) and the same call sites flip it — this is
-    // a state-home move, not a behavior change (one deliberate delta: the
-    // flag now survives this activity's recreate() — pre-Android-13 language
-    // change — instead of re-locking mid-session; see AppLockState KDoc).
+    // above; same default (locked) and the same call sites flip it. One
+    // deliberate property: the flag survives this activity's recreate() —
+    // pre-Android-13 language change — instead of re-locking mid-session;
+    // see AppLockState KDoc.
     private val appLockState: AppLockState by lazy { KoinPlatform.getKoin()!!.get() }
 
     // The PIN-attempt command fold (click-time lockout re-check, off-main
     // verify, failure/success accounting) — composed here from the same Koin
-    // singletons the former inline `onPinEntered` body reached directly.
+    // singletons it uses.
     private val pinGateController: PinGateController by lazy {
         PinGateController(
             rateLimiter = pinRateLimiter,
@@ -186,13 +182,12 @@ class MainActivity : FragmentActivity() {
             },
         )
         // The one-time CastContext initialization (Dynamite dex load +
-        // hasSystemFeature binder call) used to run synchronously here, before
-        // setContent, putting both straight into TTID — the splash cannot
-        // release until onCreate + the first composition finish. It now runs
-        // in the coroutine kicked off just before setContent below;
-        // every later getSharedInstance caller (the hidden route button
-        // there, CastManager, GoogleCastStrategy) still hits the cached
-        // singleton.
+        // hasSystemFeature binder call) runs in the coroutine kicked off just
+        // before setContent below — NOT synchronously before it — so neither
+        // cost lands in TTID (the splash cannot release until onCreate + the
+        // first composition finish). Every later getSharedInstance caller
+        // (the hidden route button there, CastManager, GoogleCastStrategy)
+        // hits the cached singleton.
         splashScreen.setKeepOnScreenCondition { shellInfra.sessionCoordinatorLazy.value.isRestoring.value }
         // Fully-drawn report: the splash gate clearing is the app's real
         // "content ready" boundary (Home is composed and the shell can render),
@@ -277,12 +272,12 @@ class MainActivity : FragmentActivity() {
 
         // The CastContext init, kicked off here so it runs CONCURRENTLY
         // with setContent instead of serially before it — onCreate (and thus
-        // TTID) no longer pays the Dynamite dex load + hasSystemFeature binder
+        // TTID) does not pay the Dynamite dex load + hasSystemFeature binder
         // call. Still on Main (getSharedInstance is main-thread-only, the API
         // has no off-thread variant), but on Dispatchers.Main — NOT
         // Main.immediate, which would execute this body inline inside onCreate
         // itself (there are no suspension points before the CastContext call)
-        // and reproduce today's serial cost — the posted task interleaves with
+        // and reproduce the serial cost — the posted task interleaves with
         // the first composed frames, and castPreinitialized flips the hidden
         // 1dp route button in one or two frames. The dex reads stay wrapped in
         // withCastDiskReadsPermitted: the StrictMode permit is thread-scoped
@@ -300,8 +295,7 @@ class MainActivity : FragmentActivity() {
         setContent {
             val preferences by viewModel.preferences.collectAsStateWithLifecycle()
             // The unlocked flag lives in the app-scoped holder —
-            // collected here so the gate below recomposes exactly like the
-            // former compose-local isPinUnlocked state did.
+            // collected here so the gate below recomposes on every change.
             val pinUnlocked by appLockState.unlocked.collectAsStateWithLifecycle()
 
             // Hidden Cast media-route button, composed only once the onCreate
@@ -312,8 +306,7 @@ class MainActivity : FragmentActivity() {
             // button appears on the recomposition that lands the flip, a
             // frame or two after the first composition. When Cast is
             // unavailable (or not yet initialized) the branch is skipped
-            // outright, matching the old fallback plain View (nothing
-            // references the invisible button).
+            // outright — nothing references the invisible button.
             if (castPreinitialized) {
                 Box(
                     modifier = Modifier
@@ -378,10 +371,7 @@ class MainActivity : FragmentActivity() {
                     // fork, title fork, verify spinner — lives in its own
                     // host composable beside PinGateController
                     // (shell/LockGateHost.kt), the overlay-host pattern; this
-                    // fork keeps only the theme + gate decision. The lock
-                    // decisions themselves were already extracted
-                    // (PinGateController + its pure folds, pinned by their
-                    // suite).
+                    // fork keeps only the theme + gate decision.
                     LockGateHost(
                         pinHash = preferences.pinHash,
                         biometricLockEnabled = preferences.biometricLockEnabled,
@@ -409,8 +399,7 @@ class MainActivity : FragmentActivity() {
     /**
      * One dispatch line over the pure [IncomingIntentRequest] fold (deeplink
      * package): the fold owns the action vocabulary and classifies the intent
-     * into the shell entry point; the string-literal when-chain used to live
-     * inline here.
+     * into the shell entry point.
      */
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent == null) return
@@ -425,14 +414,12 @@ class MainActivity : FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        // The video engine is hosted by PlayerActivity now. MainActivity no longer
-        // drives the shared PlayerLifecycleManager: doing so contaminated
-        // PlayerActivity's engine on app-background / PiP-expand / lock-unlock
-        // (the shared singleton's activeCallbacks is PlayerActivity's engine, so
-        // a pause here reached across Activities). LiveTV does not use it either
-        // (it manages its own engine lifecycle), so there is nothing to pause.
-        // Only record backgrounding for the PIN auto-lock timer — the stamp
-        // itself now lives in AppLockState (the lock family), not on this field.
+        // The video engine is hosted by PlayerActivity, which owns its own
+        // pause/resume handling; LiveTV manages its own engine lifecycle too,
+        // so MainActivity pauses nothing here (driving the shared
+        // PlayerLifecycleManager from here would reach across Activities into
+        // PlayerActivity's engine). Only record backgrounding for the PIN
+        // auto-lock timer — the stamp itself lives in AppLockState.
         appLockState.onBackgrounded(System.currentTimeMillis())
     }
 
@@ -441,10 +428,9 @@ class MainActivity : FragmentActivity() {
 
         // The auto-lock-on-resume policy (gate configured + timer elapsed while
         // backgrounded → relock) is folded into AppLockState.onResumed via
-        // AppLockRedirect.shouldRelock; this adapter only feeds it the same
-        // signals it always read at this point (current preferences + the
-        // resume-moment wall clock). onResumed consumes the background stamp
-        // unconditionally, exactly like the former `backgroundedAt = 0L` did.
+        // AppLockRedirect.shouldRelock; this adapter only feeds it the current
+        // preferences and the resume-moment wall clock. onResumed consumes the
+        // background stamp unconditionally.
         val prefs = viewModel.preferences.value
         appLockState.onResumed(
             nowMs = System.currentTimeMillis(),
@@ -460,9 +446,8 @@ class MainActivity : FragmentActivity() {
         super.onStop()
         // No engine lifecycle here. The video engine lives in PlayerActivity
         // (which owns its own PiP + pause/resume handling); LiveTV manages
-        // itself. MainActivity can no longer enter PiP, so the former PiP-dismiss
-        // branches were dead and are removed along with the cross-Activity
-        // playerLifecycleManager contamination.
+        // itself. MainActivity never enters PiP, so this hook has no
+        // PiP-dismiss work to do.
     }
 
     private companion object {

@@ -75,7 +75,7 @@ class NotificationDispatcherIdTest {
         }
     }
 
-    // ── D12: the series-episode id family ───────────────────────────────
+    // ── the series-episode id family ───────────────────────────────
 
     @Test
     fun `series episode ID is deterministic per series plus episode`() {

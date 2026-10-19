@@ -128,37 +128,37 @@ data class DetailUiState(
      *  score chips on the seasons section's episode rows plus the season
      *  header's average; empty = no scores anywhere. */
     val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
-    /** D4: the no-plugin external-ratings strip values (Seerr first, TMDB
+    /** The no-plugin external-ratings strip values (Seerr first, TMDB
      *  fallback), resolved by the `externalRatings` enrichment. [DetailExternalRatings.isEmpty]
      *  = strip absent (pref off / no source resolved — silent absence). */
     val externalRatings: DetailExternalRatings = DetailExternalRatings(),
-    /** D4: the plugin dedupe flag — true when the `externalRatings`
+    /** The plugin dedupe flag — true when the `externalRatings`
      *  enrichment's synchronous [JellyPlayPluginFeatures.Ratings] probe came
-     *  back live. Suppresses the D4 chips exactly when the plugin ratings row
+     *  back live. Suppresses the external-ratings chips exactly when the plugin ratings row
      *  actually renders (the pluginSimilarSuppressesStock mirror). */
     val externalRatingsSuppressedByPlugin: Boolean = false,
-    /** D6: the "More in this collection" franchise rows — up to two BoxSets
+    /** The "More in this collection" franchise rows — up to two BoxSets
      *  containing the loaded item, each hydrated with its members in the
      *  server's default order (the current item filtered out). Empty = section
      *  absent (pref off / remote discovery off / no BoxSet ancestor / empty
      *  hydration — silent absence). */
     val franchiseCollections: List<FranchiseCollection> = emptyList(),
-    /** D7: the series' unaired episodes (`GET /Shows/Upcoming` scoped to the
+    /** The series' unaired episodes (`GET /Shows/Upcoming` scoped to the
      *  series, `parentId` = the SERIES id). SERIES detail only. Empty = strip
      *  absent (pref off / not a series / no upcoming episodes — silent
      *  absence). */
     val upcomingEpisodes: List<MediaItem> = emptyList(),
-    /** D12: the CURRENT series' new-episode notification opt-in — mirrored
+    /** The CURRENT series' new-episode notification opt-in — mirrored
      *  from NotificationStore's seriesConfigs by the VM's collector (an
      *  episode resolves to its parent series, a series to itself). Drives the
-     *  ⋮ menu entry's checkmark state and the D7 rows' bell. False = not
+     *  ⋮ menu entry's checkmark state and the upcoming rows' bell. False = not
      *  opted in / desktop (where the surfaces are hidden anyway). */
     val seriesNotificationsEnabled: Boolean = false,
-    /** D8: whether ambient theme audio is currently playing — the top-bar
+    /** Whether ambient theme audio is currently playing — the top-bar
      *  mute chip's visibility gate (folded from the theme-music seam's
      *  playing flow). False on desktop (the no-op seam never plays). */
     val themeMusicPlaying: Boolean = false,
-    /** D6: the franchise rows the user eye-hid, keyed per detail item
+    /** The franchise rows the user eye-hid, keyed per detail item
      *  (itemId → the hidden collection ids). Session memory: it survives
      *  navigation and pull-to-refresh (a surviving leaf of [clearedForReload])
      *  but not a process restart — cross-launch persistence would need a
@@ -174,7 +174,7 @@ data class DetailUiState(
     val seerrSimilar: List<SeerrSearchItem> = emptyList(),
     val relatedVideos: List<SeerrRelatedVideo> = emptyList(),
     /**
-     * D3: the merged trailer list — server-hosted local trailers wrapped as
+     * The merged trailer list — server-hosted local trailers wrapped as
      * [TrailerEntry.Local] plus the TMDB/Seerr videos as [TrailerEntry.Remote]
      * — ordered by the `preferLocalTrailers` pref (locals first when on,
      * today's remote-first order when off). Written by the `trailers`
@@ -184,7 +184,7 @@ data class DetailUiState(
      */
     val trailers: List<TrailerEntry> = emptyList(),
     /**
-     * D22: the resolved stream URL of the item's server ThemeVideo clip —
+     * The resolved stream URL of the item's server ThemeVideo clip —
      * the ambient clip the detail hero prefers over the YouTube embed when
      * the platform can render it (desktop no-ops to the static backdrop).
      * Written by the `themeVideo` enrichment (only while `trailerAutoplay`
@@ -226,7 +226,7 @@ data class DetailUiState(
         val highlightCount: Int = 0,
     )
     /**
-     * One D6 franchise row: a BoxSet containing the loaded item plus its
+     * One franchise row: a BoxSet containing the loaded item plus its
      * members in the server's default order. [members] never contains the
      * loaded item itself (self-filtered by the `franchise` enrichment) and is
      * never empty (empty hydrations drop the row at write time), so the
@@ -241,7 +241,7 @@ data class DetailUiState(
     )
 
     /**
-     * D3: one entry of the merged trailer list — either a server-hosted
+     * One entry of the merged trailer list — either a server-hosted
      * local trailer (a playable library [MediaItem]; dispatches to the full
      * player session, the libmpv path on desktop) or a remote TMDB/Seerr
      * video ([SeerrRelatedVideo]; dispatches to the inline YouTube dialog,
@@ -274,7 +274,7 @@ data class DetailUiState(
      *    per-item content — they survive the reset (and are in any case
      *    re-folded onto the published uiState by the ViewModel's outer
      *    combine; the core flow this reset runs on never writes them).
-     *  - [hiddenFranchiseCollections] is session memory (D6 eye-hides keyed
+     *  - [hiddenFranchiseCollections] is session memory (eye-hides keyed
      *    per item): the hide must survive a pull-to-refresh AND navigation
      *    away and back, so it rides the surviving leaves too.
      *
@@ -360,7 +360,7 @@ sealed interface DetailUiLoadState {
 }
 
 /**
- * D3: merges the item's local (server-hosted) trailers with the remote
+ * Merges the item's local (server-hosted) trailers with the remote
  * TMDB/Seerr videos into one ordered [DetailUiState.TrailerEntry] list. The
  * `preferLocalTrailers` pref decides only the ORDER — locals first when on;
  * otherwise today's remote-first order with the locals appended. Relative
@@ -377,7 +377,7 @@ internal fun mergeTrailerEntries(
 }
 
 /**
- * D3: the local entries already carried by a merged [DetailUiState.trailers]
+ * The local entries already carried by a merged [DetailUiState.trailers]
  * list — the re-merge inputs when the TMDB videos leg lands (or is cleared)
  * after the local fetch. Preserves source order. Pure.
  */
@@ -385,7 +385,7 @@ internal fun List<DetailUiState.TrailerEntry>.localTrailerItems(): List<MediaIte
     filterIsInstance<DetailUiState.TrailerEntry.Local>().map { it.mediaItem }
 
 /**
- * D3: the backdrop autoplay's trailer pick — the merged list's entry the
+ * The backdrop autoplay's trailer pick — the merged list's entry the
  * hero mounts, under the `preferLocalTrailers` pref:
  *
  *  - pref ON + a local trailer exists → the FIRST local entry (the later

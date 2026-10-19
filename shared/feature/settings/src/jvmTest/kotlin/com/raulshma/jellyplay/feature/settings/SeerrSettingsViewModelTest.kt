@@ -46,7 +46,7 @@ import kotlin.test.assertTrue
  * without touching the repository, and toggles/disconnect route to the
  * preferences store.
  *
- * The via-server bridge half (ADR 0010) pins the mode persistence +
+ * The via-server bridge half pins the mode persistence +
  * plugin-brokered link lifecycle: entering the mode persists the flag and
  * fetches `seerrStatus`, the Quick Connect flow authorizes through the
  * Jellyfin QC primitives and finalizes with the plugin's `seerrLogin`,
@@ -132,7 +132,7 @@ class SeerrSettingsViewModelTest {
         secureCredentialsStore,
         pluginApiClient = pluginApiClient.takeIf { withBridge },
         pluginStatusStore = pluginStatusStore.takeIf { withBridge },
-        // The per-feature gate seam (ADR 0010 §6): fail-CLOSED when unwired,
+        // The per-feature gate seam: fail-CLOSED when unwired,
         // so every bridge path (the init seed included) needs the gate —
         // production always receives it from Koin, tests pass this mock.
         jellyPlayFeatureGate = featureGate.takeIf { withBridge },
@@ -262,7 +262,7 @@ class SeerrSettingsViewModelTest {
         assertEquals(ConnectionProbe.Status.Idle, viewModel.connectionStatus.value)
     }
 
-    // ── via-server bridge mode (ADR 0010) ──
+    // ── via-server bridge mode ──
 
     @Test
     fun `entering via-server mode persists the flag and fetches the bridge status`() = runTest {

@@ -250,7 +250,7 @@ private const val LOGO_TITLE_WIDTH_FRACTION = 0.5f
 private const val LOGO_TITLE_ASPECT_RATIO = 2.39f
 
 /**
- * The pure decision behind the detail header's tagline line (D2): the first
+ * The pure decision behind the detail header's tagline line: the first
  * non-blank tagline when the user opted into "show tagline", else null —
  * and null on an empty/blank taglines list, so an older server (no Taglines
  * on the wire) or an offline snapshot simply renders no line. Pure →
@@ -401,7 +401,7 @@ internal fun DetailHeaderSection(
                     }
                 }
 
-            // D2: the item's first tagline under the title — italic, muted,
+            // The item's first tagline under the title — italic, muted,
             // capped at two lines. Silent absence is the contract when the
             // snapshot carries no taglines (older servers / offline) or the
             // show_tagline preference is off.
@@ -517,11 +517,11 @@ internal fun DetailHeaderSection(
                             }
                         }
                     }
-                    // D4: the no-plugin ratings strip (Seerr first, TMDB
+                    // The no-plugin ratings strip (Seerr first, TMDB
                     // fallback), rendered after the critic chip. Standalone
                     // placement only — when the plugin ratings row is present
                     // the chips merge into THAT row's FlowRow instead
-                    // (PluginRatingsSectionModule, D9), so the strip never
+                    // (PluginRatingsSectionModule), so the strip never
                     // renders twice. Chips deep-link to the provider when
                     // their source carries a url (the shared RatingsRow).
                     if (
@@ -837,7 +837,7 @@ internal fun DetailOverviewSection(
     item: MediaItem,
     bodyContentPad: Dp,
 ) {
-    // D1: external-link chips — the server's externalUrls first, then
+    // External-link chips — the server's externalUrls first, then
     // TMDB/IMDb constructed from the provider ids, deduped by host so
     // a server-sourced entry outranks its constructed twin. The whole
     // row hides when the merged list is empty, when the origin is
@@ -1063,7 +1063,7 @@ internal fun DetailUpNextCardSection(
     }
 }
 
-// ── Airing next (D7, delayIndex 6, between up-next and seasons) ───────────
+// ── Airing next (delayIndex 6, between up-next and seasons) ───────────
 
 @Composable
 internal fun DetailUpcomingEpisodesSection(
@@ -1079,7 +1079,7 @@ internal fun DetailUpcomingEpisodesSection(
     val isTv = LocalTvMode.current
     val isCompact = !isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact
 
-    // D12: the per-row bell rides the slot D7 reserved for it —
+    // The per-row bell rides the slot the upcoming slot reserved for it —
     // hidden outright on desktop (no notification stack) and
     // keyed to the strip's one shared per-series state.core.
     val bellVisible = showsSeriesNotifyBell(
@@ -1400,7 +1400,7 @@ internal fun DetailCastSection(
     }
 }
 
-// ── More in this collection (D6, delayIndex 10, ahead of the similar rows) ─
+// ── More in this collection (delayIndex 10, ahead of the similar rows) ─
 
 @Composable
 internal fun DetailMoreInCollectionSection(

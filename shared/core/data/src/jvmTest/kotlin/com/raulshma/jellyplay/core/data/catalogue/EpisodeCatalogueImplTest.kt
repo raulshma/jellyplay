@@ -365,7 +365,7 @@ class EpisodeCatalogueImplTest {
 
     @Test
     fun `cancelled originator does not take down concurrent awaiters`() = runTest {
-        // Risk 1 / port of MediaRepositoryImpl.getMediaDetail 412-433: the
+        // Mirrors the MediaRepositoryImpl.getMediaDetail behaviour: the
         // originator of the shared in-flight Deferred is cancelled mid-fetch,
         // which cancels the Deferred. A concurrent awaiter that is NOT itself
         // cancelled must re-fetch on its own scope rather than failing along

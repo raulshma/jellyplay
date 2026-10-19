@@ -123,7 +123,7 @@ fun MediaDetailScreen(
     // can be merged into it (was previously a separate LaunchedEffect(itemId)).
     var activeTrailerKey by remember { mutableStateOf<String?>(null) }
 
-    // D12: the POST_NOTIFICATIONS runtime-flow seam (Android actual fires the
+    // The POST_NOTIFICATIONS runtime-flow seam (Android actual fires the
     // Android 13+ system dialog when not granted; desktop is a no-op). The
     // per-series notify toggle's first enable invokes it beside the config
     // write — the MainActivity cold-start prompt pattern, mirrored.
@@ -533,7 +533,7 @@ fun MediaDetailScreen(
                             // The play click's whole decision is the pure
                             // [DetailPlaySequencer] fold — the stream
                             // selection ([DetailPlayPolicies.resolveDetailPlayDispatch])
-                            // plus the D14 trailer-then-feature sequencing
+                            // plus the trailer-then-feature sequencing
                             // (with the queue-seeding order its KDoc
                             // documents); this lambda only executes the
                             // returned effects in order.
@@ -603,7 +603,7 @@ fun MediaDetailScreen(
                         onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
                         onStartRadio = { viewModel.onEvent(DetailUiEvent.StartRadio) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
-                        // D14 "Play (with pre-rolls)": arm the one-shot Cinema
+                        // "Play (with pre-rolls)": arm the one-shot Cinema
                         // Mode override, then dispatch the current item from
                         // the start through the normal play path — the
                         // session's user-open funnel consumes the override
@@ -629,7 +629,7 @@ fun MediaDetailScreen(
                             )
                         },
                         onOpenVersionPicker = { dialogSession.openVersionPicker() },
-                        // D6 "Play collection in order": start at the FIRST
+                        // "Play collection in order": start at the FIRST
                         // UNWATCHED member (franchisePlayOrder — plain in-order
                         // when every member is watched or user data is absent)
                         // and append the members AFTER it to the manual queue
@@ -736,7 +736,7 @@ fun MediaDetailScreen(
                         onHideFranchiseRow = { collectionId ->
                             viewModel.onEvent(DetailUiEvent.HideFranchiseRow(collectionId))
                         },
-                        // D12: the config write routes through the VM; the
+                        // The config write routes through the VM; the
                         // POST_NOTIFICATIONS runtime prompt (first enable on
                         // Android 13+, the MainActivity cold-start pattern)
                         // fires beside it via the platform seam. Desktop —
@@ -1326,10 +1326,10 @@ private fun EpisodeDownloadProgressProvider(
  * parameter). All four are process-wide core:data / datastore /
  * player-contract singles:
  *
- *  - [videoQueue]: D6's manual up-next queue (DetailContent's koinInject
+ *  - [videoQueue]: the manual up-next queue (DetailContent's koinInject
  *    precedent) — the franchise row's "play collection in order" tail and
- *    the D14 preroll's feature seed append to it around the start dispatch;
- *  - [cinemaModeOverride]: D14's one-shot Cinema Mode override ("Play with
+ *    the the preroll's feature seed append to it around the start dispatch;
+ *  - [cinemaModeOverride]: the one-shot Cinema Mode override ("Play with
  *    pre-rolls" arms it);
  *  - [syncPlayManager]: the SyncPlay flag the trailer pre-roll sequencing
  *    vetoes on;

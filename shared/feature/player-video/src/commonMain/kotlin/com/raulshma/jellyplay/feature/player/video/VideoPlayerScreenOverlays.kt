@@ -323,7 +323,7 @@ internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
 }
 
 /**
- * The shared collector behind BOTH trickplay thumbnail feeds (A6): the
+ * The shared collector behind BOTH trickplay thumbnail feeds: the
  * seek-bar / D-pad scrub (seek overlay bitmap + the TV mirror, which renders
  * no gesture overlay) and the gesture-swipe preview. The two former inline
  * `LaunchedEffect(Unit)` collectors differed only in the position source, the

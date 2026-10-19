@@ -11,9 +11,9 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 
 /**
- * H7: the hero clip's metadata leg — a per-candidate TTL-memoised probe with
+ * The hero clip's metadata leg — a per-candidate TTL-memoised probe with
  * the spec's two-tier source: the server ThemeVideo clip first, the muted
- * YouTube trailer embed second (the detail screen's D22 pair). One candidate
+ * YouTube trailer embed second (the detail screen's fallback). One candidate
  * = one probe chain per [ttlMs]; a revisit inside the window (hero rotation
  * back to a seen candidate, or a pause-chip toggle re-mounting the surface)
  * serves the memo instead of re-hitting the network. A miss and a FAILED

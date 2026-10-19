@@ -38,8 +38,7 @@ import com.raulshma.jellyplay.widget.skeleton.toViewVisibility
  *
  * `onDataSetChanged` runs on the main thread; the list is read from the
  * store's eagerly-warmed [kotlinx.coroutines.flow.StateFlow] snapshot —
- * memory-only, no DataStore disk IO (the former bounded ≤1 s
- * blocking warm-up read is gone from the bind; a cold snapshot renders the
+ * memory-only, no DataStore disk IO (a cold snapshot renders the
  * empty view and the skeleton's async tail repaints once the eager flow
  * lands). The [ContinueWatchingWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data

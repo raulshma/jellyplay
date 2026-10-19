@@ -255,7 +255,7 @@ class LibraryApiHandMappersTest {
         )
         assertTrue(
             fields.contains("Taglines", ignoreCase = true),
-            "the D2 tagline field must ride the detail projection (got $fields)",
+            "the tagline field must ride the detail projection (got $fields)",
         )
     }
 

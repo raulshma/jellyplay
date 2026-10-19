@@ -28,7 +28,7 @@ class HomeSettingsViewModel(
         private set
 
     /**
-     * H20 manual upload — pushes the current layout to the server through the
+     * Manual upload — pushes the current layout to the server through the
      * sync controller (the same codec the autopush uses). Works regardless of
      * the autopush pref; the result reports success or the transport failure.
      */
@@ -40,7 +40,7 @@ class HomeSettingsViewModel(
     }
 
     /**
-     * H20 manual restore, step 1 — fetch + leniently decode the server's saved
+     * Manual restore, step 1 — fetch + leniently decode the server's saved
      * layout. On an [HomeLayoutRestoreFetch.Offer] the VM retains it in
      * [pendingRestoreOffer] for the confirmation dialog; the caller messages
      * the Empty / Undecodable / failure outcomes.

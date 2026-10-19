@@ -20,7 +20,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Guards the Stage B derivation integrity for the subtitle &amp; language
+ * Guards the derivation integrity for the subtitle &amp; language
  * domain: the [SubtitlePreferenceSpecs] rows are the single declaration of
  * every key's wire name / storage type / reset category, and
  * `SubtitleLanguageStore` derives its `Keys` members, reset lists (and its
@@ -28,8 +28,8 @@ import kotlin.test.assertTrue
  * and [SubtitlePreferenceSpecs.searchEntries] derives from the rows' declared
  * search specs — so a wire-name, storage-type or reset-category drift would
  * silently change what is read from disk or wiped on reset. These tests pin the
- * derivation to the exact legacy strings the pre-spec hand-written store
- * carried; the behavioral safety net (defaults, round-trips, the LRU and
+ * derivation to the exact legacy wire strings; the
+ * behavioral safety net (defaults, round-trips, the LRU and
  * identity-by-absence invariants) stays in [SubtitleLanguageStoreTest].
  */
 class SubtitleSpecDerivationTest {
@@ -62,7 +62,7 @@ class SubtitleSpecDerivationTest {
 
     /**
      * The opted-out rows — the documented [PreferenceSpec.derived]-without-
-     * encode residuals and the Stage A [PreferenceSpec.string] declarations:
+     * encode residuals and the plain [PreferenceSpec.string] declarations:
      * the three nullable language overrides (their setters are the
      * set-or-remove dance) and the three identity/param-dependent blobs (the
      * LRU entry removal, the identity key removals). They have no derived
@@ -200,11 +200,11 @@ class SubtitleSpecDerivationTest {
 
     @Test
     fun `every slice default equals its spec default`() {
-        // The single-default ratchet: each [SubtitleSlice] property's default
+        // The single-default guard: each [SubtitleSlice] property's default
         // reads its row's `.default`, so the value below IS the row's — if a
         // future edit restates a literal here (or on the slice) and the two
-        // drift, this fails. The HDR style default (formerly restated on the
-        // read AND the slice) is the row's DEFAULT_HDR_SUBTITLE_STYLE now.
+        // drift, this fails. The HDR style default is the row's
+        // DEFAULT_HDR_SUBTITLE_STYLE.
         val slice = SubtitleSlice()
         assertEquals(SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.default, slice.preferredSubtitleLanguage)
         assertEquals(SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.default, slice.subtitlesForcedOnly)

@@ -13,11 +13,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the offline home's layout-mirror query at the SQL level (issue #147):
+ * Pins the offline home's layout-mirror query at the SQL level:
  * [com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao.getLatestForIdentity]
  * must return the newest row for the identity regardless of cacheKey, and
- * never leak another identity's row. Ported from the legacy Android test with
- * the shared jvmTest database harness (bundled JVM driver, no Robolectric).
+ * never leak another identity's row. Mirrors the Android test, using the
+ * shared jvmTest database harness (bundled JVM driver, no Robolectric).
  */
 class HomeSectionCacheDaoTest {
 
@@ -59,8 +59,8 @@ class HomeSectionCacheDaoTest {
 
     @Test
     fun `getLatestForIdentity returns the newest row regardless of cacheKey`() = runTest {
-        // The offline home's layout mirror is key-agnostic on purpose (issue
-        // #147): a preference change while offline shifts the cacheKey, and the
+        // The offline home's layout mirror is key-agnostic on purpose: a
+        // preference change while offline shifts the cacheKey, and the
         // last-fetched row is still the layout the user last saw. Newest-first
         // insertion order proves the winner is ORDER BY fetchedAt, not rowid.
         homeSectionCacheDao.upsert(createEntry(cacheKey = "key-home-v2", payloadJson = """{"v":2}""", fetchedAt = 3_000L))

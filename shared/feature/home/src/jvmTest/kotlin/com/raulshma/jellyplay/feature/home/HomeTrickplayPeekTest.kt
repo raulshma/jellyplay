@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Covers the pure decisions behind the H13 wide-card trickplay peek:
+ * Covers the pure decisions behind the wide-card trickplay peek:
  *  - [trickplayTileAt] (the player's index math, hoisted: position → thumbnail
  *    index + sprite sheet)
  *  - [shouldLoadTrickplayPeek] (the suppression ladder: TV ∧ pref ∧

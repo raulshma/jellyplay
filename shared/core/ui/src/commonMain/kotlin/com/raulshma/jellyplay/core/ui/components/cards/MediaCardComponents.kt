@@ -284,7 +284,7 @@ fun PosterCard(
      */
     bookProgressFractionOverride: Float? = null,
     /**
-     * H12: render the [NewBadge] arrival chip (the row resolved the flag —
+     * Render the [NewBadge] arrival chip (the row resolved the flag —
      * section type + visit-stamp predicate + the composition local's
      * [CardDisplayPreferences.showNewBadges]; the card stays a pure renderer).
      */
@@ -302,10 +302,10 @@ fun PosterCard(
     // Books get a reading affordance instead of the play triangle — the tap
     // still opens the reader, the glyph just shouldn't claim "play".
     val isBook = item.mediaType == MediaType.BOOK
-    // H15 anti-spoiler: the one decision fold the overlays and the footer
+    // Anti-spoiler: the one decision fold the overlays and the footer
     // both consume (see [spoilerSafeCardState]).
     val spoilerSafe = remember(cardPrefs) { spoilerSafeCardState(cardPrefs) }
-    // H11 quality chips: gated on the card prefs AND suppressed in
+    // Quality chips: gated on the card prefs AND suppressed in
     // performance mode — the same gate the dominant-color extraction uses
     // (no per-card extra work while the user asked for a lean render). Null
     // badges (an unprojected fetch) render nothing inside the row itself.
@@ -400,7 +400,7 @@ fun PosterCard(
         showProgress = showProgress,
         progressFraction = progressPercent,
         overlays = {
-            // Watched/unwatched corner: the H15 anti-spoiler mode force-hides
+            // Watched/unwatched corner: the anti-spoiler mode force-hides
             // both regardless of their individual prefs; the checkmark /
             // badge / row-filtering semantics are otherwise unchanged.
             if (spoilerSafe.showWatchedBadges) {
@@ -431,7 +431,7 @@ fun PosterCard(
             }
 
             // Top-left info stack: optional top-start badge (e.g. air date),
-            // the NEW arrival chip above the rating and the H11 quality chips,
+            // the NEW arrival chip above the rating and the quality chips,
             // in one column so the corner's badges coexist (a lone child renders
             // exactly where the former standalone rating badge sat). Rating
             // badges are never spoilers — they render in anti-spoiler mode too.
@@ -506,7 +506,7 @@ fun PosterCard(
                 // The whole book-vs-time meta decision is [mediaCardFooterMeta]'s
                 // (see MediaCardFooters.kt); this shell only renders it — always
                 // with the "•" divider and the poster footer's text style. The
-                // H15 anti-spoiler mode drops the "Xm left" segment.
+                // Anti-spoiler mode drops the "Xm left" segment.
                 val footerMeta = remember(item, bookProgressFractionOverride, spoilerSafe) {
                     mediaCardFooterMeta(
                         item,

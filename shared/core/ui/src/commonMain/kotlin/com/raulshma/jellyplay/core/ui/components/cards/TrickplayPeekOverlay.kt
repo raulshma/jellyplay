@@ -26,7 +26,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
- * One loaded trickplay preview (H13): the DECODED sprite sheet ([sheet]) plus
+ * One loaded trickplay preview: the DECODED sprite sheet ([sheet]) plus
  * everything needed to crop the right tile cell out of it — the sheet's grid
  * spec ([info]), which thumbnail the preview shows ([thumbnailIndex], the
  * item's resume position resolved through the tile math), and the item the
@@ -44,7 +44,7 @@ class TrickplayPeekTile(
 )
 
 /**
- * H13's `TrickplayPeekOverlay`: the ~160 dp sprite crop that peeks above a
+ * The `TrickplayPeekOverlay`: the ~160 dp sprite crop that peeks above a
  * focused wide card's progress bar. The whole sprite sheet is drawn at
  * tile-cell display scale and offset so the wanted cell lands in the
  * viewport — the Box's smooth-clip masks the rest of the sheet, so no second

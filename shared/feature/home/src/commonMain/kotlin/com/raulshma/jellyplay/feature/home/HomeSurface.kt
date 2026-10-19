@@ -5,8 +5,7 @@ import com.raulshma.jellyplay.core.model.HomeMode
 
 /**
  * WHICH surface the home renders, folded ONCE from [HomeUiState] + the
- * [OfflineHomeContent] aggregate by [homeSurface] — the pure successor of the
- * three differently-derived branch conditions that used to open
+ * [OfflineHomeContent] aggregate by [homeSurface] — the single fold behind
  * `MainHomeContent`'s render `when` (error+sections+renderSource vs
  * offlineMode+offlineSections vs homeMode+offlineMode).
  *
@@ -77,7 +76,7 @@ internal fun homeSurface(
     offlineContent: OfflineHomeContent,
 ): HomeSurface = when {
     // The hard-error verdict, folded once on [HomeUiState.isHardError] — the
-    // same three terms this arm used to restate inline.
+    // same three terms this arm renders on.
     state.isHardError -> HomeSurface.HardError
 
     state.renderSource == HomeRenderSource.Offline.Explicit &&

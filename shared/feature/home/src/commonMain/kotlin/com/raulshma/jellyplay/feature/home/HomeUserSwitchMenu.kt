@@ -230,8 +230,8 @@ internal fun UserSwitchTvRow(option: UserSwitchOption) {
 }
 
 /**
- * THE avatar palette helpers — the single home of this logic (HomeAppBar's
- * chip avatar used to carry a copy). Internal so both surfaces share one
+ * THE avatar palette helpers — the single home of this logic (shared with
+ * HomeAppBar's chip avatar). Internal so both surfaces share one
  * implementation.
  */
 

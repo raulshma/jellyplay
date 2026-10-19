@@ -11,15 +11,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the Compose mapping helpers that moved next to their only consumer,
- * settings' [SubtitleStylePreview] (the composable consumers are skipped):
+ * Pins the Compose mapping helpers used by settings' [SubtitleStylePreview]
+ * (the composable consumers are skipped):
  *
  *  - [resolvedColor] is a plain ARGB-int passthrough;
  *  - [resolvedFontWeight] is Bold only when `bold`, otherwise the SemiBold
  *    legibility default (never Normal);
  *  - [resolvedShadow] is null for [SubtitleEdgeType.NONE] and, for the three
- *    directional edges, uses the exact legacy offsets/blur constants and a
- *    dimmed edge color — OUTLINE keeps full alpha;
+ *    directional edges, uses fixed offsets/blur constants and a dimmed edge
+ *    color — OUTLINE keeps full alpha;
  */
 class ResolvedSubtitleStyleComposeTest {
 

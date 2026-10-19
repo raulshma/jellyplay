@@ -82,9 +82,8 @@ internal sealed interface ReleaseSearchEvent {
 /**
  * The release sheet's UI state — the pure machine [ReleaseSearchStateMachine]
  * reduces, kept compose-free apart from the [Immutable] marker so jvmTest pins
- * the transitions directly (the ArrQueuePresentation precedent: the screen's
- * composables keep only the drawing). One instance per opened sheet; closing
- * the sheet discards it.
+ * the transitions directly (the screen's composables keep only the drawing).
+ * One instance per opened sheet; closing the sheet discards it.
  */
 @Immutable
 data class ReleaseSearchState(
@@ -103,7 +102,7 @@ data class ReleaseSearchState(
      * surfaced above the list until the next attempt.
      */
     val grabError: String? = null,
-    /** Client-side "previously grabbed / failed" badges keyed by release guid. */
+    /** Client-side "already grabbed / failed" badges keyed by release guid. */
     val historyStatuses: Map<String, ArrReleaseHistoryStatus> = emptyMap(),
 ) {
     /** [releases] in [sort] order — the list the sheet renders. */

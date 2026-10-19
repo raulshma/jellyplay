@@ -94,7 +94,7 @@ class StillWatchingControllerTest {
     @Test
     fun lifecycle_continueWithoutAPromptTakesTheHoursArm() {
         // Defensive: a stray Continue with no prompt rides the hours arm's
-        // resume (the pre-extraction body's null arm).
+        // resume (the original body's null arm).
         val r = Recording()
         r.controller.onContinue()
         assertEquals(1, r.interactions)

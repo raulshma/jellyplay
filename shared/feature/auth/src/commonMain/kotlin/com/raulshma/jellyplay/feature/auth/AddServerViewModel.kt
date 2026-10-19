@@ -55,8 +55,8 @@ class AddServerViewModel(
      * The screen's local-network permission sync — the composition-side
      * platform seam (`rememberLocalNetworkAccess()`) reports its current
      * state on screen entry and on every grant change, and this method owns
-     * the two choreography decisions that used to live inline in the
-     * screen's `LaunchedEffect(localNetwork.isGranted)`:
+     * the two choreography decisions behind the screen's
+     * `LaunchedEffect(localNetwork.isGranted)`:
      *
      * 1. The rationale-banner predicate (`enforced && !granted`) folds into
      *    [AddServerUiState.localNetworkRationale] — the screen renders the
@@ -188,7 +188,7 @@ class AddServerViewModel(
      * DataStore EDIT completed — the derived `networkOffline` StateFlow the
      * network layer reads at handshake time republishes asynchronously, so we
      * AWAIT the entry appearing in it before retrying (the retry's very first
-     * TLS handshake must already honor the grant; racing it used to fail the
+     * TLS handshake must already honor the grant; racing it fails the
      * retry on the same certificate). The wait is bounded: on timeout the
      * retry proceeds anyway — a stuck propagation must not trap the dialog
      * (the retry then just fails like an ungranted host and re-prompts). No

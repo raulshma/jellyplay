@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Ratchet against the one hard cycle :shared:core:test-fixtures can create:
+ * Guard against the one hard cycle :shared:core:test-fixtures can create:
  * the fixtures module's jvmShared depends on :shared:core:data (and
  * core:model/player-contract), while consumers' TEST source sets depend on
  * the fixtures — legal ONLY because the two edges sit on disjoint
@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * dependency cycle Gradle cannot order, and would also leak test doubles
  * into production binaries.
  *
- * The ratchet is ZERO-TOLERANCE — there is no count baseline to raise and no
+ * The guard is ZERO-TOLERANCE — there is no count baseline to raise and no
  * legitimate main-scope case to grandfather. A module that needs a double at
  * main scope has a design problem: the double belongs in the consuming
  * module (or core:data), not on a production classpath.
@@ -42,7 +42,7 @@ import kotlin.test.assertTrue
  *
  * Sibling of test-fixtures' own TestFixturesScopeGuardTest (the same rule,
  * running in THAT module's jvmTest — a lane no consumer's check pulls
- * transitively); this one lives in the repo-wide ratchet home so the
+ * transitively); this one lives in the shared core test lane so the
  * regularly-exercised core lanes re-scan the whole graph too.
  */
 class TestFixturesMainScopeRatchetTest {

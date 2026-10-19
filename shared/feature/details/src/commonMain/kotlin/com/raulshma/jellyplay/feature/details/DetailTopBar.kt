@@ -76,9 +76,9 @@ internal fun DetailTopBar(
     contentFocusRequester: FocusRequester,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
-    /** D8: whether the mute chip renders at all — only while theme audio plays. */
+    /** Whether the mute chip renders at all — only while theme audio plays. */
     themeMusicVisible: Boolean = false,
-    /** D8: the per-series memory the chip's icon reflects (muted → VolumeOff). */
+    /** The per-series memory the chip's icon reflects (muted → VolumeOff). */
     themeMusicMuted: Boolean = false,
     onToggleThemeMusicMuted: (Boolean) -> Unit = {},
 ) {
@@ -124,7 +124,7 @@ internal fun DetailTopBar(
             },
             actions = {
                 val editIconColor = if (iconsOnBackdrop) Color.White else MaterialTheme.colorScheme.onSurface
-                // D8: the ambient theme-music mute chip — visible only while a
+                // The ambient theme-music mute chip — visible only while a
                 // theme plays; tapping mutes immediately AND writes the
                 // per-series memory (the VM command does both).
                 if (themeMusicVisible) {

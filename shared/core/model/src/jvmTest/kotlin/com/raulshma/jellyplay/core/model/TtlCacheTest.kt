@@ -11,10 +11,9 @@ import kotlin.test.Test
  * on `android.os.SystemClock` at test time (the `core:model` module has no
  * Robolectric dependency).
  *
- * Test-lane note (docs/adr/0006-test-lane-selection.md): this file has no
- * actual JVM dependency — the clock is injected, the assertions pure — so it
- * is a commonTest candidate; it sits in jvmTest as historical drift from
- * before the injectable clock removed the last JVM-facing concern.
+ * Test-lane note: this file has no actual JVM dependency — the clock is
+ * injected, the assertions pure — so it is a commonTest candidate despite
+ * its jvmTest placement.
  */
 class TtlCacheTest {
 

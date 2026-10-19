@@ -173,7 +173,7 @@ fun SeerrSettingsScreen(
     val isTesting = connectionStatus is ConnectionProbe.Status.Testing
     val isConnected = connectionStatus is ConnectionProbe.Status.Connected
 
-    // ── "via JellyPlay server" mode (ADR 0010) ──
+    // ── "via JellyPlay server" mode ──
     // The mode selector arms only on AVAILABLE + the SeerrBridge feature key
     // + the user's per-feature toggle (the capability-registry gate — never a
     // per-endpoint 404). The probe rides the selector's visibility (the
@@ -307,7 +307,7 @@ fun SeerrSettingsScreen(
                                 .padding(vertical = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Mode selector (ADR 0010): direct connection vs the
+                            // Mode selector: direct connection vs the
                             // plugin-brokered "via server" bridge. Only armed when
                             // the capabilities probe reports AVAILABLE with the
                             // SeerrBridge feature key — a stock server never sees it.
@@ -895,10 +895,8 @@ private fun seerrBridgeFailureText(failure: SeerrBridgeFailure): String = when (
 }
 
 /**
- * The direct-connection form, extracted verbatim from the connection group
- * when the mode dispatch moved in (ADR 0010) — the pre-bridge pane, byte for
- * byte in behavior: server URL, auth-method segmented row, per-method fields,
- * test/sign-in + disconnect, and the status banner.
+ * The direct-connection form: server URL, auth-method segmented row,
+ * per-method fields, test/sign-in + disconnect, and the status banner.
  */
 @Composable
 private fun SeerrDirectConnectionContent(

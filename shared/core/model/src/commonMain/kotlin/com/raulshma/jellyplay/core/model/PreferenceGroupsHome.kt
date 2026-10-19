@@ -5,10 +5,10 @@ import kotlinx.serialization.Serializable
 
 /**
  * Fields read by `HomeSettingsScreen` — the home-screen config hub (display
- * rows, Continue Watching / Next Up behavior, the home layout editor, and —
- * since the finished Appearance → HomeSettings move, PS-4 — the card-display
- * toggles: unwatched badge, watched checkmark, hide watched, external
- * ratings). Everything here projects from the single [HomeDiscoveryStore]
+ * rows, Continue Watching / Next Up behavior, the home layout editor, and the
+ * card-display toggles: unwatched badge, watched checkmark, hide watched,
+ * external ratings). Everything here projects from the single
+ * [HomeDiscoveryStore]
  * slice.
  */
 @Immutable
@@ -16,20 +16,20 @@ import kotlinx.serialization.Serializable
 data class HomeScreenPreferences(
     val homeMode: HomeMode = HomeMode.VIDEO,
     val homeHeroEnabled: Boolean = true,
-    /** H7 video hero billboard (touch/default form factors). Default off. */
+    /** Video hero billboard (touch/default form factors). Default off. */
     val homeHeroVideoEnabled: Boolean = false,
-    /** H7 video hero billboard (TV form factor). Default off. */
+    /** Video hero billboard (TV form factor). Default off. */
     val homeHeroVideoTvEnabled: Boolean = false,
     val homeBackdropEnabled: Boolean = true,
-    /** H10 focus-driven ambient backdrop (Android TV). Default off. */
+    /** Focus-driven ambient backdrop (Android TV). Default off. */
     val homeFocusBackdrop: Boolean = false,
-    /** H17 personal stats card. Default off. */
+    /** Personal stats card. Default off. */
     val homeStatsCard: Boolean = false,
-    /** H18 genre quick-access rail. Default off. */
+    /** Genre quick-access rail. Default off. */
     val homeGenreRail: Boolean = false,
-    /** H19 watch-party / presence chips. Default off. */
+    /** Watch-party / presence chips. Default off. */
     val homePresenceChips: Boolean = false,
-    /** H21 new-section announcement toast. Default on. */
+    /** New-section announcement toast. Default on. */
     val homeNewSectionAnnouncements: Boolean = true,
     val showClockOnHome: Boolean = false,
     val showSettingsInHomeSearch: Boolean = true,
@@ -43,9 +43,9 @@ data class HomeScreenPreferences(
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
-    /** Classic (pre-Jellyfin-12) home-row semantics (#168). Default false. */
+    /** Classic (pre-Jellyfin-12) home-row semantics. Default false. */
     val classicRows: Boolean = false,
-    /** H6: exclude items with an active playback session from Continue Watching / Next Up. Default off. */
+    /** Exclude items with an active playback session from Continue Watching / Next Up. Default off. */
     val excludeActiveSessions: Boolean = false,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
@@ -53,19 +53,19 @@ data class HomeScreenPreferences(
     /** The user's custom Discover rows (config order). */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
-    /** H20 layout DisplayPreferences auto-push. Default off. */
+    /** Layout DisplayPreferences auto-push. Default off. */
     val homeLayoutAutopush: Boolean = false,
-    /** The card-display quartet, moved here with its rows (PS-4). */
+    /** The card-display quartet, owned here with its rows. */
     val showUnwatchedBadge: Boolean = true,
     val showWatchedCheckmark: Boolean = true,
     val hideWatchedItems: Boolean = false,
     val showExternalRatings: Boolean = true,
-    /** H11 quality badges on cards. Default on. */
+    /** Quality badges on cards. Default on. */
     val showQualityBadges: Boolean = true,
-    /** H12 "NEW" badges on cards. Default on. */
+    /** "NEW" badges on cards. Default on. */
     val showNewBadges: Boolean = true,
-    /** H13 trickplay preview on wide cards (TV focus). Default on. */
+    /** Trickplay preview on wide cards (TV focus). Default on. */
     val homeTrickplayPreview: Boolean = true,
-    /** H15 anti-spoiler home master switch. Default off. */
+    /** Anti-spoiler home master switch. Default off. */
     val antiSpoilerHome: Boolean = false,
 )

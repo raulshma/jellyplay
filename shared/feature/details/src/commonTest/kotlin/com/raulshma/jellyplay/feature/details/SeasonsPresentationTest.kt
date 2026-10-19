@@ -168,7 +168,7 @@ class SeasonsPresentationTest {
 
     @Test
     fun `episode-row badge gates ride the display preferences`() {
-        // D11/D16: the stream-badge and download-progress gates are the
+        // The stream-badge and download-progress gates are the
         // preferences verbatim (both default on) — the fold only carries them.
         val on = SeasonsPresentation.from(state(), series(), isLocalOrigin = false)
         assertTrue(on.showStreamBadges)

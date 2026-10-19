@@ -66,7 +66,7 @@ data class SubtitleRenderDefaults(
  * record to Compose `Color`/`TextStyle` via a `toCompose()` extension in core/ui.
  *
  * Generalizes feature/player/video's mpv-named `ResolvedMpvStyle` — same shape,
- * no longer named after one engine.
+ * not named after one engine.
  */
 @Immutable
 data class ResolvedSubtitleStyle(
@@ -91,8 +91,8 @@ data class ResolvedSubtitleStyle(
  *   (only `verticalPosition` / `offsetMs` carry over, since they're layout not
  *   styling).
  * - When true, the user's free-form ARGB fields win over the enum colors
- *   (`fontColorArgb ?: fontColor.value`), folding in what
- *   feature/player/video's `SubtitleColorResolver` used to do module-locally.
+ *   (`fontColorArgb ?: fontColor.value`), folding in
+ *   feature/player/video's module-local `SubtitleColorResolver`.
  *
  * This is the single resolution entry point; engines and the Compose overlay
  * read from the returned [ResolvedSubtitleStyle] instead of re-deriving.

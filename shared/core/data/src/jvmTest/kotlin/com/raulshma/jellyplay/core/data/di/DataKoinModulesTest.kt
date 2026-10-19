@@ -239,7 +239,7 @@ class DataKoinModulesTest {
             // V3 downloads conveyor: the download engine resolves on desktop —
             // the repository single (seams satisfied by desktopDataModule's
             // actuals), the per-item delegate, and the in-process
-            // manager/scheduler behind the enqueue-coordinator seam. D6: the
+            // manager/scheduler behind the enqueue-coordinator seam. The
             // OfflineDownloadWriter view is the standalone writer core single
             // (the artifact-write cluster extracted out of the repository),
             // NOT the repository — the repo forwards its inherited writer
@@ -257,7 +257,7 @@ class DataKoinModulesTest {
             )
             assertTrue(
                 writer !== repository,
-                "OfflineDownloadWriter must not alias the DownloadRepository single anymore (D6: standalone writer)",
+                "OfflineDownloadWriter must not alias the DownloadRepository single anymore (standalone writer)",
             )
             assertResolves<DownloadDelegate>(koin)
             assertResolves<DownloadEnqueueCoordinator>(koin)
@@ -345,7 +345,7 @@ class DataKoinModulesTest {
             assertEquals(
                 4,
                 koin.getAll<com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice>().size,
-                "the four wave-2 backup slice sources must resolve as one set",
+                "the four backup slice sources must resolve as one set",
             )
             assertResolves<com.raulshma.jellyplay.core.datastore.UserPreferencesStore>(koin)
 

@@ -129,8 +129,8 @@ fun HomeSearchResultsOverlay(
             }
         } else {
             // Hoisted out of the per-item lambdas below: these three labels are
-            // constant, but were previously looked up per visible row per
-            // keystroke during search-as-you-type (N×3 string resolutions).
+            // constant, and looking them up per visible row per keystroke
+            // during search-as-you-type costs N×3 string resolutions.
             val movieLabel = stringResource(Res.string.home_movie)
             val seriesLabel = stringResource(Res.string.home_tv_show)
             val musicLabel = stringResource(Res.string.home_music)
@@ -413,8 +413,8 @@ fun HomeSearchResultsOverlay(
 }
 
 /**
- * The result row's ONE lead tile (both result kinds — Jellyfin and Seerr —
- * used to duplicate this block verbatim): the artwork when a URL exists,
+ * The result row's ONE lead tile (shared by both result kinds — Jellyfin and
+ * Seerr): the artwork when a URL exists,
  * else the neutral search-icon placeholder.
  */
 @Composable

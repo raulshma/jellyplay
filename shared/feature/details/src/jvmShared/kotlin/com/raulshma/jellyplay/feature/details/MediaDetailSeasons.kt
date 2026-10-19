@@ -604,9 +604,9 @@ internal fun EpisodeCard(
     animeBadge: AnimeBadgeKind? = null,
     /** Plugin TMDB score for this episode number (null = none — ADR 0010). */
     tmdbScore: Double? = null,
-    /** D11: render the stream-info badge row (CC / audio layout / languages). */
+    /** Render the stream-info badge row (CC / audio layout / languages). */
     showStreamBadges: Boolean = false,
-    /** D16: render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
+    /** Render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
     showDownloadProgress: Boolean = false,
 ) {
     // Build the episode image URL once per episode instead of 3× per recomposition.
@@ -682,7 +682,7 @@ internal fun EpisodeCard(
     )
     val isDimmed = presentation.isDimmed
 
-    // D16: this row's in-flight download fraction (provided by the screen from
+    // This row's in-flight download fraction (provided by the screen from
     // the download-lifecycle slice); null = not downloading. Read here so a
     // ~2 s progress tick recomposes only the downloading rows — the local is a
     // compositionLocalOf (reader-tracked), not static.
@@ -763,7 +763,7 @@ internal fun EpisodeCard(
                 )
             }
 
-            // D16 in-flight download bar + percent chip — along the thumbnail's
+            // In-flight download bar + percent chip — along the thumbnail's
             // TOP edge (the watch-progress / played bars own the bottom edge);
             // the delete affordance co-occupies top-end only once the download
             // completes and this overlay is gone.
@@ -904,9 +904,9 @@ private fun CompactEpisodeRow(
     animeBadge: AnimeBadgeKind? = null,
     /** Plugin TMDB score for this episode number (null = none — ADR 0010). */
     tmdbScore: Double? = null,
-    /** D11: render the stream-info badge row (CC / audio layout / languages). */
+    /** Render the stream-info badge row (CC / audio layout / languages). */
     showStreamBadges: Boolean = false,
-    /** D16: render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
+    /** Render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
     showDownloadProgress: Boolean = false,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
@@ -937,7 +937,7 @@ private fun CompactEpisodeRow(
         showWatchedCheckmark = cardPrefs.showWatchedCheckmark,
     )
     val isDimmed = presentation.isDimmed
-    // D16: this row's in-flight download fraction (see EpisodeCard).
+    // This row's in-flight download fraction (see EpisodeCard).
     val downloadProgressFraction = if (showDownloadProgress) {
         LocalEpisodeDownloadProgress.current[episode.id]
     } else {
@@ -1015,7 +1015,7 @@ private fun CompactEpisodeRow(
                 )
             }
 
-            // D16 in-flight download bar + percent chip — see EpisodeCard.
+            // In-flight download bar + percent chip — see EpisodeCard.
             downloadProgressFraction?.let { fraction ->
                 EpisodeDownloadOverlay(fraction = fraction)
             }
@@ -1195,7 +1195,7 @@ private fun EpisodePlayedBar(modifier: Modifier = Modifier) {
 
 /**
  * The episode row's metadata stack — title ("N. Name"), the runtime line
- * ("Xm left • 42m", or a bare "42m") with stream-info badges (D11) on the
+ * ("Xm left • 42m", or a bare "42m") with stream-info badges on the
  * right side of the time, the TMDB score chip (ADR 0010), and the last-watched
  * relative timestamp. Shared by [EpisodeCard] and [CompactEpisodeRow]; the caller
  * picks the type scale and the runtime line's top padding (the only
@@ -1212,7 +1212,7 @@ private fun ColumnScope.EpisodeMetaLines(
     runtimeTopPadding: Dp,
     /** Plugin TMDB score for this episode (null = no chip — ADR 0010). */
     tmdbScore: Double? = null,
-    /** D11: render the stream-info badge row (CC / audio layout / languages). */
+    /** Render the stream-info badge row (CC / audio layout / languages). */
     showStreamBadges: Boolean = false,
 ) {
     Text(
@@ -1269,7 +1269,7 @@ private fun ColumnScope.EpisodeMetaLines(
                 )
             }
 
-            // Stream-info badge row (D11): CC / audio layout / audio-language count,
+            // Stream-info badge row: CC / audio layout / audio-language count,
             // from the per-season fetch's MediaStreams projection. Rendered along the
             // right side of the episode runtime line.
             if (hasBadges) {
@@ -1490,7 +1490,7 @@ internal fun TmdbScoreChip(
 }
 
 /**
- * The episode row's stream-info badge row (D11): the "CC" chip when any
+ * The episode row's stream-info badge row: the "CC" chip when any
  * subtitle stream exists, the best audio track's layout chip ("Atmos" /
  * "7.1" / "5.1" — absent for stereo and below), and the audio-language-count
  * chip (only when more than one language — a single language is the default
@@ -1561,7 +1561,7 @@ private fun EpisodeStreamChip(text: String) {
 }
 
 /**
- * The episode thumbnail's in-flight download overlay (D16): the thin
+ * The episode thumbnail's in-flight download overlay: the thin
  * determinate bar along the thumbnail's TOP edge — mirroring the played-bar
  * styling (3 dp, primary) the rows render along the bottom edge for watch
  * state, so the two never stack — plus the percent chip at the top-end (the

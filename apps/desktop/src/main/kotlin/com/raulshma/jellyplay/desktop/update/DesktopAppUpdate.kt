@@ -11,12 +11,11 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Desktop auto-update, client half (docs/adr/desktop-auto-update.md — the
- * accepted v1 design: **manual check + open the release page**, never silent
- * download-and-install). This file owns the desktop shell's ONE real
- * `AppUpdateRepository` definition ([desktopAppUpdateModule] — core:data's
- * desktop data module ships no update family; the installed version is a
- * desktop-shell input it cannot see):
+ * Desktop auto-update, client half (**manual check + open the release page**,
+ * never silent download-and-install). This file owns the desktop shell's ONE
+ * real `AppUpdateRepository` definition ([desktopAppUpdateModule] —
+ * core:data's desktop data module ships no update family; the installed
+ * version is a desktop-shell input it cannot see):
  *
  *  - The installed version comes from the generated `desktop-build.properties`
  *    classpath resource ([DesktopInstalledVersion.read], bound as a Koin
@@ -128,8 +127,7 @@ sealed interface DesktopInstalledVersion {
  * asset is a desktop installer extension: the shared
  * `GitHubReleasesApiImpl.selectAsset` is Android-shaped and its last-resort
  * branch will happily attach an Android `-universal.apk` to a desktop result
- * (the exact false-attach the ADR calls out) — an APK must never become a
- * desktop download link.
+ * — an APK must never become a desktop download link.
  *
  * Whichever URL wins is verified against the compiled-in
  * [GitHubRepoAllowList] before it can reach the browser (both surfaces are
@@ -161,7 +159,7 @@ object DesktopUpdateLinks {
 }
 
 /**
- * The AWT browse half of the ADR's option 2. Headless/locked-down sessions
+ * The AWT browse half of the browser handoff. Headless/locked-down sessions
  * (no `java.awt.Desktop`, no BROWSE action) return `false` so the caller can
  * phrase the snackbar as "download from <releases page>" instead of
  * pretending a browser opened. Callers run this OFF the event thread.
@@ -177,14 +175,13 @@ object DesktopUpdateBrowser {
 
 /**
  * The desktop `AppUpdateRepository` actual: the shared
- * [AppUpdateRepositoryImpl] wired with the real installed version (the ADR's
- * "one-line change to the version supplier", done app-side) plus the
+ * [AppUpdateRepositoryImpl] wired with the real installed version, plus the
  * [DesktopInstalledVersion.DevBuild] suppression — a dev build's
  * `currentVersionName` cannot be made version-comparable, so the decorator
  * pins `isUpdateAvailable` to false rather than faking an unbeatable version
  * number. Download/pending/cleanup delegate untouched: on desktop the UI
  * gates on `isUpdateAvailable`, so the appdata `updates` dir stays empty
- * (ADR: downloadUpdate/getPendingUpdate remain Android-only-reachable).
+ * (downloadUpdate/getPendingUpdate are Android-reachable only).
  */
 class DesktopAppUpdateRepository(
     private val delegate: AppUpdateRepository,
@@ -231,8 +228,8 @@ private const val DEV_VERSION_NAME = "dev"
  * version is the shell's [DesktopInstalledVersion] single (bound beside
  * DesktopPaths in DesktopKoinModules, read from the generated
  * desktop-build.properties): release-lane builds compare against the GitHub
- * feed for real, dev builds are suppressed by the decorator — the ADR's
- * manual check + open the release page, never a silent install.
+ * feed for real, dev builds are suppressed by the decorator — manual check
+ * + open the release page, never a silent install.
  */
 fun desktopAppUpdateModule(dataDir: Path): Module = module {
     single<AppUpdateRepository> {

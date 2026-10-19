@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 /**
  * Pins [ensureControlsSummonable] — the read-time repair for the one
- * unrecoverable binding state (issue #171's broken-editor fallout): NO
+ * unrecoverable binding state (broken-editor fallout): NO
  * family (touch / remote) has a summon left enabled, so the controls can
  * never be shown and no in-player UI exists to fix the mapping. Anything
  * narrower — a one-family lockout reachable through the normal UI, or a

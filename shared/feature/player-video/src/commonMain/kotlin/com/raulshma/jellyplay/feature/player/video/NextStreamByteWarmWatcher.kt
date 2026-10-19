@@ -77,7 +77,7 @@ private fun isNextStreamWarmEligible(warm: WarmNextStream): Boolean {
 
 /**
  * The next-item stream-cache pre-warm trigger, extracted from
- * [VideoPlayerViewModel] (its extracted-module size ratchet): when the
+ * [VideoPlayerViewModel] (its extracted-module size guard): when the
  * Up-Next card's item has a settled PlaybackInfo resolution (the session's
  * warm slot — the SAME trigger moment the resolve warm uses, so no extra
  * server traffic pattern) and that resolution passes the engine-mirroring

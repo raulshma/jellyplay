@@ -3,9 +3,7 @@ package com.raulshma.jellyplay.desktop.player
 /**
  * Polls [condition] every 50 ms until true or [timeoutMs] elapses — the
  * wall-clock wait helper for suites whose engines/collaborators run on their
- * own threads (the desktop mpv suites; the recorder-sampling tests). Moved
- * beside [FakeMediaEngine] from the desktop tests' deleted fake file, so the
- * real-engine suites keep it after the fake-twin merge.
+ * own threads (the desktop mpv suites; the recorder-sampling tests).
  *
  * Named `pollUntil` (not `waitUntil`) to stay clear of MpvDesktopEngineTest's
  * file-private helper of that name.

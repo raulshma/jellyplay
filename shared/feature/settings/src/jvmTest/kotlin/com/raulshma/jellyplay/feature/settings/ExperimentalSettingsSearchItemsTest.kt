@@ -11,14 +11,12 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Pins the spec-derived Experimental catalog (Stage A pilot) against the
- * retired hand-written `ExperimentalSettingsSearchItems` list, field for
- * field: the derivation ([toSettingsSearchItems] over
- * `ExperimentalPreferenceSpecs.searchEntries`) must be byte-equivalent in
- * behavior — same ids in the same order, same bound resources, same
- * keywords, routes, icons, isAdvanced flags and platform availability — so
- * the switch to spec-derived entries changes nothing downstream (deep-link
- * highlighting, group membership, search tie-break order).
+ * Pins the spec-derived Experimental catalog: the derivation
+ * ([toSettingsSearchItems] over `ExperimentalPreferenceSpecs.searchEntries`)
+ * must hold field for field — same ids in the same order, same bound
+ * resources, same keywords, routes, icons, isAdvanced flags and platform
+ * availability — so downstream behavior (deep-link highlighting, group
+ * membership, search tie-break order) stays consistent.
  */
 class ExperimentalSettingsSearchItemsTest {
 

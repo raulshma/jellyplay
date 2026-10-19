@@ -110,7 +110,7 @@ class PreferencesEditScopeTest {
 
     @Test
     fun `verifyPin round-trips against the security store's hash`() = runTest {
-        // The editor no longer re-exposes setPin — the write goes through the
+        // The editor does not re-expose setPin — the write goes through the
         // edit scope (the owning store), the read through the editor seam the
         // security VM actually uses.
         editor.edit { security.setPin("1234") }.join()

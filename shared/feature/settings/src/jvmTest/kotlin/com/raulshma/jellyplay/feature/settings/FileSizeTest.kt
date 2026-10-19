@@ -11,8 +11,8 @@ import org.junit.AssumptionViolatedException
 /**
  * Pins the shared `directorySizeBytes` walk (FileSize.kt, jvmShared)
  * that backs BOTH [SettingsViewModel] cache-size and the
- * [StorageSettingsViewModel] storage breakdown — it used to be duplicated in
- * the two ViewModels, so a fix to one could silently diverge from the other.
+ * [StorageSettingsViewModel] storage breakdown, so a fix to one applies to
+ * both.
  *
  * Invariants under test: nested dirs sum, symlinks inside the tree are skipped
  * (circular-link guard) while a symlinked ROOT is still measured (the OS

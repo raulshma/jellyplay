@@ -35,7 +35,7 @@ import kotlin.test.assertTrue
 /**
  * Engine tests for the profile-sync cycle: opt-in gating, adopt-clean/push-
  * dirty split, LWW-reject retry, convergence — against fakes, no I/O. The
- * tombstone half (Phase 1's `deleted[]`/`nextCursor` wave): outbound delete
+ * tombstone half (the `deleted[]`/`nextCursor` protocol): outbound delete
  * adoption and anti-resurrection, the paged delta sweep, the persisted
  * cursor, and the non-retryable reject surfacing.
  */

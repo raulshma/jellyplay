@@ -91,7 +91,7 @@ class VideoPlayerSpecDerivationTest {
     )
 
     /**
-     * The four legacy string-keyed skip booleans are Stage A declarations
+     * The four legacy string-keyed skip booleans are plain declarations
      * (no derived write — their reads route through the `segment_behaviors`
      * row's lambda), so they are the only rows excluded from the write-through
      * storage table below.
@@ -185,7 +185,7 @@ class VideoPlayerSpecDerivationTest {
 
     @Test
     fun `every slice default equals its spec default`() {
-        // The single-default ratchet: each [VideoPlayerSlice] property's
+        // The single-default guard: each [VideoPlayerSlice] property's
         // default reads its row's `.default`, so the value below IS the row's —
         // if a future edit restates a literal here (or on the slice) and the
         // two drift, this fails.

@@ -306,7 +306,7 @@ internal fun PlaybackPlayerAdvancedRows(
                             highlighted = highlightSettingId == PlaybackRows.BackgroundAudio.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.playback.setBackgroundVideoAudioEnabled(it) } },
                         )
-                        // Auto-PiP on Home/recents (issue #167) — Android-only;
+                        // Auto-PiP on Home/recents — Android-only;
                         // the declared Platform(Pip) admission hides the row on
                         // desktop. Off makes leaving the app background it
                         // normally instead of entering picture-in-picture; the

@@ -61,7 +61,7 @@ object ExperimentalPreferenceSpecs {
     private val searchMediaCardPeek = PreferenceSearchSpec(
         id = "MEDIA_CARD_PEEK",
         titleKey = "ss_MEDIA_CARD_PEEK_title",
-        // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+        // One-key family: a single screen-face key.
         subtitleKey = "settings_exp_press_hold_preview_subtitle",
         categoryKey = "ss_cat_experimental",
         keywords = listOf("press", "hold", "peek", "preview", "media card", "long press", "experimental"),
@@ -200,9 +200,8 @@ object ExperimentalPreferenceSpecs {
     /**
      * The domain's settings-search declaration, in catalog order — the
      * single source the settings feature derives its
-     * `ExperimentalSettingsSearchItems` from (ids identical to the retired
-     * hand-written list: the screen entry, the three feature toggles, the
-     * *arr settings hub).
+     * `ExperimentalSettingsSearchItems` from (the screen entry, the three
+     * feature toggles, the *arr settings hub).
      */
     val searchEntries: List<PreferenceSearchSpec> = listOf(
         searchExperimentalScreen,

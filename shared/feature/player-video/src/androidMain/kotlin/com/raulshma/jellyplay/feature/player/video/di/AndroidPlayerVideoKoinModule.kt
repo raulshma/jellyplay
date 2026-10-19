@@ -107,7 +107,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
         AndroidVideoPlayerPlatform(
             context = context,
             castManager = get(),
-            // The video focus slice (ADR-0004): the module-owned exclusivity
+            // The video focus slice: the module-owned exclusivity
             // authority + the VIDEO-family commandable surface singleton the
             // wiring binds its engine into.
             playbackFocus = get(),
@@ -132,7 +132,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // core:data port, bound (to the AndroidPipController singleton the host
     // PlayerActivity also injects) in androidCoreDataModule.
     single<PlayerVideoMessageBus> { AndroidUserMessageBridge(get()) }
-    // D14 "Play (with pre-rolls)": the one-shot Cinema Mode override the
+    // "Play (with pre-rolls)": the one-shot Cinema Mode override the
     // detail screen arms before the play dispatch (core:player-contract).
     single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
     viewModel { params ->

@@ -140,9 +140,8 @@ class ImageUrlBuilderTest {
 
     @Test
     fun `fill url emits the legacy settings-row key order byte-for-byte`() {
-        // Ratchet: ActiveDevicesRow's now-playing card URL, exactly as the
-        // hand-rolled string produced it (tag first — NOT the SDK buildMap
-        // order — so Coil cache keys survive the ownership move).
+        // Pins: ActiveDevicesRow's now-playing card URL — tag first, NOT the
+        // SDK buildMap order — so Coil cache keys stay stable.
         assertEquals(
             "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Backdrop" +
                 "?tag=e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6&fillWidth=400&fillHeight=300&quality=90",

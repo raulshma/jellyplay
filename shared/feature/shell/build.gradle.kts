@@ -11,9 +11,9 @@ kotlin {
         // appSections must see every *Section builder it registers —
         // detailsSection lives in :shared:feature:details' jvmShared source
         // set, invisible from a consumer's commonMain — so the shared shell
-        // graph lives in this module's own jvmShared middle set (details'
-        // exact wiring, created by the convention plugin), shared verbatim by
-        // the only two consumers: the Android and desktop shells.
+        // graph lives in this module's own jvmShared middle set (created by
+        // the convention plugin), shared by the only two consumers: the
+        // Android and desktop shells.
 
         commonMain.dependencies {
             // HomeMode in the ShellHostHooks surface (not re-exported by
@@ -34,9 +34,9 @@ kotlin {
             implementation(project(":shared:feature:home"))
             implementation(project(":shared:feature:library"))
             // The photo suite (PhotoAlbum/PhotoViewer screens + VMs, the
-            // PhotoExport seam) extracted out of library. api, not
-            // implementation: SharedFeatureModules/appSections below consume
-            // photos symbols, and the two shells' extracted startKoin lists
+            // PhotoExport seam). api, not implementation:
+            // SharedFeatureModules/appSections below consume
+            // photos symbols, and the two shells' startKoin lists
             // (AndroidKoinModules.kt / DesktopKoinModules.kt) import photos'
             // platform export modules directly — neither app declares its own
             // photos edge, they resolve the module through this aggregator.
@@ -60,7 +60,7 @@ kotlin {
             implementation(project(":shared:feature:arrqueue"))
             implementation(project(":shared:feature:calendar"))
             implementation(project(":shared:feature:shortcuts"))
-            // The 22nd feature: player-live's Koin module rides the shared
+            // Player-live's Koin module rides the shared
             // registration list (SharedFeatureModules) beside its section
             // peers — the desktop bridge-probed video-player alternative
             // lives there.
@@ -68,7 +68,7 @@ kotlin {
             // The UserMessageHost seam's shared UiText resolver (suspend
             // getString) — the shared core:ui keeps compose-resources
             // implementation-scoped, so the module that resolves messages
-            // carries the runtime (core/ui precedent).
+            // carries the runtime.
             // ShellHostHooks.surpriseRequests is Flow<Unit>.
             implementation(libs.kotlinx.coroutines.core)
             // RealtimeSessionController's capabilities arm swallows a failed
@@ -76,7 +76,7 @@ kotlin {
             implementation(project(":shared:core:concurrency"))
             // entryProvider / EntryProviderScope / NavEntry — runtime only.
         }
-        // AdminRefreshGate policy pins (settings/core-data precedent).
+        // AdminRefreshGate policy pins.
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
             // The session controller's arbitration/collect tests (runTest +

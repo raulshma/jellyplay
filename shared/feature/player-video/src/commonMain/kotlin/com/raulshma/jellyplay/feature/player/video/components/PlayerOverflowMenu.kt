@@ -97,7 +97,7 @@ private val NoSleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L)
 
 /**
  * One tap-to-flip row of the overflow menu's input-binding quick toggles
- * (issue #171's mid-playback use case: kill the brightness swipe without
+ * (mid-playback use case: kill the brightness swipe without
  * leaving the player). [bindingId] is the stable row id from the persisted
  * [com.raulshma.jellyplay.core.model.PlayerInputMap].
  */
@@ -356,7 +356,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 onClick = menu.onSubtitleHubClick,
             )
 
-            // Input-binding quick toggles (issue #171): grouped behind one
+            // Input-binding quick toggles: grouped behind one
             // "Gestures" entry like the audio normalization submenu — the
             // collapsed row shows the enabled count, expanding it reveals the
             // tap-to-flip rows. Flipping stays in place (persisted), the

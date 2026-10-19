@@ -23,7 +23,7 @@ import kotlinx.coroutines.test.runTest
  * edgeRefreshable gate (the two halves of the edge-pull decision cannot
  * drift), the rows without a refresh arm fail with the same caller-bug error
  * the former `else` arm threw, and the batch sub-calls carry exactly the
- * resume trio plus the H4 Upcoming row (the only rows with a direct,
+ * resume trio plus the Upcoming row (the only rows with a direct,
  * enabled-gated port read). The per-type refresh BEHAVIOR is
  * HomeSectionsFetcherTest's.
  */
@@ -73,7 +73,7 @@ class HomeRowArmsTest {
 
     @Test
     fun batchSubcalls_coverExactlyTheResumeTrioPlusUpcoming() {
-        // H4 joined the trio: Upcoming rides the same per-type batch-arm shape
+        // Upcoming joined the trio: it rides the same per-type batch-arm shape
         // (enabled gate + fixed limit, no query parameters of its own).
         assertEquals(
             setOf(
@@ -119,16 +119,16 @@ class HomeRowArmsTest {
         )
 
         // One registered read serves both arms — the flag is stated once, so
-        // the two arms cannot disagree on the H6 wire flag.
+        // the two arms cannot disagree on the wire flag.
         HomeRowTransports.getValue(HomeSectionType.CONTINUE_WATCHING).batchSubcall!!.invoke(sources, query)
-        assertTrue(sources.recordedExcludeActiveSessions == true, "the batch sub-call must forward the H6 flag")
+        assertTrue(sources.recordedExcludeActiveSessions == true, "the batch sub-call must forward the flag")
 
         sources.recordedExcludeActiveSessions = null
         homeRowRefreshArm(HomeSectionType.CONTINUE_WATCHING).refresh(
             refreshContext(query = query, sources = sources),
             section(HomeSectionType.CONTINUE_WATCHING),
         )
-        assertTrue(sources.recordedExcludeActiveSessions == true, "the refresh arm must forward the same H6 flag")
+        assertTrue(sources.recordedExcludeActiveSessions == true, "the refresh arm must forward the same flag")
     }
 
     @Test
@@ -225,7 +225,7 @@ class HomeRowArmsTest {
         override suspend fun getDiscoverRowItems(row: DiscoverRowConfig) = items()
     }
 
-    /** Stand-in that records the H6 flag the arms pass to the resume reads. */
+    /** Stand-in that records the flag the arms pass to the resume reads. */
     private class RecordingSources : HomeSectionSources {
         var recordedExcludeActiveSessions: Boolean? = null
         var recordedNextUpCall: Boolean = false

@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The disk-backed local-artwork resolution subsystem behind every offline read
- * path, extracted verbatim from [OfflineRepositoryImpl] (D4) so the FS-stat +
+ * path, extracted verbatim from [OfflineRepositoryImpl] so the FS-stat +
  * fallback-ladder logic is testable against two DAO seams instead of the full
  * five-DAO + database repository construction.
  *

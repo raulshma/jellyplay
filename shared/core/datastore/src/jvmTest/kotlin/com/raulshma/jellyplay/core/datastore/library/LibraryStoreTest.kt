@@ -17,8 +17,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the library-browsing preference store, focusing on the
- * read-modify-write JSON map setters that previously lived inline in the
- * `UserPreferencesStore` god object with no unit coverage.
+ * read-modify-write JSON map setters.
  */
 class LibraryStoreTest {
 
@@ -50,7 +49,7 @@ class LibraryStoreTest {
         assertEquals(true, slice.showDetailUpNext)
         assertEquals(false, slice.showMissingEpisodes)
         assertEquals(emptyMap<String, String>(), slice.defaultLibrarySortOrders)
-        // The detail-screen display toggles (plan D1–D23): true unless the
+        // The detail-screen display toggles: true unless the
         // feature intentionally preserves today's off behavior.
         assertEquals(true, slice.showExternalLinks)
         assertEquals(true, slice.showTagline)
@@ -118,7 +117,7 @@ class LibraryStoreTest {
 
     @Test
     fun `detail display toggles default off-state round-trips`() = runTest {
-        // The one default-off toggle (D3) flips both ways like its neighbors.
+        // The one default-off toggle flips both ways like its neighbors.
         assertEquals(false, store.library.first().preferLocalTrailers)
         store.setPreferLocalTrailers(true)
         assertEquals(true, store.library.first().preferLocalTrailers)
@@ -128,7 +127,7 @@ class LibraryStoreTest {
 
     @Test
     fun `detail display toggles round-trip both ways`() = runTest {
-        // Every default-on detail toggle (D1/D2/D6/D7/D8/D9/D11/D16/D18/D20/D22/D23):
+        // Every default-on detail toggle:
         // flip off → observed, flip back on → observed (the setters are the
         // settings rows' only write path).
         val cases: List<Triple<String, suspend (Boolean) -> Unit, suspend () -> Boolean>> = listOf(

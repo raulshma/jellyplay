@@ -320,8 +320,7 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
     override suspend fun migrate(db: SQLiteConnection) {
         // No-op: the servers(address) unique index was already created by
         // MIGRATION_15_16. This migration object is retained so Room's
-        // 16→17 step still resolves. (Previously it re-ran the same idempotent
-        // CREATE UNIQUE INDEX IF NOT EXISTS — harmless copy-paste residue.)
+        // 16→17 step still resolves.
     }
 }
 

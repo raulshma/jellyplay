@@ -30,9 +30,8 @@ import com.raulshma.jellyplay.core.model.typeGroup
  * prefs) change and passes it down as a single value — the derived sections,
  * the id→item lookup (built once per emission, shared by the DOWNLOADED rows
  * and the hero's click routing) and the raw lists the inline Downloaded row's
- * dedupe reads. Previously each consumer re-derived its own slice from the
- * UiState mirrors, and [itemsById] was built twice per tree on different
- * remember keys.
+ * dedupe reads. Each consumer reads its slice from this one value, and
+ * [itemsById] is built once per tree.
  *
  * The row titles are localized strings, so the aggregate is built at the
  * call site ([rememberOfflineHomeSectionTitles] is composable) — the UiState
@@ -142,7 +141,7 @@ data class OfflineHomeSectionPrefs(
     val continueWatchingEnabled: Boolean = true,
     val continueReadingEnabled: Boolean = true,
     val nextUpEnabled: Boolean = true,
-    /** All currently-enabled configurable section types — filters the cached-layout mirror (#147). */
+    /** All currently-enabled configurable section types — filters the cached-layout mirror. */
     val enabledSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     /** Per-library DISABLED types, keyed by library id — same shape as the online overrides. */
     val libraryOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
@@ -159,7 +158,7 @@ data class OfflineHomeSectionPrefs(
 /**
  * Derives the home sections shown while offline from the (mode-filtered)
  * offline library and its downloaded episodes. Two shapes, in precedence
- * order (issue #147: "literally the home layout, filtered for downloaded"):
+ * order ("literally the home layout, filtered for downloaded"):
  *
  *  1. **Cached-layout mirror** — when [cachedLayout] (the last persisted
  *     online snapshot) is non-empty and at least one of its rows survives the
@@ -343,7 +342,7 @@ internal fun buildOfflineHomeSections(
             )
         }
     }
-    // Cached-layout mirror first (#147): when the snapshot exists and yields
+    // Cached-layout mirror first: when the snapshot exists and yields
     // at least one row, it IS the offline layout. Generic fallback rows are
     // then APPENDED for content the mirror does not already surface — so a
     // download whose snapshot row dropped (type disabled at fetch time, empty

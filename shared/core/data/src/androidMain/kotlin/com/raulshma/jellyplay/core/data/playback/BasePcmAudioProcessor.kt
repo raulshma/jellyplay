@@ -35,7 +35,7 @@ import java.nio.ShortBuffer
  *
  * **Passthrough when inactive.** When [computeIsActive] returns false,
  * `queueInput` copies the input buffer straight to the output without calling
- * [processFloatSample] — matching the pre-extraction `if (!isActive) { outputBuffer
+ * [processFloatSample] — matching the former `if (!isActive) { outputBuffer
  * = inputBuffer; return }` early-return in HPF/Dynamics/Balance. Subclasses
  * whose active state is set in `configure` (Balance) must update their active
  * flag from [onConfigure].
@@ -136,7 +136,7 @@ abstract class BasePcmAudioProcessor : AudioProcessor {
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         // Passthrough when inactive: copy input straight to output, skipping
-        // the per-sample hook entirely. Matches the pre-extraction early-return.
+        // the per-sample hook entirely.
         if (!isActive()) {
             outputBuffer = inputBuffer
             return

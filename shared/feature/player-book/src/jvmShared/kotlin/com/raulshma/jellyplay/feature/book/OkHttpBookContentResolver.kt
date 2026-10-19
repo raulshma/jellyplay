@@ -75,7 +75,7 @@ class OkHttpBookContentResolver(
     }
 
     /**
-     * Best-effort `.part` cleanup — non-suspend on purpose (the ratchet keeps
+     * Best-effort `.part` cleanup — non-suspend on purpose (the guard keeps
      * bare runCatching out of suspend bodies): a failed delete leaves a stray
      * part file but never masks the original failure the caller rethrows.
      */

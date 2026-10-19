@@ -34,7 +34,7 @@ import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
- * Gaps in [AuthViewModel] coverage NOT pinned by [AuthViewModelTest] (which
+ * Behavior in [AuthViewModel] not pinned by [AuthViewModelTest] (which
  * exercises only the QuickConnect happy/sad branches):
  *
  * 1. [AuthViewModel.checkServersHealth] — the whole function was untested:
@@ -51,7 +51,7 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
  * 2. Session delegation: [AuthViewModel.login], [AuthViewModel.switchUser],
  *    [AuthViewModel.removeUser], [AuthViewModel.removeServer] and
  *    [AuthViewModel.getUsersForServer] forward 1:1 to the repository.
- * 3. QuickConnect branches the legacy suite missed: the
+ * 3. Additional QuickConnect branches: the
  *    [QuickConnectUiState.WaitingForApproval] state carries code + secret;
  *    initiate/poll failures WITHOUT an exception message fall back to their
  *    localized resources; `loginWithQuickConnect` failure surfaces
@@ -238,7 +238,7 @@ class AuthViewModelHealthAndSessionTest {
         coVerify(exactly = 1) { authRepository.removeServer("srv-1") }
     }
 
-    // ── QuickConnect branches the legacy suite missed ─────────────────────
+    // ── additional QuickConnect branches ──────────────────────────────────
 
     @Test
     fun quickConnect_initiate_landsWaitingForApprovalWithCodeAndSecret() = runTest(testDispatcher) {

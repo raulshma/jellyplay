@@ -6,8 +6,8 @@ import com.raulshma.jellyplay.core.model.UserStatistics
 
 /**
  * Platform seam for the statistics screens' share actions (admin conveyor,
- * settings' PlatformIntents pattern). Android keeps the pre-migration bodies
- * verbatim in the androidMain actual: the per-user statistics CSV export
+ * settings' PlatformIntents pattern). Android's actual uses the platform
+ * share sheet: the per-user statistics CSV export
  * (ACTION_SEND chooser over a FileProvider stream from `cacheDir`) and the
  * "Year in Jellyfin" plain-text share. Desktop has no share sheet: the CSV is
  * written under `java.io.tmpdir` and the folder is opened through AWT

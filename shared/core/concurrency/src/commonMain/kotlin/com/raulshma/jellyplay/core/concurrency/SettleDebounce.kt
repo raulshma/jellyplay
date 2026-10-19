@@ -32,7 +32,7 @@ public sealed interface Settlement<out T> {
  * new value — the plain [kotlinx.coroutines.flow.debounce] behaviour, plus
  * the immediate arrival signal for the zero-cost part of the reaction.
  *
- * Built for focus-driven UI (H10/H13): a card's BlurHash paints on
+ * Built for focus-driven UI: a card's BlurHash paints on
  * [Settlement.Arrived], the network-backed fetch waits for
  * [Settlement.Settled] and is cancelled for free when the focus moves on.
  */

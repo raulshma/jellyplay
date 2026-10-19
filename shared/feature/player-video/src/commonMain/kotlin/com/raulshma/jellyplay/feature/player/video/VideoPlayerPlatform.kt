@@ -79,8 +79,8 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
     ): VideoPlayerAudio
 
     /**
-     * The video focus slice's two seams (ADR-0004), routed through this
-     * aggregate because the ViewModel's ctor line-ceiling ratchet forbids
+     * The video focus slice's two seams, routed through this
+     * aggregate because the ViewModel's ctor line-ceiling guard forbids
      * two more constructor slots: the module-owned exclusivity authority the
      * wiring claims [com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId.VIDEO]
      * on (Koin resolves the bound DefaultPlaybackFocus; headless harnesses

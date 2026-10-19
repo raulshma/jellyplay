@@ -45,16 +45,16 @@ android {
 
     // ABI splits are property-gated, not task-name-
     // sniffed: gradle.startParameter.taskNames is configuration-cache-hostile
-    // and misfired on any invocation containing "debug" (testPhoneDebugUnitTest
-    // never packages an APK but still paid the extra-ABI configuration).
+    // and matches any invocation containing "debug" (testPhoneDebugUnitTest
+    // never packages an APK but would still pay the extra-ABI configuration).
     splits {
         abi {
             isEnable = true
             reset()
             include("arm64-v8a")
             // Builds default to arm64-only — the device fleet is
-            // physical phones, and every developer/CI invocation used to pay
-            // for three dex+package passes. The emulator ABIs (x86_64 for
+            // physical phones, and extra ABIs cost three dex+package passes.
+            // The emulator ABIs (x86_64 for
             // modern images; x86 for the 32-bit-only Android TV system images,
             // API 30 and older) are opt-in via a comma-separated property.
             // Named extraAbis because splits.abi is variant-agnostic: it
@@ -73,11 +73,11 @@ android {
                 .forEach { include(it) }
             // The universal APK (all 4 ABIs of every native player
             // stack, ~3-4x the arm64 payload) is a sideload-only convenience
-            // and no longer builds by default. The release lane opts back in
+            // and does not build by default. The release lane opts back in
             // (-PbuildUniversal=true in release.yml on BOTH the baseline-
             // profile generate step — which assembles and installs release
             // APKs on the x86_64 ciPixel8 GMD — and the assemble step), so
-            // its artifact set is unchanged; every other build skips it.
+            // release artifacts keep it; every other build skips it.
             isUniversalApk = providers.gradleProperty("buildUniversal")
                 .map(String::toBoolean)
                 .getOrElse(false)
@@ -182,9 +182,8 @@ aboutLibraries {
 // Compose-resources APK guard. The launch-blocking crash it prevents: the
 // AGP-9 KMP library plugin leaves android resources OFF by default, so a shared module can ship
 // generated `Res` accessor classes in the APK while its backing `.cvr` string
-// assets are silently missing (23 of 24 resource-carrying modules were in
-// exactly that state until c6da8ff8a added
-// `androidResources { enable = true }` across the tree). No compile gate can
+// assets are silently missing unless the module opts in via
+// `androidResources { enable = true }`. No compile gate can
 // see it — the accessors compile fine, the MissingResourceException only
 // fires on the first string read at runtime — so this task opens the BUILT
 // phoneDebug APK as a zip instead and asserts, for every resource-carrying
@@ -202,16 +201,13 @@ aboutLibraries {
 //     (verified against the real phoneDebug artifact: e.g. shared/feature/home
 //     → com.raulshma.jellyplay.feature.home.generated.resources/values-de/
 //     strings.commonMain.cvr — note the legacy import paths, NOT the
-//     kotlin.android namespace). The predecessor parsed `packageOfResClass =
-//     "..."` literals out of each module's build.gradle.kts (namespace
-//     fallback); the build-convention bundle moved those tails into the
-//     convention plugin's path-derived default, the parse fell back to the
-//     `.shared.`-bearing namespace, and every module read as "missing" while
-//     the APK was fine — so the guard now reads the one source of truth
-//     instead of a text-parse that can drift from it;
+//     kotlin.android namespace). The convention plugin derives
+//     `packageOfResClass` from the module path, so the guard reads that one
+//     source of truth instead of text-parsing build.gradle.kts literals that
+//     can drift from it;
 //   * the locale set derives from the module's values/values-xx directory
 //     names (today 9 per module: values, -de, -es, -fr, -it, -ja, -ko, -pt,
-//     -zh) and the derivation reproduces the measured baseline of
+//     -zh) and the derivation yields
 //     216 .cvr entries = 24 modules × 9 locales.
 // Always re-runs (the zip scan is cheap): a cached "PASS" would defeat the
 // point of a guard. TV flavor ships the same merged assets graph; the phone
@@ -374,10 +370,6 @@ baselineProfile {
     // committed and regenerate on demand, like aboutlibraries.json. Builds
     // not preceded by a generate step pick up the committed files instead of
     // producing profile-less APKs.
-    // The src/phoneRelease/generated/baselineProfiles
-    // tree is still EMPTY — commit the baseline-prof.txt/startup-prof.txt the
-    // next release run writes (release.yml gates on them existing). Until
-    // then, local release builds package no baseline rules.
     saveInSrc = true
     variants {
         create("phone") {
@@ -397,8 +389,8 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:datastore"))
     implementation(project(":shared:core:data"))
-    // Shared core:ui (core.ui.message bus seam + the cutover's
-    // moved Android halves) + compose-resources runtime for the shared
+    // Shared core:ui (core.ui.message bus seam + Android platform
+    // halves of shared UI) + compose-resources runtime for the shared
     // UserMessageBus collector (UiText resolution on Android).
     implementation(project(":shared:core:ui"))
     implementation(project(":shared:feature:auth"))

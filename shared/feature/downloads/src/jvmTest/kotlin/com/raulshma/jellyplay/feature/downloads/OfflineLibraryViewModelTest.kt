@@ -28,8 +28,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class OfflineLibraryViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var offlineRepository: OfflineRepository

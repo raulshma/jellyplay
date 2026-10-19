@@ -173,8 +173,8 @@ private fun ActiveDeviceCard(
         val tag = nowPlayingItem.backdropImageTag ?: nowPlayingItem.primaryImageTag
         if (!tag.isNullOrBlank()) {
             val type = if (nowPlayingItem.backdropImageTag != null) "Backdrop" else "Primary"
-            // Owned image-URL grammar (core:model); byte-identical to the
-            // string this used to hand-roll, so Coil cache keys survive.
+            // Owned image-URL grammar (core:model); the URL shape stays stable
+            // so Coil cache keys survive.
             buildItemFillImageUrl(
                 baseUrl = serverAddress,
                 itemId = nowPlayingItem.id,

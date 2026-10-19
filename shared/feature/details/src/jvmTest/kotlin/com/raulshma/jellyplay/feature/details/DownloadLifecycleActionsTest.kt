@@ -70,7 +70,7 @@ class DownloadLifecycleActionsTest {
      * double for the production scope (the VM's Main.immediate): launches run
      * eagerly up to their first suspension, so the tests' advanceUntilIdle
      * calls observe the settled state. TestScope/backgroundScope cannot serve
-     * here — the D16 collector subscribing at construction never completes
+     * here — the progress collector subscribing at construction never completes
      * (hanging runTest on TestScope), and backgroundScope tasks only progress
      * while the test body is suspended, which the advanceUntilIdle-driven
      * bodies never do.
@@ -82,7 +82,7 @@ class DownloadLifecycleActionsTest {
      * with an overridable session flow. Defaults: unmetered connection, an
      * empty [DownloadsSlice] (→ ORIGINAL quality → null maxBitrate), an
      * expandSeason that records calls and returns empty, and an empty live
-     * download-progress flow (the D16 collector subscribes at construction).
+     * download-progress flow (the progress collector subscribes at construction).
      */
     private fun makeActions(
         scope: CoroutineScope,
@@ -94,7 +94,7 @@ class DownloadLifecycleActionsTest {
         expandedEpisodes: (String) -> List<MediaItem> = { emptyList() },
         downloadsSlice: DownloadsSlice = DownloadsSlice(),
         unmetered: Boolean = true,
-        /** Backing flow of the D16 live-progress collector (tests push ticks into it). */
+        /** Backing flow of the live-progress collector (tests push ticks into it). */
         activeProgressFlow: MutableStateFlow<Map<String, DownloadProgress>> = MutableStateFlow(emptyMap()),
     ): DownloadLifecycleActions {
         val session = MutableStateFlow(
@@ -594,7 +594,7 @@ class DownloadLifecycleActionsTest {
     }
     // endregion
 
-    // region episode download progress (D16 flow collection + merge)
+    // region episode download progress (download-progress flow collection + merge)
     @Test
     fun `in-flight progress rows re-key onto episode ids with their fraction`() = runTest {
         val progressFlow = MutableStateFlow(

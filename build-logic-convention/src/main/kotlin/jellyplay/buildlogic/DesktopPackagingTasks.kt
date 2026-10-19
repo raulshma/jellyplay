@@ -17,23 +17,16 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.security.MessageDigest
 
-// (GeneratePackagingIconsTask — the one task that drew the committed
-// packaging/icons/* placeholder assets, with its java.awt/ImageIO imports —
-// lived in the module script beside these until it was deleted: its outputs
-// are committed real files, ordinary builds never regenerate them, and
-// PackagingIconAssetsTest validates the bytes.)
-
 /**
  * Fetches the bundled Windows libmpv (out-of-the-box desktop playback) from
  * the pinned mpv-winbuild release, verifies sha256, and mirrors the dlls +
- * license notice into the app-resources packaging dir. Moved verbatim from
- * :apps:desktop's build script into this convention build; task NAME and
- * behavior are unchanged (CI release lanes and the README reference
- * `fetchBundledLibmpv` by name).
+ * license notice into the app-resources packaging dir. Task NAME is stable
+ * API (CI release lanes and the README reference `fetchBundledLibmpv` by
+ * name).
  *
  * Desktop video/audio playback goes through libmpv via JNA, and requiring
  * every user to install mpv by hand (or set MPV_LIBRARY) is a non-starter —
- * a missing dll used to surface as a silent black player screen. The
+ * a missing dll would otherwise surface as a silent black player screen. The
  * Windows dll is fetched at build time and shipped inside the packaged app
  * image (the resourcesDir output is the compose plugin's
  * appResourcesRootDir input), so playback works with zero user setup.
@@ -48,7 +41,7 @@ import java.security.MessageDigest
  * Extraction needs a 7-Zip binary: every distributor ships the dev package
  * as .7z (LZMA2+BCJ2, beyond pure-Java readers), while Windows dev boxes and
  * GitHub's windows runners all carry one. Machines without it keep the
- * pre-existing manual escape hatch — drop libmpv-2.dll into tools/mpv/.
+ * manual escape hatch — drop libmpv-2.dll into tools/mpv/.
  */
 abstract class FetchBundledLibmpvTask : DefaultTask() {
     @get:Input abstract val devArchiveUrl: Property<String>
@@ -63,8 +56,8 @@ abstract class FetchBundledLibmpvTask : DefaultTask() {
     fun fetch() {
         val dll = dllFile.get().asFile
         if (dll.isFile && dll.length() > 0L) {
-            // Manual drop-in (the pre-bundling workflow) still wins — never
-            // overwrite what a developer placed there on purpose.
+            // Manual drop-in still wins — never overwrite what a developer
+            // placed there on purpose.
             syncResources(dll)
             return
         }
@@ -231,11 +224,11 @@ abstract class FetchBundledLibmpvTask : DefaultTask() {
 
 /**
  * Writes the classpath desktop-build.properties (versionName + release
- * channel) the About screen's DesktopAppMetaProvider reads. Moved verbatim
- * from :apps:desktop's build script; task NAME and output path are
- * unchanged (the release.yml / kmp-release.yml comments reference the task
- * by name, and the srcDir wiring in [DesktopPackagingPlugin] feeds the same
- * build/generated/build-info directory into processResources).
+ * channel) the About screen's DesktopAppMetaProvider reads. Task NAME and
+ * output path are stable API (the release.yml / kmp-release.yml comments
+ * reference the task by name, and the srcDir wiring in
+ * [DesktopPackagingPlugin] feeds the same build/generated/build-info
+ * directory into processResources).
  */
 abstract class WriteDesktopBuildInfoTask : DefaultTask() {
     @get:Input abstract val versionName: Property<String>

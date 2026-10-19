@@ -40,7 +40,7 @@ class PlaybackOutboxDrainerImpl(
     private val mediaRepository: MediaRepository,
     /**
      * The post-drain wholesale cache drop. Deliberately off the public
-     * [MediaRepository] interface (plan 08) — it arrives through the narrow
+     * [MediaRepository] interface — it arrives through the narrow
      * [MediaCacheInvalidator] port, Koin-bound to the same
      * MediaRepositoryImpl single as [mediaRepository].
      */

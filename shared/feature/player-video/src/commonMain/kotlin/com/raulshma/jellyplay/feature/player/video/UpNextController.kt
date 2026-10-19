@@ -80,7 +80,7 @@ data class UpNextCard(
  *
  * The [SubtitleStyleController] shape: every fact the moved logic read from
  * the VM arrives as a narrow constructor lambda — NO raw uiState handle
- * crosses (the god-count ratchet stays at its baseline; this class never
+ * crosses (the god-count guard stays at its baseline; this class never
  * references [VideoPlayerUiState]). The episode-browsing slice stays a stored
  * slice of the uiState; the navigator remains its single writer through the
  * injected [updateEpisodes] seam, and the mark/advance effects stay the
@@ -307,7 +307,7 @@ internal class UpNextController(
     /** How a queue consumption's settle wait resolved. */
     private enum class AdvanceSettled { SETTLED, FAILED }
 
-    /** True while a next-episode advance is in flight and unsettled (#146). */
+    /** True while a next-episode advance is in flight and unsettled. */
     val isNextEpisodeLoading: StateFlow<Boolean> get() = navigator.isNextEpisodeLoading
 
     /**

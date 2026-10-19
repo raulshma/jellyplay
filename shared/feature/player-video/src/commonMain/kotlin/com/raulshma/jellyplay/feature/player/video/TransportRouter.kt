@@ -245,7 +245,7 @@ internal class TransportRouter(
 
 /**
  * The composition wiring for [PlaybackSession.transport] — moved out of the
- * session body (the composition root's line ratchet) into the module being
+ * session body (the composition root's line guard) into the module being
  * wired, the same ownership move the constructors' lambda bundles made. Reads
  * the session's internal collaborators through the receiver (lazily — the
  * lambdas defer every read of the later-declared `syncPlay` / aggregate

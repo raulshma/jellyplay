@@ -489,7 +489,7 @@ object AppearancePreferenceSpecs {
         resetCategory = PreferenceResetCategory.APPEARANCE,
         search = PreferenceSearchSpec(
             id = "layout_mode",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_layout_mode",
             subtitleKey = "ss_layout_mode_subtitle",
             categoryKey = "ss_cat_appearance",
@@ -512,7 +512,7 @@ object AppearancePreferenceSpecs {
         resetCategory = PreferenceResetCategory.APPEARANCE,
         search = PreferenceSearchSpec(
             id = "screen_fit",
-            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            // One-key family: a single screen-face key.
             titleKey = "settings_screen_fit",
             subtitleKey = "ss_screen_fit_subtitle",
             categoryKey = "ss_cat_appearance",
@@ -612,7 +612,7 @@ object AppearancePreferenceSpecs {
 
     /**
      * The domain's settings-search declarations, in the settings feature's
-     * catalog order (the order the retired hand records carried): every row
+     * catalog order: every row
      * above that carries a [PreferenceSearchSpec], plus the two standalone
      * entries ([searchThemeScheduler], [searchStyleAccent]). The settings
      * feature derives its spec-backed catalog rows from this list over its

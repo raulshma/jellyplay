@@ -13,10 +13,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Temporal policy for fetch-shaped work — the three questions every poll /
- * deadline / serialize site in this repo used to answer with hand-rolled
- * copies (EpgViewModel, AdminApiClientImpl, ServerDiscoveryService,
- * HomeRefresher, ServerHealthMonitor, SyncPlayManager; five recent production
- * fixes landed inside those copies), gathered under one vocabulary:
+ * deadline / serialize site in this repo answers through this one vocabulary
+ * (EpgViewModel, AdminApiClientImpl, ServerDiscoveryService, HomeRefresher,
+ * ServerHealthMonitor, SyncPlayManager are its callers):
  *
  *  - **Deadline — how long** ([withDeadlineMs]): one hard outer envelope,
  *    because only OkHttp's per-call read timeout exists below it and a

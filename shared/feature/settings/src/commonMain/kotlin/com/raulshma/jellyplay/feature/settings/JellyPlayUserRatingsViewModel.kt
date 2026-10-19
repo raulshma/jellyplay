@@ -38,7 +38,7 @@ data class JellyPlayUserRatingsState(
 )
 
 /**
- * The companion-plugin "My ratings" screen's model (ADR 0010): the user's
+ * The companion-plugin "My ratings" screen's model: the user's
  * synced likes / dislikes / ratings ([JellyPlayPluginFeatures.UserRatings]),
  * one fetch per filter tab.
  *
@@ -46,7 +46,7 @@ data class JellyPlayUserRatingsState(
  * entry (plugin probe AVAILABLE + the `user-ratings` feature key + the user's
  * per-feature toggle), but the api calls are STILL feature-gated here — the
  * gate is re-checked at every call, so the api client is never touched without
- * it (ADR 0010's gating rule; the capabilities contract can degrade
+ * it (the plugin-gating contract; the capabilities contract can degrade
  * mid-session). The gate is the ONE seam ([JellyPlayFeatureGate.isAvailableNow]
  * — probe AND toggle); without the gate seam (direct-construction tests) the
  * probe-only read keeps the pre-toggle behavior.

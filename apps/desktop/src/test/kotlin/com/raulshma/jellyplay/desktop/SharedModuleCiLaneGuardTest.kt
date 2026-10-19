@@ -7,43 +7,35 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * CI lane-coverage ratchet (the TestFixturesScopeGuardTest idiom, pointed at
+ * CI lane-coverage guard (the TestFixturesScopeGuardTest idiom, pointed at
  * the workflow instead of the build graph).
  *
- * kmp-build.yml's shared-tree lanes used to HAND-enumerate every shared
- * module's Gradle tasks, and that hand list was the failure mode twice over:
- * photos, shell, player-book, and test-fixtures shipped full local suites
- * that ran in NO CI lane, and even after the tests were added,
- * test-fixtures stayed out of the build lane because its jvmTest line alone
- * satisfied the old "module path appears somewhere" guard (and :app itself
- * once ran in none — the workflow's android-app comment records that earlier
- * instance of the same bug). Nothing compile-side can catch an omission,
- * because the omission is a missing *invocation*, not missing code.
- *
- * The lanes are now DERIVED: a workflow step scans settings.gradle.kts for
+ * The lanes are DERIVED: a workflow step scans settings.gradle.kts for
  * include(":shared:…") and expands every hit into jvmJar +
  * compileAndroidMain (build lane) and jvmTest (test lane), so a new include
- * joins coverage by construction. This guard ratchets the derivation
- * itself:
+ * joins coverage by construction. A hand-enumerated list is the failure
+ * mode: a module whose tasks are listed partially or not at all runs its
+ * suite in no CI lane, and nothing compile-side can catch the omission —
+ * the omission is a missing *invocation*, not missing code. The steps
+ * therefore hold the derivation itself:
  *
  *  1. settings.gradle.kts still contains the shared includes the scan
  *     expects (floor — keeps the scan from passing vacuously);
  *  2. the workflow still contains the derivation step (the include-scan
  *     regex + the two lane-step interpolations);
  *  3. NO hand-enumerated `:shared:…:{jvmJar,compileAndroidMain,jvmTest}`
- *     task literal creeps back into the workflow — a partial hand list
- *     beside the derivation is exactly the two-mechanism drift that bred
- *     the original dark suites. A genuine one-off special case (never seen
- *     so far) must consciously update this test.
+ *     task literal appears in the workflow — a partial hand list beside the
+ *     derivation creates two mechanisms that drift apart. A genuine one-off
+ *     special case must consciously update this test.
  *
  * androidHostTest lanes are NOT derived here: which modules own hostTest
  * source sets is not textually derivable from settings.gradle.kts. They run
- * in the android-app job (core:data, core:ui, player-video, syncplay today);
- * hostTest additions ride review.
+ * in the android-app job (core:data, core:ui, player-video, syncplay);
+ * hostTest additions are added to that job by hand.
  */
 class SharedModuleCiLaneGuardTest {
 
-    /** Ratchet floor: shared includes at the time this guard landed. */
+    /** Floor: the shared includes this guard expects. */
     private val minSharedModuleCount = 36
 
     private val sharedInclude = Regex("""include\("(:shared:[^"]+)"\)""")

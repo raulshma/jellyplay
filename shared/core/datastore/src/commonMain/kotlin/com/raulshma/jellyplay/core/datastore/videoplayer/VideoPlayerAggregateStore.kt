@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.stateIn
  * audio-effects, subtitle, engine, security), so rather than inject seven
  * stores and combine them at each call site they collect this one aggregate.
  *
- * The aggregate holds the seven slices verbatim — it does not project them
+ * The aggregate holds the seven slices as-is — it does not project them
  * into a flattened shape. Callers destructure the slices they need
  * (`aggregate.videoPlayer.videoDefaultSpeed`). A flattened projection would
  * duplicate the per-screen shapes already owned by `PreferenceProjections`;

@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
  * Pins the ONE livetv tab-ladder rung decision behind [LiveTvTabScaffold]
  * (the former five hand-copied per-screen `when` ladders — Channels had no
  * loading rung at all). The precedence must stay byte-equal to core:ui's
- * `pagedCollectionRung` (the load-ladder cohort's decision shape): an error
+ * `pagedCollectionRung`: an error
  * over an EMPTY tab wins over the spinner, both arms gate on emptiness so a
  * refresh over live content never blanks it, and a settled-empty tab is the
  * empty rung.

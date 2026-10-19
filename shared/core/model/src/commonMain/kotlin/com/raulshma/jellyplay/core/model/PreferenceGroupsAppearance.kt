@@ -36,10 +36,10 @@ data class AppearancePreferences(
  * the Appearance screen surfaces theme, layout, library-card display,
  * newsletter, and accessibility settings together. Navigation-customization
  * fields are excluded — they live in [navigationCustomization]; the
- * home-discovery card-display quartet is excluded too — it moved (with its
- * rows) to `HomeScreenPreferences` (PS-4). The H11/H12 card-badge toggles
- * read back here though: the plan also surfaces those two rows in
- * Appearance → Library & Cards, writing the SAME home-store prefs.
+ * home-discovery card-display quartet is excluded too — it lives (with its
+ * rows) on `HomeScreenPreferences`. The card-badge toggles appear here as
+ * well: the same two rows show in Appearance → Library & Cards, writing the
+ * SAME home-store prefs.
  */
 @Immutable
 @Serializable
@@ -129,9 +129,9 @@ data class AppearanceScreenPreferences(
     val showClockOnHome: Boolean = false,
     /** Show settings search results alongside media in the home search bar. */
     val showSettingsInHomeSearch: Boolean = true,
-    /** H11 quality badges (4K / HDR / DV / Atmos) on cards — the home-store pref, also surfaced in Library & Cards. */
+    /** Quality badges (4K / HDR / DV / Atmos) on cards — the home-store pref, also surfaced in Library & Cards. */
     val showQualityBadges: Boolean = true,
-    /** H12 NEW badges for items added since the last home visit — the home-store pref, also surfaced in Library & Cards. */
+    /** NEW badges for items added since the last home visit — the home-store pref, also surfaced in Library & Cards. */
     val showNewBadges: Boolean = true,
     /**
      * Whether the home screen's top header dock auto-hides on scroll-down and

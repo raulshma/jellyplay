@@ -43,10 +43,10 @@ class AppUpdateRepositoryImpl(
     private val flavor: String,
     private val supportedAbis: Array<String>,
     /**
-     * Clock seam (D3) for the progress-report throttle and the sidecar's
+     * Clock seam for the progress-report throttle and the sidecar's
      * downloadedAt stamp — same reads as the bare System.currentTimeMillis()
      * before. DEFAULTED because apps/desktop's DesktopAppUpdate constructs
-     * this impl manually outside Koin (out of D3's touch set); the Koin
+     * this impl manually rather than through Koin; the Koin
      * modules pass the shared single explicitly.
      */
     private val timeSource: TimeSource = SystemTimeSource(),

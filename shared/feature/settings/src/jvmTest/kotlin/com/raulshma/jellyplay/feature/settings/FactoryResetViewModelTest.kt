@@ -88,7 +88,7 @@ import kotlin.test.assertTrue
  * verbatim. Main-dispatcher rule inlined (StandardTestDispatcher +
  * setMain/resetMain — module jvmTest pattern).
  *
- * The Wave-6 seam-present resets (the nullable `pluginApiClient`/`statusStore`
+ * The seam-present resets (the nullable `pluginApiClient`/`statusStore`
  * ctor seams) get their own block: a gated capture parks `resetRunning` and
  * refuses a second confirmation, a FAILED capture warns without blocking, and
  * the capture strictly precedes the destructive clear.
@@ -259,13 +259,13 @@ class FactoryResetViewModelTest {
         verify(exactly = 1) { editor.clearAllPreferences() }
     }
 
-    // ---------------------------------------------------------------- Wave-6 seam-present resets
+    // ---------------------------------------------------------------- seam-present resets
 
     private val pluginStatus = MutableStateFlow(JellyPlayPluginStatus.UNAVAILABLE)
     private lateinit var pluginApi: JellyPlaySettingsSyncRoutes
 
     /**
-     * The seam-present VM: the Wave-6 capture's gate is OPEN (probe AVAILABLE +
+     * The seam-present VM: the capture's gate is OPEN (probe AVAILABLE +
      * the `settings-sync` registry), so the safety capture actually runs — the
      * [JellyPlaySyncViewModelTest] api-mockk idiom.
      */

@@ -37,19 +37,18 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Newsletter ViewModel coverage (requests/calendar conveyor test style, no
- * legacy suite existed): section-order resolution (stored order filtered by
- * the enabled-section set, DEFAULT_ORDER fallback), send-now/send-test
- * result mapping incl. the failure branch, the markViewed timestamp write,
- * the admin flag flow-through, and the two date/count formatting helpers
- * (reached through reflection because they are file-private in the moved
- * screens — kept byte-identical to HEAD rather than widened for tests).
+ * Newsletter ViewModel coverage: section-order resolution (stored order
+ * filtered by the enabled-section set, DEFAULT_ORDER fallback), send-now/
+ * send-test result mapping incl. the failure branch, the markViewed timestamp
+ * write, the admin flag flow-through, and the two date/count formatting
+ * helpers (reached through reflection because they are file-private in the
+ * screens, which stay unwidened for the tests).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsletterViewModelTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (requests conveyor port pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: NewsletterApiClient
@@ -151,7 +150,7 @@ class NewsletterViewModelTest {
         assertFalse(state.isRefreshing)
         assertNull(state.error)
         coVerify(exactly = 1) { notificationStore.setNewsletterLastViewed(any()) }
-        // Head semantics: System.currentTimeMillis() at the write.
+        // The write stamps System.currentTimeMillis().
         assertTrue(timestamp.captured > 0L)
         assertTrue(System.currentTimeMillis() - timestamp.captured < 60_000L)
     }

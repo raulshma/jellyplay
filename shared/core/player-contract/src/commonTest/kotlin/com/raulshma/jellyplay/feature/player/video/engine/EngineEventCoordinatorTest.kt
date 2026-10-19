@@ -21,7 +21,7 @@ import kotlinx.coroutines.test.runTest
  * only decides, never executes.
  *
  * Moved verbatim from `:shared:feature:player-video`'s jvmTest with the
- * coordinator (candidate C4: the live player consumes the same policies): the
+ * coordinator (the live player consumes the same policies): the
  * old `FakeMediaEngine` twin degrades to the [EngineSourceFixture] — the
  * coordinator now consumes [EngineEventSource], so the tests drive exactly
  * the raw flows the production hosts feed it (VOD: `MediaEngine.toEngineEventSource`;

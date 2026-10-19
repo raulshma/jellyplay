@@ -19,12 +19,11 @@ import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
 
 /**
- * Deep module extracted from [HomeRefresher]: the discover-row dice-roll
+ * Deep module split out of [HomeRefresher]: the discover-row dice-roll
  * machinery — the roll registry, the roll jobs, and the state patches a roll
  * applies — behind one small interface ([roll], [drainRolls],
- * [cancelForIdentityChange]). Previously this lived inline on the refresher
- * as ~160 lines interleaved with the fetch choreography; every home change
- * had to re-learn the generation invariant by reading the whole refresher.
+ * [cancelForIdentityChange]). Keeping it separate from the fetch choreography
+ * keeps the generation invariant in one place.
  * The refresher keeps WHAT/WHEN (the fetch schedule, the drain CALL SITE);
  * this coordinator owns the ordering rule that makes a roll survive a
  * concurrently in-flight fetch.

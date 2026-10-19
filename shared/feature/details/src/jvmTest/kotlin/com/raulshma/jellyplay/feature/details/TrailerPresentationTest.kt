@@ -11,7 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the D3 merged-trailer vocabulary and the D14 pre-roll policies:
+ * Pins the merged-trailer vocabulary and the pre-roll policies:
  * the merge order (pref on/off), the backdrop autoplay pick, the
  * per-entry playback dispatch (local session vs YouTube embed vs the
  * embed-failure external fallback), the trailer-then-feature gate table
@@ -24,7 +24,7 @@ class TrailerPresentationTest {
     private fun remote(key: String?, name: String = "Trailer $key", url: String? = null) =
         SeerrRelatedVideo(key = key, name = name, site = "YouTube", type = "Trailer", url = url)
 
-    // ── mergeTrailerEntries: the D3 merge order ──────────────────────────
+    // ── mergeTrailerEntries: the merge order ──────────────────────────
 
     @Test
     fun merge_prefOff_isRemoteFirst_localsAppended() {
@@ -78,7 +78,7 @@ class TrailerPresentationTest {
         )
 
         assertEquals(listOf("l1", "l2"), merged.localTrailerItems().map { it.id })
-        // The remote-only shape (pre-D3 content) extracts nothing.
+        // The remote-only shape (remote-only content) extracts nothing.
         assertTrue(mergeTrailerEntries(emptyList(), listOf(remote("r1")), false).localTrailerItems().isEmpty())
     }
 
@@ -257,7 +257,7 @@ class TrailerPresentationTest {
         )
     }
 
-    // ── offersPlayWithPrerolls: the ⋮ menu gate (D14 step 1) ─────────────
+    // ── offersPlayWithPrerolls: the ⋮ menu gate (step 1) ─────────────
 
     @Test
     fun menuGate_movieAndEpisodeOffer_offlineAndSyncPlaySuppress() {

@@ -17,14 +17,14 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
- * Surface-selection contract of [DesktopMpvPlayerEngineFactory] (the
- * overlay-fix precedence): which engine — and which
+ * Surface-selection contract of [DesktopMpvPlayerEngineFactory] (software-first
+ * precedence): which engine — and which
  * [EngineActivitySnapshot] surface tag — a session gets for each bridge
  * state. Software-render support WINS over an available HWND (the sw pane
  * lives inside the compose tree: controls stack above the video and pointer
  * input reaches the gesture layer; the HWND child window composites above all
  * Compose content and starves both). The HWND wait only runs when the probe
- * failed, and the pre-12B audio-only degrade survives behind both. The bridge
+ * failed, and the audio-only degrade remains behind both. The bridge
  * is a global object, so every test installs its provider/probe and removes
  * them again in a finally block.
  *
@@ -159,7 +159,7 @@ class DesktopMpvPlayerEngineFactorySurfaceSelectionTest {
             withSoftwareProbe(probe = { false }) {
                 val factory = DesktopMpvPlayerEngineFactory(recorder = recorder)
                 val engine = factory.create(PlayerType.MPV)
-                // The pre-12B degrade is the same class as the wid engine —
+                // The degrade is the same class as the wid engine —
                 // the recorder's surface tag is what tells the branches apart.
                 assertIs<MpvDesktopEngine>(engine)
                 assertEquals(SURFACE_WID_NULL, recorder.latestVideoEngine().surface)

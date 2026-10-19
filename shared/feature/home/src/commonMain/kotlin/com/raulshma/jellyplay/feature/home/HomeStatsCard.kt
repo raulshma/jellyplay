@@ -40,8 +40,8 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_w
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * H17 "Your library week" — the personal stats card's whole render model.
- * The v1 shape is the non-admin-safe triplet (played / unplayed / approximate
+ * "Your library week" — the personal stats card's whole render model.
+ * The base shape is the non-admin-safe triplet (played / unplayed / approximate
  * watch minutes from the user-scoped item queries); the admin+plugin upgrade
  * fills [exactWatchHours] / [currentStreakDays] from the Playback Reporting
  * plugin's per-user aggregates when the user is an admin AND the plugin
@@ -97,7 +97,7 @@ internal object HomeStatsMath {
 }
 
 /**
- * The H17 stats-card loader — the one place the card's three primitives are
+ * The stats-card loader — the one place the card's three primitives are
  * fetched and folded. Non-admin-safe by construction: the played/unplayed
  * counters and the capped played-items query are plain user-scoped reads;
  * the admin+plugin upgrade (real hours + streak from
@@ -107,7 +107,7 @@ internal object HomeStatsMath {
  *
  * Total (never throws): every network read is Result-based and folded with
  * getOrNull/getOrDefault, so the VM can treat a null return as "hide the
- * card" with no error surface (the plan's failure → hidden silently).
+ * card" with no error surface (failure → hidden silently).
  */
 internal class HomeStatsCardLoader(
     private val mediaInfoApiClient: MediaInfoApiClient,
@@ -120,10 +120,9 @@ internal class HomeStatsCardLoader(
      *
      * The three base reads are independent — fan them out so the card
      * waits on the slowest leg, not their serial sum. Everything stays
-     * Result-folded, so a failed leg no longer aborts its siblings mid-flight
+     * Result-folded, so a failed leg does not abort its siblings mid-flight
      * either: the early return below cancels the remaining legs through the
-     * [coroutineScope] unwind, exactly as the sequential version's stack
-     * unwind would have.
+     * [coroutineScope] unwind.
      */
     suspend fun load(userId: String, isAdmin: Boolean): HomeStatsCardData? = coroutineScope {
         val playedDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId) }
@@ -181,7 +180,7 @@ internal class HomeStatsCardLoader(
 
     companion object {
         /**
-         * The played-items query cap — the plan's "~200". Keeps the runtime
+         * The played-items query cap (~200). Keeps the runtime
          * sample to one bounded page even for heavy libraries.
          */
         const val RUNTIME_SAMPLE_CAP: Int = 200
@@ -196,7 +195,7 @@ internal class HomeStatsCardLoader(
 }
 
 /**
- * The H17 compact stats card. [onClick] is null when the tap affordance is
+ * The compact stats card. [onClick] is null when the tap affordance is
  * not permitted (non-admin — the user-statistics detail is an admin area),
  * rendering the card as a plain non-clickable tile.
  */

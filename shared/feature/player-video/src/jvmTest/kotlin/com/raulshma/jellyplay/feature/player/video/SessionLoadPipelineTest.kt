@@ -39,7 +39,7 @@ import org.junit.Test
  * Ported from the legacy Android test of the same name (the migration dropped
  * it; the class under test is commonMain-pure so the file is verbatim JVM).
  * Includes upstream v0.10.6 additions: the `isReady`-gate staging and the
- * `loadMediaFailure_stopsAfterLoadMedia_withoutOutcome` pin (#146).
+ * `loadMediaFailure_stopsAfterLoadMedia_withoutOutcome` pin.
  *
  * The first written record of the session-load ordering
  * constraints that used to live unwritten inside `initializeInternal`'s inlined
@@ -406,7 +406,7 @@ class SessionLoadPipelineTest {
         assertFalse("an external player vetoes the pre-roll", "beginCinemaMode" in stages)
     }
 
-    // ── D14 "Play (with pre-rolls)": the per-invocation force flag ────────
+    // ── "Play (with pre-rolls)": the per-invocation force flag ────────
 
     @Test
     fun cinemaGate_forceCinemaMode_bypassesTheGlobalPref_butKeepsTheOtherVetoes() = runTest {
@@ -444,7 +444,7 @@ class SessionLoadPipelineTest {
 
     @Test
     fun cinemaGate_prefOn_withoutForce_stillFires_normally() = runTest {
-        // The defaulted field keeps every pre-D14 request construction intact:
+        // The defaulted field keeps every legacy request construction intact:
         // pref on + no force = the historical behavior.
         val intro = MediaItem(id = "intro-1", name = "Intro", mediaType = MediaType.MOVIE)
         val pipeline = pipeline(
@@ -584,7 +584,7 @@ class SessionLoadPipelineTest {
      * A loadMedia that reports its own failure (offline gate, detail-fetch
      * miss, vanished offline file) leaves `isReady = false`. The spine must
      * stop there — no media session, no playback-START report, no tracking —
-     * instead of ghosting a session for an item that never started (#146).
+     * instead of ghosting a session for an item that never started.
      */
     @Test
     fun loadMediaFailure_stopsAfterLoadMedia_withoutOutcome() = runTest {

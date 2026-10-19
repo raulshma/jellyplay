@@ -101,10 +101,9 @@ sealed class SecuritySettingsDialog {
 
 /**
  * The declared security screen groups in LazyColumn order — the derivation
- * source the deep-link scroll resolver consumes (see HighlightScroll.kt).
- * Hoisted from the former inline list at the [rememberHighlightScrollIndex]
- * call site (same declaration, one name) so the chassis reads it as a
- * parameter like every sibling screen's group list.
+ * source the deep-link scroll resolver consumes (see HighlightScroll.kt),
+ * named so the chassis reads it as a parameter like every sibling screen's
+ * group list.
  */
 private val securityScreenGroups: List<Set<String>> = listOf(
     setOf(
@@ -192,7 +191,7 @@ val biometricGate = rememberBiometricGate()
                     // Derived by rowTotalFor from the security group
                     // declaration (the shipped count quirks —
                     // pin_for_player_lock never admitted, the biometric count
-                    // ignoring the runtime gate — preserved verbatim in the
+                    // ignoring the runtime gate — encoded in the
                     // declaration).
                     SettingsItemList(total = rowTotalFor(SettingsScreenGroups.security, securityRowFlags)) {
                     if (SettingsScreenGroups.security.rowAdmitted(SecurityRows.PinLock.id, securityRowFlags)) {
@@ -361,8 +360,7 @@ val biometricGate = rememberBiometricGate()
                     HiddenSettingsHint(
                         // Derived from the fused declaration (hiddenRowsFor):
                         // the auto-lock timer's All(AppLock, Advanced) gate —
-                        // 1 where the app-lock stack exists, 0 on desktop
-                        // (the retired hand literal showed 1 everywhere).
+                        // 1 where the app-lock stack exists, 0 on desktop.
                         hiddenCount = hiddenRowsFor(listOf(SettingsScreenGroups.security), securityRowFlags),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )

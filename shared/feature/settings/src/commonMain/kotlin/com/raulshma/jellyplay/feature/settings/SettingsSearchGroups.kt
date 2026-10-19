@@ -9,12 +9,11 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
  * core/ui and must not widen).
  *
  * A group is the single declaration of that screen region's facts. The
- * owning screen derives everything that used to be hand-typed parallel id
- * lists from it — the deep-link scroll group list, the `initiallyExpanded`
+ * owning screen derives the parallel id lists from it — the deep-link scroll
+ * group list, the `initiallyExpanded`
  * expand sets, and the `SettingsItemList(total = …)` row totals — so the
- * catalog and the UI can no longer drift apart (the `vlc_video_output`
- * class of bug: declared, but in no screen group, so a deep-link neither
- * scrolled nor expanded).
+ * catalog and the UI cannot drift apart (a row can be declared but in no
+ * screen group, so a deep-link neither scrolls nor expands).
  *
  * A single screen group may be fed by more than one adjacent declaration
  * list (the playback engine group spans the MPV/VLC/ExoPlayer lists), and a
@@ -119,15 +118,15 @@ internal object SettingsScreenGroups {
     val systemHooks = SystemHooksGroup
 
     /**
-     * the JellyPlay companion-plugin settings-sync rows (ADR 0010) — the
+     * the JellyPlay companion-plugin settings-sync rows — the
      * opt-in toggle + sync-now action, one capability-gated on-screen group
      * (emitted only where the plugin's capabilities probe reports AVAILABLE).
      */
     val jellyplaySync = JellyPlaySyncGroup
 
     /**
-     * the JellyPlay companion-plugin per-feature switches ("Server plugin",
-     * ADR 0010) — one toggle row per user-facing capability, emitted only
+     * the JellyPlay companion-plugin per-feature switches ("Server plugin")
+     * — one toggle row per user-facing capability, emitted only
      * where the probe exposes it (the whole group hides when the plugin is
      * UNAVAILABLE/UNKNOWN; `transcodes` additionally only for admins).
      */
@@ -135,12 +134,10 @@ internal object SettingsScreenGroups {
 
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
-     * The home config hub's four screen groups — the rows moved off
-     * Appearance (the former advanced-gated home display rows, the Next Up
-     * behavior rows, the former `appearance.homeLayout` drill-in group, and
-     * the "Library & Cards" card-display quartet, PS-4). Ids carried over
-     * verbatim, so persisted deep-links/recents keep resolving — only the
-     * owning screen changed.
+     * The home config hub's four screen groups — the home display rows, the
+     * Next Up behavior rows, the `appearance.homeLayout` drill-in group, and
+     * the "Library & Cards" card-display quartet. Ids are stable, so persisted
+     * deep-links/recents keep resolving.
      */
     val homeDisplay = HomeDisplayGroup
     val homeNextUp = HomeNextUpGroup
@@ -151,9 +148,8 @@ internal object SettingsScreenGroups {
     // The appearance domain converted to the fused rows
     // (AppearanceSettingsRows.kt): the six groups derive items AND
     // admissions from the row lists in one act ([List.asRowGroup]) — the
-    // per-domain admissions maps this shape replaced delete as each domain
-    // converts (the appearance trio — record + binding + admissions map — is
-    // retired; see [AppearanceThemeGroup]).
+    // per-domain admissions maps collapse as each domain converts (see
+    // [AppearanceThemeGroup]).
 
     /** Derives from [AppearanceThemeRows]: 17 spec-backed rows + 2 residuals. */
     val appearanceTheme = AppearanceThemeGroup

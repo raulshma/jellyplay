@@ -25,18 +25,16 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * The desktop shell's startKoin module list (extracted from Main.kt): the
- * shared core graph, this shell's platform actuals, and the ONE spread of
- * [sharedFeatureModules] (the shared feature declaration in
- * shared/feature/shell — both JVM shells consume it; the per-module
- * conveyor history rides that declaration).
+ * The desktop shell's startKoin module list: the shared core graph, this
+ * shell's platform actuals, and the ONE spread of [sharedFeatureModules]
+ * (the shared feature declaration in shared/feature/shell — both JVM shells
+ * consume it).
  *
  * The graph loads under Koin's default no-override policy — Main.kt's
  * startKoin sets no allowOverride and every definition is keyed and unique.
  * The desktop auto-update binding ([desktopAppUpdateModule]) is the ONE
  * `AppUpdateRepository` definition: core:data's desktopDataModule ships no
- * update family, so there is no sentinel to replace and no
- * later-module-wins dance (docs/adr/desktop-auto-update.md). Its installed
+ * update family, so no later-module-wins override is needed. Its installed
  * version rides the [DesktopInstalledVersion] single bound beside
  * [DesktopPaths] below.
  */
@@ -52,7 +50,7 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // resource the About screen's DesktopAppMetaProvider reads. CI
     // release-lane builds classify Release and compare against the GitHub
     // feed for real; every dev/IDE build classifies DevBuild and stays
-    // "up to date" by construction (docs/adr/desktop-auto-update.md).
+    // "up to date" by construction.
     module { single { DesktopInstalledVersion.read() } },
     datastoreCommonModule,
     desktopDatastoreModule(paths.dataDir),
@@ -91,7 +89,7 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // core:ui's UserMessageBus module — core, not feature, so it stays
     // inline (the shell's UserMessageHost collects this bus).
     coreUiMessageModule,
-    // The companion-plugin's live broadcast events (ADR 0010) surface as
+    // The companion-plugin's live broadcast events surface as
     // one-shot user messages over that same bus (the text is the session
     // controller's title/body fold — server-supplied, UiText.Raw path).
     // Same core:data-cannot-see-core:ui bridge shape as the Android shell's
@@ -106,7 +104,7 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     },
     desktopBookPlayerModule(paths.dataDir),
 
-    // ── Desktop auto-update (ADR desktop-auto-update) ────────────────
+    // ── Desktop auto-update ──────────────────────────────────────────
     // The ONE AppUpdateRepository definition in this graph — no override:
     // core:data's desktopDataModule ships no update family, so Main.kt's
     // startKoin runs under Koin's default no-override policy. Resolves the
@@ -118,7 +116,7 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // sits here with the rest of this shell's own sections.
     desktopAppUpdateModule(paths.dataDirNio),
 
-    // ── Desktop shell integrations (features 4.2 + 4.3) ─────────────
+    // ── Desktop shell integrations ───────────────────────────────────
     // The Discord Rich Presence stack (hand-rolled DiscordIpcClient +
     // DiscordPresenceService over the shared NowPlayingReporter spine) and
     // the playback-event shell hooks (DesktopHookRunner). Both start from
@@ -127,12 +125,11 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // or shared-graph type. List position is inert (definitions are keyed).
     desktopIntegrationModule(),
 
-    // …subtitle-tester, the FINAL conveyor feature, deliberately has NO
-    // registration here: the entire feature (ViewModel, screen, preview
-    // engine host, raw-asset factory) lives in the shared module's
-    // androidMain — its engine factory and font provider actuals are
-    // Android-only (Koin-owned since then) with no desktop halves — so there
-    // is no commonMain Koin module to register. The shared settings-search
+    // …subtitle-tester deliberately has NO registration here: the entire
+    // feature (ViewModel, screen, preview engine host, raw-asset factory)
+    // lives in the shared module's androidMain — its engine factory and font
+    // provider actuals are Android-only with no desktop halves — so there is
+    // no commonMain Koin module to register. The shared settings-search
     // row for Route.SubtitleTester stays unreachable on desktop
     // (LanguageSettings' push is intercepted by the guard); the guard's
     // dead-end set is DERIVED from the shared shell graph's registration

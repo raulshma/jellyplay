@@ -51,18 +51,16 @@ import kotlin.time.TimeSource
  * interface — who may fetch, when, how often, and which spinners show while
  * it happens.
  *
- * Previously this policy lived inline on the ~1390-LOC [HomeViewModel] as
- * ~250 lines of interleaved machinery: a [Mutex] plus a replaceable refresh
- * [Job], a single `lastRefreshTime` clock read by three different
+ * Holding this policy in one module keeps interleaved machinery — a [Mutex]
+ * plus a replaceable refresh [Job], the `lastRefreshTime` clock shared by the
  * throttle/staleness rules, a foreground/background-jittered `while(true)`
- * loop, a debounced server-push collector, a discover TTL gate, and seven
- * `_uiState` writes scattered across the fetch fan-out. Every home change
- * had to re-learn those invariants by reading the whole VM, and testing any
- * of them required constructing the VM itself — Robolectric,
- * ProcessLifecycleOwner, and a `while(true)` loop leaked past each test's
- * teardown. The bug class this extraction kills: split-brain refresh state
- * (two call sites disagreeing about who owns the spinner or the clock) and
- * cadence/throttle changes that could only be regression-tested end-to-end.
+ * loop, a debounced server-push collector, a discover TTL gate, and the
+ * `_uiState` writes of the fetch fan-out — from re-spreading across
+ * [HomeViewModel]: testing any of it there would need the whole VM
+ * (Robolectric, ProcessLifecycleOwner, a `while(true)` loop leaking past test
+ * teardown). The bug class the seam kills: split-brain refresh state (two call
+ * sites disagreeing about who owns the spinner or the clock) and
+ * cadence/throttle changes testable only end-to-end.
  *
  * Division of labour (deliberate):
  *  * The refresher owns WHAT and WHEN: exclusive mutex ownership, the
@@ -147,9 +145,9 @@ internal class HomeRefresher(
      */
     private val stateStore: MutableStateFlow<HomeRefreshState>,
     /**
-     * The discover/arr side-fetch bodies (the legacy Seerr discover-grid
+     * The discover/arr side-fetch bodies (the Seerr discover-grid
      * fan-out and the direct *arr "Recently Grabbed" calendar fetch) — WHAT
-     * to fetch, moved out of this class; the fetch-group schedule and await
+     * to fetch, kept out of this class; the fetch-group schedule and await
      * points that call them stay here (WHEN). Factory-owned, so a new
      * side-effect repository widens [HomeDiscoverSources], not this
      * constructor.
@@ -178,15 +176,15 @@ internal class HomeRefresher(
          * Hard deadline on the offline→online fetch, applied with the shared
          * governor vocabulary (core:concurrency FetchGovernor's
          * [com.raulshma.jellyplay.core.concurrency.withDeadlineMs] — same
-         * withTimeoutOrNull semantics, now declared policy at the call site).
-         * The gap it caps is UNCHANGED until Wave-4's owner lands: there is
-         * still no deadline anywhere down the getHomeSections /
+         * withTimeoutOrNull semantics, declared policy at the call site).
+         * The gap it caps has no other bound: there is no deadline anywhere
+         * down the getHomeSections /
          * fetchDiscoverSections / fetchRecentlyGrabbed chain — only OkHttp's
          * per-call read timeout (which a half-open socket or a hung Seerr
          * await can defeat). Without this cap a stuck fetch parks on
          * refreshMutex forever and the handshake's full-screen loader never
          * clears, leaving the home stuck until the app is restarted. (The
-         * going-online busy flag is not at risk anymore:
+         * going-online busy flag is not at risk:
          * [OfflineModeManager.goingOnline] owns it and clears it at the ONLINE
          * emission, before this fetch even starts.) The loader
          * MAY legitimately stay up across the handshake's whole bounded
@@ -230,7 +228,7 @@ internal class HomeRefresher(
     // NOT in [refreshJob]: its fetch must survive a mid-flight [stop] ([stop]
     // cancels only [refreshJob]). Replaced per request so a back-to-back
     // transition cancels the stale handler, mirroring the collectLatest
-    // cancellation semantics this used to inherit from the VM's collector.
+    // cancellation semantics the VM's collector applies.
     private var transitionJob: Job? = null
     // Standalone discover fetches (pref-enable trigger) run outside
     // [refreshJob] — replacing the refresh job for them would cancel an
@@ -377,7 +375,7 @@ internal class HomeRefresher(
                     // force = the home screen's manual refresh /
                     // pull-to-refresh: bypass this query's home-sections
                     // cache rather than dropping every cache in the
-                    // repository (plan 08). The main fetch carries the
+                    // repository. The main fetch carries the
                     // custom discover rows of BOTH sources (Jellyfin +
                     // Seerr) — the network layer owns their fan-out, TTL and
                     // ordering; nothing is spliced here anymore.
@@ -400,14 +398,14 @@ internal class HomeRefresher(
                         // Surface a non-blocking notice only when a section
                         // type actually failed to load (403/500/network).
                         // Sections that returned zero items (e.g. no watch
-                        // history, no Next Up) are NOT failures — previously
-                        // the size-mismatch heuristic false-positived on new
+                        // history, no Next Up) are NOT failures — a
+                        // size-mismatch heuristic false-positives on new
                         // users and after merges.
                         _state.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
                         // OrderHomeSectionsUseCase is pure and operates on a
                         // handful of sections (sub-microsecond), so no thread
                         // offload. A withContext(Dispatchers.Default) hop here
-                        // previously escaped the test scheduler and made
+                        // would escape the test scheduler and make
                         // isRefreshing/isLoading assertions racy under
                         // StandardTestDispatcher — state writes stay on the
                         // caller's dispatcher.
@@ -453,7 +451,7 @@ internal class HomeRefresher(
                         pendingCwSideEffect = applySectionOutcome(
                             sections = rolledSections,
                             bookProgressFractions = bookFractions,
-                            // H9: the hero billboards ride the SAME
+                            // The hero billboards ride the SAME
                             // single-emission write as the sections they
                             // rotate with — a partial paint (new rows,
                             // stale hero) never lands.
@@ -496,7 +494,7 @@ internal class HomeRefresher(
             // Defensive spinner clear — but only if this fetch was NOT
             // cancelled: whoever cancelled it (the user-switch paint, a
             // replaced refresh job, [stop], the going-online timeout) owns
-            // the flags now. A cancelled fetch clearing them here used to
+            // the flags now. A cancelled fetch clearing them here would
             // land between the user-switch paint and its replacement fetch,
             // exposing sections=empty + isLoading=false + error=null — the
             // cold-launch "No Content Available" flash. A fetch that merely
@@ -536,9 +534,9 @@ internal class HomeRefresher(
      *    inline spinner.
      *  * [PrefsChanged]: replace [refreshJob] with a NON-forced fetch (the
      *    new query is what matters, not cache bypass) followed by the loop.
-     *    Previously this fetch ran in the VM's prefs collector outside any
-     *    refresh job, so a backgrounding could not cancel it; folding it
-     *    into the refresh job aligns it with every other trigger.
+     *    Folding this fetch into the refresh job (rather than running it in
+     *    the VM's prefs collector) lets a backgrounding cancel it and aligns
+     *    it with every other trigger.
      *  * [UserDataChanged]: throttled silent refresh — forced for external
      *    pushes, non-forced for echoes of this device's own writes —
      *    see [refreshAfterUserDataChange].
@@ -591,8 +589,8 @@ internal class HomeRefresher(
             RefreshTrigger.DiscoverEnabled -> fetchDiscover()
             RefreshTrigger.GoingOnline -> {
                 // Going online is async (preference write → mode flip →
-                // drain + fetch) and previously gave zero feedback. The busy
-                // flag's whole lifecycle lives in the manager now: the
+                // drain + fetch); the busy flag is the feedback. Its whole
+                // lifecycle lives in the manager: the
                 // toggle below arms it (direction: going online), and the
                 // mode flow's ONLINE emission — or the manager's own
                 // watchdog, if the preference write is lost — clears it.
@@ -611,8 +609,8 @@ internal class HomeRefresher(
      * container forwards here. Checks EVERY section, because the same item
      * can appear in several (e.g. Continue Watching and Latest in X) and
      * every visible card must flip together — but only a section actually
-     * containing the id rebuilds (the patch used to remap every item of
-     * every section, a whole-home allocation per quick-action toggle).
+     * containing the id rebuilds (a whole-section remap would allocate the
+     * whole home per quick-action toggle).
      * Keeps [HomeRefreshState.sections] single-writer: the VM folds
      * emissions, it never writes them.
      */
@@ -802,8 +800,8 @@ internal class HomeRefresher(
      * Resets the discover-sections TTL so the next fetch actually hits the
      * network. Called on user-initiated refresh — the custom Seerr rows ride
      * the forced home-sections fetch instead (the network layer's force acts
-     * as their invalidation), and the legacy fixed grid is what the gate
-     * still covers. WHEN is here (the manual-refresh preamble); the gate
+     * as their invalidation), and the fixed grid is what the gate
+     * covers. WHEN is here (the manual-refresh preamble); the gate
      * itself lives on [HomeDiscoverSources].
      */
     private fun invalidateDiscoverCache() {
@@ -913,9 +911,9 @@ internal class HomeRefresher(
                         )
                             .onSuccess { fresh ->
                                 if (fresh != null) {
-                                    // Single-index replacement — the swap
-                                    // used to re-map ALL sections to replace
-                                    // one.
+                                    // Single-index replacement — only the
+                                    // matching section is rebuilt; the rest
+                                    // are reused.
                                     val sections = _state.value.sections
                                     val index = sections.indexOfFirst { it.id == sectionId }
                                     val patched = if (index < 0) sections else sections.toMutableList().also { it[index] = fresh }
@@ -1040,9 +1038,9 @@ internal class HomeRefresher(
      *    [RefreshTrigger.GoingOnline] path raised the manager-owned busy
      *    flag on its toggle, and the manager cleared it at this very ONLINE
      *    emission; external flips (nav ⋮ toggle from the app shell) and
-     *    auto-detect reconnects used to mirror the field only, which left
-     *    the home sitting on dropped-empty sections until a manual refresh
-     *    or the next periodic tick.
+     *    auto-detect reconnects run the same handshake: mirroring the field
+     *    alone would leave the home sitting on dropped-empty sections until a
+     *    manual refresh or the next periodic tick.
      */
     private fun observeOfflineMode() {
         scope.launch {
@@ -1152,10 +1150,10 @@ internal class HomeRefresher(
      * Silent refresh after a user-data change. FORCE remains the rule for
      * external pushes: server-side changes must bypass the TtlCache'd home
      * sections. An echo of THIS device's own writes — every item id of the
-     * pushed change recently recorded by [recentLocalWrites] — now demotes
-     * to a non-forced fetch (TTL semantics): it used to force a full
+     * pushed change recently recorded by [recentLocalWrites] — demotes
+     * to a non-forced fetch (TTL semantics): forcing a full
      * cache-bypassing refetch behind the player for every playback-save
-     * burst, even though only this device's own state moved. The
+     * burst is wasted when only this device's own state moved. The
      * demotion decision itself lives at the flush; this function owns the
      * throttle either way, guarded by
      * [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
@@ -1172,11 +1170,11 @@ internal class HomeRefresher(
      * throttle expiry (each further echo re-arms the timer on
      * [userDataRefreshJob] — trailing edge, so a playback session's ~10s
      * position saves collapse into one fetch after the last save). Dropping
-     * instead used to strand the final echo of a session — the position save
+     * instead strands the final echo of a session — the position save
      * or markPlayed that lands <60s after the last refresh, exactly the
      * state the user sees when they leave the player: Continue Watching /
-     * Next Up stayed mid-playback stale until the periodic loop's non-forced
-     * fetch worked through the cache TTLs, or a pull-to-refresh forced it.
+     * Next Up stay mid-playback stale until the periodic loop's non-forced
+     * fetch works through the cache TTLs, or a pull-to-refresh forces it.
      */
     private fun refreshAfterUserDataChange() {
         pendingUserDataRefresh = true
@@ -1291,8 +1289,7 @@ internal class HomeRefresher(
      * The identity-transition counterpart of [replaceRefreshJob]: a new
      * [RefreshTrigger.UserSwitched] / [SignedOut] request cancels the
      * previous transition's handler mid-flight — the collectLatest
-     * cancellation semantics the VM's HomeSession collector used to supply
-     * when these bodies still ran inside its `collectLatest` block.
+     * cancellation semantics the VM's HomeSession collector supplies.
      */
     private fun replaceTransitionJob(block: suspend () -> Unit) {
         transitionJob?.cancel()
@@ -1363,9 +1360,8 @@ internal class HomeRefresher(
     }
 
     /**
-     * The post-fetch choreography [fetchOnce]'s batch arm and
-     * [refreshSectionRow]'s single-row arm used to hand-roll separately —
-     * one write, three shared rules:
+     * The post-fetch choreography shared by [fetchOnce]'s batch arm and
+     * [refreshSectionRow]'s single-row arm — one write, three shared rules:
      *  * (a) Continue Watching: a changed item set writes the widget store
      *    UNDER [refreshMutex], with the broadcast / TV Watch-Next refresh
      *    captured into the returned runner for the caller to fire after the
@@ -1464,7 +1460,7 @@ internal enum class RefreshTrigger {
 internal data class HomeRefreshState(
     val sections: List<HomeSection> = emptyList(),
     /**
-     * H9: the plugin-curated hero billboards, resolved by the fetcher and
+     * The plugin-curated hero billboards, resolved by the fetcher and
      * merged AHEAD of the local hero candidates at the screen (server order,
      * dedup by item id, curated wins). Cleared wherever the sections clear —
      * server-curated data must never outlive its fetch the way sections
@@ -1526,7 +1522,7 @@ internal data class HomeRefreshState(
      * fallback (online mode + downloads present). Sections on screen do NOT
      * disqualify the fallback: they are the stale pre-failure snapshot, and
      * keeping them rendered would freeze Continue Watching / Next Up at
-     * server data that can no longer refresh. The offline collection gate in
+     * server data that cannot refresh. The offline collection gate in
      * [com.raulshma.jellyplay.feature.home.HomeViewModel] keys on this, and
      * the same gate folds it into
      * [com.raulshma.jellyplay.feature.home.HomeUiState.renderSource] via

@@ -50,7 +50,7 @@ class PersonDetailViewModelTest {
     /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
 
-    /** Builds a VM over fresh preference stubs — the D18/D20 gate seam. */
+    /** Builds a VM over fresh preference stubs — the filmography gate seam. */
     private fun buildViewModel(
         detailPreferences: DetailPreferences = DetailPreferences(),
     ): PersonDetailViewModel {
@@ -73,7 +73,7 @@ class PersonDetailViewModelTest {
         libraryApiClient = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
-        // The D20 leg runs behind a relaxed mock otherwise (mockk cannot shape
+        // The co-star leg runs behind a relaxed mock otherwise (mockk cannot shape
         // a Result return) — every test here starts co-star-silent.
         coEvery { libraryApiClient.getPeople(any(), any(), any()) } returns Result.success(emptyList())
         viewModel = buildViewModel()
@@ -90,7 +90,7 @@ class PersonDetailViewModelTest {
     }
 
     /**
-     * The one container-adapter test (plan 03): a successful optimistic
+     * The one container-adapter test: a successful optimistic
      * mutation flips ONLY the matching filmography item — resume zeroed by the
      * resolved patch — and leaves non-matching items referentially equal.
      */
@@ -158,7 +158,7 @@ class PersonDetailViewModelTest {
         assertNull(success.biography)
     }
 
-    // ── D18: role credits off the filmography's projected People ────────────
+    // ── role: role credits off the filmography's projected People ────────────
 
     @Test
     fun `filmography People resolve the person's role credits into the state`() = runTest(mainDispatcher) {
@@ -183,7 +183,7 @@ class PersonDetailViewModelTest {
         assertFalse(success.filmographyCredits.containsKey("m2"))
     }
 
-    // ── D20: co-star enrichment leg ─────────────────────────────────────────
+    // ── co-star: co-star enrichment leg ─────────────────────────────────────────
 
     @Test
     fun `co-stars anchor on the most-recent filmography entry and exclude the person`() = runTest(mainDispatcher) {

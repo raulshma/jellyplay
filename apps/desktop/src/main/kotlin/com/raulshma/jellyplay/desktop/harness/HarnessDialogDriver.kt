@@ -14,15 +14,14 @@ import javax.swing.SwingUtilities
 import kotlinx.coroutines.delay
 
 /**
- * The shared Robot half of the native-dialog harnesses ('s
- * DesktopNativeDialogHarness.DialogDriver, extracted when the flows
- * lane needed the same mechanics). Runs OFF the EDT (the EDT is inside the
+ * The shared Robot half of the native-dialog harnesses, used by both the
+ * native-dialog and flow lanes. Runs OFF the EDT (the EDT is inside the
  * modal loop): waits for a showing [FileDialog], brings it to front, and
  * either types the full absolute path + Enter (cancel=false) or presses ESC
- * (cancel=true). Bounded attempts per the retry lesson; a dialog that
+ * (cancel=true). Bounded attempts; a dialog that
  * outlives every attempt gets a final ESC so the blocked EDT resumes and the
  * step fails instead of wedging until auto-exit. Every action prints a
- * t=+ms-stamped diag line (a past lesson: timestamps on diag lines).
+ * t=+ms-stamped diag line.
  *
  * Also exposes the ASCII [typer] so flow harnesses can type short strings
  * into focused Compose fields (language inputs) with the same cadence.

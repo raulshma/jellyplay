@@ -66,7 +66,7 @@ public interface HomeSectionSources {
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
 
     /**
-     * H4: unaired episodes across the followed series (`GET /Shows/Upcoming`)
+     * Unaired episodes across the followed series (`GET /Shows/Upcoming`)
      * — the batch sub-call behind the Upcoming row. Signature borrowed
      * verbatim from [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
      * (defaults dropped, the port convention), so the production client
@@ -112,7 +112,7 @@ public interface SeerrHomeSectionSources {
 
 /**
  * The plugin-side sibling of [SeerrHomeSectionSources]: the jellyplay row and
- * curated-hero reads the PLUGIN_ROW home rows and the H9 hero need (the
+ * curated-hero reads the PLUGIN_ROW home rows and the hero need (the
  * transport twin of `JellyPlayRowsRoutes`), the plugin's
  * local-library matches resolved to full [MediaItem]s, and the capability
  * gates. Signatures deliberately carry the raw wire payload — the port stays
@@ -185,11 +185,11 @@ public interface JellyPlayHomeSectionSources {
  * recommendations chain.
  *
  * Schedule (verbatim from the JVM impl it replaces):
- *  - Continue Watching / Continue Reading / Next Up / Upcoming (H4) /
+ *  - Continue Watching / Continue Reading / Next Up / Upcoming /
  *    folders / pinned launch
  *    concurrently; a disabled section makes ZERO port calls (resolved locally
  *    as `Result.success(emptyList())`); folders are gated on
- *    LATEST_MEDIA || RECENTLY_ADDED || MY_MEDIA (the H5 tiles assemble the
+ *    LATEST_MEDIA || RECENTLY_ADDED || MY_MEDIA (the tiles assemble the
  *    same folders read); pinned sections are fetched ALWAYS,
  *    regardless of [HomeSectionQuery.enabledSections].
  *  - The recommendations chain launches only AFTER Continue Watching and
@@ -344,7 +344,7 @@ public class HomeSectionsFetcher(
     private val homePluginRowCache = TtlCache<PluginRowValue>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     /**
-     * The plugin-curated hero (H9): identity-scoped like every entry with the
+     * The plugin-curated hero: identity-scoped like every entry with the
      * sibling sub-call TTL — the cached VALUE is the resolved entry list (full
      * MediaItems with per-item UserData), so a hit costs zero port calls and a
      * watched/favorite write must not let the memo serve the pre-write hero
@@ -448,7 +448,7 @@ public class HomeSectionsFetcher(
         val nextUpDeferred = async {
             homeRowBatchSubcall(HomeSectionType.NEXT_UP)(sources, query)
         }
-        // H4: the Upcoming sub-call rides the same per-type registration the
+        // The Upcoming sub-call rides the same per-type registration the
         // resume trio uses — the schedule stays here, the call shape lives in
         // the row's own batch arm.
         val upcomingDeferred = async {
@@ -456,7 +456,7 @@ public class HomeSectionsFetcher(
         }
         val foldersDeferred = async {
             // The shared folders fetch backs THREE rows now: the latest
-            // fan-out (LATEST_MEDIA + RECENTLY_ADDED) and the H5 My Media
+            // fan-out (LATEST_MEDIA + RECENTLY_ADDED) and the My Media
             // tiles (which assemble the folders directly, zero extra calls).
             if (HomeSectionType.LATEST_MEDIA in enabledSections ||
                 HomeSectionType.RECENTLY_ADDED in enabledSections ||
@@ -494,7 +494,7 @@ public class HomeSectionsFetcher(
                 fetchTitledPluginRows(force = force, identity = identity)
         }
 
-        // H9 plugin-curated hero: fetched ALWAYS beside the plugin rows (the
+        // The plugin-curated hero: fetched ALWAYS beside the plugin rows (the
         // same capability-registry gate posture — not user layout config),
         // concurrently with everything else. Empty = gated off / unconfigured
         // / unresolvable — the hero silently falls back to its local pool.
@@ -980,7 +980,7 @@ public class HomeSectionsFetcher(
         }
     }
 
-    // ── Plugin-curated hero (H9 — the `hero` feature, beside the rows) ────
+    // ── Plugin-curated hero (the `hero` feature, beside the rows) ────
     //
     // The same leaf shape as the rows: the capability registry is the WHAT
     // gate, the TTL memo is [homeCuratedHeroCache], and every failure mode

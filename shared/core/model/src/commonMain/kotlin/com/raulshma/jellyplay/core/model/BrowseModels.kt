@@ -90,7 +90,7 @@ data class HomeSectionsResult(
     val sections: List<HomeSection>,
     val failedSectionTypes: Set<HomeSectionType> = emptySet(),
     /**
-     * H9: the plugin-curated hero billboards (`jellyplay/hero`), already
+     * The plugin-curated hero billboards (`jellyplay/hero`), already
      * resolved to full [CuratedHeroEntry]s by the home fetcher (unresolved
      * ids dropped) in the plugin's serve order. Rendered AHEAD of the local
      * hero candidates; empty = gated off / unconfigured / unresolvable — the
@@ -101,7 +101,7 @@ data class HomeSectionsResult(
 )
 
 /**
- * One plugin-curated hero billboard (H9 — the companion server plugin's
+ * One plugin-curated hero billboard (the companion server plugin's
  * `hero` feature): the curated item id resolved to the full library
  * [MediaItem] (the same batched ids read the plugin rows resolve through, so
  * the candidate carries local art and per-item UserData), plus the optional
@@ -130,13 +130,13 @@ enum class HomeSectionType {
     CONTINUE_READING,
     NEXT_UP,
     /**
-     * H4: unaired episodes across the followed series (`GET /Shows/Upcoming`)
+     * Unaired episodes across the followed series (`GET /Shows/Upcoming`)
      * — the watch-state-independent complement to Next Up. Renders through the
      * standard poster chassis; cards carry an air-date chip.
      */
     UPCOMING,
     /**
-     * H5: the My Media library-tiles row — one non-poster tile per Jellyfin
+     * The My Media library-tiles row — one non-poster tile per Jellyfin
      * library (jellyfin-web's SmallLibraryTiles). The only non-poster home
      * shape: renders through the [com.raulshma.jellyplay.core.model.home]
      * chassis's tiles arm, items being the libraries mapped to FOLDER-typed
@@ -159,7 +159,7 @@ enum class HomeSectionType {
     DISCOVER,
     /**
      * Rows sourced from the jellyfin-plugin-jellyplay companion server
-     * plugin (ADR 0010), fetched through the JellyPlayHomeSectionSources
+     * plugin, fetched through the JellyPlayHomeSectionSources
      * home-fetcher leaf (network layer) and gated by the plugin's capability
      * registry — never by user layout config ([isConfigurable] is false, like
      * PINNED: the row appears exactly when the probe says AVAILABLE && the
@@ -204,7 +204,7 @@ enum class HomeSectionType {
             CONTINUE_WATCHING,
             CONTINUE_READING,
             NEXT_UP,
-            // H4/H5 (v3): Upcoming rides beside Next Up (its watch-state
+            // Upcoming rides beside Next Up (its watch-state
             // complement); My Media follows it. Registry order = default
             // layout order — a persisted order missing either re-inserts it
             // at this default position (the order union).

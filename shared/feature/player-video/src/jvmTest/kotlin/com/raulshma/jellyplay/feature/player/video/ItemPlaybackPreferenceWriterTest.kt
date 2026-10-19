@@ -331,7 +331,7 @@ class ItemPlaybackPreferenceWriterTest {
         assertEquals(0, refreshCount)
     }
 
-    // ─── Remembered track (G5) — SERIES-only persistence ──────────────────────
+    // ─── Remembered track — SERIES-only persistence ──────────────────────
 
     @Test
     fun rememberTrack_savesSeriesScopeAndRefreshes() = testScope.runTest {

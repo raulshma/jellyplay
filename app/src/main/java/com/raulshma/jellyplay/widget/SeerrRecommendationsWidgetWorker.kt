@@ -19,9 +19,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory]
- * (Hilt removal: the former Hilt worker assisted-injection ctor became this
- * explicit constructor; deps resolve from the Koin container). A thin adapter
+ * Plain CoroutineWorker constructed by [AppWidgetWorkerFactory] with an
+ * explicit constructor; deps resolve from the Koin container. A thin adapter
  * over [RecommendationWorkerSkeleton], which owns the guard → fetch →
  * empty-keep → persist → retry-fold chassis; this class supplies the Seerr
  * seams (server-configured guard, source-routed discover fetches, the

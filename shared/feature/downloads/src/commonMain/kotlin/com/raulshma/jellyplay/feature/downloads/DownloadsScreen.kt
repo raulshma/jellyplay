@@ -507,7 +507,7 @@ fun DownloadsScreen(
                                         DownloadItemRow(
                                             // Deferred draw-phase read of the shared entrance
                                             // progress: alpha + a slide of 1/10 of the row
-                                            // height reproduce the old fadeIn +
+                                            // height reproduce the fadeIn +
                                             // slideInVertically(it / 10) entrance with zero
                                             // per-row state, coroutine, or animation node.
                                             modifier = rowModifier,
