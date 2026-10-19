@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.playback.DefaultPlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
@@ -38,7 +38,10 @@ internal val dataPlaybackFamilyModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             mediaCacheInvalidation = get(),
-            mediaRepository = lazy { get<MediaRepository>() },
+            // The confirmed-write announcements ride the UserDataAnnouncer
+            // leaf (dataMediaRepositoryModule) — eager, no deferral: the
+            // media-repository edge this used to lazy-break is gone.
+            userDataAnnouncer = get(),
         )
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }

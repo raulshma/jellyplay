@@ -176,13 +176,15 @@ fun PlaybackSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        // A frozen hand approximation, kept verbatim: the real hidden-
-                        // row count varies by platform, engine and the dialogue-boost
-                        // toggle (the three advanced-only groups alone hide anywhere
-                        // from 7 to 19+ rows), so no derivation via rowTotalFor
-                        // reproduces 9 across the (isTv, engine) combos. Its source
-                        // rows are the advanced-only blocks: the player group's
-                        // advanced rows, the advanced-video group, the engine group
+                        // FROZEN hand approximation — the one hiddenCount the
+                        // hiddenRowsFor derivation does not own: the real
+                        // hidden-row count varies by platform, engine and the
+                        // dialogue-boost toggle (the three advanced-only
+                        // groups alone hide anywhere from 7 to 19+ rows), so
+                        // no derivation via rowTotalFor reproduces 9 across
+                        // the (isTv, engine) combos. Its source rows are the
+                        // advanced-only blocks: the player group's advanced
+                        // rows, the advanced-video group, the engine group
                         // and the media-segments group.
                         hiddenCount = 9,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },

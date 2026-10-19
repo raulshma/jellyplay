@@ -19,8 +19,10 @@ import kotlin.test.assertTrue
  *
  * Two classes of behavior are pinned here:
  *  1. membership — sections admitted for the specific media family (SEASONS
- *     for series/episodes/seasons, COLLECTION_ITEMS for collections,
- *     ALBUM_TRACKS for audio, BOOK_READING_CARD for books);
+ *     for series/episodes/seasons, ALBUM_TRACKS for audio,
+ *     BOOK_READING_CARD for books) — the registry-owned kinds (the wave-1/2
+ *     section modules) are pinned by DetailSectionRegistryTest and
+ *     DetailSectionEnrichmentArmsTest;
  *  2. the stagger indices — byte-identical to the literals the body used to
  *     pass to [StaggeredDetailSection] (they drive the shared entrance
  *     animation arithmetic).
@@ -73,14 +75,9 @@ class DetailSectionAdmissionTest {
         seerrDataAvailable: Boolean = true,
         hasSeerrRecommendations: Boolean = true,
         hasSeerrSimilar: Boolean = true,
-        hasSpecialFeatures: Boolean = true,
         hasAttachedDownload: Boolean = false,
         hasPluginSimilar: Boolean = false,
         suppressStockSimilar: Boolean = false,
-        hasFranchiseCollections: Boolean = false,
-        showMoreInCollection: Boolean = true,
-        hasUpcomingEpisodes: Boolean = false,
-        showUpcomingStrip: Boolean = true,
     ): List<DetailSectionKind> = DetailSectionAdmission(
         mediaType = mediaType,
         isLocalOrigin = isLocalOrigin,
@@ -96,14 +93,9 @@ class DetailSectionAdmissionTest {
         seerrDataAvailable = seerrDataAvailable,
         hasSeerrRecommendations = hasSeerrRecommendations,
         hasSeerrSimilar = hasSeerrSimilar,
-        hasSpecialFeatures = hasSpecialFeatures,
         hasAttachedDownload = hasAttachedDownload,
         hasPluginSimilar = hasPluginSimilar,
         suppressStockSimilar = suppressStockSimilar,
-        hasFranchiseCollections = hasFranchiseCollections,
-        showMoreInCollection = showMoreInCollection,
-        hasUpcomingEpisodes = hasUpcomingEpisodes,
-        showUpcomingStrip = showUpcomingStrip,
     ).admit()
 
     private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
@@ -113,9 +105,9 @@ class DetailSectionAdmissionTest {
     @Test
     fun remoteMovie_fullAdmission_matchesInlineEmission() {
         // PLUGIN_RATINGS and TMDB_REVIEWS left the fold in the wave-1 section
-        // module pilot (their modules own those rows now) — this pin covers the
-        // hand-written sections only; the merged emission is pinned by
-        // DetailSectionRegistryTest.
+        // module pilot, and SPECIAL_FEATURES in wave 2 (their modules own those
+        // rows now) — this pin covers the hand-written sections only; the
+        // merged emission is pinned by DetailSectionRegistryTest.
         assertEquals(
             listOf(
                 DetailSectionKind.HEADER,
@@ -128,12 +120,11 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MORE_LIKE_THIS,
                 DetailSectionKind.SEERR_RECOMMENDATIONS,
                 DetailSectionKind.SEERR_SIMILAR,
-                DetailSectionKind.SPECIAL_FEATURES,
             ),
             admission(MediaType.MOVIE, hasAttachedDownload = false),
         )
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13),
+            listOf(0, 1, 2, 3, 4, 8, 9, 10, 11, 12),
             admission(MediaType.MOVIE).indices(),
         )
     }
@@ -152,9 +143,10 @@ class DetailSectionAdmissionTest {
 
     @Test
     fun localMovie_offlineCapabilities_admitsLocalSectionsOnly() {
-        // Local origin: Seerr rows and special features are remote-only (dropped),
-        // the footer always renders, MORE_LIKE_THIS/RELATED_VIDEOS/CAST stay
-        // admitted (their content gates are render-side).
+        // Local origin: Seerr rows are remote-only (dropped), the footer
+        // always renders, MORE_LIKE_THIS/RELATED_VIDEOS/CAST stay admitted
+        // (their content gates are render-side). SPECIAL_FEATURES is
+        // registry-owned since wave 2.
         assertEquals(
             listOf(
                 DetailSectionKind.HEADER,
@@ -174,7 +166,6 @@ class DetailSectionAdmissionTest {
                 seerrDataAvailable = false,
                 hasSeerrRecommendations = false,
                 hasSeerrSimilar = false,
-                hasSpecialFeatures = false,
             ),
         )
     }
@@ -190,10 +181,13 @@ class DetailSectionAdmissionTest {
         val sections = admission(MediaType.MOVIE, showActionButtons = false)
         assertFalse(sections.contains(DetailSectionKind.ACTION_ROW))
         assertEquals(0, sections.first().delayIndex)
-        // Everything else keeps its exact slot. Slot 14 (TMDB_REVIEWS) is
-        // registry-owned since the section-module wave — pinned by
-        // DetailSectionRegistryTest's merged-emission test, not by the fold.
-        assertEquals(listOf(0, 2, 3, 4, 8, 9, 10, 11, 12, 13), sections.indices())
+        // The fold-only emission: the module-owned kinds (PLUGIN_RATINGS 14,
+        // TMDB_REVIEWS 15, SPECIAL_FEATURES 13, COLLECTION_ITEMS,
+        // UPCOMING_EPISODES, MORE_IN_COLLECTION) are admitted by their
+        // DetailSectionModules since the section-module waves — the merged
+        // emission is pinned by DetailSectionRegistryTest, not by the fold.
+        // For a movie only SPECIAL_FEATURES was fold-admitted before wave 2.
+        assertEquals(listOf(0, 2, 3, 4, 8, 9, 10, 11, 12), sections.indices())
     }
 
     @Test
@@ -237,7 +231,7 @@ class DetailSectionAdmissionTest {
         // Slot 14 (TMDB_REVIEWS) is registry-owned since the section-module
         // wave — pinned by DetailSectionRegistryTest's merged-emission test.
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 13),
+            listOf(0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12),
             sections.indices(),
         )
     }
@@ -254,7 +248,6 @@ class DetailSectionAdmissionTest {
             seerrDataAvailable = false,
             hasSeerrRecommendations = false,
             hasSeerrSimilar = false,
-            hasSpecialFeatures = false,
         )
         assertEquals(DetailSectionKind.DOWNLOAD_FOOTER, sections.last())
         assertEquals(15, sections.last().delayIndex)
@@ -311,7 +304,6 @@ class DetailSectionAdmissionTest {
             seerrDataAvailable = false,
             hasSeerrRecommendations = false,
             hasSeerrSimilar = false,
-            hasSpecialFeatures = false,
         )
         assertEquals(
             listOf(
@@ -396,7 +388,6 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MORE_LIKE_THIS,
                 DetailSectionKind.SEERR_RECOMMENDATIONS,
                 DetailSectionKind.SEERR_SIMILAR,
-                DetailSectionKind.SPECIAL_FEATURES,
             ),
             sections,
         )
@@ -415,15 +406,9 @@ class DetailSectionAdmissionTest {
 
     // ── COLLECTION ────────────────────────────────────────────────────────
 
-    @Test
-    fun remoteCollection_itemsSlotAdmittedOnlyForCollections() {
-        val sections = admission(MediaType.COLLECTION)
-        assertTrue(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
-        assertFalse(sections.contains(DetailSectionKind.SEASONS))
-        assertEquals(7, sections.first { it == DetailSectionKind.COLLECTION_ITEMS }.delayIndex)
-        // The empty-items gate is render-side: admission checks only the
-        // media type, never the collection members.
-    }
+    // (The COLLECTION_ITEMS admission pins moved to
+    // DetailSectionEnrichmentArmsTest — the wave-2 section module owns that
+    // row.)
 
     // ── Seerr / special-features gates ────────────────────────────────────
 
@@ -457,20 +442,11 @@ class DetailSectionAdmissionTest {
         assertEquals(12, both.first { it == DetailSectionKind.SEERR_SIMILAR }.delayIndex)
     }
 
-    @Test
-    fun specialFeatures_requireRemoteDiscovery() {
-        assertFalse(
-            admission(MediaType.MOVIE, capabilities = allCapabilities().copy(remoteDiscovery = false))
-                .contains(DetailSectionKind.SPECIAL_FEATURES),
-        )
-        assertEquals(
-            13,
-            admission(MediaType.MOVIE).first { it == DetailSectionKind.SPECIAL_FEATURES }.delayIndex,
-        )
-    }
-
     // (The PLUGIN_RATINGS / TMDB_REVIEWS admission pins moved to
-    // DetailSectionRegistryTest — the wave-1 section modules own those rows.)
+    // DetailSectionRegistryTest — the wave-1 section modules own those rows.
+    // The SPECIAL_FEATURES / UPCOMING_EPISODES / MORE_IN_COLLECTION pins
+    // moved to DetailSectionEnrichmentArmsTest — the wave-2 modules own
+    // theirs.)
 
     // ── delayIndex ratchet ────────────────────────────────────────────────
 
@@ -510,102 +486,10 @@ class DetailSectionAdmissionTest {
         assertEquals(15, DETAIL_MAX_STAGGER_INDEX)
     }
 
-    // ── D7: the UPCOMING_EPISODES strip ───────────────────────────────────
-
-    @Test
-    fun upcomingStrip_admitsInTheSeriesTrio_sharedSlot6() {
-        val sections = admission(MediaType.SERIES, hasUpcomingEpisodes = true)
-        val upNext = sections.indexOf(DetailSectionKind.UP_NEXT)
-        val upcoming = sections.indexOf(DetailSectionKind.UPCOMING_EPISODES)
-        val seasons = sections.indexOf(DetailSectionKind.SEASONS)
-        // Emission order: the unaired strip sits between the smart-play card
-        // and the season tree; all three share the stagger band 6.
-        assertTrue(upNext in 0 until upcoming, "UP_NEXT must be emitted before UPCOMING_EPISODES")
-        assertTrue(upcoming in 0 until seasons, "UPCOMING_EPISODES must be emitted before SEASONS")
-        assertEquals(6, sections[upcoming].delayIndex)
-        assertEquals(6, sections[upNext].delayIndex)
-        assertEquals(6, sections[seasons].delayIndex)
-    }
-
-    @Test
-    fun upcomingStrip_emptyOrPreferenceOff_dropsOnlyUpcoming() {
-        // No strip content (the enrichment's silent absence) → no slot.
-        assertFalse(admission(MediaType.SERIES, hasUpcomingEpisodes = false).contains(DetailSectionKind.UPCOMING_EPISODES))
-        // Preference off → no slot even with content; UP_NEXT/SEASONS stand.
-        val off = admission(MediaType.SERIES, hasUpcomingEpisodes = true, showUpcomingStrip = false)
-        assertFalse(off.contains(DetailSectionKind.UPCOMING_EPISODES))
-        assertTrue(off.contains(DetailSectionKind.UP_NEXT))
-        assertTrue(off.contains(DetailSectionKind.SEASONS))
-        // Admission is content-driven, NOT media-type-driven: a movie with
-        // (impossible-by-enrichment) content would admit — the fold stays a
-        // pure input table. The SERIES-only rule lives on the enrichment.
-        assertTrue(admission(MediaType.MOVIE, hasUpcomingEpisodes = true).contains(DetailSectionKind.UPCOMING_EPISODES))
-    }
-
-    // ── D6: the MORE_IN_COLLECTION franchise rows ─────────────────────────
-
-    @Test
-    fun franchiseRow_admittedJustBeforeTheSimilarRows_sharedSlot10() {
-        val sections = admission(MediaType.MOVIE, hasFranchiseCollections = true)
-        val franchise = sections.indexOf(DetailSectionKind.MORE_IN_COLLECTION)
-        val relatedVideos = sections.indexOf(DetailSectionKind.RELATED_VIDEOS)
-        val moreLikeThis = sections.indexOf(DetailSectionKind.MORE_LIKE_THIS)
-        assertTrue(relatedVideos in 0 until franchise, "RELATED_VIDEOS must precede the franchise rows")
-        assertTrue(franchise in 0 until moreLikeThis, "the franchise rows precede MORE_LIKE_THIS")
-        assertEquals(10, sections[franchise].delayIndex)
-        assertEquals(10, sections[moreLikeThis].delayIndex)
-    }
-
-    @Test
-    fun franchiseRow_emptyOrPreferenceOff_dropsOnlyFranchise() {
-        assertFalse(
-            admission(MediaType.MOVIE, hasFranchiseCollections = false).contains(DetailSectionKind.MORE_IN_COLLECTION),
-        )
-        val off = admission(MediaType.MOVIE, hasFranchiseCollections = true, showMoreInCollection = false)
-        assertFalse(off.contains(DetailSectionKind.MORE_IN_COLLECTION))
-        // The similar rows are untouched by the franchise preference.
-        assertTrue(off.contains(DetailSectionKind.MORE_LIKE_THIS))
-    }
-
-    @Test
-    fun franchiseRow_admittedForSeriesToo() {
-        // The D6 gate is MOVIE || SERIES (the enrichment's rule); the fold
-        // itself is content-driven for both.
-        assertTrue(admission(MediaType.SERIES, hasFranchiseCollections = true).contains(DetailSectionKind.MORE_IN_COLLECTION))
-    }
-
-    // ── the state mapper: hidden rows never admit ─────────────────────────
-
-    @Test
-    fun fromState_hiddenFranchiseRows_excludeFromAdmission() {
-        val item = MediaItem(id = "i3", name = "Movie", mediaType = MediaType.MOVIE)
-        val detail = MediaDetail(item = item)
-        fun stateWith(hidden: Map<String, Set<String>>) = DetailContentState(
-            core = DetailUiState(
-                detail = detail,
-                origin = DetailOrigin.REMOTE,
-                franchiseCollections = listOf(
-                    DetailUiState.FranchiseCollection(id = "box1", name = "Franchise", members = listOf(item)),
-                    DetailUiState.FranchiseCollection(id = "box2", name = "Shared universe", members = listOf(item)),
-                ),
-                hiddenFranchiseCollections = hidden,
-            ),
-            itemId = "i3",
-        )
-
-        // No hides → admitted.
-        assertTrue(DetailSectionAdmission.from(stateWith(emptyMap()), detail).hasFranchiseCollections)
-        // One row hidden → the other keeps the slot admitted.
-        val oneHidden = DetailSectionAdmission.from(stateWith(mapOf("i3" to setOf("box1"))), detail)
-        assertTrue(oneHidden.hasFranchiseCollections)
-        // Every row hidden → the slot drops (no empty gap in the body).
-        val allHidden = DetailSectionAdmission.from(stateWith(mapOf("i3" to setOf("box1", "box2"))), detail)
-        assertFalse(allHidden.hasFranchiseCollections)
-        assertFalse(allHidden.admit().contains(DetailSectionKind.MORE_IN_COLLECTION))
-        // Hides are keyed per item: another item's hides don't leak in.
-        val otherItemsHide = DetailSectionAdmission.from(stateWith(mapOf("other" to setOf("box1", "box2"))), detail)
-        assertTrue(otherItemsHide.hasFranchiseCollections)
-    }
+    // (The UPCOMING_EPISODES strip and MORE_IN_COLLECTION franchise-row
+    // admission pins — including the hidden-rows fold — moved to
+    // DetailSectionEnrichmentArmsTest: the wave-2 section modules own those
+    // rows, and their module-level pins exercise the same terms.)
 
     // ── the state mapper ──────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.WhatsNewTargets
@@ -95,7 +95,7 @@ internal fun WhatsNewSheetOverlay(
  */
 @Composable
 internal fun AppMiniPlayerHost(
-    audioPlaybackManager: AudioPlaybackManager,
+    audioPlaybackManager: ShellAudioSurface,
     title: String,
     onNowPlayingClick: () -> Unit,
     onDismissMiniPlayer: () -> Unit,

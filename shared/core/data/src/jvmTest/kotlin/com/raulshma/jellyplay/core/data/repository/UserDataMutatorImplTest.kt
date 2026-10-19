@@ -58,8 +58,8 @@ class UserDataMutatorImplTest {
     @BeforeTest
     fun setup() {
         mutator = UserDataMutatorImpl(
-            userDataWrites = lazy { userDataWrites },
-            mediaDetailProvider = lazy { mediaDetailProvider },
+            userDataWrites = userDataWrites,
+            mediaDetailProvider = mediaDetailProvider,
         )
     }
 

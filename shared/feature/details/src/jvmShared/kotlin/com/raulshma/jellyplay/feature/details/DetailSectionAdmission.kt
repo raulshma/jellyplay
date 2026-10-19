@@ -163,8 +163,6 @@ internal data class DetailSectionAdmission(
     val hasSeerrRecommendations: Boolean,
     /** Seerr similar cards fetched (state.core.seerrSimilar non-empty). */
     val hasSeerrSimilar: Boolean,
-    /** Special features fetched (state.core.specialFeatures non-empty). */
-    val hasSpecialFeatures: Boolean,
     /** A download lifecycle is attached to the snapshot (state.core.detailContext?.download != null). */
     val hasAttachedDownload: Boolean,
     /** Plugin scored-similar items hydrated (state.core.pluginSimilarItems non-empty — ADR 0010).
@@ -177,20 +175,6 @@ internal data class DetailSectionAdmission(
      *  content, MORE_LIKE_THIS stands down. False on pre-12 hosts / older
      *  plugins — the lists differ, both rows render. */
     val suppressStockSimilar: Boolean = false,
-    /** D6 franchise rows hydrated with non-empty members
-     *  (state.core.franchiseCollections non-empty). Admits MORE_IN_COLLECTION
-     *  together with [showMoreInCollection]. */
-    val hasFranchiseCollections: Boolean = false,
-    /** User preference: the detail screen shows the "More in this collection"
-     *  franchise rows (D6's show_more_in_collection — gates the whole
-     *  MORE_IN_COLLECTION slot). */
-    val showMoreInCollection: Boolean = true,
-    /** D7 unaired-episode strip fetched with rows (state.core.upcomingEpisodes
-     *  non-empty). Admits UPCOMING_EPISODES together with [showUpcomingStrip]. */
-    val hasUpcomingEpisodes: Boolean = false,
-    /** User preference: the detail screen shows the "Airing next" strip
-     *  (D7's show_upcoming_strip — gates the whole UPCOMING_EPISODES slot). */
-    val showUpcomingStrip: Boolean = true,
 ) {
 
     /**
@@ -199,11 +183,13 @@ internal data class DetailSectionAdmission(
      * UPCOMING_EPISODES → SEASONS — all delayIndex 6), and each kind carries
      * its own delayIndex.
      *
-     * Two sections left the fold in the section-module wave-1 pilot —
-     * PLUGIN_RATINGS and TMDB_REVIEWS are admitted by their
-     * [DetailSectionModule]s instead ([DetailSectionRegistry.admittedSections]
-     * merges the two halves in this enum's declaration order, so the body's
-     * emission is unchanged).
+     * Six sections left the fold in the section-module waves — PLUGIN_RATINGS
+     * and TMDB_REVIEWS in the wave-1 pilot, then SPECIAL_FEATURES,
+     * COLLECTION_ITEMS, UPCOMING_EPISODES and MORE_IN_COLLECTION in wave 2 —
+     * admitted by their [DetailSectionModule]s instead
+     * ([DetailSectionRegistry.admittedSections] merges the two halves in this
+     * enum's declaration order, so the body's emission is unchanged; the
+     * every-kind-exactly-one-owner pin lives in DetailSectionRegistryTest).
      */
     fun admit(): List<DetailSectionKind> = buildList {
         fun admit(kind: DetailSectionKind, admitted: Boolean) {
@@ -234,18 +220,9 @@ internal data class DetailSectionAdmission(
             DetailSectionKind.UP_NEXT,
             mediaType == MediaType.SERIES && hasSmartPlayTarget && showDetailUpNext,
         )
-        admit(
-            DetailSectionKind.UPCOMING_EPISODES,
-            showUpcomingStrip && hasUpcomingEpisodes,
-        )
         admit(DetailSectionKind.SEASONS, showsSeasonTree(mediaType))
-        admit(DetailSectionKind.COLLECTION_ITEMS, mediaType == MediaType.COLLECTION)
         admit(DetailSectionKind.CAST, mediaType != MediaType.BOOK)
         admit(DetailSectionKind.RELATED_VIDEOS, admitted = true)
-        admit(
-            DetailSectionKind.MORE_IN_COLLECTION,
-            showMoreInCollection && hasFranchiseCollections,
-        )
         admit(
             DetailSectionKind.MORE_LIKE_THIS,
             // Stand the stock row down only where it would duplicate the plugin
@@ -266,10 +243,6 @@ internal data class DetailSectionAdmission(
         admit(
             DetailSectionKind.SEERR_SIMILAR,
             seerrDataAvailable && hasSeerrSimilar,
-        )
-        admit(
-            DetailSectionKind.SPECIAL_FEATURES,
-            capabilities.remoteDiscovery && hasSpecialFeatures,
         )
         admit(
             DetailSectionKind.DOWNLOAD_FOOTER,
@@ -304,20 +277,9 @@ internal data class DetailSectionAdmission(
             seerrDataAvailable = state.core.isSeerrConnected && state.core.isSeerrRecommendationsEnabled,
             hasSeerrRecommendations = state.core.seerrRecommendations.isNotEmpty(),
             hasSeerrSimilar = state.core.seerrSimilar.isNotEmpty(),
-            hasSpecialFeatures = state.core.specialFeatures.isNotEmpty(),
             hasAttachedDownload = state.core.detailContext?.download != null,
             hasPluginSimilar = state.core.pluginSimilarItems.isNotEmpty(),
             suppressStockSimilar = state.core.pluginSimilarSuppressesStock,
-            // The D6 franchise admission counts only VISIBLE rows: a row the
-            // user eye-hid is excluded here (not just render-side) so a fully
-            // hidden row family doesn't leave an empty admitted slot's gap in
-            // the body column.
-            hasFranchiseCollections = state.core.franchiseCollections.any { collection ->
-                collection.id !in state.core.hiddenFranchiseCollections[state.itemId].orEmpty()
-            },
-            showMoreInCollection = state.preferences.showMoreInCollection,
-            hasUpcomingEpisodes = state.core.upcomingEpisodes.isNotEmpty(),
-            showUpcomingStrip = state.preferences.showUpcomingStrip,
         )
     }
 }

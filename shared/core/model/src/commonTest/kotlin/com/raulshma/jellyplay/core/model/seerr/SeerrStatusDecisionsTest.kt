@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.model.seerr
 
+import com.raulshma.jellyplay.core.model.MediaType
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -149,5 +150,68 @@ class SeerrStatusDecisionsTest {
             SeerrRequestButtonState.Requested.Processing,
             seerrRequestButtonState(buttonMedia(SeerrMediaStatus.PROCESSING, requestCount = 1)),
         )
+    }
+
+    // ── SeerrMediaKind (the movie/TV kind fold) ─────────────────────────
+
+    @Test
+    fun `fromWire parses both wire strings ignoring case`() {
+        // The render sites always ignored case; the fold made that universal.
+        assertEquals(SeerrMediaKind.MOVIE, SeerrMediaKind.fromWire("movie"))
+        assertEquals(SeerrMediaKind.MOVIE, SeerrMediaKind.fromWire("Movie"))
+        assertEquals(SeerrMediaKind.MOVIE, SeerrMediaKind.fromWire("MOVIE"))
+        assertEquals(SeerrMediaKind.TV, SeerrMediaKind.fromWire("tv"))
+        assertEquals(SeerrMediaKind.TV, SeerrMediaKind.fromWire("TV"))
+    }
+
+    @Test
+    fun `fromWire folds empty null and exotic payloads to UNKNOWN`() {
+        // The render sites' passthrough arm — unmatched stays distinguishable.
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrMediaKind.fromWire(""))
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrMediaKind.fromWire(null))
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrMediaKind.fromWire("anime"))
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrMediaKind.fromWire(" shows "))
+    }
+
+    @Test
+    fun `request kind derives from the wire type with the same ignoreCase rule`() {
+        assertEquals(SeerrMediaKind.MOVIE, SeerrRequestItem(type = "movie").kind)
+        assertEquals(SeerrMediaKind.MOVIE, SeerrRequestItem(type = "Movie").kind)
+        assertEquals(SeerrMediaKind.TV, SeerrRequestItem(type = "tv").kind)
+        assertEquals(SeerrMediaKind.TV, SeerrRequestItem(type = "TV").kind)
+        // Empty/odd payloads (the wire omits or mangles `type`) → UNKNOWN.
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrRequestItem().kind)
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrRequestItem(type = "Movie ").kind)
+    }
+
+    @Test
+    fun `search item kind derives from mediaType`() {
+        assertEquals(SeerrMediaKind.MOVIE, SeerrSearchItem(id = 0, mediaType = "movie").kind)
+        assertEquals(SeerrMediaKind.TV, SeerrSearchItem(id = 0, mediaType = "TV").kind)
+        assertEquals(SeerrMediaKind.UNKNOWN, SeerrSearchItem(id = 0).kind)
+    }
+
+    @Test
+    fun `pick routes movie to the movie leg and everything else to the tv leg`() {
+        // The fetch-fork fold: the former `if (isMovie) … else …` ran the tv
+        // leg for every non-"movie" value — UNKNOWN rides tv, byte-identical.
+        assertEquals("m", SeerrMediaKind.MOVIE.pick(movie = { "m" }, tv = { "t" }))
+        assertEquals("t", SeerrMediaKind.TV.pick(movie = { "m" }, tv = { "t" }))
+        assertEquals("t", SeerrMediaKind.UNKNOWN.pick(movie = { "m" }, tv = { "t" }))
+    }
+
+    @Test
+    fun `pick is lazy - only the taken leg runs`() {
+        // The fetch legs are network calls; a taken movie leg must not touch tv.
+        var tvRan = false
+        SeerrMediaKind.MOVIE.pick(movie = { "m" }, tv = { tvRan = true; "t" })
+        assertFalse(tvRan)
+    }
+
+    @Test
+    fun `toMediaType maps movie to MOVIE and everything else to SERIES`() {
+        assertEquals(MediaType.MOVIE, SeerrMediaKind.MOVIE.toMediaType())
+        assertEquals(MediaType.SERIES, SeerrMediaKind.TV.toMediaType())
+        assertEquals(MediaType.SERIES, SeerrMediaKind.UNKNOWN.toMediaType())
     }
 }

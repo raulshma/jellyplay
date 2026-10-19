@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -22,12 +24,16 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the detail section registry (the wave-1 pilot): the registry's order
- * follows the [DetailSectionKind] declaration order, the merged emission
+ * Pins the detail section registry: the registry's order follows the
+ * [DetailSectionKind] declaration order, the merged emission
  * (hand fold + module admissions) is byte-identical to the pre-pilot
- * full-admission movie emission, the two pilot modules own their admission
- * rows (moved out of DetailSectionAdmission's fold), and the plugin ratings
- * module's enrichment arm preserves the fetch it took over.
+ * full-admission movie emission, the modules own their admission rows (moved
+ * out of DetailSectionAdmission's fold), the plugin ratings module's
+ * enrichment arm preserves the fetch it took over, and — the
+ * registry-completeness rule (the HomeRowModulesTest mirror) — every
+ * [DetailSectionKind] is admitted by EXACTLY ONE of the hand fold and a
+ * registered module, so a double admission (a section rendering twice) and a
+ * fold row whose kind migrated are both failing tests.
  */
 class DetailSectionRegistryTest {
 
@@ -148,6 +154,31 @@ class DetailSectionRegistryTest {
         override suspend fun mdbListRatings(
             imdbId: String,
         ): Result<List<JellyPlayPluginRating>?>? = result
+
+        // The wave-2 arms' reads: empty successes — the fake exists to pin
+        // the registry's dispatch and state-write shape, not wire content.
+        override suspend fun specialFeatures(itemId: String): Result<List<MediaItem>> =
+            Result.success(emptyList())
+
+        override suspend fun collectionItems(
+            collectionId: String,
+            startIndex: Int,
+            limit: Int,
+        ): Result<SearchResult> =
+            Result.success(SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0))
+
+        override suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
+            Result.success(emptyList())
+
+        override suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>> =
+            Result.success(emptyList())
+
+        override fun detailPreferences(): DetailPreferences = DetailPreferences()
+
+        override suspend fun <T, R> mapConcurrent(
+            items: List<T>,
+            transform: suspend (T) -> R,
+        ): List<R> = items.map { transform(it) }
     }
 
     // ── registry order ────────────────────────────────────────────────────
@@ -156,7 +187,17 @@ class DetailSectionRegistryTest {
     fun registry_followsTheEnumDeclarationOrder() {
         // The registry list itself must read in emission order…
         val kinds = DetailSectionRegistry.modules.map { it.kind }
-        assertEquals(listOf(DetailSectionKind.PLUGIN_RATINGS, DetailSectionKind.TMDB_REVIEWS), kinds)
+        assertEquals(
+            listOf(
+                DetailSectionKind.PLUGIN_RATINGS,
+                DetailSectionKind.UPCOMING_EPISODES,
+                DetailSectionKind.COLLECTION_ITEMS,
+                DetailSectionKind.MORE_IN_COLLECTION,
+                DetailSectionKind.SPECIAL_FEATURES,
+                DetailSectionKind.TMDB_REVIEWS,
+            ),
+            kinds,
+        )
         // …and the merged emission re-sorts by the enum, so nothing can ever
         // reorder visually regardless of how the list is written.
         val merged = DetailSectionRegistry.admittedSections(
@@ -339,5 +380,98 @@ class DetailSectionRegistryTest {
         )
         val host = FakeHost(probe = true, result = Result.success(emptyList()))
         assertFalse(PluginRatingsSectionModule.enrichments(host).single().gate(localInputs))
+    }
+
+    // ── registry completeness (the HomeRowModulesTest mirror) ─────────────
+
+    /** Offline/local capability set: every remote-only lever off, local levers on. */
+    private fun localCapabilities() = DetailCapabilities(
+        remoteDiscovery = false,
+        remoteStreamSelection = false,
+        localSubtitleSelection = true,
+        localStreamInfo = true,
+        personNavigation = false,
+        studioNavigation = false,
+        smartPlay = false,
+        remoteWorkAllowed = false,
+        localDownloadManagement = true,
+        tagNavigation = false,
+        chapters = true,
+    )
+
+    /**
+     * The every-media-family admission span: each family × both capability
+     * sets × both origins, every other input admitting (content present,
+     * prefs on). Its union must admit every fold-owned kind — and must never
+     * admit a registry-owned one.
+     */
+    private fun admissionSpan(): List<DetailSectionAdmission> {
+        val mediaTypes = listOf(
+            MediaType.MOVIE,
+            MediaType.SERIES,
+            MediaType.EPISODE,
+            MediaType.SEASON,
+            MediaType.COLLECTION,
+            MediaType.BOOK,
+            MediaType.ALBUM,
+            MediaType.AUDIO,
+        )
+        val capabilitySets = listOf(allCapabilities(), localCapabilities())
+        return mediaTypes.flatMap { mediaType ->
+            capabilitySets.flatMap { capabilities ->
+                listOf(false, true).map { isLocal ->
+                    DetailSectionAdmission(
+                        mediaType = mediaType,
+                        isLocalOrigin = isLocal,
+                        capabilities = capabilities,
+                        showActionButtons = true,
+                        showMediaInfo = true,
+                        hasBookState = true,
+                        hasBookToc = true,
+                        hasChapters = true,
+                        hasAlbumTracks = true,
+                        hasSmartPlayTarget = true,
+                        showDetailUpNext = true,
+                        seerrDataAvailable = true,
+                        hasSeerrRecommendations = true,
+                        hasSeerrSimilar = true,
+                        hasAttachedDownload = true,
+                        hasPluginSimilar = true,
+                        suppressStockSimilar = false,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun everySectionKind_isAdmittedByExactlyOneOwner() {
+        val span = admissionSpan()
+        val moduleKinds = DetailSectionRegistry.modules.map { it.kind }
+        // Registry-side disjointness: two modules claiming one kind would
+        // render the section twice.
+        assertEquals(
+            moduleKinds.size,
+            moduleKinds.distinct().size,
+            "a DetailSectionKind is claimed by two registered modules",
+        )
+
+        for (kind in DetailSectionKind.entries) {
+            val module = DetailSectionRegistry.moduleFor(kind)
+            val foldAdmits = span.any { input -> kind in input.admit() }
+            if (module == null) {
+                assertTrue(
+                    foldAdmits,
+                    "$kind has no registered module, so the hand fold must own it — " +
+                        "a deleted fold row leaves the section unowned (rendering nothing)",
+                )
+            } else {
+                assertFalse(
+                    foldAdmits,
+                    "$kind is registered (${module::class.simpleName}); a fold row still emitting it " +
+                        "would admit the section twice and render it twice",
+                )
+            }
+        }
     }
 }

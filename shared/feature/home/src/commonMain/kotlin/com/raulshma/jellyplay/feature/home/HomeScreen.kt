@@ -255,10 +255,13 @@ private fun MainHomeContent(
 
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val serverHealth by LocalServerHealth.current.collectAsStateWithLifecycle()
-    val headerStatus = remember(state.isLoading, state.error != null, networkStatus, serverHealth) {
+    // The header chip reads the refresher's folded verdict
+    // ([HomeUiState.fetchFailed]) — not the raw `error` field, whose
+    // `!= null` restatement is exactly the split ADR-0008 closed.
+    val headerStatus = remember(state.isLoading, state.fetchFailed, networkStatus, serverHealth) {
         resolveHeaderStatus(
             isLoading = state.isLoading,
-            hasError = state.error != null,
+            hasError = state.fetchFailed,
             networkStatus = networkStatus,
             serverHealth = serverHealth,
         )
@@ -921,23 +924,34 @@ private fun HomeSurfaceContent(
             }
             HomeContentList(
                 state = HomeContentState(
+                    // The VM's slice, embedded as ONE value (the
+                    // DetailContentState precedent) — readers qualify through
+                    // state.core.X; the extras below are the screen's own
+                    // resolutions.
+                    core = HomeContentState.Core(
+                        homeHeroEnabled = state.homeHeroEnabled,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        discoverEnabled = state.discoverEnabled,
+                        experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
+                        continueWatchingClickBehavior = state.continueWatchingClickBehavior,
+                        recentlyGrabbed = state.recentlyGrabbed,
+                        homeLastVisitEpochMs = state.homeLastVisitEpochMs,
+                        statsCard = statsCardData,
+                        statsCardEnabled = state.statsCardEnabled,
+                        genreChips = state.genreChips,
+                        genreRailEnabled = state.genreRailEnabled,
+                    ),
                     // WHAT renders was decided by the fold — the
                     // feed carries the online or offline surface
                     // with the offline-only masks (spinner,
                     // banners) and the FallbackPending loading
                     // window already applied.
                     feed = s.feed,
-                    homeHeroEnabled = state.homeHeroEnabled,
-                    homeBackdropEnabled = state.homeBackdropEnabled,
-                    discoverEnabled = state.discoverEnabled,
-                    experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
                     featuredItem = heroController.featuredItem,
                     curatedHeroOverlay = curatedHeroOverlay,
                     backgroundColor = backgroundColor,
                     contentPad = contentPad,
                     headerHeight = headerHeight,
-                    isLightTheme = isLightTheme,
-                    continueWatchingClickBehavior = state.continueWatchingClickBehavior,
                     // The CR progress bars ride the fold too —
                     // the surface carries whichever map belongs
                     // to the carried feed (online vs offline
@@ -945,20 +959,12 @@ private fun HomeSurfaceContent(
                     bookProgressFractions = s.bookProgressFractions,
                     discoverRows = discoverRows,
                     allDiscoverItems = allDiscoverItems,
-                    recentlyGrabbed = state.recentlyGrabbed,
                     randomDiscoverRowIds = remember(state.sectionConfig.discoverRows) {
                         state.sectionConfig.discoverRows
                             .filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN && it.filters.sortBy == SortOption.RANDOM }
                             .mapTo(mutableSetOf()) { it.id }
                     },
                     statusBanner = implicitOfflineBanner,
-                    // H12 visit memory (the sibling one-liner): the
-                    // NEW-badge predicate's previous-visit threshold.
-                    homeLastVisitEpochMs = state.homeLastVisitEpochMs,
-                    statsCard = statsCardData,
-                    statsCardEnabled = state.statsCardEnabled,
-                    genreChips = state.genreChips,
-                    genreRailEnabled = state.genreRailEnabled,
                 ),
                 callbacks = HomeContentCallbacks(
                     onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },

@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
@@ -918,10 +919,15 @@ class DetailViewModel internal constructor(
      *
      * The detail section modules' enrichment arms
      * ([DetailSectionRegistry.enrichments]) are spliced in at the exact
-     * position their migrated hand-written entries occupied (wave 1: the
+     * position the wave-1 migrated hand-written entry occupied (the
      * pluginRatings fetch, now PluginRatingsSectionModule's arm) — the
      * externalRatings entry below reads the feature probe that arm latches,
-     * so the splice point is load-bearing.
+     * so the splice point is load-bearing. The wave-2 arms (specialFeatures,
+     * collectionItems, franchise, upcoming) joined the registry with their
+     * sections and ride the same spliced list: all entries are independent,
+     * fire-and-forget, guard-checked coroutines (single-writer-per-field),
+     * so the arms' positions within the spliced list preserve the observable
+     * behavior the fan-out order contract documents above.
      */
     // ── The section modules' enrichment-host seam ([DetailSectionEnrichmentHost]):
     //    a private adapter over the members the former hand-written enrichment
@@ -945,6 +951,29 @@ class DetailViewModel internal constructor(
             imdbId: String,
         ): Result<List<JellyPlayPluginRating>?>? =
             pluginRatingsApi?.getMdbListRatings(imdbId)
+
+        // Wave-2 roles: the reads the collection-family/strip arms' former
+        // hand-written bodies made directly on these collaborators.
+        override suspend fun specialFeatures(itemId: String): Result<List<MediaItem>> =
+            libraryApiClient.getSpecialFeatures(itemId)
+
+        override suspend fun collectionItems(
+            collectionId: String,
+            startIndex: Int,
+            limit: Int,
+        ): Result<SearchResult> =
+            mediaRepository.getCollectionItems(collectionId, startIndex = startIndex, limit = limit)
+
+        override suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
+            mediaCatalogueEnrichments.getBoxSetsContaining(itemId)
+
+        override suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>> =
+            libraryApiClient.getUpcoming(parentId = parentId, limit = limit)
+
+        override fun detailPreferences(): DetailPreferences = preferences.value
+
+        override suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R> =
+            hydrationSemaphore.mapConcurrentCatching(items, transform)
     }
 
     private val enrichments: List<DetailEnrichment> =
@@ -995,19 +1024,6 @@ class DetailViewModel internal constructor(
                     _uiState.update {
                         it.copy(relatedItems = items.filter { related -> related.id != inputs.itemId })
                     }
-                }
-        },
-        DetailEnrichment(
-            name = "specialFeatures",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Fetch special features / extras (featurettes, deleted scenes, etc.)
-            // concurrently so the core detail renders immediately; the result lands
-            // in specialFeatures and renders as its own horizontal row.
-            libraryApiClient.getSpecialFeatures(inputs.itemId)
-                .onSuccess { extras ->
-                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                    _uiState.update { it.copy(specialFeatures = extras) }
                 }
         },
         DetailEnrichment(
@@ -1062,26 +1078,14 @@ class DetailViewModel internal constructor(
                 it.copy(localRelatedItems = related.filter { r -> r.id != inputs.itemId })
             }
         },
-        DetailEnrichment(
-            name = "collectionItems",
-            // Collections are remote-only companion content (not part of the
-            // snapshot); gated on remoteDiscovery so a local origin never
-            // starts it.
-            gate = {
-                it.remoteDiscoveryAllowed && it.mediaType == MediaType.COLLECTION
-            },
-        ) { inputs ->
-            mediaRepository.getCollectionItems(inputs.itemId, limit = 100)
-                .onSuccess { result ->
-                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                    _uiState.update { it.copy(collectionItems = result.items) }
-                }
-        },
     ) +
         // The section modules' enrichment arms (the detail section registry):
-        // today the pluginRatings fetch, verbatim from its former hand-written
-        // entry — spliced exactly where that entry sat, so the fan-out order
-        // (and externalRatings' read of the latched probe below) is unchanged.
+        // the wave-1 pluginRatings fetch, verbatim from its former hand-written
+        // entry, spliced exactly where that entry sat so the fan-out order
+        // (and externalRatings' read of the latched probe below) is unchanged;
+        // the wave-2 arms (specialFeatures, collectionItems, franchise,
+        // upcoming) joined their sections' modules and ride the same spliced
+        // list.
         DetailSectionRegistry.enrichments(host = sectionEnrichmentHost) +
         listOf(
         DetailEnrichment(
@@ -1254,81 +1258,6 @@ class DetailViewModel internal constructor(
             _uiState.update { it.copy(seasonRatings = it.seasonRatings + fetchedRatingsBySeasonId) }
         },
         DetailEnrichment(
-            name = "franchise",
-            // D6: the "More in this collection" franchise rows. MOVIE/SERIES
-            // only — BoxSet ancestry is a film-franchise concept, and the
-            // members read is a per-collection page the other families have
-            // no use for. Ancestors → up to [FRANCHISE_MAX_COLLECTIONS]
-            // BoxSets → each hydrated with its members in the server's
-            // default order; rows with no (non-self) members drop out and a
-            // wholly empty fold leaves the field empty — silent absence.
-            gate = {
-                it.remoteDiscoveryAllowed &&
-                    (it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES)
-            },
-        ) { inputs ->
-            // The user-pref half of the gate rides the body: the gate lambda
-            // stays a pure snapshot read (the DetailEnrichmentInputs
-            // contract), so `showMoreInCollection` is checked here instead —
-            // a preference read, not snapshot state (the externalRatings
-            // convention).
-            if (!preferences.value.showMoreInCollection) return@DetailEnrichment
-            // The franchise read rides the repository's cache (the detail
-            // cluster's boxsets-containing member): the enumerate-then-probe
-            // fan-out below is the costliest enrichment, so a re-entry inside
-            // its TTL window re-serves the row instead of re-probing.
-            val boxSets = mediaCatalogueEnrichments.getBoxSetsContaining(inputs.itemId)
-                .getOrNull()
-                ?.take(FRANCHISE_MAX_COLLECTIONS)
-                .orEmpty()
-            if (boxSets.isEmpty()) return@DetailEnrichment
-            // The shared bounded-parallel members hydration (the
-            // pluginSimilarItems idiom): per-BoxSet failures and empty member
-            // lists drop out; the source order is preserved
-            // (mapConcurrentCatching is order-preserving), so the rows keep
-            // the server's default order.
-            val rows = hydrationSemaphore.mapConcurrentCatching(boxSets) { boxSet ->
-                val members = mediaRepository
-                    .getCollectionItems(boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
-                    .getOrNull()
-                    ?.items
-                    // The loaded item never renders inside its own franchise
-                    // row (the similarItems enrichment's self-filter).
-                    ?.filter { it.id != inputs.itemId }
-                    .orEmpty()
-                if (members.isEmpty()) {
-                    null
-                } else {
-                    DetailUiState.FranchiseCollection(id = boxSet.id, name = boxSet.name, members = members)
-                }
-            }.filterNotNull()
-            if (rows.isEmpty()) return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(franchiseCollections = rows) }
-        },
-        DetailEnrichment(
-            name = "upcoming",
-            // D7: the "Airing next" strip, SERIES detail only. The fetch keys
-            // on `parentId` = the loaded item id — which inside this
-            // SERIES-only gate IS the series id: the gate cannot start before
-            // a snapshot resolved (the enrichment fan-out runs off the
-            // resolution), so the item id can never be an unresolved
-            // stand-in. This is the MediaDetailScreen `seriesIdForSeasons`
-            // keying rule applied at the enrichment seam: for an
-            // EPISODE/SEASON detail the series id differs from the item id,
-            // and those types are excluded here rather than re-keyed.
-            gate = { it.remoteDiscoveryAllowed && it.mediaType == MediaType.SERIES },
-        ) { inputs ->
-            // The user-pref half of the gate rides the body (the franchise
-            // convention above).
-            if (!preferences.value.showUpcomingStrip) return@DetailEnrichment
-            libraryApiClient.getUpcoming(parentId = inputs.itemId, limit = UPCOMING_STRIP_LIMIT)
-                .onSuccess { upcoming ->
-                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                    _uiState.update { it.copy(upcomingEpisodes = upcoming) }
-                }
-        },
-        DetailEnrichment(
             name = "trailers",
             // D3: the merged trailer list's local leg — the server-hosted
             // trailers (the parental-filtered getLocalTrailers wrapper) merged
@@ -1377,9 +1306,6 @@ class DetailViewModel internal constructor(
     /** The stock similar row's limit (the plugin row mirrors it). */
     private companion object {
         const val SIMILAR_ITEMS_LIMIT = 12
-
-        /** The D7 strip's row bound (an "airing next" rail; small by design). */
-        const val UPCOMING_STRIP_LIMIT = 12
     }
 
     /**
@@ -1859,45 +1785,68 @@ class DetailViewModel internal constructor(
 
     private fun markSeasonUnplayed(seasonId: String) = markSeasonReactor.markSeasonUnplayed(seasonId)
 
-    private fun hideFromNextUp() {
+    /**
+     * The discovery-pref write funnel: every item-keyed preference write on
+     * this screen is the same row — resolve the key off the current item (an
+     * episode keys to its parent series, a series to itself — the
+     * hideFromNextUp keying), run the store write, then optionally surface
+     * the snackbar once the write has landed. Five handlers used to restate
+     * that skeleton by hand; only the three terms differed. The event
+     * funnel's entries stay; their bodies collapsed onto this one.
+     *
+     * [setLastViewedSeason] and [setShowDetailUpNext] stay hand-written: the
+     * first is event-keyed (its series+season pair arrives with the event —
+     * no item resolution, no message, a silent background write), the second
+     * has no key at all; neither has a skeleton to collapse.
+     */
+    private fun writeDiscoveryPref(
+        /** The write's identity off the current item — [seriesKey] or the item id. */
+        key: (MediaItem) -> String,
+        /** The store write, with the resolved key. */
+        write: suspend (key: String) -> Unit,
+        /** The snackbar, emitted after the write lands; null = silent. */
+        message: (suspend () -> DetailMessage)? = null,
+    ) {
         val item = _uiState.value.detail?.item ?: return
-        val seriesId = item.seriesId ?: item.id
+        val resolvedKey = key(item)
         launch {
-            stores.homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
-            _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_hidden_from_next_up)))
+            write(resolvedKey)
+            message?.let { _messages.emit(it()) }
         }
     }
 
-    private fun showFromNextUp() {
-        val item = _uiState.value.detail?.item ?: return
-        val seriesId = item.seriesId ?: item.id
-        launch {
-            stores.homeDiscoveryStore.includeSeriesInNextUp(seriesId)
-            _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_shown_in_next_up)))
-        }
-    }
+    /** The item-keyed write identity: an episode's parent series, else the item itself. */
+    private fun seriesKey(item: MediaItem): String = item.seriesId ?: item.id
 
-    private fun hideFromContinueWatching() {
-        val item = _uiState.value.detail?.item ?: return
-        launch {
-            stores.homeDiscoveryStore.hideCwItem(item.id)
-            _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_hidden_from_continue_watching)))
-        }
-    }
+    private fun hideFromNextUp() = writeDiscoveryPref(
+        key = ::seriesKey,
+        write = stores.homeDiscoveryStore::excludeSeriesFromNextUp,
+        message = { DetailMessage.Text(strings.get(Res.string.detail_msg_hidden_from_next_up)) },
+    )
 
-    private fun showFromContinueWatching() {
-        val item = _uiState.value.detail?.item ?: return
-        launch {
-            stores.homeDiscoveryStore.unhideCwItem(item.id)
-            _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_shown_in_continue_watching)))
-        }
-    }
+    private fun showFromNextUp() = writeDiscoveryPref(
+        key = ::seriesKey,
+        write = stores.homeDiscoveryStore::includeSeriesInNextUp,
+        message = { DetailMessage.Text(strings.get(Res.string.detail_msg_shown_in_next_up)) },
+    )
+
+    private fun hideFromContinueWatching() = writeDiscoveryPref(
+        key = { it.id },
+        write = stores.homeDiscoveryStore::hideCwItem,
+        message = { DetailMessage.Text(strings.get(Res.string.detail_msg_hidden_from_continue_watching)) },
+    )
+
+    private fun showFromContinueWatching() = writeDiscoveryPref(
+        key = { it.id },
+        write = stores.homeDiscoveryStore::unhideCwItem,
+        message = { DetailMessage.Text(strings.get(Res.string.detail_msg_shown_in_continue_watching)) },
+    )
 
     /**
      * Silently pins the last-viewed season for [seriesId] so the series detail
-     * screen reopens on that season tab. Mirrors [hideFromNextUp]'s launch shape
-     * but emits NO user-facing message (a background preference write). The
-     * value flows back reactively via [preferences].
+     * screen reopens on that season tab. Event-keyed (no item resolution, no
+     * message — see [writeDiscoveryPref]). The value flows back reactively
+     * via [preferences].
      */
     private fun setLastViewedSeason(seriesId: String, seasonId: String) {
         launch {
@@ -1919,43 +1868,42 @@ class DetailViewModel internal constructor(
      * needs the activity), so only the store write + the snackbar happen
      * here.
      */
-    private fun setSeriesNotifications(enabled: Boolean) {
-        val item = _uiState.value.detail?.item ?: return
-        val seriesId = item.seriesId ?: item.id
-        launch {
-            stores.notificationStore.setSeriesNotificationEnabled(seriesId, enabled)
-            _messages.emit(
-                DetailMessage.Text(
-                    strings.get(
-                        if (enabled) {
-                            Res.string.detail_msg_series_notifications_on
-                        } else {
-                            Res.string.detail_msg_series_notifications_off
-                        },
-                    ),
+    private fun setSeriesNotifications(enabled: Boolean) = writeDiscoveryPref(
+        key = ::seriesKey,
+        write = { stores.notificationStore.setSeriesNotificationEnabled(it, enabled) },
+        message = {
+            DetailMessage.Text(
+                strings.get(
+                    if (enabled) {
+                        Res.string.detail_msg_series_notifications_on
+                    } else {
+                        Res.string.detail_msg_series_notifications_off
+                    },
                 ),
             )
-        }
-    }
+        },
+    )
 
     /**
      * D8: the top-bar mute chip — flips the live theme audio immediately
-     * (the seam's volume half) and writes the per-series memory (the store
-     * half), so a muted series's theme enrichment never starts playback
-     * again. An episode resolves to its parent series, a series to itself —
-     * the hideFromNextUp/setSeriesNotifications keying.
+     * (the seam's volume half, BEFORE the funnel's launch) and writes the
+     * per-series memory (the store half), so a muted series's theme
+     * enrichment never starts playback again. An episode resolves to its
+     * parent series, a series to itself — the hideFromNextUp keying. No
+     * message: the chip's own state is the feedback.
      */
     private fun setThemeMusicMuted(muted: Boolean) {
         themeMusicPlayer.setMuted(muted)
-        val item = _uiState.value.detail?.item ?: return
-        val seriesId = item.seriesId ?: item.id
-        launch {
-            if (muted) {
-                stores.homeDiscoveryStore.muteThemeMusicForSeries(seriesId)
-            } else {
-                stores.homeDiscoveryStore.unmuteThemeMusicForSeries(seriesId)
-            }
-        }
+        writeDiscoveryPref(
+            key = ::seriesKey,
+            write = {
+                if (muted) {
+                    stores.homeDiscoveryStore.muteThemeMusicForSeries(it)
+                } else {
+                    stores.homeDiscoveryStore.unmuteThemeMusicForSeries(it)
+                }
+            },
+        )
     }
 
     /**

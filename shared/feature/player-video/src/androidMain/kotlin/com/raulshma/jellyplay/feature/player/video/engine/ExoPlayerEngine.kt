@@ -830,6 +830,9 @@ class ExoPlayerEngine(
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
         resetStatsGuard()
+        // The change-guard's sample dies with the item too — the new item's
+        // first stats tick must never be suppressed by the previous one.
+        statsGuard.reset()
         videoDecoderCounters = null
         wasPlayingBeforeActivityPause = false
     }
@@ -1694,6 +1697,15 @@ class ExoPlayerEngine(
         }
     }.conflate()
 
+    // The shared stats change-guard ([StatsPublishGuard], player-contract —
+    // the Exo/mpv hand copies unified). No cadence arm: nothing behind this
+    // adapter's guard is expensive enough to gate (the counters and format
+    // reads are in-memory), so a moved scalar is the only admit path.
+    private val statsGuard = StatsPublishGuard(
+        fullRereadCadenceMs = null,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+    )
+
     private fun updateVideoStats() {
         val p = player ?: return
         val bufferedPos = p.bufferedPosition.coerceAtLeast(0L)
@@ -1709,8 +1721,9 @@ class ExoPlayerEngine(
         // The HDR fold is computed BEFORE the dedup guard and compared by its
         // PUBLISHED shape: the observed-SDR downgrade (below) can flip
         // hdrOutputActive while every counter stays frozen, and a guard keyed
-        // on the decision's expectation would swallow that flip.
-        val last = lastVideoStats
+        // on the decision's expectation would swallow that flip. The fold is
+        // exactly why the guard takes VALUES, not a read source — the folded
+        // trio below is what the shared guard compares.
         val hdrDecision = resolveHdrDecision()
         val videoFormat = p.videoFormat
         // The OBSERVED content transfer (the selected track's color metadata —
@@ -1735,12 +1748,18 @@ class ExoPlayerEngine(
             ?: displayHdrProbeValue
                 ?.let { it.displayHdrTypesSummary() }
                 ?.also { displayHdrTypesCache = displayHdrProbeValue to it }
-        if (last != null && last.bufferedPositionMs == bufferedPos &&
-            last.estimatedBandwidthBps == bandwidthEstimate &&
-            last.droppedFrames == dropped && last.totalVideoFrames == rendered &&
-            last.hdrOutputActive == hdrOutputActive &&
-            last.hdrOutputNotice == hdrDecision.notice &&
-            last.displayHdrTypes == displayHdrTypes
+        // The dedup guard over the PUBLISHED-shape values (the folded HDR
+        // trio included — see the comment above); [publishStatsIfChanged]
+        // stays the final emit funnel.
+        if (!statsGuard.admit(
+                bufferedPos,
+                bandwidthEstimate,
+                dropped,
+                rendered,
+                hdrOutputActive,
+                hdrDecision.notice,
+                displayHdrTypes,
+            )
         ) {
             return
         }

@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -44,6 +45,9 @@ import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_presence_chip_label
 import com.raulshma.jellyplay.feature.home.generated.resources.home_presence_dismiss_cd
 import com.raulshma.jellyplay.feature.home.generated.resources.home_presence_join
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -169,12 +173,12 @@ internal object HomePresenceChipsMath {
  *    deliberately NOT persisted (the plan's inline-dismiss contract).
  *
  * Live updates: POLL on the home refresh cadence
- * (`HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS`, driven by the VM's
- * collector below this class's call site) rather than the websocket
- * `Sessions` push — the shared socket is connect-on-demand infrastructure
- * (SyncPlay joins, the admin dashboard, cast), NOT connected while home
- * shows, and home must not adopt socket-lifecycle side effects to power an
- * opt-in decoration. The poll rides the same `AdminRepository.getSessions`
+ * (`HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS`, driven by [poll] — the
+ * cadence loop lives HERE, beside the policies it serves) rather than the
+ * websocket `Sessions` push — the shared socket is connect-on-demand
+ * infrastructure (SyncPlay joins, the admin dashboard, cast), NOT connected
+ * while home shows, and home must not adopt socket-lifecycle side effects to
+ * power an opt-in decoration. The poll rides the same `AdminRepository.getSessions`
  * read the probe used.
  *
  * Never throws: every network read is Result-folded, so a transient poll
@@ -261,7 +265,65 @@ internal class HomePresenceChipsController(
      */
     suspend fun join(itemId: String): Result<SyncPlayGroup> =
         syncPlayManager.joinGroupPlayingItem(itemId)
+
+    /**
+     * The live poll — the chips' cadence policy, moved here from the VM's
+     * init so the loop and every policy it serves (probe-once, session
+     * filter, dismiss memory) live in ONE class; the VM only folds the gate
+     * flows together and supplies the write sink. Bound off [scope] for the
+     * VM's lifetime through [HomeFeatureGate] (the shared gate spine): per
+     * distinct [PresenceGate] emission the parked loop is cancelled and
+     * restarted — a pref toggle / user switch / going-offline re-polls
+     * immediately or drops the loop, and the foreground leg's re-emission on
+     * re-entry restarts with an immediate poll before the cadence resumes.
+     *
+     * One poll tick is this class's own [refresh] when the gate is fully
+     * open (pref on, online, foreground, signed-in) and an empty write
+     * otherwise (the row hides — the same off-write the pre-move loop made);
+     * the tick then holds the home refresh cadence
+     * ([HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS]) while the gate stays
+     * open. The default-off pref means the loop never runs — and never
+     * probes — until the user opts in.
+     *
+     * The chips land on [onChips] — the VM's own chips-flow write (the
+     * search-query precedent: never a whole-state write per cadence tick).
+     */
+    fun poll(
+        scope: CoroutineScope,
+        gate: Flow<PresenceGate>,
+        onChips: (List<HomePresenceChip>) -> Unit,
+    ) {
+        HomeFeatureGate(scope, gate) { pollGate ->
+            // The open gate spelled ONCE — the refresh guard and the parked-
+            // loop break read the same predicate (a drift here would poll a
+            // closed gate or fold the row while still polling).
+            fun PresenceGate.isOpen(): Boolean =
+                enabled && online && foreground && userId != null
+            while (true) {
+                val chips = if (pollGate.isOpen()) refresh(pollGate.userId) else emptyList()
+                onChips(chips)
+                if (!pollGate.isOpen()) break
+                delay(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS)
+            }
+        }
+    }
 }
+
+/**
+ * The H19 poll gate — pref on, online mode, the signed-in user id (the
+ * probe's identity key) and the app-foreground mirror (the cadence must not
+ * poll from a backgrounded process). One value so the combine's
+ * [kotlinx.coroutines.flow.distinctUntilChanged] compares all four
+ * atomically. Lives beside the controller (not the VM) because
+ * [HomePresenceChipsController.poll] is what consumes it — the VM only folds
+ * the gate's flows together.
+ */
+internal data class PresenceGate(
+    val enabled: Boolean,
+    val userId: String?,
+    val online: Boolean,
+    val foreground: Boolean,
+)
 
 /**
  * Phone layout: not TV and a compact window — the H19 row's Column-vs-LazyRow

@@ -6,7 +6,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -27,18 +26,14 @@ import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.RememberPreferenceToggle
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
-import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
-import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_description
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_version
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_version
 
@@ -116,8 +111,9 @@ internal fun PlayerSheetRouter(
     // through it (the GLOSSARY "Session slice" seam) — no controller reaches.
     val sheets = viewModel.sessionSlices.sheets
     // The module slot's region params — only the migrated branches read it
-    // (the pilots: Hdr, Render); their slice collections stay inside each
-    // module's Content exactly where the branches collected them.
+    // (wave 1: Hdr, Render; wave 2: SubtitleHub); their slice collections
+    // stay inside each module's Content exactly where the branches collected
+    // them.
     val moduleScope = PlayerSheetScope(uiState, inputs, viewModel, sheets)
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
@@ -169,145 +165,13 @@ internal fun PlayerSheetRouter(
                 } else null,
             )
         }
-        is PlayerSheet.SubtitleHub -> {
-            // The sheet's SINGLE hub-open load trigger ([SubtitleManager.openSubtitleHub]):
-            // both entry clicks (Tracks tab / overflow) only route here, so an
-            // open costs one remote-subtitles request — the former hand-copied
-            // click cascades double-fetched (click loads, then this effect
-            // cancelled and re-fetched). Timing change: the fetch
-            // starts at sheet composition rather than at click (the hub's
-            // loading spinner already covers the in-flight window). The reset
-            // intent is per-entry: the overflow entry opens with a cleared
-            // search/cultures slice (stale results must not leak across
-            // items), the Tracks tab deliberately keeps prior state — the
-            // flag rides from the click and is consumed single-shot. A
-            // config-change sheet restore re-enters with the flag reset to
-            // false, i.e. the same no-reset re-load this effect always did.
-            LaunchedEffect(Unit) {
-                sheets.openSubtitleHub(resetFirst = inputs.subtitleHubResetFirst)
-                inputs.onSubtitleHubResetConsumed()
-            }
-            // Track + subtitle-workflow slices: collected inside the
-            // branch — only this hub consumes them while the sheet is open.
-            val trackState by sheets.trackState.collectAsStateWithLifecycle()
-            val subtitleState by sheets.subtitleState.collectAsStateWithLifecycle()
-            // named style presets: the hub's Style tab is the apply/save/
-            // delete surface. Presets are pure data over the style-controller
-            // slice behind the sheets slice; the list rides the slice.
-            val userStylePresets by sheets.userStylePresets
-                .collectAsStateWithLifecycle(initialValue = emptyList())
-            // Custom-mpv-config ownership: which sub-* styling keys the engine
-            // yields to Advanced MPV Configuration / mpv.conf this session.
-            // The Style tab renders its case-by-case notice (owned keys, ASS
-            // force requirement, quoting trap) from this snapshot.
-            val sessionEngine by sheets.engineFlow.collectAsStateWithLifecycle()
-            SubtitleHubSheet(
-                initialTab = inputs.subtitleHubInitialTab,
-                onDismiss = inputs.dismissSheet,
-                // Tracks tab
-                subtitleTracks = trackState.subtitleTracks,
-                onSelectSubtitleTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectSubtitleTrack(it)) },
-                onResetSubtitleTrack = if (trackState.hasSubtitleOverride) {
-                    { viewModel.onEvent(VideoPlayerUiEvent.ResetSubtitleTrack) }
-                } else null,
-                tracksFooter = if (uiState.media.seriesId != null) {
-                    {
-                        // Per-series subtitle preference toggle. With a real track
-                        // selected it saves that track's language + role so every
-                        // episode restores the right same-language track; with the
-                        // "Off" row selected it saves a "subtitles off" intent so
-                        // every episode loads with subs off. Toggling off forgets
-                        // whichever intent was saved. The intent derivation lives
-                        // in [seriesSubtitlePreferenceIntent].
-                        val label = if (seriesSubtitlePrefersOffLabel(trackState.subtitleTracks, trackState.hasSeriesSubtitleOffPref)) {
-                            stringResource(Res.string.player_video_remember_subtitles_off)
-                        } else {
-                            stringResource(Res.string.player_video_remember_subtitle_language)
-                        }
-                        RememberPreferenceToggle(
-                            label = label,
-                            checked = trackState.hasSeriesSubtitlePref,
-                            onToggle = { remember ->
-                                when (val intent = seriesSubtitlePreferenceIntent(trackState.subtitleTracks, remember)) {
-                                    is SeriesSubtitlePrefIntent.Off ->
-                                        viewModel.onEvent(VideoPlayerUiEvent.SetSeriesSubtitleDisabled(intent.disabled))
-                                    is SeriesSubtitlePrefIntent.Track ->
-                                        viewModel.onEvent(
-                                            VideoPlayerUiEvent.SetSeriesSubtitlePreference(
-                                                language = intent.language,
-                                                forced = intent.forced,
-                                                hearingImpaired = intent.hearingImpaired,
-                                            )
-                                        )
-                                    SeriesSubtitlePrefIntent.Forget ->
-                                        viewModel.onEvent(VideoPlayerUiEvent.SetSeriesSubtitlePreference(language = null))
-                                }
-                            },
-                        )
-                    }
-                } else null,
-                // Style tab
-                subtitleStyle = uiState.subtitleStyle,
-                onStyleChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSubtitleStyle(it)) },
-                onSubtitleDelayChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSubtitleDelay(it)) },
-                onPickFont = inputs.onPickFont,
-                onOpenTester = inputs.onOpenSubtitleTester,
-                capabilities = uiState.engineCapabilities,
-                subtitleOwnership = sessionEngine?.subtitleStyleOwnership
-                    ?: MpvSubtitleOwnership.NONE,
-                userStylePresets = userStylePresets,
-                onSaveStylePreset = { name ->
-                    sheets.saveStylePreset(name, uiState.subtitleStyle)
-                },
-                onDeleteStylePreset = { name ->
-                    sheets.deleteStylePreset(name)
-                },
-                // Get tab
-                downloadSubtitles = subtitleState.remoteSubtitles,
-                isDownloading = subtitleState.isLoadingRemoteSubtitles,
-                remoteSubtitlesError = subtitleState.remoteSubtitlesError,
-                onDownload = { sheets.downloadSubtitle(it) },
-                onLoadLocalFile = inputs.onLoadLocalSubtitle,
-                searchResults = subtitleState.searchedSubtitles,
-                isSearching = subtitleState.isSearchingSubtitles,
-                hasSearched = subtitleState.hasSearchedSubtitles,
-                searchError = subtitleState.subtitleSearchError,
-                cultures = subtitleState.subtitleCultures,
-                defaultLanguage = subtitleState.defaultSearchLanguage,
-                onSearch = { sheets.searchRemoteSubtitles(it) },
-                onDownloadSearched = { sheets.downloadSubtitle(it) },
-                providerSearchResults = subtitleState.providerSearchResults,
-                providerSearchErrors = subtitleState.providerSearchErrors,
-                configuredProviders = subtitleState.configuredSubtitleProviders,
-                onSearchAllProviders = { sheets.searchAllProviders(it) },
-                onDownloadProviderSubtitle = { sheets.downloadProviderSubtitle(it) },
-                downloadingSubtitles = subtitleState.downloadingSubtitles,
-                // "Use" activates the downloaded subtitle as the current track
-                // (resolved from the manager's ready hints); on success the hub
-                // shows the Tracks tab with the new selection, otherwise it
-                // stays on Get while the pending selection auto-applies.
-                onUseSubtitle = { rowKey -> viewModel.useDownloadedSubtitle(rowKey) },
-                onSaveSubtitleToServer = { rowKey ->
-                    sheets.retryUploadSubtitle(rowKey)
-                },
-                isUploading = subtitleState.isUploadingSubtitle,
-                onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
-                    // KMP seam: the sheets hand the picked SAF
-                    // document as its string form; SubtitleManager consumes it.
-                    sheets.uploadSubtitle(
-                        uriStr,
-                        fileName,
-                        language,
-                        isForced,
-                        isHearingImpaired,
-                    )
-                    inputs.onSheetChange(PlayerSheet.None)
-                },
-                // Delay tab
-                currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
-                onOpenDelayOverlay = inputs.onOpenSubtitleDelayOverlay,
-            )
-        }
+        is PlayerSheet.SubtitleHub ->
+            // Migrated (the sheet-module wave 2): the branch body — the single
+            // hub-open load trigger, the four sheet-local slice collections
+            // and the per-tab wiring — lives in SubtitleHubSheetModule.Content;
+            // the hub's open intent (reset-first flag + landing tab) rides the
+            // inputs bundle like the Render sheet's toggle.
+            SubtitleHubSheetModule.Content(moduleScope)
         is PlayerSheet.Chapter -> {
             // Collect position only while the chapter sheet is open, so
             // the router itself stays a low-frequency scope when no sheet (or

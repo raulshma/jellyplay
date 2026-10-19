@@ -4,11 +4,15 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePortAdapter
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.DisplayPreferencesDto
+import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,10 +30,18 @@ import kotlin.test.assertTrue
  * Setup mirrors [AuthApiClientImplTest]: a real [JellyfinApiEngine] (mocked
  * Jellyfin SDK instance, real OkHttp) so the identity-keyed TtlCache runs for
  * real under a signed-in (server, user) pair.
+ *
+ * The playlist / collection families moved off the wide client to
+ * [PlaylistApiClientImpl] / [CollectionApiClientImpl]; their tests here
+ * construct the adapters over the SAME test engine and pin the moved wire
+ * shapes, and the impl-owned [HomeSectionsCachePort] adapter is exercised
+ * through the internal re-exposure the Koin binding resolves.
  */
 class LibraryApiClientImplTest {
 
     private lateinit var client: LibraryApiClientImpl
+    private lateinit var playlistClient: PlaylistApiClientImpl
+    private lateinit var collectionClient: CollectionApiClientImpl
     private lateinit var engine: JellyfinApiEngine
 
     private val testServer = ServerInfo(
@@ -61,6 +73,10 @@ class LibraryApiClientImplTest {
         engine.updateUser(testUser)
 
         client = LibraryApiClientImpl(engine, mockk(relaxed = true), SystemTimeSource())
+        // The moved families ride their own adapters over the SAME engine —
+        // the shape the Koin graph builds in production.
+        playlistClient = PlaylistApiClientImpl(engine)
+        collectionClient = CollectionApiClientImpl(engine)
     }
 
     private val favoriteItemId = FAVORITE_ITEM_ID
@@ -617,6 +633,104 @@ class LibraryApiClientImplTest {
             "the write stamps a wall-clock marker for the sync dialog",
         )
         assertEquals("jellyplay", dto.client)
+    }
+
+    // ── the family adapters (playlist/collection split + the home cache port) ──
+
+    @Test
+    fun `createPlaylist posts the SDK dto over the same engine`() = runTest {
+        // The playlist family moved to PlaylistApiClientImpl (its own adapter
+        // over the SAME engine single): the wire must not have moved with it —
+        // POST /Playlists with the CreatePlaylistDto carrying the current
+        // user, the item ids and the default AUDIO media type.
+        val api = RecordingApiClient(responseBody = """{"Id":"$FAVORITE_ITEM_ID"}""")
+        engine.updateApi(api)
+
+        val created = playlistClient.createPlaylist(name = "Mix", itemIds = listOf(FAVORITE_ITEM_ID)).getOrThrow()
+
+        assertEquals(FAVORITE_ITEM_ID, created)
+        assertEquals(listOf("POST /Playlists"), api.requests)
+        val dto = api.requestBodies.single() as CreatePlaylistDto
+        assertEquals("Mix", dto.name)
+        assertEquals(listOf(FAVORITE_ITEM_ID), dto.ids?.map { it.toString() })
+        assertEquals(testUser.id, dto.userId?.toString())
+        assertEquals(SdkMediaType.AUDIO, dto.mediaType)
+    }
+
+    @Test
+    fun `deletePlaylist rides the raw Items DELETE path`() = runTest {
+        // The one hand-rolled SDK request in the playlist family — the raw
+        // DELETE /Items/{id} — must survive the move to the adapter
+        // byte-identically.
+        val api = RecordingApiClient()
+        engine.updateApi(api)
+
+        playlistClient.deletePlaylist(FAVORITE_ITEM_ID).getOrThrow()
+
+        assertEquals(listOf("DELETE Items/$FAVORITE_ITEM_ID"), api.requests)
+    }
+
+    @Test
+    fun `addItemsToPlaylist carries the current user with the entry ids`() = runTest {
+        val api = RecordingApiClient()
+        engine.updateApi(api)
+
+        playlistClient
+            .addItemsToPlaylist(playlistId = FAVORITE_ITEM_ID, itemIds = listOf(RESUMABLE_ITEM_ID))
+            .getOrThrow()
+
+        assertEquals(listOf("POST /Playlists/{playlistId}/Items"), api.requests)
+        assertEquals(RESUMABLE_ITEM_ID, queryParam(api.queries[0], "ids"))
+        assertEquals(
+            testUser.id,
+            queryParam(api.queries[0], "userId"),
+            "the server-side reorder/edit ACL keys on the calling user",
+        )
+    }
+
+    @Test
+    fun `the collection adapter reads members and creates over the same engine`() = runTest {
+        // The collection family moved to CollectionApiClientImpl: members page
+        // under the collection parent with the SearchResult envelope, and
+        // creation POSTs /Collections and echoes the new id.
+        val api = RecordingApiClient(
+            responseBody = """
+                {"Items":[{"Id":"$RESUMABLE_ITEM_ID","Name":"Member","Type":"Movie"}],
+                 "TotalRecordCount":1,"StartIndex":0}
+            """.trimIndent(),
+        )
+        engine.updateApi(api)
+
+        val members = collectionClient.getCollectionItems(EPISODE_SERIES_ID, startIndex = 20, limit = 10).getOrThrow()
+
+        assertEquals(listOf("Member"), members.items.map { it.name })
+        assertEquals(1, members.totalRecordCount)
+        assertEquals(20, members.startIndex)
+        assertEquals("GET /Items", api.requests.single())
+        assertEquals(EPISODE_SERIES_ID, queryParam(api.queries[0], "parentId"))
+        assertEquals("20", queryParam(api.queries[0], "startIndex"))
+
+        val createApi = RecordingApiClient(responseBody = """{"Id":"$LATEST_FOLDER_ID"}""")
+        engine.updateApi(createApi)
+        assertEquals(
+            LATEST_FOLDER_ID,
+            collectionClient.createCollection(name = "Canon", itemIds = listOf(FAVORITE_ITEM_ID)).getOrThrow(),
+        )
+        assertEquals(listOf("POST /Collections"), createApi.requests)
+        assertEquals("Canon", queryParam(createApi.queries[0], "name"))
+        assertEquals(FAVORITE_ITEM_ID, queryParam(createApi.queries[0], "ids"))
+    }
+
+    @Test
+    fun `the home cache port rides the impl-owned adapter over the same fetcher`() {
+        // The port's production adapter ([HomeSectionsCachePortAdapter]) is
+        // constructed ON the impl — over its own fetcher — and re-exposed
+        // internal; the Koin construction owner binds the port to this
+        // property. The best-effort verbs are documented no-ops before any
+        // home fetch has memoised, so the drop runs for real here.
+        val port: HomeSectionsCachePort = client.homeSectionsCachePort
+        assertTrue(port is HomeSectionsCachePortAdapter)
+        port.invalidateSubcallCaches()
     }
 
     private companion object {

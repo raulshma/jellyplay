@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.feature.player.video.PlatformBitmap
 import com.raulshma.jellyplay.feature.player.video.SeekBarBufferBands
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.raulshma.jellyplay.feature.player.video.state.rememberTvSeekController
+import com.raulshma.jellyplay.feature.player.video.state.ticksToFraction
 import com.raulshma.jellyplay.feature.player.video.state.tvSeekStepFraction
 import com.raulshma.jellyplay.core.ui.player.playerSeekbarDpSpec
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -334,8 +335,8 @@ internal fun TvControllableSeekBar(
                 if (duration > 0) {
                     segments.forEach { segment ->
                         if (!segment.hasSegment) return@forEach
-                        val startFrac = (segment.startTicks / 10_000f) / duration
-                        val endFrac = (segment.endTicks / 10_000f) / duration
+                        val startFrac = ticksToFraction(segment.startTicks, duration)
+                        val endFrac = ticksToFraction(segment.endTicks, duration)
                         if (startFrac !in 0f..1f || endFrac <= startFrac) return@forEach
                         val segHeight = 6.dp.toPx()
                         val segY = (size.height / 2f) - (segHeight / 2f)
@@ -386,8 +387,8 @@ internal fun TvControllableSeekBar(
                     val abMarkerHeight = 10.dp.toPx()
                     val abMarkerWidth = 2.dp.toPx()
                     if (abStart != null && abEnd != null && abStart < abEnd) {
-                        val abStartFrac = (abStart.toFloat() / duration).coerceIn(0f, 1f)
-                        val abEndFrac = (abEnd.toFloat() / duration).coerceIn(0f, 1f)
+                        val abStartFrac = ticksToFraction(abStart * 10_000L, duration)
+                        val abEndFrac = ticksToFraction(abEnd * 10_000L, duration)
                         if (abEndFrac > abStartFrac) {
                             drawRoundRect(
                                 color = abRepeatRegionColor,
@@ -411,7 +412,7 @@ internal fun TvControllableSeekBar(
                             }
                         }
                     } else if (abStart != null) {
-                        val abStartFrac = (abStart.toFloat() / duration).coerceIn(0f, 1f)
+                        val abStartFrac = ticksToFraction(abStart * 10_000L, duration)
                         drawRoundRect(
                             color = abRepeatMarkerColor,
                             topLeft = androidx.compose.ui.geometry.Offset(
@@ -426,7 +427,7 @@ internal fun TvControllableSeekBar(
 
                 if (chapters.isNotEmpty() && duration > 0) {
                     chapters.forEach { chapter ->
-                        val chapterFraction = (chapter.startPositionTicks / 10_000f) / duration
+                        val chapterFraction = ticksToFraction(chapter.startPositionTicks, duration)
                         if (chapterFraction in 0.01f..0.99f) {
                             val markerX = chapterFraction * trackWidth
                             val markerHeight = 7.dp.toPx()

@@ -15,17 +15,23 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins the hand-mapped playlist / collection / tag endpoints of
- * [LibraryApiClientImpl] (the LibraryApiClientImplTest harness shape: real
- * [JellyfinApiEngine] over a minimal recording [org.jellyfin.sdk.api.client.ApiClient]
- * — mockk can't proxy the final SDK operations classes): both the REQUEST
- * shape (path + the query vocabulary the SDK serializes) and the WIRE → model
- * mapping of the hand-built rows, so an SDK DTO rename or a mapper edit shows
- * up as a diff here instead of a silent feature break.
+ * Pins the hand-mapped playlist / collection / tag endpoints (the
+ * LibraryApiClientImplTest harness shape: real [JellyfinApiEngine] over a
+ * minimal recording [org.jellyfin.sdk.api.client.ApiClient] — mockk can't
+ * proxy the final SDK operations classes): both the REQUEST shape (path + the
+ * query vocabulary the SDK serializes) and the WIRE → model mapping of the
+ * hand-built rows, so an SDK DTO rename or a mapper edit shows up as a diff
+ * here instead of a silent feature break. The playlist / collection reads run
+ * through their family adapters ([PlaylistApiClientImpl] /
+ * [CollectionApiClientImpl] — the families moved off the wide client) built
+ * over the SAME test engine; the tag/detail/search-suggestions reads stay on
+ * [LibraryApiClientImpl].
  */
 class LibraryApiHandMappersTest {
 
     private lateinit var client: LibraryApiClientImpl
+    private lateinit var playlistClient: PlaylistApiClientImpl
+    private lateinit var collectionClient: CollectionApiClientImpl
     private lateinit var engine: JellyfinApiEngine
 
     @BeforeTest
@@ -39,6 +45,8 @@ class LibraryApiHandMappersTest {
         engine.updateServer(ServerInfo(id = "server-1", name = "Test Server", address = "https://test.example.com"))
         engine.updateUser(TEST_USER)
         client = LibraryApiClientImpl(engine, mockk(relaxed = true), SystemTimeSource())
+        playlistClient = PlaylistApiClientImpl(engine)
+        collectionClient = CollectionApiClientImpl(engine)
     }
 
     /** Minimal recording ApiClient — see [LibraryApiClientImplTest.RecordingApiClient] for the full contract. */
@@ -88,7 +96,7 @@ class LibraryApiHandMappersTest {
         )
         engine.updateApi(api)
 
-        val playlists = client.getPlaylists(limit = 25).getOrThrow()
+        val playlists = playlistClient.getPlaylists(limit = 25).getOrThrow()
 
         assertEquals("GET /Items", api.requests.single())
         val query = api.queries.single()
@@ -126,7 +134,7 @@ class LibraryApiHandMappersTest {
         )
         engine.updateApi(api)
 
-        val items = client.getPlaylistItems(PLAYLIST_ID, startIndex = 10, limit = 50).getOrThrow()
+        val items = playlistClient.getPlaylistItems(PLAYLIST_ID, startIndex = 10, limit = 50).getOrThrow()
 
         assertEquals("GET /Items", api.requests.single())
         val query = api.queries.single()
@@ -163,7 +171,7 @@ class LibraryApiHandMappersTest {
         )
         engine.updateApi(api)
 
-        val collections = client.getCollections(limit = 100).getOrThrow()
+        val collections = collectionClient.getCollections(limit = 100).getOrThrow()
 
         assertEquals("GET /Items", api.requests.single())
         val query = api.queries.single()

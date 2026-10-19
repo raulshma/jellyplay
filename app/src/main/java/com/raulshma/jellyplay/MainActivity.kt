@@ -33,7 +33,7 @@ import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.core.data.cast.withCastDiskReadsPermitted
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
@@ -92,8 +92,10 @@ class MainActivity : FragmentActivity() {
     // Lazy deferral is load-bearing: the playback engine (AudioPlaybackManager
     // and its 14-dep graph) stays unbuilt for auth/onboarding-only sessions —
     // resolved only inside ShellInfra's authenticated branch (JellyPlayApp).
-    private val audioPlaybackManagerLazy: kotlin.Lazy<AudioPlaybackManager> =
-        lazy { KoinPlatform.getKoin()!!.get() }
+    // Typed to the shell's narrow ShellAudioSurface — the Koin alias over the
+    // same single — so the shell composition never pulls the concrete class.
+    private val audioPlaybackManagerLazy: kotlin.Lazy<ShellAudioSurface> =
+        lazy { KoinPlatform.getKoin()!!.get<ShellAudioSurface>() }
 
     // App-scoped lock flag: hoisted off the former compose-local
     // `isPinUnlocked` mutableStateOf so PlayerActivity's redirect check (the

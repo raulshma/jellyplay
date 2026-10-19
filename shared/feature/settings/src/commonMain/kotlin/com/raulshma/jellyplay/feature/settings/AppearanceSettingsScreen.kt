@@ -127,6 +127,20 @@ private val appearanceScreenSections: List<SettingsScreenSection> = listOf(
 )
 
 /**
+ * The section groups themselves, in the same LazyColumn order — the
+ * hidden-settings hint's derivation source ([hiddenRowsFor]; the idSet twin
+ * above is the scroll resolver's).
+ */
+private val appearanceScreenGroups = listOf(
+    SettingsScreenGroups.appearanceTheme,
+    SettingsScreenGroups.appearanceNavigation,
+    SettingsScreenGroups.appearanceLibrary,
+    SettingsScreenGroups.appearancePerformance,
+    SettingsScreenGroups.appearanceEyeCare,
+    SettingsScreenGroups.appearanceNewsletter,
+)
+
+/**
  * The persisted accent id for a themed variant, or null when the variant has
  * no accent (standard uses the global swatch; monochrome is fixed). Single
  * source for both the group summary and the style_accent picker.
@@ -293,11 +307,17 @@ fun AppearanceSettingsScreen(
 
         if (!showAdvanced) {
             item {
-                // Eight always-on advanced theme rows plus the two rows in
-                // each of the three advanced-only groups (performance, eye
-                // care, newsletter) are hidden while Advanced is off.
+                // Derived from the fused declarations (hiddenRowsFor): the
+                // theme group's advanced rows (the NotTv-forked layout row
+                // included off-TV) plus both performance/eye-care rows and
+                // the newsletter trio. The retired hand literal (14,
+                // "eight theme rows plus two per advanced group") under-
+                // counted from the day the third newsletter row landed.
                 HiddenSettingsHint(
-                    hiddenCount = 14,
+                    hiddenCount = hiddenRowsFor(
+                        appearanceScreenGroups,
+                        RowAdmissionFlags(showAdvanced = false, isTv = LocalTvMode.current),
+                    ),
                     onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                 )
             }

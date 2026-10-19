@@ -36,12 +36,12 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigApplier
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
-import com.raulshma.jellyplay.feature.player.video.engine.MpvTlsOptions
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvBinding
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvCore
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEndFileError
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeHost
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvLoadOptionsPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvProperties
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
@@ -741,38 +741,34 @@ open class MpvDesktopEngine(
         _bufferedPositionMs.value = 0L
         _bufferedRanges.value = emptyList()
 
-        // Per-request options. http-header-fields is a list option that
-        // PERSISTS on the context — reset it first or the previous item's
-        // credentials (X-Emby-Authorization) are sent to this item's server.
-        // The -append suffix is then the only way to set entries containing
-        // commas (X-Emby-Authorization does), one call per header.
-        MpvLib.mpv.mpv_set_option_string(context, MpvProperties.HTTP_HEADER_FIELDS, "")
-        request.headers.forEach { (k, v) ->
-            MpvLib.mpv.mpv_set_option_string(context, MpvProperties.HTTP_HEADER_FIELDS_APPEND, "$k: $v")
-        }
-        // mTLS: the tls-* file-path options persist the same way —
-        // write the reset trio when no certificate is active so the previous
-        // item's certificate/key is never presented to this item's server.
-        MpvTlsOptions.from(request.requestSpecific?.tls).forEach { (option, value) ->
+        // Per-request options ride the shared [MpvLoadOptionsPlan]
+        // (player-video commonMain, the Android/desktop ladder unified): the
+        // plan owns the DECISIONS — TLS reset trio, normalized + blank-skipped
+        // languages, the User-Agent extraction, the header persistence
+        // discipline, readahead — this engine only the transport: option
+        // writes on the live context (the -append rows carry their wire name
+        // already), and `start` in loadfile's options slot (file-local — the
+        // property write would persist it past this item; the Android twin
+        // writes the property instead). Desktop parity GAINS the plan's
+        // Android decisions: User-Agent lands in `user-agent` (some servers
+        // parse the header form inconsistently), language lists are
+        // normalized, blank language strings are skipped.
+        val plan = MpvLoadOptionsPlan.plan(
+            MpvLoadOptionsPlan.Request(
+                headers = request.headers,
+                preferredAudioLanguage = request.preferredAudioLanguage,
+                preferredSubtitleLanguage = request.preferredSubtitleLanguage,
+                startPositionMs = request.startPositionMs,
+                tls = request.requestSpecific?.tls,
+                maxBufferMs = request.maxBufferMs,
+            ),
+            headerFields = MpvLoadOptionsPlan.HeaderFieldsSpelling.REPLACE_LIST,
+        )
+        plan.optionWrites.forEach { (option, value) ->
             MpvLib.mpv.mpv_set_option_string(context, option, value)
         }
-        request.preferredAudioLanguage?.let {
-            MpvLib.mpv.mpv_set_option_string(context, MpvProperties.ALANG, it)
-        }
-        request.preferredSubtitleLanguage?.let {
-            MpvLib.mpv.mpv_set_option_string(context, MpvProperties.SLANG, it)
-        }
-        MpvLib.mpv.mpv_set_option_string(
-            context,
-            MpvProperties.DEMUXER_READAHEAD_SECS,
-            (request.maxBufferMs / 1000).toString(),
-        )
 
-        val loadOptions = if (request.startPositionMs > 0) {
-            "${MpvProperties.START}=+${request.startPositionMs / 1000.0}"
-        } else {
-            null
-        }
+        val loadOptions = plan.start?.let { "${MpvProperties.START}=$it" }
         // loadfile <url> <flags> <index> <options> — index is ignored with
         // replace, but must be present to reach the options slot.
         val loaded = if (loadOptions == null) {

@@ -250,6 +250,11 @@ private val appearanceDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_scheduled_end_title, { it.appearance.scheduledThemeEndHour }, ::hour),
     DiffField(Res.string.ss_color_blind_mode_title, { it.appearance.colorBlindMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_hand_mode_title, { it.appearance.handMode }, { v -> v.enumDisplay() }),
+    // The layout-override pair the reset review had silently dropped (the
+    // spec↔diff ratchet's first findings): the spec-backed rows exist, the
+    // slice fields exist, only the diff rows were never added.
+    DiffField(Res.string.settings_layout_mode, { it.appearance.layoutMode }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_screen_fit, { it.appearance.tvOverscan }, { v -> v.enumDisplay() }),
 )
 
 private val playbackDiffFields: List<DiffField<*>> = listOf(
@@ -302,6 +307,23 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_duck_on_transient_focus_loss_title, { it.playback.duckOnTransientFocusLoss }, Boolean::onOff),
     DiffField(Res.string.ss_tv_zoom_mode_title, { it.videoPlayer.tvZoomModePercent }, Float::pct),
     DiffField(Res.string.diff_segment_behaviors, { it.videoPlayer.segmentBehaviors }, Map<*, SegmentBehavior>::segmentSummary),
+    // The spec↔diff ratchet's findings: PLAYBACK-category spec rows the
+    // review had silently dropped (declared, projected into the slices,
+    // diff-registered by no row).
+    DiffField(Res.string.settings_external_player_app, { it.playback.preferredExternalPlayer }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_offline_playback, { it.playback.offlinePlaybackPreference }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_max_audio_channels, { it.playback.maxAudioChannels }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_downmix_boost, { it.playback.downmixBoostDb }, Float::fmt1),
+    DiffField(Res.string.settings_hide_osd_on_pause, { it.videoPlayer.videoHideOsdOnPause }, Boolean::onOff),
+    DiffField(Res.string.settings_resume_headset_plug, { it.videoPlayer.videoResumeOnHeadsetPlug }, Boolean::onOff),
+    DiffField(Res.string.settings_double_tap_hold_seek, { it.videoPlayer.videoDoubleTapHoldSeekEnabled }, Boolean::onOff),
+    // The whole input-mapping blob (the screen's editor face) — rendered
+    // verbatim like the aspect-ratio row above.
+    DiffField(Res.string.settings_input_bindings, { it.videoPlayer.videoInputBindings }, ::identity),
+    DiffField(Res.string.settings_still_watching_mode, { it.videoPlayer.stillWatchingMode }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_still_watching_episodes, { it.videoPlayer.stillWatchingEpisodeThreshold }, Int::toString),
+    DiffField(Res.string.settings_video_cache_size, { it.videoPlayer.videoCacheSizeMb }, Int::toString),
+    DiffField(Res.string.settings_skip_segments_on_seek, { it.videoPlayer.skipSegmentsOnSeek }, Boolean::onOff),
 )
 
 private val audioDiffFields: List<DiffField<*>> = listOf(
@@ -443,6 +465,11 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.settings_show_new_badges, { it.homeDiscovery.showNewBadges }, Boolean::onOff),
     DiffField(Res.string.settings_home_trickplay_preview, { it.homeDiscovery.homeTrickplayPreview }, Boolean::onOff),
     DiffField(Res.string.settings_anti_spoiler_home, { it.homeDiscovery.antiSpoilerHome }, Boolean::onOff),
+    // Ratchet findings: HOME_DISCOVERY spec rows that had no alias row.
+    DiffField(Res.string.ss_home_backdrop_title, { it.homeDiscovery.homeBackdropEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_discover_rows_title, { it.homeDiscovery.discoverRows.size }, Int::toString),
+    DiffField(Res.string.ss_classic_rows_title, { it.homeDiscovery.classicRows }, Boolean::onOff),
+    DiffField(Res.string.ss_hidden_libraries_title, { it.homeDiscovery.myMediaHiddenLibraryIds.size }, Int::toString),
 )
 
 private val audioCacheDiffFields: List<DiffField<*>> = listOf(
@@ -483,6 +510,22 @@ private val screensaverDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.settings_ken_burns, { it.screensaver.dreamKenBurnsEnabled }, Boolean::onOff),
     DiffField(Res.string.settings_show_title, { it.screensaver.dreamShowTitle }, Boolean::onOff),
     DiffField(Res.string.settings_slideshow_interval, { it.screensaver.dreamSlideshowIntervalMs }, Long::millisToSeconds),
+    // Ratchet findings: the SCREENSAVER category's remaining spec rows —
+    // the parental cap, the dim pair, the desktop idle-ambient/Discord/
+    // shell-hook rows (empty command = that hook disabled, so the command
+    // rows render Off instead of a blank).
+    DiffField(Res.string.settings_dream_max_parental_rating, { it.screensaver.dreamMaxParentalRating }, { v -> v?.toString() ?: "None" }),
+    DiffField(Res.string.settings_dream_dim_after, { it.screensaver.dreamDimAfterMs }, Long::millisToSeconds),
+    DiffField(Res.string.settings_dream_dim_percent, { it.screensaver.dreamDimPercent }, Int::toString),
+    DiffField(Res.string.settings_idle_ambient_enabled, { it.screensaver.idleAmbientEnabled }, Boolean::onOff),
+    DiffField(Res.string.settings_idle_ambient_timeout, { it.screensaver.idleAmbientTimeoutMin }, Long::toString),
+    DiffField(Res.string.settings_discord_presence_enabled, { it.screensaver.discordPresenceEnabled }, Boolean::onOff),
+    DiffField(Res.string.settings_hooks_enabled, { it.screensaver.hooksEnabled }, Boolean::onOff),
+    DiffField(Res.string.settings_hooks_play_cmd, { it.screensaver.hooksPlayCmd }, { v -> v.ifEmpty { "Off" } }),
+    DiffField(Res.string.settings_hooks_stop_cmd, { it.screensaver.hooksStopCmd }, { v -> v.ifEmpty { "Off" } }),
+    DiffField(Res.string.settings_hooks_ended_cmd, { it.screensaver.hooksEndedCmd }, { v -> v.ifEmpty { "Off" } }),
+    DiffField(Res.string.settings_hooks_idle_cmd, { it.screensaver.hooksIdleCmd }, { v -> v.ifEmpty { "Off" } }),
+    DiffField(Res.string.settings_hooks_idle_ended_cmd, { it.screensaver.hooksIdleEndedCmd }, { v -> v.ifEmpty { "Off" } }),
 )
 
 private val newsletterDiffFields: List<DiffField<*>> = listOf(
@@ -503,6 +546,9 @@ private val syncplayCastingDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_dvr_pre_padding_title, { it.syncPlayCast.dvrPrePaddingMinutes }, Int::toString),
     DiffField(Res.string.ss_dvr_post_padding_title, { it.syncPlayCast.dvrPostPaddingMinutes }, Int::toString),
     DiffField(Res.string.ss_dvr_recording_quality_title, { it.syncPlayCast.dvrRecordingQuality }, ::identity),
+    // Ratchet finding: the live-stream option rides the playback slice (the
+    // knob's store) but resets with SYNCPLAY_CASTING — the spec's category.
+    DiffField(Res.string.ss_live_stream_option_title, { it.playback.liveStreamOption }, { v -> v.enumDisplay() }),
 )
 
 private val playerEnginesDiffFields: List<DiffField<*>> = listOf(

@@ -18,7 +18,13 @@ import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 // The shared MediaEngine double (fixtures merge): the desktop twin was
 // deleted — its hardcoded AUTO_PLAY personality is this class's
 // LoadBehavior.AUTO_PLAY, passed at every construction below.
+import com.raulshma.jellyplay.core.testfixtures.FakeImages
+import com.raulshma.jellyplay.core.testfixtures.FakeLyricsRepository
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.FakePlaybackRepository
+import com.raulshma.jellyplay.core.testfixtures.FakeResolver
+import com.raulshma.jellyplay.core.testfixtures.InMemoryQueueDao
+import com.raulshma.jellyplay.core.testfixtures.TestTimeSource
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

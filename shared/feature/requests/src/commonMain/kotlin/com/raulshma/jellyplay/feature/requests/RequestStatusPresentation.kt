@@ -62,3 +62,48 @@ internal fun requestStatusPresentation(
         SeerrMediaStatus.UNKNOWN -> Res.string.requests_status_unknown to unknownStatusColor
     }
 }
+
+/**
+ * The admin action verbs a request offers, the [RequestListItem]/
+ * [RequestDetailBottomSheet] action `when`s folded into one table (the same
+ * single-siting the status chip above got): FAILED → retry + delete,
+ * PENDING → approve + decline, every other status → delete. Admin-gated —
+ * non-admins get no actions at all (both surfaces rendered their action
+ * column/section inside `if (isAdmin)`).
+ *
+ * FAILED carries BOTH verbs because the bottom sheet offers retry and delete
+ * side by side; the compact [RequestListItem] row keeps its single button by
+ * dropping the delete leg (a per-surface placement rule that stays in the
+ * renderer — the sheet, with room, shows the full list). The approve/decline
+ * pair is atomic in both surfaces (always rendered together), delete is
+ * two-step-confirm in both; the confirm choreography and the per-button
+ * styling stay render-side.
+ */
+internal enum class RequestAction {
+    /** Re-run the failed request (Jellyseerr's retry). */
+    RETRY,
+
+    /** Approve the pending request (confirm-dialog guarded in the list row). */
+    APPROVE,
+
+    /** Decline the pending request (confirm-dialog guarded in the list row). */
+    DECLINE,
+
+    /** Remove the request (two-step inline confirm in both surfaces). */
+    DELETE,
+}
+
+/**
+ * The action ladder for [status] at [isAdmin]: the shared decision both
+ * renderers consume. Ordering is display order (retry before delete; approve
+ * before decline); the empty list renders no action surface.
+ */
+internal fun requestActionsFor(
+    status: SeerrRequestStatus,
+    isAdmin: Boolean,
+): List<RequestAction> = when {
+    !isAdmin -> emptyList()
+    status == SeerrRequestStatus.FAILED -> listOf(RequestAction.RETRY, RequestAction.DELETE)
+    status == SeerrRequestStatus.PENDING -> listOf(RequestAction.APPROVE, RequestAction.DECLINE)
+    else -> listOf(RequestAction.DELETE)
+}

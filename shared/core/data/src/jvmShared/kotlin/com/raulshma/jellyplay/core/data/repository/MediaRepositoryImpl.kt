@@ -30,15 +30,14 @@ import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
+import com.raulshma.jellyplay.core.network.library.HomeWriteGeneration
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.merge
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
@@ -103,7 +102,10 @@ class MediaRepositoryImpl internal constructor(
     /**
      * The deep "Episode Catalogue": the single owner of the series
      * seasons/episodes snapshot. Injected (not constructed) so the repo's
-     * `getSeasons`/`getEpisodes`/`getAllEpisodesGrouped` can delegate to it.
+     * invalidation paths can drop a series' snapshot through it
+     * ([invalidateSeriesCache]/[invalidateFor]) — the catalogue is the
+     * read surface's own dependency (its consumers inject
+     * [EpisodeCatalogue] directly; the union carries no series reads).
      * The catalogue depends on `LibraryApiClient` + `OfflineRepository` only
      * (never on `MediaRepository`), so this edge does NOT form a DI cycle —
      * both are Koin singles in `core:data` and the constructor edge fixes
@@ -154,15 +156,15 @@ class MediaRepositoryImpl internal constructor(
      */
     private val internals: MediaRepositoryInternals,
     /**
-     * The in-memory log of this device's recent writes. Every
-     * [notifyUserDataChanged] announcement records its item ids here so the
-     * home refresher can tell a socket echo of THIS device's own write
-     * burst from an external push and demote the echo to a non-forced
-     * (TTL-semantics) refresh. Defaults to the neutral no-op (tests);
-     * production wiring (Koin) passes the shared single the refresher
-     * consults.
+     * The synthetic-push fan-out ([UserDataAnnouncerImpl]): owns the shared
+     * flow [userDataChanges] merges beside the WS channel and the
+     * [RecentLocalUserDataWrites] record the refresher's echo demotion
+     * consults. A leaf single, so the write paths UPSTREAM of this
+     * repository's graph (PlayedStateSyncImpl, PlaybackRepositoryImpl)
+     * announce through it eagerly — the cycle-break the former
+     * `Lazy<MediaRepository>` deferrals performed, now without the lazies.
      */
-    private val recentLocalWrites: RecentLocalUserDataWrites = NoopRecentLocalUserDataWrites(),
+    private val userDataAnnouncer: UserDataAnnouncer,
 ) : MediaRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the music-catalogue and user-data-write families,
@@ -389,12 +391,11 @@ class MediaRepositoryImpl internal constructor(
      * guarding every home cache write in the pipeline: this class's
      * assembled-payload cache reads it as the write guard in [getHomeSections],
      * and the network layer's per-row discover memo observes the SAME token
-     * through the [HomeSectionsCachePort] verbs' `generation` parameter (the
-     * fetcher keeps a mirror, no counter of its own) — one owner, one value,
-     * two guarded caches. Bumped only by [bumpHomeWriteGeneration]; part of
-     * the roll protocol — see [rerollDiscoverRow]/[HomeFeed.rerollDiscoverRow]
-     * (the protocol's single owner) for the three race windows and the
-     * bump-at-invalidate-AND-commit rule. Same idiom as
+     * through the [HomeSectionsCachePort] verbs' [HomeWriteGeneration]
+     * parameter — one owner, one value, two guarded caches. Bumped only by
+     * [bumpHomeWriteGeneration]; the protocol's ordering rules (the roll's
+     * three race windows, bump-at-invalidate-AND-commit) live on
+     * [HomeFeed.rerollDiscoverRow], the single owner. Same idiom as
      * [MediaRepositoryInternals]' detail epoch. (Named "generation" to say
      * what it owns — every home CACHE WRITE — and to leave "epoch" to the
      * feature layer's identity-scoped roll generations, a different axis.)
@@ -619,12 +620,12 @@ class MediaRepositoryImpl internal constructor(
      * [HomeFeed.rerollDiscoverRow]): funnel bump + network per-row memo drop
      * + assembled-payload drop (maxSize is 1, so the clear is exactly the one
      * cached payload — nothing else pays for the roll). The port verb carries
-     * the post-bump token so the fetcher's write guard observes the same
-     * generation this class's cache guards on.
+     * the post-bump [HomeWriteGeneration] so the fetcher's write guard
+     * observes the same generation this class's cache guards on.
      */
     private fun invalidateDiscoverRowCache(rowId: String) {
         bumpHomeWriteGeneration()
-        homeSectionsCachePort.invalidateDiscoverRow(rowId, homeWriteGeneration.get())
+        homeSectionsCachePort.invalidateDiscoverRow(rowId, HomeWriteGeneration.of(homeWriteGeneration.get()))
     }
 
     /**
@@ -633,13 +634,14 @@ class MediaRepositoryImpl internal constructor(
      * commit-time funnel bump (a fetch in flight across the whole roll stays
      * stall-guarded) + the assembled-payload drop again. Cheap (maxSize 1).
      * No-op on an empty list — the funnel does not run, so an empty commit
-     * advances no generation. The port verb carries the post-bump token (the
-     * bump-at-invalidate-AND-commit rule's commit half, delivered as data).
+     * advances no generation. The port verb carries the post-bump
+     * [HomeWriteGeneration] (the bump-at-invalidate-AND-commit rule's commit
+     * half, delivered as data).
      */
     private fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return
         bumpHomeWriteGeneration()
-        homeSectionsCachePort.seedDiscoverRow(row, items, homeWriteGeneration.get())
+        homeSectionsCachePort.seedDiscoverRow(row, items, HomeWriteGeneration.of(homeWriteGeneration.get()))
     }
 
     override suspend fun getCachedHomeSections(
@@ -791,25 +793,6 @@ class MediaRepositoryImpl internal constructor(
         // DetailCacheGroup for the declared TTL divergence.
         detailCaches.boxSetsContaining(itemId)
 
-    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
-        // Thin passthrough: the catalogue owns the seasons/episodes snapshot
-        // (grouping, single-flight, epoch guard, offline branch). Server order
-        // is preserved — the snapshot never reorders seasons.
-        episodeCatalogue.loadSeriesEpisodes(seriesId).map { it.seasons }
-
-    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
-        // Per-season slice: serves from the shared snapshot if that season is
-        // present, else fetches the one season and merges it back (the exact
-        // "per-season fetch merges into the grouped cache" semantics the
-        // catalogue absorbed from this repository).
-        episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId)
-
-    override suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>> =
-        // The grouped map shape is derived from the catalogue snapshot's
-        // `episodesBySeason`. groupBy-by-seasonId semantics are preserved in
-        // the catalogue (an episode whose seasonId is null groups under "").
-        episodeCatalogue.loadSeriesEpisodes(seriesId).map { it.episodesBySeason }
-
     override suspend fun getCollectionItems(
         collectionId: String,
         startIndex: Int,
@@ -876,40 +859,42 @@ class MediaRepositoryImpl internal constructor(
     // forward never had: getTags (the filter sheets' walk-the-library scan,
     // the genres/studios-shaped [tagsSpec] above).
 
-    private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
-        extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-
     /**
-     * WS pushes merged with [syntheticUserDataChanges] — local writers that
-     * reach the server outside the socket's echo (notably the offline outbox
-     * drain in PlaybackSyncWorker) feed the same consumer fan-out (home
-     * forced refresh, open detail sessions) through [notifyUserDataChanged].
+     * WS pushes merged with the announcer's synthetic pushes — local writers
+     * that reach the server outside the socket's echo (notably the offline
+     * outbox drain in PlaybackSyncWorker) feed the same consumer fan-out
+     * (home forced refresh, open detail sessions) through
+     * [notifyUserDataChanged]. The fan-out's owner is the [userDataAnnouncer]
+     * leaf single; this merge is the feed's one composition point.
      */
     override val userDataChanges: Flow<UserDataChange> =
-        merge(userDataRealtimeChannel.changes, syntheticUserDataChanges)
+        merge(userDataRealtimeChannel.changes, userDataAnnouncer.changes)
 
     override fun notifyUserDataChanged(itemIds: List<String>) {
         if (itemIds.isEmpty()) return
         // No identity → nothing is keyed to a user yet; emitting would only
         // risk refreshing another account's screens on a stale collector.
-        val userId = homeSession.currentIdentitySnapshot()?.userId ?: return
-        // The confirmed write also arms the lazy staleness markers (#157 —
-        // the [staleReadGroups] registrations): the next read of each
-        // announced-stale group refetches even if no consumer was collecting
-        // when this landed (VM off the back stack / recreated cold within
-        // the TTL). The announce names only item ids, so the gap groups
-        // (album tracks, collection pages) arm coarsely — one marker per
-        // group, never per item.
+        // (Re-checked inside the announcer — this gate also guards the #157
+        // arming, so a signed-out announce arms nothing.)
+        if (homeSession.currentIdentitySnapshot()?.userId == null) return
+        // The #157 arming rides the announcer (see
+        // [UserDataAnnouncerImpl.onConfirmedWrite]) — the flip/stop write
+        // paths announce through the same leaf, and every confirmed write
+        // must arm the stale-read markers, funnel or not.
+        userDataAnnouncer.notifyUserDataChanged(itemIds)
+    }
+
+    /**
+     * The confirmed-write arming the announcer calls back into (DI wires the
+     * hook): arms EVERY [staleReadGroups] registration — the next read of
+     * each announced-stale group refetches even if no consumer was collecting
+     * when the write landed (VM off the back stack / recreated cold within
+     * the TTL). The announce names only item ids, so the gap groups (album
+     * tracks, collection pages) arm coarsely — one marker per group, never
+     * per item.
+     */
+    internal fun armStaleReadGroupsForConfirmedWrite() {
         staleReadGroups.announceConfirmedWrite()
-        val distinctIds = itemIds.distinct()
-        // Record the confirmed write BEFORE the announcement so the
-        // refresher can recognize the resulting push (and the socket echo of
-        // the underlying server write) as this device's own and demote it to
-        // a non-forced refresh.
-        recentLocalWrites.record(distinctIds)
-        syntheticUserDataChanges.tryEmit(UserDataChange(userId, distinctIds))
     }
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
@@ -1117,13 +1102,6 @@ class MediaRepositoryImpl internal constructor(
     // client family entirely).
 
     companion object {
-        /**
-         * Buffer for [syntheticUserDataChanges]: large enough that a drain of
-         * dozens of flips never suspends or drops wholesale, small enough to
-         * be pointless to tune. DROP_OLDEST keeps the tryEmit non-suspending.
-         */
-        private const val SYNTHETIC_CHANGES_BUFFER = 64
-
         // The cache TTLs this repository used to declare as private literals
         // (FOLDERS_CACHE_TTL_MS 10 min, LATEST_CACHE_TTL_MS 2 min) now cite
         // the named policies FreshnessCeilings.FOLDERS_TTL_MS /

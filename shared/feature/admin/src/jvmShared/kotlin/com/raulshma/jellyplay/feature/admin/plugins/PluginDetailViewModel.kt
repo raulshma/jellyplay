@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.core.model.PluginVersionInfo
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
-import kotlinx.coroutines.delay
 
 data class PluginDetailState(
     val isLoading: Boolean = true,
@@ -119,8 +118,7 @@ class PluginDetailViewModel(
                 pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
             }
             result.onSuccess {
-                delay(500)
-                loadPlugin(plugin.id, plugin.name)
+                settleThenRefetch(delayMs = 500) { loadPlugin(plugin.id, plugin.name) }
             }.onFailure { e ->
                 Log.e("PluginDetail", "Failed to toggle plugin", e)
                 _state.value = _state.value.copy(error = e.message)
@@ -134,8 +132,7 @@ class PluginDetailViewModel(
         _state.value = _state.value.copy(isUninstalling = true)
         launch {
             pluginAdminRepository.uninstallPlugin(plugin.id).onSuccess {
-                delay(500)
-                onComplete()
+                settleThenRefetch(delayMs = 500) { onComplete() }
             }.onFailure { e ->
                 Log.e("PluginDetail", "Failed to uninstall plugin", e)
                 _state.value = _state.value.copy(
@@ -156,10 +153,11 @@ class PluginDetailViewModel(
                 version = version.version,
                 repositoryUrl = version.repositoryUrl,
             ).onSuccess {
-                delay(1000)
-                val plugin = _state.value.plugin
-                if (plugin != null) {
-                    loadPlugin(plugin.id, plugin.name)
+                settleThenRefetch(delayMs = 1000) {
+                    val plugin = _state.value.plugin
+                    if (plugin != null) {
+                        loadPlugin(plugin.id, plugin.name)
+                    }
                 }
             }.onFailure { e ->
                 Log.e("PluginDetail", "Failed to install version", e)

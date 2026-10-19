@@ -279,8 +279,10 @@ internal fun DetailContentBody(
  * Dispatches one admitted section to its family renderer. Pure wiring — the
  * `when` is exhaustive over [DetailSectionKind] so a new admission row cannot
  * silently render nothing. The registry's migrated sections (wave 1:
- * PLUGIN_RATINGS, TMDB_REVIEWS) route through their module's [DetailSectionModule.Content]
- * slot; the hand-written families keep their per-kind composables.
+ * PLUGIN_RATINGS, TMDB_REVIEWS; wave 2: UPCOMING_EPISODES, COLLECTION_ITEMS,
+ * MORE_IN_COLLECTION, SPECIAL_FEATURES) route through their module's
+ * [DetailSectionModule.Content] slot; the hand-written families keep their
+ * per-kind composables.
  */
 @Composable
 internal fun DetailSectionRenderer(
@@ -293,7 +295,8 @@ internal fun DetailSectionRenderer(
     bodyContentPad: Dp,
     contentFocusRequester: FocusRequester?,
 ) {
-    // The module slot's region params — only the two migrated branches read it.
+    // The module slot's region params — only the migrated branches read it
+    // (the two wave-1 pilots plus the wave-2 collection-family/strip modules).
     val moduleScope = DetailSectionRenderScope(
         state = state,
         callbacks = callbacks,
@@ -380,12 +383,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.UPCOMING_EPISODES ->
-            DetailUpcomingEpisodesSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
+            UpcomingEpisodesSectionModule.Content(moduleScope)
 
         DetailSectionKind.SEASONS ->
             DetailSeasonsSection(
@@ -398,12 +396,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.COLLECTION_ITEMS ->
-            DetailCollectionItemsSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
+            CollectionItemsSectionModule.Content(moduleScope)
 
         DetailSectionKind.CAST ->
             DetailCastSection(
@@ -423,12 +416,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.MORE_IN_COLLECTION ->
-            DetailMoreInCollectionSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
+            MoreInCollectionSectionModule.Content(moduleScope)
 
         DetailSectionKind.MORE_LIKE_THIS ->
             DetailMoreLikeThisSection(
@@ -468,12 +456,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.SPECIAL_FEATURES ->
-            DetailSpecialFeaturesSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
+            SpecialFeaturesSectionModule.Content(moduleScope)
 
         DetailSectionKind.TMDB_REVIEWS ->
             TmdbReviewsSectionModule.Content(moduleScope)

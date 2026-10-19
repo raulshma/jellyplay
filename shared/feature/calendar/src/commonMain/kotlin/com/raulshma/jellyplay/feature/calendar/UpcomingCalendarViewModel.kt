@@ -8,7 +8,9 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.model.seerr.pick
 import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
@@ -74,18 +76,21 @@ class UpcomingCalendarViewModel(
      * failures swallowed, and the merge is this screen's append-only rule —
      * existing entries are never clobbered — written inside the enricher's
      * snapshot-atomic block (the declared fix for the unsynchronized
-     * read-then-write the hand-rolled version did). The fetch resolves the
-     * TMDB poster path through the right details endpoint and flattens it to
-     * a URL via [buildPosterUrl] (blank paths → null → swallowed, so the *arr
+     * read-then-write the hand-rolled version did). The key carries the
+     * model-level [SeerrMediaKind] (mapped off the *arr item's ArrMediaType
+     * below), and the fetch fork reads [SeerrMediaKind.pick] — the same
+     * movie/TV fold the Seerr detail paths ride. The fetch resolves the TMDB
+     * poster path through the right details endpoint and flattens it to a URL
+     * via [buildPosterUrl] (blank paths → null → swallowed, so the *arr
      * poster URL remains the card's primary source).
      */
-    private val posterEnricher = IdEnricher<Pair<Int, ArrMediaType>, String>(
+    private val posterEnricher = IdEnricher<Pair<Int, SeerrMediaKind>, String>(
         scope = scope,
-        fetch = { (tmdbId, mediaType) ->
-            val posterPath = when (mediaType) {
-                ArrMediaType.MOVIE -> seerrRepository.getMovieDetails(tmdbId).getOrNull()?.posterPath
-                ArrMediaType.SERIES -> seerrRepository.getTvDetails(tmdbId).getOrNull()?.posterPath
-            }
+        fetch = { (tmdbId, kind) ->
+            val posterPath = kind.pick(
+                movie = { seerrRepository.getMovieDetails(tmdbId).getOrNull()?.posterPath },
+                tv = { seerrRepository.getTvDetails(tmdbId).getOrNull()?.posterPath },
+            )
             posterPath?.let { buildPosterUrl(it) }
         },
         merge = { (tmdbId, _), url ->
@@ -150,11 +155,21 @@ class UpcomingCalendarViewModel(
     private fun enrichMissing(items: List<ArrCalendarItem>) {
         val already = _enrichedPosters.value
         val toEnrich = items
-            .mapNotNull { item -> item.tmdbId?.let { it to item.mediaType } }
+            .mapNotNull { item -> item.tmdbId?.let { it to item.mediaType.toSeerrKind() } }
             .filter { (tmdbId, _) -> tmdbId !in already }
         if (toEnrich.isEmpty()) return
         posterEnricher.enrich(toEnrich)
     }
+
+/**
+ * The *arr calendar item's media type mapped onto the model-level Seerr kind
+ * (the vocabulary the poster enricher's fetch fork reads). ArrMediaType has
+ * no unmatched arm — both values map 1:1.
+ */
+private fun ArrMediaType.toSeerrKind(): SeerrMediaKind = when (this) {
+    ArrMediaType.MOVIE -> SeerrMediaKind.MOVIE
+    ArrMediaType.SERIES -> SeerrMediaKind.TV
+}
 
     /** Re-fetches the calendar for the visible month. Never throws. */
     fun refresh() {

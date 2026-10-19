@@ -85,9 +85,9 @@ class DownloadRepositoryImpl(
     private val mediaRepository: MediaRepositoryAccess,
     /**
      * The consolidated series seasons/episodes snapshot. [downloadSeries] uses
-     * it in place of the former `mediaRepository.getSeasons` + per-season
-     * `getEpisodes` fan-out — one load per series. Online-only path, so
-     * `offline` defaults to `false`.
+     * it in place of the retired per-series seasons + per-season episodes
+     * repository reads — one load per series. Online-only path, so `offline`
+     * defaults to `false`.
      */
     private val episodeCatalogue: EpisodeCatalogue,
     /** Series poster/backdrop URLs persisted with the offline metadata rows. */

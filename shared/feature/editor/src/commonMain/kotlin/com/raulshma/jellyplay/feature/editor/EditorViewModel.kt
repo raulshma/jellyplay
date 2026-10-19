@@ -419,7 +419,11 @@ internal class EditorViewModel(
     /**
      * Downloads an external-provider subtitle and uploads it to the Jellyfin
      * server so it persists as a media stream. Jellyfin rows route through the
-     * server-side [handleDownloadRemoteSubtitle] path.
+     * server-side [handleDownloadRemoteSubtitle] path; external rows ride the
+     * store's [EditorSubtitleStore.saveUploadAndAttribute] choreography (the
+     * save → encode → upload → reload → attribute sequencing the VM used to
+     * inline). This side keeps only the busy/error flags and the
+     * "Saved to device only" degradation wording.
      */
     private fun handleDownloadProviderSubtitle(result: SubtitleSearchResult) {
         val itemId = _uiState.value.mediaDetail?.item?.id ?: return
@@ -431,41 +435,32 @@ internal class EditorViewModel(
                 _uiState.update { it.copy(isDownloadingProviderSubtitle = true) }
                 subtitleProviderRepository.downloadExternal(result)
                     .onSuccess { file ->
-                        // Persist durably on-device first so the subtitle survives
-                        // even if the server upload fails (e.g. offline). Mirrors
-                        // the player's SubtitleManager provider-download path.
-                        val codec = file.format
                         val saved = ProviderSubtitleSave(
                             itemId = itemId,
                             provider = result.provider,
                             providerSubtitleId = result.id,
                             fileName = file.fileName,
                             language = file.language ?: result.language,
-                            codec = codec,
+                            codec = file.format,
                             isForced = result.isForced,
                             isHearingImpaired = result.isHearingImpaired,
                             bytes = file.bytes,
                         )
-                        subtitleStore.save(saved)
-                        val base64 = Base64.Default.encode(file.bytes)
-                        val preUploadExternalIndices = currentSubtitleStreams()
-                            .filter { it.type == StreamType.SUBTITLE && it.isExternal }
-                            .mapTo(mutableSetOf()) { it.index }
-                        editorRepository.uploadSubtitle(
-                            itemId,
-                            base64,
-                            file.fileName,
-                            file.language,
-                            result.isForced,
-                            result.isHearingImpaired,
-                        ).onSuccess {
-                            loadEditorData(itemId)
-                            subtitleStore.attributeUploaded(
-                                save = saved,
-                                streamsAfterUpload = currentSubtitleStreams(),
-                                preUploadExternalIndices = preUploadExternalIndices,
-                            )
-                        }
+                        subtitleStore.saveUploadAndAttribute(
+                            save = saved,
+                            streams = ::currentSubtitleStreams,
+                            upload = { base64 ->
+                                editorRepository.uploadSubtitle(
+                                    itemId,
+                                    base64,
+                                    file.fileName,
+                                    file.language,
+                                    result.isForced,
+                                    result.isHearingImpaired,
+                                )
+                            },
+                            onUploaded = { loadEditorData(itemId) },
+                        )
                             // Best-effort: the durable on-device copy already backs
                             // this subtitle, so an upload failure (server offline)
                             // is surfaced as an info note rather than a hard error.

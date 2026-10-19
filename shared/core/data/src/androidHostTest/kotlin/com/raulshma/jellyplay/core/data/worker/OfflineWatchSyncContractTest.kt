@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -80,6 +81,7 @@ class OfflineWatchSyncContractTest {
     private val offlineRepository: OfflineRepository = mockk(relaxUnitFun = true)
     private val userDataSyncScheduler: UserDataSyncScheduler = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataAnnouncer: UserDataAnnouncer = mockk(relaxed = true)
     private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
     private val downloadsStore: DownloadsStore = mockk()
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
@@ -105,7 +107,9 @@ class OfflineWatchSyncContractTest {
         coEvery { outbox.drain() } returns emptyList()
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
         coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        // Reconcile reads the fresh server view straight off the client now
+        // (the announcer seam removed the sync's MediaRepository edge).
+        coEvery { apiClient.getMediaDetail(any()) } returns
             Result.failure(java.io.IOException("no detail"))
         coEvery { apiClient.writeUserData(any()) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { apiClient.reportPlaybackStart(any(), any(), any()) } returns Result.success(Unit)
@@ -122,14 +126,14 @@ class OfflineWatchSyncContractTest {
             apiClient, apiClient, apiClient, apiClient,
             outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mockk(relaxed = true),
-            mediaRepository = lazy { mediaRepository },
+            userDataAnnouncer = userDataAnnouncer,
         )
         val playedStateSync = PlayedStateSyncImpl(
             apiClient = apiClient,
             offlineRepository = offlineRepository,
             playbackOutboxRepository = outbox,
             offlineModeManager = offlineModeManager,
-            mediaRepository = lazy { mediaRepository },
+            userDataAnnouncer = userDataAnnouncer,
             downloadsStore = lazy { downloadsStore },
             downloadRepository = lazy { downloadRepository },
             timeSource = fakeTimeSource,
@@ -227,7 +231,7 @@ class OfflineWatchSyncContractTest {
             entry("e1", ITEM_ID, PlaybackOutboxEventType.PROGRESS, positionTicks = 30_000_000L),
         )
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineRow()
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, any()) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(serverRow(isPlayed = true, positionTicks = 5_000_000L))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         // The heal pushes through the intent row + delivery probe.
@@ -245,7 +249,10 @@ class OfflineWatchSyncContractTest {
         coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
         // Exactly-once announce contract: the drain-tail announce names the
         // item a single time — the heal flip inside the reconcile stays
-        // silent (announce=false) precisely so this verify can pin it.
+        // silent (announce=false) precisely so this verify can pin it. The
+        // tail announces through the drainer's MediaRepository seam (the
+        // write paths' union — the drainer's markPlayed routes ride it too);
+        // the announcer mock on PlayedStateSyncImpl is for the flip paths.
         coVerify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(ITEM_ID)) }
         coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
     }
@@ -258,7 +265,7 @@ class OfflineWatchSyncContractTest {
             entry("e1", ITEM_ID, PlaybackOutboxEventType.PROGRESS, positionTicks = 30_000_000L),
         )
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineRow()
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, any()) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(serverRow(isPlayed = true, positionTicks = 5_000_000L))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns
             Result.failure(java.io.IOException("5xx"))
@@ -326,7 +333,7 @@ class OfflineWatchSyncContractTest {
         // pre-guard build. The periodic backstop is what cleans it up.
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf(ITEM_ID)
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineRow(isPlayed = true, playedPercentage = 100.0)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, any()) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(serverRow(isPlayed = true, positionTicks = 45_000_000L))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { outbox.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns true

@@ -253,11 +253,14 @@ class SeerrRepositoryImpl(
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> =
         detailCache.getOrFetchTyped({ sessionIdentity.cacheIdentity() }, "ratings_${tmdbId}_$mediaType") {
             withSeerrSession { url, credentials ->
-                if (mediaType == "movie") {
-                    seerrApiClient.getMovieRatingsCombined(url, credentials, tmdbId)
-                } else {
-                    seerrApiClient.getTvRatings(url, credentials, tmdbId)
-                }
+                // The kind fork reads the model's SeerrMediaKind (one
+                // ignoreCase parse): the former `== "movie"` was case-sensitive,
+                // so a "Movie" payload hit the tv-ratings leg — the fold's
+                // declared fix.
+                SeerrMediaKind.fromWire(mediaType).pick(
+                    movie = { seerrApiClient.getMovieRatingsCombined(url, credentials, tmdbId) },
+                    tv = { seerrApiClient.getTvRatings(url, credentials, tmdbId) },
+                )
             }
         }
 

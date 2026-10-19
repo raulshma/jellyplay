@@ -40,8 +40,9 @@ import com.raulshma.jellyplay.feature.player.video.session.SheetsSessionSlice
  *
  * Wave 1 is the pilot: exactly two sheets ([HdrSheetModule],
  * [RenderSheetModule], chosen because they cross-link). The remaining
- * branches stay hand-written in [PlayerSheetRouter]'s `when` and migrate
- * as touched — the Detail section module precedent.
+ * branches stayed hand-written in [PlayerSheetRouter]'s `when` and migrate
+ * as touched — the Detail section module precedent (wave 2:
+ * [SubtitleHubSheetModule], its own file).
  */
 internal interface PlayerSheetModule {
 
@@ -146,7 +147,7 @@ internal object PlayerSheetRegistry {
         PlayerSheet.Chapter -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.PlaybackInfo -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.AspectRatio -> PlayerSheetRegistration.pending(sheet)
-        PlayerSheet.SubtitleHub -> PlayerSheetRegistration.pending(sheet)
+        PlayerSheet.SubtitleHub -> PlayerSheetRegistration.migrated(SubtitleHubSheetModule)
         PlayerSheet.AVSync -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.Decoder -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.Episodes -> PlayerSheetRegistration.pending(sheet)

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
+import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SeerrRowFilters
 import com.raulshma.jellyplay.core.model.SeerrRowMedia
@@ -38,8 +39,9 @@ import kotlin.test.assertTrue
  * section gating (zero port calls), the deliberate serialization of the
  * recommendations chain behind Continue Watching / Next Up (its seeds), the
  * seed-fallback wart, the music-filtered folder-order latest fan-out, the
- * suggestions pre-fetch condition (same predicate the assembler's fallback
- * branch renders on — the cross-module agreement), the partial-failure vs
+ * suggestions pre-fetch condition (the shared [suggestionsFallbackApplies]
+ * predicate — the assembler's fallback branch renders on the same function),
+ * the partial-failure vs
  * throw-when-nothing-rendered error policy, always-fetched pinned rows, and
  * the identity-keyed TTL sub-call cache semantics (hit / force-bypass /
  * memoise / identity-switch miss).
@@ -377,13 +379,26 @@ class HomeSectionsFetcherTest {
         )
 
         // Recs succeeded (empty seeds → empty result) and ONLY THEN was the
-        // suggestions pre-fetch issued — the same predicate the assembler's
-        // fallback branch (~162) renders on; this pair is the cross-module pin.
+        // suggestions pre-fetch issued.
         assertTrue("suggestions:20" in fake.calls)
         val recSection = fetched.sections.single()
         assertEquals(HomeSectionType.RECOMMENDATIONS, recSection.type)
         assertEquals(listOf("s1", "s2"), recSection.items.map { it.id })
         assertEquals(null, recSection.seedItem)
+    }
+
+    @Test
+    fun `the shared suggestions-fallback predicate is the production pin`() = runTest {
+        // The fetch/render agreement used to be two hand-synced copies pinned
+        // together by the round-trip test above; both sites now consult the
+        // ONE production predicate (suggestionsFallbackApplies, beside the
+        // assembler). Pin its truth table directly: applies to a
+        // successful-but-empty payload only — never to items, a failure, or
+        // a disabled recommendations section (null).
+        assertTrue(suggestionsFallbackApplies(Result.success(RecommendationResult(emptyList(), null))))
+        assertFalse(suggestionsFallbackApplies(Result.success(RecommendationResult(listOf(item("rec1")), null))))
+        assertFalse(suggestionsFallbackApplies(Result.failure(RuntimeException("recs down"))))
+        assertFalse(suggestionsFallbackApplies(null))
     }
 
     @Test
@@ -700,7 +715,7 @@ class HomeSectionsFetcherTest {
         // The generation value is the data layer's token passed through — any
         // value works here (the fetch below starts after the seed, so its
         // guard capture already observes it).
-        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")), generation = 1)
+        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")), generation = HomeWriteGeneration.of(1))
         val after = f.fetch(query)
 
         assertEquals(0, fake.calls.count { it.startsWith("discover:") })
@@ -737,8 +752,8 @@ class HomeSectionsFetcherTest {
         val gate = fake.gate("discover:r1:${row.limit}")
         val first = launch { f.fetch(query) }
         runCurrent() // the sub-call is now parked on the gate
-        f.invalidateDiscoverRow("r1", generation = 1)
-        f.seedDiscoverRow(row, listOf(item("rolled-1")), generation = 2)
+        f.invalidateDiscoverRow("r1", generation = HomeWriteGeneration.of(1))
+        f.seedDiscoverRow(row, listOf(item("rolled-1")), generation = HomeWriteGeneration.of(2))
         gate.complete(Unit)
         first.join()
 

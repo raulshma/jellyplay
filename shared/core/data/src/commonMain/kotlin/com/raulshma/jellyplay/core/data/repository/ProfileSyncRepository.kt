@@ -812,8 +812,29 @@ class ProfileSyncRepository(
         return "$size key(s) rejected by server: $reasons"
     }
 
-    private companion object {
-        const val OWNER = "profile-sync"
+    companion object {
+        /**
+         * The cycle's canonical adapter order — the contract the DI graph
+         * sorts the multi-binding by. Koin's `getAll` on secondary
+         * (`bind`) definitions returns them in index-allocation order, NOT
+         * source-declaration order, so the declaration-side order is not a
+         * contract; this sequence is. A namespace not listed rides last (its
+         * relative order then the collection order — irrelevant, it has no
+         * predecessor contract). DataKoinModulesTest pins the resolved order.
+         */
+        val REGISTRATION_ORDER: List<String> = listOf(
+            "prefs",
+            "books",
+            "search",
+            "cw",
+            "reader",
+            "homelayout",
+            "integrations",
+            "itemprefs",
+            "playlists",
+        )
+
+        private const val OWNER = "profile-sync"
 
         /** The registry key this engine gates on (ADR 0010 §6). */
         const val FEATURE_SETTINGS_SYNC = com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SettingsSync

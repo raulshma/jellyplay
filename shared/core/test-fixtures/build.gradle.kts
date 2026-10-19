@@ -21,6 +21,10 @@ kotlin {
         // each's only consumers were a single module's test lane, so each
         // lives in that module's test sources again (apps/desktop tests and
         // player-video jvmTest, respectively).
+        // The desktop audio-queue fakes joined under ADR-0006 rule 4 proper:
+        // the file existed VERBATIM in core:data jvmTest and apps/desktop's
+        // test set (the app-side KDoc itself said "kept in sync by review"),
+        // so both lanes now consume the single canonical copy here.
         // AGP 9 has no KMP testFixtures support, so this is a
         // plain library module declared inside consumers' test source-set
         // blocks ONLY.
@@ -63,6 +67,20 @@ kotlin {
             // carries its own player-contract edge, same rule as core:data
             // above — this module must never become a reason to widen one.
             implementation(project(":shared:core:player-contract"))
+        }
+        getByName("jvmMain").dependencies {
+            // The desktop audio-queue fakes (DesktopAudioQueueManagerFixtures)
+            // live in jvmMain, not the usual jvmShared: they reference
+            // core:data's JVM-only AudioEffectsSession (that module's
+            // jvmMain), invisible to this module's ANDROID compilation — and
+            // both consumer lanes (core:data jvmTest, apps/desktop test) are
+            // JVM anyway. jvmMain inherits the jvmShared edges above for
+            // everything else the fakes touch (core:data, player-contract).
+            // The AudioQueueDao + AudioQueueEntity/AudioQueueStateEntity Room
+            // edge InMemoryQueueDao extends. implementation, not api: every
+            // consumer already carries its own core:database edge — this
+            // module must never become a reason to widen one.
+            implementation(project(":shared:core:database"))
         }
     }
 }

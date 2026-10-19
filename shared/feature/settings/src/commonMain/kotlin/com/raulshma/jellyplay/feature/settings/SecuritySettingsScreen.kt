@@ -359,7 +359,11 @@ val biometricGate = rememberBiometricGate()
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 1,
+                        // Derived from the fused declaration (hiddenRowsFor):
+                        // the auto-lock timer's All(AppLock, Advanced) gate —
+                        // 1 where the app-lock stack exists, 0 on desktop
+                        // (the retired hand literal showed 1 everywhere).
+                        hiddenCount = hiddenRowsFor(listOf(SettingsScreenGroups.security), securityRowFlags),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

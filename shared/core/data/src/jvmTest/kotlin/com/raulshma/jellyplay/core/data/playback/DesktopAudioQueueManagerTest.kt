@@ -6,7 +6,15 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.testfixtures.FakeEffectsSession
+import com.raulshma.jellyplay.core.testfixtures.FakeImages
+import com.raulshma.jellyplay.core.testfixtures.FakeLyricsRepository
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.FakePlaybackRepository
+import com.raulshma.jellyplay.core.testfixtures.FakeResolver
+import com.raulshma.jellyplay.core.testfixtures.InMemoryQueueDao
+import com.raulshma.jellyplay.core.testfixtures.TestTimeSource
+import com.raulshma.jellyplay.core.testfixtures.resolvedTrack
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

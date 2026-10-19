@@ -10,6 +10,7 @@ import com.sun.jna.Pointer
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -336,6 +337,57 @@ class MpvDesktopEngineAndroidParityTest {
             )
             val ctx = engine.liveMpvHandle() as Pointer
             assertEquals("2", MpvLib.getPropertyString(ctx, "aid"), "mpv's own state agrees with the catalog")
+        } finally {
+            engine.release()
+        }
+    }
+
+    // ── load: the shared per-request option ladder (MpvLoadOptionsPlan) ─────
+
+    @Test
+    fun load_appliesTheSharedOptionLadder_userAgentAndNormalizedLanguages() {
+        assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        val engine = MpvDesktopEngine(extraOptions = mapOf("vo" to "null", "ao" to "null"))
+        try {
+            // A nonexistent target, like the TLS option test: the option
+            // writes land before the async open fails — the readback below is
+            // the assertion surface. The UA header must surface in the
+            // `user-agent` property (the Android decision: some servers parse
+            // the buried header form inconsistently), NOT in
+            // http-header-fields; the language list must land normalized
+            // (`de; en_US` → `de,en-US`, the Android normalizer).
+            engine.load(
+                PlaybackRequest(
+                    uri = "file:///nonexistent-jellyplay-ladder-test.bin",
+                    title = "ladder",
+                    headers = mapOf(
+                        "User-Agent" to "JellyPlay-Parity/1.0",
+                        "X-Emby-Authorization" to "MediaBrowser Client=\"T\", DeviceId=\"abc\"",
+                    ),
+                    preferredAudioLanguage = "de; en_US",
+                    preferredSubtitleLanguage = "   ",
+                ),
+            )
+            val handle = checkNotNull(engine.liveMpvHandle())
+            assertEquals(
+                "JellyPlay-Parity/1.0",
+                MpvLib.getPropertyString(handle, "user-agent"),
+                "User-Agent must be extracted into the user-agent option",
+            )
+            assertEquals(
+                "de,en-US",
+                MpvLib.getPropertyString(handle, "alang"),
+                "the audio language list must be normalized (the Android arm)",
+            )
+            val headerFields = MpvLib.getPropertyString(handle, "http-header-fields")
+            assertTrue(
+                headerFields?.contains("X-Emby-Authorization") == true,
+                "the non-UA headers stay in http-header-fields: $headerFields",
+            )
+            assertFalse(
+                headerFields?.contains("User-Agent", ignoreCase = true) == true,
+                "the UA entry must not also be buried in http-header-fields: $headerFields",
+            )
         } finally {
             engine.release()
         }

@@ -21,10 +21,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.model.CollectionSummary
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -50,10 +56,15 @@ import org.jetbrains.compose.resources.stringResource
  * restating the index. The event projection a full module would also carry
  * still lives in [DetailContentCallbacks] — a later wave.
  *
- * Wave 1 is the pilot: exactly two sections ([PluginRatingsSectionModule],
- * [TmdbReviewsSectionModule]). The remaining sections stay hand-written in
- * [DetailSectionAdmission]'s fold and [DetailSectionRenderer]'s `when` and
- * migrate in later waves.
+ * Wave 1 was the pilot: the two ratings-adjacent sections
+ * ([PluginRatingsSectionModule], [TmdbReviewsSectionModule]). Wave 2 brings
+ * the four clean 1:1 collection-family/strip sections
+ * ([SpecialFeaturesSectionModule], [CollectionItemsSectionModule],
+ * [UpcomingEpisodesSectionModule], [MoreInCollectionSectionModule]) — each a
+ * verbatim move of its admission fold row and its hand-written enrichment
+ * entry, with the renderer slot routing to the existing family composable.
+ * The remaining sections stay hand-written in [DetailSectionAdmission]'s fold
+ * and [DetailSectionRenderer]'s `when` and migrate in later waves.
  */
 internal interface DetailSectionModule {
 
@@ -108,8 +119,9 @@ internal data class DetailSectionRenderScope(
 /**
  * The VM-side seams a section module's enrichment arm reads — implemented by
  * [DetailViewModel] (thin delegations, no new state). The generic write/guard
- * seams plus the plugin probe/fetch roles the wave-1 arm needs; later waves
- * extend it per migrated section.
+ * seams, the plugin probe/fetch roles the wave-1 arm needs, and the
+ * collection-family/strip roles the wave-2 arms need; later waves extend it
+ * per migrated section.
  */
 internal interface DetailSectionEnrichmentHost {
 
@@ -131,6 +143,40 @@ internal interface DetailSectionEnrichmentHost {
      * arm degrades to silent absence.
      */
     suspend fun mdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>?
+
+    // ── Wave 2: the collection-family / strip roles (specialFeatures,
+    //    collectionItems, franchise, upcoming) — the reads their former
+    //    hand-written bodies made directly on the VM's collaborators.
+
+    /** The item-attached extras read ([LibraryApiClient.getSpecialFeatures]) — the SPECIAL_FEATURES arm. */
+    suspend fun specialFeatures(itemId: String): Result<List<MediaItem>>
+
+    /**
+     * The collection-members page read ([MediaRepository.getCollectionItems]) —
+     * the COLLECTION_ITEMS arm, and the franchise rows' per-BoxSet members.
+     */
+    suspend fun collectionItems(collectionId: String, startIndex: Int = 0, limit: Int): Result<SearchResult>
+
+    /** The BoxSet ancestors read ([MediaCatalogueEnrichments.getBoxSetsContaining]) — the franchise arm's enumerate leg. */
+    suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>>
+
+    /** The series "Airing next" strip read ([LibraryApiClient.getUpcoming]) — the UPCOMING_EPISODES arm. */
+    suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>>
+
+    /**
+     * The projected detail-preference snapshot the arms' BODY-pref halves read
+     * (the externalRatings convention: the gate lambda stays a pure snapshot
+     * read, so a user preference is checked in the body instead).
+     */
+    fun detailPreferences(): DetailPreferences
+
+    /**
+     * The shared bounded-parallel fan-out (the VM's hydration semaphore,
+     * [com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching] semantics:
+     * order-preserving, per-item failures drop) — the franchise members
+     * hydration rides it.
+     */
+    suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R>
 }
 
 /**
@@ -323,19 +369,249 @@ private fun ReviewsSection(
 }
 
 /**
+ * The SPECIAL_FEATURES section module (wave 2): the special features / extras
+ * poster row (remote discovery only). Admission and the fetch arm moved
+ * verbatim from DetailSectionAdmission's fold row and DetailViewModel's
+ * hand-written entry; the renderer slot routes to the existing
+ * [DetailSpecialFeaturesSection] family composable.
+ */
+internal object SpecialFeaturesSectionModule : DetailSectionModule {
+
+    override val kind: DetailSectionKind = DetailSectionKind.SPECIAL_FEATURES
+
+    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+        state.core.capabilities.remoteDiscovery && state.core.specialFeatures.isNotEmpty()
+
+    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+        DetailEnrichment(
+            name = "specialFeatures",
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            // Fetch special features / extras (featurettes, deleted scenes, etc.)
+            // concurrently so the core detail renders immediately; the result lands
+            // in specialFeatures and renders as its own horizontal row.
+            host.specialFeatures(inputs.itemId)
+                .onSuccess { extras ->
+                    if (!host.isCurrent(inputs.itemId)) return@onSuccess
+                    host.updateState { it.copy(specialFeatures = extras) }
+                }
+        },
+    )
+
+    @Composable
+    override fun Content(scope: DetailSectionRenderScope) {
+        DetailSpecialFeaturesSection(
+            delayIndex = kind.delayIndex,
+            state = scope.state,
+            callbacks = scope.callbacks,
+            bodyContentPad = scope.bodyContentPad,
+        )
+    }
+}
+
+/**
+ * The COLLECTION_ITEMS section module (wave 2): the collection members row.
+ * Admission is the media family alone (the empty-members gate is render-side,
+ * exactly as the fold row had it); the fetch arm moved verbatim from
+ * DetailViewModel's hand-written entry, and the renderer slot routes to the
+ * existing [DetailCollectionItemsSection] family composable.
+ */
+internal object CollectionItemsSectionModule : DetailSectionModule {
+
+    override val kind: DetailSectionKind = DetailSectionKind.COLLECTION_ITEMS
+
+    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+        detail.item.mediaType == MediaType.COLLECTION
+
+    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+        DetailEnrichment(
+            name = "collectionItems",
+            // Collections are remote-only companion content (not part of the
+            // snapshot); gated on remoteDiscovery so a local origin never
+            // starts it.
+            gate = {
+                it.remoteDiscoveryAllowed && it.mediaType == MediaType.COLLECTION
+            },
+        ) { inputs ->
+            host.collectionItems(collectionId = inputs.itemId, limit = 100)
+                .onSuccess { result ->
+                    if (!host.isCurrent(inputs.itemId)) return@onSuccess
+                    host.updateState { it.copy(collectionItems = result.items) }
+                }
+        },
+    )
+
+    @Composable
+    override fun Content(scope: DetailSectionRenderScope) {
+        DetailCollectionItemsSection(
+            delayIndex = kind.delayIndex,
+            state = scope.state,
+            callbacks = scope.callbacks,
+            bodyContentPad = scope.bodyContentPad,
+        )
+    }
+}
+
+/**
+ * The UPCOMING_EPISODES section module (wave 2): the D7 "Airing next" strip,
+ * SERIES detail only. Admission is content + the `show_upcoming_strip`
+ * preference (the fold row's terms — content-driven, NOT media-type-driven;
+ * the SERIES-only rule lives on the enrichment's gate). The fetch arm moved
+ * verbatim from DetailViewModel's hand-written entry — including the keying
+ * rule: the fetch keys on `parentId` = the loaded item id, which inside the
+ * SERIES-only gate IS the series id (an EPISODE/SEASON detail's series id
+ * differs, and those types are excluded rather than re-keyed). The renderer
+ * slot routes to the existing [DetailUpcomingEpisodesSection] family
+ * composable.
+ */
+internal object UpcomingEpisodesSectionModule : DetailSectionModule {
+
+    override val kind: DetailSectionKind = DetailSectionKind.UPCOMING_EPISODES
+
+    /** The D7 strip's row bound (an "airing next" rail; small by design) — moved with the arm. */
+    private const val UPCOMING_STRIP_LIMIT = 12
+
+    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+        state.preferences.showUpcomingStrip && state.core.upcomingEpisodes.isNotEmpty()
+
+    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+        DetailEnrichment(
+            name = "upcoming",
+            gate = { it.remoteDiscoveryAllowed && it.mediaType == MediaType.SERIES },
+        ) { inputs ->
+            // The user-pref half of the gate rides the body (the franchise
+            // convention).
+            if (!host.detailPreferences().showUpcomingStrip) return@DetailEnrichment
+            host.upcomingEpisodes(parentId = inputs.itemId, limit = UPCOMING_STRIP_LIMIT)
+                .onSuccess { upcoming ->
+                    if (!host.isCurrent(inputs.itemId)) return@onSuccess
+                    host.updateState { it.copy(upcomingEpisodes = upcoming) }
+                }
+        },
+    )
+
+    @Composable
+    override fun Content(scope: DetailSectionRenderScope) {
+        DetailUpcomingEpisodesSection(
+            delayIndex = kind.delayIndex,
+            state = scope.state,
+            callbacks = scope.callbacks,
+            bodyContentPad = scope.bodyContentPad,
+        )
+    }
+}
+
+/**
+ * The MORE_IN_COLLECTION section module (wave 2): the D6 "More in {collection}"
+ * franchise rows (BoxSet ancestors + members), declared just before the
+ * similar rows and sharing their slot-10 band. Admission counts only VISIBLE
+ * rows (a row the user eye-hid is excluded — not just render-side — so a
+ * fully hidden row family doesn't leave an empty admitted slot's gap; the
+ * fold's `from` projection moved verbatim). The fetch arm moved verbatim from
+ * DetailViewModel's hand-written entry — the enumerate-then-hydrate fan-out
+ * over [FRANCHISE_MAX_COLLECTIONS] BoxSets, whose constants live beside the
+ * row's presentation ([FRANCHISE_MEMBER_LIMIT] included). The renderer slot
+ * routes to the existing [DetailMoreInCollectionSection] family composable.
+ */
+internal object MoreInCollectionSectionModule : DetailSectionModule {
+
+    override val kind: DetailSectionKind = DetailSectionKind.MORE_IN_COLLECTION
+
+    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+        state.preferences.showMoreInCollection &&
+            // The D6 admission counts only VISIBLE rows: a row the user
+            // eye-hid is excluded here (not just render-side) so a fully
+            // hidden row family doesn't leave an empty admitted slot's gap in
+            // the body column.
+            state.core.franchiseCollections.any { collection ->
+                collection.id !in state.core.hiddenFranchiseCollections[state.itemId].orEmpty()
+            }
+
+    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+        DetailEnrichment(
+            name = "franchise",
+            // D6: the "More in this collection" franchise rows. MOVIE/SERIES
+            // only — BoxSet ancestry is a film-franchise concept, and the
+            // members read is a per-collection page the other families have
+            // no use for. Ancestors → up to [FRANCHISE_MAX_COLLECTIONS]
+            // BoxSets → each hydrated with its members in the server's
+            // default order; rows with no (non-self) members drop out and a
+            // wholly empty fold leaves the field empty — silent absence.
+            gate = {
+                it.remoteDiscoveryAllowed &&
+                    (it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES)
+            },
+        ) { inputs ->
+            // The user-pref half of the gate rides the body: the gate lambda
+            // stays a pure snapshot read (the DetailEnrichmentInputs
+            // contract), so `showMoreInCollection` is checked here instead —
+            // a preference read, not snapshot state (the externalRatings
+            // convention).
+            if (!host.detailPreferences().showMoreInCollection) return@DetailEnrichment
+            // The franchise read rides the repository's cache (the detail
+            // cluster's boxsets-containing member): the enumerate-then-probe
+            // fan-out below is the costliest enrichment, so a re-entry inside
+            // its TTL window re-serves the row instead of re-probing.
+            val boxSets = host.boxSetsContaining(inputs.itemId)
+                .getOrNull()
+                ?.take(FRANCHISE_MAX_COLLECTIONS)
+                .orEmpty()
+            if (boxSets.isEmpty()) return@DetailEnrichment
+            // The shared bounded-parallel members hydration (the
+            // pluginSimilarItems idiom): per-BoxSet failures and empty member
+            // lists drop out; the source order is preserved
+            // (mapConcurrentCatching is order-preserving), so the rows keep
+            // the server's default order.
+            val rows = host.mapConcurrent(boxSets) { boxSet ->
+                val members = host.collectionItems(collectionId = boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
+                    .getOrNull()
+                    ?.items
+                    // The loaded item never renders inside its own franchise
+                    // row (the similarItems enrichment's self-filter).
+                    ?.filter { it.id != inputs.itemId }
+                    .orEmpty()
+                if (members.isEmpty()) {
+                    null
+                } else {
+                    DetailUiState.FranchiseCollection(id = boxSet.id, name = boxSet.name, members = members)
+                }
+            }.filterNotNull()
+            if (rows.isEmpty()) return@DetailEnrichment
+            if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
+            host.updateState { it.copy(franchiseCollections = rows) }
+        },
+    )
+
+    @Composable
+    override fun Content(scope: DetailSectionRenderScope) {
+        DetailMoreInCollectionSection(
+            delayIndex = kind.delayIndex,
+            state = scope.state,
+            callbacks = scope.callbacks,
+            bodyContentPad = scope.bodyContentPad,
+        )
+    }
+}
+
+/**
  * The detail section registry: the ordered list of [DetailSectionModule]s. The
  * order is [DetailSectionKind] declaration order — the body's emission order —
  * and [admittedSections] re-sorts the merged emission by the enum, so a
  * module's position here can never reorder anything visually.
  *
- * Wave 1 (the pilot) registers the two ratings-adjacent rows; the remaining
- * sections stay hand-written ([DetailSectionAdmission]'s fold + the
- * [DetailSectionRenderer] `when`) and join in later waves.
+ * Wave 1 (the pilot) registered the two ratings-adjacent rows; wave 2 brings
+ * the four collection-family/strip rows. The remaining sections stay
+ * hand-written ([DetailSectionAdmission]'s fold + the [DetailSectionRenderer]
+ * `when`) and join in later waves.
  */
 internal object DetailSectionRegistry {
 
     val modules: List<DetailSectionModule> = listOf(
         PluginRatingsSectionModule,
+        UpcomingEpisodesSectionModule,
+        CollectionItemsSectionModule,
+        MoreInCollectionSectionModule,
+        SpecialFeaturesSectionModule,
         TmdbReviewsSectionModule,
     )
 

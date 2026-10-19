@@ -64,7 +64,9 @@ import kotlin.math.pow
  * flag the verdict owns is read here only through the [remoteSessionActive]
  * gate lambda (the former manager-local `@Volatile var` — its storage and
  * single-writer contract moved into the verdict; the audio side never
- * writes it).
+ * writes it). [ShellAudioSurface] — the app shell's narrowed
+ * metadata+transport parameter — folds onto the same overrides with no
+ * member of its own; the Koin alias binds the same single.
  */
 @Stable
 class AudioPlaybackManager(
@@ -127,7 +129,7 @@ class AudioPlaybackManager(
      * the flag's resting value was `false` too.
      */
     private val remoteSessionActive: () -> Boolean = { false },
-) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace {
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace, ShellAudioSurface {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 

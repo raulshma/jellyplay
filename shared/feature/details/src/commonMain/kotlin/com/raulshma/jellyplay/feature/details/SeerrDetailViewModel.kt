@@ -13,9 +13,9 @@ import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionStateHolder
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -23,6 +23,8 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.isAvailable
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.pick
+import com.raulshma.jellyplay.core.model.seerr.toMediaType
 import com.raulshma.jellyplay.core.model.seerr.withPendingRequest
 import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -100,9 +102,11 @@ class SeerrDetailViewModel constructor(
 
     fun loadDetails(tmdbId: Int, mediaType: String) {
         launch {
-            // Normalize once so every downstream comparison is case-insensitive
-            // and consistent (callers may pass "movie", "Movie", "tv", "TV", …).
-            val isMovie = mediaType.equals("movie", ignoreCase = true)
+            // The kind folds through the model's SeerrMediaKind — one
+            // case-insensitive parse (callers may pass "movie", "Movie", "tv",
+            // "TV", …); the fetch fork is the model's pick (UNKNOWN rides the
+            // tv leg, exactly like the former `if (isMovie) … else …`).
+            val kind = SeerrMediaKind.fromWire(mediaType)
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -122,31 +126,34 @@ class SeerrDetailViewModel constructor(
             var hasRatings = false
 
             try {
-                if (isMovie) {
-                    seerrRepository.getMovieDetails(tmdbId).onSuccess { details ->
-                        _uiState.update { it.copy(movieDetails = details) }
-                        val ratings = details.ratings
-                        if (ratings?.rt != null || ratings?.imdb != null) {
-                            hasRatings = true
+                kind.pick(
+                    movie = {
+                        seerrRepository.getMovieDetails(tmdbId).onSuccess { details ->
+                            _uiState.update { it.copy(movieDetails = details) }
+                            val ratings = details.ratings
+                            if (ratings?.rt != null || ratings?.imdb != null) {
+                                hasRatings = true
+                            }
+                            updateRatings(ratings, details.voteAverage)
+                        }.onFailure {
+                            _uiState.update { state -> state.copy(error = it.message) }
                         }
-                        updateRatings(ratings, details.voteAverage)
-                    }.onFailure {
-                        _uiState.update { state -> state.copy(error = it.message) }
-                    }
-                } else {
-                    seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
-                        _uiState.update { it.copy(tvDetails = details) }
-                        val ratings = details.ratings
-                        if (ratings?.rt != null || ratings?.imdb != null) {
-                            hasRatings = true
+                    },
+                    tv = {
+                        seerrRepository.getTvDetails(tmdbId).onSuccess { details ->
+                            _uiState.update { it.copy(tvDetails = details) }
+                            val ratings = details.ratings
+                            if (ratings?.rt != null || ratings?.imdb != null) {
+                                hasRatings = true
+                            }
+                            updateRatings(ratings, details.voteAverage)
+                        }.onFailure {
+                            _uiState.update { state -> state.copy(error = it.message) }
                         }
-                        updateRatings(ratings, details.voteAverage)
-                    }.onFailure {
-                        _uiState.update { state -> state.copy(error = it.message) }
-                    }
-                }
+                    },
+                )
 
-                val type = if (isMovie) MediaType.MOVIE else MediaType.SERIES
+                val type = kind.toMediaType()
 
                 // The ratings/recommendations/similar legs ride the shared
                 // holder. Joined, not fire-and-forget: the isLoading flag must
@@ -200,7 +207,7 @@ class SeerrDetailViewModel constructor(
      * server. Updates [SeerrDetailUiState.jellyfinItemId] on success.
      */
     private suspend fun resolveJellyfinItemId(tmdbId: Int, mediaType: String) {
-        val isMovie = mediaType.equals("movie", ignoreCase = true)
+        val kind = SeerrMediaKind.fromWire(mediaType)
         val state = _uiState.value
         val movie = state.movieDetails
         val tv = state.tvDetails
@@ -214,7 +221,7 @@ class SeerrDetailViewModel constructor(
         // tvdb/imdb are fallbacks that may be present on the detail's externalIds.
         val candidates = buildList {
             add("tmdb" to tmdbId.toString())
-            val externalIds = if (isMovie) movie?.externalIds else tv?.externalIds
+            val externalIds = kind.pick(movie = { movie?.externalIds }, tv = { tv?.externalIds })
             externalIds?.tvdbId?.let { add("tvdb" to it.toString()) }
             externalIds?.imdbId?.let { add("imdb" to it) }
         }

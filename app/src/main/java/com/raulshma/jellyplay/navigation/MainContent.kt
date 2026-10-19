@@ -24,7 +24,7 @@ import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MainPreferences
@@ -66,7 +66,7 @@ internal fun MainContent(
     model: MainShellModel,
     preferences: MainPreferences,
     infra: ShellInfra,
-    audioPlaybackManager: AudioPlaybackManager,
+    audioPlaybackManager: ShellAudioSurface,
 ) {
     val homeMode = preferences.homeMode
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current

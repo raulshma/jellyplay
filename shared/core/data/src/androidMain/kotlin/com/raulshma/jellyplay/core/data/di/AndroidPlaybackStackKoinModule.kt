@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.data.playback.ExoAmbientVideoPlayer
 import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -104,6 +105,11 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single<AudioQueueManager> { get<AudioPlaybackManager>() }
     single<AudioEffectsManager> { get<AudioPlaybackManager>() }
     single<AudioPlayerEngine> { get<AudioPlaybackManager>() }
+    // The app shell's narrowed metadata+transport surface (MainContent and
+    // its layout/overlay branches) — same single, one more alias beside the
+    // three above, so shell code resolves the interface and constructs
+    // against a fake on the JVM.
+    single<ShellAudioSurface> { get<AudioPlaybackManager>() }
     // The Now-playing verdict (GLOSSARY): one fold over the video registry
     // (commonMain, dataJvmModule) and this module's manager as the audio
     // face. Consumed by the remote-cast family's reporter + receiver, the

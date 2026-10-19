@@ -60,6 +60,9 @@ import kotlin.test.assertTrue
  */
 class MediaRepositoryHomeSectionsSwrPersistTest {
 
+    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
+    private var built: MediaRepositoryImpl? = null
+
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
 
@@ -130,11 +133,12 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             userDataRealtimeChannel = realtimeChannel,
             timeSource = fakeTimeSource,
             homeSession = homeSession,
+            userDataAnnouncer = announcerFor(homeSession) { built },
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
             internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        )
+        ).also { built = it }
     }
 
     private fun homeResult() = Result.success(

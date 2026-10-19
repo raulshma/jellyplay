@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrCardLoadingState
@@ -138,11 +139,12 @@ internal fun SeerrDiscoverRow(
 
 /**
  * Normalizes an *arr media type for the detail routes: case-folded `movie` /
- * `tv`, everything else passed through. Internal so the test asserts THIS
- * function instead of a local copy of the rule.
+ * `tv`, everything else passed through. The parse rides the model's
+ * [SeerrMediaKind.fromWire] (the one ignoreCase parse); internal so the test
+ * asserts THIS function instead of a local copy of the rule.
  */
-internal fun normalizeSeerrMediaType(raw: String): String = when {
-    raw.equals("movie", ignoreCase = true) -> "movie"
-    raw.equals("tv", ignoreCase = true) -> "tv"
-    else -> raw
+internal fun normalizeSeerrMediaType(raw: String): String = when (SeerrMediaKind.fromWire(raw)) {
+    SeerrMediaKind.MOVIE -> "movie"
+    SeerrMediaKind.TV -> "tv"
+    SeerrMediaKind.UNKNOWN -> raw
 }

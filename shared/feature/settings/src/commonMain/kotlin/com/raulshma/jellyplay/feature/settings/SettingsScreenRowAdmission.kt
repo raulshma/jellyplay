@@ -169,6 +169,35 @@ internal fun rowTotalFor(
     include: (SettingsSearchItem) -> Boolean = { true },
 ): Int = group.items.count { item -> include(item) && (group.admissionOf(item.id)?.admitted(flags) ?: false) }
 
+/**
+ * THE hidden-count derivation behind every screen's [HiddenSettingsHint]:
+ * how many of [groups]' declared rows the advanced toggle REVEALS under
+ * [flags] — each group's [rowTotalFor] with the advanced leg forced on minus
+ * its [rowTotalFor] as [flags] carries it. The delta shape is what makes it
+ * honest: rows hidden for other reasons (platform capability, parent toggle,
+ * form factor) are hidden under BOTH evaluations and count nothing, and a
+ * whole group whose rows ride an `All(Advanced, …)` gate collapses to zero
+ * when its parent is off (the notifications `enabled`-off hint showing 0
+ * falls out, no special case). Callers pass the same [RowAdmissionFlags]
+ * their row totals and emission `if`s read — the hint only renders while
+ * advanced is off, which is the state the count describes.
+ *
+ * The retired hand literals this replaces drifted every time a gated row
+ * landed without the count being re-run (appearance 14 vs 15/16, audio 19 vs
+ * 20, language 5 vs 7, notifications 4 vs 6/8, storage 3 vs 5); the literals
+ * that encode state the flags genuinely cannot express stay hand-written
+ * beside their screens, marked frozen (playback's engine-dependent 9).
+ *
+ * Pure (and internal) so `FusedRowsRatchetTest` pins each screen's
+ * derivation against the row declarations.
+ */
+internal fun hiddenRowsFor(
+    groups: List<SettingsSearchItemGroup>,
+    flags: RowAdmissionFlags,
+): Int = groups.sumOf { group ->
+    rowTotalFor(group, flags.copy(showAdvanced = true)) - rowTotalFor(group, flags)
+}
+
 // ── PlaybackSettingsScreen ──────────────────────────────────────────────
 
 /**

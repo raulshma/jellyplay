@@ -636,7 +636,15 @@ fun LanguageSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 5,
+                        // Derived from the fused declarations (hiddenRowsFor):
+                        // the subtitles group's seven Advanced-gated style
+                        // rows, plus the HDR font-size row while the HDR-style
+                        // toggle is on. The retired hand literal (5) predated
+                        // the HDR pair / vertical-position row.
+                        hiddenCount = hiddenRowsFor(
+                            listOf(SettingsScreenGroups.languageGeneral, SettingsScreenGroups.languageSubtitles),
+                            subtitleRowFlags,
+                        ),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

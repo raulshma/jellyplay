@@ -335,11 +335,14 @@ internal object HomeRowAssembleArms {
                         ctx.sections.add(
                             HomeSectionType.RECOMMENDATIONS.descriptor.section(result.items, seedItem = result.seedItem),
                         )
-                    } else if (ctx.input.suggestions.isNotEmpty()) {
+                    } else if (suggestionsFallbackApplies(ctx.input.recommendationsResult) && ctx.input.suggestions.isNotEmpty()) {
                         // Fallback "For You" source when there are no similarity seeds
                         // yet (new user, no watch history): surface favorited/liked
                         // items so the home page still has discovery content. Mirrors
-                        // the search "Suggestions" data source.
+                        // the search "Suggestions" data source. The applies-here rule
+                        // is the shared [suggestionsFallbackApplies] — the same
+                        // predicate the fetcher's pre-fetch consulted before this
+                        // list was ever fetched.
                         ctx.sections.add(HomeSectionType.RECOMMENDATIONS.descriptor.section(ctx.input.suggestions))
                     }
                 }
@@ -390,6 +393,22 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
         firstError = ctx.firstError,
     )
 }
+
+/**
+ * Whether the suggestions fallback applies to this pass's recommendations
+ * result — the ONE copy of the rule both halves of the fallback consume: the
+ * fetcher issues the suggestions sub-call only when this reads true (the
+ * fallback exists for a successful-but-empty recommendations payload — new
+ * user, no watch history), and the RECOMMENDATIONS arm renders the fetched
+ * suggestions only when it reads true, so a hand-fed suggestions list can
+ * never masquerade as a recommendations row for a recommendations result that
+ * earned its own items. The former hand-synced pair (fetch-side predicate,
+ * render-side branch) was pinned together by HomeSectionsFetcherTest; this
+ * shared function IS that pin — the test now calls it directly. Same
+ * shared-predicate shape as [filterNextUpEligible] below.
+ */
+internal fun suggestionsFallbackApplies(recommendationsResult: Result<RecommendationResult>?): Boolean =
+    recommendationsResult?.getOrNull()?.items?.isEmpty() == true
 
 /**
  * The assembler's Next Up eligibility filters — CW-overlap drop (keyed on the

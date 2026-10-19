@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.lifecycle.compose.LifecycleStartEffect
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -94,6 +95,15 @@ fun PluginsScreen(
         itemCount = if (state.isLoading && selectedTab == 0) 0 else 1,
         tag = "plugins_init",
     )
+
+    // The installation-progress poll is visibility-bound (the
+    // LogsScreen/JellyPlayTranscodesScreen shape): it runs only between START
+    // and STOP, so a back-stacked Plugins screen no longer polls. Whether any
+    // round fetches stays the VM-internal gate (active installations).
+    LifecycleStartEffect(Unit) {
+        viewModel.startInstallationPolling()
+        onStopOrDispose { viewModel.stopInstallationPolling() }
+    }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.admin_plugins_title),

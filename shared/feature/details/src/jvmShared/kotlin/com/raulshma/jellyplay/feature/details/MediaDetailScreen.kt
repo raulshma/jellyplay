@@ -109,6 +109,14 @@ fun MediaDetailScreen(
      * long-press Download on a series). Consumed once the item loads. */
     openDownloadSheetOnEntry: Boolean = false,
     onBack: () -> Unit,
+    /**
+     * The process-wide playback seams the play funnels read — ONE
+     * constructor bundle instead of four mid-body `koinInject` pulls (the
+     * constructor convention this screen already follows with [viewModel]):
+     * the default resolves the same Koin singles the pulls did, so the
+     * navigation wiring is unchanged, and a direct construction hands fakes.
+     */
+    seams: MediaDetailPlaybackSeams = rememberMediaDetailPlaybackSeams(),
     viewModel: DetailViewModel = koinViewModel(),
 ) {
     // Declared before the load-item effect below so the trailer-dismiss reset
@@ -516,75 +524,46 @@ fun MediaDetailScreen(
                     )
                 }
 
-                // D6: the process-wide manual up-next queue (DetailContent's
-                // koinInject precedent) — the franchise row's "play collection
-                // in order" action appends to it before the start dispatch.
-                val videoQueue = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.VideoQueueController>()
-                // D14: the one-shot Cinema Mode override ("Play with
-                // pre-rolls" arms it), the SyncPlay flag the trailer
-                // pre-roll sequencing vetoes on, and the playback-prefs
-                // slice the trailer-then-feature toggle reads at dispatch
-                // time — all process-wide core:data/datastore/player-contract
-                // singles, same koinInject shape.
-                val cinemaModeOverride =
-                    org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.CinemaModeOverride>()
-                val syncPlayManager =
-                    org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager>()
-                val videoPlayerStore =
-                    org.koin.compose.koinInject<com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore>()
-                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, onReadClick, itemId) {
+                // The process-wide playback seams arrive as ONE constructor
+                // bundle ([MediaDetailPlaybackSeams]) — the former mid-body
+                // koinInject pulls, hoisted to the screen's signature.
+                val playbackCallbacks = remember(viewModel, seams, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
-                            // Stream selection (local-origin subtitle index when offline)
-                            // is the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
-                            // fold; this lambda only dispatches.
-                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
-                                origin = uiState.origin,
-                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
-                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
-                                audioStreamIndex = viewModel.selectedAudioIndex,
-                            )
-                            // D14 trailer-then-feature (opt-in
-                            // `playTrailerBeforeMovie`): sequence a LOCAL
-                            // trailer before the feature. The manual queue
-                            // drains AFTER the current item, so the plan's
-                            // seed-the-trailer-first shape would play it
-                            // after the movie — the documented two-session
-                            // fallback instead seeds the FEATURE at the
-                            // queue head and starts the session on the
-                            // trailer; the queue-first advance plays the
-                            // feature when the trailer ends. Remote
-                            // (YouTube) trailers cannot ride the player
-                            // session, so remote-only items keep the plain
-                            // start (resolveTrailerPreroll returns null).
-                            // SyncPlay-suppressed by the policy (the group
-                            // owns the order).
-                            val preroll = resolveTrailerPreroll(
-                                mediaType = uiState.detail?.item?.mediaType,
-                                trailers = uiState.trailers,
-                                playTrailerBeforeMovie = videoPlayerStore.videoPlayer.value.playTrailerBeforeMovie,
-                                startPositionTicks = start,
-                                isSyncPlayActive = syncPlayManager.isInSyncPlaySession,
-                            )
-                            if (preroll != null && playItemId == itemId) {
-                                videoQueue.enqueueNext(
-                                    com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
-                                        itemId = itemId,
-                                        title = uiState.detail?.item?.name ?: "",
-                                        subtitle = uiState.detail?.item?.year?.toString(),
-                                        imageUrl = viewModel.getImageUrl(itemId),
-                                        runTimeTicks = uiState.detail?.item?.runTimeTicks,
-                                    ),
-                                )
-                                onPlayClick(preroll.mediaItem.id, null, 0L, null, null)
-                            } else {
-                                onPlayClick(
-                                    playItemId,
-                                    sourceId,
-                                    start,
-                                    dispatch.subtitleStreamIndex,
-                                    dispatch.audioStreamIndex,
-                                )
+                            // The play click's whole decision is the pure
+                            // [DetailPlaySequencer] fold — the stream
+                            // selection ([DetailPlayPolicies.resolveDetailPlayDispatch])
+                            // plus the D14 trailer-then-feature sequencing
+                            // (with the queue-seeding order its KDoc
+                            // documents); this lambda only executes the
+                            // returned effects in order.
+                            DetailPlaySequencer.sequence(
+                                DetailPlaySequencer.DetailPlayContext(
+                                    requestedItemId = playItemId,
+                                    requestedMediaSourceId = sourceId,
+                                    requestedStartPositionTicks = start,
+                                    currentItem = uiState.detail?.item,
+                                    origin = uiState.origin,
+                                    localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                    remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                    audioStreamIndex = viewModel.selectedAudioIndex,
+                                    trailers = uiState.trailers,
+                                    currentItemPosterUrl = viewModel.getImageUrl(itemId),
+                                    playTrailerBeforeMovie = seams.videoPlayerStore.videoPlayer.value.playTrailerBeforeMovie,
+                                    isSyncPlayActive = seams.syncPlayManager.isInSyncPlaySession,
+                                ),
+                            ).forEach { effect ->
+                                when (effect) {
+                                    is DetailPlaySequencer.DetailPlayEffect.EnqueueNext ->
+                                        seams.videoQueue.enqueueNext(effect.item)
+                                    is DetailPlaySequencer.DetailPlayEffect.PlaySession -> onPlayClick(
+                                        effect.itemId,
+                                        effect.mediaSourceId,
+                                        effect.startPositionTicks,
+                                        effect.subtitleStreamIndex,
+                                        effect.audioStreamIndex,
+                                    )
+                                }
                             }
                         },
                         onPlayChapter = { start ->
@@ -633,7 +612,7 @@ fun MediaDetailScreen(
                         // vetoes still apply). The stream selection is the
                         // same policy fold, forced via the override record.
                         onPlayWithPrerolls = {
-                            cinemaModeOverride.arm()
+                            seams.cinemaModeOverride.arm()
                             val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
                                 origin = uiState.origin,
                                 localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
@@ -664,7 +643,7 @@ fun MediaDetailScreen(
                         onPlayCollectionInOrder = { collection ->
                             franchisePlayOrder(collection.members)?.let { order ->
                                 order.queuedTail.forEach { member ->
-                                    videoQueue.enqueueLast(
+                                    seams.videoQueue.enqueueLast(
                                         com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
                                             itemId = member.id,
                                             title = member.name,
@@ -1339,3 +1318,40 @@ private fun EpisodeDownloadProgressProvider(
         content = content,
     )
 }
+
+/**
+ * The process-wide playback seams the media-detail screen's play funnels
+ * read — ONE constructor-shaped bundle instead of four mid-body `koinInject`
+ * pulls (the screen's constructor convention, same as its `viewModel`
+ * parameter). All four are process-wide core:data / datastore /
+ * player-contract singles:
+ *
+ *  - [videoQueue]: D6's manual up-next queue (DetailContent's koinInject
+ *    precedent) — the franchise row's "play collection in order" tail and
+ *    the D14 preroll's feature seed append to it around the start dispatch;
+ *  - [cinemaModeOverride]: D14's one-shot Cinema Mode override ("Play with
+ *    pre-rolls" arms it);
+ *  - [syncPlayManager]: the SyncPlay flag the trailer pre-roll sequencing
+ *    vetoes on;
+ *  - [videoPlayerStore]: the playback-prefs slice the trailer-then-feature
+ *    toggle reads at dispatch time.
+ *
+ * [rememberMediaDetailPlaybackSeams] resolves the same Koin singles the
+ * former pulls did, so the navigation wiring is unchanged; a direct
+ * construction (tests) hands fakes.
+ */
+data class MediaDetailPlaybackSeams(
+    val videoQueue: com.raulshma.jellyplay.core.data.playback.VideoQueueController,
+    val cinemaModeOverride: com.raulshma.jellyplay.core.data.playback.CinemaModeOverride,
+    val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
+    val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
+)
+
+/** The bundle's composition-time default: the four Koin singles, one seam. */
+@Composable
+fun rememberMediaDetailPlaybackSeams(): MediaDetailPlaybackSeams = MediaDetailPlaybackSeams(
+    videoQueue = org.koin.compose.koinInject(),
+    cinemaModeOverride = org.koin.compose.koinInject(),
+    syncPlayManager = org.koin.compose.koinInject(),
+    videoPlayerStore = org.koin.compose.koinInject(),
+)

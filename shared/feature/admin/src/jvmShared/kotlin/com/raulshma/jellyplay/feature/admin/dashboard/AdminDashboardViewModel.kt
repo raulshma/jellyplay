@@ -164,15 +164,15 @@ class AdminDashboardViewModel(
     }
 
     /**
-     * Deadline (via [System.currentTimeMillis]) up to which an IDLE scan task
-     * is treated as RUNNING. Set when the user triggers a scan: the server
-     * takes a moment to flip the scheduled task from IDLE to RUNNING after
-     * [apiClient.startTask], and a WS push landing on IDLE during that window
-     * would otherwise collapse the optimistic [LibraryScanState.Running] and
-     * hide the progress UI. Cleared as soon as the WS confirms RUNNING, so a
-     * later IDLE genuinely means the scan finished.
+     * The optimistic grace-window machine ([LibraryScanWindow], extracted):
+     * armed when the user triggers a scan, disarmed the moment the WS
+     * confirms RUNNING, and cleared when it expires unconfirmed. The former
+     * private AtomicLong + constants moved with the machine.
      */
-    private val scanOptimisticUntilMs = java.util.concurrent.atomic.AtomicLong(0L)
+    private val scanWindow = LibraryScanWindow()
+
+    /** The WS-push freshness rule ([WsTaskFreshness], extracted). */
+    private val wsTasksFreshness = WsTaskFreshness()
 
     init {
         loadDashboard()
@@ -234,16 +234,14 @@ class AdminDashboardViewModel(
 
     /**
      * True while WS task pushes are recent enough to be trusted over a REST
-     * snapshot (1 Hz cadence; 30 s of silence means the socket is dead).
-     * Freshness is judged from the channel's push timestamp, not from
-     * collection: the shared flow replays its last emission to every new
-     * collector, and that replay can be arbitrarily old.
+     * snapshot — the extracted [WsTaskFreshness] rule (1 Hz cadence; 30 s of
+     * silence means the socket is dead). Freshness is judged from the
+     * channel's push timestamp, not from collection: the shared flow replays
+     * its last emission to every new collector, and that replay can be
+     * arbitrarily old.
      */
-    private fun wsTasksFresh(): Boolean {
-        val lastPushAtMs = adminRepository.scheduledTasksLastPushAtMs
-        return lastPushAtMs != 0L &&
-            System.currentTimeMillis() - lastPushAtMs < WS_PUSH_STALE_AFTER_MS
-    }
+    private fun wsTasksFresh(): Boolean =
+        wsTasksFreshness.isFresh(adminRepository.scheduledTasksLastPushAtMs)
 
     /**
      * Live running-task list from the WebSocket `ScheduledTasksInfo` push
@@ -365,7 +363,7 @@ class AdminDashboardViewModel(
      */
     fun scanLibrary() {
         if (_uiState.value.libraryScanState is LibraryScanState.Running) return
-        scanOptimisticUntilMs.set(System.currentTimeMillis() + scanOptimisticGraceMs)
+        scanWindow.start()
         launch {
             _uiState.update { it.copy(libraryScanState = LibraryScanState.Running(progress = null)) }
             adminRepository.startLibraryScan()
@@ -387,26 +385,28 @@ class AdminDashboardViewModel(
     /**
      * Reflects the "Scan media library" task's [ScheduledTaskInfo] into
      * [libraryScanState], honoring the optimistic window started by [scanLibrary].
+     * The window machine is the extracted [LibraryScanWindow]; the
+     * `state == TaskState.RUNNING` comparisons here deliberately stay raw-enum
+     * code — they read the domain fact "the server reports the task running",
+     * not a presentation decision.
      */
     private fun applyScanTask(scanTask: ScheduledTaskInfo?) {
         // Server has actually started running — no more optimistic hold.
         if (scanTask?.state == TaskState.RUNNING) {
-            scanOptimisticUntilMs.set(0L)
+            scanWindow.confirmRunning()
         }
-        val withinOptimisticWindow = scanOptimisticUntilMs.get() != 0L &&
-            System.currentTimeMillis() < scanOptimisticUntilMs.get()
         val nextState = when {
             scanTask?.state == TaskState.RUNNING ->
                 LibraryScanState.Running(progress = scanTask.currentProgressPercentage)
             // Server still IDLE but within the grace window following a user
             // tap: preserve the optimistic Running(null) state.
-            withinOptimisticWindow -> LibraryScanState.Running(progress = null)
+            scanWindow.isActive() -> LibraryScanState.Running(progress = null)
             else -> LibraryScanState.Idle
         }
         // If the grace window expired without ever observing RUNNING, give up
         // the optimistic hold so the UI can settle to Idle.
         if (nextState is LibraryScanState.Idle) {
-            scanOptimisticUntilMs.set(0L)
+            scanWindow.clear()
         }
         _uiState.update { it.copy(libraryScanState = nextState) }
     }
@@ -414,17 +414,6 @@ class AdminDashboardViewModel(
     private companion object {
         // Jellyfin scheduled-task key for "Scan media library".
         const val KEY_SCAN_LIBRARY = "RefreshLibrary"
-
-        // WS task pushes arrive at 1 Hz; past this much silence the socket
-        // is considered dead and REST snapshots may refresh runningTasks
-        // again (see [wsTasksFresh]).
-        private const val WS_PUSH_STALE_AFTER_MS = 30_000L
-
-        // How long to keep the optimistic Running state after the user taps
-        // "Scan Library", waiting for the server to flip the task to RUNNING.
-        // Generous enough to cover startTask latency + the IDLE→RUNNING flip,
-        // short enough to recover the UI if the start request silently failed.
-        const val scanOptimisticGraceMs = 15_000L
     }
 }
 

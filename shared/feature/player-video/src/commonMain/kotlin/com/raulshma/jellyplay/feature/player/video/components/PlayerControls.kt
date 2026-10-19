@@ -221,7 +221,8 @@ internal data class GestureControls(
  * subtitle-hub pair, the subtitle-delay overlay, the render sheet), the
  * overflow panel's toggle/state wiring (video stats, video filters,
  * screenshot, A/B repeat actions, audio-only, incognito mark-and-exit,
- * render/deinterlace), and the Episodes entry's gates. Everything here either
+ * render/deinterlace, the input-binding quick toggles and their flip
+ * callback), and the Episodes entry's gates. Everything here either
  * opens a [PlayerSheet]-shaped surface or is dispatched from inside one.
  *
  * The [openSheet] funnel used to be the whole story: every control that opens
@@ -269,7 +270,6 @@ internal data class SheetControls(
     val onMarkUnwatchedAndQuit: () -> Unit = {},
     val supportsRenderPanel: Boolean = false,
     val onRenderClick: () -> Unit = {},
-    val supportsDeinterlace: Boolean = false,
     val deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
     val onDeinterlaceCycle: () -> Unit = {},
     /** Opens the Version sheet (multi-version items only — the overflow menu gates on the track fact). */
@@ -279,6 +279,11 @@ internal data class SheetControls(
     val queueItemCount: Int = 0,
     val isInSyncPlaySession: Boolean = false,
     val onQueueClick: () -> Unit = {},
+    // Input-binding quick toggles (issue #171) — forwarded to the overflow
+    // menu's tap-to-flip section. Defaulted empty so previews/tests are
+    // unaffected.
+    val inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
+    val onInputQuickToggle: (String, Boolean) -> Unit = { _, _ -> },
 )
 
 /**
@@ -286,12 +291,14 @@ internal data class SheetControls(
  * playback-metadata row and the quality/audio sheet entries render — stream
  * list, audio tracks, play method (+ forced-direct flag), HDR type, metered
  * connection, subtitle delay, streaming quality, playback mode, the row's
- * visibility toggle.
+ * visibility toggle, and the aspect ratio the primary cluster's aspect entry
+ * renders.
  */
 @Immutable
 internal data class TrackControls(
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
+    val currentAspectRatio: AspectRatio = AspectRatio.AUTO,
     val playMethod: String = "Direct Play",
     val isDirectPlayForced: Boolean = false,
     val hdrType: String? = null,
@@ -334,13 +341,6 @@ internal fun PlayerControls(
     gestures: GestureControls = GestureControls(),
     sheets: SheetControls = SheetControls(),
     tracks: TrackControls = TrackControls(),
-    // Input-binding quick toggles (issue #171) — forwarded to the overflow
-    // menu's tap-to-flip section. Defaulted empty so previews/tests are
-    // unaffected.
-    inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
-    onInputQuickToggle: (String, Boolean) -> Unit = { _, _ -> },
-    currentAspectRatio: AspectRatio,
-    detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
     // Passed whole (the SubtitleStyleControls capabilities precedent): the
     // per-engine gates ride the @Immutable EngineCapabilities data class
@@ -712,7 +712,7 @@ internal fun PlayerControls(
                             hasEpisodes = sheets.hasEpisodes,
                             episodeBrowserEnabled = sheets.episodeBrowserEnabled,
                             isInSyncPlaySession = syncPlay.inSession,
-                            currentAspectRatio = currentAspectRatio,
+                            currentAspectRatio = tracks.currentAspectRatio,
                         )
                     }
                     if (splitBottomControlsEvenly) {
@@ -818,166 +818,164 @@ internal fun PlayerControls(
         // interceptor can cover the full area and the panel anchors to TopEnd).
         // Rendered in-window — not a DropdownMenu popup — so it inherits the
         // player's immersive mode and the system bars never appear.
+        // The action bundle is remembered on exactly the bundles its lambdas
+        // route through (the [PlayerEffectsControls] idiom): every capture is
+        // a key, so the instance cannot go stale, and between flips it stays
+        // equal — the closed panel's cost is one early return.
+        val overflowActions = remember(sheets, effectsControls, transport) {
+            PlayerOverflowMenuActions(
+                onSubtitleHubClick = {
+                    showOverflow = false
+                    sheets.onSubtitleHubClick()
+                },
+                onDialogueBoostClick = {
+                    showOverflow = false
+                    effectsControls.onDialogueBoostClick()
+                },
+                onDialogueBoostStrengthChange = effectsControls.onDialogueBoostStrengthChange,
+                onNightModeClick = {
+                    showOverflow = false
+                    effectsControls.onNightModeClick()
+                },
+                onNightModeStrengthChange = effectsControls.onNightModeStrengthChange,
+                onAVSyncClick = {
+                    showOverflow = false
+                    sheets.openSheet(PlayerSheet.AVSync)
+                },
+                onPlaybackModeClick = {
+                    showOverflow = false
+                    sheets.openSheet(PlayerSheet.PlaybackMode)
+                },
+                onVersionClick = {
+                    showOverflow = false
+                    sheets.onVersionClick()
+                },
+                onDecoderClick = {
+                    showOverflow = false
+                    sheets.openSheet(PlayerSheet.Decoder)
+                },
+                onPassthroughClick = {
+                    showOverflow = false
+                    effectsControls.onPassthroughClick()
+                },
+                onSpatialAudioClick = {
+                    showOverflow = false
+                    effectsControls.onSpatialAudioClick()
+                },
+                onVideoStatsClick = {
+                    showOverflow = false
+                    sheets.onVideoStatsClick()
+                },
+                onAudioNormalizationClick = {
+                    showOverflow = false
+                    effectsControls.onAudioNormalizationClick()
+                },
+                onAudioNormalizationModeChange = {
+                    showOverflow = false
+                    effectsControls.onAudioNormalizationModeChange(it)
+                },
+                onChannelMixClick = {
+                    showOverflow = false
+                    effectsControls.onChannelMixClick()
+                },
+                onChannelMixModeChange = {
+                    showOverflow = false
+                    effectsControls.onChannelMixModeChange(it)
+                },
+                onSleepTimerClick = {
+                    showOverflow = false
+                    sheets.openSheet(PlayerSheet.SleepTimer)
+                },
+                onVideoFilterClick = {
+                    showOverflow = false
+                    sheets.openSheet(PlayerSheet.VideoFilter)
+                },
+                onScreenshotClick = {
+                    showOverflow = false
+                    sheets.onScreenshotClick()
+                },
+                onAbRepeatToggle = {
+                    showOverflow = false
+                    sheets.onAbRepeatToggle()
+                },
+                onAbRepeatSetA = {
+                    showOverflow = false
+                    sheets.onAbRepeatSetA()
+                },
+                onAbRepeatSetB = {
+                    showOverflow = false
+                    sheets.onAbRepeatSetB()
+                },
+                onAbRepeatClear = {
+                    showOverflow = false
+                    sheets.onAbRepeatClear()
+                },
+                onToggleAudioOnly = {
+                    showOverflow = false
+                    sheets.onToggleAudioOnly()
+                },
+                onPreviousEpisode = {
+                    showOverflow = false
+                    transport.onPreviousEpisode()
+                },
+                onQueueClick = {
+                    showOverflow = false
+                    sheets.onQueueClick()
+                },
+                onMarkWatchedAndSkip = {
+                    showOverflow = false
+                    sheets.onMarkWatchedAndSkip()
+                },
+                onMarkUnwatchedAndQuit = {
+                    showOverflow = false
+                    sheets.onMarkUnwatchedAndQuit()
+                },
+                onRenderClick = {
+                    showOverflow = false
+                    sheets.onRenderClick()
+                },
+                // The cycle closes the panel: the item's label reads the session
+                // mode, and reopening is the cheap way to re-derive it fresh.
+                onDeinterlaceCycle = {
+                    showOverflow = false
+                    sheets.onDeinterlaceCycle()
+                },
+                onInputQuickToggle = sheets.onInputQuickToggle,
+            )
+        }
         PlayerOverflowMenu(
             expanded = showOverflow,
             onDismiss = { showOverflow = false },
-            inputQuickToggles = inputQuickToggles,
-            onInputQuickToggle = onInputQuickToggle,
-            supportsSubtitleStyle = capabilities.supportsSubtitleStyle,
-            supportsDialogueBoost = capabilities.supportsDialogueBoost,
-            supportsNightMode = capabilities.supportsNightMode,
-            supportsAudioDelay = capabilities.supportsAudioDelay,
-            supportsSubtitleDelay = capabilities.supportsSubtitleDelay,
-            supportsAudioPassthrough = capabilities.supportsAudioPassthrough,
-            supportsAudioNormalization = capabilities.supportsAudioNormalization,
-            supportsChannelMixing = capabilities.supportsChannelMixing,
-            supportsSpatialAudio = capabilities.supportsSpatialAudio,
+            capabilities = capabilities,
+            menu = overflowActions,
+            inputQuickToggles = sheets.inputQuickToggles,
             dialogueBoostEnabled = effectsControls.dialogueBoostEnabled,
             dialogueBoostStrength = effectsControls.dialogueBoostStrength,
             nightModeEnabled = effectsControls.nightModeEnabled,
             nightModeStrength = effectsControls.nightModeStrength,
             audioPassthrough = effectsControls.audioPassthrough,
+            spatialAudioEnabled = effectsControls.spatialAudioEnabled,
+            spatialAudioState = effectsControls.spatialAudioState,
             showVideoStats = sheets.showVideoStats,
             audioNormalizationMode = effectsControls.audioNormalizationMode,
             audioNormalizationEnabled = effectsControls.audioNormalizationEnabled,
             channelMixMode = effectsControls.channelMixMode,
             channelMixEnabled = effectsControls.channelMixEnabled,
-            spatialAudioEnabled = effectsControls.spatialAudioEnabled,
-            spatialAudioState = effectsControls.spatialAudioState,
-            onSubtitleHubClick = {
-                showOverflow = false
-                sheets.onSubtitleHubClick()
-            },
-            onDialogueBoostClick = {
-                showOverflow = false
-                effectsControls.onDialogueBoostClick()
-            },
-            onDialogueBoostStrengthChange = effectsControls.onDialogueBoostStrengthChange,
-            onNightModeClick = {
-                showOverflow = false
-                effectsControls.onNightModeClick()
-            },
-            onNightModeStrengthChange = effectsControls.onNightModeStrengthChange,
-            onAVSyncClick = {
-                showOverflow = false
-                sheets.openSheet(PlayerSheet.AVSync)
-            },
-            playbackMode = tracks.playbackMode,
-            onPlaybackModeClick = {
-                showOverflow = false
-                sheets.openSheet(PlayerSheet.PlaybackMode)
-            },
-            hasMultipleVersions = tracks.hasMultipleVersions,
-            onVersionClick = {
-                showOverflow = false
-                sheets.onVersionClick()
-            },
-            onDecoderClick = {
-                showOverflow = false
-                sheets.openSheet(PlayerSheet.Decoder)
-            },
-            onPassthroughClick = {
-                showOverflow = false
-                effectsControls.onPassthroughClick()
-            },
-            onSpatialAudioClick = {
-                showOverflow = false
-                effectsControls.onSpatialAudioClick()
-            },
-            onVideoStatsClick = {
-                showOverflow = false
-                sheets.onVideoStatsClick()
-            },
-            onAudioNormalizationClick = {
-                showOverflow = false
-                effectsControls.onAudioNormalizationClick()
-            },
-            onAudioNormalizationModeChange = {
-                showOverflow = false
-                effectsControls.onAudioNormalizationModeChange(it)
-            },
-            onChannelMixClick = {
-                showOverflow = false
-                effectsControls.onChannelMixClick()
-            },
-            onChannelMixModeChange = {
-                showOverflow = false
-                effectsControls.onChannelMixModeChange(it)
-            },
             sleepTimerActive = sleepTimer.active,
             sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
             sleepTimerRemainingFlow = sleepTimer.remainingFlow,
-            onSleepTimerClick = {
-                showOverflow = false
-                sheets.openSheet(PlayerSheet.SleepTimer)
-            },
-            supportsVideoFilters = capabilities.supportsVideoFilters,
+            playbackMode = tracks.playbackMode,
+            hasMultipleVersions = tracks.hasMultipleVersions,
+            supportsRenderPanel = sheets.supportsRenderPanel,
+            deinterlaceMode = sheets.deinterlaceMode,
             videoFiltersActive = sheets.videoFiltersActive,
-            onVideoFilterClick = {
-                showOverflow = false
-                sheets.openSheet(PlayerSheet.VideoFilter)
-            },
-            supportsScreenshot = capabilities.supportsScreenshot,
-            onScreenshotClick = {
-                showOverflow = false
-                sheets.onScreenshotClick()
-            },
             abRepeat = abRepeat,
-            onAbRepeatToggle = {
-                showOverflow = false
-                sheets.onAbRepeatToggle()
-            },
-            onAbRepeatSetA = {
-                showOverflow = false
-                sheets.onAbRepeatSetA()
-            },
-            onAbRepeatSetB = {
-                showOverflow = false
-                sheets.onAbRepeatSetB()
-            },
-            onAbRepeatClear = {
-                showOverflow = false
-                sheets.onAbRepeatClear()
-            },
             audioOnly = sheets.audioOnly,
-            onToggleAudioOnly = {
-                showOverflow = false
-                sheets.onToggleAudioOnly()
-            },
             hasNextEpisode = transport.hasNextEpisode,
             hasPreviousEpisode = transport.hasPreviousEpisode,
-            onPreviousEpisode = {
-                showOverflow = false
-                transport.onPreviousEpisode()
-            },
             queueItemCount = sheets.queueItemCount,
             isInSyncPlaySession = sheets.isInSyncPlaySession,
-            onQueueClick = {
-                showOverflow = false
-                sheets.onQueueClick()
-            },
             incognitoModeEnabled = sheets.incognitoModeEnabled,
-            onMarkWatchedAndSkip = {
-                showOverflow = false
-                sheets.onMarkWatchedAndSkip()
-            },
-            onMarkUnwatchedAndQuit = {
-                showOverflow = false
-                sheets.onMarkUnwatchedAndQuit()
-            },
-            supportsRenderPanel = sheets.supportsRenderPanel,
-            onRenderClick = {
-                showOverflow = false
-                sheets.onRenderClick()
-            },
-            supportsDeinterlace = sheets.supportsDeinterlace,
-            deinterlaceMode = sheets.deinterlaceMode,
-            // The cycle closes the panel: the item's label reads the session
-            // mode, and reopening is the cheap way to re-derive it fresh.
-            onDeinterlaceCycle = {
-                showOverflow = false
-                sheets.onDeinterlaceCycle()
-            },
         )
     }
 }

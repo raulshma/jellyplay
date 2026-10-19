@@ -43,7 +43,7 @@ import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
@@ -117,7 +117,7 @@ internal fun TvContent(
     navItemOrder: List<String> = emptyList(),
     nowPlayingEnabled: Boolean,
     showMiniPlayer: Boolean,
-    audioPlaybackManager: AudioPlaybackManager,
+    audioPlaybackManager: ShellAudioSurface,
     onDismissMiniPlayer: () -> Unit,
 ) {
     val navigationState = shellParams.navigationState
@@ -232,7 +232,7 @@ internal fun PhoneContent(
     hideBottomNavOnScroll: Boolean,
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
-    audioPlaybackManager: AudioPlaybackManager,
+    audioPlaybackManager: ShellAudioSurface,
     audioItemId: String?,
     onDismissMiniPlayer: () -> Unit,
     animatedNavBarColor: Color,

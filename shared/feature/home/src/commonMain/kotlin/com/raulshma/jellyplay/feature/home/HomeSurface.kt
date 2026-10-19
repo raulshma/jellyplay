@@ -76,8 +76,9 @@ internal fun homeSurface(
     state: HomeUiState,
     offlineContent: OfflineHomeContent,
 ): HomeSurface = when {
-    state.error != null && state.sections.isEmpty() &&
-        state.renderSource == HomeRenderSource.Online -> HomeSurface.HardError
+    // The hard-error verdict, folded once on [HomeUiState.isHardError] — the
+    // same three terms this arm used to restate inline.
+    state.isHardError -> HomeSurface.HardError
 
     state.renderSource == HomeRenderSource.Offline.Explicit &&
         offlineContent.sections.isEmpty() -> HomeSurface.NoDownloads(state.isGoingOnline)

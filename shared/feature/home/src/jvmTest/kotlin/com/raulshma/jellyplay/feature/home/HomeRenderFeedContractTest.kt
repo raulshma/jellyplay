@@ -70,20 +70,20 @@ class HomeRenderFeedContractTest {
     }
 
     private fun state(feed: HomeRenderFeed) = HomeContentState(
+        core = HomeContentState.Core(
+            homeHeroEnabled = true,
+            homeBackdropEnabled = true,
+            discoverEnabled = false,
+            experimentalCardClippingEnabled = false,
+            continueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
+        ),
         feed = feed,
-        homeHeroEnabled = true,
-        homeBackdropEnabled = true,
-        discoverEnabled = false,
-        experimentalCardClippingEnabled = false,
         featuredItem = null,
         backgroundColor = Color.Black,
         contentPad = 0.dp,
         headerHeight = 0.dp,
-        isLightTheme = false,
-        continueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
         discoverRows = emptyList<List<SeerrSearchItem>>(),
         allDiscoverItems = emptyList(),
-        recentlyGrabbed = emptyList(),
     )
 
     @Test

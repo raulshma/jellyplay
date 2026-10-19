@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import com.raulshma.jellyplay.feature.player.video.PlayerSheet
 import com.raulshma.jellyplay.feature.player.video.formatDuration
+import com.raulshma.jellyplay.feature.player.video.state.ticksToFraction
 import kotlin.test.Test
 import kotlin.test.*
 
@@ -10,23 +11,25 @@ class SeekSliderTest {
     @Test
     fun seekSlider_zeroDuration_fractionIsZero() {
         val duration = 0L
-        val fraction = if (duration > 0) 0L.toFloat() / duration else 0f
+        // The production core (the seek bar's marker math): a duration-less
+        // stream renders 0.
+        val fraction = ticksToFraction(ticks = 0L, durationMs = duration)
         assertEquals(0f, fraction)
     }
 
     @Test
     fun seekSlider_halfway_fractionIs0_5() {
-        val duration = 100_000L
-        val position = 50_000L
-        val fraction = position.toFloat() / duration
+        val durationMs = 100_000L
+        val positionMs = 50_000L
+        val fraction = ticksToFraction(positionMs * 10_000L, durationMs)
         assertEquals(0.5f, fraction, 0.001f)
     }
 
     @Test
     fun seekSlider_atEnd_fractionIs1() {
-        val duration = 100_000L
-        val position = 100_000L
-        val fraction = position.toFloat() / duration
+        val durationMs = 100_000L
+        val positionMs = 100_000L
+        val fraction = ticksToFraction(positionMs * 10_000L, durationMs)
         assertEquals(1f, fraction, 0.001f)
     }
 

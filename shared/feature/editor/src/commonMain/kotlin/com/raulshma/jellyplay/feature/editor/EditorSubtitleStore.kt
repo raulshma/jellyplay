@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.editor
 
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * One external-provider subtitle's durable-save request — the parameter
@@ -48,4 +51,51 @@ internal interface EditorSubtitleStore {
 
     /** Deletes local copies of the server subtitle stream just removed at [index]. */
     suspend fun purgeDeletedServerStreamCopies(itemId: String, index: Int, deletedStream: MediaStream?)
+
+    /**
+     * The provider-subtitle choreography the editor VM used to inline as ~40
+     * lines inside `handleDownloadProviderSubtitle` — it has exactly one
+     * caller and every half of it (persist/attribute) already lived here, so
+     * the sequencing belongs here too:
+     *
+     * 1. [save] — the durable on-device copy FIRST, so the subtitle survives
+     *    even if the server upload fails (e.g. offline; mirrors the player's
+     *    SubtitleManager provider-download path).
+     * 2. Base64-encode the bytes and snapshot the CURRENT external subtitle
+     *    indices through [streams] (the pre-upload set [attributeUploaded]
+     *    matches the new stream against).
+     * 3. [upload] — the server round trip, handed the encoded payload.
+     * 4. On upload success: [onUploaded] (the editor's data reload, so the
+     *    new server stream is visible) then [attributeUploaded] against the
+     *    post-upload [streams] snapshot — so a later server-side delete can
+     *    purge exactly this local copy.
+     *
+     * The upload Result is returned verbatim; the failure arm stays
+     * caller-side (the VM owns the busy/error flags and the
+     * "Saved to device only" degradation wording). A default body keeps the
+     * seam's implementors (the JVM adapter and the tests' recording fake)
+     * untouched by this fold.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    suspend fun saveUploadAndAttribute(
+        save: ProviderSubtitleSave,
+        streams: () -> List<MediaStream>,
+        upload: suspend (base64: String) -> Result<Unit>,
+        onUploaded: suspend () -> Unit,
+    ): Result<Unit> {
+        save(save)
+        val base64 = Base64.Default.encode(save.bytes)
+        val preUploadExternalIndices = streams()
+            .filter { it.type == StreamType.SUBTITLE && it.isExternal }
+            .mapTo(mutableSetOf()) { it.index }
+        return upload(base64)
+            .onSuccess {
+                onUploaded()
+                attributeUploaded(
+                    save = save,
+                    streamsAfterUpload = streams(),
+                    preUploadExternalIndices = preUploadExternalIndices,
+                )
+            }
+    }
 }

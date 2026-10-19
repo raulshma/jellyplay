@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
+import com.raulshma.jellyplay.core.testfixtures.FakeLyricsRepository
+import com.raulshma.jellyplay.core.testfixtures.FakePlaybackRepository
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

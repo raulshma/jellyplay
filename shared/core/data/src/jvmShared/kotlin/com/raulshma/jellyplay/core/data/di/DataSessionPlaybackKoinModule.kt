@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayReaderSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlaySearchHistorySyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
 import com.raulshma.jellyplay.core.data.repository.JpsyncReservation
+import com.raulshma.jellyplay.core.data.repository.ProfileSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -48,6 +49,7 @@ import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
 import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 /**
@@ -267,7 +269,7 @@ internal val dataSessionPlaybackModule: Module = module {
             // theirs landed) are swept by the adapter's one-time prune.
             excludedKeys = PreferenceSyncPolicy.EXCLUDED_KEYS,
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The reader's bookmarks under the general sync protocol (ADR 0011): the
     // `books` namespace adapter over the Room `book_bookmarks` store, full
@@ -280,7 +282,7 @@ internal val dataSessionPlaybackModule: Module = module {
             bookmarkDao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The search history under the general sync protocol (ADR 0011): the
     // `search` namespace adapter over the Room `search_history` store —
@@ -295,7 +297,7 @@ internal val dataSessionPlaybackModule: Module = module {
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
             userIdProvider = { identities.currentIdentity()?.userId },
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The continue-watching removals under the general sync protocol (ADR
     // 0011): the `cw` namespace adapter over the home store's hidden-CW set —
@@ -308,7 +310,7 @@ internal val dataSessionPlaybackModule: Module = module {
             homeDiscoveryStore = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The reader's annotation backup under the general sync protocol (ADR
     // 0011, ADR 0003 local-first): the `reader` namespace adapter over the
@@ -322,7 +324,7 @@ internal val dataSessionPlaybackModule: Module = module {
             annotationDao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The home LAYOUT under the general sync protocol (ADR 0011): the
     // `homelayout` namespace adapter over the home store's layout domains
@@ -337,7 +339,7 @@ internal val dataSessionPlaybackModule: Module = module {
             homeDiscoveryStore = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The H20 DisplayPreferences home-layout sync bridge: collects the home
     // store's layoutRevision dirty signal (armed by the home_layout_autopush
@@ -369,7 +371,7 @@ internal val dataSessionPlaybackModule: Module = module {
             subtitleProviderPreferencesStore = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The per-item/per-series playback preferences under the general sync
     // protocol (the settings-backup wave): the `itemprefs` namespace adapter
@@ -383,7 +385,7 @@ internal val dataSessionPlaybackModule: Module = module {
             dao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The playlist DEFINITIONS under the general sync protocol (the
     // settings-backup wave): the `playlists` namespace adapter over the Room
@@ -397,7 +399,7 @@ internal val dataSessionPlaybackModule: Module = module {
             moodPlaylistDao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     single {
         val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
@@ -406,22 +408,24 @@ internal val dataSessionPlaybackModule: Module = module {
             apiClient = get(),
             statusStore = get(),
             sessionCacheRegistry = get(),
-            // The shared adapter registrations above (with their exclusions) —
+            // The shared adapter registrations above (with their exclusions),
+            // collected through the ProfileSyncAdapter multi-binding —
             // constructing a fresh adapter here would silently sync the
             // excluded keys (that drift is how dream/screensaver leaked
             // before). The books adapter rides the same engine: one toggle,
-            // one cycle, per-namespace adapters.
-            adapters = listOf(
-                get<JellyPlayPreferencesSyncAdapter>(),
-                get<JellyPlayBookmarksSyncAdapter>(),
-                get<JellyPlaySearchHistorySyncAdapter>(),
-                get<JellyPlayCwSyncAdapter>(),
-                get<JellyPlayReaderSyncAdapter>(),
-                get<JellyPlayHomeLayoutSyncAdapter>(),
-                get<JellyPlayIntegrationsSyncAdapter>(),
-                get<JellyPlayItemPrefsSyncAdapter>(),
-                get<JellyPlayPlaylistsSyncAdapter>(),
-            ),
+            // one cycle, per-namespace adapters. ORDER: Koin's `getAll` on
+            // secondary (`bind`) definitions returns them in
+            // index-allocation order, not declaration order — so the cycle's
+            // adapter order (and `activeNamespaces`' row order) is the
+            // engine's own REGISTRATION_ORDER sequence, which the collection
+            // is sorted by; an unlisted namespace rides last. Pinned by
+            // DataKoinModulesTest; a tenth adapter adds its binding beside
+            // these nine and never re-touches this definition.
+            adapters = getKoin().getAll<ProfileSyncAdapter>()
+                .sortedBy { adapter ->
+                    ProfileSyncRepository.REGISTRATION_ORDER.indexOf(adapter.namespace)
+                        .let { if (it < 0) Int.MAX_VALUE else it }
+                },
             deviceProfile = detectDeviceProfile(),
             deviceIdProvider = jpsyncDeviceIdProvider(dataStore),
             nowMillis = { get<TimeSource>().nowEpochMillis() },

@@ -1,5 +1,7 @@
-package com.raulshma.jellyplay.desktop.player
+package com.raulshma.jellyplay.core.testfixtures
 
+import com.raulshma.jellyplay.core.data.playback.AudioEffectsSession
+import com.raulshma.jellyplay.core.data.playback.AudioEffectsStateCore
 import com.raulshma.jellyplay.core.data.playback.AudioTrackResolver
 import com.raulshma.jellyplay.core.data.playback.ResolvedAudioTrack
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
@@ -19,6 +21,7 @@ import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.CopyOnWriteArrayList
@@ -28,21 +31,30 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Hand-rolled collaborators for the two APP-LEVEL audio queue suites (the
- * focus composition suite + the real-mpv engine suite). The canonical
- * fixture set moved to core:data jvmTest together with the semantics
- * suite and the relocated manager (test source sets do not propagate
- * across modules), so this is the deliberately-duplicated app-side copy —
- * same fakes, same bodies, kept in sync by review.
+ * Hand-rolled collaborators for the desktop audio queue tests — the ONE
+ * copy of the fixture set that used to exist verbatim in TWO lanes:
+ * core:data jvmTest (the manager-semantics + state-core suites, beside the
+ * relocated manager) and apps/desktop's test source set (the two app-level
+ * suites that stayed behind — the focus composition suite and the
+ * real-mpv engine suite — whose own KDoc called this set canonical and
+ * its copy "kept in sync by review"). ADR-0006 rule 4: a fake needed by
+ * more than one module's test lane belongs here; both copies dissolved
+ * into this file with their bodies untouched (only the package and the
+ * visibility changed — module-internal would strand them in this module).
  *
- * Internal top-level so both suites share them (the MediaEngine double is
- * the shared com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine since
- * the fake-twin merge — the app-side copy was deleted; its pollUntil helper
- * moved beside it into the fixtures module).
+ * Public top-level so both lanes' suites share them, same convention as
+ * [FakeMediaEngine]; the MediaEngine double itself had already merged
+ * here in the fake-twin merge.
+ *
+ * JVM-only home (jvmMain, NOT the module's usual jvmShared): the set
+ * references core:data's JVM-only [AudioEffectsSession] (that module's
+ * jvmMain), which this module's ANDROID compilation cannot resolve —
+ * jvmShared compiles into both targets. Both consumer lanes (core:data
+ * jvmTest, apps/desktop test) are JVM anyway, so nothing is lost.
  */
 
-/** Scriptable per-item resolution; mirrors what [DesktopAudioSourceResolver] returns. */
-internal class FakeResolver : AudioTrackResolver {
+/** Scriptable per-item resolution; mirrors what the desktop resolver returns. */
+class FakeResolver : AudioTrackResolver {
     val tracks = mutableMapOf<String, ResolvedAudioTrack>()
     val unresolved = mutableSetOf<String>()
     val resolveCalls = mutableListOf<Pair<String, Long>>()
@@ -58,7 +70,7 @@ internal class FakeResolver : AudioTrackResolver {
     }
 }
 
-internal class FakeImages : ImageUrlProvider {
+class FakeImages : ImageUrlProvider {
     override fun getImageUrl(itemId: String, maxWidth: Int?): String =
         "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String = ""
@@ -66,14 +78,14 @@ internal class FakeImages : ImageUrlProvider {
     override fun getLogoUrl(itemId: String): String = ""
 }
 
-internal data class StartRecord(
+class StartRecord(
     val itemId: String,
     val sessionId: String,
     val mediaSourceId: String?,
     val startPositionTicks: Long?,
 )
 
-internal class FakePlaybackRepository : PlaybackRepository {
+class FakePlaybackRepository : PlaybackRepository {
     val starts = CopyOnWriteArrayList<StartRecord>()
     val progresses = CopyOnWriteArrayList<PlaybackProgress>()
     val stops = CopyOnWriteArrayList<Triple<String, String, Long>>()
@@ -145,7 +157,7 @@ internal class FakePlaybackRepository : PlaybackRepository {
     override suspend fun getTrickplayTileImage(itemId: String, width: Int, index: Int): ByteArray? = null
 }
 
-internal class FakeLyricsRepository : LyricsRepository {
+class FakeLyricsRepository : LyricsRepository {
     private val fail = Result.failure<LyricsResult>(IllegalStateException("offline test"))
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = fail
     override suspend fun getLyricsWithFallback(itemId: String, artistName: String?, trackName: String?, duration: Double?): Result<LyricsResult> = fail
@@ -156,7 +168,7 @@ internal class FakeLyricsRepository : LyricsRepository {
 }
 
 /** In-memory Room DAO twin — the real QueuePersistenceHelper runs on top of it. */
-internal class InMemoryQueueDao : AudioQueueDao() {
+class InMemoryQueueDao : AudioQueueDao() {
     // All mutable state is cross-thread visible: the helper's persist chain
     // runs on the manager's scope thread while tests poll from the JUnit thread
     // (a plain ArrayList here once hid committed writes behind a JMM visibility
@@ -210,13 +222,13 @@ internal class InMemoryQueueDao : AudioQueueDao() {
     }
 }
 
-internal class TestTimeSource : TimeSource {
+class TestTimeSource : TimeSource {
     override fun nowEpochMillis(): Long = System.currentTimeMillis()
     override fun today(zone: ZoneId): LocalDate = LocalDate.now(zone)
     override fun nowElapsedRealtimeMillis(): Long = System.nanoTime() / 1_000_000
 }
 
-internal fun resolvedTrack(
+fun resolvedTrack(
     itemId: String,
     uri: String = "https://stream.example/$itemId",
     resumePositionTicks: Long? = null,
@@ -234,3 +246,38 @@ internal fun resolvedTrack(
     normalizationGain = normalizationGain,
     resumePositionTicks = resumePositionTicks,
 )
+
+/**
+ * State-core-backed [AudioEffectsSession] — the test twin of the app-side
+ * `DesktopAudioEffectsManager`: the full [AudioEffectsStateCore] machine
+ * plus the port's three members, so the core:data manager-semantics suite
+ * drives the REAL state machine through the manager's effects seam.
+ * [snapshotConfig] folds exactly the fields the suite asserts reach the
+ * engine config; the production fold (and its mpv `af` parity) stays
+ * pinned app-side (DesktopAudioEffectsManagerTest + the real-engine
+ * suite, which drive the real manager instead and never construct this).
+ */
+class FakeEffectsSession :
+    AudioEffectsStateCore(),
+    AudioEffectsSession {
+
+    override var onEffectsChanged: (() -> Unit)? = null
+
+    /** The desktop half's only override: every mutation funnels to the hook. */
+    override fun onEffectsStateChanged() {
+        onEffectsChanged?.invoke()
+    }
+
+    override fun applyReplayGainForTrack(trackGainDb: Float?, isShuffled: Boolean) =
+        setReplayGainContext(trackGainDb, isShuffled)
+
+    override fun snapshotConfig(): AudioEffectsConfig = AudioEffectsConfig(
+        equalizerEnabled = equalizerEnabled.value,
+        audioNormalizationMode = replayGainMode.value,
+        audioNormalizationEnabled = replayGainNormalizationActive,
+        channelMixMode = channelMixMode.value,
+        channelMixEnabled = channelMixEnabled.value,
+        pitchSemitones = pitchSemitones.value,
+        replayGainEffectiveDb = replayGainContextEffectiveDb(),
+    )
+}

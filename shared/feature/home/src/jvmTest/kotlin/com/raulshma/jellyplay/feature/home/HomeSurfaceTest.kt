@@ -21,6 +21,11 @@ import kotlin.test.Test
  * `HomeRenderSourceTest`; here it licenses driving every case through
  * `renderSource` alone, so the former `offlineMode != ONLINE` branch terms
  * and the render-source terms select the same surface.
+ *
+ * The HardError arm keys on the folded verdict [HomeUiState.isHardError] —
+ * the three-term predicate computed once on the state instead of restated at
+ * the branch (and mirrored by the header chip's [HomeUiState.fetchFailed]
+ * read). The verdict's own corners are pinned at the bottom of this suite.
  */
 class HomeSurfaceTest {
 
@@ -235,5 +240,42 @@ class HomeSurfaceTest {
             populatedOffline,
         ) as HomeSurface.Content
         assertEquals(mapOf("b1" to 0.25f), content.bookProgressFractions)
+    }
+
+    // ── Folded verdicts (HomeUiState.isHardError / fetchFailed) ─────────────
+
+    @Test
+    fun `isHardError is the exact three-term HardError verdict`() {
+        // The arm's terms — failed fetch, confirmed-empty feed, online render
+        // source — asserted on the verdict the branch now consumes.
+        assertTrue(state(error = "boom").isHardError)
+        // Sections on screen are a stale snapshot, not a hard error.
+        assertFalse(
+            state(
+                error = "partial",
+                sections = listOf(HomeSection(id = "movies", title = "Movies", type = HomeSectionType.LATEST_MEDIA, items = emptyList())),
+            ).isHardError,
+        )
+        // A failed fetch under an offline render source renders the offline
+        // surfaces, never HardError — the render-source term.
+        assertFalse(state(renderSource = HomeRenderSource.Offline.Explicit, error = "boom").isHardError)
+        assertFalse(state(renderSource = HomeRenderSource.Offline.Implicit, error = "boom").isHardError)
+        assertFalse(state(renderSource = HomeRenderSource.FallbackPending, error = "boom").isHardError)
+        // No error, no verdict — even with an empty feed.
+        assertFalse(state().isHardError)
+    }
+
+    @Test
+    fun `fetchFailed is error alone - the header chip's wider verdict`() {
+        // The header chip reports ANY failed fetch, stale sections included —
+        // a strictly wider verdict than isHardError.
+        assertTrue(state(error = "boom").fetchFailed)
+        assertTrue(
+            state(
+                error = "partial",
+                sections = listOf(HomeSection(id = "movies", title = "Movies", type = HomeSectionType.LATEST_MEDIA, items = emptyList())),
+            ).fetchFailed,
+        )
+        assertFalse(state().fetchFailed)
     }
 }

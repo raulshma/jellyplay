@@ -43,7 +43,9 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.kind
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -473,10 +475,12 @@ internal fun seerrResultSubtitle(
     seriesLabel: String,
 ): String = buildString {
     item.year?.let { append(it) }
-    val typeLabel = when {
-        item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
-        item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
-        else -> item.mediaType
+    // The kind fold reads the model's SeerrMediaKind (one parse, ignoreCase);
+    // an exotic mediaType keeps the raw passthrough arm.
+    val typeLabel = when (item.kind) {
+        SeerrMediaKind.MOVIE -> movieLabel
+        SeerrMediaKind.TV -> seriesLabel
+        SeerrMediaKind.UNKNOWN -> item.mediaType
     }
     if (item.year != null) append(" · ")
     append(typeLabel)

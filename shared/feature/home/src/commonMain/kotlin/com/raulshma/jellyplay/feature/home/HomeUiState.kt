@@ -246,7 +246,31 @@ data class HomeUiState(
      * loads (cards stuck on their blurHash) on every forced refresh.
      */
     val imageReloadEpoch: Long = 0L,
-)
+) {
+    /**
+     * The refresher's verdict — the ONE meaning of "the fetch failed"
+     * (ADR-0008's single-carrier rule), the same derivation as
+     * [HomeRefreshState.fetchFailed] carried through the refresher fold.
+     * Readers (the header status chip) consume this named verdict instead of
+     * restating `error != null` from the raw field.
+     */
+    val fetchFailed: Boolean
+        get() = error != null
+
+    /**
+     * The hard-error surface verdict, computed ONCE here — the fold's output,
+     * where [renderSource], [sections] and [error] are consistent in one
+     * snapshot — instead of re-derived at each branch: the failed fetch over a
+     * confirmed-empty feed that renders [HomeSurface.HardError]. The
+     * offline-render corners stay excluded because [HomeRenderSource] already
+     * folded them away (Explicit / FallbackPending / Implicit never equal
+     * [HomeRenderSource.Online]); no reader restates the three-term predicate.
+     * Lives here and not on [HomeRefreshState] because the render source is
+     * the offline gate's fold, not the refresher's.
+     */
+    val isHardError: Boolean
+        get() = fetchFailed && sections.isEmpty() && renderSource == HomeRenderSource.Online
+}
 
 /**
  * Data backing the offline home's series delete-episodes sheet (the same

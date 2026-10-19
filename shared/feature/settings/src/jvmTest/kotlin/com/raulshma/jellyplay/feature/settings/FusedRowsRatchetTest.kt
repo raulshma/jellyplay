@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
@@ -412,5 +413,140 @@ class FusedRowsRatchetTest {
         assertEquals(emptySet(), unclaimed, "spec entries no fused row claims — they never surface in search")
         // …and no spec id is double-declared across the domain stores.
         assertEquals(specIds.size, specIds.toSet().size, "a spec id is declared twice across the stores")
+    }
+
+    // ── 6. The hidden-settings hints derive from the declarations ───────
+
+    /**
+     * The five screens' HiddenSettingsHint counts, derived through
+     * [hiddenRowsFor] from the same declarations the emission `if`s read —
+     * the retired hand literals this replaced drifted on every gated-row
+     * landing (appearance 14, audio 19, language 5, notifications 4, storage
+     * 3 — the derived values below are the declarations' truth). Playback's
+     * 9 is the documented FROZEN exception (engine-/platform-dependent; the
+     * flags vocabulary cannot express it) and is deliberately NOT pinned
+     * here. Capabilities are passed explicitly so the pins are hermetic —
+     * the hints' runtime values ride the same flags the screens build.
+     */
+    @Test
+    fun `the hidden-settings hint counts derive from the row declarations`() {
+        // Appearance: the theme group's nine advanced rows (the NotTv-forked
+        // layout row included off-TV) + 2 performance + 2 eye-care +
+        // 3 newsletter; on TV the fork drops one.
+        val appearanceGroups = listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearanceNavigation,
+            SettingsScreenGroups.appearanceLibrary,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+            SettingsScreenGroups.appearanceNewsletter,
+        )
+        assertEquals(
+            16,
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            "appearance phone hint drifted",
+        )
+        assertEquals(
+            15,
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            "appearance tv hint drifted",
+        )
+
+        // Audio: 17 plain-advanced rows at the default preferences (every
+        // effect parent off — the All(Advanced, WhenOn) strength rows count
+        // nothing until their parent toggles on), plus the cache group's
+        // three advanced rows where that group composes.
+        val audioFlags = audioRowAdmissionFlags(showAdvanced = false, AudioPreferences())
+        assertEquals(
+            17,
+            hiddenRowsFor(listOf(SettingsScreenGroups.audio), audioFlags),
+            "audio hint (no cache group) drifted",
+        )
+        assertEquals(
+            20,
+            hiddenRowsFor(listOf(SettingsScreenGroups.audio, SettingsScreenGroups.audioCache), audioFlags),
+            "audio hint (with cache group) drifted",
+        )
+
+        // Language: the subtitles group's seven Advanced style rows, plus
+        // the HDR font-size row while the HDR-style parent is on.
+        val languageGroups = listOf(
+            SettingsScreenGroups.languageGeneral,
+            SettingsScreenGroups.languageSubtitles,
+        )
+        assertEquals(
+            7,
+            hiddenRowsFor(
+                languageGroups,
+                RowAdmissionFlags(showAdvanced = false, supportsAppLocaleOverride = false),
+            ),
+            "language hint drifted",
+        )
+        assertEquals(
+            8,
+            hiddenRowsFor(
+                languageGroups,
+                RowAdmissionFlags(
+                    showAdvanced = false,
+                    supportsAppLocaleOverride = false,
+                    parentsOn = rowParentsOn(LanguageRows.HdrSubtitleStyle.id to true),
+                ),
+            ),
+            "language hint (HDR parent on) drifted",
+        )
+
+        // Notifications: the enable+advanced block — 0 while notifications
+        // are disabled (the All(WhenOn) gates collapse, no special case),
+        // 6 enabled with the system-settings capability, 5 without it,
+        // 8 with quiet hours on.
+        val notifications = listOf(SettingsScreenGroups.notifications)
+        fun notificationFlags(enable: Boolean, quiet: Boolean, sysSettings: Boolean) =
+            RowAdmissionFlags(
+                showAdvanced = false,
+                supportsSystemNotificationSettings = sysSettings,
+                parentsOn = rowParentsOn(
+                    NotificationRows.NotificationsEnable.id to enable,
+                    NotificationRows.QuietHours.id to quiet,
+                ),
+            )
+        assertEquals(0, hiddenRowsFor(notifications, notificationFlags(enable = false, quiet = false, sysSettings = true)), "notifications hint (disabled) drifted")
+        assertEquals(6, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = false, sysSettings = true)), "notifications hint (enabled) drifted")
+        assertEquals(5, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = false, sysSettings = false)), "notifications hint (no system-settings row) drifted")
+        assertEquals(8, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = true, sysSettings = true)), "notifications hint (quiet hours on) drifted")
+
+        // Storage: the cache group's five advanced tuning rows; network and
+        // downloads carry no advanced gates (the WhenOn rows count nothing —
+        // hidden under both evaluations).
+        assertEquals(
+            5,
+            hiddenRowsFor(
+                listOf(
+                    SettingsScreenGroups.storageCache,
+                    SettingsScreenGroups.storageNetwork,
+                    SettingsScreenGroups.storageDownloads,
+                ),
+                RowAdmissionFlags(showAdvanced = false),
+            ),
+            "storage hint drifted",
+        )
+
+        // Security: the auto-lock timer's All(AppLock, Advanced) gate — 1
+        // where the app-lock stack exists, 0 without it.
+        assertEquals(
+            1,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.security),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false),
+            ),
+            "security hint (app-lock platform) drifted",
+        )
+        assertEquals(
+            0,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.security),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLock = false, supportsBiometric = false),
+            ),
+            "security hint (no app-lock stack) drifted",
+        )
     }
 }

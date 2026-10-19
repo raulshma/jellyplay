@@ -56,11 +56,14 @@ class PlaybackRepositoryImpl(
      */
     private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation,
     /**
-     * Deferred cross-repository edge: the stop path announces confirmed
-     * position writes on the user-data-change flow so open screens heal even
-     * without a WS echo. Lazy keeps the construction graph acyclic.
+     * The synthetic-push seam for confirmed position writes (the delivered or
+     * staged STOP paths below): the same flow server WS pushes reach
+     * consumers through, so open screens heal even without an echo. Eager —
+     * the announcer is a leaf single, so this edge cannot cycle with the
+     * media repository's construction graph (the former reason this class
+     * deferred MediaRepository).
      */
-    private val mediaRepository: Lazy<MediaRepository>,
+    private val userDataAnnouncer: UserDataAnnouncer,
 ) : PlaybackRepository,
     com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay {
 
@@ -154,7 +157,7 @@ class PlaybackRepositoryImpl(
         // heals even when the socket is down. Offline-staged stops announce
         // through the outbox drain instead (which already does).
         if (!offlineModeManager.isOffline && result.isSuccess) {
-            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+            userDataAnnouncer.notifyUserDataChanged(listOf(itemId))
         }
         return result
     }
@@ -209,7 +212,7 @@ class PlaybackRepositoryImpl(
         )
         mediaCacheInvalidation.invalidateForUserDataChange(itemId)
         if (!offlineModeManager.isOffline) {
-            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+            userDataAnnouncer.notifyUserDataChanged(listOf(itemId))
         }
         return Result.success(Unit)
     }

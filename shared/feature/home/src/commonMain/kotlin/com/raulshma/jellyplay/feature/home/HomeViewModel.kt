@@ -170,14 +170,14 @@ internal class HomeViewModel(
 
     /**
      * H19 watch-party presence chips — deliberately OUT of [HomeUiState], the
-     * search-query precedent (see [searchQuery]): the poll loop below writes
-     * this flow on the home refresh cadence, and a whole-state write per tick
-     * would copy the ~45-field [HomeUiState] — interleaving with the
-     * refresher's emissions on the same StateFlow — for a value one row
-     * reads. The chip row collects this flow at its own scope, so a tick that
-     * changes nothing (the common case: [MutableStateFlow] dedupes on
-     * equality) recomposes nothing and [HomeUiState] emits for real changes
-     * only.
+     * search-query precedent (see [searchQuery]): the controller's poll
+     * ([HomePresenceChipsController.poll]) writes this flow on the home
+     * refresh cadence, and a whole-state write per tick would copy the
+     * ~45-field [HomeUiState] — interleaving with the refresher's emissions
+     * on the same StateFlow — for a value one row reads. The chip row
+     * collects this flow at its own scope, so a tick that changes nothing
+     * (the common case: [MutableStateFlow] dedupes on equality) recomposes
+     * nothing and [HomeUiState] emits for real changes only.
      */
     private val _presenceChips = stateFlow<List<HomePresenceChip>>(emptyList())
 
@@ -740,21 +740,24 @@ internal class HomeViewModel(
         // signed in (the identity flow re-runs the load on user switches —
         // the user-scoped clients swap underneath). A failed load resolves
         // to null inside the loader: the card hides silently, never errors.
-        launch {
+        // The gate spine ([HomeFeatureGate]) owns the dedupe + the
+        // cancel-and-restart collector; this site owns only the combine and
+        // the load→bag-write effect.
+        HomeFeatureGate(
+            scope,
             combine(
                 prefs.homeDiscovery.homeDiscovery
                     .map { it.homeStatsCard }
                     .distinctUntilChanged(),
                 authRepository.currentUser.distinctUntilChanged(),
-            ) { enabled, user -> enabled to user }
-                .collect { (enabled, user) ->
-                    val data = if (enabled && user != null) {
-                        statsCardLoader.load(userId = user.id, isAdmin = user.isAdmin)
-                    } else {
-                        null
-                    }
-                    _uiState.update { it.copy(statsCard = data) }
-                }
+            ) { enabled, user -> StatsCardTrigger(enabled, user) },
+        ) { trigger ->
+            val data = if (trigger.enabled && trigger.user != null) {
+                statsCardLoader.load(userId = trigger.user.id, isAdmin = trigger.user.isAdmin)
+            } else {
+                null
+            }
+            _uiState.update { it.copy(statsCard = data) }
         }
 
         // ── H18 genre quick-access rail ──────────────────────────────────
@@ -766,7 +769,8 @@ internal class HomeViewModel(
         // part of the trigger AND the cache key, so a user switch reloads
         // (the signed-in client bean swaps underneath — the identity-aware
         // TtlCache contract).
-        launch {
+        HomeFeatureGate(
+            scope,
             combine(
                 prefs.homeDiscovery.homeDiscovery
                     .map { it.homeGenreRail }
@@ -778,37 +782,32 @@ internal class HomeViewModel(
                 authRepository.currentUser.map { it?.id }.distinctUntilChanged(),
             ) { enabled, hasSections, online, userId ->
                 GenreRailTrigger(enabled, hasSections, online, userId)
+            },
+        ) { trigger ->
+            val chips = if (
+                trigger.enabled && trigger.hasSections && trigger.online && trigger.userId != null
+            ) {
+                genreRailCache.genres(trigger.userId)
+            } else {
+                emptyList()
             }
-                .distinctUntilChanged()
-                .collect { trigger ->
-                    val chips = if (
-                        trigger.enabled && trigger.hasSections && trigger.online && trigger.userId != null
-                    ) {
-                        genreRailCache.genres(trigger.userId)
-                    } else {
-                        emptyList()
-                    }
-                    _uiState.update { it.copy(genreChips = chips) }
-                }
+            _uiState.update { it.copy(genreChips = chips) }
         }
 
         // ── H19 watch-party presence chips ───────────────────────────────
-        // The same gate shape as the genre rail above (pref on, online,
-        // signed-in user, app foreground), plus a poll loop on the home
-        // refresh cadence (HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS): the
-        // websocket `Sessions` push was rejected because the shared socket is
-        // connect-on-demand infrastructure (SyncPlay joins, admin dashboard,
-        // cast) and is NOT connected while home shows — the controller's
-        // KDoc records the decision. The FIRST poll of a session is also the
-        // /Sessions capability probe (probe-once, hide-forever — inside the
-        // controller). collectLatest cancels the parked delay on every gate
-        // change, so a toggle/user switch/going-offline re-polls immediately
-        // or drops the loop; the foreground leg suspends the cadence
-        // while the app is backgrounded, and the re-emission on re-entry
-        // restarts the loop with an immediate poll. The default-off pref
-        // means the loop never runs (and never probes) until the user opts
-        // in.
-        launch {
+        // The gate flows fold into [PresenceGate] here; the poll itself —
+        // the cadence loop AND the probe-once/session-filter/dismiss memory
+        // it serves — lives on the controller ([HomePresenceChipsController.poll]),
+        // so the split-brain (cadence in the VM, policy in the controller)
+        // is closed. The websocket `Sessions` push was rejected because the
+        // shared socket is connect-on-demand infrastructure (SyncPlay joins,
+        // admin dashboard, cast) and is NOT connected while home shows — the
+        // controller's KDoc records the decision. The FIRST poll of a
+        // session is also the /Sessions capability probe (probe-once,
+        // hide-forever — inside the controller). The default-off pref means
+        // the loop never runs (and never probes) until the user opts in.
+        presenceChipsController.poll(
+            scope,
             combine(
                 prefs.homeDiscovery.homeDiscovery
                     .map { it.homePresenceChips }
@@ -820,22 +819,11 @@ internal class HomeViewModel(
                 _homeForeground.flow,
             ) { enabled, userId, online, foreground ->
                 PresenceGate(enabled, userId, online, foreground)
-            }
-                .distinctUntilChanged()
-                .collectLatest { gate ->
-                    while (true) {
-                        val chips = if (gate.enabled && gate.online && gate.foreground && gate.userId != null) {
-                            presenceChipsController.refresh(gate.userId)
-                        } else {
-                            emptyList()
-                        }
-                        // The chips' own flow (see [presenceChips]) — never a
-                        // whole-[HomeUiState] write per cadence tick.
-                        _presenceChips.set(chips)
-                        if (!(gate.enabled && gate.online && gate.foreground && gate.userId != null)) break
-                        delay(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS)
-                    }
-                }
+            },
+        ) { chips ->
+            // The chips' own flow (see [presenceChips]) — never a
+            // whole-[HomeUiState] write per cadence tick.
+            _presenceChips.set(chips)
         }
 
         // Fold the search holder's one UI-shaped slice into HomeUiState (same
@@ -953,6 +941,16 @@ internal class HomeViewModel(
     )
 
     /**
+     * The H17 stats-card trigger pair — the `home_stats_card` pref mirror and
+     * the signed-in user (the loader's identity + admin gate). One value so
+     * the gate spine's distinctUntilChanged compares both atomically.
+     */
+    private data class StatsCardTrigger(
+        val enabled: Boolean,
+        val user: UserInfo?,
+    )
+
+    /**
      * The H18 genre-rail trigger quad — pref on, rendered sections, online
      * mode, and the signed-in user (the cache's identity key). One value so
      * the combine's distinctUntilChanged compares all four atomically.
@@ -964,18 +962,8 @@ internal class HomeViewModel(
         val userId: String?,
     )
 
-    /**
-     * The H19 presence-chip poll gate — pref on, online mode, the signed-in
-     * user id (the probe's identity key) and the app-foreground mirror (the
-     * cadence must not poll from a backgrounded process). One value so
-     * the combine's distinctUntilChanged compares all four atomically.
-     */
-    private data class PresenceGate(
-        val enabled: Boolean,
-        val userId: String?,
-        val online: Boolean,
-        val foreground: Boolean,
-    )
+    // The H19 presence gate ([PresenceGate]) lives beside
+    // [HomePresenceChipsController] — its poll loop, not this VM, consumes it.
 
     /**
      * The VM's single command surface: every user intent arrives here as a

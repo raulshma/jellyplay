@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
+import com.raulshma.jellyplay.core.network.library.HomeWriteGeneration
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import io.mockk.coVerify
 import io.mockk.every
@@ -87,6 +88,9 @@ import kotlin.test.assertTrue
  * this suite only executes them.
  */
 class HomeFeedRealStackContractTest {
+
+    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
+    private var built: MediaRepositoryImpl? = null
 
     /**
      * Mirrors core:network's HomeSectionsFetcherTest fake (internal to that
@@ -170,19 +174,19 @@ class HomeFeedRealStackContractTest {
         private val fetcher: HomeSectionsFetcher,
     ) : HomeSectionsCachePort {
 
-        val invalidateGenerations = mutableListOf<Long>()
-        val seedGenerations = mutableListOf<Long>()
+        val invalidateGenerations = mutableListOf<HomeWriteGeneration>()
+        val seedGenerations = mutableListOf<HomeWriteGeneration>()
 
         override fun invalidateSubcallCaches() {
             fetcher.invalidateCaches()
         }
 
-        override fun invalidateDiscoverRow(rowId: String, generation: Long) {
+        override fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
             invalidateGenerations += generation
             fetcher.invalidateDiscoverRow(rowId, generation)
         }
 
-        override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: Long) {
+        override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
             seedGenerations += generation
             fetcher.seedDiscoverRow(row, items, generation)
         }
@@ -283,9 +287,10 @@ class HomeFeedRealStackContractTest {
             userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
             timeSource = fakeTimeSource,
             homeSession = homeSession,
+            userDataAnnouncer = announcerFor(homeSession) { built },
             sessionCacheRegistry = sessionCacheRegistry,
             internals = MediaRepositoryInternals(client, homeSession, sessionCacheRegistry),
-        )
+        ).also { built = it }
         return Stack(repository, client, port)
     }
 
@@ -450,8 +455,8 @@ class HomeFeedRealStackContractTest {
         val rolled = repository.rerollDiscoverRow(row)
 
         assertEquals(listOf("rolled"), rolled.getOrNull()?.map { it.id })
-        assertEquals(listOf(1L), port.invalidateGenerations, "invalidate carries the post-bump token")
-        assertEquals(listOf(2L), port.seedGenerations, "seed carries the commit token, +1 after invalidate")
+        assertEquals(listOf(HomeWriteGeneration.of(1L)), port.invalidateGenerations, "invalidate carries the post-bump token")
+        assertEquals(listOf(HomeWriteGeneration.of(2L)), port.seedGenerations, "seed carries the commit token, +1 after invalidate")
 
         val after = repository.getHomeSections(query, force = false).getOrThrow()
         assertEquals(listOf("rolled"), after.sections.single().items.map { it.id })

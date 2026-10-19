@@ -17,23 +17,33 @@ import java.time.format.DateTimeFormatter
 
 //  MediaRepository cluster flip: moved verbatim from the legacy
 // core:data shim (same package/name). Ctor-level transforms only, plus the
-// one mechanical body edit they force:
+// body edits they force:
 //  - `@Singleton` / `@Inject` stripped (one framework per type — Koin's
 //    dataJvmModule constructs this single; the legacy DataModule bridges the
 //    remaining Hilt injectors via koin().get()).
 //  - `dagger.Lazy<T>` ctor params → kotlin `Lazy<T>` (the module has no
 //    dagger dependency; memoizing single-evaluation semantics preserved —
-//    the dataJvmModule def feeds `lazy { get() }`). The deferral is the
-//    MediaRepositoryImpl ↔ PlayedStateSync construction-cycle breaker.
-//    dagger.Lazy's `.get()` call sites became `.value` (kotlin.Lazy's
-//    accessor) — the only body-level change, one-for-one mechanical.
+//    the dataJvmModule def feeds `lazy { get() }`). dagger.Lazy's `.get()`
+//    call sites became `.value` (kotlin.Lazy's accessor). The Lazy on the
+//    media-repository edge later died entirely: its only uses were the
+//    synthetic-push announcements (now the eager, cycle-free
+//    [UserDataAnnouncer] leaf) and reconcile's fresh-detail read (now the
+//    [apiClient] read this class already carried — see that site). The
+//    download-stack params stay Lazy (defensive, per their ctor kdocs).
 //  - `android.util.Log` → the module's Log facade.
 class PlayedStateSyncImpl(
     private val apiClient: LibraryApiClient,
     private val offlineRepository: OfflineRepository,
     private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
-    private val mediaRepository: Lazy<MediaRepository>,
+    /**
+     * The synthetic-push seam for confirmed writes (the played/favorite
+     * flips and the favorite toggle below): the same flow server WS pushes
+     * reach consumers through. Eager — the announcer is a leaf single, so
+     * this edge cannot cycle with the media repository's construction graph
+     * (the former reason this class deferred MediaRepository).
+     */
+    private val userDataAnnouncer: UserDataAnnouncer,
     /**
      * Auto-delete-after-watch: reads the download-lifetime pref.
      * Injected (not constructed) and lazy-deferred so the download stack
@@ -93,7 +103,7 @@ class PlayedStateSyncImpl(
             // series, never the season. Drain-context flips stay silent
             // (see [announce]).
             if (announce) {
-                mediaRepository.value.notifyUserDataChanged(listOfNotNull(itemId, seriesId))
+                userDataAnnouncer.notifyUserDataChanged(listOfNotNull(itemId, seriesId))
             }
             // Auto-delete-after-watch: item was just marked played — if the
             // user opted in and a finished download exists for it, remove it
@@ -134,7 +144,7 @@ class PlayedStateSyncImpl(
             runCatchingRethrowingCancellation { offlineRepository.applyFavoriteState(itemId, target) }
             // Same synthetic announcement as the played flip: confirmed write
             // on the user-data-change flow, socket-independent.
-            mediaRepository.value.notifyUserDataChanged(listOf(itemId))
+            userDataAnnouncer.notifyUserDataChanged(listOf(itemId))
             return Result.success(target)
         } else {
             // Online but the call failed — don't lose the user's intent: apply
@@ -189,9 +199,12 @@ class PlayedStateSyncImpl(
 
     override suspend fun reconcileOfflineRow(itemId: String): ReconcileOutcome {
         val offline = offlineRepository.getOfflineItem(itemId) ?: return ReconcileOutcome.NoChange
-        // Pull a fresh server view (bypass any cached detail so a stale cache
-        // cannot mask a newer played/position state).
-        val serverItem = mediaRepository.value.getMediaDetail(itemId, force = true).getOrNull()?.item
+        // Pull a fresh server view — the plain client read (the repo's cached
+        // detail read with force was the same fetch plus a write-through of
+        // the result into the detail cache, a side effect this background
+        // reconcile never needed; the announce-driven user-data eviction is
+        // what drops detail caches for the surfaces that read them).
+        val serverItem = apiClient.getMediaDetail(itemId).getOrNull()?.item
             ?: return ReconcileOutcome.NoChange
 
         // Favorite is a user preference shared across devices, so the server is

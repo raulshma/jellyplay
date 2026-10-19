@@ -40,13 +40,7 @@ class UserDataMutatorTest {
 
     @Before
     fun setup() {
-        // kotlin Lazy (dagger.Lazy at the time this suite was written — the
-        // cluster flip converted the ctor params) — mockk cannot mock
-        // kotlin.Lazy directly, so the real `lazy { }` wraps the mock; the
-        // impl only reads .value.
-        val lazyRepo: Lazy<UserDataWriteOperations> = lazy { userDataWrites }
-        val lazyProvider: Lazy<MediaDetailProvider> = lazy { mediaDetailProvider }
-        mutator = UserDataMutatorImpl(lazyRepo, lazyProvider)
+        mutator = UserDataMutatorImpl(userDataWrites, mediaDetailProvider)
     }
 
     /**

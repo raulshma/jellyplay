@@ -42,7 +42,12 @@ override (delegating it for value-only namespaces pushed resets as
 tombstones). Status: implemented 2026-10-14 (`MirrorProfileSyncAdapter`;
 all nine adapters ride it — the prefs adapter with its frozen root mirror
 prefix and whole `deleteRemote` override, the value-only namespaces keeping
-the SPI-default `deletedKeys`).
+the SPI-default `deletedKeys`). Registration: implemented 2026-10-19 —
+the nine bindings multi-bind the interface and `ProfileSyncRepository`
+consumes them sorted by `REGISTRATION_ORDER` (Koin's `getAll` on secondary
+binds is index-allocation order, not declaration order — the engine's own
+sequence is the contract; `DataKoinModulesTest` pins the resolved order
+through `activeNamespaces`).
 
 ## Plugin client
 
@@ -50,6 +55,17 @@ the SPI-default `deletedKeys`).
 client family (ADR-0010 §5): settings sync routes, device registry + push,
 analytics, transcodes, ratings, markers. One family implementation satisfies
 all roles; consumers and test fakes depend on the one role they use.
+
+**Library client families** — the impl-side counterpart of the consumer
+seams: `PlaylistApiClientImpl` (8 members), `CollectionApiClientImpl`
+(4) and the `HomeSectionsCachePortAdapter` are small ctor-injected adapters
+over the one `JellyfinApiEngine` single, while `LibraryApiClientImpl` keeps
+only the library-browse/home/user-data families (44 overrides, was 59).
+The port adapter takes engine + fetcher (the fetcher is constructed with
+`sources = this` inside the impl), and `HomeSectionSources.getCollectionItems`
+stays a one-line forward to the same collection adapter single — each
+family's wire bodies exist in exactly one place.
+Status: implemented 2026-10-19 (the library-client family split).
 
 ## Home
 
@@ -70,6 +86,26 @@ row without one states that absence on the registration instead of an
 absent table entry. Status: implemented 2026-10-14 (`HomeRowTransports`,
 core/network's `HomeRowFetchArms.kt`).
 
+**Fetcher cache spec** — the fetcher-local list every sub-call cache
+declares itself on, `invalidateCaches` iterates it — the
+`MediaRepositoryImpl.cacheSpecs` idiom applied to
+`HomeSectionsFetcher` (the hand clear-list grew by append-with-comment
+twice before; a forgotten clear served stale badges for a TTL). The
+suggestions-fallback predicate lives beside the assembler; both sites call
+the one function.
+Status: implemented 2026-10-19.
+
+**Home write generation** — the home pipeline's one cache-write token,
+branded: `HomeWriteGeneration` (core:network, beside the port verbs it
+qualifies) crosses the repo → port → fetcher-mirror seam named, so a raw
+epoch of a different axis no longer type-checks where the token is
+required. A data class with a private constructor + `of()` deliberately —
+a `@JvmInline` value class's JVM slot is its underlying `long`, which
+breaks mockk captures on the port verbs (boxed Long → CCE); the token
+crosses test seams far more often than hot loops. The protocol essays
+shrank to the type's KDoc.
+Status: implemented 2026-10-19.
+
 ## Details
 
 **Detail section module** — everything one detail section knows about itself:
@@ -77,8 +113,55 @@ admission (does this media get this section), fetch/enrichment arm, renderer,
 and event projection, behind one small interface registered in the detail
 section registry. The section-module pattern the Home row module proved,
 applied where a section's inputs currently restate themselves in four places.
-Status: implemented as a registry with two pilot sections (TMDB reviews,
-plugin ratings); remaining sections migrate into it as touched.
+Status: implemented as a registry; wave-2 (2026-10-19) moved
+SPECIAL_FEATURES, COLLECTION_ITEMS, UPCOMING_EPISODES and MORE_IN_COLLECTION
+(admission + renderer + their enrichment arms: specialFeatures,
+collectionItems, boxSetsContaining franchise members, upcomingEpisodes) out
+of the fold and the VM's hand list — six kinds are module-owned
+(+ the two wave-1 pilots). The every-kind-exactly-one-owner pin lives in
+`DetailSectionRegistryTest` (a kind admitted by both a fold row and a module
+would render twice; a fold row whose kind migrated fails the test). The
+remaining fold kinds migrate as touched.
+
+**Detail play sequencer** — the play click's ordered effects, decided once:
+the pure composition of `resolveDetailPlayDispatch` (stream tail) and
+`resolveTrailerPreroll` (the trailer-then-feature gate) that the screen's
+`onPlayClick` lambda used to hand-sequence inline with zero JVM surface.
+Input: one `DetailPlayContext`; output: ordered `DetailPlayEffect`s
+(EnqueueNext the feature, PlaySession the trailer/preroll arm) the lambda
+executes in order. The screen's process-wide seams (video queue, syncplay,
+player store, cinema override) arrive as one constructor bundle instead of
+four mid-body `koinInject` pulls.
+Status: implemented 2026-10-19 (`DetailPlaySequencer` beside
+`DetailPlayPolicies`).
+
+**Home content state core** — the eleven `HomeUiState` fields the content
+list reads (pref mirrors, click behavior, visit stamp, stats-card and
+genre-rail data) travel as one embedded `HomeContentState.Core` value: the
+fold at the construction site is a one-line copy per field, every reader
+qualifies through `HomeContentState.core`, and "which surface facts come
+from the VM" is answerable by looking at one type — the former shape
+interleaved those fields among the screen-derived extras. Deliberately not
+the `DetailContentState.core` wholesale shape: the home bag narrows to the
+fields the content list consumes, so an unchanged `Core` copy stays
+referentially stable while the refresher/dialog fields of `HomeUiState`
+move; the feed, featured hero, discover rows and status banners remain the
+screen-derived half.
+Status: implemented 2026-10-19.
+
+**Home feature gate** — one reactive spine for the VM's opt-in decoration
+features (H17 stats card, H18 genre rail, H19 presence poll): combine the
+feature's gate flows into one value, dedupe, run the effect once per
+distinct emission with collectLatest cancel-and-restart. The presence
+poll's cadence loop lives in `HomePresenceChipsController.poll(scope, gate)`
+— probe-once, session filtering, dismiss memory AND the poll loop are one
+owner (the split-brain closed). Read-side extraction; the ADR-0008
+write-effect lift stays rejected. The folded verdicts live on `HomeUiState`
+and each reader takes the one it means — the surface's HardError arm keys
+on `isHardError` (the three-term fold), the header chip on the refresher's
+`fetchFailed`; a raw `error != null` restatement at either site is a
+defect.
+Status: implemented 2026-10-19.
 
 ## Downloads
 
@@ -131,7 +214,56 @@ settings-group grain). The 19-branch router `when` and the manual
 module instead of touching six-plus files (the HDR sheet measured
 nineteen). Migration is staged: pilot sheets first, the rest as
 touched — the Detail section module precedent.
-Status: implemented as a registry with two pilot sheets (Hdr, Render) — `PlayerSheetModule.kt`: interface + scope + explicit no-reflection registry with an exhaustive-`when` totality gate; `PlayerSheetSaver` restores via the registry; the pilot router branches delegate to their modules and the chip/gear/cross-sheet entries reference the modules' keys. The router `when` remains for the unmigrated 17 (migrate as touched); the commands, slice-region and entry-bundle halves are later waves.
+Status: implemented as a registry; three sheets migrated (Hdr, Render,
+and — 2026-10-19 — SubtitleHub: the 41-parameter hub whose router branch
+was a pure forwarder now reads the `SheetsSessionSlice` through
+`SubtitleHubSheetModule` with per-tab input bundles, the sheet signature
+41→6; DECLARED DELTA: the hub's remote-subtitle fetch starts at sheet
+composition instead of at click — the former hand-copied click cascades
+double-fetched, and a config-change restore re-entry now refetches where
+it previously did not). The router `when` remains for the unmigrated 16 (migrate as
+touched); the commands, slice-region and entry-bundle halves are later
+waves. The sheet tests derive from the registry (`PlayerSheetRegistry.all`)
+— a hand sheet list there already drifted once and is the defect shape.
+
+**Player parameter bundles** — the overflow menu takes
+`capabilities: EngineCapabilities` + one `PlayerOverflowMenuActions` bundle
+instead of re-flattening the capability projection into per-call-site
+booleans (the codebase's own stated idiom); `ticksToFraction` (state/)
+is the one home for the seek-bar's ticks→fraction clamp policy, the six
+inline derivations and the slider tests calling production.
+Status: implemented 2026-10-19 (overflow menu 73→34 params; dead params
+dropped in the same pass).
+
+**mpv load plan** — the per-request mpv option ladder as one pure plan:
+`MpvLoadOptionsPlan` (beside the absorbed subtitle side-load plan and
+stats projection) turns a playback request into ordered (option, value)
+writes — TLS reset trio, normalized + blank-skipped language lists, the
+User-Agent extraction into the `user-agent` option, the header
+persistence discipline (reset unconditional in BOTH spellings:
+`REPLACE_LIST` replace-write for Android and desktop,
+`RESET_AND_APPEND` where the transport supports list-append), readahead.
+Each engine supplies only its transport seam. The desktop engine GAINED
+the UA extraction + language normalization + blank-skip decisions
+(deliberate parity fixes; `MpvDesktopEngineAndroidParityTest` pins the
+shared ladder).
+Status: implemented 2026-10-19.
+
+**Stats publish guard** — the engines' video-stats change-guard
+(last-value cache, scalar-change predicate, forced periodic full re-read,
+publish funnel) as one `StatsPublishGuard` in player-contract beside
+`MpvStatsProjection`, parameterized by each engine's read source; the
+published-shape comparison semantics (the HDR fold computed before the
+dedup guard) are the guard's pinned contract. Exo and mpv ride it; the
+"mirrors the Exo adapter" copy is gone.
+Status: implemented 2026-10-19.
+
+**Audio shell seam** — the app shell's read surface over the audio
+family: `ShellAudioSurface` (the narrow interface the shell consumes —
+current-playing item and the shell-read state) instead of the concrete
+androidMain `AudioPlaybackManager` class crossing into shell code. The
+manager implements it; the Koin binding is the seam.
+Status: implemented 2026-10-19.
 
 **HDR mode verdict** — the playback-mode derivation
 (`resolveHdrPlaybackMode`, today a 74-line decision tree inside the
@@ -227,10 +359,81 @@ Status: implemented 2026-10-18 (`DetailContentState.core` + extras incl. the nes
 **Model-typed enrichment roles** — the detail-facing plugin roles (mdbList ratings, TMDB season ratings, anime markers, similar items) return `core:model` types; wire DTOs decode at the role implementation, completing the mapper's stated "DTOs stop at the client boundary." Presentation rules (dropping scoreless entries) stay in the section module arm, not the role.
 Status: implemented 2026-10-18 (the three detail-facing roles re-typed; `DetailSectionEnrichmentHost` model-only; settings/admin roles keep their DTO-in-ViewModel convention — a future review's term if it ever ratifies).
 
+## Admin (logs, plugins)
+
+**Log line parse** — the log screen's severity-highlight decode as plain
+JVM types (`parseLogLineSpans` / `LogLineRole` / `LogLineSpan`, jvmShared):
+the whole-word severity regex (alternation ordered so `WARN` yields to
+`WARNING` inside the longer word) and the token → role fold live beside a
+parse test; the composable only maps role → tint and draws. The former
+file-private `parseLogLine` was Compose-typed (`AnnotatedString`) and
+therefore JVM-unreachable though pure.
+Status: implemented 2026-10-19.
+
+**Plugin settle-then-refetch** — the plugins' wait-for-server-effect idiom
+as one `settleThenRefetch(delayMs, refetch)` (the bare `delay(…)` plus
+follow-up that eight `PluginsViewModel` / `PluginDetailViewModel` call
+sites re-wrote); the sites' delay literals stay verbatim — installs
+1000 ms, the other commands 500 ms — no recorded rationale to unify them
+against.
+Status: implemented 2026-10-19.
+
 ## Cross-feature
 
 **Screen-shape declaration** — each settings screen's ordered section list, typed as payload-free `SettingsScreenSection(idSet, advancedOnly)`; the scroll-adjust arithmetic derives from it (`deriveAdjustForAdvanced`) and a source-scan guard ties each `advancedOnly` flag to an advanced-gated emission block. The declaration must never grow a composable slot — that would be ADR-0009's rejected registry at group grain. Emission blocks and engine-dependent hidden-count literals stay hand-written.
-Status: implemented 2026-10-18 (Playback + Appearance converted — the only two non-identity adjust functions).
+Status: implemented 2026-10-18 (Playback + Appearance converted — the only two non-identity adjust functions). Extension, 2026-10-19: `hiddenRowsFor(groups, flags)` derives six screens' hidden-count hints from the same declarations (Playback's `9` stays a documented frozen literal — no derivation reproduces it across the (isTv, engine) combos), pinned by `FusedRowsRatchetTest`. DECLARED DELTA: Appearance's derived count differs from the old literal `14` — the hand sum under-counted from the day the third newsletter row landed; the hint now states the true hidden-row count. The navigation customization's row list derives from core:ui's `NAV_DESTINATIONS` (the registry wins on icon/order — its two live icon drifts died with the hand table); only the route→subtitle map stays local. The app module's three ViewModel defs ride `viewModelOf(::X)` with a source-scan totality guard (the settings convention extended; genuinely-mechanical carve-out).
+
+**Reset review cross-pin** — every spec-backed preference in a reset
+category has a `DiffField` row (the Factory-Reset / restore-wizard review
+surface's totality is no longer self-referential); sanctioned omissions
+ride an explicit pinned-exception set in
+`PreferenceSpecDiffFieldRatchetTest`.
+Status: implemented 2026-10-19.
+
+**Request action table** — "which actions are legal for this request
+status" as one `requestActionsFor(status, isAdmin)` beside the module's
+status-presentation table; the list row and the detail sheet render the
+one table (placement/styling stays per-surface). The admin TaskState
+family has the same single home (`TaskStatePresentation`: color role,
+cancellable, startable, label — labels single-sited, i18n follow-up
+recorded), as do the requests-side ArrDownloadStatus rows.
+Status: implemented 2026-10-19.
+
+**Seerr media kind** — `SeerrMediaKind` + `SeerrRequestItem.kind` derived
+once in core:model beside `effectiveMediaStatus` (ignoreCase); the thirteen
+`type.equals("movie")` parse sites across five modules read the model. The
+core/data sites gaining ignoreCase was a live misroute bug ("Movie"
+payloads) — fixed deliberately.
+Status: implemented 2026-10-19.
+
+**Scan grace window** — the dashboard's optimistic scan grace-window
+machine and the WS-freshness rule as small tested holders beside the
+`MediaCleanupScanStateHolder` precedent; the dashboard VM delegates.
+Status: implemented 2026-10-19 (`LibraryScanWindow`).
+
+**Subtitle upload choreography** — the editor's provider-subtitle
+save → encode → upload → reload → attribute sequencing lives in
+`EditorSubtitleStore.saveUploadAndAttribute` (one caller, and the
+persist/attribute halves already lived there); the VM keeps only
+busy/error flags and the degradation wording.
+Status: implemented 2026-10-19.
+
+**User-data announcer** — the synthetic-push seam for confirmed writes:
+`UserDataAnnouncer` (the flow + the record) is a leaf single, so the write
+paths upstream of the repository's construction graph
+(`PlayedStateSyncImpl`, `PlaybackRepositoryImpl`) announce eagerly — the
+`lazy { get<MediaRepository>() }` cycle-breaks and their DI prose are
+gone. The repository funnels its own union member through the same seam.
+The outbox drainer keeps its `MediaRepository` seam deliberately (its
+derived flips ride `markPlayed` for the cache-dropping semantics).
+Status: implemented 2026-10-19.
+
+**Test fixtures home** — ADR-0006 rule 4 enforced where it had drifted:
+the desktop-audio queue fixtures (verbatim twice, "kept in sync by
+review") live once in `:shared:core:test-fixtures` (jvmMain — the fakes
+reference core:data's jvmMain-only `AudioEffectsSession`; both consumer
+lanes are JVM-only).
+Status: implemented 2026-10-19.
 
 **Koin registration totality** — plain ViewModel registrations ride `viewModelOf(::X)`; hand-written blocks remain only where wiring is genuinely non-obvious (nullable platform seams, function-typed ctor defaults). A source-scan guard asserts every ViewModel class has exactly one registration.
 Status: implemented 2026-10-18 (`SettingsKoinModule` 398→238 lines, 25 converted / 3 hand-kept; settings only — the hand-written convention stands elsewhere).
@@ -358,3 +561,31 @@ the deletion test (order-as-data adds interface without depth; the
 29-parameter constructor is a testability extraction, not a seam);
 only the desktop timeout-twin merge stands, as chore rather than
 architecture.
+
+The 2026-10-19 pass (six exploration agents: engines, core data/network,
+details+home, the nine previously-unswept feature modules, shells +
+settings, and a repo-wide testability audit; auto-grilled, all
+deletion-test-passing candidates implemented the same session) ratified
+the **mpv load plan**, **Stats publish guard**, **Player parameter
+bundles**, the SubtitleHub wave of the **Player sheet module**, the
+**Home write generation**, the sync multi-binding + `REGISTRATION_ORDER`
+extension of the **Sync adapter base**, the **Library client families**,
+the **Fetcher cache spec**, the **User-data announcer**, wave-2 of the
+**Detail section module** (+ its exactly-one-owner pin), the **Detail
+play sequencer**, the **Home content state core**, the **Home feature
+gate**, the **Request action table** + **Task state presentation** +
+**Seerr media kind**, the **Scan grace window**, the **Subtitle upload
+choreography**, `hiddenRowsFor` + the **Reset review cross-pin**, the
+app-module **Koin registration totality** extension, the **Audio shell
+seam** and the **Test fixtures home** hoist. REJECTED and recorded: a
+global `PlayerEnvironment` ctor bundle (param plumbing, not a seam —
+the startup-prewarm rejection applies verbatim); VM/session cohort
+facades and the PlaybackSession file split (real, top of the next
+review's list, too entangled to automate); the full 16-enrichment
+migration (staged as touched); the audio/effects **Preference spec
+tier** domain (requires the plugin-catalog artifact regeneration —
+next domain, next session); the version-probe twin hoist (the twin's
+own KDoc waits for a third consumer); the MediaRepositoryImplTest
+narrow-fake rework; screen file-splits and dedupes (chores, the
+deletion test is neutral); a live/VOD transport sub-interface (until a
+third family forces it).

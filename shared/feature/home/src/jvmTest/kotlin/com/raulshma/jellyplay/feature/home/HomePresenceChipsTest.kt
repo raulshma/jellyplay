@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
@@ -11,6 +12,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -226,6 +233,70 @@ class HomePresenceChipsTest {
         val chips = controller.refresh(currentUserId = "me")
         assertEquals(listOf("s2"), chips.map { it.sessionId })
         assertFalse(controller.isDismissed("s2"))
+    }
+
+    // ── Poll (the cadence loop, moved from the VM) ───────────────────────
+
+    @Test
+    fun poll_pollsImmediately_thenOnTheHomeCadence_andStopsWhenTheGateCloses() = runTest {
+        stubSessions(session("s1", userId = "alex"))
+        stubGroups()
+        val gate = MutableStateFlow(
+            PresenceGate(enabled = true, userId = "me", online = true, foreground = true),
+        )
+        val emissions = mutableListOf<List<HomePresenceChip>>()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        try {
+            buildController().poll(scope, gate) { emissions.add(it) }
+
+            // The first poll of a session is immediate — and it is the
+            // /Sessions capability probe (one network read so far).
+            runCurrent()
+            assertEquals(1, emissions.size)
+            assertEquals(1, emissions.single().size)
+
+            // The cadence tick: one poll per home refresh interval.
+            advanceTimeBy(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS)
+            runCurrent()
+            assertEquals(2, emissions.size)
+
+            // The gate closes (pref off / going offline / signed out): an
+            // immediate empty emission folds the row away, the parked loop
+            // is cancelled, and the cadence stops polling for good.
+            gate.value = PresenceGate(enabled = false, userId = "me", online = true, foreground = true)
+            runCurrent()
+            assertEquals(3, emissions.size)
+            assertTrue(emissions.last().isEmpty())
+            advanceTimeBy(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS * 3)
+            assertEquals(3, emissions.size)
+            coVerify(exactly = 2) { adminRepository.getSessions() }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun poll_closedGate_writesEmptyOnce_withoutProbing() = runTest {
+        // The default-off pref shape: the loop's first (and only) tick is the
+        // empty write — /Sessions is never asked, so opting in later (a gate
+        // flip) probes and polls afresh from a controller that never ran.
+        stubSessions(session("s1", userId = "alex"))
+        val gate = MutableStateFlow(
+            PresenceGate(enabled = false, userId = "me", online = true, foreground = true),
+        )
+        val emissions = mutableListOf<List<HomePresenceChip>>()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        try {
+            buildController().poll(scope, gate) { emissions.add(it) }
+
+            runCurrent()
+            assertEquals(listOf(emptyList<HomePresenceChip>()), emissions)
+            advanceTimeBy(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS * 2)
+            assertEquals(1, emissions.size)
+            coVerify(exactly = 0) { adminRepository.getSessions() }
+        } finally {
+            scope.cancel()
+        }
     }
 
     // ── Pure projection helpers ──────────────────────────────────────────

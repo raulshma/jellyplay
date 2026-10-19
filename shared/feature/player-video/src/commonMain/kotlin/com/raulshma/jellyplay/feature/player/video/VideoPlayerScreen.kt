@@ -1611,7 +1611,6 @@ fun VideoPlayerScreen(
                     // through the sheet module's registered key.
                     supportsRenderPanel = uiState.preferredPlayerType == PlayerType.MPV,
                     onRenderClick = { openSheet(RenderSheetModule.sheet) },
-                    supportsDeinterlace = uiState.engineCapabilities.supportsDeinterlace,
                     deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
                         controls.render.deinterlace
                     } else {
@@ -1622,10 +1621,13 @@ fun VideoPlayerScreen(
                     queueItemCount = videoQueue.size,
                     isInSyncPlaySession = uiState.isInSyncPlaySession,
                     onQueueClick = { openSheet(PlayerSheet.Queue) },
+                    inputQuickToggles = inputQuickToggles,
+                    onInputQuickToggle = onInputQuickToggle,
                 ),
                 tracks = TrackControls(
                     streamingQuality = uiState.uiPrefs.streamingQuality,
                     playbackMode = uiState.uiPrefs.playbackMode,
+                    currentAspectRatio = aspectRatio,
                     playMethod = uiState.media.playMethod,
                     isDirectPlayForced = uiState.media.isDirectPlayForced,
                     hdrType = uiState.hdrType,
@@ -1637,8 +1639,6 @@ fun VideoPlayerScreen(
                     hasMultipleVersions = uiState.media.mediaSources.size > 1,
                     mpvConfigNoticeActive = engine?.subtitleStyleOwnership?.isActive == true,
                 ),
-                currentAspectRatio = aspectRatio,
-                detectedAspectRatio = detectedAspectRatio,
                 isVisible = chrome.visible && !isInPipMode && !isScreenLocked,
                 capabilities = uiState.engineCapabilities,
                 syncPlay = SyncPlayIndicator(
@@ -1655,8 +1655,6 @@ fun VideoPlayerScreen(
                 ),
                 abRepeat = abRepeat,
                 castRouteButton = viewModel.sessionSlices.cast.routeButton,
-                inputQuickToggles = inputQuickToggles,
-                onInputQuickToggle = onInputQuickToggle,
                 showClock = uiState.uiPrefs.showClock,
                 showTimeRemaining = uiState.uiPrefs.showTimeRemaining,
                 tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,

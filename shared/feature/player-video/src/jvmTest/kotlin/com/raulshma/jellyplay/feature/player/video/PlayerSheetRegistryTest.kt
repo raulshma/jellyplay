@@ -9,8 +9,9 @@ import kotlin.test.assertSame
 /**
  * Pins the player sheet registry (the sheet-module pilot wave): every
  * [PlayerSheet] member is registered exactly once, in declaration order, the
- * Saver's restore enumeration rides the registry, and the two pilot sheets
- * (Hdr, Render) route through their modules while the rest stay hand-written.
+ * Saver's restore enumeration rides the registry, and the migrated sheets
+ * (wave 1 pilots Hdr, Render; wave 2 SubtitleHub) route through their modules
+ * while the rest stay hand-written.
  *
  * Totality technique: [PlayerSheet] is a sealed CLASS, so the home registry's
  * `HomeSectionType.entries` walk has no direct equivalent — and
@@ -55,10 +56,13 @@ class PlayerSheetRegistryTest {
     @Test
     fun registry_coversEveryMemberExactlyOnce_inCanonicalOrder() {
         // Every sealed member registered, once, in declaration order: the
-        // mapped canonical positions must be the full 0..18 sequence. A
-        // duplicate registration repeats a position; a missing one leaves a
-        // hole; a new subtype fails canonicalPosition's compile gate first.
-        assertEquals(List(19) { it }, PlayerSheetRegistry.all.map { canonicalPosition(it) })
+        // mapped canonical positions must be the full 0..last sequence (the
+        // length derives from the registry itself — the exhaustive `when`s on
+        // both sides are the compile gate that keeps a new subtype from
+        // shipping unregistered). A duplicate registration repeats a position;
+        // a missing one leaves a hole; a new subtype fails canonicalPosition's
+        // compile gate first.
+        assertEquals(PlayerSheetRegistry.all.indices.toList(), PlayerSheetRegistry.all.map { canonicalPosition(it) })
         // Exactly-once, stated directly too (the sequence pin implies it —
         // kept explicit so the intent survives pin updates).
         assertEquals(PlayerSheetRegistry.all.size, PlayerSheetRegistry.all.distinct().size)
@@ -83,28 +87,29 @@ class PlayerSheetRegistryTest {
         assertEquals(PlayerSheet.None, PlayerSheetSaver.restore("NotASheet"))
     }
 
-    // ── The wave-1 pilots ─────────────────────────────────────────────────
+    // ── The migrated sheets (the wave-1 pilots + wave 2) ──────────────────
 
     @Test
-    fun registry_pilotSheets_routeThroughTheirModules() {
+    fun registry_migratedSheets_routeThroughTheirModules() {
         assertSame(HdrSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.Hdr))
         assertSame(RenderSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.Render))
+        assertSame(SubtitleHubSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.SubtitleHub))
         // The migrated() factory derives the registration's key half from the
         // module — the two cannot drift.
         assertEquals(PlayerSheet.Hdr, HdrSheetModule.sheet)
         assertEquals(PlayerSheet.Render, RenderSheetModule.sheet)
+        assertEquals(PlayerSheet.SubtitleHub, SubtitleHubSheetModule.sheet)
     }
 
     @Test
     fun registry_unmigratedSheets_haveNoModule() {
         assertNull(PlayerSheetRegistry.moduleFor(PlayerSheet.None))
         assertNull(PlayerSheetRegistry.moduleFor(PlayerSheet.Speed))
-        assertNull(PlayerSheetRegistry.moduleFor(PlayerSheet.SubtitleHub))
         assertNull(PlayerSheetRegistry.moduleFor(PlayerSheet.Version))
         // The rest of the registry is the pending carrier: every
         // un-migrated key resolves to null exactly like a raw lookup.
         for (sheet in PlayerSheetRegistry.all) {
-            if (sheet != PlayerSheet.Hdr && sheet != PlayerSheet.Render) {
+            if (sheet != PlayerSheet.Hdr && sheet != PlayerSheet.Render && sheet != PlayerSheet.SubtitleHub) {
                 assertNull(PlayerSheetRegistry.moduleFor(sheet), "sheet=$sheet")
             }
         }

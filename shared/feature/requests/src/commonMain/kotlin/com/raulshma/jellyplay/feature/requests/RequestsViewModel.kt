@@ -13,9 +13,12 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
+import com.raulshma.jellyplay.core.model.seerr.kind
+import com.raulshma.jellyplay.core.model.seerr.pick
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
@@ -107,30 +110,40 @@ class RequestsViewModel(
     /** Shared permit bound for both enrichment fan-outs (the former enrichEach semaphore). */
     private val enrichSemaphore = Semaphore(4)
 
-    /** Media-details enrichment: one fetch per distinct (tmdbId, isMovie) pair. */
-    private val mediaEnricher = IdEnricher<Pair<Int, Boolean>, RequestMediaInfo>(
+    /**
+     * Media-details enrichment: one fetch per distinct (tmdbId, kind) pair.
+     * The kind is the model-level [SeerrRequestItem.kind] (the wire `type`
+     * parsed once in core/model, case-insensitively).
+     */
+    private val mediaEnricher = IdEnricher<Pair<Int, SeerrMediaKind>, RequestMediaInfo>(
         scope = scope,
         semaphore = enrichSemaphore,
-        fetch = { (tmdbId, isMovie) ->
-            if (isMovie) {
-                seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
-                    RequestMediaInfo(
-                        title = it.title,
-                        posterUrl = it.posterUrl,
-                        overview = it.overview,
-                        year = it.releaseDate?.take(4)?.toIntOrNull(),
-                    )
-                }
-            } else {
-                seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
-                    RequestMediaInfo(
-                        title = it.name,
-                        posterUrl = it.posterUrl,
-                        overview = it.overview,
-                        year = it.firstAirDate?.take(4)?.toIntOrNull(),
-                    )
-                }
-            }
+        fetch = { (tmdbId, kind) ->
+            // The movie/TV fetch fork reads the model's [SeerrMediaKind.pick]
+            // — UNKNOWN rides the tv leg, exactly like the former
+            // `if (isMovie) … else …`.
+            kind.pick(
+                movie = {
+                    seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.title,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.releaseDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                },
+                tv = {
+                    seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.name,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.firstAirDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                },
+            )
         },
         merge = { (tmdbId, _), info ->
             _mediaInfo.update { it + (tmdbId to info) }
@@ -268,13 +281,13 @@ class RequestsViewModel(
     /** Per-request media-details enrichment; rides the shared [mediaEnricher]. */
     private fun enrichRequests(requests: List<SeerrRequestItem>) {
         // tmdb ids collide across the movie/tv namespaces (movie 603 ≠ tv 603),
-        // so the fan-out key is the (tmdbId, isMovie) pair — one fetch per
+        // so the fan-out key is the (tmdbId, kind) pair — one fetch per
         // distinct pair, each hitting its OWN endpoint. mediaInfo stays
         // tmdbId-keyed (the read side's shape), so same-id-different-type
         // requests still overwrite one another on the write — the pre-fold
         // behaviour, now at least fed by both correct fetches.
         val distinctPairs = requests
-            .map { it.media.tmdbId to it.type.equals("movie", ignoreCase = true) }
+            .map { it.media.tmdbId to it.kind }
             .distinct()
         mediaEnricher.enrich(
             ids = distinctPairs,

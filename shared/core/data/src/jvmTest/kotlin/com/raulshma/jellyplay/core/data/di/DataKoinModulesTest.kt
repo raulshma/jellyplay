@@ -203,15 +203,11 @@ class DataKoinModulesTest {
                 koin.get<SeerrAuthenticator>() === koin.get<SeerrRepository>(),
                 "SeerrAuthenticator must alias the SeerrRepositoryImpl single (one impl, two seams)",
             )
-            // The home cache-maintenance port aliases the LibraryApiClientImpl
-            // single (the client is the port's adapter onto the fetcher) — the
-            // write/roll paths' verb seam, resolved from the network module.
+            // The home cache-maintenance port resolves to the dedicated
+            // HomeSectionsCachePortAdapter (the family split's small adapter
+            // over the engine + fetcher) — the write/roll paths' verb seam,
+            // resolved from the network module over the same engine single.
             assertResolves<com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort>(koin)
-            assertTrue(
-                koin.get<com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort>() ===
-                    koin.get<com.raulshma.jellyplay.core.network.api.LibraryApiClient>(),
-                "HomeSectionsCachePort must alias the LibraryApiClientImpl single (one impl, two seams)",
-            )
             assertResolves<StoragePolicy>(koin)
             assertResolves<TimeSource>(koin)
             assertResolves<HomeSession>(koin)
@@ -352,6 +348,37 @@ class DataKoinModulesTest {
                 "the four wave-2 backup slice sources must resolve as one set",
             )
             assertResolves<com.raulshma.jellyplay.core.datastore.UserPreferencesStore>(koin)
+
+            // ── Companion-plugin sync adapters ──────────────────
+            // The nine ProfileSyncAdapter registrations multi-bind their
+            // commonMain interface (dataSessionPlaybackModule), and the sync
+            // engine consumes them sorted by the engine's REGISTRATION_ORDER
+            // (Koin's `getAll` on secondary binds returns them in
+            // index-allocation order, not declaration order — the engine
+            // sorts, the DI comment records why). Pinned through the REAL
+            // definition — ProfileSyncRepository.activeNamespaces IS the
+            // cycle's adapter order and the settings screen's namespace row
+            // order; each resolution also walks the adapter's full ctor
+            // graph (Room DAOs + the shared user-prefs mirror store).
+            val adapterNamespaces = koin
+                .getAll<com.raulshma.jellyplay.core.data.repository.ProfileSyncAdapter>()
+                .map { it.namespace }
+            assertEquals(
+                9,
+                adapterNamespaces.size,
+                "exactly nine sync adapters must multi-bind",
+            )
+            assertEquals(
+                adapterNamespaces.distinct().sorted(),
+                adapterNamespaces.sorted(),
+                "each namespace binds exactly once",
+            )
+            assertEquals(
+                com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.REGISTRATION_ORDER,
+                koin.get<com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository>()
+                    .activeNamespaces,
+                "the sync cycle must run the adapters in the engine's registration order",
+            )
         } finally {
             database.close()
             stopKoin()

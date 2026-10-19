@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
+import com.raulshma.jellyplay.core.network.library.HomeWriteGeneration
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -54,6 +55,9 @@ import kotlin.test.assertTrue
  * suite).
  */
 class MediaRepositoryHomeSectionsCacheTest {
+
+    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
+    private var built: MediaRepositoryImpl? = null
 
     // Atomic (server, user) session flow — what the shared HomeSession
     // identity detector consumes (see JellyfinApiEngine.session). One value per
@@ -121,11 +125,12 @@ class MediaRepositoryHomeSectionsCacheTest {
             userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
             timeSource = fakeTimeSource,
             homeSession = homeSession,
+            userDataAnnouncer = announcerFor(homeSession) { built },
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
             internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        )
+        ).also { built = it }
     }
 
     private fun homeResult(tag: String) = Result.success(
@@ -282,10 +287,10 @@ class MediaRepositoryHomeSectionsCacheTest {
         val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        val invalidateGenerations = mutableListOf<Long>()
-        val seedGenerations = mutableListOf<Long>()
-        every { homeSectionsCachePort.invalidateDiscoverRow(any(), any()) } answers { invalidateGenerations += arg<Long>(1) }
-        every { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) } answers { seedGenerations += arg<Long>(2) }
+        val invalidateGenerations = mutableListOf<HomeWriteGeneration>()
+        val seedGenerations = mutableListOf<HomeWriteGeneration>()
+        every { homeSectionsCachePort.invalidateDiscoverRow(any(), any()) } answers { invalidateGenerations += arg<HomeWriteGeneration>(1) }
+        every { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) } answers { seedGenerations += arg<HomeWriteGeneration>(2) }
 
         // The roll's own fresh fetch parks between the two verbs, opening the
         // invalidate-only window a home fetch can start inside.
@@ -316,8 +321,8 @@ class MediaRepositoryHomeSectionsCacheTest {
 
         // Exactly one generation per verb, in order, +1 apart — the funnel is
         // the only writer and each verb delivered the repo's post-bump token.
-        assertEquals(listOf(1L), invalidateGenerations)
-        assertEquals(listOf(2L), seedGenerations)
+        assertEquals(listOf(HomeWriteGeneration.of(1L)), invalidateGenerations)
+        assertEquals(listOf(HomeWriteGeneration.of(2L)), seedGenerations)
 
         // Phase 1's write lands AFTER both bumps: refused (captured 0 ≠ 2),
         // still returned to its caller — and the joined phase-2 caller

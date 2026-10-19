@@ -334,7 +334,14 @@ fun NotificationSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = if (notifPrefs.enabled) 4 else 0,
+                        // Derived from the fused declarations (hiddenRowsFor):
+                        // the group's enable+advanced-gated rows (quiet-hours
+                        // pair included while quiet hours is on, the
+                        // system-settings row where its capability holds). The
+                        // disabled → 0 case falls out of the All(WhenOn) gates
+                        // — the retired `if (enabled) 4 else 0` literal
+                        // undercounted the advanced block by two.
+                        hiddenCount = hiddenRowsFor(listOf(SettingsScreenGroups.notifications), rowFlags),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

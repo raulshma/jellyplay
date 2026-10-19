@@ -62,7 +62,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import okhttp3.OkHttpClient
 import org.koin.core.module.Module
-import org.koin.compose.viewmodel.dsl.viewModel
+import org.koin.compose.viewmodel.dsl.viewModelOf
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
@@ -233,41 +233,20 @@ fun androidAppModule(context: Context): Module = module {
 }
 
 /**
- * App-shell ViewModels. Definitions are plain factories: the Activity sites
- * resolve them through the AndroidX ViewModelStore (see [KoinViewModelFactory]
- * below), so per-owner instance semantics — not Koin's own scoping — decide
- * sharing, exactly like the former Hilt-ViewModel integration's
- * viewModels() pair.
+ * App-shell ViewModels. All three are `viewModelOf` one-liners — every ctor
+ * param is a plain Koin-bound type (no getOrNull seams, no function-typed
+ * defaults), so nothing needs a hand-written def (same two documented reasons
+ * SettingsKoinModule keeps its hand-written half). The Activity sites resolve
+ * them through the AndroidX ViewModelStore (see [KoinViewModelFactory] below),
+ * so per-owner instance semantics — not Koin's own scoping — decide sharing,
+ * exactly like the former Hilt-ViewModel integration's viewModels() pair.
+ * Registration totality (exactly one def per app-module ViewModel) is pinned
+ * by AppKoinModuleViewModelTotalityGuardTest (app/src/test).
  */
 val androidAppViewModelsModule: Module = module {
-    viewModel {
-        MainViewModel(
-            authRepository = get(),
-            projections = get(),
-            homeDiscoveryStore = get(),
-            appRuntimeStateStore = get(),
-            pinRateLimiter = get(),
-            remoteControlReceiver = get(),
-            appShortcutManager = get(),
-            deepLinkHandler = get(),
-            downloadRepository = get(),
-            offlineModeManager = get(),
-            userMessageBus = get(),
-            sessionCoordinator = get(),
-            updateCoordinator = get(),
-            syncPlayOpenCoordinator = get(),
-            whatsNewCoordinator = get(),
-        )
-    }
-    viewModel {
-        PlayOnViewModel(
-            jellyfinStrategy = get(),
-            audioPlaybackManager = get(),
-        )
-    }
-    viewModel {
-        WidgetConfigViewModel(widgetDataStore = get())
-    }
+    viewModelOf(::MainViewModel)
+    viewModelOf(::PlayOnViewModel)
+    viewModelOf(::WidgetConfigViewModel)
 }
 
 /**

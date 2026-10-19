@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvCore
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEndFileError
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeHost
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvLoadOptionsPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvProperties
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
@@ -909,6 +910,12 @@ class MpvPlayerEngine(
     override fun onResetItemScopedState() {
         _liveSubtitleCue.value = null
         core.resetPlaybackCaches()
+        resetStatsGuard()
+        // The change-guard's sample dies with the item too — the new item's
+        // first stats tick must never be suppressed by the previous one
+        // (the [StatsPublishGuard] contract's reset-on-item-switch arm, the
+        // Exo adapter's site mirrored).
+        statsGuard.reset()
     }
 
     override fun play() {
@@ -1337,16 +1344,24 @@ class MpvPlayerEngine(
         }
     }
 
-    /** ElapsedRealtime of the last unguarded (full) stats read — see updateVideoStatsOnly. */
-    private var lastFullStatsReadMs = 0L
+    // The shared stats change-guard ([StatsPublishGuard], player-contract —
+    // the Exo/mpv hand copies unified), armed with this host's cadence: the
+    // scalar set can freeze while paused (frame counters stop, bitrates drop
+    // to 0), so the full property re-read — the only path that picks up
+    // fields the guard never sees move (hwdec switches, avsync, vo-delayed,
+    // track changes) — is forced at least every FULL_STATS_REREAD_MS anyway.
+    private val statsGuard = StatsPublishGuard(
+        fullRereadCadenceMs = FULL_STATS_REREAD_MS,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+    )
 
     private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
             // The shared property-name table + sanitize fold lives in
             // [MpvStatsProjection] (player-contract, desktop parity); this
-            // adapter owns only the reads seam, the change-guard and its
-            // FULL_STATS_REREAD cadence.
+            // adapter owns only the reads seam — the change-guard and its
+            // cadence are the shared guard's now.
             val reads = MpvStatsReadSource(m)
             val scalars = MpvStatsProjection.readGuardScalars(reads)
             val bufferedPositionMs = _bufferedPositionMs.value
@@ -1354,22 +1369,22 @@ class MpvPlayerEngine(
             // Cheap-scalar change guard first (mirrors the Exo adapter): the
             // ~10 string/track reads further down are worth paying only once a
             // scalar actually moved. publishStatsIfChanged stays the final emit
-            // guard. The scalar set can freeze while paused (frame counters
-            // stop, bitrates drop to 0), so a periodic full re-read is forced
-            // anyway to pick up fields the guard never sees move (hwdec
-            // switches, avsync, vo-delayed, track changes).
-            val nowMs = android.os.SystemClock.elapsedRealtime()
-            val last = lastVideoStats
-            if (last != null && last.videoBitrate == scalars.videoBitrateBps &&
-                last.audioBitrate == scalars.audioBitrateBps &&
-                last.bufferedPositionMs == bufferedPositionMs &&
-                last.droppedFrames == scalars.droppedFrames &&
-                last.totalVideoFrames == scalars.totalVideoFrames &&
-                nowMs - lastFullStatsReadMs < FULL_STATS_REREAD_MS
+            // guard; the cadence arm forces the periodic full re-read described
+            // on [statsGuard] above. The sample is scalar-only BY DECLARATION:
+            // the HDR fold below needs JNI reads, so it rides AFTER the guard
+            // and lets the cadence catch its flips (the Exo adapter computes
+            // its fold BEFORE the guard instead — same guard, declared
+            // per-host sample).
+            if (!statsGuard.admit(
+                    scalars.videoBitrateBps,
+                    scalars.audioBitrateBps,
+                    bufferedPositionMs,
+                    scalars.droppedFrames,
+                    scalars.totalVideoFrames,
+                )
             ) {
                 return
             }
-            lastFullStatsReadMs = nowMs
 
             // The per-file display-target probe (the desktop's probeHdrTarget
             // twin): read `video-target-params/gamma` once per file, at the
@@ -1462,54 +1477,50 @@ class MpvPlayerEngine(
         // the shared companion helper.
         core.rearmHdrTargetProbe()
         core.applyTargetColorspaceHint(MpvCore.targetColorspaceHintRequested(currentConfig))
-        // mTLS: the tls-* options are file-path options that
-        // PERSIST on the view's mpv handle across loads — write the reset
-        // trio when no certificate is active (same discipline as
-        // http-header-fields below) so the previous item's credentials are
-        // never inherited. Property writes only: this always runs on an
-        // initialized handle, where an option write IS a property write —
-        // the former option+property pair was two identical JNI round-trips
-        // per key.
-        MpvTlsOptions.from(request.requestSpecific?.tls).forEach { (option, value) ->
+        // The per-request option ladder is the shared [MpvLoadOptionsPlan]
+        // (player-video commonMain, desktop parity): the plan owns the
+        // DECISIONS (TLS reset trio, the UA extraction out of the headers,
+        // language normalization + blank-skip, the header persistence
+        // discipline, the start/readahead compositions); this adapter owns
+        // only the transport — property writes on the live handle. All of it
+        // runs on an initialized handle, where an option write IS a property
+        // write, so every row lands through setPropertyString except the
+        // language rows, which keep their setOptionString call shape.
+        // Android has never written demuxer-readahead-secs per request —
+        // `maxBufferMs` stays unconsumed here (null), a declared host
+        // divergence, not drift.
+        val plan = MpvLoadOptionsPlan.plan(
+            MpvLoadOptionsPlan.Request(
+                headers = request.headers,
+                preferredAudioLanguage = request.preferredAudioLanguage,
+                preferredSubtitleLanguage = request.preferredSubtitleLanguage,
+                startPositionMs = request.startPositionMs,
+                tls = request.requestSpecific?.tls,
+                maxBufferMs = null,
+            ),
+            headerFields = MpvLoadOptionsPlan.HeaderFieldsSpelling.REPLACE_LIST,
+        )
+
+        fun applyWrite(option: String, value: String) {
             try {
-                view.mpv.setPropertyString(option, value)
+                when (option) {
+                    MpvProperties.ALANG, MpvProperties.SLANG -> view.mpv.setOptionString(option, value)
+                    else -> view.mpv.setPropertyString(option, value)
+                }
             } catch (_: Exception) {}
         }
-
-        if (request.startPositionMs > 0) {
-            val startVal = "+${request.startPositionMs / 1000.0}"
-            try { view.mpv.setPropertyString(MpvProperties.START, startVal) } catch (_: Exception) {}
+        plan.optionWrites.forEach { (option, value) -> applyWrite(option, value) }
+        if (request.headers.isNotEmpty()) {
+            Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
+        }
+        // The start value rides the `start` property on this host (the
+        // desktop's twin passes it in loadfile's options slot instead — the
+        // plan composes the value, the host maps it to its transport).
+        plan.start?.let { start ->
+            try { view.mpv.setPropertyString(MpvProperties.START, start) } catch (_: Exception) {}
         }
 
         view.mpv.setPropertyBoolean(MpvProperties.SUB_VISIBILITY, true)
-        request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
-            view.mpv.setOptionString(MpvProperties.ALANG, normalizeLanguageList(language))
-        }
-        request.preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
-            view.mpv.setOptionString(MpvProperties.SLANG, normalizeLanguageList(language))
-        }
-
-        if (request.headers.isNotEmpty()) {
-            // mpv handles User-Agent as its own property (it drives the default
-            // UA for all requests, including the one mpv sends for stream
-            // probing). Pull it out so it lands in `user-agent` rather than
-            // being buried in http-header-fields, which some servers parse
-            // inconsistently. Remaining headers stay in http-header-fields,
-            // comma-joined per mpv's documented format.
-            val userAgent = request.headers.entries
-                .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
-                ?.value
-            if (!userAgent.isNullOrBlank()) {
-                try { view.mpv.setPropertyString(MpvProperties.USER_AGENT, userAgent) } catch (_: Exception) {}
-            }
-            val headerStr = request.headers.entries
-                .filter { !it.key.equals("User-Agent", ignoreCase = true) }
-                .joinToString(",") { "${it.key}: ${it.value}" }
-            if (headerStr.isNotBlank()) {
-                try { view.mpv.setPropertyString(MpvProperties.HTTP_HEADER_FIELDS, headerStr) } catch (_: Exception) {}
-            }
-            Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
-        }
 
         try {
             // Runtime choreography via the shared applier (no sub-reload /
@@ -1545,11 +1556,9 @@ class MpvPlayerEngine(
         core.addExternalSubtitle(source)
     }
 
-    private fun normalizeLanguageList(language: String): String =
-        language.split(',', ';')
-            .map { it.trim().replace('_', '-') }
-            .filter { it.isNotBlank() }
-            .joinToString(",")
+    // normalizeLanguageList (the `de; en_US` → `de,en-US` mpv language-list
+    // composition) moved to the shared [MpvLoadOptionsPlan] with the rest of
+    // the per-request ladder decisions.
 
     /**
      * The one Android-side node-transport seam of the shared parses (the

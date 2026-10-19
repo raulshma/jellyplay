@@ -294,28 +294,24 @@ public class HomeSectionsFetcher(
     /**
      * The write guard for the Jellyfin discover-row memo reads
      * ([fetchJellyfinDiscoverRows] and [refreshSection]'s DISCOVER arm): a
-     * MIRROR of the data layer's ONE home cache-write generation token
-     * (`MediaRepositoryImpl.homeWriteGeneration`). This class owns no
-     * counter — the only writes here are the [generation] parameter of the
-     * two mutating [HomeSectionsCachePort] verbs ([invalidateDiscoverRow] /
-     * [seedDiscoverRow]), each carrying the repo funnel's post-bump value,
-     * so the mirror is provably fed by the token's single owner and the
-     * bump-at-invalidate-AND-commit rule has exactly one writer (see
-     * `HomeFeed.rerollDiscoverRow`, the roll protocol's single owner).
-     * `@Volatile` because the writers arrive through port calls on the
-     * caller's thread while the guard reads ride fetch coroutines — the
-     * same explicit-visibility idiom as [lastKnownSeerrRows]. The guard
-     * compares captured-vs-current values only (never against a constant),
-     * so the mirror skipping the repo bump that has no port verb (the
-     * single-row refetch's) changes no outcome — that bump never guarded a
-     * row memo before either. One decision window IS tighter than the
-     * retired counter: the seed verb also advances the mirror (the counter
-     * moved only on invalidate), so a row writer that captured between the
-     * roll's invalidate and its seed is now rejected instead of pinning a
-     * pre-roll payload — strictly safer, never looser.
+     * MIRROR of the data layer's ONE home cache-write generation token,
+     * delivered as [HomeWriteGeneration] by the two mutating
+     * [HomeSectionsCachePort] verbs ([invalidateDiscoverRow] /
+     * [seedDiscoverRow]). This class owns no counter — the mirror is provably
+     * fed by the token's single owner (the repo funnel; the roll protocol's
+     * rules live on `HomeFeed.rerollDiscoverRow`). `@Volatile` because the
+     * writers arrive through port calls on the caller's thread while the
+     * guard reads ride fetch coroutines — the same explicit-visibility idiom
+     * as [lastKnownSeerrRows]. The guard compares captured-vs-current values
+     * only (never against a constant), so the mirror skipping the repo bump
+     * that has no port verb (the single-row refetch's) changes no outcome.
+     * One decision window is deliberately tighter than the retired internal
+     * counter: the seed verb also advances the mirror, so a row writer that
+     * captured between the roll's invalidate and its seed is rejected instead
+     * of pinning a pre-roll payload — strictly safer, never looser.
      */
     @Volatile
-    private var observedGeneration: Long = 0L
+    private var observedGeneration: HomeWriteGeneration = HomeWriteGeneration.INITIAL
 
     // ── Seerr discover rows (moved from the feature layer's ─────────────────
     // fetchCustomSeerrRows) ─────────────────────────────────────────────────
@@ -357,23 +353,34 @@ public class HomeSectionsFetcher(
     private val homeCuratedHeroCache = TtlCache<List<CuratedHeroEntry>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     /**
-     * Drops both sub-call caches so the next home fetch re-hits the server for the
-     * latest/similar rows. The rows carry per-item UserData (played badge,
-     * favorite heart, resume bar), so a watched/favorite/progress write must
-     * not let this TTL layer serve the pre-write rows — reached from the data
-     * layer through [HomeSectionsCachePort.invalidateSubcallCaches].
+     * The registry the wholesale drop iterates — this class's cacheSpecs
+     * (MediaRepositoryImpl's registry pattern): every home sub-call memo the
+     * fetcher keeps, in one list. A new memo joins every future drop by
+     * declaring itself here instead of growing [invalidateCaches] by
+     * append-with-comment (the growth pattern that list used to be). Order is
+     * declaration order of the caches above — latest, similar, discover,
+     * plugin rows, curated hero — and unobservable beyond that (the members
+     * are independent clears).
+     */
+    private val homeSubcallCaches: List<TtlCache<*>> = listOf(
+        homeLatestMediaCache,
+        homeSimilarCache,
+        homeDiscoverRowCache,
+        homePluginRowCache,
+        homeCuratedHeroCache,
+    )
+
+    /**
+     * Drops every home sub-call cache in [homeSubcallCaches] so the next home
+     * fetch re-hits the server for the memoised rows (latest, similar,
+     * discover, plugin rows, curated hero). The rows carry per-item UserData
+     * (played badge, favorite heart, resume bar), so a watched/favorite/
+     * progress write must not let this TTL layer serve the pre-write rows —
+     * reached from the data layer through
+     * [HomeSectionsCachePort.invalidateSubcallCaches].
      */
     fun invalidateCaches() {
-        homeLatestMediaCache.clear()
-        homeSimilarCache.clear()
-        homeDiscoverRowCache.clear()
-        // Plugin rows carry resolved MediaItems with per-item UserData, so a
-        // watched/favorite write must not let this memo serve the pre-write
-        // row either.
-        homePluginRowCache.clear()
-        // Same for the curated hero — its entries are full MediaItems the
-        // hero's Play/Resume affordance renders from.
-        homeCuratedHeroCache.clear()
+        homeSubcallCaches.forEach { it.clear() }
     }
 
     /**
@@ -386,7 +393,7 @@ public class HomeSectionsFetcher(
      * the drop (the same bump-then-drop order this guard always observed);
      * see `HomeFeed.rerollDiscoverRow`.
      */
-    fun invalidateDiscoverRow(rowId: String, generation: Long) {
+    fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
         observedGeneration = generation
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
         homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
@@ -412,7 +419,7 @@ public class HomeSectionsFetcher(
      * parameter — the repo funnel's post-bump token, a roll-protocol rule
      * owned by the data layer (see `HomeFeed.rerollDiscoverRow`).
      */
-    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: Long) {
+    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
         if (items.isEmpty()) return
         observedGeneration = generation
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
@@ -547,15 +554,14 @@ public class HomeSectionsFetcher(
         }
 
         val recommendationsResult = recommendationsDeferred?.await()
-        // Suggestions fallback fetched only when recommendations succeeded
-        // but produced no items — the SAME predicate the assembler's
-        // fallback branch (~162) renders on; the two are pinned together by
-        // HomeSectionsFetcherTest.
-        val suggestions = recommendationsResult
-            ?.getOrNull()
-            ?.takeIf { it.items.isEmpty() }
-            ?.let { sources.getSearchSuggestions(limit = 20).getOrNull()?.items.orEmpty() }
-            .orEmpty()
+        // Suggestions fallback fetched only when the shared predicate says the
+        // recommendations payload earned nothing ([suggestionsFallbackApplies],
+        // beside the assembler whose branch renders on the SAME predicate).
+        val suggestions = if (suggestionsFallbackApplies(recommendationsResult)) {
+            sources.getSearchSuggestions(limit = 20).getOrNull()?.items.orEmpty()
+        } else {
+            emptyList()
+        }
 
         val output = assembleHomeSections(
             HomeSectionsAssemblyInputs(
@@ -688,7 +694,7 @@ public class HomeSectionsFetcher(
         identity,
         discoverRowCacheKey(row.id, row.limit),
         force = force,
-        currentEpoch = { observedGeneration },
+        currentEpoch = { observedGeneration.value },
     ) {
         sources.getDiscoverRowItems(row)
     }

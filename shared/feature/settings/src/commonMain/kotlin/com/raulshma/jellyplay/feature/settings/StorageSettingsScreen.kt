@@ -849,7 +849,18 @@ fun StorageSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 3,
+                        // Derived from the fused declarations (hiddenRowsFor):
+                        // the cache group's five advanced tuning rows (the
+                        // retired hand literal 3 predated two of them; the
+                        // network/downloads groups carry no advanced gates).
+                        hiddenCount = hiddenRowsFor(
+                            listOf(
+                                SettingsScreenGroups.storageCache,
+                                SettingsScreenGroups.storageNetwork,
+                                SettingsScreenGroups.storageDownloads,
+                            ),
+                            rowFlags,
+                        ),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

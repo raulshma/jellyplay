@@ -12,18 +12,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Apps
 import com.composables.icons.tabler.outline.ArrowBarToDown
-import com.composables.icons.tabler.outline.DeviceTv
-import com.composables.icons.tabler.outline.Disc
-import com.composables.icons.tabler.outline.Home
-import com.composables.icons.tabler.outline.LayoutList
 import com.composables.icons.tabler.outline.Menu2
-import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
-import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -66,16 +60,52 @@ private data class NavItemDescriptor(
     val subtitleRes: StringResource,
 )
 
-// The union of video + music top-level routes, in their default display order.
-// Mirrors VIDEO_TOP_LEVEL_ROUTES / MUSIC_TOP_LEVEL_ROUTES in core:ui.
-private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
-    NavItemDescriptor(Route.Home.navKey, Res.string.settings_nav_item_home, Tabler.Outline.Home, Res.string.settings_nav_item_home_subtitle),
-    NavItemDescriptor(Route.Library.navKey, Res.string.settings_nav_item_library, Tabler.Outline.LayoutList, Res.string.settings_nav_item_library_subtitle),
-    NavItemDescriptor(Route.Search.navKey, Res.string.settings_nav_item_search, Tabler.Outline.Search, Res.string.settings_nav_item_search_subtitle),
-    NavItemDescriptor(Route.LiveTv.navKey, Res.string.settings_nav_item_live_tv, Tabler.Outline.DeviceTv, Res.string.settings_nav_item_live_tv_subtitle),
-    NavItemDescriptor(Route.MusicBrowse.navKey, Res.string.settings_nav_item_browse, Tabler.Outline.Disc, Res.string.settings_nav_item_browse_subtitle),
-    NavItemDescriptor(SHORTCUTS_NAV_KEY, Res.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, Res.string.settings_nav_item_shortcuts_subtitle),
+// The customizable floating-bar rows, DERIVED from core:ui's NAV_DESTINATIONS
+// registry: the customizable-route subset (the video/music top-level union —
+// Home, Library, Search, LiveTv, MusicBrowse — plus Shortcuts, i.e. exactly
+// the routes the floating bar renders) in registry row order, each row's
+// persisted key and icon read from its registry entry. The former hand list
+// mirrored the registry and had already drifted twice on icons (Shortcuts
+// rendered Apps vs the registry's Bolt, Library LayoutList vs Library) —
+// registry wins, so those two drifts die here (the same unification the
+// registry KDoc records for the shells).
+// The genuinely local facts are the faces the registry does not carry:
+// localized label/subtitle resources per route (the "Browse" wording the
+// customization row shares with TOP_LEVEL_LABEL_OVERRIDES' music-bar
+// divergence). The label/subtitle maps' keys ARE the customizable-route
+// enumeration; a route registered in core:ui but absent here simply gets no
+// customization row.
+private val NAV_ITEM_LABEL_RES: Map<Route, StringResource> = mapOf(
+    Route.Home to Res.string.settings_nav_item_home,
+    Route.Library to Res.string.settings_nav_item_library,
+    Route.Search to Res.string.settings_nav_item_search,
+    Route.LiveTv to Res.string.settings_nav_item_live_tv,
+    Route.MusicBrowse to Res.string.settings_nav_item_browse,
+    Route.Shortcuts to Res.string.settings_nav_item_shortcuts,
 )
+
+private val NAV_ITEM_SUBTITLE_RES: Map<Route, StringResource> = mapOf(
+    Route.Home to Res.string.settings_nav_item_home_subtitle,
+    Route.Library to Res.string.settings_nav_item_library_subtitle,
+    Route.Search to Res.string.settings_nav_item_search_subtitle,
+    Route.LiveTv to Res.string.settings_nav_item_live_tv_subtitle,
+    Route.MusicBrowse to Res.string.settings_nav_item_browse_subtitle,
+    Route.Shortcuts to Res.string.settings_nav_item_shortcuts_subtitle,
+)
+
+private val NAV_ITEMS: List<NavItemDescriptor> = NAV_DESTINATIONS
+    .filter { it.route in NAV_ITEM_LABEL_RES }
+    .map { row ->
+        NavItemDescriptor(
+            // row.key is the same string Route.navKey resolves to
+            // (NAV_KEYS_BY_ROUTE derives from these rows) — the persisted
+            // vocabulary is unchanged.
+            key = row.key,
+            labelRes = NAV_ITEM_LABEL_RES.getValue(row.route),
+            icon = row.icon,
+            subtitleRes = NAV_ITEM_SUBTITLE_RES.getValue(row.route),
+        )
+    }
 
 /**
  * A settings group that lets the user customize the floating navigation bar:

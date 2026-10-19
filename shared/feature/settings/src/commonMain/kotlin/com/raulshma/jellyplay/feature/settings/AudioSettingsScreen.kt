@@ -703,7 +703,19 @@ fun AudioSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 19,
+                        // Derived from the fused declarations (hiddenRowsFor):
+                        // the audio group's 17 plain-advanced rows plus the
+                        // parent-gated effect rows whose toggle is on, and the
+                        // cache group's three advanced rows where that group
+                        // composes. The retired hand literal (19) matched
+                        // neither surface at the defaults.
+                        hiddenCount = hiddenRowsFor(
+                            buildList {
+                                add(SettingsScreenGroups.audio)
+                                if (settingsCapabilities.supportsAudioCache) add(SettingsScreenGroups.audioCache)
+                            },
+                            rowFlags,
+                        ),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
