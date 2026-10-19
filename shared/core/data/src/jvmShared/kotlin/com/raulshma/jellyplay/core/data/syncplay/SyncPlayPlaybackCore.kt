@@ -37,8 +37,16 @@ class SyncPlayPlaybackCore constructor(
     private val timeSyncManager: TimeSyncManager,
     private val controller: SyncPlayController,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * core's Main-immediate scope hangs off as a SupervisorJob child — the
+     * per-session jobs are cancelled individually (never the scope itself),
+     * so the child now also dies with an app-level teardown.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Main.immediate)
 
     /**
      * The last APPLIED group command (set by [applyCommand], cleared by

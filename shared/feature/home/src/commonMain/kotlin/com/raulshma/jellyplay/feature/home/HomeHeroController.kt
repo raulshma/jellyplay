@@ -2,8 +2,11 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,7 +16,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
+import coil3.size.Size as CoilSize
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -21,22 +31,69 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
+import com.raulshma.jellyplay.core.ui.image.mediaImageDecodeSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import org.koin.compose.koinInject
+
+/**
+ * The hero backdrop's decode size — MUST mirror the hero `MediaImage`'s
+ * `size = CoilSize(1920, 1080)` in HomeHero.kt (performanceModeAware true, so
+ * [mediaImageDecodeSize] tiers it to 768² under performance mode exactly as
+ * the display request is clamped). The rotation prefetch loads at this size so
+ * the display request hits the prefetched memory-cache entry instead of
+ * re-fetching and re-decoding at a different key.
+ */
+private val HeroBackdropDecodeSize = CoilSize(1920, 1080)
+
+/**
+ * Holds the ONE in-flight hero-backdrop prefetch (the downloads sidecar's
+ * `imageLoader.enqueue` targetless-preload posture). A new [prefetch] call
+ * disposes the previous request first — that IS the fast-manual-navigation
+ * cancellation: a surprise pick or quick rotation tick that replaces the
+ * current hero before the last prefetch finished drops the now-stale transfer
+ * instead of letting it burn bandwidth toward a cache entry nobody will read.
+ * [cancel] runs at composition leave (the hero left Home) so no prefetch
+ * outlives the screen that wanted it.
+ */
+internal class HeroBackdropPrefetcher {
+    private var disposable: coil3.request.Disposable? = null
+
+    fun prefetch(context: PlatformContext, url: String, decodeSize: CoilSize) {
+        cancel()
+        if (url.isBlank()) return
+        disposable = SingletonImageLoader.get(context).enqueue(
+            ImageRequest.Builder(context)
+                .data(url)
+                // Same URL + same decode size as the hero's display request →
+                // same memory/disk cache keys (Coil's auto-derived memory-cache
+                // key embeds the size string). No crossfade/transition: this is
+                // a targetless preload, only the caches matter.
+                .size(decodeSize)
+                .build()
+        )
+    }
+
+    fun cancel() {
+        disposable?.dispose()
+        disposable = null
+    }
+}
 
 /**
  * Selects the hero "featured" candidate list from the home sections, in a single
- * pass. Previously this traversed all sections up to 3 times (filter+flatMap of
- * LATEST_MEDIA, then a full flatMap+filter fallback, then another bare flatMap).
+ * pass (a multi-pass filter/flatMap walk would traverse the sections up to 3
+ * times).
  *
  * Preference order: up to 3 movies/series total, taken from the LATEST_MEDIA
  * sections in order; if that yields nothing, every movie/series across all
- * sections; if that still yields nothing, every item. The result is identical
- * to the old multi-pass version but computed in one traversal with a single
- * fallback sweep.
+ * sections; if that still yields nothing, every item. Computed in one traversal
+ * with a single fallback sweep.
  */
 internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaItem> =
     buildList {
@@ -66,16 +123,38 @@ internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaIt
  * sections. The music home is excluded to match the online music home, which
  * never renders a hero — and stale online sections painted by the user-switch
  * SWR path must not leak into it. Online rendering uses the server sections.
+ *
+ * The plugin-curated billboards ride AHEAD of the local pool in the
+ * online branch ([mergeCuratedHeroCandidates] — server order, dedupe by item
+ * id, curated wins). Offline rendering never carries them: curated is
+ * server data and the offline hero features downloads only.
  */
 internal fun selectHomeHeroCandidates(
     renderingOffline: Boolean,
     homeMode: HomeMode,
     onlineSections: List<HomeSection>,
     offlineSections: List<HomeSection>,
+    curatedHero: List<CuratedHeroEntry> = emptyList(),
 ): List<MediaItem> = when {
     renderingOffline && homeMode != HomeMode.MUSIC -> selectFeaturedCandidates(offlineSections)
     renderingOffline -> emptyList()
-    else -> selectFeaturedCandidates(onlineSections)
+    else -> mergeCuratedHeroCandidates(curatedHero, selectFeaturedCandidates(onlineSections))
+}
+
+/**
+ * The curated/local merge — the curated entries' items first (exactly the
+ * plugin's serve order; a duplicated curated id keeps its FIRST slot), then
+ * the local candidates minus every id the curated list already features
+ * (curated wins, no double rotation slot). Pure and synchronously testable.
+ */
+internal fun mergeCuratedHeroCandidates(
+    curated: List<CuratedHeroEntry>,
+    local: List<MediaItem>,
+): List<MediaItem> {
+    if (curated.isEmpty()) return local
+    val curatedIds = HashSet<String>()
+    val curatedItems = curated.mapNotNull { entry -> entry.item.takeIf { curatedIds.add(it.id) } }
+    return curatedItems + local.filter { it.id !in curatedIds }
 }
 
 /**
@@ -96,6 +175,103 @@ internal fun rememberHeroHeight(): Dp {
 }
 
 /**
+ * The hero video's user gates read AT the hero — the pref mirror
+ * (`home_hero_video_enabled` touch/default, `home_hero_video_tv_enabled` TV;
+ * the additive koinInject mirror, the HomeTrickplayPeek repository precedent,
+ * because the hero composable sits below the screen orchestrator that carries
+ * the HomeUiState pref mirrors) and performance mode (the app-provided
+ * [com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode]).
+ */
+internal class HeroVideoGates(
+    /** The per-form-factor pref: the feature master gate. Default off. */
+    val prefEnabled: Boolean,
+    /** Performance mode hard-gates the clip alongside the reduced-motion gate. */
+    val performanceMode: Boolean,
+)
+
+@Composable
+internal fun rememberHeroVideoGates(): HeroVideoGates {
+    val isTv = LocalTvMode.current
+    val homeDiscovery = koinInject<HomeDiscoveryStore>()
+    val discoverySlice by homeDiscovery.homeDiscovery.collectAsStateWithLifecycle()
+    val performanceMode = LocalPerformanceMode.current
+    // Only the two hero-video flags are consumed — map them out and key
+    // on them, not the whole slice, so an unrelated home-pref change (row
+    // order, banners, stats) doesn't invalidate the gates and their readers.
+    val videoEnabled = discoverySlice.homeHeroVideoEnabled
+    val videoTvEnabled = discoverySlice.homeHeroVideoTvEnabled
+    return remember(isTv, videoEnabled, videoTvEnabled, performanceMode) {
+        HeroVideoGates(
+            prefEnabled = if (isTv) videoTvEnabled else videoEnabled,
+            performanceMode = performanceMode,
+        )
+    }
+}
+
+/**
+ * The start gate, in its pure form (the [HeroController.rotationCadence]
+ * family of Compose-free decisions): the ambient clip plays only when the
+ * pref is on AND the platform can render it (desktop: static hero), the
+ * user has not paused it for the session, neither reduced-motion nor
+ * performance mode holds, the hero is visible AND prominent AND still holds
+ * focus (TV), the lifecycle is at least RESUMED, and the list is not
+ * scrolling. Any leg failing means the static image stays — the clip's
+ * absence must never be observable work.
+ */
+internal fun heroVideoShouldPlay(
+    prefEnabled: Boolean,
+    sessionPaused: Boolean,
+    reducedMotion: Boolean,
+    performanceMode: Boolean,
+    isVisible: Boolean,
+    isProminent: Boolean,
+    heroFocusHeld: Boolean,
+    lifecycleResumed: Boolean,
+    isScrolling: Boolean,
+    platformCapable: Boolean,
+): Boolean =
+    prefEnabled &&
+        platformCapable &&
+        !sessionPaused &&
+        !reducedMotion &&
+        !performanceMode &&
+        isVisible &&
+        isProminent &&
+        heroFocusHeld &&
+        lifecycleResumed &&
+        !isScrolling
+
+/**
+ * Reactive RESUMED read for the hero's clip gate (the rotation cadence reads
+ * the same lifecycle state, but non-reactively inside its snapshotFlow
+ * collector; the clip gate needs it as composition state so an app
+ * backgrounding unmounts the surface).
+ */
+@Composable
+internal fun rememberIsLifecycleResumed(): Boolean {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumed by remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+    LaunchedEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> resumed = true
+                Lifecycle.Event.ON_PAUSE -> resumed = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        try {
+            awaitCancellation()
+        } finally {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return resumed
+}
+
+/**
  * Owns the hero rotation state and its effects: the featured-item index, the
  * "Surprise Me" pick, auto-rotation while idle, and snapping the list back to
  * the top when the hero receives focus (TV). All policy lives on
@@ -106,8 +282,7 @@ internal fun rememberHeroHeight(): Dp {
  * controller once and runs the dumb collector shells: the candidate
  * composition-write, the launch-shortcut arm, the snapshotFlow/collectLatest
  * cadence collector (8s idle / 2s while scrolling, the `isAtLeast(RESUMED)`
- * gate passed as an argument, keys preserved from the inline implementation
- * previously in `MainHomeContent`), and the focus-keyed snap effect.
+ * gate passed as an argument), and the focus-keyed snap effect.
  */
 @Composable
 internal fun rememberHeroController(
@@ -115,7 +290,7 @@ internal fun rememberHeroController(
     listState: LazyListState,
     getBackdropUrl: (String) -> String,
 ): HeroController {
-    // Conveyor transform: the legacy Context.isTv() (UI_MODE check on
+    // Conveyor transform: Context.isTv() (UI_MODE check on
     // LocalContext) is Android-only; LocalTvMode is the shared core:ui
     // equivalent and is provided from the same device-class detection at the
     // composition root, so the value is identical wherever this runs.
@@ -137,10 +312,26 @@ internal fun rememberHeroController(
     // write back into the next composition (the recomposition-loop pattern
     // Compose warns about). Keyed on the controller too, so a rebuilt
     // controller can never sit with empty candidates until the list happens
-    // to change.
+    // to change. The epoch rides alongside: candidates identity churns
+    // per refresh emission, so the cadence effect keys on this epoch instead
+    // of the list — it advances only when a write crosses the pool's
+    // availability boundary (empty ↔ non-empty), the one transition the
+    // collector must re-run on; content churn leaves a pending idle wait
+    // alone. The epoch bump itself is a SideEffect, not an in-composition
+    // write: the pending flag is a plain local (a composition-phase snapshot
+    // write costs a guaranteed extra recomposition), and the one-frame lag
+    // before the cadence effect sees the new key is irrelevant at an 8 s/2 s
+    // cadence.
+    var candidatesEpoch by remember { mutableIntStateOf(0) }
+    var epochBumpPending = false
     remember(getBackdropUrl, featuredCandidates) {
+        val wasEmpty = controller.candidates.isEmpty()
         controller.updateCandidates(featuredCandidates)
+        epochBumpPending = wasEmpty != featuredCandidates.isEmpty()
         true
+    }
+    SideEffect {
+        if (epochBumpPending) candidatesEpoch++
     }
 
     // Honor the "Surprise Me" launcher shortcut when the
@@ -160,10 +351,14 @@ internal fun rememberHeroController(
     // Cadence shell: every decision (gates, delays, post-delay re-check) is the
     // controller's [HeroController.rotationCadence]/[shouldTickNow]; this is
     // just the collector — collectLatest cancels a pending delay on any
-    // scroll-state change. Effect keys preserved from the inline implementation.
-    LaunchedEffect(featuredCandidates, listState, controller.autoRotateEnabled) {
-        snapshotFlow { listState.isScrollInProgress }
-            .collectLatest { isScrolling ->
+    // scroll-state change. The effect keys are [listState] plus the
+    // candidates epoch, and autoRotateEnabled is read inside the
+    // snapshotFlow instead — a pref or "Surprise Me" flip still re-evaluates
+    // the cadence immediately, while per-emission candidates churn does not
+    // cancel a pending 8 s idle wait.
+    LaunchedEffect(listState, candidatesEpoch) {
+        snapshotFlow { listState.isScrollInProgress to controller.autoRotateEnabled }
+            .collectLatest { (isScrolling, _) ->
                 when (
                     val cadence = controller.rotationCadence(
                         isScrolling = isScrolling,
@@ -187,6 +382,42 @@ internal fun rememberHeroController(
     LaunchedEffect(controller.focusInHero) {
         if (controller.onFocusEffect(controller.focusInHero, isTv)) {
             listState.scrollToItem(0, 0)
+        }
+    }
+
+    // Hero backdrop prefetch: the moment an item becomes current, preload the
+    // NEXT rotation successor's backdrop (same URL builder the hero display
+    // uses, [HeroBackdropDecodeSize]'s size) so a rotation swaps straight to a
+    // decoded bitmap instead of holding the blurHash placeholder through a
+    // full network fetch + decode of a ~1920px JPEG. autoRotateEnabled rides
+    // in the flow so a rotation-off state (TV default, Surprise Me) prefetches
+    // nothing; flipping it re-evaluates immediately. Every featured change
+    // REPLACES the in-flight prefetch ([HeroBackdropPrefetcher.prefetch]
+    // disposes the previous request first) and leaving the composition cancels
+    // it — a fast manual navigation never leaves stale transfers running.
+    val prefetchContext = coil3.compose.LocalPlatformContext.current
+    val prefetchPerformanceMode = LocalPerformanceMode.current
+    val backdropPrefetcher = remember { HeroBackdropPrefetcher() }
+    DisposableEffect(backdropPrefetcher) {
+        onDispose { backdropPrefetcher.cancel() }
+    }
+    LaunchedEffect(controller, backdropPrefetcher, prefetchContext, prefetchPerformanceMode) {
+        snapshotFlow {
+            Triple(controller.featuredItem, controller.nextCandidate, controller.autoRotateEnabled)
+        }.collect { (current, next, autoRotate) ->
+            if (!autoRotate) return@collect
+            val candidate = next ?: return@collect
+            if (candidate.id == current?.id) return@collect
+            val url = getBackdropUrl(candidate.id)
+            if (url.isBlank()) return@collect
+            backdropPrefetcher.prefetch(
+                context = prefetchContext,
+                url = url,
+                // The clamp must produce the display request's exact decode
+                // size (the hero keeps performanceModeAware true), or the
+                // display path would miss the prefetched memory-cache entry.
+                decodeSize = mediaImageDecodeSize(HeroBackdropDecodeSize, prefetchPerformanceMode),
+            )
         }
     }
 
@@ -229,7 +460,27 @@ internal class HeroController(
     internal var focusSnapSettled: Boolean by mutableStateOf(false)
 
     val featuredItem: MediaItem? get() = candidates.getOrNull(featuredIndex)
-    val backdropUrl: String? get() = featuredItem?.let { getBackdropUrl(it.id) }
+
+    /**
+     * The rotation successor of [featuredItem] (featuredIndex + 1, wrapping) —
+     * the candidate the next auto-rotation tick features, known ahead of time
+     * so its backdrop can be prefetched while the current item displays. Null
+     * on an empty pool; equals the current item on a single-entry pool.
+     */
+    val nextCandidate: MediaItem?
+        get() {
+            val pool = candidates
+            if (pool.isEmpty()) return null
+            return pool[(featuredIndex + 1) % pool.size]
+        }
+
+    /**
+     * Memoized per (candidates, featuredIndex) read: [featuredItem]'s
+     * backdrop string is resolved once per actual featured-item change instead
+     * of on every read. [derivedStateOf] tracks both state reads, so the
+     * value is identical to the old per-read resolution.
+     */
+    val backdropUrl: String? by derivedStateOf { featuredItem?.let { getBackdropUrl(it.id) } }
 
     fun updateCandidates(items: List<MediaItem>) {
         candidates = items
@@ -330,7 +581,7 @@ internal class HeroController(
         internal const val SCROLL_DEFER_DELAY_MS = 2_000L
     }
 
-    /** Notifies the controller that hero focus changed (used to drive the snap-to-top). */
+    /** Notifies the controller that hero focus changed (drives the snap-to-top). */
     fun onFocusChange(focused: Boolean) {
         focusInHero = focused
     }

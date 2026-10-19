@@ -55,7 +55,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_clear_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_network_policy_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_network_policy_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_size_subtitle
@@ -66,7 +65,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_default_speed_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_description_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_description_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_backfill_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_lookahead_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_lookahead_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_preload_buffer_subtitle
@@ -125,10 +123,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_volume_nor
 /**
  * The audio domain's fused row declarations — the feature-side single home of
  * every audio row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `AudioSettingsIds` holder constant (all
- * retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * Every row is a HAND-MAINTAINED residual (the audio knobs live in spec-less
  * stores) and carries its full hand search faces; the effect-dependent rows
@@ -139,7 +135,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_volume_nor
  * `audioRowAdmissionFlags` builder translates. The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * drift; search results, catalog order, group membership and per-gate
- * visibility are byte-identical to the retired declarations.
+ * visibility derive from these declarations.
  */
 internal object AudioRows {
 
@@ -515,7 +511,7 @@ internal object AudioRows {
         icon = Tabler.Outline.Music,
         titleRes = Res.string.settings_audio_prefetch_backfill,
         subtitleRes = Res.string.settings_audio_prefetch_backfill_subtitle,
-        searchSubtitleRes = Res.string.ss_audio_prefetch_backfill_subtitle,
+        searchSubtitleRes = Res.string.settings_audio_prefetch_backfill_subtitle,
         keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
         route = Route.AudioSettings(),
         isAdvanced = true,
@@ -527,7 +523,7 @@ internal object AudioRows {
         icon = Tabler.Outline.Trash,
         titleRes = Res.string.settings_audio_cache_clear,
         subtitleRes = Res.string.settings_audio_cache_clear_subtitle,
-        searchSubtitleRes = Res.string.ss_audio_cache_clear_subtitle,
+        searchSubtitleRes = Res.string.settings_audio_cache_clear_subtitle,
         keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
         route = Route.AudioSettings(),
         isAdvanced = true,
@@ -546,7 +542,7 @@ internal object AudioRows {
     )
 
     /**
-     * Every fused audio row — the ratchet's vocabulary. A computed accessor
+     * Every fused audio row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

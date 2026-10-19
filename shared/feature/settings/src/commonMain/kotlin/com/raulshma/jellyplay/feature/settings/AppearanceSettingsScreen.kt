@@ -112,30 +112,33 @@ private val THEME_HIGHLIGHT_IDS = setOf(AppearanceRows.ThemeMode.id, AppearanceR
  * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
  * the scroll target can never drift from the UI. Indices 0-2 always render;
  * 3-5 (performance, eye care, newsletter) only compose when advanced settings
- * are shown. (The home display / Next Up / home-layout rows AND the
- * home-discovery card-display quartet moved to HomeSettingsScreen.)
+ * are shown (their [SettingsScreenSection] carries `advancedOnly = true`,
+ * which [deriveAdjustForAdvanced] folds into the adjust). (The home display /
+ * Next Up / home-layout rows AND the home-discovery card-display quartet moved
+ * to HomeSettingsScreen.)
  */
-private val appearanceScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.appearanceTheme.itemIdSet,
-    SettingsScreenGroups.appearanceNavigation.itemIdSet,
-    SettingsScreenGroups.appearanceLibrary.itemIdSet,
-    SettingsScreenGroups.appearancePerformance.itemIdSet,
-    SettingsScreenGroups.appearanceEyeCare.itemIdSet,
-    SettingsScreenGroups.appearanceNewsletter.itemIdSet,
+private val appearanceScreenSections: List<SettingsScreenSection> = listOf(
+    SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.appearanceNavigation.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.appearanceLibrary.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.appearancePerformance.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.appearanceEyeCare.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.appearanceNewsletter.itemIdSet, advancedOnly = true),
 )
 
 /**
- * [resolveHighlightScrollIndex]'s [rememberHighlightScrollIndex adjustForAdvanced]
- * for this screen's LazyColumn: with advanced hidden the three trailing
- * expert groups don't compose, so their ids cannot scroll (`-1`). Pure (and
- * internal) so the contract test can pin the derivation against it.
+ * The section groups themselves, in the same LazyColumn order — the
+ * hidden-settings hint's derivation source ([hiddenRowsFor]; the idSet twin
+ * above is the scroll resolver's).
  */
-internal fun appearanceAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
-    if (showAdvanced) {
-        { it }
-    } else {
-        { raw -> if (raw >= 3) -1 else raw }
-    }
+private val appearanceScreenGroups = listOf(
+    SettingsScreenGroups.appearanceTheme,
+    SettingsScreenGroups.appearanceNavigation,
+    SettingsScreenGroups.appearanceLibrary,
+    SettingsScreenGroups.appearancePerformance,
+    SettingsScreenGroups.appearanceEyeCare,
+    SettingsScreenGroups.appearanceNewsletter,
+)
 
 /**
  * The persisted accent id for a themed variant, or null when the variant has
@@ -230,8 +233,8 @@ fun AppearanceSettingsScreen(
         onBack = onBack,
         focusTag = "appearance_init",
         highlightSettingId = highlightSettingId,
-        highlightGroups = appearanceScreenGroups,
-        adjustForAdvanced = appearanceAdjustForAdvanced(showAdvanced),
+        highlightGroups = appearanceScreenSections.map { it.idSet },
+        adjustForAdvanced = deriveAdjustForAdvanced(appearanceScreenSections, showAdvanced),
         advancedToggle = PreferenceAdvancedToggle(
             showAdvanced = showAdvanced,
             onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
@@ -304,11 +307,15 @@ fun AppearanceSettingsScreen(
 
         if (!showAdvanced) {
             item {
-                // Eight always-on advanced theme rows plus the two rows in
-                // each of the three advanced-only groups (performance, eye
-                // care, newsletter) are hidden while Advanced is off.
+                // Derived from the fused declarations (hiddenRowsFor): the
+                // theme group's advanced rows (the NotTv-forked layout row
+                // included off-TV) plus both performance/eye-care rows and
+                // the newsletter trio.
                 HiddenSettingsHint(
-                    hiddenCount = 14,
+                    hiddenCount = hiddenRowsFor(
+                        appearanceScreenGroups,
+                        RowAdmissionFlags(showAdvanced = false, isTv = LocalTvMode.current),
+                    ),
                     onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                 )
             }

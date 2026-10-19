@@ -11,13 +11,18 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
+import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -52,10 +57,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import okhttp3.OkHttpClient
 import org.koin.core.module.Module
-import org.koin.compose.viewmodel.dsl.viewModel
+import org.koin.compose.viewmodel.dsl.viewModelOf
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
@@ -178,13 +185,22 @@ fun androidAppModule(context: Context): Module = module {
             userDataSyncScheduler = lazy { get<UserDataSyncScheduler>() },
             playbackSyncScheduler = lazy { get<PlaybackSyncScheduler>() },
             playbackSyncReconnectListener = lazy { get<PlaybackSyncReconnectListener>() },
-            settingsSyncBackgroundTrigger = lazy { get<com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger>() },
+            settingsSyncBackgroundTrigger = lazy { get<SettingsSyncBackgroundTrigger>() },
             downloadReconnectListener = lazy { get<DownloadReconnectListener>() },
             notificationReconnectListener = lazy { get<NotificationReconnectListener>() },
             autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },
             notificationScheduler = lazy { get<NotificationScheduler>() },
             downloadRecoveryInitializer = lazy { get<DownloadRecoveryInitializer>() },
             appUpdateRepository = lazy { get<AppUpdateRepository>() },
+            eventsSessionController = lazy { get<JellyPlayEventsSessionController>() },
+            liveResyncConnector = lazy { get<JellyPlayLiveResyncConnector>() },
+            downloadSummarySurface = lazy { get<DownloadSummarySurface>() },
+            okHttpClient = lazy { get<OkHttpClient>() },
+            authRepository = lazy { get<AuthRepository>() },
+            sessionCoordinator = lazy { get<SessionCoordinator>() },
+            updateCoordinator = lazy { get<UpdateCoordinator>() },
+            whatsNewCoordinator = lazy { get<WhatsNewCoordinator>() },
+            syncPlayOpenCoordinator = lazy { get<SyncPlayOpenCoordinator>() },
         )
     }
 
@@ -194,6 +210,8 @@ fun androidAppModule(context: Context): Module = module {
         NowPlayingWidgetUpdater(
             context = context,
             audioPlaybackManager = get(),
+            nowPlayingVerdict = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     single<WidgetWorkScheduler> {
@@ -215,41 +233,20 @@ fun androidAppModule(context: Context): Module = module {
 }
 
 /**
- * App-shell ViewModels. Definitions are plain factories: the Activity sites
- * resolve them through the AndroidX ViewModelStore (see [KoinViewModelFactory]
- * below), so per-owner instance semantics — not Koin's own scoping — decide
- * sharing, exactly like the former Hilt-ViewModel integration's
- * viewModels() pair.
+ * App-shell ViewModels. All three are `viewModelOf` one-liners — every ctor
+ * param is a plain Koin-bound type (no getOrNull seams, no function-typed
+ * defaults), so nothing needs a hand-written def (same two documented reasons
+ * SettingsKoinModule keeps its hand-written half). The Activity sites resolve
+ * them through the AndroidX ViewModelStore (see [KoinViewModelFactory] below),
+ * so per-owner instance semantics — not Koin's own scoping — decide sharing,
+ * exactly like the former Hilt-ViewModel integration's viewModels() pair.
+ * Registration totality (exactly one def per app-module ViewModel) is pinned
+ * by AppKoinModuleViewModelTotalityGuardTest (app/src/test).
  */
 val androidAppViewModelsModule: Module = module {
-    viewModel {
-        MainViewModel(
-            authRepository = get(),
-            projections = get(),
-            homeDiscoveryStore = get(),
-            appRuntimeStateStore = get(),
-            pinRateLimiter = get(),
-            remoteControlReceiver = get(),
-            appShortcutManager = get(),
-            deepLinkHandler = get(),
-            downloadRepository = get(),
-            offlineModeManager = get(),
-            userMessageBus = get(),
-            sessionCoordinator = get(),
-            updateCoordinator = get(),
-            syncPlayOpenCoordinator = get(),
-            whatsNewCoordinator = get(),
-        )
-    }
-    viewModel {
-        PlayOnViewModel(
-            jellyfinStrategy = get(),
-            audioPlaybackManager = get(),
-        )
-    }
-    viewModel {
-        WidgetConfigViewModel(widgetDataStore = get())
-    }
+    viewModelOf(::MainViewModel)
+    viewModelOf(::PlayOnViewModel)
+    viewModelOf(::WidgetConfigViewModel)
 }
 
 /**
@@ -322,6 +319,8 @@ private class AppDetailThemeMusic(
 ) : DetailThemeMusic {
     override fun playThemeFor(itemId: String) = player.playThemeFor(itemId)
     override fun stop() = player.stop()
+    override fun setMuted(muted: Boolean) = player.setMuted(muted)
+    override val isPlaying: StateFlow<Boolean> get() = player.isPlaying
 }
 
 /**
@@ -339,9 +338,14 @@ private class AppAudioPlayerCast(
     private val appContext = application
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     override val isConnected get() = castManager.isConnectedFlow
+    // WhileSubscribed: the only consumers are screens (the audio cast
+    // picker), collected via collectAsStateWithLifecycle — so the
+    // Main-dispatcher collector runs only while a picker is open, not for
+    // the whole process from singleton construction. 5 s stop timeout rides
+    // out configuration changes.
     override val discoveredDeviceNames = castManager.discoveredDevices
         .map { devices -> devices.map { it.name } }
-        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
     override fun startDiscovery() = castManager.startDiscovery(appContext)
     override fun stopDiscovery() = castManager.stopDiscovery()
     override fun connect(deviceName: String) {

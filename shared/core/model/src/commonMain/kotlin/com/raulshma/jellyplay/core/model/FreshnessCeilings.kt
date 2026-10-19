@@ -81,7 +81,7 @@ object FreshnessCeilings {
     /**
      * Newsletter render's cached server display name — 30 minutes: the name
      * is effectively session-static and lives below the repository layer, so
-     * every newsletter render previously bypassed any cache; a long TTL keeps
+     * each newsletter render would otherwise bypass any cache; a long TTL keeps
      * it fresh across server renames without per-render network calls.
      */
     const val MEDIA_INFO_SERVER_NAME_TTL_MS = 30 * 60_000L

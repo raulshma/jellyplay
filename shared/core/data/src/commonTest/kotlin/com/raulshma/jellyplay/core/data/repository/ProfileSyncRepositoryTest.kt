@@ -13,12 +13,15 @@ import com.raulshma.jellyplay.core.network.api.JellyPlaySettingDelete
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingWrite
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSnapshot
+import kotlin.coroutines.ContinuationInterceptor
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -32,7 +35,7 @@ import kotlin.test.assertTrue
 /**
  * Engine tests for the profile-sync cycle: opt-in gating, adopt-clean/push-
  * dirty split, LWW-reject retry, convergence — against fakes, no I/O. The
- * tombstone half (Phase 1's `deleted[]`/`nextCursor` wave): outbound delete
+ * tombstone half (the `deleted[]`/`nextCursor` protocol): outbound delete
  * adoption and anti-resurrection, the paged delta sweep, the persisted
  * cursor, and the non-retryable reject surfacing.
  */
@@ -82,7 +85,7 @@ class ProfileSyncRepositoryTest {
         override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
             current.filter { (key, value) -> mirror[key] != value }
 
-        override suspend fun deletedKeys(): Set<String> = pendingDeletes.toSet()
+        override suspend fun deletedKeys(current: Map<String, JsonElement>): Set<String> = pendingDeletes.toSet()
 
         override suspend fun applyRemote(entries: Map<String, JsonElement>) {
             appliedRemote += entries
@@ -230,7 +233,12 @@ class ProfileSyncRepositoryTest {
         val savedToggles: MutableList<Pair<String, Boolean>>,
     )
 
-    private fun harness(
+    /**
+     * A [TestScope] receiver so the harness can inject the test's own
+     * dispatcher into the engine: the cycle must run on the virtual-time
+     * scheduler, never on a hardcoded `Dispatchers.Default`.
+     */
+    private fun TestScope.harness(
         local: Map<String, JsonElement>,
         remote: Map<String, JsonElement> = emptyMap(),
         rejectKeys: Set<String> = emptySet(),
@@ -268,6 +276,7 @@ class ProfileSyncRepositoryTest {
                     namespaceEnabled[ns] = value
                 }
                 ) else null,
+            syncDispatcher = coroutineContext[ContinuationInterceptor] as CoroutineDispatcher,
         )
         return Harness(api, adapter, repo, statusStore, savedCursors, savedToggles)
     }
@@ -623,6 +632,52 @@ class ProfileSyncRepositoryTest {
         assertNull(h.repo.state.value.lastError)
     }
 
+    // ── the equal-dirty wart: a dirty key the server already agrees with ──
+
+    @Test
+    fun equalDirtyKey_confirmsAsSynced_noPush_noPending() = runTest {
+        // Both sides hold "dark" but the mirror holds nothing (never synced):
+        // the key reads dirty, yet the adopt filter skips dirty keys and the
+        // push filter skips equal values — without the confirm face it would
+        // re-read dirty (and pending) on every cycle forever.
+        val h = harness(
+            local = mapOf("theme" to JsonPrimitive("dark")),
+            remote = mapOf("prefs/theme" to JsonPrimitive("dark")),
+        )
+
+        h.repo.setEnabled(true)
+        h.repo.requestSync()
+
+        assertTrue(h.api.pushedWrites.isEmpty(), "an equal key needs no write")
+        assertTrue(h.repo.state.value.pendingByNamespace.isEmpty(), "the confirmed key must stop reading pending")
+        // The agreement was recorded — the next cycle stays quiet too.
+        h.repo.requestSync()
+        assertTrue(h.api.pushedWrites.isEmpty())
+        assertTrue(h.repo.state.value.pendingByNamespace.isEmpty())
+    }
+
+    @Test
+    fun forceRepull_equalDirtyKey_resolvesAsSynced() = runTest {
+        // The recovery path's adopt filter only takes DIFFERING keys, so a
+        // dirty key equal to its remote row skips it there too — same wart,
+        // force-repull face.
+        val h = harness(local = mapOf("theme" to JsonPrimitive("dark")))
+        h.repo.setEnabled(true)
+        h.repo.requestSync() // baseline: "dark" pushed, the mirror holds "dark"
+
+        // Rewind the mirror so the key reads dirty while still agreeing with
+        // the server, then take the server's view.
+        h.adapter.markSynced(mapOf("theme" to JsonPrimitive("stale")))
+        h.repo.forceRepull()
+
+        assertEquals(JsonPrimitive("dark"), h.api.remote["prefs/theme"], "the recovery path pushes nothing")
+        assertEquals(JsonPrimitive("dark"), h.adapter.local["theme"])
+        assertTrue(h.repo.state.value.pendingByNamespace.isEmpty(), "the equal key must not stay pending after the recovery cycle")
+        h.repo.requestSync()
+        assertEquals(1, h.api.pushedWrites.size, "a confirmed key must not re-push")
+        assertTrue(h.repo.state.value.pendingByNamespace.isEmpty())
+    }
+
     // ── forced keys (the admin-defaults `modes` map, the resolved payload's additive face) ──
 
     @Test
@@ -716,6 +771,7 @@ class ProfileSyncRepositoryTest {
             nowMillis = { 1L },
             loadNamespaceEnabled = { throw IllegalStateException("io") },
             saveNamespaceEnabled = { _, _ -> throw IllegalStateException("io") },
+            syncDispatcher = coroutineContext[ContinuationInterceptor] as CoroutineDispatcher,
         )
         failing.setEnabled(true)
         failing.requestSync()

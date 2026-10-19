@@ -6,11 +6,11 @@ import com.raulshma.jellyplay.core.model.PluginInstallationInfo
 import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.model.PluginRepository
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.RefreshCycle
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
 
 data class PluginsState(
     val isLoading: Boolean = true,
@@ -75,6 +75,11 @@ class PluginsViewModel(
     private val pluginAdminRepository: PluginAdminRepository,
 ) : JellyPlayViewModel() {
 
+    private companion object {
+        /** Cadence of the installation-progress poll. */
+        const val INSTALL_POLL_INTERVAL_MS = 5_000L
+    }
+
     private val _state = composeState(PluginsState())
     val state: PluginsState get() = _state.value
 
@@ -82,7 +87,6 @@ class PluginsViewModel(
 
     init {
         loadInstalledPlugins()
-        startInstallationPolling()
     }
 
     fun loadInstalledPlugins() {
@@ -194,24 +198,21 @@ class PluginsViewModel(
     fun enablePlugin(plugin: PluginInfo) {
         launch {
             pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = true)
-            delay(500)
-            fetchInstalledPlugins()
+            settleThenRefetch(delayMs = 500) { fetchInstalledPlugins() }
         }
     }
 
     fun disablePlugin(plugin: PluginInfo) {
         launch {
             pluginAdminRepository.setPluginEnabled(plugin.id, plugin.version, enabled = false)
-            delay(500)
-            fetchInstalledPlugins()
+            settleThenRefetch(delayMs = 500) { fetchInstalledPlugins() }
         }
     }
 
     fun uninstallPlugin(pluginId: String) {
         launch {
             pluginAdminRepository.uninstallPlugin(pluginId)
-            delay(500)
-            fetchInstalledPlugins()
+            settleThenRefetch(delayMs = 500) { fetchInstalledPlugins() }
         }
     }
 
@@ -229,8 +230,7 @@ class PluginsViewModel(
                 repositoryUrl = repositoryUrl,
             ).onSuccess {
                 hasActiveInstalls.value = true
-                delay(1000)
-                fetchActiveInstallations()
+                settleThenRefetch(delayMs = 1000) { fetchActiveInstallations() }
             }.onFailure { e ->
                 Log.e("Plugins", "Failed to install package", e)
                 _state.value = _state.value.copy(error = e.message)
@@ -241,8 +241,7 @@ class PluginsViewModel(
     fun cancelInstallation(packageId: String) {
         launch {
             pluginAdminRepository.cancelPackageInstallation(packageId)
-            delay(500)
-            fetchActiveInstallations()
+            settleThenRefetch(delayMs = 500) { fetchActiveInstallations() }
         }
     }
 
@@ -258,19 +257,35 @@ class PluginsViewModel(
         }
     }
 
-    private fun startInstallationPolling() {
-        launch {
-            // collectLatest (not collect): a plain collect suspends forever
-            // inside the `while (active)` loop with the captured true value,
-            // so a false emission can never restart the collector and polling
-            // would outlive the installs until ViewModel clear.
-            hasActiveInstalls.collectLatest { active ->
-                while (active) {
-                    delay(5000)
-                    fetchActiveInstallations()
-                }
-            }
-        }
+    /**
+     * The installation-progress poll, registered once and bound to screen
+     * visibility by [startInstallationPolling]/[stopInstallationPolling]
+     * (the LogsViewModel/JellyPlayTranscodesViewModel shape — the
+     * refresh-cycle module's gate/poll/fetch split, not a hand-rolled
+     * `collectLatest { while (active) { delay(5000); fetch } }` loop). The
+     * gate is "installations are active": a closed round fetches nothing. The
+     * fetch arm stays the fire-and-forget [fetchActiveInstallations] launch,
+     * so a thrown fetch cannot kill the loop.
+     */
+    private val installationPollCycle = RefreshCycle(
+        scope = scope,
+        poll = PollSpec(intervalMs = INSTALL_POLL_INTERVAL_MS),
+        gate = { hasActiveInstalls.value },
+        fetch = { fetchActiveInstallations() },
+    )
+
+    /**
+     * Screen-visibility hook: arms the installation poll (the screen calls
+     * this from its `LifecycleStartEffect`). Safe to call on every entry into
+     * START — a repeated call replaces the running loop ([RefreshCycle.start]).
+     */
+    fun startInstallationPolling() {
+        installationPollCycle.start()
+    }
+
+    /** Stops the poll started by [startInstallationPolling]; the VM owner kills it for good. */
+    fun stopInstallationPolling() {
+        installationPollCycle.stop()
     }
 
     fun addRepository(name: String, url: String) {

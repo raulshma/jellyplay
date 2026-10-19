@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.NameGuidPair
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
+import com.raulshma.jellyplay.core.testfixtures.FakePlaybackRepository
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path

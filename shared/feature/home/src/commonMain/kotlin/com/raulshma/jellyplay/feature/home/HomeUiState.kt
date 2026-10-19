@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -47,7 +51,22 @@ data class SectionConfigState(
 
 @Immutable
 data class HomeUiState(
-    val sections: List<HomeSection> = emptyList(),
+    /**
+     * The rendered rows — a persistent list so the @Immutable bag's largest
+     * field stays Compose-stable (a plain List parameter is unstable and
+     * would un-skip every consumer). The refresher fold (the sole writer)
+     * converts with `toImmutableList()` under an identity guard: the
+     * refresher's own sections are a plain List rebuilt only on a real
+     * sections change, so only genuinely new lists are re-wrapped.
+     */
+    val sections: ImmutableList<HomeSection> = persistentListOf(),
+    /**
+     * The plugin-curated hero billboards (the refresher's resolved
+     * entries — see [HomeRefreshState.curatedHero]). The screen merges them
+     * ahead of the local hero candidates and reads the headline/subhead
+     * overrides for the featured item from here.
+     */
+    val curatedHero: List<CuratedHeroEntry> = emptyList(),
     /**
      * Continue Reading progress bars keyed by item id (the refresher's
      * book-fraction decodes — see [HomeRefreshState.bookProgressFractions]).
@@ -75,20 +94,6 @@ data class HomeUiState(
     val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
-    /**
-     * Custom discover rows with a dice roll in flight (row ids) — drives the
-     * dice icon's tumbling animation on the matching row header. Mirrored
-     * from [HomeRefreshState.rollingDiscoverRowIds] (the refresher's roll
-     * choreography owns it).
-     */
-    val rollingDiscoverRowIds: Set<String> = emptySet(),
-    /**
-     * Section ids with an edge-pull refresh in flight — drives the matching
-     * row's edge spinner and arms the one-refresh-per-row pull guard.
-     * Mirrored from [HomeRefreshState.refreshingSectionIds] (the refresher's
-     * single-row refresh choreography owns it).
-     */
-    val refreshingSectionIds: Set<String> = emptySet(),
     val homeMode: HomeMode = HomeMode.VIDEO,
     /** The appearance/theme quintet — see [AppearanceUiState]. */
     val appearance: AppearanceUiState = AppearanceUiState(),
@@ -103,7 +108,7 @@ data class HomeUiState(
      */
     val offlineEpisodes: List<OfflineMediaItem> = emptyList(),
     /**
-     * The cached ONLINE home layout (issue #147): section types, titles,
+     * The cached ONLINE home layout: section types, titles,
      * per-library rows and order from the last successful online fetch,
      * collected under the same gate as [offlineLibrary]. The offline home
      * mirrors it filtered to downloaded items (see buildOfflineHomeSections);
@@ -186,7 +191,86 @@ data class HomeUiState(
      * the same sheet the media-detail screen hosts.
      */
     val seriesDownload: HomeSeriesDownloadState? = null,
-)
+    /**
+     * Visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
+     * never stamped), read ONCE per home session — before this session's
+     * dwell timer writes its own stamp — so the NEW-badge predicate compares
+     * arrivals against the last visit, never against the in-progress one
+     * (a live flow would clear every badge ~10s after it appeared). Feeds
+     * the content list's arrival rows via [HomeContentState].
+     */
+    val homeLastVisitEpochMs: Long = 0L,
+    /**
+     * Personal stats card data — null hides the card. Loaded only while
+     * the `home_stats_card` pref is on and a user is signed in; a load
+     * failure resolves to null too (the card hides silently — no error
+     * surface for an opt-in decoration).
+     */
+    val statsCard: HomeStatsCardData? = null,
+    /** The `home_stats_card` pref mirror — the card's render gate. */
+    val statsCardEnabled: Boolean = false,
+    /**
+     * Genre quick-access rail chips (server-ordered, top ~24). Empty
+     * hides the rail: pref off, offline suppression, or a failed/empty
+     * fetch.
+     */
+    val genreChips: List<Genre> = emptyList(),
+    /** The `home_genre_rail` pref mirror — the rail's render gate. */
+    val genreRailEnabled: Boolean = false,
+    /**
+     * The `home_focus_backdrop` pref mirror — the TV focus-driven
+     * ambient backdrop's render gate. Default off; the backdrop region gates
+     * the focus choreography on it (beside the existing backdrop gates).
+     */
+    val focusBackdropEnabled: Boolean = false,
+    /**
+     * The `home_trickplay_preview` pref mirror — the TV wide-card peek
+     * loader's gate. Default on; TV-only behavior (non-TV never provides the
+     * loader with a live gate).
+     */
+    val trickplayPreviewEnabled: Boolean = true,
+    /**
+     * Watch-party presence chips live outside [HomeUiState] — see the NOTE on
+     * [HomeSearchState] for the pattern: the poll loop writes the whole
+     * state on the home refresh cadence, so a per-tick field meant copying
+     * the ~45-field object (and racing the refresher's emissions on the same
+     * StateFlow) for a value one row reads. The source of truth is now the
+     * VM's `presenceChips` StateFlow, collected at the chip row
+     * ([HomeContentList]).
+     *
+     * Monotonic counter bumped once per forced refresh — mirrored from
+     * [HomeRefreshState.imageReloadEpoch] (the refresher is its sole writer,
+     * like [sections]). Provided to the content subtree as
+     * [com.raulshma.jellyplay.core.ui.image.LocalImageReloadEpoch] so
+     * [com.raulshma.jellyplay.core.ui.image.MediaImage] re-issues the failed
+     * loads (cards stuck on their blurHash) on every forced refresh.
+     */
+    val imageReloadEpoch: Long = 0L,
+) {
+    /**
+     * The refresher's verdict — the ONE meaning of "the fetch failed"
+     * (the single-carrier rule), the same derivation as
+     * [HomeRefreshState.fetchFailed] carried through the refresher fold.
+     * Readers (the header status chip) consume this named verdict instead of
+     * restating `error != null` from the raw field.
+     */
+    val fetchFailed: Boolean
+        get() = error != null
+
+    /**
+     * The hard-error surface verdict, computed ONCE here — the fold's output,
+     * where [renderSource], [sections] and [error] are consistent in one
+     * snapshot — instead of re-derived at each branch: the failed fetch over a
+     * confirmed-empty feed that renders [HomeSurface.HardError]. The
+     * offline-render corners stay excluded because [HomeRenderSource] already
+     * folded them away (Explicit / FallbackPending / Implicit never equal
+     * [HomeRenderSource.Online]); no reader restates the three-term predicate.
+     * Lives here and not on [HomeRefreshState] because the render source is
+     * the offline gate's fold, not the refresher's.
+     */
+    val isHardError: Boolean
+        get() = fetchFailed && sections.isEmpty() && renderSource == HomeRenderSource.Online
+}
 
 /**
  * Data backing the offline home's series delete-episodes sheet (the same
@@ -228,14 +312,14 @@ data class HomeSearchState(
     val seerrResults: List<SeerrSearchItem> = emptyList(),
     val isSearching: Boolean = false,
 ) {
-    // NOTE: the live query string no longer lives here. It is the per-keystroke
+    // NOTE: the live query string does not live here. It is the per-keystroke
     // value of the search field, and holding it inside this @Immutable state
     // object meant _uiState changed equality on every keystroke, recomposing
-    // the ~510-line MainHomeContent body. The source of truth is now the VM's
+    // the ~510-line MainHomeContent body. The source of truth is the VM's
     // `searchQuery` StateFlow (read in a leaf), with `isSearchActive` carrying
     // only the rarely-changing blank/nonblank signal to the orchestrator.
     //
-    // NOTE: settings results also no longer live here — the local
+    // NOTE: settings results also do not live here — the local
     // settings-search pipeline is computed in the UI layer
     // (HomeTopDockScrim via `settingsSearchResults`), which resolves the
     // registry's Compose-Resources strings through the suspend resolver.

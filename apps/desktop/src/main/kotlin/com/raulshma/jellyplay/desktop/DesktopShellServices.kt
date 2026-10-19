@@ -40,23 +40,23 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.koin.core.Koin
 
 /**
- * The shell-services holder extracted from [DesktopNavScaffold] (the
- * DesktopStartup/DesktopTrayActions extraction idiom, scaled up): ONE
+ * The shell-services holder for [DesktopNavScaffold]: ONE
  * plain class owning the CONSTRUCTION of every non-UI service the scaffold
  * composition needs, and — through [rememberDesktopShellServices] — the
  * COLLECTION effects that keep them alive. The scaffold keeps the chrome
  * (rail, NavDisplay, snackbar surface, key handling, the idle overlay's
  * rendering) and reads these through the properties below.
  *
- *  - the shell session policy (ADR 0001): [sessionController] — the shared
+ *  - the shell session policy: [sessionController] — the shared
  *    [ShellSessionController] over this shell's own stores (no Koin
  *    binding, the same direct construction MainViewModel performs on
  *    Android), owning admin-status state + the 30 s refresh arbitration,
  *    homeMode collect/persist, and the revoke/plain logout fork, on this
  *    composition's scope so every job dies with the scaffold;
- *  - the About update check (ADR desktop-auto-update): [updateCheckController]
+ *  - the About update check: [updateCheckController]
  *    — check→message mapping, browser handoff, snackbar wording; never a
  *    silent install, browser handoff only;
  *  - the dead-end guard: [sectionRegistry] + [guardedNavigator] — the
@@ -93,15 +93,13 @@ import org.koin.compose.koinInject
  *    does, per the composition-order contract on
  *    [rememberDesktopShellServices].
  *
- * A plain class on constructor-injected collaborators (the
- * DesktopUpdateCheckController idiom, no Koin awareness of its own), so the
- * wiring is JVM-constructible and the scaffold's `remember` keys reduce to
- * the stable inputs of [rememberDesktopShellServices].
+ * A plain class on constructor-injected collaborators (no Koin awareness of
+ * its own), so the wiring is JVM-constructible and the scaffold's `remember`
+ * keys reduce to the stable inputs of [rememberDesktopShellServices].
  *
  * @param scope the scaffold composition's scope — every service job
  *   (session arbitration, update check, guard snackbars, idle ticks) dies
- *   with the composition, exactly like the inline `scope.launch` calls this
- *   holder replaced.
+ *   with the composition.
  * @param navigation the scaffold's nav3 [NavigationState] — the guard's
  *   back stacks and the remote tab-switch seam write through it.
  * @param showMessage the snackbar sink shared by the update check, the
@@ -158,7 +156,7 @@ internal class DesktopShellServices(
     webSocketClient: JellyfinWebSocketClient,
     screensaverStore: ScreensaverStore,
     /**
-     * The shell hooks' idle arms (feature 4.3): [collectIdleTransitions]
+     * The shell hooks' idle arms: [collectIdleTransitions]
      * forwards this shell's idle-monitor transitions onto the shared
      * [NowPlayingReporter] event stream, where [DesktopHookRunner] consumes
      * them. The shared core:data single, injected like every other Koin
@@ -173,19 +171,19 @@ internal class DesktopShellServices(
      * contract on [rememberDesktopShellServices]):
      *  - [networkMonitor] — the rail's offline hide-set source and the
      *    LocalNetworkStatus flow (LIVE desktop connectivity);
-     *  - [navigationStore] — bottom-nav customization (#152), the same
+     *  - [navigationStore] — bottom-nav customization, the same
      *    store the phone settings write through;
      *  - [appRuntimeStateStore] — the first-run onboarding gate's one-shot
      *    `onboarding_completed` read;
      *  - [appearanceStore] — the stored manual layout override behind the
-     *    adaptive shell wiring (#166).
+     *    adaptive shell wiring.
      */
     val networkMonitor: NetworkMonitor,
     val navigationStore: NavigationStore,
     val appRuntimeStateStore: AppRuntimeStateStore,
     val appearanceStore: AppearanceStore,
 ) {
-    /** ADR 0001's shared session-policy wiring — see class KDoc. */
+    /** The shared session-policy wiring — see class KDoc. */
     val sessionController = ShellSessionController(
         scope = scope,
         nowMs = { System.currentTimeMillis() },
@@ -198,7 +196,7 @@ internal class DesktopShellServices(
         },
     )
 
-    /** The About row's check controller (ADR desktop-auto-update). */
+    /** The About row's check controller. */
     val updateCheckController = DesktopUpdateCheckController(
         scope = scope,
         repository = appUpdateRepository,
@@ -232,8 +230,7 @@ internal class DesktopShellServices(
     )
 
     /**
-     * The remote-navigation ladder over this shell's seams (the former
-     * DesktopRemoteNavCollector wrapper folded away): pushes through
+     * The remote-navigation ladder over this shell's seams: pushes through
      * [guardedNavigator] (dead-end routes surface the guard's snackbar),
      * tab switches write `topLevelRoute` directly — NOT through the
      * navigator, whose pop-to-root-when-already-on-tab behavior must not
@@ -304,6 +301,35 @@ internal class DesktopShellServices(
         remoteNavigation.collect(remoteNavigationBridge.targets, DESKTOP_CONTEXT_MENU_UNAVAILABLE)
     }
 }
+
+/**
+ * The Koin singles [rememberDesktopShellServices] resolves via koinInject()
+ * below, as off-main prewarm thunks: launchDesktopStartup iterates
+ * this list on its Default-dispatcher block so first composition's koinInject
+ * hands hit Koin's memoized instances instead of paying construction there.
+ * ONE source of truth — adding a shell service means adding its typed val
+ * below AND one entry here, in the same file; the prewarm side never names
+ * types itself. Resolution order is arbitrary (construction is documented
+ * side-effect free) but kept identical to the koinInject order.
+ */
+internal val desktopShellServicePrewarms: List<(Koin) -> Any> = listOf(
+    { it.get<AuthRepository>() },
+    { it.get<HomeDiscoveryStore>() },
+    { it.get<AppUpdateRepository>() },
+    { it.get<UserMessageBus>() },
+    { it.get<MusicMessageBus>() },
+    { it.get<RemoteControlReceiver>() },
+    { it.get<RemoteNavigationBridge>() },
+    { it.get<DesktopAudioQueueManager>() },
+    { it.get<ActivePlayerController>() },
+    { it.get<JellyfinWebSocketClient>() },
+    { it.get<ScreensaverStore>() },
+    { it.get<NowPlayingReporter>() },
+    { it.get<NetworkMonitor>() },
+    { it.get<NavigationStore>() },
+    { it.get<AppRuntimeStateStore>() },
+    { it.get<AppearanceStore>() },
+)
 
 /**
  * Constructs and arms [DesktopShellServices] for one scaffold composition:

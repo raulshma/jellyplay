@@ -9,17 +9,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.IntState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -57,30 +52,20 @@ fun <T> TvFocusableItemRow(
 ) {
     val isTv = LocalTvMode.current
     val rowFocusRequester = remember { FocusRequester() }
-    val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
-    val focusedIndexState = rememberInt(initialIndex)
-    var focusedIndex by focusedIndexState
-    var initialFocusRequested by remember { mutableStateOf(false) }
-
-    LaunchedEffect(items.size) {
-        if (items.isNotEmpty()) {
-            focusedIndex = focusedIndex.coerceIn(0, items.lastIndex)
-        }
-    }
-
-    // focusRestorer(fallback) and focusProperties { onEnter } only react to focus *entering* the
-    // group; neither proactively grabs focus. When requestInitialFocus is true, grab focus on the
-    // focused cell the first time the row becomes non-empty (for single-row screens; multi-row
-    // screens like Home should leave this false and drive focus from the page instead).
-    // The scroll-to-item before the grab ensures the saved cell is composed before requesting focus.
-    LaunchedEffect(items.isNotEmpty()) {
-        if (isTv && requestInitialFocus && items.isNotEmpty() && !initialFocusRequested) {
-            initialFocusRequested = true
-            state.scrollToItem(focusedIndex.coerceIn(0, items.lastIndex))
-            fallbackFocusRequester.tryRequestFocus("tv_row_init")
-        }
-    }
+    // The shared focus cursor (fallback leaf + clamp/initial-grab ladder + tags)
+    // — TvFocusCursor.kt owns the whole contract. Item rows carry no
+    // refreshGeneration, so the cursor's re-grab ladder stays dormant.
+    val cursor = rememberTvFocusCursor(
+        layout = TvFocusLayout.ItemRow,
+        initialIndex = initialIndex,
+        isTv = isTv,
+        requestInitialFocus = requestInitialFocus,
+        itemCount = items.size,
+        refreshGeneration = 0,
+        scrollToItem = { state.scrollToItem(it) },
+    )
+    val fallbackFocusRequester = cursor.fallback
 
     LazyRow(
         state = state,
@@ -120,12 +105,11 @@ fun <T> TvFocusableItemRow(
             val placementSpec = lazyItemPlacementSpec()
             if (isTv) {
                 TvItemFocusFallback(
-                    focusedIndexState = focusedIndexState,
+                    cursor = cursor,
                     itemCount = items.size,
                     index = index,
-                    fallbackFocusRequester = fallbackFocusRequester,
                     onFocused = {
-                        focusedIndex = index
+                        cursor.focusedIndex = index
                         currentOnFocusedIndexChange(index)
                     },
                     animatedModifier = Modifier.animateItem(placementSpec = placementSpec),
@@ -137,34 +121,4 @@ fun <T> TvFocusableItemRow(
             }
         }
     }
-}
-
-/**
- * Renders [content] with [fallbackFocusRequester] attached to the item at [index] only while the
- * tracked focus cursor points at [index]. The [focusedIndexState] read must stay inside this leaf —
- * reading it in the container body recomposes every composed item on each focus move.
- */
-@Composable
-private fun TvItemFocusFallback(
-    focusedIndexState: IntState,
-    itemCount: Int,
-    index: Int,
-    fallbackFocusRequester: FocusRequester,
-    onFocused: () -> Unit,
-    animatedModifier: Modifier,
-    content: @Composable (Modifier) -> Unit,
-) {
-    val currentFocusedIndex = focusedIndexState.intValue.coerceIn(0, itemCount - 1)
-    val itemModifier = (if (currentFocusedIndex == index) {
-        Modifier.focusRequester(fallbackFocusRequester)
-    } else {
-        Modifier
-    })
-        .onFocusChanged {
-            if (it.isFocused || it.hasFocus) {
-                onFocused()
-            }
-        }
-        .then(animatedModifier)
-    content(itemModifier)
 }

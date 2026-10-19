@@ -6,10 +6,12 @@ import com.raulshma.jellyplay.core.model.InputPattern
 import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputKey
+import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.core.model.SwipeEdge
 import com.raulshma.jellyplay.core.model.SwipeSide
 import com.raulshma.jellyplay.core.model.TouchZone
 import com.raulshma.jellyplay.core.model.WheelAxis
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputPolicy
 import com.raulshma.jellyplay.feature.player.video.chrome.KEY_SEEK_STEP_ALT_CTRL_MS
 import com.raulshma.jellyplay.feature.player.video.chrome.KEY_SEEK_STEP_CTRL_MS
@@ -19,14 +21,16 @@ import com.raulshma.jellyplay.feature.player.video.chrome.KEY_SEEK_STEP_PAGE_MS
 import com.raulshma.jellyplay.feature.player.video.chrome.KEY_SEEK_STEP_SHIFT_CTRL_MS
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
  * Pins the DEFAULT mapping ([PlayerInputDefaults]) — one assertion per input
  * the player handles. The retired decision tables (`mediaKeyAction`, the
  * D-pad branch, `PlayerWheelPolicy`'s shift-seek fold, the swipe arms, the
- * tap zones) became this data (issue #171's generalized input mapping): each
+ * tap zones) became this data (generalized input mapping): each
  * row here pins that the retired behavior is exactly what a fresh install
  * resolves, so the mapping can never silently drift from the historical
  * semantics — keyboard AND wheel AND D-pad. Runtime resolution runs through
@@ -266,6 +270,33 @@ class PlayerInputDefaultsParityTest {
             }
             assertEquals(1, plainRows.size, "catalog key $key must have exactly one plain default row")
         }
+    }
+
+    @Test
+    fun liveTV_ridesTheMap_zapGatesAndSelectLadderResolveOverTheDefaults() {
+        // The live TV surface registers its zap-family arms as fixed defaults
+        // (no PlayerAction names a channel zap) and resolves the shared
+        // controls through the input dispatcher: over the untouched map the
+        // zap gates are all enabled and SELECT's default row IS live's
+        // toggle, so live behaves exactly as before; a disabled/NONE row
+        // silences the arm on live too.
+        fun dispatcher(map: PlayerInputMap) = PlayerInputDispatcher(getMap = { map }, executeAction = { true })
+
+        val live = dispatcher(map)
+        assertEquals(
+            PlayerAction.TOGGLE_CONTROLS,
+            live.resolveAction(InputPattern.DPad(DpadControl.SELECT)),
+            "SELECT's default row must be live's toggle",
+        )
+        for (control in listOf(DpadControl.UP, DpadControl.DOWN, DpadControl.SELECT)) {
+            assertTrue(live.isControlEnabled(control), "control=$control must gate open on the defaults")
+        }
+
+        val silencedRow = map.withBindingEnabled(PlayerInputDefaults.ID_DPAD_SELECT, enabled = false)
+        assertFalse(
+            dispatcher(silencedRow).isControlEnabled(DpadControl.SELECT),
+            "a disabled row is an OFF on live too",
+        )
     }
 
     @Test

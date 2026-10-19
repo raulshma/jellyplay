@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">強制</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">デフォルト</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">取得</string>
     <string name="player_video_subtitle_hub_section_delay">遅延</string>
     <string name="player_video_subtitle_downloaded_device_only">デバイスにのみ保存（オフライン）</string>
+    <string name="player_video_subtitle_save_to_server">サーバーに保存</string>
     <string name="player_video_chapters">チャプター</string>
+    <string name="player_video_scrub_slow">遅い</string>
+    <string name="player_video_queue_title">再生キュー</string>
+    <string name="player_video_queue_subtitle">キューに %1$d 件</string>
+    <string name="player_video_queue_clear">キューをクリア</string>
+    <string name="player_video_queue_up_next">次に再生</string>
+    <string name="player_video_queue_move_up">上へ移動</string>
+    <string name="player_video_queue_move_down">下へ移動</string>
+    <string name="player_video_queue_remove">キューから削除</string>
+    <string name="player_video_queue_open">再生キュー (%1$d)</string>
     <string name="player_video_episodes">エピソード</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">アスペクト比</string>
@@ -163,6 +174,11 @@
     <string name="player_video_dialogue_boost">ダイアログブースト</string>
     <string name="player_video_dialogue_boost_on">ダイアログブースト \u00B7 %1$s</string>
     <string name="player_video_night_mode">ナイトモード</string>
+    <string name="player_video_spatial_audio">スペーシャルオーディオ</string>
+    <string name="player_video_spatial_audio_on">スペーシャルオーディオ有効 — システムのスパイシャライザーが動作中</string>
+    <string name="player_video_spatial_audio_unavailable">この出力では立体化できません</string>
+    <string name="player_video_stats_spatial">空間オーディオ状態</string>
+    <string name="player_video_stats_spatial_superseded">(バーチャライザー無効)</string>
     <string name="player_video_night_mode_on">ナイトモード \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">音声ノーマライズ</string>
     <string name="player_video_normalization_on">ノーマライズ \u00B7 %1$s</string>
@@ -261,10 +277,9 @@
     <string name="player_video_no_episodes_found">このシーズンのエピソードが見つかりません</string>
     <string name="player_video_poster">ポスター</string>
     <string name="player_video_selected">選択済み</string>
-    <string name="player_video_volume">音量</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">時間</string>
+    <string name="player_video_volume">音量</string>    <string name="player_video_duration">時間</string>
     <string name="player_video_remember_audio_language">このシリーズの音声言語を記憶</string>
+    <string name="player_video_remember_audio_description">このシリーズは音声解説を優先</string>
     <string name="player_video_remember_subtitle_language">このシリーズの字幕言語を記憶</string>
     <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
     <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>
@@ -292,6 +307,7 @@
     <string name="player_video_stats_clock">時計</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR出力アクティブ</string>
+    <string name="player_video_stats_display_hdr">ディスプレイHDR</string>
     <string name="player_video_stats_color_range">色域</string>
     <string name="player_video_stats_color_depth">色深度</string>
     <string name="player_video_stats_sample_rate">サンプリングレート</string>

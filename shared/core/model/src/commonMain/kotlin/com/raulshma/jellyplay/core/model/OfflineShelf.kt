@@ -4,8 +4,8 @@ package com.raulshma.jellyplay.core.model
  * The canonical top-level grouping of offline items. Every surface that
  * partitions the offline store by "video vs music vs books" — the home's mode
  * filter, the downloads screen's filter chips — reads THIS enum instead of
- * declaring its own media-type set (three copies used to exist, and they
- * disagreed: the home kept ARTIST rows in music mode while the downloads
+ * declaring its own media-type set (three copies would disagree: the home
+ * kept ARTIST rows in music mode while the downloads
  * screen's MUSIC filter didn't).
  *
  * Deliberately Kotlin-side only: the DAO's SQL literals stay as they are —

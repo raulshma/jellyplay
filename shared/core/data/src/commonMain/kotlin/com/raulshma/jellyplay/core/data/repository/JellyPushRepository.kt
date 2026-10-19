@@ -24,7 +24,7 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * The push registration's lifecycle state for THIS device — the machine the
- * settings row's subtitle reads. Exactly the five states the push wave's
+ * settings row's subtitle reads. Exactly the five states the push support
  * contract names:
  *  - [Unregistered] — no registration asked for (or the last one failed);
  *  - [Registering] — the distributor has been asked; waiting for the endpoint;
@@ -32,7 +32,7 @@ import kotlinx.coroutines.sync.withLock
  *  - [NoDistributor] — the user has no UnifiedPush distributor app installed
  *    (ntfy & co) — the settings row surfaces "requires a push distributor app";
  *  - [ServerPushOff] — the probe's registry does not expose the `push` key
- *    (server admin disabled push, or the plugin predates the push wave).
+ *    (server admin disabled push, or the plugin predates push support).
  */
 sealed interface JellyPushState {
     data object Unregistered : JellyPushState
@@ -43,7 +43,7 @@ sealed interface JellyPushState {
 }
 
 /**
- * The platform half of the push wave: the UnifiedPush distributor seam. The
+ * The platform half of push support: the UnifiedPush distributor seam. The
  * Android surface implements it over the connector (`UnifiedPush.register` /
  * `unregister` / distributor discovery); desktop registers nothing, so a
  * `push` toggle there degrades to [JellyPushState.NoDistributor] without any
@@ -73,7 +73,7 @@ interface JellyPushDistributor {
 
 /**
  * The push face of the jellyfin-plugin-jellyplay companion plugin (the
- * plugin's push wave): per-device registration state machine over the
+ * plugin's push support): per-device registration state machine over the
  * UnifiedPush distributor seam + the plugin's additive `push` device
  * registration field.
  *
@@ -330,7 +330,7 @@ class JellyPushRepository(
 
     /**
      * The probe stopped exposing `push` (server admin disabled push, or the
-     * plugin predates the push wave): park the machine on
+     * plugin predates push support): park the machine on
      * [JellyPushState.ServerPushOff] and touch NOTHING — an old plugin must
      * never see a `push` field it cannot parse, and the persisted endpoint +
      * distributor registration stay put for the day push comes back (the

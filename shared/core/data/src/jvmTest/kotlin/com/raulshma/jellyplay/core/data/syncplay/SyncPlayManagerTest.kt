@@ -12,7 +12,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +70,7 @@ class SyncPlayManagerTest {
             syncPlayController = syncPlayController,
             playbackCore = playbackCore,
             queueCore = queueCore,
+            applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
     }
 
@@ -171,6 +175,57 @@ class SyncPlayManagerTest {
         assertEquals("fresh", result.getOrNull()?.groupId)
         coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("fresh") }
         coVerify(exactly = 0) { apiClient.joinSyncPlayGroup("stale") }
+    }
+
+    // ── home presence-chip join seam ─────────────────────────────────
+
+    @Test
+    fun `groupPlayingItem matches the visible group playing the item`() {
+        val dune = SyncPlayGroup(groupId = "g1", groupName = "Party", participantCount = 2, playingItemId = "item_dune")
+        val other = SyncPlayGroup(groupId = "g2", groupName = "Other", participantCount = 1, playingItemId = "item_other")
+
+        assertEquals("g1", manager.groupPlayingItem(listOf(other, dune), "item_dune")?.groupId)
+        // Absent → null (the home chip's "no Join affordance" side).
+        assertNull(manager.groupPlayingItem(listOf(other), "item_dune"))
+        assertNull(manager.groupPlayingItem(emptyList(), "item_dune"))
+        // A blank item id (a session without a resolvable now-playing id)
+        // never matches — not even a group with a blank/absent playing item.
+        val noItem = SyncPlayGroup(groupId = "g3", groupName = "Idle", participantCount = 1)
+        assertNull(manager.groupPlayingItem(listOf(noItem), ""))
+    }
+
+    @Test
+    fun `joinGroupPlayingItem joins the group playing the item and returns it`() = runTest {
+        armJoinForCreate()
+        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(
+            listOf(
+                SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 2, playingItemId = "item_dune"),
+            ),
+        )
+        coEvery { apiClient.getSyncPlayInfo("g9") } returns
+            Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
+
+        val result = manager.joinGroupPlayingItem("item_dune")
+
+        assertTrue(result.isSuccess)
+        assertEquals("g9", result.getOrNull()?.groupId)
+        assertEquals("g9", manager.activeGroupId)
+        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("g9") }
+    }
+
+    @Test
+    fun `joinGroupPlayingItem fails without joining when no group plays the item`() = runTest {
+        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(
+            listOf(
+                SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 2, playingItemId = "item_other"),
+            ),
+        )
+
+        val result = manager.joinGroupPlayingItem("item_dune")
+
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup(any()) }
+        assertNull(manager.activeGroupId)
     }
 
     @Test

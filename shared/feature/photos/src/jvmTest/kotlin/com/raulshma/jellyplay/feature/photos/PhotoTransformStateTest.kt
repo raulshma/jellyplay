@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 /**
  * Pins the photo viewer's pinch/pan invariants and its pure gesture decisions —
  * previously ~120 untestable lines inside PhotoViewerScreen's pointerInput
- * (the PageZoomStateTest extraction precedent over in player-book).
+ * (the same pure-state seam as PageZoomStateTest over in player-book).
  */
 class PhotoTransformStateTest {
 

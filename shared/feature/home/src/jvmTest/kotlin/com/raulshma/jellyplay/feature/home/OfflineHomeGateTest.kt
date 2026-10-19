@@ -17,8 +17,8 @@ import kotlin.test.assertEquals
 import kotlin.test.Test
 
 /**
- * Drives [OfflineHomeGate] through its interface — the gate semantics that
- * were previously pinnable only by constructing the whole 33-collaborator VM
+ * Drives [OfflineHomeGate] through its interface — the gate semantics
+ * pinned without constructing the whole 33-collaborator VM
  * under Robolectric.
  */
 @OptIn(ExperimentalCoroutinesApi::class)

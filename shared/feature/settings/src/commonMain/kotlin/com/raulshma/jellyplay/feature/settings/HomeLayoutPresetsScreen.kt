@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.foundation.text.KeyboardOptions
 import com.composables.icons.tabler.Tabler
@@ -61,6 +62,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_apply
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets_server_note
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_reset_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_reset_title
@@ -108,7 +110,8 @@ fun HomeLayoutPresetsScreen(
     highlightSettingId: String? = null,
     viewModel: LibraryLayoutViewModel = koinViewModel(),
 ) {
-    val presets = viewModel.homeLayoutPresets
+    val presets by viewModel.homeLayoutPresetsFlow.collectAsStateWithLifecycle()
+    val homeLayoutAutopush by viewModel.homeLayoutAutopushFlow.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
     val bus = LocalUserMessageBus.current
     val platformIntents = rememberPlatformIntents()
@@ -139,7 +142,19 @@ fun HomeLayoutPresetsScreen(
                 icon = Tabler.Outline.Bookmarks,
                 title = stringResource(Res.string.settings_layout_presets),
                 summary = {
-                    if (presets.isEmpty()) stringResource(Res.string.settings_no_saved_presets) else pluralStringResource(Res.plurals.settings_saved_presets_count, presets.size, presets.size)
+                    val presetSummary = if (presets.isEmpty()) {
+                        stringResource(Res.string.settings_no_saved_presets)
+                    } else {
+                        pluralStringResource(Res.plurals.settings_saved_presets_count, presets.size, presets.size)
+                    }
+                    // The cheap "also on server" state note — the
+                    // current layout mirrors to the server while autopush is
+                    // on (the full server state lives on the sync controller).
+                    if (homeLayoutAutopush) {
+                        "$presetSummary, ${stringResource(Res.string.settings_home_layout_presets_server_note)}"
+                    } else {
+                        presetSummary
+                    }
                 },
                 modifier = Modifier.padding(vertical = 8.dp),
                 initiallyExpanded = true,

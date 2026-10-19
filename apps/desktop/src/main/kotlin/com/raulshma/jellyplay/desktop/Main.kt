@@ -140,31 +140,36 @@ fun main(args: Array<String>) {
     )
     startupPerf.scheduleMeasurementHooksIfRequested()
 
+    //  startup mark: closes Main's synchronous pre-Koin segment (paths +
+    // mkdirs, single-instance file lock, drop-file clear + WatchService,
+    // crash-marker consume) so the koinStart delta below measures GRAPH
+    // CONSTRUCTION only, free of that IO share.
+    startupPerf.markPreKoinDone()
+
     val koinApp = startKoin {
         // Koin's default no-override policy holds — every definition in the
         // list is keyed and unique (the desktop auto-update binding is the
-        // ONE AppUpdateRepository definition; docs/adr/desktop-auto-update.md).
-        // The module list itself is DesktopKoinModules.kt (the fold): the
-        // shared core graph, this shell's platform actuals, and the ONE
-        // spread of sharedFeatureModules both JVM shells consume. Startup
-        // ORDER below is unchanged — Koin → off-critical-path starts →
-        // image loader → window.
+        // ONE AppUpdateRepository definition). The module list itself is
+        // DesktopKoinModules.kt: the shared core graph, this shell's platform
+        // actuals, and the ONE spread of sharedFeatureModules both JVM shells
+        // consume. Startup ORDER: Koin → off-critical-path starts → image
+        // loader → window.
         modules(desktopKoinModules(paths))
     }
 
     //  startup mark: Koin graph construction is the first heavy
-    // milestone of boot (module list above is untouched — no reordering).
+    // phase of boot (module list above is untouched — no reordering).
     startupPerf.markKoinStarted()
 
-    // Off-critical-path startup work this main() used to inline (the fold's
-    // extraction — Main.kt keeps paths/window/tray/title-bar): the
-    // download/audio manager starts (the documented start ORDER is preserved
-    // inside), the runtime icon decode, and the desktop identity prewarm —
-    // all in DesktopStartup over the Koin application scope.
+    // Off-critical-path startup work (Main.kt keeps
+    // paths/window/tray/title-bar): the download/audio manager starts (the
+    // documented start ORDER is preserved inside), the runtime icon decode,
+    // and the desktop identity prewarm — all in DesktopStartup over the Koin
+    // application scope.
     val appIconState = mutableStateOf<Painter?>(null)
     launchDesktopStartup(koinApp, onAppIconDecoded = { appIconState.value = it })
 
-    // Desktop image engine (extracted): the shared JVM Coil builder policy —
+    // Desktop image engine: the shared JVM Coil builder policy —
     // core:data's jellyPlayImageLoader (serviceLoaderEnabled(false), OkHttp
     // fetcher over the Koin-owned STREAMING client, crossfade, and the
     // lazily-sized ImageCache.DIR disk cache rooted at <configDir>) — over
@@ -186,7 +191,19 @@ fun main(args: Array<String>) {
         ?.let { DesktopWindowStateStore.sanitize(it, DesktopWindowStateStore.availableScreens()) }
     val pxToDp = DesktopWindowPlacementController.pxToDpFactor()
 
+    //  startup mark: closes main()'s synchronous post-Koin segment (the
+    // startup kicks, the image loader install, the window-state load) so the
+    // koin→windowShown gap splits into koinStart→appEntry→firstComposition
+    // →windowShown.
+    startupPerf.markAppEntry()
+
     application {
+        //  startup mark: first statement of the content's first composition
+        // (remember initializers run during composition, once per composition
+        // lifetime) — the segment before it is Compose/Skia init + window
+        // creation.
+        remember(startupPerf) { startupPerf.markFirstComposition() }
+
         val windowState = rememberWindowState(
             position = savedWindowGeometry
                 ?.let { WindowPosition((it.x / pxToDp).dp, (it.y / pxToDp).dp) }
@@ -341,8 +358,8 @@ fun main(args: Array<String>) {
                 onDispose { window.removeWindowListener(maximizeListener) }
             }
 
-            // The settings/profile sync engine's window-focus flush (ADR 0011):
-            // the desktop's app-background equivalent — the window regaining
+            // The settings/profile sync engine's window-focus flush: the
+            // desktop's app-background equivalent — the window regaining
             // focus is the "the user is back" edge, so changes accumulated on
             // this device flush promptly (the scheduler's own debounce
             // collapses alt-tab bursts). Best-effort and inert before the
@@ -456,10 +473,7 @@ fun main(args: Array<String>) {
                         // that same AWT event thread, and this hop costs one
                         // loop turn while guaranteeing every future listener
                         // variant stays on-thread.
-                        // Window restore/focus itself lives in DesktopTrayActions
-                        // (extraction — null path unit-covered; the
-                        // visual restore still needs a one-time manual eyeball,
-                        // see docs/perf notes + gate report).
+                        // Window restore/focus itself lives in DesktopTrayActions.
                         java.awt.EventQueue.invokeLater {
                             windowState.isMinimized = false
                             DesktopTrayActions.showMainWindow(windowRef.get())

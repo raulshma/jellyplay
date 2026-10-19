@@ -10,20 +10,22 @@ kotlin {
     sourceSets {
         // ── what this module is ──────────────────────────────────────────
         // Test doubles needed by MORE THAN ONE module's test lane — today
-        // FakeTimeSource (livetv + core:data — the per-module copies were
-        // single-homed here),
-        // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
-        // MediaEngine double for the session + audio-queue jvmTest suites;
-        // apps/desktop's app-side copy was adopted in the fake-twin merge —
-        // its suites construct AUTO_PLAY instances of this class, and its
-        // wall-clock pollUntil helper lives beside it in PollUntil.kt).
+        // FakeTimeSource (livetv + core:data), FakeUserDataMutator
+        // (details + home) and FakeMediaEngine (the one MediaEngine double
+        // for the session + audio-queue jvmTest suites; apps/desktop's
+        // suites construct AUTO_PLAY instances of this class). Doubles whose
+        // only consumers are a single module's test lane live in that
+        // module's test sources (apps/desktop tests and player-video
+        // jvmTest, respectively).
+        // The desktop audio-queue fakes are also canonical here, so both
+        // lanes consume the single copy.
         // AGP 9 has no KMP testFixtures support, so this is a
         // plain library module declared inside consumers' test source-set
         // blocks ONLY.
         //
-        // The dissolved :core:testing lesson: a central test module
-        // accretes every helper anyone ever copied twice and becomes a
-        // production-looking dependency nobody can audit. House rules:
+        // A central test module accretes every helper anyone ever copied
+        // twice and becomes a production-looking dependency nobody can
+        // audit. Rules:
         //  - per-touch adoption: a double moves here when a SECOND module
         //    needs it, never in bulk;
         //  - NEVER add this module to a main source set — the
@@ -33,15 +35,15 @@ kotlin {
         //    redesign at the move.
         //
         // The doubles live in jvmShared, not commonMain: FakeTimeSource
-        // implements core:model's TimeSource (D3 moved the seam there from
-        // core:data), which lives in THAT module's jvmShared
+        // implements core:model's TimeSource (the core:data seam), which
+        // lives in THAT module's jvmShared
         // (java.time-flavored) and is therefore equally invisible to
         // commonMain here. One home for all doubles keeps the story simple;
         // a future common-safe double would add a commonMain file when a
         // commonTest consumer actually exists.
 
         getByName("jvmShared").dependencies {
-            // TimeSource (core:model jvmShared, the D3 move) FakeTimeSource
+            // TimeSource (core:model jvmShared) FakeTimeSource
             // implements. implementation, not api: every consumer already
             // carries its own core:model edge — this module must never
             // become a reason to widen one.
@@ -59,6 +61,20 @@ kotlin {
             // carries its own player-contract edge, same rule as core:data
             // above — this module must never become a reason to widen one.
             implementation(project(":shared:core:player-contract"))
+        }
+        getByName("jvmMain").dependencies {
+            // The desktop audio-queue fakes (DesktopAudioQueueManagerFixtures)
+            // live in jvmMain, not the usual jvmShared: they reference
+            // core:data's JVM-only AudioEffectsSession (that module's
+            // jvmMain), invisible to this module's ANDROID compilation — and
+            // both consumer lanes (core:data jvmTest, apps/desktop test) are
+            // JVM anyway. jvmMain inherits the jvmShared edges above for
+            // everything else the fakes touch (core:data, player-contract).
+            // The AudioQueueDao + AudioQueueEntity/AudioQueueStateEntity Room
+            // edge InMemoryQueueDao extends. implementation, not api: every
+            // consumer already carries its own core:database edge — this
+            // module must never become a reason to widen one.
+            implementation(project(":shared:core:database"))
         }
     }
 }

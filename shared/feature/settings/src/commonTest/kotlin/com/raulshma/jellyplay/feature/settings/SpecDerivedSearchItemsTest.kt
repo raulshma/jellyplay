@@ -11,14 +11,14 @@ import kotlin.test.assertTrue
 /**
  * Pins the spec-derived catalog lists and the domains' FUSED row projections
  * field for field: the fused `List<SettingsRow>.toSearchItems` derivation
- * (every domain but the experimental screen) must be byte-equivalent in
- * behavior to the retired record+binding declarations — same ids in the same
+ * (every domain but the experimental screen) must match the spec+row
+ * declarations in behavior — same ids in the same
  * order, same bound resources, keywords from the specs, routes from the
  * route maps, icons from the rows, isAdvanced flags and platform
  * availability — so the fusion changes nothing downstream (deep-link
  * highlighting, group membership, search tie-break order, platform gating).
  *
- * The list INITIALIZATIONS themselves are the fail-fast drift ratchet: any
+ * The list INITIALIZATIONS themselves are the fail-fast drift guard: any
  * spec id without a row, resource-key drift, missing route kind or a
  * converted row that still carries hand search faces throws at catalog
  * init — every test here touching the catalog keeps that check exercised.
@@ -28,9 +28,9 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 41-row order and projects the spec faces`() {
+    fun `playback player list keeps its 42-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(41, items.size)
+        assertEquals(42, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
         assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
 
@@ -67,9 +67,9 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `advanced video list keeps its 16-row order with the three residuals in place`() {
+    fun `advanced video list keeps its 18-row order with the three residuals in place`() {
         val items = PlaybackAdvancedVideoSearchItems
-        assertEquals(16, items.size)
+        assertEquals(18, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DialogueBoost.id,
@@ -83,6 +83,8 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.PassthroughCodecTruehd.id,
                 PlaybackRows.MaxAudioChannels.id,
                 PlaybackRows.DownmixBoost.id,
+                PlaybackRows.SpatialAudio.id,
+                PlaybackRows.SpatialAudioOnlyHeadphones.id,
                 PlaybackRows.FrameRateMatching.id,
                 PlaybackRows.OfflinePlayback.id,
                 PlaybackRows.StreamingQuality.id,
@@ -105,7 +107,9 @@ class SpecDerivedSearchItemsTest {
         assertEquals(1, items.size)
         val item = items.single()
         assertEquals(PlaybackRows.ExternalPlayerApp.id, item.id)
-        assertEquals("ss_external_player_app_title", item.titleRes.key)
+        // One-key family: the row's search title folds to the screen title —
+        // the spec's titleKey names the settings_ key.
+        assertEquals("settings_external_player_app", item.titleRes.key)
         assertEquals(Route.PlaybackSettings(), item.route)
         assertFalse(item.isAdvanced)
         assertEquals(PlatformKind.entries.toSet(), item.platforms)
@@ -171,21 +175,40 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance library list keeps its 8-row order with the five residuals in place`() {
-        // The home-discovery watch-state quartet moved to HomeCardsSearchItems
-        // (PS-4); the appearance side keeps the five library residuals plus
-        // the haptics / share-media / hide-search-history spec-backed trio.
+    fun `appearance library list keeps its 23-row order with the five residuals in place`() {
+        // The home-discovery watch-state quartet lives in
+        // HomeCardsSearchItems; the appearance side keeps the library
+        // residuals, the
+        // haptics / share-media / hide-search-history spec-backed trio, and
+        // the detail-display toggles parked in Library &
+        // Cards (badges, stream-info, tagline, theme-music, external links,
+        // reviews, trailers, promoted actions, download progress).
         val items = AppearanceLibrarySearchItems
-        assertEquals(8, items.size)
+        assertEquals(23, items.size)
         assertEquals(
             listOf(
                 AppearanceRows.HideEpisodeThumbnails.id,
+                AppearanceRows.QualityBadges.id,
+                AppearanceRows.NewBadges.id,
                 AppearanceRows.CompactEpisodeList.id,
+                AppearanceRows.ShowEpisodeStreamBadges.id,
                 AppearanceRows.SkipSpecials.id,
                 AppearanceRows.ShowMissingEpisodes.id,
                 AppearanceRows.PreferLogos.id,
+                AppearanceRows.ShowTagline.id,
+                AppearanceRows.PlayThemeMusic.id,
                 AppearanceRows.HapticsEnabled.id,
                 AppearanceRows.ShowShareMedia.id,
+                AppearanceRows.ShowExternalLinks.id,
+                AppearanceRows.ShowReviews.id,
+                AppearanceRows.PreferLocalTrailers.id,
+                AppearanceRows.TrailerPreviewOnFocus.id,
+                AppearanceRows.ShowPromotedActionsLandscape.id,
+                AppearanceRows.ShowDownloadProgress.id,
+                AppearanceRows.ShowUpcomingStrip.id,
+                AppearanceRows.ShowMoreInCollection.id,
+                AppearanceRows.ShowFilmographyRoles.id,
+                AppearanceRows.ShowFrequentCostars.id,
                 AppearanceRows.HideSearchHistory.id,
             ),
             items.map { it.id },
@@ -213,12 +236,20 @@ class SpecDerivedSearchItemsTest {
 
     @Test
     fun `home lists keep their sizes and derive their routes from the spec kinds`() {
-        assertEquals(10, HomeDisplaySearchItems.size)
+        // The display group: hero video, the badge rows'
+        // new-section/continue-watching knobs, the stats card, the
+        // genre rail and the presence chips (17 rows), plus the
+        // hidden-libraries restore row (18).
+        assertEquals(18, HomeDisplaySearchItems.size)
         assertEquals(HomeRows.HomeMode.id, HomeDisplaySearchItems.first().id)
         assertEquals(HomeRows.UnhideCw.id, HomeDisplaySearchItems.last().id)
-        assertEquals(3, HomeNextUpSearchItems.size)
-        assertEquals(4, HomeLayoutSearchItems.size)
-        assertEquals(4, HomeCardsSearchItems.size)
+        // The exclude-active-sessions toggle joined the Next Up quartet.
+        assertEquals(4, HomeNextUpSearchItems.size)
+        // The layout auto-push row joined the layout drill-ins.
+        assertEquals(5, HomeLayoutSearchItems.size)
+        // The cards group: the card-display quartet plus the
+        // badge/spoiler toggles and the TV-gated trickplay fork (8 rows).
+        assertEquals(8, HomeCardsSearchItems.size)
 
         // The drill-in rows resolve their routes through the spec route kinds.
         assertIs<Route.PinnedHomeSections>(HomeLayoutSearchItems.single { it.id == HomeRows.PinnedHomeSections.id }.route)
@@ -226,7 +257,8 @@ class SpecDerivedSearchItemsTest {
         assertIs<Route.LibraryHomeSections>(HomeLayoutSearchItems.single { it.id == HomeRows.ConfigureLibraries.id }.route)
         assertIs<Route.DiscoverRows>(HomeLayoutSearchItems.single { it.id == HomeRows.DiscoverRows.id }.route)
         assertIs<Route.NextUpExcluded>(HomeDisplaySearchItems.single { it.id == HomeRows.NextUpHidden.id }.route)
-        // The cards group (the PS-4 moved quartet) deep-links into the hub…
+        assertIs<Route.MyMediaHidden>(HomeDisplaySearchItems.single { it.id == HomeRows.HiddenLibraries.id }.route)
+        // The cards group deep-links into the hub…
         assertIs<Route.HomeSettings>(HomeCardsSearchItems.first().route)
         // …and every home row renders unconditionally (no advanced flags).
         assertTrue(HomeDisplaySearchItems.none { it.isAdvanced })

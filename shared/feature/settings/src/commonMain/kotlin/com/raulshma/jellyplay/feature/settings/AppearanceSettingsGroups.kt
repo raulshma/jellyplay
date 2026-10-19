@@ -42,8 +42,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summ
 
 @Composable
 private fun appearanceLibrarySummary(preferences: AppearanceScreenPreferences): String {
-    // The group's remaining rows (the home-discovery card-display quartet
-    // moved to HomeSettingsScreen — PS-4, so its terms left the summary).
+    // The group's remaining rows; the home-discovery card-display quartet
+    // lives on HomeSettingsScreen, so its terms stay out of the summary.
     val hideThumbnails = if (preferences.hideEpisodeThumbnails) stringResource(Res.string.settings_summary_hide_thumbnails) else null
     val skipSpecials = if (preferences.skipSpecials) stringResource(Res.string.settings_summary_skip_specials) else null
     val shareOpt = if (preferences.showShareMediaOption) stringResource(Res.string.settings_summary_share_button) else null
@@ -116,6 +116,28 @@ internal fun AppearanceLibraryGroup(
             onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
         )
 
+        // The card-badge rows: a second face on the home cards
+        // group's prefs — these write the SAME HomeDiscoveryStore commands
+        // (the cross-store shape the home-discovery fields in this group's
+        // slice already establish), so either screen's toggle moves both.
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.QualityBadges),
+            title = rowTitle(AppearanceRows.QualityBadges),
+            subtitle = rowSubtitle(AppearanceRows.QualityBadges),
+            checked = preferences.showQualityBadges,
+            highlighted = highlightSettingId == AppearanceRows.QualityBadges.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowQualityBadges(it) } },
+        )
+
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.NewBadges),
+            title = rowTitle(AppearanceRows.NewBadges),
+            subtitle = rowSubtitle(AppearanceRows.NewBadges),
+            checked = preferences.showNewBadges,
+            highlighted = highlightSettingId == AppearanceRows.NewBadges.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowNewBadges(it) } },
+        )
+
         SettingToggleItem(
             icon = Tabler.Outline.List,
             title = rowTitle(AppearanceRows.CompactEpisodeList),
@@ -123,6 +145,15 @@ internal fun AppearanceLibraryGroup(
             checked = preferences.compactEpisodeList,
             highlighted = highlightSettingId == AppearanceRows.CompactEpisodeList.id,
             onCheckedChange = { viewModel.edit { scope -> scope.library.setCompactEpisodeList(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Subtitles,
+            title = rowTitle(AppearanceRows.ShowEpisodeStreamBadges),
+            subtitle = rowSubtitle(AppearanceRows.ShowEpisodeStreamBadges),
+            checked = preferences.showEpisodeStreamBadges,
+            highlighted = highlightSettingId == AppearanceRows.ShowEpisodeStreamBadges.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowEpisodeStreamBadges(it) } },
         )
 
         SettingToggleItem(
@@ -162,6 +193,24 @@ internal fun AppearanceLibraryGroup(
         )
 
         SettingToggleItem(
+            icon = Tabler.Outline.Quote,
+            title = rowTitle(AppearanceRows.ShowTagline),
+            subtitle = rowSubtitle(AppearanceRows.ShowTagline),
+            checked = preferences.showTagline,
+            highlighted = highlightSettingId == AppearanceRows.ShowTagline.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowTagline(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Music,
+            title = rowTitle(AppearanceRows.PlayThemeMusic),
+            subtitle = rowSubtitle(AppearanceRows.PlayThemeMusic),
+            checked = preferences.playThemeMusic,
+            highlighted = highlightSettingId == AppearanceRows.PlayThemeMusic.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setPlayThemeMusic(it) } },
+        )
+
+        SettingToggleItem(
             icon = Tabler.Outline.DeviceMobileVibration,
             title = rowTitle(AppearanceRows.HapticsEnabled),
             subtitle = rowSubtitle(AppearanceRows.HapticsEnabled),
@@ -177,6 +226,96 @@ internal fun AppearanceLibraryGroup(
             checked = preferences.showShareMediaOption,
             highlighted = highlightSettingId == AppearanceRows.ShowShareMedia.id,
             onCheckedChange = { viewModel.edit { scope -> scope.experimental.setShowShareMediaOption(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Link,
+            title = rowTitle(AppearanceRows.ShowExternalLinks),
+            subtitle = rowSubtitle(AppearanceRows.ShowExternalLinks),
+            checked = preferences.showExternalLinks,
+            highlighted = highlightSettingId == AppearanceRows.ShowExternalLinks.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowExternalLinks(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Star,
+            title = rowTitle(AppearanceRows.ShowReviews),
+            subtitle = rowSubtitle(AppearanceRows.ShowReviews),
+            checked = preferences.showReviews,
+            highlighted = highlightSettingId == AppearanceRows.ShowReviews.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowReviews(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Movie,
+            title = rowTitle(AppearanceRows.PreferLocalTrailers),
+            subtitle = rowSubtitle(AppearanceRows.PreferLocalTrailers),
+            checked = preferences.preferLocalTrailers,
+            highlighted = highlightSettingId == AppearanceRows.PreferLocalTrailers.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setPreferLocalTrailers(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.DeviceTv,
+            title = rowTitle(AppearanceRows.TrailerPreviewOnFocus),
+            subtitle = rowSubtitle(AppearanceRows.TrailerPreviewOnFocus),
+            checked = preferences.trailerPreviewOnFocus,
+            highlighted = highlightSettingId == AppearanceRows.TrailerPreviewOnFocus.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setTrailerPreviewOnFocus(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.PlayerPlay,
+            title = rowTitle(AppearanceRows.ShowPromotedActionsLandscape),
+            subtitle = rowSubtitle(AppearanceRows.ShowPromotedActionsLandscape),
+            checked = preferences.showPromotedActionsLandscape,
+            highlighted = highlightSettingId == AppearanceRows.ShowPromotedActionsLandscape.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowPromotedActionsLandscape(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Download,
+            title = rowTitle(AppearanceRows.ShowDownloadProgress),
+            subtitle = rowSubtitle(AppearanceRows.ShowDownloadProgress),
+            checked = preferences.showDownloadProgress,
+            highlighted = highlightSettingId == AppearanceRows.ShowDownloadProgress.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowDownloadProgress(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.CalendarEvent,
+            title = rowTitle(AppearanceRows.ShowUpcomingStrip),
+            subtitle = rowSubtitle(AppearanceRows.ShowUpcomingStrip),
+            checked = preferences.showUpcomingStrip,
+            highlighted = highlightSettingId == AppearanceRows.ShowUpcomingStrip.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowUpcomingStrip(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Stack2,
+            title = rowTitle(AppearanceRows.ShowMoreInCollection),
+            subtitle = rowSubtitle(AppearanceRows.ShowMoreInCollection),
+            checked = preferences.showMoreInCollection,
+            highlighted = highlightSettingId == AppearanceRows.ShowMoreInCollection.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowMoreInCollection(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.Users,
+            title = rowTitle(AppearanceRows.ShowFilmographyRoles),
+            subtitle = rowSubtitle(AppearanceRows.ShowFilmographyRoles),
+            checked = preferences.showFilmographyRoles,
+            highlighted = highlightSettingId == AppearanceRows.ShowFilmographyRoles.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowFilmographyRoles(it) } },
+        )
+
+        SettingToggleItem(
+            icon = Tabler.Outline.User,
+            title = rowTitle(AppearanceRows.ShowFrequentCostars),
+            subtitle = rowSubtitle(AppearanceRows.ShowFrequentCostars),
+            checked = preferences.showFrequentCostars,
+            highlighted = highlightSettingId == AppearanceRows.ShowFrequentCostars.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.library.setShowFrequentCostars(it) } },
         )
 
         SettingToggleItem(
@@ -305,10 +444,9 @@ internal fun AppearanceNewsletterGroup(
                         onCheckedChange = { viewModel.edit { scope -> scope.notification.setNewsletterEnabled(it) } }
         )
 
-        // The persisted newsletterDayOfWeek values are the legacy
-        // java.util.Calendar day numbers (SUNDAY=1 … SATURDAY=7) —
-        // the literals preserve that wire format now that the JVM
-        // type is gone.
+        // The persisted newsletterDayOfWeek values use java.util.Calendar day
+        // numbers (SUNDAY=1 … SATURDAY=7); the literals preserve that wire
+        // format.
         val daysOfWeek = listOf(
             CALENDAR_MONDAY to stringResource(Res.string.settings_day_monday),
             CALENDAR_TUESDAY to stringResource(Res.string.settings_day_tuesday),

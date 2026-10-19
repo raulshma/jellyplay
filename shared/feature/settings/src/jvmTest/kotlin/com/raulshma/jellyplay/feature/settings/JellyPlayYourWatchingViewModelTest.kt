@@ -28,8 +28,8 @@ import kotlin.test.assertNull
 /**
  * The "Your watching" screen's model (the mockk idiom, the
  * [JellyPlaySyncViewModelTest] pattern): one fetch per window chip, the
- * per-call analytics gate, and the quiet null degrade for the pre-wave 404 —
- * never an error state.
+ * per-call analytics gate, and the quiet null degrade for a 404 — never an
+ * error state.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlayYourWatchingViewModelTest {
@@ -79,7 +79,7 @@ class JellyPlayYourWatchingViewModelTest {
 
     @Test
     fun notFound_degradesQuietlyToNull() = runTest {
-        // The pre-wave 404: the route answers null (the api contract).
+        // A 404: the route answers null (the api contract).
         coEvery { pluginApi.getMyAnalytics(any()) } returns Result.success(null)
 
         val viewModel = viewModel(gateOpen = true)

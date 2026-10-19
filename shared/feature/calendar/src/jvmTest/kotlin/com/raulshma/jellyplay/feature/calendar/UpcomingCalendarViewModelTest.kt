@@ -69,16 +69,16 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 
 /**
- * UpcomingCalendarViewModel coverage (downloads/syncplay conveyor test style,
- * hand-rolled fakes over the repository interfaces — no mocking library):
- * the feature-disabled refresh gate, the month-collector window swap, the
- * enrichment semaphore + append-only poster map, and stableRowId identity.
+ * UpcomingCalendarViewModel coverage (hand-rolled fakes over the repository
+ * interfaces — no mocking library): the feature-disabled refresh gate, the
+ * month-collector window swap, the enrichment semaphore + append-only poster
+ * map, and stableRowId identity.
  *
  * The VM does real work in `init` (month collector + snapshotFlow enrichment
  * watcher + refresh), so Main is a [StandardTestDispatcher] and every
  * construction site is followed by [advanceUntilIdle]. Enrichment fans out on
- * [Dispatchers.Default] (production behavior, kept verbatim), so those tests
- * poll on real time via [awaitReal].
+ * [Dispatchers.Default] (production behavior), so those tests poll on real
+ * time via [awaitReal].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpcomingCalendarViewModelTest {
@@ -118,7 +118,7 @@ class UpcomingCalendarViewModelTest {
         seerrRepository = seerr,
         // The gate rides the test Main dispatcher (not the store's Unconfined
         // scope) so it still reports the cold `false` seed while VM init's
-        // synchronous refresh() runs — the HEAD init-timing the flag tests pin
+        // synchronous refresh() runs — the init timing the flag tests pin
         // (ExperimentalFeatureGate's KDoc). advanceUntilIdle warms it.
         experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
@@ -221,7 +221,7 @@ class UpcomingCalendarViewModelTest {
 
         val currentMonth = YearMonth.now()
         vm.changeMonth(1)
-        // Items clear synchronously so the list doesn't show the old month.
+        // Items clear synchronously so the list doesn't show the stale month.
         assertTrue(vm.state.value.items.isEmpty())
         advanceUntilIdle()
 
@@ -284,18 +284,18 @@ class UpcomingCalendarViewModelTest {
         advanceUntilIdle()
         flushSnapshots()
 
-        awaitReal { vm.state.value.enrichedPosters.keys == setOf(101, 202) }
+        awaitReal { vm.enrichedPosters.value.keys == setOf(101, 202) }
 
         assertEquals(
             "${TmdbImageUrls.POSTER_W500}/movie.jpg",
-            vm.state.value.enrichedPosters[101],
+            vm.enrichedPosters.value[101],
         )
         assertEquals(
             "${TmdbImageUrls.POSTER_W500}/tv.jpg",
-            vm.state.value.enrichedPosters[202],
+            vm.enrichedPosters.value[202],
         )
         // No tmdbId → nothing to enrich.
-        assertFalse(vm.state.value.enrichedPosters.containsKey(0))
+        assertFalse(vm.enrichedPosters.value.containsKey(0))
     }
 
     @Test
@@ -307,9 +307,9 @@ class UpcomingCalendarViewModelTest {
         advanceUntilIdle()
         flushSnapshots()
 
-        awaitReal { vm.state.value.enrichedPosters.size == 8 }
+        awaitReal { vm.enrichedPosters.value.size == 8 }
 
-        assertEquals(8, vm.state.value.enrichedPosters.size)
+        assertEquals(8, vm.enrichedPosters.value.size)
         assertTrue(seerr.maxConcurrent.get() <= 4, "semaphore must cap concurrency at 4, saw ${seerr.maxConcurrent.get()}")
         assertTrue(seerr.maxConcurrent.get() >= 2, "cap must still allow parallel lookups, saw ${seerr.maxConcurrent.get()}")
     }
@@ -321,7 +321,7 @@ class UpcomingCalendarViewModelTest {
         val vm = newViewModel()
         advanceUntilIdle()
         flushSnapshots()
-        awaitReal { vm.state.value.enrichedPosters.containsKey(1) }
+        awaitReal { vm.enrichedPosters.value.containsKey(1) }
         val served = seerr.servedMovieIds.size
 
         // Same items re-emit (e.g. collector refresh): nothing re-fetched.
@@ -452,9 +452,9 @@ private class FakeSeerrRepository : SeerrRepository {
     }
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> = unused()
-    // (The auth trio, the *arr settings pair and editRequest moved to the
+    // (The auth trio, the *arr settings pair and editRequest belong to the
     // SeerrAuthenticator / SeerrServiceDirectory / SeerrRequestLifecycle
-    // family seams — no longer members this fake must implement.)
+    // family seams, so this fake does not implement them.)
     override suspend fun search(query: String, page: Int): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> = unused()
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> = unused()

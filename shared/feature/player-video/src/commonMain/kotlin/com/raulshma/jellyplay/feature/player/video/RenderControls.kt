@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvInterpolationTscale
@@ -12,19 +14,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Owns the "Rendering" sheet + gear-menu deinterlace write choreography
- * extracted from [VideoPlayerViewModel] (the [SubtitleStyleController]
- * shape): it composes the pure [SessionRenderState] semantics with the
- * writes around them — the global mpv slice persist (the global-only picks:
- * render quality / `tscale` / custom shader files), the per-item/series
- * render-profile rows (shader pack + tone mapping, through the
+ * Owns the "Rendering" sheet + the HDR output sheet's choreography + the
+ * gear-menu deinterlace write choreography extracted from
+ * [VideoPlayerViewModel] (the [SubtitleStyleController] shape): it composes
+ * the pure [SessionRenderState] semantics with the writes around them — the
+ * global mpv slice persist (the global-only picks:
+ * render quality / `tscale` / custom shader files / HDR passthrough), the
+ * per-item/series render-profile rows (shader pack + tone mapping, through the
  * [ItemPlaybackPreferenceWriter] render commands), and the session
- * item-change re-resolution of the stored override.
+ * item-change re-resolution of the stored override. The ExoPlayer HDR
+ * tone-mapping pick rides the same store-write shape with its own global
+ * slice lambdas (no session lens — the Exo output posture is a
+ * construction-time input, applied on the next playback either way).
  *
  * Like [SubtitleStyleController], this class never references
  * [VideoPlayerUiState] — the state lives in [state] ([SessionRenderState])
  * and every write flows through the narrow constructor lambdas below, so
- * the god-count ratchet stays at its baseline. The engine re-apply stays
+ * the god-count guard stays at its baseline. The engine re-apply stays
  * VM-side: this controller reports a dirty config through [onConfigDirty]
  * (the VM's `updateConfigWithUiState`), and the engines' diff caches apply
  * the delta.
@@ -49,6 +55,10 @@ internal class RenderControls(
     private val getGlobalMpvConfig: () -> MpvEngineConfig,
     /** Persists the global mpv slice (`stores.engine.setMpvConfig`). */
     private val saveGlobalMpvConfig: suspend (MpvEngineConfig) -> Unit,
+    /** The persisted GLOBAL ExoPlayer slice (the HDR sheet's exo lens). */
+    private val getGlobalExoConfig: () -> ExoPlayerEngineConfig,
+    /** Persists the global Exo slice (`stores.engine.setExoPlayerConfig`). */
+    private val saveGlobalExoConfig: suspend (ExoPlayerEngineConfig) -> Unit,
     /** Reads a stored per-item/series preference row (the playback-pref repository `get`). */
     private val loadStoredRow: suspend (prefScope: PlaybackPrefScope, id: String) -> ItemPlaybackPreference?,
     /** Persists the per-item/series override ([ItemPlaybackPreferenceWriter.setRenderProfile]). */
@@ -65,6 +75,10 @@ internal class RenderControls(
     /** Pass-through of [getGlobalMpvConfig] — the sheet's pickers read the global slice through it. */
     val globalMpvConfig: MpvEngineConfig
         get() = getGlobalMpvConfig()
+
+    /** Pass-through of [getGlobalExoConfig] — the HDR sheet's exo lens. */
+    val globalExoConfig: ExoPlayerEngineConfig
+        get() = getGlobalExoConfig()
 
     /**
      * The "Rendering" sheet's shader-pack pick. Applies to the session
@@ -123,6 +137,32 @@ internal class RenderControls(
         pending = { it.copy(customShaderFiles = files) },
         config = { it.copy(customShaderFiles = files) },
     )
+
+    /**
+     * The HDR sheet's mpv passthrough toggle — a GLOBAL mpv preference with
+     * the same session-lens + persist choreography as the other global picks:
+     * the pending mirror makes the CURRENT config rebuild (and with it the
+     * engine's `target-colorspace-hint` re-arm) reflect the flip immediately,
+     * before the DataStore round-trip lands.
+     */
+    fun setMpvHdrPassthrough(enabled: Boolean) = setGlobalMpvField(
+        pending = { it.copy(hdrPassthrough = enabled) },
+        config = { it.copy(hdrPassthrough = enabled) },
+    )
+
+    /**
+     * The HDR sheet's ExoPlayer tone-mapping pick — a GLOBAL Exo preference.
+     * No session lens (the Exo HDR output posture is a construction-time
+     * player input — the GL video-graph engagement chosen at load — applied
+     * on the next playback either way): persist + config-dirty is enough.
+     */
+    fun setExoHdrToneMapping(mode: ExoHdrToneMappingMode) {
+        val next = getGlobalExoConfig().copy(hdrToneMapping = mode)
+        scope.launch {
+            saveGlobalExoConfig(next)
+        }
+        onConfigDirty()
+    }
 
     /**
      * The shared choreography of the sheet's global-only picks: mirror into

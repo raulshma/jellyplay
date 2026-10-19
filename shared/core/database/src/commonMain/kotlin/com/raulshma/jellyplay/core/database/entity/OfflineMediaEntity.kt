@@ -15,12 +15,10 @@ import androidx.room3.PrimaryKey
  *  - [PlaybackStateEntity]: playback progress + watched/favorite state.
  *  - [SyncBaselineEntity]: freshness baseline signatures + result flags.
  *
- * Previously this row carried four jobs at once with every column
- * nullable/defaultable, so it could represent a bare stub, a full metadata
- * mirror, a progress row, or a freshness baseline row indistinguishably. The
- * split gives each concern its own home and its own invariant; a metadata
- * re-persist no longer needs to copy the sync or playback columns forward to
- * avoid clobbering them.
+ * A row with every column nullable/defaultable could represent a bare stub,
+ * a full metadata mirror, a progress row, or a freshness baseline row
+ * indistinguishably. The split gives each concern its own home and its own
+ * invariant; a metadata re-persist copies only the columns it owns.
  *
  * Playback state for a row is read via the `OfflineMediaWithPlayback` LEFT JOIN
  * projection (see [com.raulshma.jellyplay.core.database.dao.OfflineMediaDao]);

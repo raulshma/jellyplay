@@ -4,22 +4,22 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 
 /**
- * Stage B of the spec machinery: HOW a preference row's value is derived from
- * a raw DataStore snapshot (the read) and — when the inverse is mechanical —
- * written back into the slot (the write), as plain data on the [PreferenceSpec]
- * row. A store that declares its keys as Stage B rows derives its read
- * projection, its `restore` rows, its single-key setters and (from the rows'
- * reset categories) its reset-key lists from these encodings, instead of
+ * HOW a preference row's value is derived from a raw DataStore snapshot (the
+ * read) and — when the inverse is mechanical — written back into the slot
+ * (the write), as plain data on the [PreferenceSpec] row. A store that
+ * declares its keys as encoded rows derives its read projection, its
+ * `restore` rows, its single-key setters and (from the rows' reset
+ * categories) its reset-key lists from these encodings, instead of
  * hand-maintaining a second copy of every encoding beside the declaration.
  * The persisted wire name is declared exactly once per row: the legacy
  * string-key fallback consults `keyName` itself, so the typed key and the
- * pre-typed-era fallback can never drift apart.
+ * fallback can never drift apart.
  *
  * Three encodings exist, one per read shape preference stores actually have:
  *
  *  - [PlainCodec] — the typed slot + legacy string-key fallback dance of
  *    `PreferenceCodec.readBool/readInt/readFloat` (booleans / ints / floats
- *    that took part in the one-shot typed-key migration).
+ *    whose values may still sit under the legacy string key).
  *  - [EnumRow] — the enum-by-name string slot: parse the stored constant
  *    name, fall back to the declared default on absence or corruption; the
  *    derived write persists `value.name`.

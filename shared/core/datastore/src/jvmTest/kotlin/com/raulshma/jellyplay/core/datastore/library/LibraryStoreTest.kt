@@ -17,8 +17,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the library-browsing preference store, focusing on the
- * read-modify-write JSON map setters that previously lived inline in the
- * `UserPreferencesStore` god object with no unit coverage.
+ * read-modify-write JSON map setters.
  */
 class LibraryStoreTest {
 
@@ -50,6 +49,21 @@ class LibraryStoreTest {
         assertEquals(true, slice.showDetailUpNext)
         assertEquals(false, slice.showMissingEpisodes)
         assertEquals(emptyMap<String, String>(), slice.defaultLibrarySortOrders)
+        // The detail-screen display toggles: true unless the
+        // feature intentionally preserves today's off behavior.
+        assertEquals(true, slice.showExternalLinks)
+        assertEquals(true, slice.showTagline)
+        assertEquals(false, slice.preferLocalTrailers)
+        assertEquals(true, slice.showMoreInCollection)
+        assertEquals(true, slice.showUpcomingStrip)
+        assertEquals(true, slice.playThemeMusic)
+        assertEquals(true, slice.showReviews)
+        assertEquals(true, slice.showEpisodeStreamBadges)
+        assertEquals(true, slice.showFilmographyRoles)
+        assertEquals(true, slice.showFrequentCostars)
+        assertEquals(true, slice.trailerPreviewOnFocus)
+        assertEquals(true, slice.showPromotedActionsLandscape)
+        assertEquals(true, slice.showDownloadProgress)
     }
 
     @Test
@@ -99,6 +113,54 @@ class LibraryStoreTest {
         assertEquals(true, store.library.first().preferLogos)
         store.restore(LibrarySlice(preferLogos = false))
         assertEquals(false, store.library.first().preferLogos)
+    }
+
+    @Test
+    fun `detail display toggles default off-state round-trips`() = runTest {
+        // The one default-off toggle flips both ways like its neighbors.
+        assertEquals(false, store.library.first().preferLocalTrailers)
+        store.setPreferLocalTrailers(true)
+        assertEquals(true, store.library.first().preferLocalTrailers)
+        store.setPreferLocalTrailers(false)
+        assertEquals(false, store.library.first().preferLocalTrailers)
+    }
+
+    @Test
+    fun `detail display toggles round-trip both ways`() = runTest {
+        // Every default-on detail toggle:
+        // flip off → observed, flip back on → observed (the setters are the
+        // settings rows' only write path).
+        val cases: List<Triple<String, suspend (Boolean) -> Unit, suspend () -> Boolean>> = listOf(
+            Triple("showExternalLinks", store::setShowExternalLinks, { store.library.first().showExternalLinks }),
+            Triple("showTagline", store::setShowTagline, { store.library.first().showTagline }),
+            Triple("showMoreInCollection", store::setShowMoreInCollection, { store.library.first().showMoreInCollection }),
+            Triple("showUpcomingStrip", store::setShowUpcomingStrip, { store.library.first().showUpcomingStrip }),
+            Triple("playThemeMusic", store::setPlayThemeMusic, { store.library.first().playThemeMusic }),
+            Triple("showReviews", store::setShowReviews, { store.library.first().showReviews }),
+            Triple("showEpisodeStreamBadges", store::setShowEpisodeStreamBadges, { store.library.first().showEpisodeStreamBadges }),
+            Triple("showFilmographyRoles", store::setShowFilmographyRoles, { store.library.first().showFilmographyRoles }),
+            Triple("showFrequentCostars", store::setShowFrequentCostars, { store.library.first().showFrequentCostars }),
+            Triple("trailerPreviewOnFocus", store::setTrailerPreviewOnFocus, { store.library.first().trailerPreviewOnFocus }),
+            Triple("showPromotedActionsLandscape", store::setShowPromotedActionsLandscape, { store.library.first().showPromotedActionsLandscape }),
+            Triple("showDownloadProgress", store::setShowDownloadProgress, { store.library.first().showDownloadProgress }),
+        )
+        cases.forEach { (name, setter, read) ->
+            setter(false)
+            assertEquals(false, read(), "$name did not round-trip to false")
+            setter(true)
+            assertEquals(true, read(), "$name did not round-trip back to true")
+        }
+    }
+
+    @Test
+    fun `restore round-trips the detail display toggles through the slice`() = runTest {
+        store.restore(LibrarySlice(showTagline = false, playThemeMusic = false, showDownloadProgress = false))
+        val slice = store.library.first()
+        assertEquals(false, slice.showTagline)
+        assertEquals(false, slice.playThemeMusic)
+        assertEquals(false, slice.showDownloadProgress)
+        store.restore(LibrarySlice())
+        assertEquals(true, store.library.first().showTagline)
     }
 
     @Test

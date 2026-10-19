@@ -49,6 +49,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,9 +112,9 @@ import com.raulshma.jellyplay.feature.photos.generated.resources.photos_reset
 
 // Filmstrip thumbnails all share the same 6dp smooth-corner shape; a single
 // file-level val avoids allocating a fresh AbsoluteSmoothCornerShape per item
-// on every recomposition (the same rationale as ShapeCache — kept local here
-// rather than as a ShapeCache entry because that would wrap it in
-// SynthwaveDynamicShape and square these corners in synthwave mode).
+// on every recomposition (kept local rather than as a ShapeCache entry because
+// ShapeCache tokens flatten to zero corner in synthwave mode, and this shape
+// must stay rounded).
 private val filmstripThumbShape = smoothCornerShape(6.dp)
 
 /** One arm of the photo viewer's ordered back ladder. */
@@ -629,15 +631,22 @@ private fun PhotoImage(
     // restarts at the fitted decode.
     var decodeScale by remember(photo.id) { mutableFloatStateOf(1f) }
 
-    // Zoom settle → re-decode: keys on the scale, so pinch frames keep
-    // cancelling the timer; the still moment fires it. ContentScale.Fit
+    // Zoom settle → re-decode: snapshotFlow re-emits on every scale change and
+    // collectLatest cancels the pending settle when a new value arrives, so
+    // pinch frames keep resetting the timer and the still moment fires it —
+    // the same restart-on-new-value semantics the scale-keyed relaunch had,
+    // but the subscription is coroutine-side: composition never reads the
+    // scale, so pinch frames no longer recompose this scope. ContentScale.Fit
     // re-fits ANY decode to this Box, so swapping the decode size never
     // moves the rendered image — the graphicsLayer below keeps the raw
     // transform and the zoom stays continuous.
-    LaunchedEffect(photo.id, transform.scale) {
-        kotlinx.coroutines.delay(PHOTO_ZOOM_SETTLE_MS)
-        val target = photoDecodeTarget(transform.scale, decodeScale) ?: return@LaunchedEffect
-        decodeScale = target
+    LaunchedEffect(photo.id) {
+        snapshotFlow { transform.scale }
+            .collectLatest {
+                kotlinx.coroutines.delay(PHOTO_ZOOM_SETTLE_MS)
+                val target = photoDecodeTarget(transform.scale, decodeScale) ?: return@collectLatest
+                decodeScale = target
+            }
     }
 
     Box(

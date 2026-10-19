@@ -11,8 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The five placement rules of [DesktopWindowPlacementController] — the
- * choreography that used to live as composable locals in Main.kt — pinned
+ * The five placement rules of [DesktopWindowPlacementController], pinned
  * against a fake [DesktopWindowPlacementHost] and the real
  * [DesktopWindowStateStore] on a tmpdir (the DesktopWindowStateStoreTest
  * pattern): a headless JVM has no AWT windows to drive, and the seam exists

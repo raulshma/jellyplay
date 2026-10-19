@@ -8,10 +8,9 @@ import com.raulshma.jellyplay.PlayerActivity
  * Typed launch contract for [PlayerActivity] — the single adapter that both
  * **builds** and **parses** the intent extras the activity consumes.
  *
- * Producers and consumers that previously joined only through loose string
- * literals (the intent-building block formerly in JellyPlayApp's
- * `navigateFilter` and PlayerActivity's own hand-written parser) now share
- * this one file:
+ * Producers and consumers share this one file instead of joining only
+ * through loose string literals (an intent-building block and
+ * PlayerActivity's own hand-written parser):
  *
  *  - [buildIntent] writes the extras for the dedicated-activity host
  *    ([PlaybackHostRouter] answers [HostDecision.DedicatedActivity]).
@@ -57,6 +56,8 @@ sealed class PlayerActivityArgs {
         val startPositionTicks: Long = 0L,
         val subtitleStreamIndex: Int? = null,
         val audioStreamIndex: Int? = null,
+        /** "Stream instead": resolve Online even when a completed download exists. */
+        val forceStream: Boolean = false,
     ) : PlayerActivityArgs()
 
     /**
@@ -84,6 +85,7 @@ sealed class PlayerActivityArgs {
                 mediaSourceId?.let { intent.putExtra(EXTRA_MEDIA_SOURCE_ID, it) }
                 intent.putExtra(EXTRA_START_POSITION_TICKS, startPositionTicks)
                 writeStreamIndexes(intent, subtitleStreamIndex, audioStreamIndex)
+                if (forceStream) intent.putExtra(EXTRA_FORCE_STREAM, true)
             }
             is Live -> {
                 intent.putExtra(EXTRA_VARIANT, VARIANT_LIVE)
@@ -105,6 +107,8 @@ sealed class PlayerActivityArgs {
         const val EXTRA_AUDIO_STREAM_INDEX = "player_audio_stream_index"
         const val EXTRA_CHANNEL_ID = "player_channel_id"
         const val EXTRA_CHANNEL_NAME = "player_channel_name"
+        /** "Stream instead" flag — video variant only, presence = true. */
+        const val EXTRA_FORCE_STREAM = "player_force_stream"
 
         /**
          * Parse the launch args from a start/new [Intent]. Returns `null` when
@@ -127,6 +131,7 @@ sealed class PlayerActivityArgs {
                 startPositionTicks = intent.getLongExtra(EXTRA_START_POSITION_TICKS, 0L),
                 subtitleStreamIndex = intent.readStreamIndex(EXTRA_SUBTITLE_STREAM_INDEX),
                 audioStreamIndex = intent.readStreamIndex(EXTRA_AUDIO_STREAM_INDEX),
+                forceStream = intent.getBooleanExtra(EXTRA_FORCE_STREAM, false),
             )
         }
 

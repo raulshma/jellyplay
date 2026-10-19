@@ -215,14 +215,14 @@ class JellyPlayBookmarksSyncAdapterTest {
         // the pending outbound tombstone the engine pushes.
         database.bookBookmarkDao().deleteAtPosition(entity.itemId, entity.positionTicks)
 
-        assertEquals(setOf("book-1/12345"), adapter.deletedKeys())
+        assertEquals(setOf("book-1/12345"), adapter.deletedKeys(adapter.snapshot()))
 
         // The engine's confirmation after the applied push (or an inbound
         // tombstone from another device): rows stay gone AND the mirror entry
         // goes — the key re-reads neither dirty nor deleted, so nothing
         // resurrects it on the next cycle.
         adapter.deleteRemote(setOf("book-1/12345"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertTrue(rows().isEmpty())
         assertNull(mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey("books", "book-1/12345"))])
@@ -240,7 +240,7 @@ class JellyPlayBookmarksSyncAdapterTest {
         assertEquals(1, rows().size)
         assertEquals(800L, rows()[0].positionTicks)
         // The tombstoned key's mirror entry is gone; the survivor's stays.
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertEquals(1, adapter.snapshot().size)
     }
 

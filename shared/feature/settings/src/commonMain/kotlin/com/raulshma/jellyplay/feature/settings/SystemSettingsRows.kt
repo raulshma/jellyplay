@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_media_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent
@@ -33,6 +34,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ken_burns
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ken_burns_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
@@ -48,33 +50,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_idle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_idle_ended_cmd_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_play_cmd_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hooks_stop_cmd_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_enabled_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_enabled_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_timeout_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_idle_ambient_timeout_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_categories_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_categories_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_dim_after_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_dim_percent_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_ken_burns_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_ken_burns_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_max_parental_rating_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_show_title_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_show_title_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_slideshow_interval_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_slideshow_interval_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_transition_style_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screensaver_transition_style_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_setup_wizard_title
 
 /**
  * The system domain's fused row declarations — the feature-side single home
  * of every system row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `SettingsScreenIds` holder constant
- * (all retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * The SEMANTICS stay two-homed by design: the dream/desktop-shell rows'
  * keywords, advanced flag, platform rule and route kind live on the
@@ -85,7 +69,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_setup_wiza
  * the group decoration, the list itself stays whole. The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * row-spec drift; search results, catalog order, group membership and
- * per-gate visibility are byte-identical to the retired declarations.
+ * per-gate visibility derive from these declarations.
  */
 internal object SystemRows {
 
@@ -120,8 +104,7 @@ internal object SystemRows {
         id = "screensaver_show_title",
         icon = Tabler.Outline.Typography,
         titleRes = Res.string.settings_show_title,
-        searchTitleRes = Res.string.ss_screensaver_show_title_title,
-        searchSubtitleRes = Res.string.ss_screensaver_show_title_subtitle,
+        searchSubtitleRes = Res.string.settings_display_media_title,
     )
 
     val ScreensaverCategories = SettingsRow(
@@ -129,8 +112,7 @@ internal object SystemRows {
         icon = Tabler.Outline.Folders,
         titleRes = Res.string.settings_categories,
         subtitleRes = Res.string.settings_categories_subtitle,
-        searchTitleRes = Res.string.ss_screensaver_categories_title,
-        searchSubtitleRes = Res.string.ss_screensaver_categories_subtitle,
+        searchSubtitleRes = Res.string.settings_categories_subtitle,
     )
 
     val ScreensaverSlideshowInterval = SettingsRow(
@@ -138,23 +120,20 @@ internal object SystemRows {
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_slideshow_interval,
         subtitleRes = Res.string.settings_slideshow_interval_subtitle,
-        searchTitleRes = Res.string.ss_screensaver_slideshow_interval_title,
-        searchSubtitleRes = Res.string.ss_screensaver_slideshow_interval_subtitle,
+        searchSubtitleRes = Res.string.settings_slideshow_interval_subtitle,
     )
 
     val ScreensaverKenBurns = SettingsRow(
         id = "screensaver_ken_burns",
         icon = Tabler.Outline.Movie,
         titleRes = Res.string.settings_ken_burns,
-        searchTitleRes = Res.string.ss_screensaver_ken_burns_title,
-        searchSubtitleRes = Res.string.ss_screensaver_ken_burns_subtitle,
+        searchSubtitleRes = Res.string.settings_ken_burns_on,
     )
 
     val ScreensaverTransitionStyle = SettingsRow(
         id = "screensaver_transition_style",
         icon = Tabler.Outline.ArrowsHorizontal,
         titleRes = Res.string.settings_transition_style,
-        searchTitleRes = Res.string.ss_screensaver_transition_style_title,
         searchSubtitleRes = Res.string.ss_screensaver_transition_style_subtitle,
     )
 
@@ -163,7 +142,7 @@ internal object SystemRows {
         icon = Tabler.Outline.Shield,
         titleRes = Res.string.settings_dream_max_parental_rating,
         subtitleRes = Res.string.settings_dream_max_parental_rating_subtitle,
-        searchSubtitleRes = Res.string.ss_screensaver_max_parental_rating_subtitle,
+        searchSubtitleRes = Res.string.settings_dream_max_parental_rating_subtitle,
     )
 
     val ScreensaverDimAfter = SettingsRow(
@@ -171,7 +150,7 @@ internal object SystemRows {
         icon = Tabler.Outline.Hourglass,
         titleRes = Res.string.settings_dream_dim_after,
         subtitleRes = Res.string.settings_dream_dim_after_subtitle,
-        searchSubtitleRes = Res.string.ss_screensaver_dim_after_subtitle,
+        searchSubtitleRes = Res.string.settings_dream_dim_after_subtitle,
     )
 
     val ScreensaverDimPercent = SettingsRow(
@@ -179,7 +158,7 @@ internal object SystemRows {
         icon = Tabler.Outline.Sun,
         titleRes = Res.string.settings_dream_dim_percent,
         subtitleRes = Res.string.settings_dream_dim_percent_subtitle,
-        searchSubtitleRes = Res.string.ss_screensaver_dim_percent_subtitle,
+        searchSubtitleRes = Res.string.settings_dream_dim_percent_subtitle,
     )
 
     // -- The desktop idle "Ready to play" ambient screen pair — their own screen group beside the TV dream group. --
@@ -189,8 +168,7 @@ internal object SystemRows {
         icon = Tabler.Outline.Moon,
         titleRes = Res.string.settings_idle_ambient_enabled,
         subtitleRes = Res.string.settings_idle_ambient_enabled_subtitle,
-        searchTitleRes = Res.string.ss_idle_ambient_enabled_title,
-        searchSubtitleRes = Res.string.ss_idle_ambient_enabled_subtitle,
+        searchSubtitleRes = Res.string.settings_idle_ambient_enabled_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
     )
 
@@ -199,8 +177,7 @@ internal object SystemRows {
         icon = Tabler.Outline.Stopwatch,
         titleRes = Res.string.settings_idle_ambient_timeout,
         subtitleRes = Res.string.settings_idle_ambient_timeout_subtitle,
-        searchTitleRes = Res.string.ss_idle_ambient_timeout_title,
-        searchSubtitleRes = Res.string.ss_idle_ambient_timeout_subtitle,
+        searchSubtitleRes = Res.string.settings_idle_ambient_timeout_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
     )
 
@@ -260,7 +237,7 @@ internal object SystemRows {
     )
 
     /**
-     * Every fused system row — the ratchet's vocabulary. A computed accessor
+     * Every fused system row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

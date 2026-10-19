@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.widget
 
 /**
- * Single home for the widget layout breakpoints that used to sit as magic
- * numbers across 7+ call sites (the factories' `onDataSetChanged`/`getViewAt`
- * and the providers' responsive ladders). Each widget family keeps its OWN
- * value — 220 vs 250 vs 110 are per-widget divergences, so they are declared
+ * Single home for the widget layout breakpoints shared across 7+ call sites
+ * (the factories' `onDataSetChanged`/`getViewAt` and the providers'
+ * responsive ladders). Each widget family keeps its OWN value — 220 vs 250 vs
+ * 110 are per-widget divergences, so they are declared
  * here as named constants, not unified.
  *
  * | Constant | dp | Consumer |

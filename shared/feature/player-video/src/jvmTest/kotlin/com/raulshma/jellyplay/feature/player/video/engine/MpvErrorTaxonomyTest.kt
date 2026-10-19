@@ -76,7 +76,7 @@ class MpvErrorTaxonomyTest {
         assertIs<EngineError.Network>(MpvErrorTaxonomy.fromCodeString("-13"))
         assertIs<EngineError.Decoder>(MpvErrorTaxonomy.fromCodeString("-17"))
         // Unknown keeps the ORIGINAL string as its raw text, byte-identical
-        // to the pre-extraction Android arm (not the re-rendered int).
+        // to the Android arm (not the re-rendered int).
         val unknown = MpvErrorTaxonomy.fromCodeString("-20")
         assertIs<EngineError.Unknown>(unknown)
         assertEquals("Playback error (mpv): -20", unknown.raw)
@@ -118,7 +118,7 @@ class MpvErrorTaxonomyTest {
     @Test
     fun fromCodeString_networkKeywordsWinOnKeywordOverlap() {
         // "connection lost: decoder error" carries one keyword from each
-        // family — the Network arm is checked first (pre-extraction order).
+        // family — the Network arm is checked first (the original order).
         assertIs<EngineError.Network>(MpvErrorTaxonomy.fromCodeString("connection lost: decoder error"))
     }
 

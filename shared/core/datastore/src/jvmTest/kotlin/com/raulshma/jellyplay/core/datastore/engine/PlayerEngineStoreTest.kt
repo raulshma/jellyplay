@@ -22,8 +22,7 @@ import kotlin.test.Test
 /**
  * Exercises the player-engine preference store, focusing on the JSON
  * round-trips for the engine configs and the 100-entry LRU cap on the per-item
- * media-stream map that previously lived inline in the `UserPreferencesStore`
- * god object with **no** unit coverage.
+ * media-stream map.
  */
 class PlayerEngineStoreTest {
 

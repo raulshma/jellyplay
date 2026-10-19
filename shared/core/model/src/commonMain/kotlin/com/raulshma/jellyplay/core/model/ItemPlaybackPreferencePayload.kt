@@ -40,6 +40,7 @@ data class ItemPlaybackPreferencePayload(
     val subtitleDisabled: Boolean? = null,
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
+    val preferAudioDescription: Boolean? = null,
     val dialogueBoostStrength: String? = null,
     val rememberedAudioLabel: String? = null,
     val rememberedAudioLanguage: String? = null,

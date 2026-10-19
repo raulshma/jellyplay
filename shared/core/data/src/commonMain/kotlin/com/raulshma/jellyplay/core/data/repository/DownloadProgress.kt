@@ -18,4 +18,30 @@ data class DownloadProgress(
     val id: String,
     val downloadedBytes: Long,
     val speedBytesPerSec: Long,
-)
+    /**
+     * The downloaded item id (the `downloads.mediaItemId` join column) —
+     * lets item-keyed surfaces (the detail screen's episode rows) map live
+     * progress onto their rows without a second query. Null only from tests
+     * constructing the bare byte/speed triple.
+     */
+    val mediaItemId: String? = null,
+    /**
+     * The row's persisted total size — the denominator of the 0..1 fraction
+     * the download-progress UI derives (`downloadedBytes / totalSizeBytes`,
+     * the same math as the ⋮ menu's "Downloading N%" label). 0 = unknown
+     * (a PENDING row before its size probe) → no fraction yet.
+     */
+    val totalSizeBytes: Long = 0,
+) {
+    /**
+     * The 0..1 transfer fraction, or null while the total size is unknown.
+     * Shared by every live-percent surface so the rounding/clamping cannot
+     * drift between the ⋮ menu and the episode-row bar.
+     */
+    val progressFraction: Float?
+        get() = if (totalSizeBytes > 0) {
+            (downloadedBytes.toFloat() / totalSizeBytes).coerceIn(0f, 1f)
+        } else {
+            null
+        }
+}

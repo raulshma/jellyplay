@@ -422,7 +422,13 @@ class VideoPlayerUiStateSyncPlayTest {
     }
 
     @Test
-    fun shouldShowUpNext_falseWhenNoSeriesId() {
+    fun shouldShowUpNext_siblingShowsEvenWithoutSeriesId() {
+        // The former seriesId bypass is GONE: the segment calculator is pure
+        // time-window math and the projection folds ANY next item (episode
+        // sibling OR the Up Next queue mirror) into hasNextEpisode. A sibling
+        // without a series id is no longer gated — the time window alone
+        // decides (the queue case is pinned in SegmentCalculatorTest's
+        // projection-fold section).
         val state = VideoPlayerUiState(
             isInSyncPlaySession = false,
             episodes = EpisodeBrowserState(
@@ -433,9 +439,24 @@ class VideoPlayerUiStateSyncPlayTest {
             ),
             media = MediaContentState(seriesId = null),
             duration = 3_600_000L,
+            currentPosition = 3_570_000L, // within the 30s pre-roll
+        )
+        assertTrue(state.shouldShowUpNext)
+    }
+
+    @Test
+    fun shouldShowUpNext_queuedMovieWithoutSibling_showsNearEnd() {
+        // The queue-first fold through the uiState mirror: a queued movie has
+        // no episode sibling at all, yet counts as next.
+        val state = VideoPlayerUiState(
+            isInSyncPlaySession = false,
+            episodes = EpisodeBrowserState(nextEpisode = null),
+            hasQueuedNext = true,
+            media = MediaContentState(seriesId = null),
+            duration = 3_600_000L,
             currentPosition = 3_570_000L,
         )
-        assertFalse(state.shouldShowUpNext)
+        assertTrue(state.shouldShowUpNext)
     }
 
     @Test

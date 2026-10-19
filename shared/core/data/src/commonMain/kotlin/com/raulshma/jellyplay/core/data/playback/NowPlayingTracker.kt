@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Deep module for the now-playing metadata: the sole writer of the six
  * `MutableStateFlow`s (item id, title, artist, artist id, album, album art
- * url) the player UI renders. Pre-extraction [AudioPlaybackManager] inlined
+ * url) the player UI renders. [AudioPlaybackManager] used to inline
  * this write sequence in four places — detail-fetch success, queue-only
  * local fallback, track transition, crossfade transition — plus the stop
  * reset, and each site hand-picked which fields to write, leaving the
@@ -63,7 +63,7 @@ class NowPlayingTracker {
      * five fields from the queue item and deliberately leaves [artistId]
      * untouched: [AudioQueueItem] carries no artist id, so the previous
      * track's survives until the next detail fetch refreshes it. Recorded
-     * divergence, not an accident — the pre-extraction transitions behaved
+     * divergence, not an accident — the former inline transitions behaved
      * identically. Null album / image url coalesce to "" exactly as the
      * inlined sequences did (`item.album ?: ""`, `item.imageUrl ?: ""`).
      */
@@ -97,7 +97,7 @@ class NowPlayingTracker {
     /**
      * Stop/release reset: returns the five display fields to their initial
      * values. Deliberately does NOT reset [artistId] — recorded divergence:
-     * the pre-extraction `stopAndRelease()` reset never cleared it either.
+     * the former `stopAndRelease()` reset never cleared it either.
      */
     fun clear() {
         _currentPlayingItemId.value = null

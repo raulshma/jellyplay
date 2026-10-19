@@ -19,11 +19,10 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Pins the shared session-policy wiring both shells serve to their surfaces
- * (ADR 0001): admin-refresh arbitration THROUGH the wired
+ * Pins the shared session-policy wiring both shells serve to their surfaces:
+ * admin-refresh arbitration THROUGH the wired
  * [AdminRefreshGate] (one refresh per 30 s window, in-flight serialization,
- * only-on-success stamping — the contracts MainViewModelTest pinned against
- * Android's copy and the desktop scaffold's inlined copy duplicated),
+ * only-on-success stamping),
  * homeMode collect + optimistic persist, the revoke/plain logout fork, and
  * the app-update check→message mapping. Fake clock + test dispatcher, the
  * AdminRefreshGateTest pattern; the repositories are plain lambdas.

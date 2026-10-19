@@ -3,14 +3,12 @@ package com.raulshma.jellyplay.core.datastore.tools
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
-import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
-import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import kotlinx.serialization.json.Json
@@ -39,7 +37,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  *
  * Coverage policy (the catalog is an ALLOWLIST, not an enumeration of
  * `user_prefs`):
- *  - spec rows of the six spec-backed domains, minus the prefixes the sync
+ *  - spec rows of the seven spec-backed domains, minus the prefixes the sync
  *    adapter excludes at its registration (`dream`/`screensaver` — the
  *    catalog must describe exactly what syncs);
  *  - the [SUPPLEMENTAL] rows below — valuable hand-written store keys that
@@ -67,14 +65,13 @@ object SettingsCatalogGenerator {
 
     /**
      * Keys that must never be offered as admin defaults, even if their stores
-     * migrate to specs later: derived from the same `SyncExcludedKeys` sets
-     * the adapter registration excludes (secrets, device/session identity,
-     * per-device lock state), so the denylist cannot drift from what sync
-     * actually excludes.
+     * migrate to specs later: the ONE assembled key-level exclusion set
+     * ([PreferenceSyncPolicy.EXCLUDED_KEYS] — secrets, device/session
+     * identity, per-device lock state, the widget payload cache) the sync
+     * adapter's registration excludes too, so the denylist cannot drift from
+     * what sync actually excludes.
      */
-    val DENYLIST: Set<String> = SecurityStore.SyncExcludedKeys +
-        PinRateLimiter.SyncExcludedKeys +
-        ServerIdentityStore.SyncExcludedKeys
+    val DENYLIST: Set<String> = PreferenceSyncPolicy.EXCLUDED_KEYS
 
     /** One catalog entry as plain data, before JSON rendering. */
     data class Entry(
@@ -133,6 +130,12 @@ object SettingsCatalogGenerator {
         "Video player" to VideoPlayerPreferenceSpecs.all,
         "Screensaver" to ScreensaverPreferenceSpecs.all,
         "Experimental" to ExperimentalPreferenceSpecs.all,
+        // After Experimental: the app_language / prefer_audio_description wire
+        // keys are dual-declared (the experimental store's rows exist to cover
+        // them; reset ownership is the subtitle store's) and the catalog keeps
+        // ONE entry per wire key, first domain wins — so the shared pair stays
+        // catalogued where it always was.
+        "Subtitles & language" to SubtitlePreferenceSpecs.all,
     )
 
     /**
@@ -161,6 +164,13 @@ object SettingsCatalogGenerator {
 
         SPEC_DOMAINS.forEach { (domain, rows) ->
             rows.forEach { spec ->
+                // Install-global bookkeeping markers are spec rows (reset
+                // coverage + derivation-integrity reflection) but describe
+                // nothing that syncs or that an admin should default —
+                // SKIPPED here where the [DENYLIST] would hard-error (these
+                // are legal rows; see
+                // PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS).
+                if (spec.keyName in PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS) return@forEach
                 if (SYNC_EXCLUDED_PREFIXES.none { spec.keyName.startsWith(it) }) {
                     spec.toEntry(domain, strings)?.let(::add)
                 }

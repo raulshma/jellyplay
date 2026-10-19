@@ -262,18 +262,33 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean {
  */
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
 
-/** Silent no-op — the focus diagnostic only ever speaks on a harness-armed desktop. */
-internal actual fun harnessFocusDiag(message: String) {}
+/**
+ * Focus diagnostic: logcat under `JellyPlayFocus` while the harness gate is
+ * armed (`jellyplay.harness.enabled=true` — the desktop actual's zero-cost
+ * gate, same property, so one flag speaks on both platforms), silent on every
+ * normal boot. The TV-key report supplied clean logcat; these lines make
+ * the Compose-side focus story (grab attempts, layer focus transitions, sink
+ * installs) part of the next field report.
+ */
+internal actual fun harnessFocusDiag(message: String) {
+    if (System.getProperty("jellyplay.harness.enabled")?.equals("true", ignoreCase = true) == true) {
+        android.util.Log.d("JellyPlayFocus", message)
+    }
+}
 
 /**
- * Silent no-op — the deterministic desktop key bridge is desktop-only (the
- * install call site is behind [grabsKeyboardFocusWithControlsVisible], false
- * here), so Android never publishes a key sink and phone/TV behavior is
- * byte-identical to HEAD.
+ * Deterministic Android key delivery: delegate to [AndroidPlayerKeyBridge].
+ * PlayerActivity.dispatchKeyEvent offers every key the normal dispatch chain
+ * did not consume (the null-focus case) to the bridge — the Android half of
+ * the fix.
  */
-internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
+internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
+    AndroidPlayerKeyBridge.install(sink)
+}
 
-internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
+internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
+    AndroidPlayerKeyBridge.uninstall(expected)
+}
 
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean =
@@ -315,8 +330,29 @@ actual fun PlatformBitmap.asPlatformImageBitmap(): ImageBitmap = asImageBitmap()
 
 // ── Cast chrome ────────────────────────────────────────────────────────────
 
-internal actual val VideoPlayerViewModel.platformCastManager: Any?
-    get() = androidCastManager
+/**
+ * The Android route-button projection over the legacy discovery/connect
+ * manager (the seam adapter's delegate): the click arm requests the route
+ * picker and the [PlatformCastButton] actual renders it from the request.
+ * The legacy surface stays behind this class — the chrome consumes only the
+ * commonMain CastRouteButton members.
+ */
+internal class AndroidCastRouteButton(
+    val legacy: com.raulshma.jellyplay.core.data.cast.CastManager,
+) : com.raulshma.jellyplay.feature.player.video.session.CastRouteButton {
+    override val isAvailable: Boolean get() = true
+
+    /** The picker request the button composable observes (the click arm's arm). */
+    val pickerRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    override val onClick: () -> Unit = { pickerRequested.value = true }
+}
+
+internal actual fun VideoPlayerViewModel.platformCastRouteButton(): com.raulshma.jellyplay.feature.player.video.session.CastRouteButton? =
+    // The legacy surface through the SESSION's seam adapter (the VM's ctor
+    // param is private since the cast-chrome ownership closure — the session
+    // is the in-module holder).
+    (playbackSession.castManager as? AndroidCastManager)?.delegate?.let(::AndroidCastRouteButton)
 
 @Composable
 internal actual fun rememberCastDisconnect(viewModel: VideoPlayerViewModel): () -> Unit {
@@ -329,18 +365,20 @@ internal actual fun rememberCastDisconnect(viewModel: VideoPlayerViewModel): () 
 internal actual fun CoroutineScope.launchPlatformCastSessionEvents(viewModel: VideoPlayerViewModel) {
     launch {
         viewModel.androidCast.castSessionEvents.collect { event ->
+            // The transport commands live on the common PlayerCastController
+            // surface the androidCast seam narrows to — no session reach here.
             when (event) {
-                is CastSessionEvent.Connected -> viewModel.playbackSession.cast.castToDevice()
-                is CastSessionEvent.Disconnected -> viewModel.playbackSession.cast.onCastDisconnected()
+                is CastSessionEvent.Connected -> viewModel.androidCast.castToDevice()
+                is CastSessionEvent.Disconnected -> viewModel.androidCast.onCastDisconnected()
             }
         }
     }
 }
 
 @Composable
-internal actual fun PlatformCastButton(castManager: Any?) {
-    if (castManager is com.raulshma.jellyplay.core.data.cast.CastManager) {
-        CastButton(castManager = castManager)
+internal actual fun PlatformCastButton(routeButton: com.raulshma.jellyplay.feature.player.video.session.CastRouteButton) {
+    if (routeButton is AndroidCastRouteButton) {
+        CastButton(routeButton = routeButton)
     }
 }
 
@@ -369,6 +407,20 @@ internal actual fun EngineVideoSurface(
                     // Non-View-surface engine (desktop-style, impossible on Android
                     // today): empty surface, audio-only playback continues.
                     ?: android.view.View(ctx)
+                // TV-key hardening: the engine's View must never participate
+                // in focus. media3's PlayerView is focusable by default (its
+                // constructor calls setFocusable(true)) and a View-level focus
+                // owner outside Compose swallows every key before Compose's
+                // dispatch ever runs — the same all-keys-dead symptom as the
+                // null-focus case. isFocusable=false alone is the portable
+                // suppression: focus search skips non-focusable views, and the
+                // View#descendantFocusability API this used to also block is
+                // REMOVED from the API-37 android.jar (the player's engine
+                // children — AspectRatioFrameLayout/SubtitleView with
+                // useController=false — are non-focusable containers anyway).
+                // The surface takes no key or touch interaction, so free.
+                view.isFocusable = false
+                view.isFocusableInTouchMode = false
                 onSurfaceCreated(view)
                 view
             },

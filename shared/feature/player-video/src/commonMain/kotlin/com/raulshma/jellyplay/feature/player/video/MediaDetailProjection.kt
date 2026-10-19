@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  * reorder them.
  *
  * Every uiState write the cluster performed stays a narrow constructor
- * lambda (no [VideoPlayerUiState] handle — the god-count ratchet is
+ * lambda (no [VideoPlayerUiState] handle — the god-count guard is
  * unmoved); the volume-memory policy ladder is [VolumeMemoryPolicy]'s.
  */
 internal class MediaDetailProjection(
@@ -44,7 +44,7 @@ internal class MediaDetailProjection(
     private val onDetail: (detail: MediaDetail, artworkUrl: String) -> Unit,
     /** The media slice's artwork URL (the VM's `getImageUrl(id, 400)`). */
     private val artworkUrl: (itemId: String) -> String,
-    /** The episode-slice adoption ([EpisodeContinuationController.adoptSeasonOf]). */
+    /** The episode-slice adoption ([UpNextController.adoptSeasonOf]). */
     private val adoptSeasonOf: (MediaDetail) -> Unit,
     /** Lyrics fold into the media slice ([MediaContentProjector.onLyrics]). */
     private val onLyrics: (List<LyricsLine>) -> Unit,

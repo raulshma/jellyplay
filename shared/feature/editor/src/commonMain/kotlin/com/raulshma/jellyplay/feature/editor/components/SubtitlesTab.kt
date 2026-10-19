@@ -238,7 +238,7 @@ internal fun SubtitlesTab(
             onSearch = { language ->
                 // configuredSubtitleProviders always includes Jellyfin (server session),
                 // so size > 1 means at least one external provider is on. Use the single
-                // merged Jellyfin + external search in that case; otherwise the legacy
+                // merged Jellyfin + external search in that case; otherwise the
                 // Jellyfin-only path avoids a wasted external round-trip.
                 if (state.configuredSubtitleProviders.size > 1) {
                     viewModel.onEvent(EditorUiEvent.SearchAllSubtitleProviders(language))
@@ -441,7 +441,7 @@ private fun RemoteSubtitleSearchSheet(
 
             // When external providers are configured the merged list
             // (ProviderResultsSection) already includes Jellyfin rows, so
-            // the legacy Jellyfin-only list is redundant — render exactly one.
+            // the Jellyfin-only list is redundant — render exactly one.
             if (configuredProviders.size <= 1) {
                 if (hasSearched && results.isEmpty()) {
                     Box(
@@ -481,7 +481,7 @@ private fun RemoteSubtitleSearchSheet(
  * Renders the merged cross-provider subtitle results (Jellyfin + Wyzie +
  * OpenSubtitles) with a provider label per row and per-provider error chips.
  * Only shown when external providers are configured; collapses to nothing
- * otherwise so the legacy Jellyfin-only list stands alone.
+ * otherwise so the Jellyfin-only list stands alone.
  */
 @Composable
 private fun ProviderResultsSection(

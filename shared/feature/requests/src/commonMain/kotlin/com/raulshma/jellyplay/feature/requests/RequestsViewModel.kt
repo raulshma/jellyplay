@@ -13,20 +13,26 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
+import com.raulshma.jellyplay.core.model.seerr.kind
+import com.raulshma.jellyplay.core.model.seerr.pick
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Semaphore
 
 data class RequestMediaInfo(
@@ -39,11 +45,6 @@ data class RequestMediaInfo(
 @Immutable
 data class RequestsUiState(
     val requests: List<SeerrRequestItem> = emptyList(),
-    val mediaInfo: Map<Int, RequestMediaInfo> = emptyMap(),
-    /** Direct *arr download progress, keyed by Seerr request `media.tmdbId`. Empty when the feature flag is off or no *arr is configured. */
-    val downloadProgress: Map<Int, ArrDownloadSummary> = emptyMap(),
-    /** Full queue items (for management actions), keyed by tmdbId. */
-    val queueItems: Map<Int, ArrQueueItem> = emptyMap(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val currentPage: Int = 1,
@@ -91,37 +92,61 @@ class RequestsViewModel(
     private val _state = composeState(RequestsUiState())
     val state: State<RequestsUiState> = _state.asState()
 
+    // The hot enrichment maps live OUTSIDE the ui state (the
+    // DownloadsViewModel split): one settled fetch per id used to copy the
+    // whole-screen ui state per network-paced completion — N sequential
+    // emissions = N whole-screen recompositions during load. Rows now read
+    // their moving values from these flows; the ui state carries only the
+    // structural list.
+    private val _mediaInfo = MutableStateFlow<Map<Int, RequestMediaInfo>>(emptyMap())
+    val mediaInfo: StateFlow<Map<Int, RequestMediaInfo>> = _mediaInfo.asStateFlow()
+    /** Direct *arr download progress, keyed by Seerr request `media.tmdbId`. Empty when the feature flag is off or no *arr is configured. */
+    private val _downloadProgress = MutableStateFlow<Map<Int, ArrDownloadSummary>>(emptyMap())
+    val downloadProgress: StateFlow<Map<Int, ArrDownloadSummary>> = _downloadProgress.asStateFlow()
+    /** Full queue items (for management actions), keyed by tmdbId. */
+    private val _queueItems = MutableStateFlow<Map<Int, ArrQueueItem>>(emptyMap())
+    val queueItems: StateFlow<Map<Int, ArrQueueItem>> = _queueItems.asStateFlow()
+
     /** Shared permit bound for both enrichment fan-outs (the former enrichEach semaphore). */
     private val enrichSemaphore = Semaphore(4)
 
-    /** Media-details enrichment: one fetch per distinct (tmdbId, isMovie) pair. */
-    private val mediaEnricher = IdEnricher<Pair<Int, Boolean>, RequestMediaInfo>(
+    /**
+     * Media-details enrichment: one fetch per distinct (tmdbId, kind) pair.
+     * The kind is the model-level [SeerrRequestItem.kind] (the wire `type`
+     * parsed once in core/model, case-insensitively).
+     */
+    private val mediaEnricher = IdEnricher<Pair<Int, SeerrMediaKind>, RequestMediaInfo>(
         scope = scope,
         semaphore = enrichSemaphore,
-        fetch = { (tmdbId, isMovie) ->
-            if (isMovie) {
-                seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
-                    RequestMediaInfo(
-                        title = it.title,
-                        posterUrl = it.posterUrl,
-                        overview = it.overview,
-                        year = it.releaseDate?.take(4)?.toIntOrNull(),
-                    )
-                }
-            } else {
-                seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
-                    RequestMediaInfo(
-                        title = it.name,
-                        posterUrl = it.posterUrl,
-                        overview = it.overview,
-                        year = it.firstAirDate?.take(4)?.toIntOrNull(),
-                    )
-                }
-            }
+        fetch = { (tmdbId, kind) ->
+            // The movie/TV fetch fork reads the model's [SeerrMediaKind.pick]
+            // — UNKNOWN rides the tv leg, exactly like the former
+            // `if (isMovie) … else …`.
+            kind.pick(
+                movie = {
+                    seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.title,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.releaseDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                },
+                tv = {
+                    seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
+                        RequestMediaInfo(
+                            title = it.name,
+                            posterUrl = it.posterUrl,
+                            overview = it.overview,
+                            year = it.firstAirDate?.take(4)?.toIntOrNull(),
+                        )
+                    }
+                },
+            )
         },
         merge = { (tmdbId, _), info ->
-            val current = _state.value
-            _state.value = current.copy(mediaInfo = current.mediaInfo + (tmdbId to info))
+            _mediaInfo.update { it + (tmdbId to info) }
         },
     )
 
@@ -131,18 +156,17 @@ class RequestsViewModel(
         semaphore = enrichSemaphore,
         fetch = { tmdbId -> arrRepository.getQueueForTmdb(tmdbId) },
         merge = { tmdbId, item ->
-            val current = _state.value
-            _state.value = current.copy(
-                downloadProgress = current.downloadProgress + (
+            _downloadProgress.update {
+                it + (
                     tmdbId to ArrDownloadSummary(
                         status = item.status,
                         percent = item.percent,
                         sizeLeft = item.sizeLeft,
                         timeLeft = item.timeLeft,
                     )
-                    ),
-                queueItems = current.queueItems + (tmdbId to item),
-            )
+                    )
+            }
+            _queueItems.update { it + (tmdbId to item) }
         },
     )
 
@@ -168,11 +192,13 @@ class RequestsViewModel(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
-        // Start Seerr background polling while the Requests UI is active so
-        // the pending-count badge and current user stay fresh. Polling is
-        // stopped in onCleared() to avoid battery drain when the user leaves.
-        // The repository is a Singleton, so this is safe across recompositions.
-        seerrRepository.startPolling()
+        // The repository's background poll is NOT started here anymore: the
+        // requests screen binds it to visibility via
+        // [startBackgroundPolling]/[stopBackgroundPolling] (the refresh cycle
+        // module's binding discipline), so a back-stacked Requests screen no
+        // longer keeps the shared loop alive — the VM-lifetime pair this init
+        // used to run (start here, stop in onCleared) retained the poll
+        // across the whole back-stack stay.
         launch {
             seerrRepository.getRequestCount().onSuccess { count ->
                 if (count.pending == 0 && _state.value.filter == SeerrRequestFilter.PENDING) {
@@ -193,8 +219,20 @@ class RequestsViewModel(
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
+    /**
+     * Starts the repository's shared background poll (the pending-count badge
+     * and current-user freshness loop) — the requests screen's
+     * LifecycleStartEffect calls this on STARTED. The loop's cadence and its
+     * own gates (fast/slow collector cadence, offline skip) live in
+     * [SeerrRepository.startPolling]; the repository refcounts starters, so
+     * this pairing is per binding.
+     */
+    fun startBackgroundPolling() {
+        seerrRepository.startPolling()
+    }
+
+    /** The binding's stop half — see [startBackgroundPolling]. */
+    fun stopBackgroundPolling() {
         seerrRepository.stopPolling()
     }
 
@@ -243,17 +281,17 @@ class RequestsViewModel(
     /** Per-request media-details enrichment; rides the shared [mediaEnricher]. */
     private fun enrichRequests(requests: List<SeerrRequestItem>) {
         // tmdb ids collide across the movie/tv namespaces (movie 603 ≠ tv 603),
-        // so the fan-out key is the (tmdbId, isMovie) pair — one fetch per
+        // so the fan-out key is the (tmdbId, kind) pair — one fetch per
         // distinct pair, each hitting its OWN endpoint. mediaInfo stays
         // tmdbId-keyed (the read side's shape), so same-id-different-type
         // requests still overwrite one another on the write — the pre-fold
         // behaviour, now at least fed by both correct fetches.
         val distinctPairs = requests
-            .map { it.media.tmdbId to it.type.equals("movie", ignoreCase = true) }
+            .map { it.media.tmdbId to it.kind }
             .distinct()
         mediaEnricher.enrich(
             ids = distinctPairs,
-            skip = { (tmdbId, _) -> tmdbId in _state.value.mediaInfo },
+            skip = { (tmdbId, _) -> tmdbId in _mediaInfo.value },
         )
     }
 
@@ -295,18 +333,14 @@ class RequestsViewModel(
      * state: drop the cached enrichment and refresh the list on success.
      */
     fun removeQueueItem(tmdbId: Int, blocklist: Boolean, searchAgain: Boolean) {
-        val item = _state.value.queueItems[tmdbId] ?: return
+        val item = _queueItems.value[tmdbId] ?: return
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionError = null)
             arrRepository.deleteQueueRow(item, blocklist, searchAgain)
                 .onSuccess {
                     // Drop the cached progress + item; refresh re-populates if still present.
-                    updateState { s ->
-                        s.copy(
-                            downloadProgress = s.downloadProgress - tmdbId,
-                            queueItems = s.queueItems - tmdbId,
-                        )
-                    }
+                    _downloadProgress.update { it - tmdbId }
+                    _queueItems.update { it - tmdbId }
                     loadRequests(refresh = true)
                 }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }

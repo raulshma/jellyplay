@@ -6,10 +6,8 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the editor feature (docs/kmp-migration-plan.md
- *,  ninth conveyor item). The HiltViewModel/@Inject/@ApplicationContext
- * annotations were stripped at the move — Koin is the single constructor owner
- * (one framework per type). Ctor deps split two ways:
+ * Koin construction owner for the editor feature. Koin is the single
+ * constructor owner (one framework per type). Ctor deps split two ways:
  *  - MetadataEditorRepository / AuthRepository / SubtitleProviderRepository
  *    are Koin-native (dataJvmModule in :shared:core:data);
  *  - StreamingSubtitleStore: the interface lives in :shared:core:data's

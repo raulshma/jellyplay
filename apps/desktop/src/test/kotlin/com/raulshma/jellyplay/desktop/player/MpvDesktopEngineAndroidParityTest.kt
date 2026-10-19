@@ -10,19 +10,20 @@ import com.sun.jna.Pointer
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.io.TempDir
 
 /**
- * Android-mpv parity slice for the desktop engine's drift fixes, in the
+ * Android-mpv parity coverage for the desktop engine, in the
  * real-libmpv property-readback style of [MpvDesktopEngineTest] and
  * [MpvDesktopEngineVideoTest]: the engine is driven through the CONTRACT
  * surface, then mpv's own properties (or the contract getters) are read back.
  * Covers the shared [com.raulshma.jellyplay.feature.player.video.engine.AspectRatioMapping]
  * plan application in [MpvDesktopEngine.setAspectRatio] (all four properties,
- * including the subtitle-margin pair the hand-rolled body never wrote), the
+ * including the subtitle-margin pair), the
  * Android `selectTrack` decision logic (negative index = deselect; the
  * positive-path id writes for audio and subtitle), the
  * shared duration ladder's server rung ([PlaybackRequest.serverDurationMs]),
@@ -30,7 +31,7 @@ import org.junit.jupiter.api.io.TempDir
  * the shared [com.raulshma.jellyplay.feature.player.video.engine.TrackRefreshCoalescer]
  * adoption (the FILE_LOADED/sid/aid/track-list refresh burst collapses into
  * one coalesced catalog rebuild — the collapse-to-one itself is pinned by the
- * moved commonMain TrackRefreshCoalescerTest; here the real engine pins that
+ * commonMain TrackRefreshCoalescerTest; here the real engine pins that
  * the coalesced body fires and converges on the settled catalog).
  * Skips on machines without libmpv, like the other engine suites.
  */
@@ -70,8 +71,8 @@ class MpvDesktopEngineAndroidParityTest {
             assertEquals("yes", subUseMargins(), "CROP sub-use-margins")
             assertEquals("yes", subAssForceMargins(), "CROP sub-ass-force-margins")
 
-            // FILL: native frame — panscan reset AND margins released (the
-            // former desktop bug: FILL was mis-applied as a second CROP).
+            // FILL: native frame — panscan reset AND margins released (FILL
+            // must not be applied as a second CROP).
             engine.setAspectRatio(AspectRatio.FILL)
             assertEquals(-1.0, override())
             assertEquals(0.0, panscan(), "FILL panscan")
@@ -79,8 +80,7 @@ class MpvDesktopEngineAndroidParityTest {
             assertEquals("no", subAssForceMargins(), "FILL sub-ass-force-margins")
 
             // 16:9: the Android spelling of the override — the plan's reduced
-            // fraction STRING ("177:100" = 1.77), not the raw double the
-            // desktop used to write.
+            // fraction STRING ("177:100" = 1.77), not a raw double.
             engine.setAspectRatio(AspectRatio.RATIO_16_9)
             assertEquals(1.77, override(), "16:9 override (177:100)")
             assertEquals(0.0, panscan(), "16:9 panscan")
@@ -124,9 +124,9 @@ class MpvDesktopEngineAndroidParityTest {
 
             // Audio: drive a real transition first — mpv auto-selects track 1;
             // pick track 2, then deselect. The Android arm writes `aid=auto`,
-            // which re-resolves to the DEFAULT track (1); the former desktop
-            // body wrote the raw "-1", which mpv REJECTS (choice property) —
-            // the selection stayed stuck on track 2.
+            // which re-resolves to the DEFAULT track (1); writing the raw
+            // "-1" instead is REJECTED by mpv (choice property), leaving the
+            // selection stuck on track 2.
             waitUntil(5_000) { MpvLib.getPropertyString(ctx, "aid") == "1" }
             engine.selectTrack(TrackType.AUDIO, 2)
             waitUntil(5_000) { MpvLib.getPropertyString(ctx, "aid") == "2" }
@@ -336,6 +336,57 @@ class MpvDesktopEngineAndroidParityTest {
             )
             val ctx = engine.liveMpvHandle() as Pointer
             assertEquals("2", MpvLib.getPropertyString(ctx, "aid"), "mpv's own state agrees with the catalog")
+        } finally {
+            engine.release()
+        }
+    }
+
+    // ── load: the shared per-request option ladder (MpvLoadOptionsPlan) ─────
+
+    @Test
+    fun load_appliesTheSharedOptionLadder_userAgentAndNormalizedLanguages() {
+        assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
+        val engine = MpvDesktopEngine(extraOptions = mapOf("vo" to "null", "ao" to "null"))
+        try {
+            // A nonexistent target, like the TLS option test: the option
+            // writes land before the async open fails — the readback below is
+            // the assertion surface. The UA header must surface in the
+            // `user-agent` property (the Android decision: some servers parse
+            // the buried header form inconsistently), NOT in
+            // http-header-fields; the language list must land normalized
+            // (`de; en_US` → `de,en-US`, the Android normalizer).
+            engine.load(
+                PlaybackRequest(
+                    uri = "file:///nonexistent-jellyplay-ladder-test.bin",
+                    title = "ladder",
+                    headers = mapOf(
+                        "User-Agent" to "JellyPlay-Parity/1.0",
+                        "X-Emby-Authorization" to "MediaBrowser Client=\"T\", DeviceId=\"abc\"",
+                    ),
+                    preferredAudioLanguage = "de; en_US",
+                    preferredSubtitleLanguage = "   ",
+                ),
+            )
+            val handle = checkNotNull(engine.liveMpvHandle())
+            assertEquals(
+                "JellyPlay-Parity/1.0",
+                MpvLib.getPropertyString(handle, "user-agent"),
+                "User-Agent must be extracted into the user-agent option",
+            )
+            assertEquals(
+                "de,en-US",
+                MpvLib.getPropertyString(handle, "alang"),
+                "the audio language list must be normalized (the Android arm)",
+            )
+            val headerFields = MpvLib.getPropertyString(handle, "http-header-fields")
+            assertTrue(
+                headerFields?.contains("X-Emby-Authorization") == true,
+                "the non-UA headers stay in http-header-fields: $headerFields",
+            )
+            assertFalse(
+                headerFields?.contains("User-Agent", ignoreCase = true) == true,
+                "the UA entry must not also be buried in http-header-fields: $headerFields",
+            )
         } finally {
             engine.release()
         }

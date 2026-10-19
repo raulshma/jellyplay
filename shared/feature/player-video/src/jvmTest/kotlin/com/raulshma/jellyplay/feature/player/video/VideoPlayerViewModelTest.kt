@@ -23,7 +23,7 @@ import kotlin.test.Test
  * The VideoPlayerViewModel behavior surface — the pre-KMP
  * `feature/player/video` tree's suite reinstated against the KMP VM: the
  * command funs became [VideoPlayerUiEvent]s on the [VideoPlayerViewModel.onEvent]
- * funnel (the ownership ratchet), the stores bundled into [PlayerStores], the
+ * funnel (the ownership guard), the stores bundled into [PlayerStores], the
  * platform seams collapsed behind [VideoPlayerPlatform]. Construction lives
  * in [VideoPlayerViewModelTestHarness]; the EXTERNAL preferred-player
  * short-circuit keeps every load path engine-free, exactly as the original
@@ -34,8 +34,8 @@ import kotlin.test.Test
  *    `resolveOfflineResumeTicks` pass-through pins — that member moved INTO
  *    the session/resolver and is pinned there now
  *    (PlaybackSessionResumeTicksTest / PlaybackSourceTest);
- *  - the next-episode single-flight latch tests (#146) re-land against
- *    [EpisodeContinuationControllerTest]'s controller-level pinning; the
+ *  - the next-episode single-flight latch tests re-land against
+ *    [UpNextControllerTest]'s controller-level pinning; the
  *    latch's happy path is re-pinned here once at the VM level.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,7 +57,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(3_000L, viewModel.currentPositionMs.value)
     }
 
-    // ── Resume seeding (#122 regression: seed before the first engine tick) ─
+    // ── Resume seeding (seed before the first engine tick) ─
 
     @Test
     fun initialize_seedsResumePositionAndDurationBeforeEngineTick() {
@@ -222,7 +222,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(1.0f, viewModel.uiState.value.playbackSpeed, 0.001f)
     }
 
-    // ── Next-episode single-flight latch (#146, VM level once) ──────────────
+    // ── Next-episode single-flight latch (VM level once) ──────────────
 
     /** Loads "item-1" (a series episode) via the EXTERNAL fast path so the
      *  VM has a mediaDetail with series/season ids and a bound currentItemId. */
@@ -246,7 +246,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
     @Test
     fun playNextEpisode_whileLoadInFlight_ignoresRetaps() {
         loadCurrentEpisodeExternally()
-        // The resolution hangs (the offline dead-air case from #146): the
+        // The resolution hangs (the offline dead-air case): the
         // request never completes, so the latch must stay held and every
         // re-tap during the window must be swallowed, not queued.
         var resolutionCalls = 0
@@ -265,7 +265,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(1, resolutionCalls)
         // …nor reach mark-played / initialize behind them.
         coVerify(exactly = 0) { userDataMutator.setPlayed(any(), any()) }
-        assertTrue(viewModel.isNextEpisodeLoading.value)
+        assertTrue(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
     }
 
     @Test
@@ -276,7 +276,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
 
         viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode)
 
-        assertFalse(viewModel.isNextEpisodeLoading.value)
+        assertFalse(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
     }
 
     @Test
@@ -304,7 +304,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
 
         // Held while the next load is still unsettled — not released merely
         // because resolution + initialize returned.
-        assertTrue(viewModel.isNextEpisodeLoading.value)
+        assertTrue(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
 
         // Settle the session onto item-2 (loadMedia flips currentItemId)…
         seedGate.complete(0L)
@@ -312,7 +312,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
 
         // …and only then does the latch release. The current item was also
         // marked played on the way, exactly once.
-        assertFalse(viewModel.isNextEpisodeLoading.value)
+        assertFalse(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
         coVerify(exactly = 1) {
             userDataMutator.setPlayed("item-1", played = true)
         }

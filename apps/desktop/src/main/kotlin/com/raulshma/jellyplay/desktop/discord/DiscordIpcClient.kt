@@ -147,7 +147,7 @@ internal class DiscordIpcClient(
                 } else {
                     // The cancellation-rethrowing form: this finally rides a
                     // suspend body, and a bare stdlib runCatching here would
-                    // mask structured cancellation (the ratchet's bug class).
+                    // mask structured cancellation.
                     // channel.close() itself never throws CancellationException,
                     // so behavior is otherwise identical.
                     runCatchingRethrowingCancellation { channel.close() }

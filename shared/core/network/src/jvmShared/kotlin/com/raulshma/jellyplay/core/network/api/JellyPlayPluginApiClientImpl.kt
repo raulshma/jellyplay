@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import java.io.BufferedReader
 import java.util.concurrent.TimeUnit
@@ -195,7 +198,7 @@ class JellyPlayPluginApiClientImpl(
                 // the wire REPLACES caps, so an omitted field must never be
                 // how a re-registration silently drops them.
                 put("caps", JsonArray(caps.map { JsonPrimitive(it) }))
-                // Additive push half (the plugin's push wave) — an explicit
+                // Additive push half (the plugin's push support) — an explicit
                 // tri-state: Keep omits the field so the legacy wire shape is
                 // byte-identical; Detach writes the JSON null that clears the
                 // server-held endpoint.
@@ -291,20 +294,23 @@ class JellyPlayPluginApiClientImpl(
     // ratings
     // ------------------------------------------------------------------
 
-    override suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?> = runCatchingIO {
+    override suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?> = runCatchingIO {
         val text = requester.getBodyText("/jellyplay/mdblist/ratings?imdbId=" + java.net.URLEncoder.encode(imdbId, "UTF-8"))
             ?: return@runCatchingIO null
-        json.decodeFromString<JellyPlayRatingsResult>(text)
+        json.decodeFromString<JellyPlayRatingsResult>(text).toModel()
     }
 
-    override suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeRatings>?> = runCatchingIO {
+    override suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeScore>?> = runCatchingIO {
         val text = requester.getBodyText("/jellyplay/tmdb/seasonRatings?tmdbId=" + java.net.URLEncoder.encode(tmdbId, "UTF-8") + "&seasonNumber=$seasonNumber")
             ?: return@runCatchingIO null
         val wrapper = json.decodeFromString<JsonObject>(text)
         val episodes = wrapper.getValue("episodes").jsonObject
         buildMap {
             episodes.forEach { (number, payload) ->
-                put(number.toIntOrNull() ?: return@forEach, json.decodeFromJsonElement(JellyPlayEpisodeRatings.serializer(), payload))
+                put(
+                    number.toIntOrNull() ?: return@forEach,
+                    json.decodeFromJsonElement(JellyPlayEpisodeRatings.serializer(), payload).toModel(),
+                )
             }
         }
     }
@@ -313,22 +319,23 @@ class JellyPlayPluginApiClientImpl(
     // recommendations
     // ------------------------------------------------------------------
 
-    override suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int): Result<List<JellyPlayScoredItem>> = runCatchingIO {
+    override suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int): Result<List<String>> = runCatchingIO {
         val text = getBodyTextOr404("/jellyplay/items/$itemId/similar?limit=$limit", "JellyPlay similar items failed")
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayScoredItem.serializer()), wrapper.getValue("items"))
+            .map { it.itemId }
     }
 
     // ------------------------------------------------------------------
     // anime markers
     // ------------------------------------------------------------------
 
-    override suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<JellyPlaySeriesMarkers?> = runCatchingIO {
+    override suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<List<JellyPlayEpisodeMarker>?> = runCatchingIO {
         val text = requester.getBodyText(
             "/jellyplay/animemarkers/series?seriesId=" + java.net.URLEncoder.encode(seriesId, "UTF-8") +
                 "&providerSeriesId=" + java.net.URLEncoder.encode(providerSeriesId, "UTF-8"),
         ) ?: return@runCatchingIO null
-        json.decodeFromString<JellyPlaySeriesMarkers>(text)
+        json.decodeFromString<JellyPlaySeriesMarkers>(text).toModel()
     }
 
     // ------------------------------------------------------------------
@@ -350,6 +357,11 @@ class JellyPlayPluginApiClientImpl(
         val suffix = keyword?.let { "?keyword=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
         val text = requester.getBodyText("/jellyplay/seasonal/row$suffix") ?: return@runCatchingIO null
         json.decodeFromString<JellyPlayRowResult>(text)
+    }
+
+    override suspend fun getCuratedHero(): Result<JellyPlayHeroResult?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/hero") ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlayHeroResult>(text)
     }
 
     // ------------------------------------------------------------------

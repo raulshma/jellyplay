@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -71,7 +72,63 @@ internal fun YouTubeVideoCard(
     val thumbnailUrl = remember(video.site, video.key) {
         youTubeThumbnailUrl(video.site, video.key)
     }
+    TrailerVideoCard(
+        title = video.name,
+        fallbackLabel = fallbackLabel,
+        thumbnailUrl = thumbnailUrl,
+        contentDescription = video.name,
+        onClick = onClick,
+        modifier = modifier,
+        border = border,
+    )
+}
 
+/**
+ * The local-trailer variant of [TrailerVideoCard] — same geometry, but
+ * the thumbnail is the library item's primary image (no YouTube key) and the
+ * card wears the "Local" badge so the two sources read apart in one row.
+ */
+@Composable
+internal fun LocalTrailerVideoCard(
+    mediaItem: MediaItem,
+    fallbackLabel: String,
+    imageUrl: String?,
+    badgeLabel: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    border: BorderStroke? = null,
+) {
+    TrailerVideoCard(
+        title = mediaItem.name,
+        fallbackLabel = fallbackLabel,
+        thumbnailUrl = imageUrl?.takeIf { it.isNotEmpty() },
+        contentDescription = mediaItem.name,
+        badgeLabel = badgeLabel,
+        onClick = onClick,
+        modifier = modifier,
+        border = border,
+    )
+}
+
+/**
+ * The shared card body behind [YouTubeVideoCard] and [LocalTrailerVideoCard]:
+ * 240dp 16:9 artwork over the bottom scrim, one-line [title] (falling back to
+ * [fallbackLabel] when null), the center play glyph, and the optional
+ * top-end [badgeLabel] pill (the "Local" source badge). Empty
+ * [thumbnailUrl] renders the placeholder box (the former null-thumbnail
+ * branch).
+ */
+@Composable
+internal fun TrailerVideoCard(
+    title: String?,
+    fallbackLabel: String,
+    thumbnailUrl: String?,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    border: BorderStroke? = null,
+    badgeLabel: String? = null,
+) {
     val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     // The bottom scrim gradient is identical across every card in the same
@@ -103,7 +160,7 @@ internal fun YouTubeVideoCard(
             if (thumbnailUrl != null) {
                 MediaImage(
                     url = thumbnailUrl,
-                    contentDescription = video.name,
+                    contentDescription = contentDescription,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
@@ -128,8 +185,24 @@ internal fun YouTubeVideoCard(
                     .background(videoScrimBrush),
             )
 
+            if (badgeLabel != null) {
+                Text(
+                    text = badgeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = ShapeCache.smooth8,
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+
             Text(
-                text = video.name ?: fallbackLabel,
+                text = title ?: fallbackLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier

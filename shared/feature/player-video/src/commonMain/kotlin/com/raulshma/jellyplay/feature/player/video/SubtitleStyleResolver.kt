@@ -5,15 +5,11 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.hdrContentFromStreams
 
-/** True when any stream is HDR (HDR10/HDR10+/HLG/Dolby Vision). */
+/** True when the item's first video stream is HDR (HDR10/HDR10+/HLG/Dolby Vision) — the typed derivation's Boolean twin. */
 fun isHdrFromStreams(streams: List<MediaStream>): Boolean =
-    streams.any { stream ->
-        val range = stream.videoRange?.lowercase()
-        val rangeType = stream.videoRangeType?.lowercase()
-        val raw = (range ?: "") + " " + (rangeType ?: "")
-        raw.contains("hdr") || raw.contains("hlg") || raw.contains("dovi") || raw.contains("dolbyvision")
-    }
+    hdrContentFromStreams(streams).isHdr
 
 /** Resolves the effective subtitle style: high-contrast override, HDR style, or the user's SDR style. */
 fun resolveSubtitleStyle(slice: SubtitleSlice, isHdr: Boolean = false): SubtitleStyle = when {

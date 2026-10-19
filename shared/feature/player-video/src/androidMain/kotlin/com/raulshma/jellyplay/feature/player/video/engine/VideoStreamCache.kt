@@ -2,16 +2,24 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheKeyFactory
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import com.raulshma.jellyplay.core.data.cache.VIDEO_CACHE_DIR_NAME
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.STRIP_SAFE_QUERY_PARAMS
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.stripVolatileQueryParams
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -55,6 +63,15 @@ import kotlin.concurrent.withLock
 class VideoStreamCache(
     private val context: Context,
     private val videoPlayerStore: VideoPlayerStore,
+    /**
+     * The shared streaming OkHttp client — used ONLY by the next-item head
+     * warm ([warmStreamHead]), which builds its own throwaway upstream chain
+     * (the same `authenticatedDataSourceFactory` prologue the engine's
+     * per-load chain uses, minus the token header: warm URLs carry their
+     * `ApiKey` query param). The engine's own load path keeps receiving its
+     * client through [com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory].
+     */
+    private val streamingOkHttpClient: OkHttpClient,
 ) {
     private val cacheDir = File(context.cacheDir, VIDEO_CACHE_DIR_NAME)
 
@@ -158,5 +175,79 @@ class VideoStreamCache(
             .setUpstreamDataSourceFactory(upstream)
             .setCacheKeyFactory(cacheKeyFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    /**
+     * Bounded next-item head warm: streams at most [maxBytes] of [url] from
+     * position 0 into this cache via [CacheWriter], through the SAME
+     * [SimpleCache] and the SAME key factory the engine's load path wraps in
+     * [getCacheDataSourceFactory] — so the next item's real load is served
+     * from the written spans instead of the network. The bound rides the
+     * [DataSpec] length (a ranged `bytes=0-(maxBytes-1)` GET), and a
+     * cancelled warm keeps the spans already committed (SimpleCache stores
+     * partial spans; the real load fills any hole) — the caller cancels on
+     * queue changes / playback stop / handover, and every outcome is
+     * bounded to [maxBytes] of new disk use inside the cache's existing LRU.
+     *
+     * Eligibility is the CALLER's gate (the VM mirrors the engine's
+     * stream-cache gates before calling); this boundary only re-refuses
+     * session-keyed URLs outright — the same rejection [cacheKeyFactory]
+     * backstops, because a session-keyed URL warmed under its full-URL key
+     * could never be hit by a load the engine itself rejects.
+     *
+     * Never throws: every failure (cache unavailable, HTTP error, IO) is
+     * logged and swallowed — warming is a pure optimization. Cancellation is
+     * honored ([runInterruptible] interrupts the blocking read, so an
+     * in-flight OkHttp body read aborts promptly).
+     *
+     * Returns the bytes now cached under the URL's key (0 when nothing
+     * landed).
+     */
+    suspend fun warmStreamHead(url: String, maxBytes: Long): Long = withContext(Dispatchers.IO) {
+        if (cache == null) {
+            initLock.withLock { ensureCacheLocked() }
+        }
+        val sc = cache ?: return@withContext 0L
+        if (isSessionKeyedUrl(url)) return@withContext 0L
+        val key = try {
+            cacheKeyFactory.buildCacheKey(DataSpec.Builder().setUri(url).build())
+        } catch (_: Exception) {
+            return@withContext 0L
+        }
+        try {
+            val dataSpec = DataSpec.Builder()
+                .setUri(url)
+                .setKey(key)
+                .setPosition(0L)
+                .setLength(maxBytes)
+                .build()
+            // The engine's per-load chain embeds the item's auth via this
+            // same prologue; the warm needs only the UA + OkHttp stack — the
+            // URL carries its ApiKey (STRIP_SAFE_QUERY_PARAMS exists precisely
+            // because that token rides in the query string), so authToken is
+            // null and the composeBase slot stays identity (the cache layer
+            // comes from getCacheDataSourceFactory below).
+            val upstream = authenticatedDataSourceFactory(
+                context = context,
+                okHttpClient = streamingOkHttpClient,
+                authToken = null,
+            )
+            // CacheWriter requires the cache-aware source; a null here is the
+            // passthrough corner (the startup prewarm held the init lock mid
+            // disk-open) — skip the warm rather than read uncached.
+            val cacheAware = getCacheDataSourceFactory(upstream).createDataSource() as? CacheDataSource
+                ?: return@withContext 0L
+            runInterruptible { CacheWriter(cacheAware, dataSpec, null, null).cache() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(WARM_LOG_TAG, "next-stream head warm failed (ignored): ${e.message}")
+        }
+        sc.getCachedBytes(key, 0L, maxBytes)
+    }
+
+    private companion object {
+        /** One grep-able trace for the next-item head warm: `adb logcat -s VideoStreamWarm`. */
+        const val WARM_LOG_TAG = "VideoStreamWarm"
     }
 }

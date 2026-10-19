@@ -158,6 +158,28 @@ sealed interface HomeUiEvent {
         val item: MediaItem,
         val onOpenDetail: (itemId: String, openDownloadSheet: Boolean) -> Unit = { _, _ -> },
     ) : HomeUiEvent
+
+    /**
+     * Inline dismiss of one presence chip. The session id lands in the
+     * controller's in-memory, session-scoped set (never persisted) AND the
+     * row folds the chip out immediately — the next poll re-filters with the
+     * same memory.
+     */
+    data class DismissPresenceChip(val sessionId: String) : HomeUiEvent
+
+    /**
+     * Presence chip's "Join" primary action: joins the visible SyncPlay
+     * group playing the chip's item (the [HomePresenceChipsController.join]
+     * seam over SyncPlayManager). A failure surfaces on the message bus and
+     * never navigates; on success [onJoined] fires once with the group's
+     * position ticks so the caller can open the player attached to the
+     * now-active watch party (the detail screen's create→open-player shape).
+     * Navigation itself stays with the caller — the [PlaySeries] shape.
+     */
+    data class JoinPresenceWatchParty(
+        val chip: HomePresenceChip,
+        val onJoined: (startPositionTicks: Long) -> Unit,
+    ) : HomeUiEvent
 }
 
 /**

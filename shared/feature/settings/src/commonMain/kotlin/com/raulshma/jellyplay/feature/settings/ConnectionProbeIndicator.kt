@@ -61,9 +61,8 @@ enum class ConnectionProbeIndicatorStyle {
 
     /**
      * Pip + text side by side, rendered for every non-Idle state including
-     * Connected ("Connected"). Used by the subtitle provider cards, replacing
-     * their former per-card spinner + label (the spinner is unified into the
-     * amber pip + "Connecting…" text).
+     * Connected ("Connected"). Used by the subtitle provider cards: the
+     * spinner is unified into the amber pip + "Connecting…" text.
      */
     Inline,
 

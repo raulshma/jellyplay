@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -147,6 +148,9 @@ class DetailViewModelTest {
         seerrRepository = mockk(relaxed = true)
         audioQueueFacade = mockk()
         themeMusicPlayer = mockk(relaxed = true)
+        // The VM folds the seam's playing flow into uiState — a real
+        // StateFlow, not a relaxed mock.
+        every { themeMusicPlayer.isPlaying } returns MutableStateFlow(false)
 
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         // Default: online. Prevents the Seerr Local-skip from falsely firing on
@@ -159,6 +163,15 @@ class DetailViewModelTest {
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        // The "Airing next" strip fetch — empty keeps the strip absent.
+        // Individual tests override.
+        coEvery { libraryApiClient.getUpcoming(any(), any(), any()) } returns Result.success(emptyList())
+        // The merged trailer list's local leg — empty keeps the list
+        // remote-only (the remote-only shape). Individual tests override.
+        coEvery { libraryApiClient.getLocalTrailers(any()) } returns Result.success(emptyList())
+        // The ambient ThemeVideo leg — empty keeps the hero on the
+        // embed/static (every embed/static shape). Individual tests override.
+        coEvery { libraryApiClient.getThemeVideos(any()) } returns Result.success(emptyList())
         // Default stub for the media-segments pre-warm fetch so its REMOTE
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
@@ -168,6 +181,11 @@ class DetailViewModelTest {
         // casting the relaxed-mock Result default. Individual tests override these.
         coEvery { seerrRepository.getTmdbVideos(any(), any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.success(emptyList())
+        // The externalRatings enrichment's Seerr leg — an empty payload
+        // keeps every fallback behavior (the strip falls through to the TMDB
+        // seam, unwired in this harness, and stays absent).
+        coEvery { seerrRepository.getRatings(any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrRatings())
         // Provider refresh is a no-op by default; tests that drive refresh override.
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
         every { mediaRepository.userDataChanges } returns userDataEvents
@@ -231,6 +249,11 @@ class DetailViewModelTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
+            mediaCatalogueEnrichments = object : MediaCatalogueEnrichments {
+                override suspend fun getTags(parentId: String?) = Result.success(emptyList<String>())
+                override suspend fun getBoxSetsContaining(itemId: String) =
+                    Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
+            },
             libraryApiClient = libraryApiClient,
             collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
             userDataMutator = userDataMutator,
@@ -244,6 +267,11 @@ class DetailViewModelTest {
                 homeDiscoveryStore = homeDiscoveryStore,
                 experimentalStore = experimentalStore,
                 engineStore = engineStore,
+                notificationStore = mockk<com.raulshma.jellyplay.core.datastore.notification.NotificationStore>(relaxed = true).also {
+                    every { it.notification } returns MutableStateFlow(
+                        com.raulshma.jellyplay.core.datastore.notification.NotificationSlice(),
+                    )
+                },
             ),
             remoteDiscovery = RemoteDiscoveryClients(
                 seerrRepository = seerrRepository,

@@ -48,8 +48,8 @@ class ReleaseSearchViewModel(
     val state: State<ReleaseSearchUiState> = _state.asState()
 
     /**
-     * One-shot grab ack, resolved + posted by the host screen (the
-     * ArrQueueViewModel messages conveyor; BUFFERED + single collector).
+     * One-shot grab ack, resolved + posted by the host screen (same seam as
+     * ArrQueueViewModel's messages; BUFFERED + single collector).
      */
     private val messageChannel = Channel<ArrQueueMessage>(Channel.BUFFERED)
     val messages: Flow<ArrQueueMessage> = messageChannel.receiveAsFlow()

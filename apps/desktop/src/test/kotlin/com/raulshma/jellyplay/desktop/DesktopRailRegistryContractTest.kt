@@ -15,8 +15,8 @@ import kotlin.test.assertTrue
  * registry row (label, icon, group — the rail renders nothing else).
  *
  * DESKTOP_RAIL_ITEMS already fails at class-init when a listed route has no
- * row (its mapping uses checkNotNull, not the former silent `mapNotNull`
- * drop that let a route vanish off the rail unnoticed), so merely touching
+ * row (its mapping uses checkNotNull, not a silent `mapNotNull`
+ * drop that would let a route vanish off the rail unnoticed), so merely touching
  * the val below IS the assertion — the per-route checks keep the failure
  * message pointed at the offending route.
  */

@@ -11,28 +11,20 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * One settings row's single feature-side declaration — presentation, ordering,
- * and capability in one home. This is the fused-catalog wave's row type: every
- * domain declares its rows as [SettingsRow]s, and the former trio is retired —
- * the `SettingsSearchBinding` entry (search presentation), the
- * `SettingsRowRecord` entry (screen face + ordering), and the `*Ids` holder
- * const (identity) collapsed into this one object, and the ordered row list IS
- * the spine (no separate ids constants: references use the row object; [id]
- * stays a `val` for the search/spec/deep-link string joins).
+ * and capability in one home. Every domain declares its rows as
+ * [SettingsRow]s: the search binding (search presentation), the screen face +
+ * ordering, and the row identity live on this one object, and the ordered row
+ * list IS the spine (no separate ids constants: references use the row object;
+ * [id] stays a `val` for the search/spec/deep-link string joins).
  *
- * The two-home shape this type realized: the datastore-side
- * [PreferenceSearchSpec] stays the SEMANTICS tier (id, keywords, category,
- * isAdvanced, platform rule, route kind — declared next to the owning store,
- * untouched here), and [SettingsRow] is the PRESENTATION tier (title/icon
- * faces, catalog order, admission gates). The retired declarations the
- * rollout deleted, per domain as its rows converted:
- *  - `SettingsRowRecord` and its registry entries (a converted row carries no
- *    record);
- *  - `SettingsSearchBinding`'s record-based overloads (a converted row IS its
- *    own binding — the spec-direct path the experimental screen keeps is the
- *    one survivor);
- *  - the `*Ids` holders (the row object replaces the constant);
- *  - the per-group admissions maps ([SettingsSearchItemGroup.admissions]
- *    derives from the rows' [gate]s).
+ * The two-home shape: the datastore-side [PreferenceSearchSpec] is the
+ * SEMANTICS tier (id, keywords, category, isAdvanced, platform rule, route
+ * kind — declared next to the owning store, untouched here), and
+ * [SettingsRow] is the PRESENTATION tier (title/icon faces, catalog order,
+ * admission gates). A converted row carries no `SettingsRowRecord`, IS its
+ * own search binding (the experimental screen keeps the spec-direct path),
+ * and replaces the `*Ids` holder constant; the per-group admissions maps
+ * ([SettingsSearchItemGroup.admissions]) derive from the rows' [gate]s.
  *
  * Field grammar (validated loudly at projection time):
  *  - SPEC-BACKED row (the knob's semantics live in a [PreferenceSearchSpec]):
@@ -51,6 +43,16 @@ import org.jetbrains.compose.resources.stringResource
  *    spec-backed rows, [isAdvanced] for residuals);
  *    [RowAdmission.ContentGated] declares the exception whose visibility
  *    rides content state the flags vocabulary does not carry.
+ *
+ * One-key family (the search-face dedup rule): a search face may bind the
+ * SAME resource as the row's screen face — when it does, the spec's
+ * titleKey/subtitleKey name that screen-face key too, and no `ss_*` catalog
+ * twin exists. One string,
+ * one key: the fold ([searchTitleRes] = null → [titleRes]; a
+ * [searchSubtitleRes] aliasing [subtitleRes]) is how a row declares it, and
+ * [verifyRowResourceKey] holds because the surviving key is declared on both
+ * sides. Never re-introduce an `ss_*` key that only restates an existing
+ * `settings_*` string — point both faces at the survivor instead.
  */
 internal data class SettingsRow(
     /** The stable catalog id — the deep-link `highlightSettingId` target. */
@@ -104,8 +106,8 @@ internal data class SettingsRow(
 /**
  * The spec entries a row list consumes, in spec order: the domain's spec
  * declarations filtered to the rows' ids. Requires every spec-backed row to
- * find its entry (a spec the store retired before the row did fails here, at
- * catalog init — the retired binding-table check, re-homed on the rows).
+ * find its entry (a row whose spec entry no longer exists fails here, at
+ * catalog init — the binding-table check, re-homed on the rows).
  * Callers pass the DOMAIN-wide spec list, so an entry another group of the
  * same domain claims is expected to be filtered out here — spec↔row totality
  * across a whole domain is pinned in FusedRowsRatchetTest, not per group.
@@ -129,9 +131,9 @@ private fun SettingsRow.isResidual(): Boolean = keywords.isNotEmpty() || route !
  * The fused catalog projection: each row's SEARCH faces derive either from
  * its spec entry (id, keywords, category, isAdvanced, platform rule,
  * routeKind — declared once at the owning store) or, for the residual rows,
- * from the row's own hand faces. Produced items are field-for-field what the
- * record+binding pair produced — `SettingsSearchItem` itself is untouched (no
- * field added), so the catalog, groups and search resolve are byte-identical.
+ * from the row's own hand faces. `SettingsSearchItem` itself is untouched (no
+ * field added), so the catalog, groups and search resolve stay byte-identical
+ * to the pair the rows replaced.
  *
  * Fail-fast at catalog init on any drift: duplicate rows, duplicate spec
  * entries, a converted row that still carries hand search faces, a residual
@@ -210,9 +212,9 @@ internal fun List<SettingsRow>.toSearchItems(
 
 /**
  * The declared spec key and the row's bound resource must name the same
- * string — the ratchet that keeps the datastore-side key strings honest (they
+ * string — the check that keeps the datastore-side key strings honest (they
  * are the declaration; the row cannot silently swap a resource in under
- * them). The retired binding-era check, re-homed on the rows.
+ * them).
  */
 private fun verifyRowResourceKey(id: String, field: String, declaredKey: String?, bound: StringResource?) {
     require(bound != null && bound.key == declaredKey) {
@@ -225,7 +227,7 @@ private fun verifyRowResourceKey(id: String, field: String, declaredKey: String?
  * the rows PLUS their admission derivation in one act — the group's
  * [SettingsSearchItemGroup.admissions] derive from the rows' [SettingsRow.gate]s
  * (null → the effective advanced flag's base gate;
- * [RowAdmission.ContentGated] rows declare no entry, exactly the retired
+ * [RowAdmission.ContentGated] rows declare no entry, keeping the
  * separate admissions maps' strict-count/true-emission semantics), so the
  * declaration you read is the single home of the group's order, faces and
  * gates. Decorating and aggregating stay the same act (see
@@ -272,6 +274,6 @@ internal fun rowSubtitle(row: SettingsRow): String? =
 /**
  * [rowTitle]'s icon twin for fused rows: the icon IS the row's field, so this
  * is a pure projection — kept as a call-site twin of [rowTitle] so a screen
- * row reads `rowIcon(SomeRows.X)` the same way records and bindings did.
+ * row reads `rowIcon(SomeRows.X)` the same way it reads `rowTitle`.
  */
 internal fun rowIcon(row: SettingsRow): ImageVector = row.icon

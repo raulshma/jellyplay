@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d Auto-Skip, %2$d Button zeigen</string>
     <string name="settings_skip_segments_on_seek">Segmente beim Spulen überspringen</string>
     <string name="settings_skip_segments_on_seek_on">Vorwärtssprünge überspringen Auto-Skip-Segmente</string>
+    <string name="settings_segment_skip_delay">Auto-Skip-Verzögerung</string>
+    <string name="settings_segment_skip_delay_off">Aus</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">Aus</string>
     <string name="settings_syncplay_join_summary">Beitrittsverhalten: %1$s</string>
     <string name="settings_join_behavior">Beitrittsverhalten</string>
@@ -245,6 +248,7 @@
     <string name="settings_player_engine_subtitle">Medien-Wiedergabe-Engine wählen</string>
     <string name="settings_shader_pack">Shader-Paket</string>
     <string name="settings_tone_mapping">Tonemapping</string>
+    <string name="settings_exo_hdr_tone_mapping">HDR-Tonemapping</string>
     <string name="settings_render_quality">Qualitätsprofil</string>
     <string name="settings_interpolation_tscale">Interpolationsfilter (tscale)</string>
     <string name="settings_power_user_mode">Expertenmodus</string>
@@ -265,6 +269,12 @@
     <string name="settings_passthrough_codec_off">Software-dekodiert</string>
     <string name="settings_max_audio_channels">Maximale Audiokanäle</string>
     <string name="settings_downmix_boost">Stereo-Downmix-Verstärkung</string>
+    <string name="settings_spatial_audio">Spatial Audio (räumliches Klangbild)</string>
+    <string name="settings_spatial_audio_on">Lässt den System-Spatializer Mehrkanalaudio räumlich wiedergeben, wenn aktiv</string>
+    <string name="settings_spatial_audio_off">Standard-Audioverarbeitung</string>
+    <string name="settings_spatial_audio_only_headphones">Nur Kopfhörer</string>
+    <string name="settings_spatial_audio_only_headphones_on">Downmix nur bei Kopfhörerausgaben aus dem Weg räumen</string>
+    <string name="settings_spatial_audio_only_headphones_off">Auf jeder Ausgabe anwenden</string>
     <string name="settings_offline_playback">Offline-Wiedergabe</string>
     <string name="settings_offline_playback_prefer_downloaded">Downloads bevorzugen</string>
     <string name="settings_offline_playback_prefer_streaming">Streaming bevorzugen</string>

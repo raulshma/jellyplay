@@ -31,6 +31,7 @@ class ExoPlayerReusePolicyTest {
         assSession = false,
         drmProvider = null,
         streamCacheEligible = true,
+        hdrGlEngaged = false,
     )
 
     private fun delta(mutate: LoadRebuildInputs.() -> LoadRebuildInputs): LoadRebuildInputs =
@@ -84,6 +85,7 @@ class ExoPlayerReusePolicyTest {
             delta { copy(headers = headers + ("X-Extra" to "v")) },
             delta { copy(assSession = true) },
             delta { copy(streamCacheEligible = false) },
+            delta { copy(hdrGlEngaged = true) },
         )
         deltas.forEach { newInputs ->
             assertFalse(
@@ -137,6 +139,24 @@ class ExoPlayerReusePolicyTest {
             shouldReuseExistingPlayer(
                 true,
                 baseline.copy(streamCacheEligible = false),
+                baseline,
+            ),
+        )
+    }
+
+    @Test
+    fun hdrGlEngagementFlip_forcesRebuild_bothDirections() {
+        // The GL video-graph path is sticky for a built player — once engaged
+        // it never reverts to the direct MediaCodec→Surface path — so an
+        // engagement flip between loads (HDR-on-SDR item → SDR item) must
+        // rebuild to shed the GL pass instead of silently keeping it.
+        assertFalse(
+            shouldReuseExistingPlayer(true, baseline, baseline.copy(hdrGlEngaged = true)),
+        )
+        assertFalse(
+            shouldReuseExistingPlayer(
+                true,
+                baseline.copy(hdrGlEngaged = true),
                 baseline,
             ),
         )

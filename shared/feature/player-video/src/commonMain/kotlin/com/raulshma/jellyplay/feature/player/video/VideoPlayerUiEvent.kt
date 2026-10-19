@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MpvRenderQuality
 import com.raulshma.jellyplay.core.model.MpvShaderPack
@@ -20,7 +21,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  * precedent): the VM exposes no per-action command methods beyond it and the
  * state flows/sync getters, so new
  * intents are added here (and routed once in the `when`) rather than as new
- * public members on the VM (whose member ratchet the fold created).
+ * public members on the VM (whose member guard the fold created).
  *
  * Deliberately NOT here:
  *  - controller-slice commands — the screen drives the exposed `cast` /
@@ -56,6 +57,8 @@ sealed interface VideoPlayerUiEvent {
         val startPositionTicks: Long = 0L,
         val subtitleStreamIndex: Int? = null,
         val audioStreamIndex: Int? = null,
+        /** "Stream instead": resolve Online even when a completed download exists. */
+        val forceStream: Boolean = false,
     ) : VideoPlayerUiEvent
 
     /** Starts playback of a picked episode at its saved position. */
@@ -219,6 +222,25 @@ sealed interface VideoPlayerUiEvent {
     /** Saves/clears the per-series "subtitles off" intent. */
     data class SetSeriesSubtitleDisabled(val disabled: Boolean) : VideoPlayerUiEvent
 
+    /**
+     * Saves/clears the per-series audio-description pin. `remember = true`
+     * prefers AD narration for every episode of this series; `false` clears
+     * the pin (the global setting stands again).
+     */
+    data class SetSeriesAudioDescriptionPreference(val remember: Boolean) : VideoPlayerUiEvent
+
+    /** Plays the up-next queue row at [index] now (removing it from the queue). */
+    data class PlayQueueItem(val index: Int) : VideoPlayerUiEvent
+
+    /** Removes the up-next queue row at [index]. */
+    data class RemoveQueueItem(val index: Int) : VideoPlayerUiEvent
+
+    /** Reorders the up-next queue (the queue sheet's move buttons). */
+    data class MoveQueueItem(val fromIndex: Int, val toIndex: Int) : VideoPlayerUiEvent
+
+    /** Empties the up-next queue. */
+    data object ClearQueue : VideoPlayerUiEvent
+
     /** Changes the aspect-ratio resize mode. */
     data class SetAspectRatio(val ratio: AspectRatio) : VideoPlayerUiEvent
 
@@ -234,8 +256,19 @@ sealed interface VideoPlayerUiEvent {
     /** Toggles adaptive bitrate (the AUTO-mode network cap). */
     data class SetAdaptiveBitrateEnabled(val enabled: Boolean) : VideoPlayerUiEvent
 
-    /** Applies a video-effects (filters) config to the session, persisted per item. */
+    /**
+     * Applies a video-effects (filters) config to the session — the LIVE drag
+     * leg: uiState + debounced engine sync only, no per-frame disk write.
+     * Persist lands via [SetVideoEffectsSettled].
+     */
     data class SetVideoEffects(val effects: VideoEffectsConfig) : VideoPlayerUiEvent
+
+    /**
+     * The filters sheet's drag-settle leg: same state write, plus the one
+     * per-item persist that matters (fire-and-forget DataStore edit of the
+     * per-item map). Reset chips and reset-all commit through this directly.
+     */
+    data class SetVideoEffectsSettled(val effects: VideoEffectsConfig) : VideoPlayerUiEvent
 
     /** The Rendering sheet's shader-pack pick (persist pins the per-series/item override). */
     data class SetRenderShaderPack(val pack: MpvShaderPack, val persist: Boolean) : VideoPlayerUiEvent
@@ -245,6 +278,19 @@ sealed interface VideoPlayerUiEvent {
 
     /** The Rendering sheet's render-quality pick (a global mpv preference). */
     data class SetRenderQuality(val quality: MpvRenderQuality) : VideoPlayerUiEvent
+
+    /**
+     * The HDR sheet's mpv passthrough toggle (a global mpv preference —
+     * global-only-pick choreography: the session lens bridges the pick to the
+     * live config rebuild, then the DataStore persist lands).
+     */
+    data class SetMpvHdrPassthrough(val enabled: Boolean) : VideoPlayerUiEvent
+
+    /**
+     * The HDR sheet's ExoPlayer tone-mapping pick (a global exo preference —
+     * the output posture is applied on the next playback).
+     */
+    data class SetExoHdrToneMapping(val mode: ExoHdrToneMappingMode) : VideoPlayerUiEvent
 
     /** "Inherit (follow global)": clears the persisted render override + the session lens. */
     data object ClearRenderOverride : VideoPlayerUiEvent

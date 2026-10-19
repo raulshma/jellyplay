@@ -114,6 +114,7 @@ internal object PlayerPrefsSeed {
                         }
                         base.toMap()
                     },
+                    segmentSkipDelaysMs = agg.videoPlayer.segmentSkipDelaysMs,
                 ),
                 episodes = episodes.copy(
                     videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,

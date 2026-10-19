@@ -22,7 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * from) included.
  *
  * Lives in shared/feature/shell beside [ShellSessionController] as part of
- * the session-policy wiring (ADR 0001's construction pattern): pure inputs
+ * the session-policy wiring (the shell-session pattern): pure inputs
  * only — flows, suspend lambdas, a scope — no Koin binding, no repository
  * types — so the module keeps its repository-free signature set. Each shell
  * constructs it directly over its own collaborators.
@@ -48,17 +48,15 @@ import kotlinx.coroutines.withTimeoutOrNull
  * possible frame of auth flash for un-blocking the gate.
  *
  * The mirror collector is launched on the host scope passed to [restore]
- * (cancel-then-replace per call), so it dies with the shell exactly as the
- * hosts' former hand-rolled collectors did — Android's activity-scoped
- * ViewModel scope, desktop's composition scope. [onAuthChange] rides the
- * same collector after every mirror write (Android's false-edge teardown:
- * stop the health monitor, clear the library folders; the mirror write lands
- * first, preserving the former single-collector order).
+ * (cancel-then-replace per call), so it dies with the shell — Android's
+ * activity-scoped ViewModel scope, desktop's composition scope.
+ * [onAuthChange] rides the same collector after every mirror write (Android's
+ * false-edge teardown: stop the health monitor, clear the library folders;
+ * the mirror write lands first).
  *
  * Per-shell remains: the splash rendering itself — Android's system
  * splash-screen gate polls [isRestoring], desktop renders its restore splash
- * while it holds; Android also exposes [isAuthenticated] to its shell
- * verbatim.
+ * while it holds; Android also exposes [isAuthenticated] to its shell.
  *
  * @param authChanges the host's auth state (`AuthRepository.isAuthenticated`);
  *   mirrored into [isAuthenticated] and gated on by the release.
@@ -98,7 +96,7 @@ class SessionRestore(
      * The rendered authenticated flag — the host's auth flow mirrored by this
      * class's own collector. The restore release waits on THIS flow (see the
      * class KDoc for why the host flow must not be waited on directly), and
-     * shells render from it verbatim.
+     * shells render from it.
      */
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
 

@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * registration order IS the default layout order and stays pinned to the
  * wire-safe [HomeSectionType.CONFIGURABLE] list, and the per-type gate facts
  * every consumer layer reads (chassis, ordering use case, refresh arms) match
- * the membership the scattered dispatches used to spell.
+ * the membership each scattered dispatch expects.
  */
 class HomeRowModulesTest {
 
@@ -63,10 +63,12 @@ class HomeRowModulesTest {
     }
 
     @Test
-    fun hasSeeAll_exactlyRecentlyAddedAndLatestMedia() {
+    fun hasSeeAll_exactlyRecentlyAddedLatestMediaAndUpcoming() {
         for (type in HomeSectionType.entries) {
             assertEquals(
-                type == HomeSectionType.RECENTLY_ADDED || type == HomeSectionType.LATEST_MEDIA,
+                type == HomeSectionType.RECENTLY_ADDED ||
+                    type == HomeSectionType.LATEST_MEDIA ||
+                    type == HomeSectionType.UPCOMING,
                 HomeRowModules[type].hasSeeAll,
                 "type=$type",
             )
@@ -80,6 +82,7 @@ class HomeRowModulesTest {
             HomeSectionType.CONTINUE_WATCHING,
             HomeSectionType.CONTINUE_READING,
             HomeSectionType.NEXT_UP,
+            HomeSectionType.UPCOMING,
             HomeSectionType.RECENTLY_ADDED,
             HomeSectionType.LATEST_MEDIA,
             HomeSectionType.PINNED,
@@ -100,6 +103,53 @@ class HomeRowModulesTest {
                 "type=$type",
             )
         }
+    }
+
+    @Test
+    fun titleCarriesSeed_exactlyRecommendations() {
+        // The seed-chain row's title renders "Because You Watched <seed>";
+        // every other row keeps its plain display string.
+        for (type in HomeSectionType.entries) {
+            assertEquals(
+                type == HomeSectionType.RECOMMENDATIONS,
+                HomeRowModules[type].titleCarriesSeed,
+                "type=$type",
+            )
+        }
+    }
+
+    // ── The Upcoming + My Media registrations ──
+
+    @Test
+    fun upcoming_rowFacts() {
+        val module = HomeRowModules[HomeSectionType.UPCOMING]
+        assertEquals(false, module.wideRow, "Upcoming renders the poster chassis")
+        assertEquals(true, module.hasSeeAll, "the full airing schedule lives behind a library browse")
+        assertEquals(true, module.edgeRefreshable, "single-row refetch via the batch sub-call's twin")
+        assertEquals("upcoming", module.descriptor.id)
+        assertEquals("Upcoming", module.descriptor.displayName)
+    }
+
+    @Test
+    fun myMedia_rowFacts() {
+        val module = HomeRowModules[HomeSectionType.MY_MEDIA]
+        assertEquals(false, module.wideRow, "My Media renders the tiles chassis, not the wide cards")
+        assertEquals(false, module.hasSeeAll, "the row IS the library surface; See All is n/a")
+        assertEquals(false, module.edgeRefreshable, "assembles the batch's shared folders read — no refetch arm")
+        assertEquals("my_media", module.descriptor.id)
+        assertEquals("My Media", module.descriptor.displayName)
+    }
+
+    @Test
+    fun v3Sections_rideTheirDefaultLayoutPositions() {
+        // Registry order IS the default layout order: Upcoming directly after
+        // Next Up (its watch-state complement), My Media right after it.
+        val order = HomeRowModules.defaultOrder
+        assertEquals(
+            listOf(HomeSectionType.NEXT_UP, HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA),
+            order.windowed(3).firstOrNull { it[0] == HomeSectionType.NEXT_UP },
+            "Upcoming and My Media must sit directly after Next Up in the default layout",
+        )
     }
 
     // ── Offline projections ──

@@ -12,8 +12,8 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * Tests for audio effect state management. After state ownership moved (plan
- * 01), the user effects live in [AudioEffectsState] (owned by
+ * Tests for audio effect state management. The user effects live in
+ * [AudioEffectsState] (owned by
  * [VideoEffectsController]); the per-item resolver-driven dialogue boost stays
  * on [VideoPlayerUiState]. These replicate the toggle/update logic as pure
  * state-machine tests.

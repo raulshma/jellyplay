@@ -302,13 +302,16 @@ fun JellyPlayTheme(
     val effectiveDarkTheme = darkTheme || isTv || variant.isDarkLocked
     val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && variant.allowsOled
 
-    // Bridge the Compose-visible synthwave flag to the global state that
-    // `SynthwaveDynamicShape` reads from `Shape.createOutline` (which runs outside of
-    // composition and therefore can't consult `LocalIsSynthwave` directly). Using
-    // `SideEffect` ensures the write only happens after a *successful* composition, so
-    // intermediate recompositions from previews or parallel compositions don't flicker the
-    // global state. The CompositionLocal itself remains the source of truth for any
-    // composable consumer; this SideEffect only mirrors it for the non-composable Shape path.
+    // Bridge the Compose-visible synthwave flag to the snapshot state that the
+    // ShapeCache accessors and `expressiveListShape` consult when handing out
+    // shapes. Composition observes reads of that state, so a flip recomposes
+    // the readers and they resolve to a different shape instance — the changed
+    // draw input that makes already-composed surfaces redraw deterministically.
+    // Using `SideEffect` ensures the write only happens after a *successful*
+    // composition, so intermediate recompositions from previews or parallel
+    // compositions don't flicker the global state. The CompositionLocal itself
+    // remains the source of truth for any composable consumer; this SideEffect
+    // only mirrors it for the Shape resolution path.
     androidx.compose.runtime.SideEffect { _isSynthwaveActive.value = synthwaveMode }
 
     // Material You dynamic color is a platform seam: null on desktop means
@@ -369,19 +372,27 @@ fun JellyPlayTheme(
             ContrastLevel.DEFAULT -> LightColorScheme
         }
         else -> {
-            val swatch = if (accentColorSwatch == "dynamic") {
-                AccentColorSwatch.BRAND
-            } else {
-                AccentColorSwatch.entries.find { it.name.lowercase() == accentColorSwatch } ?: AccentColorSwatch.BRAND
+            // Remembered like the variant branch three lines up:
+            // generateColorScheme rebuilds ~40 role objects per recomposition
+            // of the theme body otherwise, and this branch runs on every
+            // non-variant, non-dynamic-swatch session — the default look.
+            remember(
+                accentColorSwatch, colorStyle, effectiveDarkTheme, effectiveOledMode, contrastLevel,
+            ) {
+                val swatch = if (accentColorSwatch == "dynamic") {
+                    AccentColorSwatch.BRAND
+                } else {
+                    AccentColorSwatch.entries.find { it.name.lowercase() == accentColorSwatch } ?: AccentColorSwatch.BRAND
+                }
+                val seedColor = Color(if (effectiveDarkTheme) swatch.darkColor else swatch.lightColor)
+                ColorGenerator.generateColorScheme(
+                    seedColor = seedColor,
+                    style = colorStyle,
+                    darkTheme = effectiveDarkTheme,
+                    oledMode = effectiveOledMode,
+                    contrastLevel = contrastLevel
+                )
             }
-            val seedColor = Color(if (effectiveDarkTheme) swatch.darkColor else swatch.lightColor)
-            ColorGenerator.generateColorScheme(
-                seedColor = seedColor,
-                style = colorStyle,
-                darkTheme = effectiveDarkTheme,
-                oledMode = effectiveOledMode,
-                contrastLevel = contrastLevel
-            )
         }
     }
 
@@ -454,7 +465,12 @@ fun JellyPlayTheme(
         }
     }
 
-    val typography = when (variant) {
+    // The variant pick is a @Composable val read (stays in composition); the
+    // 15-style scaled COPY is what gets remembered - an unremembered
+    // Typography.copy chain rebuilt 15 TextStyle objects per theme-body
+    // recomposition. Keyed on the base identity + the scale, so a variant
+    // flip still lands the new base.
+    val baseTypography = when (variant) {
         ThemeVariant.SYNTHWAVE -> SynthwaveTypography
         ThemeVariant.SOOTHING -> SoothingTypography
         ThemeVariant.MONOCHROME -> MonochromeTypography
@@ -463,26 +479,42 @@ fun JellyPlayTheme(
         ThemeVariant.SAKURA -> SakuraTypography
         ThemeVariant.VECTOR_POP -> VectorPopTypography
         ThemeVariant.STANDARD -> if (isTv) TvTypography else JellyPlayTypography
-    }.let { base ->
+    }
+    val typography = remember(baseTypography, appFontScale) {
         if (appFontScale != AppFontScale.DEFAULT) {
-            base.copy(
-                displayLarge = base.displayLarge.copy(fontSize = base.displayLarge.fontSize * appFontScale.scale),
-                displayMedium = base.displayMedium.copy(fontSize = base.displayMedium.fontSize * appFontScale.scale),
-                displaySmall = base.displaySmall.copy(fontSize = base.displaySmall.fontSize * appFontScale.scale),
-                headlineLarge = base.headlineLarge.copy(fontSize = base.headlineLarge.fontSize * appFontScale.scale),
-                headlineMedium = base.headlineMedium.copy(fontSize = base.headlineMedium.fontSize * appFontScale.scale),
-                headlineSmall = base.headlineSmall.copy(fontSize = base.headlineSmall.fontSize * appFontScale.scale),
-                titleLarge = base.titleLarge.copy(fontSize = base.titleLarge.fontSize * appFontScale.scale),
-                titleMedium = base.titleMedium.copy(fontSize = base.titleMedium.fontSize * appFontScale.scale),
-                titleSmall = base.titleSmall.copy(fontSize = base.titleSmall.fontSize * appFontScale.scale),
-                bodyLarge = base.bodyLarge.copy(fontSize = base.bodyLarge.fontSize * appFontScale.scale),
-                bodyMedium = base.bodyMedium.copy(fontSize = base.bodyMedium.fontSize * appFontScale.scale),
-                bodySmall = base.bodySmall.copy(fontSize = base.bodySmall.fontSize * appFontScale.scale),
-                labelLarge = base.labelLarge.copy(fontSize = base.labelLarge.fontSize * appFontScale.scale),
-                labelMedium = base.labelMedium.copy(fontSize = base.labelMedium.fontSize * appFontScale.scale),
-                labelSmall = base.labelSmall.copy(fontSize = base.labelSmall.fontSize * appFontScale.scale),
+            baseTypography.copy(
+                displayLarge = baseTypography.displayLarge.copy(fontSize = baseTypography.displayLarge.fontSize * appFontScale.scale),
+                displayMedium = baseTypography.displayMedium.copy(fontSize = baseTypography.displayMedium.fontSize * appFontScale.scale),
+                displaySmall = baseTypography.displaySmall.copy(fontSize = baseTypography.displaySmall.fontSize * appFontScale.scale),
+                headlineLarge = baseTypography.headlineLarge.copy(fontSize = baseTypography.headlineLarge.fontSize * appFontScale.scale),
+                headlineMedium = baseTypography.headlineMedium.copy(fontSize = baseTypography.headlineMedium.fontSize * appFontScale.scale),
+                headlineSmall = baseTypography.headlineSmall.copy(fontSize = baseTypography.headlineSmall.fontSize * appFontScale.scale),
+                titleLarge = baseTypography.titleLarge.copy(fontSize = baseTypography.titleLarge.fontSize * appFontScale.scale),
+                titleMedium = baseTypography.titleMedium.copy(fontSize = baseTypography.titleMedium.fontSize * appFontScale.scale),
+                titleSmall = baseTypography.titleSmall.copy(fontSize = baseTypography.titleSmall.fontSize * appFontScale.scale),
+                bodyLarge = baseTypography.bodyLarge.copy(fontSize = baseTypography.bodyLarge.fontSize * appFontScale.scale),
+                bodyMedium = baseTypography.bodyMedium.copy(fontSize = baseTypography.bodyMedium.fontSize * appFontScale.scale),
+                bodySmall = baseTypography.bodySmall.copy(fontSize = baseTypography.bodySmall.fontSize * appFontScale.scale),
+                labelLarge = baseTypography.labelLarge.copy(fontSize = baseTypography.labelLarge.fontSize * appFontScale.scale),
+                labelMedium = baseTypography.labelMedium.copy(fontSize = baseTypography.labelMedium.fontSize * appFontScale.scale),
+                labelSmall = baseTypography.labelSmall.copy(fontSize = baseTypography.labelSmall.fontSize * appFontScale.scale),
             )
-        } else base
+        } else baseTypography
+    }
+
+    // Remembered per-recomposition rebuilds: ExtendedColors and the
+    // motion scheme are pure functions of stable inputs — a fresh instance per
+    // theme-body recomposition re-provided nine locals and re-derived the
+    // scheme for no behavior change. (The Local reads stay in composition;
+    // only motionSchemeFor's derivation is remembered.)
+    val extendedColors = remember { ExtendedColors() }
+    val performanceMode = LocalPerformanceMode.current
+    val reduceMotion = LocalReduceMotionEnabled.current
+    val motionScheme = remember(performanceMode, reduceMotion) {
+        motionSchemeFor(
+            performanceMode = performanceMode,
+            reduceMotion = reduceMotion,
+        )
     }
 
     CompositionLocalProvider(
@@ -490,7 +522,7 @@ fun JellyPlayTheme(
         LocalJellyPlayTypography provides typography,
         LocalJellyPlayShapes provides shapes,
         LocalIsLightTheme provides isLightColor(colorScheme.background),
-        LocalExtendedColors provides ExtendedColors(),
+        LocalExtendedColors provides extendedColors,
         LocalIsSynthwave provides synthwaveMode,
         LocalIsSoothingTheme provides soothingMode,
         LocalIsMonochromeTheme provides monochromeMode,
@@ -504,10 +536,7 @@ fun JellyPlayTheme(
             // not parameters: JellyPlayPreferenceTheme provides them once ABOVE this
             // call, so the scheme and every LocalReducedMotion call-site guard read
             // the same single source and can't drift apart.
-            motionScheme = motionSchemeFor(
-                performanceMode = LocalPerformanceMode.current,
-                reduceMotion = LocalReduceMotionEnabled.current,
-            ),
+            motionScheme = motionScheme,
             content = content,
         )
     }

@@ -30,9 +30,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelUploadTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv/admin conveyor port
-    // pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var editorRepository: MetadataEditorRepository
@@ -85,12 +84,9 @@ class EditorViewModelUploadTest {
 
     @Test
     fun `uploadImageFromFile reads the picked file's bytes and uploads them`() = runTest {
-        // Regression guard for the TODO() crash that used to live in the UI —
-        // ported onto the picker seam: the legacy test exercised the
-        // contentResolver read through uploadImageFromUri; the read moved into
-        // the Android actual's EditorPickedFile.readBytes, so the seam-typed
-        // equivalent feeds the VM a picked file whose bytes resolve like a
-        // freshly-read stream.
+        // Pins the picker-seam contract: the Android actual's
+        // EditorPickedFile.readBytes feeds the VM a picked file whose bytes
+        // resolve like a freshly-read stream.
         val bytes = byteArrayOf(1, 2, 3)
         val picked = EditorPickedFile(
             fileName = "poster.jpg",

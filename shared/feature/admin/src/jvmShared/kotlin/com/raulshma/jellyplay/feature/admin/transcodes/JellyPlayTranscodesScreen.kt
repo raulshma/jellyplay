@@ -39,6 +39,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerStop
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Transform
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -133,7 +134,7 @@ fun JellyPlayTranscodesScreen(
             state.isLoading -> {
                 ScreenLoadingState(modifier = Modifier.fillMaxSize())
             }
-            state.gate == TranscodesGate.Unavailable -> {
+            state.gate == JellyPlayCapabilityState.Unavailable -> {
                 GatedOffState(modifier = Modifier.fillMaxSize())
             }
             state.error != null -> {

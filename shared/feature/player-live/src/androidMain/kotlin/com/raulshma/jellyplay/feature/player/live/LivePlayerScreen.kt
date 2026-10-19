@@ -15,11 +15,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
@@ -32,13 +34,16 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
+import com.raulshma.jellyplay.core.model.DpadControl
 import com.raulshma.jellyplay.core.ui.player.findActivity
 import com.raulshma.jellyplay.core.ui.player.playerBottomControlsEnter
 import com.raulshma.jellyplay.core.ui.player.playerBottomControlsExit
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsEnter
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsExit
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
+import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyHandlerScope
+import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandler
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.live.components.ChannelZapToast
@@ -50,17 +55,21 @@ import com.raulshma.jellyplay.feature.player.live.components.LiveRecordSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import com.raulshma.jellyplay.feature.player.live.engine.Media3LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.video.PlayerOrientationLock
-import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.PlayerTvFocusGrabEffect
+import com.raulshma.jellyplay.feature.player.video.PlayerTvKeySinkEffect
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdict
 import com.raulshma.jellyplay.feature.player.video.chrome.LIVE_SEEK_STEP_MS
 import com.raulshma.jellyplay.feature.player.video.chrome.liveWindowRefreshLoop
+import com.raulshma.jellyplay.feature.player.video.chrome.rememberPlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.chrome.seekBackTargetMs
 import com.raulshma.jellyplay.feature.player.video.chrome.seekForwardTargetMs
 import com.raulshma.jellyplay.feature.player.video.chrome.shouldRestoreHostWindowOnDispose
-import com.raulshma.jellyplay.feature.player.video.chrome.shouldScheduleControlsAutoHide
 import com.raulshma.jellyplay.feature.player.video.rememberPlayerWindowOps
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.core.model.PlayerAction
 
 private const val ZAP_TOAST_MS = 3_000L
 
@@ -109,7 +118,6 @@ fun LivePlayerScreen(
             }
         }
     }
-    var overlayVisible by remember { mutableStateOf(true) }
     var activeSheet by remember { mutableStateOf<LiveSheet?>(null) }
     var zapToastChannelId by remember { mutableStateOf<String?>(null) }
     val isTv = LocalTvMode.current
@@ -119,6 +127,59 @@ fun LivePlayerScreen(
     // keep-screen-on and the orientation lock ride the shared ops instead of
     // raw WindowCompat/FLAG_ calls.
     val windowOps = rememberPlayerWindowOps()
+
+    // The chrome module (the GLOSSARY "Player chrome module"): the overlay
+    // visibility, the auto-hide timer, the BACK hide-or-exit ladder and the
+    // focus-grab arming — the live screen's former parallel copies of all
+    // four (the gate mapping, the ladder, the arm set) are deleted; the
+    // module's defaults carry them. Live maps onto the shared auto-hide gate
+    // with NO new parameter: constant false for the concepts the live chrome
+    // lacks — seek-gesture suppression, overflow menu, focused-chrome
+    // suppression (a focused live control never suppresses the hide, TV
+    // included; the contract test's liveScreen_shape case pins exactly this
+    // mapping). The visibility state stays plain `remember` (persistVisible
+    // = false), the same lifetime the screen-local flag had.
+    val chrome = rememberPlayerChromeController(
+        isTv = isTv,
+        controlsTimeoutMs = { state.controlsTimeoutMs },
+        isSheetOpen = { activeSheet != null },
+    )
+
+    // The input-dispatch module's instance (the GLOSSARY "Input dispatch
+    // module"): live's D-pad surface resolves its arm gates through the
+    // persisted mapping — a disabled/NONE row silences the live arm, a
+    // rebound row routes where live can express it. The map is read at
+    // EVENT time through the state delegate; the rebound executor covers
+    // exactly the actions live can express (the zap family has no
+    // PlayerAction — its arms stay the fixed defaults behind the enable
+    // gate).
+    val currentOnBack by rememberUpdatedState(onBack)
+    val inputDispatcher = remember {
+        PlayerInputDispatcher(
+            getMap = { state.inputMap },
+            executeAction = { action ->
+                when (action) {
+                    PlayerAction.TOGGLE_PLAY_PAUSE -> {
+                        viewModel.onEvent(LiveTvPlayerUiEvent.TogglePlayPause)
+                        true
+                    }
+                    PlayerAction.TOGGLE_MUTE -> {
+                        viewModel.onEvent(LiveTvPlayerUiEvent.ToggleMute)
+                        true
+                    }
+                    PlayerAction.TOGGLE_CONTROLS -> {
+                        chrome.toggle()
+                        true
+                    }
+                    PlayerAction.EXIT_PLAYER -> {
+                        currentOnBack()
+                        true
+                    }
+                    else -> false
+                }
+            },
+        )
+    }
 
     // Initialize playback once when the screen enters. A *changed* channelId
     // on a live screen instance (the host PlayerActivity's onNewIntent args
@@ -149,10 +210,14 @@ fun LivePlayerScreen(
     // TV uses the D-pad onBack handler below instead.
     if (!isTv) {
         JellyPlayBackHandler(enabled = true) {
-            when {
-                activeSheet != null -> activeSheet = null
-                overlayVisible -> overlayVisible = false
-                else -> onBack()
+            // The chrome module's ONE back ladder (sheet → close, overlay →
+            // hide, else exit) — the TV BACK arm below runs the same verdict,
+            // so the two dispatch paths can never diverge.
+            when (chrome.backVerdict()) {
+                PlayerChromeBackVerdict.CloseSheet -> activeSheet = null
+                PlayerChromeBackVerdict.HideControls -> chrome.hide()
+                PlayerChromeBackVerdict.SummonControls -> {}
+                PlayerChromeBackVerdict.Exit -> onBack()
             }
         }
     }
@@ -202,42 +267,25 @@ fun LivePlayerScreen(
     // Position ticker — drives the seek bar + at-live-edge while playing.
     // The live engine is media3's PULL model — it only republishes position/
     // duration/live-edge when `refreshLiveWindow()` is called — so a poll
-    // cadence is required (no engine flow ticks on its own). The cadence and
-    // the loop's gating semantics are the shared player-contract
-    // `liveWindowRefreshLoop`; consumers of the refreshed flows all render
-    // inside the AnimatedVisibility chrome and leave composition when it
-    // hides, so only poll while the overlay is visible. isAtLiveEdge stays
-    // correct while hidden via the engine's playback-state listener.
-    LaunchedEffect(state.isPlaying, overlayVisible) {
-        liveWindowRefreshLoop(active = { state.isPlaying && overlayVisible }) {
+    // cadence is required (no engine flow ticks on its own). The loop's
+    // gating semantics are the shared player-contract `liveWindowRefreshLoop`;
+    // consumers of the refreshed flows all render inside the
+    // AnimatedVisibility chrome and leave composition when it hides, so only
+    // poll while the overlay is visible. isAtLiveEdge stays correct while
+    // hidden via the engine's playback-state listener.
+    LaunchedEffect(state.isPlaying, chrome.visible) {
+        liveWindowRefreshLoop(active = { state.isPlaying && chrome.visible }) {
             viewModel.onEvent(LiveTvPlayerUiEvent.RefreshPosition)
         }
     }
 
     // Controls auto-hide: delay sourced from the user's
-    // `videoControlsTimeoutMs` preference (mirrors the VOD player), gated by
-    // the shared player-contract predicate and folded through its TV-doubling
-    // policy. Live maps onto the gate with NO new parameter: `overlayVisible`
-    // as showControls, the open sheet as isSheetOpen, and constant false for
-    // the concepts the live chrome lacks — seek-gesture suppression, overflow
-    // menu, focused-chrome suppression (a focused live control never
-    // suppresses the hide, TV included; the contract test's liveScreen_shape
-    // case pins exactly this mapping).
-    LaunchedEffect(overlayVisible, state.currentIndex, state.controlsTimeoutMs) {
-        if (
-            shouldScheduleControlsAutoHide(
-                showControls = overlayVisible,
-                isSeeking = false,
-                isSheetOpen = activeSheet != null,
-                isOverflowMenuOpen = false,
-                isTv = isTv,
-                controlsHasFocus = false,
-            )
-        ) {
-            val timeout = controlsAutoHideTimeoutMs(state.controlsTimeoutMs, isTv)
-            delay(timeout)
-            overlayVisible = false
-        }
+    // `videoControlsTimeoutMs` preference (mirrors the VOD player). The timer
+    // itself is the chrome module's — this effect only re-arms it on the same
+    // keys the former inline loop keyed (channel change restarts the window;
+    // the gate re-reads the open sheet at arm time, exactly as before).
+    LaunchedEffect(chrome.visible, state.currentIndex, state.controlsTimeoutMs) {
+        chrome.scheduleAutoHide()
     }
 
     // Zap toast visibility: shows on channel change, hides after 3s.
@@ -252,6 +300,10 @@ fun LivePlayerScreen(
     // (mirrors the VOD player's overlay-priority focus chain).
     val playerFocusRequester = remember { FocusRequester() }
     val errorRetryFocusRequester = remember { FocusRequester() }
+    // Whether ANYTHING under the player Box holds focus (banner retry button
+    // included) — the grab seam's re-assert watch, fed by the Box's
+    // onFocusChanged below.
+    var liveLayerHoldsFocus by remember { mutableStateOf(false) }
     LaunchedEffect(isTv, state.errorMessage) {
         if (isTv) {
             if (state.errorMessage != null) {
@@ -261,6 +313,81 @@ fun LivePlayerScreen(
             }
         }
     }
+    // The TV D-pad arm set, built through the input-dispatch module's ONE
+    // dispatcher (zap-family enable gates + the SELECT rebind ladder ride the
+    // persisted map) and remembered — the Box's focused-dispatch handler and
+    // the key-sink fallback below consume this ONE instance, so the two
+    // dispatch paths can never diverge and the sink's compiled handler stops
+    // being rebuilt per recomposition. The route-arg captures are remember
+    // keys: an onNewIntent retune swaps them and the arms must follow.
+    val liveDpadConfig = remember(chrome, inputDispatcher, audioStreamIndex, subtitleStreamIndex) {
+        liveDpadKeyConfig(
+            isSheetOpen = { activeSheet != null },
+            dispatcher = inputDispatcher,
+            onChannelUp = {
+                viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex))
+                chrome.hide()
+            },
+            onChannelDown = {
+                viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex))
+                chrome.hide()
+            },
+            onSelect = {
+                if (activeSheet != null) {
+                    activeSheet = null
+                } else {
+                    chrome.toggle()
+                }
+                true
+            },
+            onBack = {
+                when (chrome.backVerdict()) {
+                    PlayerChromeBackVerdict.CloseSheet -> activeSheet = null
+                    PlayerChromeBackVerdict.HideControls -> chrome.hide()
+                    PlayerChromeBackVerdict.SummonControls -> {}
+                    PlayerChromeBackVerdict.Exit -> currentOnBack()
+                }
+                true
+            },
+            onMenu = {
+                // MENU — last dead key: first press summons the
+                // overlay. Already-up stays unconsumed (unmapped key, pre-fix
+                // inertness).
+                if (!chrome.visible) {
+                    chrome.show()
+                    true
+                } else false
+            },
+        )
+    }
+    // TV focus grab + re-assert (parity with the VOD screen): this
+    // screen had NO hide-edge re-grab at all — when the overlay auto-hid (or a
+    // sheet closed, or the error banner unmounted), nothing re-grabbed the root
+    // Box and every D-pad key died until something else happened to take
+    // focus. The grab runs whenever the layer SHOULD own focus — the chrome
+    // module's verdict (controls hidden + sheet closed) with the error banner
+    // as this screen's one extra claimant — and the re-assert recovers any
+    // later loss, both with the 3-frame retry.
+    if (isTv) {
+        PlayerTvFocusGrabEffect(
+            focusRequester = playerFocusRequester,
+            layerComposed = chrome.shouldLayerOwnFocus(state.errorMessage != null),
+            targetHoldsFocus = liveLayerHoldsFocus,
+        )
+    }
+    // TV key-sink fallback (parity with the VOD screen): publish
+    // the EXACT arm set the Box's D-pad handler runs to the platform bridge,
+    // so keys that reach nothing — no Compose focus target left, PlayerActivity's
+    // dispatchKeyEvent finding nothing consumed — still zap/toggle/hide.
+    if (isTv) {
+        PlayerTvKeySinkEffect(
+            isSheetOpen = activeSheet != null,
+            isOverlayScreenActive = false,
+            layerHoldsFocus = liveLayerHoldsFocus,
+            onResetLayerFocus = { liveLayerHoldsFocus = false },
+            config = liveDpadConfig,
+        )
+    }
 
     PlayerDarkTheme {
         Box(
@@ -268,79 +395,71 @@ fun LivePlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
                 .focusRequester(playerFocusRequester)
+                // BEFORE the focus target it observes (the grab seam's
+                // ordering contract): feeds [liveLayerHoldsFocus] with the
+                // subtree's hasFocus — banner retry button included.
+                .onFocusChanged { if (isTv) liveLayerHoldsFocus = it.hasFocus }
                 .focusable(true)
                 .then(
                     if (!isTv) Modifier.pointerInput(Unit) {
                         detectTapGestures {
                             // Toggle chrome on tap when the channel sheet is closed.
-                            // Tapping also restarts the auto-hide timer via overlayVisible.
-                            if (activeSheet == null) overlayVisible = !overlayVisible
+                            // Tapping also restarts the auto-hide timer via the
+                            // chrome visibility.
+                            if (activeSheet == null) chrome.toggle()
                         }
                     } else Modifier,
                 )
-                .onDpadKeyEvent(
-                    onUp = { key ->
-                        if (activeSheet != null) return@onDpadKeyEvent false
-                        if (key.isKeyUp) {
-                            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex))
-                            overlayVisible = false
-                            true
-                        } else false
-                    },
-                    onDown = { key ->
-                        if (activeSheet != null) return@onDpadKeyEvent false
-                        if (key.isKeyUp) {
-                            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex))
-                            overlayVisible = false
-                            true
-                        } else false
-                    },
-                    onSelect = {
-                        if (activeSheet != null) {
-                            activeSheet = null
-                        } else {
-                            overlayVisible = !overlayVisible
-                        }
-                        true
-                    },
-                    onBack = {
-                        when {
-                            activeSheet != null -> activeSheet = null
-                            overlayVisible -> overlayVisible = false
-                            else -> onBack()
-                        }
-                        true
-                    },
-                ),
+                // Same [liveDpadConfig] the key-sink fallback interprets —
+                // one arm set, two dispatch paths.
+                .dpadKeyHandler(liveDpadConfig),
         ) {
             // Surface layer
             val media3Player = remember(state.engineState) {
                 (viewModel.engineForRendering() as? Media3LivePlayerEngine)?.media3Player
             }
             if (media3Player != null) {
+                // PiP aspect-ratio feed: forward the decoded video's
+                // dimensions so the host PlayerActivity shapes the PiP window
+                // to the content instead of its 16:9 fallback. Remembered +
+                // DisposableEffect-removed: the old factory-resident
+                // anonymous listener stacked a new registration on every
+                // surface recreation while the VM-scoped engine lived, so each
+                // onVideoSizeChanged dispatched once per dead surface too.
+                val videoSizeListener = remember(media3Player) {
+                    object : Player.Listener {
+                        override fun onVideoSizeChanged(videoSize: VideoSize) {
+                            viewModel.onVideoSizeChanged(
+                                videoSize.width,
+                                videoSize.height,
+                            )
+                        }
+                    }
+                }
+                DisposableEffect(media3Player) {
+                    media3Player.addListener(videoSizeListener)
+                    onDispose { media3Player.removeListener(videoSizeListener) }
+                }
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             player = media3Player
                             useController = false
+                            // TV-key hardening (the VOD EngineVideoSurface's
+                            // focus twin): media3's PlayerView is focusable by
+                            // default and a View-level focus owner outside Compose
+                            // swallows every D-pad key before Compose's dispatch
+                            // runs. isFocusable=false is the portable suppression
+                            // (the View#descendantFocusability API is removed from
+                            // the API-37 android.jar); the surface takes no key or
+                            // touch interaction, so free.
+                            isFocusable = false
+                            isFocusableInTouchMode = false
                             // Buffering is rendered by our own full-screen
                             // LiveErrorBanner (M3 Expressive LoadingIndicator);
                             // disable Media3's native spinner to avoid doubles.
                             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                            // PiP aspect-ratio feed: forward the
-                            // decoded video's dimensions so the host
-                            // PlayerActivity shapes the PiP window to the
-                            // content instead of its 16:9 fallback. Fires on
-                            // every track selection while the engine lives.
-                            media3Player?.addListener(object : Player.Listener {
-                                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                                    viewModel.onVideoSizeChanged(
-                                        videoSize.width,
-                                        videoSize.height,
-                                    )
-                                }
-                            })
                         }
                     },
                 )
@@ -350,7 +469,7 @@ fun LivePlayerScreen(
 
             // Chrome layer — top bar
             AnimatedVisibility(
-                visible = overlayVisible && currentChannel != null,
+                visible = chrome.visible && currentChannel != null,
                 enter = playerTopControlsEnter(),
                 exit = playerTopControlsExit(),
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -378,7 +497,7 @@ fun LivePlayerScreen(
 
             // Chrome layer — bottom bar
             AnimatedVisibility(
-                visible = overlayVisible,
+                visible = chrome.visible,
                 enter = playerBottomControlsEnter(),
                 exit = playerBottomControlsExit(),
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -453,7 +572,7 @@ fun LivePlayerScreen(
                         logoUrlFor = viewModel::logoUrlFor,
                         onChannelSelected = { id ->
                             viewModel.onEvent(LiveTvPlayerUiEvent.SelectChannelById(id))
-                            overlayVisible = false
+                            chrome.hide()
                         },
                         onToggleFavorite = { viewModel.onEvent(LiveTvPlayerUiEvent.ToggleFavorite(it)) },
                         onDismiss = { activeSheet = null },
@@ -493,5 +612,80 @@ fun LivePlayerScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * The live TV D-pad arm set — the inline arms the Box's [dpadKeyHandler] ran
+ * before the extraction (channel zap acts on KeyUp), shared with the
+ * key-sink fallback via [PlayerTvKeySinkEffect] so the two dispatch paths
+ * can never diverge.
+ *
+ * The input-dispatch module rides the persisted map: the zap arms
+ * ([DpadControl.UP]/[DpadControl.DOWN]) have no [com.raulshma.jellyplay.core.model.PlayerAction]
+ * to name, so their CURRENT live behavior IS their default binding — the map
+ * resolution gates them on the row's enable state (a disabled/NONE row
+ * silences the zap, a rebound row leaves the zap untouched), while SELECT
+ * resolves through the shared discrete-arm ladder (default
+ * [com.raulshma.jellyplay.core.model.PlayerAction.TOGGLE_CONTROLS] — exactly
+ * today's toggle; a rebound row routes to live's own executor, which covers
+ * the actions live can express). BACK keeps its fixed ladder (it IS this
+ * screen's TV back pipeline — falling through would strand a live TV viewer)
+ * and MENU stays unmapped.
+ *
+ * The edge guards are DECLARED, not "verbatim as at HEAD": at HEAD the arms
+ * never ran on TV at all ([dpadKeyHandler] is a no-op without a
+ * [LocalTvMode] provider, which PlayerActivity only started supplying with
+ * this fix — the no-guard shape was unobservable). With the arms live, the
+ * no-guard shape is a bug: SELECT toggling on BOTH edges of one press
+ * is a net no-op (the KeyDown summons the overlay, the KeyUp 32 ms later
+ * hides it again), so SELECT/BACK act on the first KeyDown only and ignore
+ * KeyRepeat (a held key must not re-toggle or walk the back ladder).
+ */
+internal fun liveDpadKeyConfig(
+    isSheetOpen: () -> Boolean,
+    dispatcher: PlayerInputDispatcher,
+    onChannelUp: () -> Unit,
+    onChannelDown: () -> Unit,
+    onSelect: () -> Boolean,
+    onBack: () -> Boolean,
+    onMenu: () -> Boolean,
+): DpadKeyHandlerScope.() -> Unit {
+    return {
+        onKeyEvent(DpadAction.Up) { key ->
+            when {
+                isSheetOpen() || !dispatcher.isControlEnabled(DpadControl.UP) -> false
+                key.isKeyUp -> {
+                    onChannelUp()
+                    true
+                }
+                else -> false
+            }
+        }
+        onKeyEvent(DpadAction.Down) { key ->
+            when {
+                isSheetOpen() || !dispatcher.isControlEnabled(DpadControl.DOWN) -> false
+                key.isKeyUp -> {
+                    onChannelDown()
+                    true
+                }
+                else -> false
+            }
+        }
+        // BACK acts on the first KeyDown only (no KeyUp re-fire, no KeyRepeat):
+        // this arm IS the TV back ladder (the screen composes no
+        // JellyPlayBackHandler on TV), and an unguarded arm fired on BOTH edges
+        // of one press — KeyDown hid the overlay, the KeyUp 32 ms later read it
+        // hidden and fell to onBack(): one BACK press hid the chrome AND exited
+        // the player.
+        onKeyEvent(DpadAction.Select) { key ->
+            if (key.isKeyDown && key.repeatCount == 0) {
+                dispatcher.discreteArm(key, DpadControl.SELECT, PlayerAction.TOGGLE_CONTROLS, legacy = onSelect)
+            } else {
+                false
+            }
+        }
+        onKeyEvent(DpadAction.Back) { key -> if (key.isKeyDown && key.repeatCount == 0) onBack() else false }
+        onKeyEvent(DpadAction.Menu) { key -> if (key.isKeyDown && key.repeatCount == 0) onMenu() else false }
     }
 }

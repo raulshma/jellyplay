@@ -25,12 +25,10 @@ import kotlinx.coroutines.flow.stateIn
  * [testWyzieApiKey] / [testOpenSubtitlesCredentials], which build the credential
  * object and route it through [SubtitleProviderRepository.verifyCredentials] —
  * OpenSubtitles performs a real `/login` there, so a wrong password is caught.
- * Status is the shared [ConnectionProbe] board (the former seal mirrored Arr's
- * `ServerConnectionStatus`; both now ride one machine, whose KDoc declares the
+ * Status is the shared [ConnectionProbe] board, whose KDoc declares the
  * single-flight RESTART policy, the cancellation-never-lands-as-Error rule,
- * and the localized fallback texts). One behavior change: the repository's Skipped
- * outcome still lands as Error, but as the localized ProviderNotConfigured
- * fallback instead of the hardcoded "Provider not configured" literal.
+ * and the localized fallback texts. The repository's Skipped outcome lands
+ * as Error with the localized ProviderNotConfigured fallback.
  */
 class SubtitleProviderSettingsViewModel(
     private val preferencesStore: SubtitleProviderPreferencesStore,
@@ -158,8 +156,8 @@ fun saveOpenSubtitlesCredentials(username: String?, password: String?) {
      * shared board's status for [kind]. Unconfigured credentials are refused
      * synchronously by the board (no Testing frame, no network round-trip).
      * Single-flight is the machine's declared RESTART policy: a second Test
-     * tap cancels the in-flight probe for that provider (previously two taps
-     * raced, last write winning).
+     * tap cancels the in-flight probe for that provider, so two taps cannot
+     * race with last-write-wins.
      */
     private fun testCredentials(kind: SubtitleProviderKind, credentials: SubtitleProviderCredentials) {
         probeBoard.probe(SubtitleProbeRequest(kind, credentials))

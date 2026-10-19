@@ -53,7 +53,7 @@ import kotlin.test.assertTrue
  * (non-ONLINE clears sections and blocks loads), the failure split (cold error
  * state with nothing cached vs transient bus toast with cached sections), and
  * the play/shuffle delegation overloads — the multi-album batch path travels
- * as [TrackWithAlbumFallback] pairs with per-album fallbacks (plan 04 risk 2).
+ * as [TrackWithAlbumFallback] pairs with per-album fallbacks.
  *
  * viewModelScope runs on `Dispatchers.Main.immediate`, which under the test
  * Main dispatcher executes launches INLINE — so every stub is recorded BEFORE
@@ -389,9 +389,9 @@ class MusicHomeViewModelTest {
         assertEquals(1, viewModel.uiState.value.sections.size)
     }
 
-    // The no-stack/skip-re-arm/cancel-re-arm choreography triple this suite
-    // used to re-pin is module behaviour now — DeferredFetchCoordinatorTest
-    // owns that table; these suites pin the host adapters' own surfaces.
+    // The no-stack/skip-re-arm/cancel-re-arm choreography triple is module
+    // behaviour — DeferredFetchCoordinatorTest owns that table; these suites
+    // pin the host adapters' own surfaces.
 
     @Test
     fun refresh_cancelledByALaterLoudLoad_doesNotMaskAsFailureOrStrandSpinner() = runTest(mainDispatcher) {

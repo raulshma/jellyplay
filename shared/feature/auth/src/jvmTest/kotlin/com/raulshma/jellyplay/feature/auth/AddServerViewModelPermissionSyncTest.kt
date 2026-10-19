@@ -29,9 +29,7 @@ import kotlin.test.assertTrue
 
 /**
  * The local-network permission choreography machine behind
- * [AddServerViewModel.onLocalNetworkAccessSynced] — the decisions extracted
- * out of AddServerScreen's former inline
- * `LaunchedEffect(localNetwork.isGranted)` (composition-only, untested):
+ * [AddServerViewModel.onLocalNetworkAccessSynced]:
  *
  * 1. The rationale-banner predicate (`enforced && !granted`) folding into
  *    [AddServerUiState.localNetworkRationale] — desktop's non-enforcing
@@ -40,9 +38,8 @@ import kotlin.test.assertTrue
  *    post-grant transition); a denied report never starts one (a scan
  *    without the permission silently finds nothing — the trap the banner
  *    replaces).
- * 3. Parity with the former per-composition effect: a granted sync AFTER a
- *    scan already completed starts a FRESH scan (servers reset) — the screen
- *    fires the sync on every entry, exactly like the old effect did.
+ * 3. A granted sync AFTER a scan already completed starts a FRESH scan
+ *    (servers reset) — the screen fires the sync on every entry.
  * 4. The [AddServerViewModel.startDiscovery] isDiscovering guard dedupes a
  *    granted sync while a scan is still running (repository invoked once).
  */
@@ -142,8 +139,8 @@ class AddServerViewModelPermissionSyncTest {
         assertEquals(listOf(server), viewModel.uiState.value.discoveredServers)
         assertFalse(viewModel.uiState.value.isDiscovering)
 
-        // Screen re-entry fires the sync again (the former composition effect
-        // did the same) — a fresh scan resets the discovered list.
+        // Screen re-entry fires the sync again — a fresh scan resets the
+        // discovered list.
         every { serverDiscoveryRepository.discoverLocalServers() } returns flowOf()
         viewModel.onLocalNetworkAccessSynced(enforced = false, granted = true)
         advanceUntilIdle()

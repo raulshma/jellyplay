@@ -100,6 +100,15 @@ data class PlaybackPreferences(
      * loudness-enhancer gain on engines that expose one.
      */
     val downmixBoostDb: Float = 0f,
+    /**
+     * The ADVISORY "allow spatial audio" toggle (Android-only) — see
+     * AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+     * rationale. Capability reporting:
+     * [com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities.supportsSpatialAudio].
+     */
+    val spatialAudioEnabled: Boolean = false,
+    /** Qualifies [spatialAudioEnabled] to headphone-class outputs only. */
+    val spatialAudioOnlyHeadphones: Boolean = true,
     val frameRateMatching: Boolean = false,
     /**
      * Granular refresh-rate / resolution switching mode. Supersedes
@@ -111,9 +120,9 @@ data class PlaybackPreferences(
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
     /**
-     * (jellyfin-androidtv #3924): pausing must not summon the control
-     * overlay. Default **off** — today's behavior; on, only the summons is
-     * suppressed (an already-visible overlay keeps its auto-hide timeout).
+     * Pausing must not summon the control overlay. Default **off**; on, only
+     * the summons is suppressed (an already-visible overlay keeps its
+     * auto-hide timeout).
      */
     val videoHideOsdOnPause: Boolean = false,
     val videoGestureMode: GestureMode = GestureMode.ALL,
@@ -136,6 +145,12 @@ data class PlaybackPreferences(
     val trailerAutoplay: Boolean = true,
     val cinemaModeEnabled: Boolean = false,
     /**
+     * Trailer-then-feature (opt-in): for MOVIE plays with a trailer available,
+     * the session queue is seeded with the trailer before the feature. Default
+     * off — today's feature-first behavior.
+     */
+    val playTrailerBeforeMovie: Boolean = false,
+    /**
      * "Still watching?" confirm prompt: which trigger arms are on
      * (see [StillWatchingMode]). The rows ride the autoplay toggle.
      */
@@ -151,6 +166,12 @@ data class PlaybackPreferences(
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    /**
+     * Per-type auto-skip delay (ms) added on top of a segment's start before
+     * an AUTO_SKIP behavior fires; all zero by default (skip at start).
+     * Only consulted for types whose [segmentBehaviors] entry is AUTO_SKIP.
+     */
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
     /** Skip-on-forward-seek. Default off — see `VideoPlayerSlice`. */
     val skipSegmentsOnSeek: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,
@@ -173,10 +194,10 @@ data class PlaybackPreferences(
     val audioDelayMs: Long = 0L,
     val backgroundVideoAudioEnabled: Boolean = false,
     /**
-     * Whether leaving the player during playback auto-enters picture-in-picture
-     * (issue #167). Default `true` keeps the historical behaviour; off makes
-     * Home/recents background the app normally. Manual PiP entry via the
-     * controls button is unaffected. Android-only surface (no desktop PiP).
+     * Whether leaving the player during playback auto-enters picture-in-picture.
+     * Default `true`; off makes Home/recents background the app normally.
+     * Manual PiP entry via the controls button is unaffected. Android-only
+     * surface (no desktop PiP).
      */
     val autoEnterPip: Boolean = true,
     val autoPlayCountdownSec: Int = 10,

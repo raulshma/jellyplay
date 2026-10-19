@@ -40,6 +40,11 @@ data class OfflineMediaItem(
     // watched); `toMediaItem` only surfaces a positive count, matching the
     // online cards.
     val unplayedEpisodeCount: Int? = null,
+    // Total downloaded episode files of this SERIES, projected at read time
+    // from the downloads table's per-series aggregate (same flow as the size
+    // aggregates — not persisted on the row). Feeds the offline library's
+    // series-card episode-count chip; null/non-positive = no chip.
+    val downloadedEpisodeCount: Int? = null,
     // Playback progress. Seeded from server UserData at download
     // time and updated locally as the user watches offline. `playedPercentage` is
     // derived (0–100) and stored so it can be rendered without recomputing.

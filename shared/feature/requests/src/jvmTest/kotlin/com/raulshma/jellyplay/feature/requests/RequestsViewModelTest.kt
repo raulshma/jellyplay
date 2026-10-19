@@ -55,7 +55,8 @@ import kotlin.test.assertTrue
  * filter fallback, filter/sort/pagination state transitions, the 400 ms
  * debounced search (incl. the init echo of the empty query), bulk-selection
  * fan-out, the DIRECT_ARR_INTEGRATION gate over the *arr enrichment, queue
- * removal, and polling stop on clear.
+ * removal, and the visibility-bound polling pair (start/stop; the repository
+ * is NOT touched by VM construction or clear).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelTest {
@@ -148,16 +149,18 @@ class RequestsViewModelTest {
             media = SeerrRequestMedia(id = id, tmdbId = tmdbId),
         )
 
-    // ── init: polling + first load ────────────────────────────────────────
+    // ── init: first load (polling is now the screen binding's job) ────────
 
     @Test
-    fun init_starts_polling_and_loads_first_page() = runTest(mainDispatcher) {
+    fun init_does_not_start_polling_but_loads_first_page() = runTest(mainDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
 
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        verify(exactly = 1) { seerrRepository.startPolling() }
+        // The VM-lifetime pair (init start / onCleared stop) retired: the
+        // requests screen binds the repository's refcounted poll to visibility.
+        verify(exactly = 0) { seerrRepository.startPolling() }
         verify(exactly = 0) { seerrRepository.stopPolling() }
         val state = viewModel.state.value
         assertEquals(listOf(1), state.requests.map { it.id })
@@ -471,11 +474,11 @@ class RequestsViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        val movie = viewModel.state.value.mediaInfo[11]
+        val movie = viewModel.mediaInfo.value[11]
         assertNotNull(movie)
         assertEquals("Movie", movie.title)
         assertEquals(2024, movie.year)
-        val tv = viewModel.state.value.mediaInfo[30]
+        val tv = viewModel.mediaInfo.value[30]
         assertNotNull(tv)
         assertEquals("Show", tv.title)
         assertEquals(2019, tv.year)
@@ -492,9 +495,9 @@ class RequestsViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        assertEquals(6, viewModel.state.value.mediaInfo.size)
-        assertEquals("T101", viewModel.state.value.mediaInfo[101]?.title)
-        assertEquals("T106", viewModel.state.value.mediaInfo[106]?.title)
+        assertEquals(6, viewModel.mediaInfo.value.size)
+        assertEquals("T101", viewModel.mediaInfo.value[101]?.title)
+        assertEquals("T106", viewModel.mediaInfo.value[106]?.title)
     }
 
     // ── DIRECT_ARR_INTEGRATION gating + queue management ──────────────────
@@ -508,8 +511,8 @@ class RequestsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { arrRepository.getQueueForTmdb(any()) }
-        assertTrue(viewModel.state.value.downloadProgress.isEmpty())
-        assertTrue(viewModel.state.value.queueItems.isEmpty())
+        assertTrue(viewModel.downloadProgress.value.isEmpty())
+        assertTrue(viewModel.queueItems.value.isEmpty())
     }
 
     @Test
@@ -537,11 +540,11 @@ class RequestsViewModelTest {
         // load re-queries (HEAD behavior).
         coVerify(exactly = 2) { arrRepository.getQueueForTmdb(42) }
         coVerify(exactly = 0) { arrRepository.getQueueForTmdb(0) }
-        val summary = viewModel.state.value.downloadProgress[42]
+        val summary = viewModel.downloadProgress.value[42]
         assertNotNull(summary)
         assertEquals(ArrDownloadStatus.DOWNLOADING, summary.status)
         assertEquals(50, summary.percent)
-        assertSame(queueItem, viewModel.state.value.queueItems[42])
+        assertSame(queueItem, viewModel.queueItems.value[42])
     }
 
     @Test
@@ -565,7 +568,7 @@ class RequestsViewModelTest {
 
         val viewModel = newViewModel()
         advanceUntilIdle()
-        assertTrue(viewModel.state.value.queueItems.containsKey(42))
+        assertTrue(viewModel.queueItems.value.containsKey(42))
         // After the deletion the queue no longer holds the row — the refresh
         // following removeQueueItem must not re-populate it.
         coEvery { arrRepository.getQueueForTmdb(42) } returns null
@@ -577,8 +580,8 @@ class RequestsViewModelTest {
         // its success leg — pinned in ArrRepositoryImplTest).
         coVerify(exactly = 1) { arrRepository.deleteQueueRow(queueItem, blocklist = true, searchAgain = true) }
         val state = viewModel.state.value
-        assertFalse(state.queueItems.containsKey(42))
-        assertFalse(state.downloadProgress.containsKey(42))
+        assertFalse(viewModel.queueItems.value.containsKey(42))
+        assertFalse(viewModel.downloadProgress.value.containsKey(42))
         assertFalse(state.actionInProgress)
     }
 
@@ -618,7 +621,7 @@ class RequestsViewModelTest {
         assertEquals("boom", viewModel.state.value.actionError)
         assertFalse(viewModel.state.value.actionInProgress)
         // Failure path keeps the cached queue row for a retry.
-        assertTrue(viewModel.state.value.queueItems.containsKey(42))
+        assertTrue(viewModel.queueItems.value.containsKey(42))
     }
 
     @Test
@@ -637,7 +640,24 @@ class RequestsViewModelTest {
     // ── polling lifecycle ─────────────────────────────────────────────────
 
     @Test
-    fun clearing_the_viewmodel_stops_polling() = runTest(mainDispatcher) {
+    fun the_visibility_binding_pairs_start_and_stop() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        verify(exactly = 0) { seerrRepository.startPolling() }
+
+        // The screen's LifecycleStartEffect binding: START starts the
+        // repository's refcounted poll, STOP stops it.
+        viewModel.startBackgroundPolling()
+        verify(exactly = 1) { seerrRepository.startPolling() }
+        verify(exactly = 0) { seerrRepository.stopPolling() }
+
+        viewModel.stopBackgroundPolling()
+        verify(exactly = 1) { seerrRepository.stopPolling() }
+    }
+
+    @Test
+    fun clearing_the_viewmodel_does_not_touch_the_refcounted_poll() = runTest(mainDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         val store = ViewModelStore()
         val factory = object : ViewModelProvider.Factory {
@@ -647,11 +667,11 @@ class RequestsViewModelTest {
         }
         val viewModel = ViewModelProvider.create(store, factory).get(RequestsViewModel::class)
         advanceUntilIdle()
-        verify(exactly = 0) { seerrRepository.stopPolling() }
 
+        // The poll is visibility-bound now — clearing the back-stacked VM is
+        // NOT a stop (the onCleared half of the old VM-lifetime pair is gone).
         store.clear()
-
-        verify(exactly = 1) { seerrRepository.stopPolling() }
+        verify(exactly = 0) { seerrRepository.stopPolling() }
         assertNotNull(viewModel)
     }
 

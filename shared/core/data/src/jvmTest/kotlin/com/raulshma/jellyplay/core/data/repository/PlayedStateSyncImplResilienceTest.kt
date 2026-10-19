@@ -50,7 +50,7 @@ class PlayedStateSyncImplResilienceTest {
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var outboxRepository: PlaybackOutboxRepository
     private lateinit var offlineModeManager: OfflineModeManager
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataAnnouncer: UserDataAnnouncer
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var sync: PlayedStateSyncImpl
@@ -61,7 +61,7 @@ class PlayedStateSyncImplResilienceTest {
         offlineRepository = mockk(relaxUnitFun = true)
         outboxRepository = mockk(relaxed = true)
         offlineModeManager = mockk()
-        mediaRepository = mockk()
+        userDataAnnouncer = mockk()
         downloadsStore = mockk()
         downloadRepository = mockk()
         sync = PlayedStateSyncImpl(
@@ -69,7 +69,7 @@ class PlayedStateSyncImplResilienceTest {
             offlineRepository = offlineRepository,
             playbackOutboxRepository = outboxRepository,
             offlineModeManager = offlineModeManager,
-            mediaRepository = lazy { mediaRepository },
+            userDataAnnouncer = userDataAnnouncer,
             downloadsStore = lazy { downloadsStore },
             downloadRepository = lazy { downloadRepository },
             timeSource = object : TimeSource {
@@ -81,7 +81,7 @@ class PlayedStateSyncImplResilienceTest {
         every { offlineModeManager.isOffline } returns false
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
         // The confirmed-write announcement (strict mock otherwise).
-        every { mediaRepository.notifyUserDataChanged(any()) } returns Unit
+        every { userDataAnnouncer.notifyUserDataChanged(any()) } returns Unit
     }
 
     // ── 1. A confirmed flip survives a failing local mirror ─────────────
@@ -142,7 +142,7 @@ class PlayedStateSyncImplResilienceTest {
         // by a racing enqueue) → treat as undelivered, reset nothing.
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(isPlayed = false, playbackPositionTicks = 30_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true, playbackPositionTicks = 5_000_000L))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns false
@@ -163,7 +163,7 @@ class PlayedStateSyncImplResilienceTest {
         // intent. The push fails AND the probe throws — an exception must
         // never be read as "delivered".
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = false))
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns
@@ -188,7 +188,7 @@ class PlayedStateSyncImplResilienceTest {
         // so the worker does not refresh caches over a favorite mirror.
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(isFavorite = false, lastPlayedDate = "2024-06-15T10:31:00Z")
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isFavorite = true, lastPlayedDate = "2024-06-15T10:30:00Z"))
 
         val outcome = sync.reconcileOfflineRow(ITEM_ID)

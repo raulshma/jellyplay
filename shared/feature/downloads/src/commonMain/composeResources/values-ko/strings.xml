@@ -15,6 +15,7 @@
 
     <!-- Storage / counts -->
     <string name="downloads_storage_used">사용 중인 공간: %1$s</string>
+    <string name="downloads_storage_quota">%2$s 중 %1$s 사용</string>
     <string name="downloads_on_device">· 기기에 %1$s</string>
     <plurals name="downloads_item_count">
         <item quantity="other">항목 %1$d개</item>
@@ -35,11 +36,15 @@
     <string name="downloads_action_move_to_front">맨 앞으로 이동</string>
     <string name="downloads_action_select_all">모두 선택</string>
     <string name="downloads_action_clear_selection">선택 해제</string>
+    <string name="downloads_action_stream">스트리밍으로 재생</string>
+    <string name="downloads_action_more_cd">더 많은 작업</string>
     <string name="downloads_pause_all">모두 일시정지</string>
     <string name="downloads_retry_failed">실패한 항목 모두 재시도</string>
     <string name="downloads_clear_cd">지우기</string>
     <string name="downloads_search_cd">검색</string>
     <string name="downloads_sort_cd">정렬</string>
+    <string name="downloads_expand_all_cd">모든 시리즈 펼치기</string>
+    <string name="downloads_collapse_all_cd">모든 시리즈 접기</string>
     <string name="downloads_search_downloads_placeholder">다운로드 검색…</string>
     <string name="downloads_selection_hint">다운로드를 길게 눌러 선택하고 일괄 작업을 적용하세요</string>
 
@@ -65,6 +70,14 @@
     <string name="downloads_status">상태</string>
 
     <!-- Seasons / episodes -->
+    <string name="downloads_season_n">시즌 %1$d</string>
+    <plurals name="downloads_episode_count">
+        <item quantity="other">%1$d개 에피소드</item>
+    </plurals>
+    <plurals name="downloads_group_progress">
+        <item quantity="one">%1$d / %2$d 다운로드됨</item>
+        <item quantity="other">%1$d / %2$d 다운로드됨</item>
+    </plurals>
 
     <!-- Library sort / filter -->
     <string name="downloads_sort_recent">최근순</string>
@@ -72,7 +85,8 @@
     <string name="downloads_sort_rating">평점</string>
     <string name="downloads_sort_size">크기</string>
     <string name="downloads_filter_all">전체</string>
-    <string name="downloads_filter_videos">동영상</string>
+    <string name="downloads_filter_movies">영화</string>
+    <string name="downloads_filter_series">시리즈</string>
     <string name="downloads_filter_music">음악</string>
     <string name="downloads_filter_books">책</string>
     <!-- Offline download resync -->

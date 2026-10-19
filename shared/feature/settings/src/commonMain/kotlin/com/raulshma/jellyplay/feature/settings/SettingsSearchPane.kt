@@ -55,23 +55,18 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_categories
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_favorites
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_recents
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads_storage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_filter_all
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_language_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_matches
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_matches_hint
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_recents_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_search_hint
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_search_placeholder
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_security
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management
 
 /**
@@ -264,22 +259,52 @@ private data class QuickCategory(
     val route: Route,
 )
 
+/**
+ * The two quick categories with no fused entrance declaration (server
+ * management is a composite section with no rows domain; favorites is not a
+ * settings screen): their route → local (title, icon) faces. The six
+ * entrance-backed entries derive from the domains' declarations instead —
+ * see [quickCategories].
+ */
+private val nonEntranceQuickCategories: Map<Route, Pair<StringResource, ImageVector>> = mapOf(
+    Route.ServerManagement(null) to (Res.string.settings_server_management to Tabler.Outline.Server),
+    Route.Favorites to (Res.string.settings_browse_favorites to Tabler.Outline.Heart),
+)
+
+/**
+ * The pane's quick categories, in render order. The six domains with a fused
+ * entrance declaration ([AppearanceEntrance] and the other entrance
+ * declarations) derive
+ * their (title, icon) face from it — the same [SettingsEntranceSectionRow]
+ * the settings root's entrance rows render, so this grid cannot drift from
+ * the root screen. Server management and
+ * favorites keep their local faces in [nonEntranceQuickCategories]. The
+ * routes stay call-site glue — the entrance declarations own the row face,
+ * never the navigation. This is DATA derivation only, no row
+ * emission.
+ */
+@Composable
+private fun quickCategories(): List<QuickCategory> =
+    listOf(
+        AppearanceEntrance to Route.AppearanceSettings(),
+        PlaybackEntrance to Route.PlaybackSettings(),
+        AudioEntrance to Route.AudioSettings(),
+        LanguageEntrance to Route.LanguageSettings(),
+        StorageEntrance to Route.StorageSettings(),
+        SecurityEntrance to Route.SecuritySettings(),
+    )
+        .map { (entrance, route) -> QuickCategory(stringResource(entrance.titleRes), entrance.icon, route) } +
+        nonEntranceQuickCategories.map { (route, face) ->
+            QuickCategory(stringResource(face.first), face.second, route)
+        }
+
 @Composable
 private fun SettingsQuickCategoriesGrid(
     onNavigate: (Route) -> Unit,
     onDismissSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val categories = listOf(
-        QuickCategory(stringResource(Res.string.settings_appearance), Tabler.Outline.Palette, Route.AppearanceSettings()),
-        QuickCategory(stringResource(Res.string.settings_playback), Tabler.Outline.PlayerPlay, Route.PlaybackSettings()),
-        QuickCategory(stringResource(Res.string.settings_audio_player), Tabler.Outline.Headphones, Route.AudioSettings()),
-        QuickCategory(stringResource(Res.string.settings_language_subtitles), Tabler.Outline.Subtitles, Route.LanguageSettings()),
-        QuickCategory(stringResource(Res.string.settings_downloads_storage), Tabler.Outline.Download, Route.StorageSettings()),
-        QuickCategory(stringResource(Res.string.settings_security), Tabler.Outline.ShieldLock, Route.SecuritySettings()),
-        QuickCategory(stringResource(Res.string.settings_server_management), Tabler.Outline.Server, Route.ServerManagement(null)),
-        QuickCategory(stringResource(Res.string.settings_browse_favorites), Tabler.Outline.Heart, Route.Favorites),
-    )
+    val categories = quickCategories()
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -350,8 +375,7 @@ private fun SettingsQuickCategoriesGrid(
 /**
  * The search-active pane: the category filter chip row above the four-way
  * result box (live matches / no-matches + quick categories / recent settings /
- * browse hint). Relocated verbatim from [SettingsScreen]'s inline
- * `if (searchPanel.isSearchActive)` subtree; [modifier] carries the
+ * browse hint). [modifier] carries the
  * Column-scope `weight(1f)` the result box needs (the chips row stays
  * unweighted above it, exactly as before).
  */

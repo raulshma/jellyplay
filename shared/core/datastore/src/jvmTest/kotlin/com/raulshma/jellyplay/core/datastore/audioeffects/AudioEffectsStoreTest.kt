@@ -21,9 +21,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the audio-effects preference store, focusing on the JSON-encoded
- * [EqualizerSettings] round-trip and the strength/effect toggles that
- * previously lived inline in the `UserPreferencesStore` god object with **no**
- * unit coverage.
+ * [EqualizerSettings] round-trip and the strength/effect toggles.
  */
 class AudioEffectsStoreTest {
 

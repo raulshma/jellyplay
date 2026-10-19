@@ -32,6 +32,20 @@ data class LoadRequest(
     val allowCinemaMode: Boolean,
     val subtitleStreamIndex: Int?,
     val audioStreamIndex: Int?,
+    /**
+     * "Play (with pre-rolls)": forces the cinema gate past the global
+     * `cinemaModeEnabled` pref for THIS load (the per-invocation override the
+     * detail screen's ⋮ action arms through [CinemaModeOverride]). Every
+     * other veto of [shouldAttemptCinemaMode] still applies — fresh start,
+     * external player, SyncPlay, item type. Default false = today's behavior.
+     */
+    val forceCinemaMode: Boolean = false,
+    /**
+     * "Stream instead": resolve the session to [PlaybackSource.Online] even
+     * when a completed download exists (the downloads row's stream action).
+     * Default false keeps the Auto resolution — local file wins when usable.
+     */
+    val forceStream: Boolean = false,
 )
 
 /** Terminal state of one session load. */
@@ -49,11 +63,11 @@ sealed interface LoadOutcome {
  * deleted [VideoSessionHost]; then the deleted `PlayerWiring` builder; today
  * [PlaybackSession], the composition root the builder collapsed into
  * that implements it) can take the transform through the command-lambda
- * split: ControllerOwnershipTest's migrated-controller ratchet forbids the
+ * split: ControllerOwnershipTest's migrated-controller guard forbids the
  * literal type name in the migrated controllers (KDoc prose is exempt; the
- * builder — the VM's construction surface — is not ratchet-listed, so its
+ * builder — the VM's construction surface — is not guard-listed, so its
  * override spells the alias for continuity). The alias is transparent —
- * overrides may spell either form. This is the ratchet's ONE declared
+ * overrides may spell either form. This is the guard's ONE declared
  * state-transformer exception (see that suite's KDoc): the projection is
  * the pipeline's load-stage vocabulary — the seed the implementer forwards
  * for the VM to apply — not state the implementer reads or owns.
@@ -242,6 +256,9 @@ internal class SessionLoadPipeline(
         restoreRememberedMuted(agg)
 
         if (request.allowCinemaMode &&
+            // the per-invocation override ORs past the global pref — the
+            // session-level gate and the remaining vetoes below still apply.
+            (agg.videoPlayer.cinemaModeEnabled || request.forceCinemaMode) &&
             shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
         ) {
             val intros = libraryApiClient.getIntros(request.itemId).getOrDefault(emptyList())
@@ -260,7 +277,17 @@ internal class SessionLoadPipeline(
         // bar at 0 and jump to resume on the engine's first tick.
         outputs.onPlayheadSeeded(resolvedStartTicks)
 
-        sessionManager.loadMedia(request.itemId, request.mediaSourceId, resolvedStartTicks)
+        // Force-stream loads skip the Auto resolution entirely — a completed
+        // download must not win the source decision. The offline-resume hook
+        // still runs (its mirror position is the correct entry point even when
+        // streaming); the online gate inside loadMedia still applies, so a
+        // force-stream while offline fails fast with the offline-stream error
+        // rather than silently falling back to the file.
+        if (request.forceStream) {
+            sessionManager.loadMedia(PlaybackSource.Online(request.itemId, request.mediaSourceId), resolvedStartTicks)
+        } else {
+            sessionManager.loadMedia(request.itemId, request.mediaSourceId, resolvedStartTicks)
+        }
 
         // loadMedia reports its own failures (offline gate, detail-fetch miss,
         // vanished offline file) by leaving isReady = false. Continuing would
@@ -352,15 +379,16 @@ internal class SessionLoadPipeline(
     /**
      * Cinema Mode is only attempted on fresh starts (never on resume /
      * next-episode auto-advance / SyncPlay / external player / mini-mode
-     * reclaim). Server-side intros are best-effort: any failure returns an
-     * empty list and falls back to normal playback.
+     * reclaim). The global pref / force-flag admission is decided by the
+     * single caller (the `cinemaModeEnabled || forceCinemaMode` OR) — not
+     * re-checked here. Server-side intros are best-effort: any failure
+     * returns an empty list and falls back to normal playback.
      */
     private fun shouldAttemptCinemaMode(
         agg: VideoPlayerAggregate,
         itemId: String,
         startPositionTicks: Long,
     ): Boolean {
-        if (!agg.videoPlayer.cinemaModeEnabled) return false
         if (startPositionTicks != 0L) return false
         if (agg.playback.preferredPlayer == PlayerType.EXTERNAL) return false
         if (syncPlayManager.isInSyncPlaySession) return false

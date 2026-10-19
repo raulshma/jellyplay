@@ -74,4 +74,38 @@ class NotificationDispatcherIdTest {
             assert(id >= 5001) { "ID $id should be >= 5001 (NOTIFICATION_ID_BASE)" }
         }
     }
+
+    // ── the series-episode id family ───────────────────────────────
+
+    @Test
+    fun `series episode ID is deterministic per series plus episode`() {
+        val a = NotificationDispatcher.seriesEpisodeNotificationIdFor(seriesId = "s1", episodeId = "ep1")
+        val b = NotificationDispatcher.seriesEpisodeNotificationIdFor(seriesId = "s1", episodeId = "ep1")
+        assertEquals(a, b)
+        assertNotEquals(
+            a,
+            NotificationDispatcher.seriesEpisodeNotificationIdFor(seriesId = "s1", episodeId = "ep2"),
+        )
+        assertNotEquals(
+            a,
+            NotificationDispatcher.seriesEpisodeNotificationIdFor(seriesId = "s2", episodeId = "ep1"),
+        )
+    }
+
+    @Test
+    fun `series episode IDs never collide with the library or push families`() {
+        // The series family sits one slot-family above the push-message family
+        // and far above the per-library blocks — a hashed (series, episode)
+        // pair can never land on another family's id.
+        val libraryTop = NotificationDispatcher.notificationIdFor(libraryId = "any", itemIndex = 511)
+        val seriesIds = (0 until 100).map { idx ->
+            NotificationDispatcher.seriesEpisodeNotificationIdFor(
+                seriesId = "series-$idx",
+                episodeId = "episode-$idx",
+            )
+        }
+        assert(seriesIds.all { it > libraryTop }) {
+            "series ids $seriesIds must sit above the per-library top $libraryTop"
+        }
+    }
 }

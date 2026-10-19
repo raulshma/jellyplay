@@ -9,8 +9,8 @@ import kotlin.test.Test
 
 /**
  * Pins [HomeDialogSession]'s event CASCADES and dismiss-clear ORDERING — the
- * choreography that used to live as untested LaunchedEffect/onDismiss bodies
- * in HomeScreen.
+ * choreography otherwise spread across HomeScreen's LaunchedEffect/onDismiss
+ * bodies.
  */
 class HomeDialogSessionTest {
 

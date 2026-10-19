@@ -155,13 +155,13 @@ class RequestsViewModelLoadGuardTest {
         // initial enrichment has already landed (single-threaded test
         // dispatcher, non-suspending stubs).
         assertEquals(1, movieDetailCalls.size)
-        assertNotNull(viewModel.state.value.mediaInfo[42])
+        assertNotNull(viewModel.mediaInfo.value[42])
 
         viewModel.loadRequests(refresh = true)
         advanceUntilIdle()
 
         // The seen-guard: mediaInfo already holds tmdb 42 → no re-fetch.
         assertEquals(1, movieDetailCalls.size)
-        assertNotNull(viewModel.state.value.mediaInfo[42])
+        assertNotNull(viewModel.mediaInfo.value[42])
     }
 }

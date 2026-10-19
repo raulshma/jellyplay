@@ -149,19 +149,19 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The JellyPlay companion-plugin's settings-sync screen (ADR 0010) — the sync
- * engine's whole UI under one roof, top to bottom: the opt-in toggle + sync-now
- * (the old settings-root rows' mechanism, untouched), the error banner (the
+ * The JellyPlay companion-plugin's settings-sync screen — the sync engine's
+ * whole UI under one roof, top to bottom: the opt-in toggle + sync-now (the
+ * settings-root rows' mechanism), the error banner (the
  * engine's `lastError`/`rejectedKeys` + the snapshot/export action
  * failures), the server-side usage (quota bars + the per-namespace
  * selective-sync toggles with their pending counts), the conflict list (the
  * last cycle's `stale-write` rejects with ours/theirs previews), the merged
  * device list (rename this device, revoke others), this device's resolved
  * profile, the sync history ledger with its retention footer, the server's
- * restore points (each opening the unified restore wizard — Wave 5), and the
+ * restore points (each opening the unified restore wizard), and the
  * namespace-reset / force-re-pull / export / restore-from-file actions (the
- * file arm reroutes into the wizard; the namespace reset captures a Wave-6
- * safety restore point first).
+ * file arm reroutes into the wizard; the namespace reset captures a safety
+ * restore point first).
  *
  * TV (`LocalTvMode`) collapses the screen to its d-pad essentials: the status
  * + sync-now, the error banner, and the namespace toggles only.
@@ -169,9 +169,9 @@ import org.koin.compose.viewmodel.koinViewModel
  * Reachability IS the gate — this screen is only navigated to from the
  * settings root's capability-gated "Sync" entry (plugin probe AVAILABLE + the
  * `settings-sync` meta feature key); the ViewModel still re-checks the gate
- * before each api call. A server whose plugin predates the sync-status wave
- * 404s the usage/history/snapshot reads — those sections degrade to the quiet
- * "unavailable" line, never an error.
+ * before each api call. A server whose plugin does not serve the sync-status
+ * reads 404s the usage/history/snapshot calls — those sections degrade to the
+ * quiet "unavailable" line, never an error.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -194,7 +194,7 @@ fun JellyPlaySyncScreen(
     // manual actions re-pull through the ViewModel.
     LaunchedEffect(Unit) { viewModel.refresh() }
 
-    // Wave 6: the pre-reset safety capture missed — warn once, never block.
+    // The pre-reset safety capture missed — warn once, never block.
     val safetyMissedText = stringResource(Res.string.wizard_safety_snapshot_failed)
     LaunchedEffect(uiState.safetySnapshotMissed) {
         if (uiState.safetySnapshotMissed) {
@@ -230,8 +230,8 @@ fun JellyPlaySyncScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // ── a. Status: the opt-in toggle + the manual sync cycle (the
-            //      declared JellyPlaySyncGroup — ADR 0009 rule 2, one
-            //      projection for the admission total) ──
+            //      declared JellyPlaySyncGroup — one projection for the
+            //      admission total) ──
             item {
                 SettingsItemList(total = rowTotalFor(JellyPlaySyncGroup, RowAdmissionFlags())) {
                     SettingToggleItem(
@@ -262,8 +262,8 @@ fun JellyPlaySyncScreen(
             // ── b. What's synced: quota bars + per-namespace rows (usage +
             //      pending + the selective-sync toggle per active namespace;
             //      TV keeps ONLY the toggle rows — the d-pad essentials). The
-            //      section degrades on the pre-wave 404 — the quiet line,
-            //      never an error. ──
+            //      section degrades on the 404 — the quiet line, never an
+            //      error. ──
             item(key = "usage_label") { SectionLabel(
                     stringResource(Res.string.settings_jellyplay_sync_usage_title),
                     Modifier.padding(top = 8.dp, start = 4.dp),
@@ -278,7 +278,9 @@ fun JellyPlaySyncScreen(
                     item(key = "quota_card") { QuotaCard(status) }
                 }
                 val namespaceRows = if (isTv) uiState.namespaceRows.filter { it.toggleable } else uiState.namespaceRows
-                items(namespaceRows, key = { "ns_${it.ns}" }) { namespace ->
+                items(namespaceRows, key = { "ns_${it.ns}" }, contentType = { row ->
+                    if (row.toggleable) "namespaceToggle" else "namespaceInfo"
+                }) { namespace ->
                     if (namespace.toggleable) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Database,
@@ -301,7 +303,7 @@ fun JellyPlaySyncScreen(
                         stringResource(Res.string.settings_jellyplay_sync_admin_section),
                         Modifier.padding(top = 8.dp, start = 4.dp),
                     ) }
-                    items(adminUsers, key = { "admin_${it.userId}" }) { user ->
+                    items(adminUsers, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
                         SettingInfoItem(
                             icon = Tabler.Outline.Users,
                             title = user.userName.ifBlank { user.userId },
@@ -325,7 +327,7 @@ fun JellyPlaySyncScreen(
                         stringResource(Res.string.settings_jellyplay_sync_conflicts_title),
                         Modifier.padding(top = 8.dp, start = 4.dp),
                     ) }
-                    items(syncState.conflicts, key = { "conflict_${it.ns}/${it.key}" }) { conflict ->
+                    items(syncState.conflicts, key = { "conflict_${it.ns}/${it.key}" }, contentType = { "conflictRow" }) { conflict ->
                         val key = "${conflict.ns}/${conflict.key}"
                         ConflictRow(
                             conflict = conflict,
@@ -345,7 +347,7 @@ fun JellyPlaySyncScreen(
                     stringResource(Res.string.settings_jellyplay_sync_devices_title),
                     Modifier.padding(top = 8.dp, start = 4.dp),
                 ) }
-                items(uiState.devices, key = { it.deviceId }) { device ->
+                items(uiState.devices, key = { it.deviceId }, contentType = { "deviceRow" }) { device ->
                     val lastSync = device.lastSyncAt
                         ?.let { stringResource(Res.string.settings_jellyplay_sync_device_last_sync, formatSyncTimestamp(it)) }
                         ?: stringResource(Res.string.settings_sync_never)
@@ -396,7 +398,7 @@ fun JellyPlaySyncScreen(
                     if (uiState.history.isEmpty()) {
                         item(key = "history_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_history_empty)) }
                     } else {
-                        items(uiState.history, key = { it.seq }) { entry ->
+                        items(uiState.history, key = { it.seq }, contentType = { "historyRow" }) { entry ->
                             HistoryRow(
                                 entry = entry,
                                 expanded = uiState.expandedHistorySeq == entry.seq,
@@ -432,7 +434,7 @@ fun JellyPlaySyncScreen(
                     if (snapshots.isEmpty()) {
                         item(key = "snapshots_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_snapshots_empty)) }
                     } else {
-                        items(snapshots, key = { "snapshot_${it.id}" }) { snapshot ->
+                        items(snapshots, key = { "snapshot_${it.id}" }, contentType = { "snapshotRow" }) { snapshot ->
                             SettingListItem(
                                 icon = Tabler.Outline.Clock,
                                 title = stringResource(
@@ -450,10 +452,9 @@ fun JellyPlaySyncScreen(
                 }
 
                 // ── h. Actions: the destructive namespace reset (confirmed;
-                //      Wave-6 safety capture inside the VM), the pull-dominant
+                //      safety capture inside the VM), the pull-dominant
                 //      recovery cycle, the JSON export, and the restore-from-
-                //      file entry (rerouted into the unified restore wizard —
-                //      Wave 5; the old in-screen import confirm is gone). ──
+                //      file entry (routed into the unified restore wizard). ──
                 item(key = "actions_label") { SectionLabel(
                     stringResource(Res.string.settings_jellyplay_sync_actions_title),
                     Modifier.padding(top = 8.dp, start = 4.dp),
@@ -736,7 +737,7 @@ private fun QuotaBar(label: String, ratio: Float) {
  * caches per seq). The expanded block reads:
  *  - the changed keys as `ns/key` lines with a relative `updatedAt`,
  *  - "No key changes" when the server holds no diff (reset rows),
- *  - a quiet "—" when the detail never landed (the pre-wave 404, a failed
+ *  - a quiet "—" when the detail never landed (a 404, a failed
  *    read — degrade, never an error), a "Loading changes…" line in flight.
  */
 @Composable
@@ -804,7 +805,7 @@ private fun HistoryKeyDiff(detail: JellyPlaySyncHistoryKeyDetail?) {
     }
 }
 
-/** The wire ops' declared faces: icon + label resource keyed by the op string (ADR-0009's rows-own-faces, per wire op). */
+/** The wire ops' declared faces: icon + label resource keyed by the op string (rows own their faces, per wire op). */
 private val SyncOpFaces = mapOf(
     "push" to (Tabler.Outline.Upload to Res.string.settings_jellyplay_sync_op_push),
     "pull" to (Tabler.Outline.ArrowDown to Res.string.settings_jellyplay_sync_op_pull),

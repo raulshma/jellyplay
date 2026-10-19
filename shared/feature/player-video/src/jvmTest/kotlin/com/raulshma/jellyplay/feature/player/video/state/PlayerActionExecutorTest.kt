@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerUiEvent
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
@@ -75,6 +76,24 @@ class PlayerActionExecutorTest {
         var durationMs: Long = 120_000L,
     )
 
+    /** Recording chrome fixture: the visibility writes land in [Probe] exactly like the old setShowControls port did. The auto-hide timer rides the test scope (virtual time, auto-cancelled). */
+    private fun chrome(
+        scope: CoroutineScope,
+        inputs: Inputs,
+        probe: Probe,
+    ): PlayerChromeController = PlayerChromeController(
+        scope = scope,
+        isVisibleNow = { inputs.showControls },
+        applyVisible = {
+            inputs.showControls = it
+            probe.showControlsWrites += it
+        },
+        isTv = { false },
+        controlsTimeoutMs = { 5_000L },
+        isSheetOpen = { false },
+        hideOsdOnPause = { inputs.hideOsdOnPause },
+    )
+
     private fun gestureController(
         scope: CoroutineScope,
         probe: Probe,
@@ -102,9 +121,8 @@ class PlayerActionExecutorTest {
         gestures: GestureSeekController = gestureController(scope, probe),
     ): PlayerActionExecutor = PlayerActionExecutor(
         getInputMap = { inputs.map },
-        getShowControls = { inputs.showControls },
+        chrome = chrome(scope, inputs, probe),
         getIsPlaying = { inputs.isPlaying },
-        getHideOsdOnPause = { inputs.hideOsdOnPause },
         getPlaybackSpeed = { inputs.playbackSpeed },
         getSubtitleOffsetMs = { inputs.subtitleOffsetMs },
         getSupportsAudioDelay = { inputs.supportsAudioDelay },
@@ -125,10 +143,6 @@ class PlayerActionExecutorTest {
         onUiEvent = { probe.events += it },
         doSeekForward = { probe.seekForwards++ },
         doSeekBack = { probe.seekBacks++ },
-        setShowControls = {
-            inputs.showControls = it
-            probe.showControlsWrites += it
-        },
         setShowDelayOverlay = { probe.delayOverlayWrites += it },
         onBack = { probe.backs++ },
         onScreenshotClick = { probe.screenshots++ },

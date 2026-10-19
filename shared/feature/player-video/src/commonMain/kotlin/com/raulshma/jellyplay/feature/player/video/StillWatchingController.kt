@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Owns the "Still watching?" confirm overlay's prompt lifecycle (feature 1.3)
  * — the cluster extracted from [VideoPlayerViewModel] (the
- * [EpisodeContinuationController] shape): the prompt StateFlow and the
+ * [UpNextController] shape): the prompt StateFlow and the
  * show / continue / stop / tick choreography, moved verbatim.
  *
  * The pure decisions stay beside it: [StillWatchingGate] (when the overlay
@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * hours arm consult it) and [StillWatchingPromptState] (the countdown fold).
  * This controller is the stateful half — callers decide WHEN and call
  * [show]; it owns what Continue/Stop/expiry then DO, over narrow constructor
- * lambdas (no [VideoPlayerUiState] handle — the god-count ratchet is
+ * lambdas (no [VideoPlayerUiState] handle — the god-count guard is
  * unmoved). Pinned by [StillWatchingControllerTest].
  */
 internal class StillWatchingController(
@@ -56,7 +56,7 @@ internal class StillWatchingController(
      * "Still watching?" → Continue: the counter resets and the requested arm
      * proceeds — the episode arm advances to the next episode, the hours arm
      * resumes the (session-paused) engine. A missing reason (defensive) rides
-     * the hours arm's resume, matching the pre-extraction body.
+     * the hours arm's resume, matching the original body.
      */
     fun onContinue() {
         val reason = _prompt.value?.reason

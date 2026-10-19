@@ -74,6 +74,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorSt
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.defaultGridCacheWindow
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_all
@@ -82,6 +83,7 @@ import com.raulshma.jellyplay.feature.library.generated.resources.library_favori
 import com.raulshma.jellyplay.feature.library.generated.resources.library_no_favorites
 import com.raulshma.jellyplay.feature.library.generated.resources.library_no_favorites_description
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun FavoritesScreen(
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
@@ -110,7 +112,7 @@ internal fun FavoritesScreen(
 
     // Long-press / TV-Menu quick actions for favorite cards, on the shared
     // intake (core/ui — see QuickActionIntake). Download / Remove download
-    // ride the same intake as the library grid (#147): a downloaded favorite
+    // ride the same intake as the library grid: a downloaded favorite
     // flips the slot to "Remove download".
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
@@ -173,7 +175,9 @@ internal fun FavoritesScreen(
             PagedCollectionGrid(
                 items = pagingItems,
                 itemKey = { it.id },
-                state = rememberLazyGridState(),
+                // Device-class default cache window: the override supplies the
+                // platform default instead of dropping the window entirely.
+                state = rememberLazyGridState(cacheWindow = defaultGridCacheWindow()),
                 columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
                 contentPadding = PaddingValues(
                     top = 8.dp,

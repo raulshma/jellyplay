@@ -18,7 +18,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The settings SSE stream's resume contract (the Phase 1 `Last-Event-ID` wave):
+ * The settings SSE stream's resume contract:
  * a non-zero `resumeFromEventId` rides the `Last-Event-ID` header so the
  * seq-anchored server replays the disconnect gap, zero/omitted stays the
  * byte-identical legacy connect — and the hand-rolled parser still delivers

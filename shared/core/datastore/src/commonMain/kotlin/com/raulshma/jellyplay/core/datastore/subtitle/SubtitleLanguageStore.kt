@@ -6,13 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +28,29 @@ import kotlinx.serialization.Serializable
  * projection (with JSON-decode memoisation), and its reset-key list end-to-end.
  * Mirrors the `PlaybackStore` / `AppearanceStore` shape.
  *
+ * **Spec derivation:** every key this store owns is declared exactly
+ * once as a row in [SubtitlePreferenceSpecs] (wire name, default, reset
+ * category, read/write encoding) and the machinery below is derived from those
+ * rows — each [Keys] member rebuilds its row's typed key from the row's wire
+ * name, each [read] projection row delegates to its row encoding, the
+ * plain-typed setters and the style-blob rows of [restore] delegate to the
+ * rows' derived writes, and [resetKeysFor] filters the rows by reset category.
+ * The blob decode memoisation lives in the rows, beside the key it applies
+ * to — every blob keeps the store's `MemoizeNull` policy (see
+ * [SubtitlePreferenceSpecs]).
+ *
+ * **Hand-written residuals (the documented opt-outs — a row encoding writes a
+ * slot, it cannot remove one or carry per-item semantics):**
+ *  - [setPreferredSubtitleLanguage] / [setPreferredAudioLanguage] /
+ *    [setAppLanguage] keep the set-or-remove dance (their rows are plain
+ *    [PreferenceSpec.string] declarations);
+ *  - [setSubtitleDelayForItem] keeps the read-modify-write LRU invariant (a
+ *    `delayMs == 0` REMOVES its entry so the map does not grow unbounded);
+ *  - [setSubtitleStylePresets] / [setTrackSelectionRules] keep the
+ *    identity-by-absence removals, and [restore] keeps their (and the delay
+ *    map's) hand write lines — restore writes the value verbatim, even the
+ *    identity/empty one the setters would remove.
+ *
  * **Per-item-delay invariant owned here:** [setSubtitleDelayForItem] maintains a
  * JSON map under `subtitle_delay_by_item`; a `delayMs == 0` **removes** the
  * entry so the map does not grow unbounded with neutral values.
@@ -45,34 +65,30 @@ class SubtitleLanguageStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [SubtitlePreferenceSpecs] row — the member rebuilds the row's typed key
+     * from the row's single-declared wire name (`Preferences.Key` equality is
+     * name-based, so these interoperate with any hand-built key of the same
+     * name). Kept as a plain object rather than folded into the rows because
+     * it is the reflection anchor for the JVM reset-coverage guard and the
+     * key-identity reference for the hand-written invariant setters below.
+     */
     internal object Keys {
-        val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
-        val SUBTITLES_FORCED_ONLY = booleanPreferencesKey("subtitles_forced_only")
-        val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
-        val SUBTITLE_DELAY_BY_ITEM = stringPreferencesKey("subtitle_delay_by_item")
-        val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
-        val SUBTITLE_PREVIEW_IN_SETTINGS = booleanPreferencesKey("subtitle_preview_in_settings")
-        val PREFER_AUDIO_DESCRIPTION = booleanPreferencesKey("prefer_audio_description")
-        val HIGH_CONTRAST_SUBTITLES = booleanPreferencesKey("high_contrast_subtitles")
-        val APP_LANGUAGE = stringPreferencesKey("app_language")
-        val HDR_SUBTITLE_STYLE_ENABLED = booleanPreferencesKey("hdr_subtitle_style_enabled")
-        val HDR_SUBTITLE_STYLE = stringPreferencesKey("hdr_subtitle_style")
-        val TRACK_SELECTION_RULES = stringPreferencesKey("track_selection_rules")
-        val SUBTITLE_STYLE_PRESETS = stringPreferencesKey("subtitle_style_presets")
+        val PREFERRED_SUBTITLE_LANG = stringPreferencesKey(SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.keyName)
+        val SUBTITLES_FORCED_ONLY = booleanPreferencesKey(SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.keyName)
+        val PREFERRED_AUDIO_LANG = stringPreferencesKey(SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.keyName)
+        val SUBTITLE_DELAY_BY_ITEM = stringPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.keyName)
+        val SUBTITLE_STYLE = stringPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_STYLE.keyName)
+        val SUBTITLE_PREVIEW_IN_SETTINGS = booleanPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_PREVIEW_IN_SETTINGS.keyName)
+        val PREFER_AUDIO_DESCRIPTION = booleanPreferencesKey(SubtitlePreferenceSpecs.PREFER_AUDIO_DESCRIPTION.keyName)
+        val HIGH_CONTRAST_SUBTITLES = booleanPreferencesKey(SubtitlePreferenceSpecs.HIGH_CONTRAST_SUBTITLES.keyName)
+        val APP_LANGUAGE = stringPreferencesKey(SubtitlePreferenceSpecs.APP_LANGUAGE.keyName)
+        val HDR_SUBTITLE_STYLE_ENABLED = booleanPreferencesKey(SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE_ENABLED.keyName)
+        val HDR_SUBTITLE_STYLE = stringPreferencesKey(SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.keyName)
+        val TRACK_SELECTION_RULES = stringPreferencesKey(SubtitlePreferenceSpecs.TRACK_SELECTION_RULES.keyName)
+        val SUBTITLE_STYLE_PRESETS = stringPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.keyName)
     }
-
-    /** Memoised decode of the SDR subtitle style blob. */
-    private var cachedSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
-    /** Memoised decode of the HDR subtitle style blob. */
-    private var cachedHdrSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
-    /** Memoised decode of the per-item subtitle delay map blob. */
-    private var cachedSubtitleDelayByItem: ParsedCache<Map<String, Long>> = ParsedCache(null, emptyMap())
-    /** Memoised decode of the track-language rule-set blob. */
-    private var cachedTrackSelectionRules: ParsedCache<LanguageRuleSet> =
-        ParsedCache(null, LanguageRuleSet())
-    /** Memoised decode of the user-named subtitle style preset list blob. */
-    private var cachedSubtitleStylePresets: ParsedCache<List<SubtitleStylePreset>> =
-        ParsedCache(null, emptyList())
 
     /**
      * The subtitle &amp; language preference slice, derived directly from the raw
@@ -84,91 +100,31 @@ class SubtitleLanguageStore constructor(
 
     /**
      * Pure read of the subtitle &amp; language fields from a raw [Preferences]
-     * snapshot. Exposed so the facade can fold these into the whole-
+     * snapshot, each field delegated to its [SubtitlePreferenceSpecs] row
+     * encoding. Exposed so the facade can fold these into the whole-
      * `UserPreferences` projection without duplicating the read logic.
      */
-    internal fun read(prefs: Preferences): SubtitleSlice {
-        // MemoizeNull (this store's pre-promotion policy at every site): a
-        // null raw is a cacheable input — the nullable style blobs memoise
-        // their null "absent" result exactly like the non-null map blob does.
-        val subtitleStyle = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.SUBTITLE_STYLE],
-            cache = cachedSubtitleStyle,
-            default = null,
-            parse = { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) },
-            cacheRef = { cachedSubtitleStyle = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val hdrSubtitleStyle = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.HDR_SUBTITLE_STYLE],
-            cache = cachedHdrSubtitleStyle,
-            default = null,
-            parse = { PreferenceCodec.json.decodeFromString<SubtitleStyle>(it) },
-            cacheRef = { cachedHdrSubtitleStyle = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val subtitleDelayByItem = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM],
-            cache = cachedSubtitleDelayByItem,
-            default = emptyMap(),
-            parse = { PreferenceCodec.json.decodeFromString<Map<String, Long>>(it) },
-            cacheRef = { cachedSubtitleDelayByItem = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val trackSelectionRules = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.TRACK_SELECTION_RULES],
-            cache = cachedTrackSelectionRules,
-            default = LanguageRuleSet(),
-            parse = { PreferenceCodec.json.decodeFromString<LanguageRuleSet>(it) },
-            cacheRef = { cachedTrackSelectionRules = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        // Absent-key fast path: skip the decode machinery entirely when no
-        // preset blob exists (the default install) so the per-emission read
-        // cost is unchanged from before the field landed.
-        val subtitleStylePresets = prefs[Keys.SUBTITLE_STYLE_PRESETS]
-            ?.let { raw ->
-                PreferenceCodec.cachedJson(
-                    raw = raw,
-                    cache = cachedSubtitleStylePresets,
-                    default = emptyList(),
-                    parse = {
-                        PreferenceCodec.json.decodeFromString<List<SubtitleStylePreset>>(it)
-                    },
-                    cacheRef = { cachedSubtitleStylePresets = it },
-                    nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-                )
-            }
-            ?: emptyList()
-
-        return SubtitleSlice(
-            preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
-            subtitlesForcedOnly = PreferenceCodec.readBool(prefs, Keys.SUBTITLES_FORCED_ONLY, "subtitles_forced_only", false),
-            preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
-            subtitleDelayByItem = subtitleDelayByItem,
-            languageRules = trackSelectionRules,
-            subtitleStyle = subtitleStyle ?: SubtitleStyle(),
-            subtitlePreviewInSettings = PreferenceCodec.readBool(prefs, Keys.SUBTITLE_PREVIEW_IN_SETTINGS, "subtitle_preview_in_settings", true),
-            preferAudioDescription = PreferenceCodec.readBool(prefs, Keys.PREFER_AUDIO_DESCRIPTION, "prefer_audio_description", false),
-            highContrastSubtitles = PreferenceCodec.readBool(prefs, Keys.HIGH_CONTRAST_SUBTITLES, "high_contrast_subtitles", false),
-            appLanguage = prefs[Keys.APP_LANGUAGE],
-            hdrSubtitleStyleEnabled = PreferenceCodec.readBool(prefs, Keys.HDR_SUBTITLE_STYLE_ENABLED, "hdr_subtitle_style_enabled", false),
-            hdrSubtitleStyle = hdrSubtitleStyle ?: SubtitleStyle(
-                fontSize = 28,
-                backgroundOpacity = 0.5f,
-                edgeType = SubtitleEdgeType.OUTLINE,
-            ),
-            userStylePresets = subtitleStylePresets,
-        )
-    }
+    internal fun read(prefs: Preferences): SubtitleSlice = SubtitleSlice(
+        preferredSubtitleLanguage = SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.readStored(prefs),
+        subtitlesForcedOnly = SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.readFrom(prefs),
+        preferredAudioLanguage = SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.readStored(prefs),
+        subtitleDelayByItem = SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.readFrom(prefs),
+        languageRules = SubtitlePreferenceSpecs.TRACK_SELECTION_RULES.readFrom(prefs),
+        subtitleStyle = SubtitlePreferenceSpecs.SUBTITLE_STYLE.readFrom(prefs),
+        subtitlePreviewInSettings = SubtitlePreferenceSpecs.SUBTITLE_PREVIEW_IN_SETTINGS.readFrom(prefs),
+        preferAudioDescription = SubtitlePreferenceSpecs.PREFER_AUDIO_DESCRIPTION.readFrom(prefs),
+        highContrastSubtitles = SubtitlePreferenceSpecs.HIGH_CONTRAST_SUBTITLES.readFrom(prefs),
+        appLanguage = SubtitlePreferenceSpecs.APP_LANGUAGE.readStored(prefs),
+        hdrSubtitleStyleEnabled = SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE_ENABLED.readFrom(prefs),
+        hdrSubtitleStyle = SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.readFrom(prefs),
+        userStylePresets = SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.readFrom(prefs),
+    )
 
     // ------------------------------------------------------------------
-    // Setters — the per-item-delay invariant lives here, behind a narrow
-    // surface.
+    // Setters — plain-typed setters delegate to their row's derived write
+    // (the encoding — JSON blob — is the row's, not re-declared here); the
+    // set-or-remove language overrides and the invariant blobs live below,
+    // hand-written.
     // ------------------------------------------------------------------
 
     suspend fun setPreferredSubtitleLanguage(language: String?) {
@@ -186,11 +142,11 @@ class SubtitleLanguageStore constructor(
     }
 
     suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
-        dataStore.edit { it[Keys.SUBTITLES_FORCED_ONLY] = enabled }
+        dataStore.edit { SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.writeTo(it, enabled) }
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
-        dataStore.edit { it[Keys.SUBTITLE_STYLE] = PreferenceCodec.json.encodeToString(style) }
+        dataStore.edit { SubtitlePreferenceSpecs.SUBTITLE_STYLE.writeTo(it, style) }
     }
 
     /**
@@ -211,23 +167,23 @@ class SubtitleLanguageStore constructor(
     }
 
     suspend fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE_ENABLED] = enabled }
+        dataStore.edit { SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setHdrSubtitleStyle(style: SubtitleStyle) {
-        dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE] = PreferenceCodec.json.encodeToString(style) }
+        dataStore.edit { SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.writeTo(it, style) }
     }
 
     suspend fun setHighContrastSubtitles(enabled: Boolean) {
-        dataStore.edit { it[Keys.HIGH_CONTRAST_SUBTITLES] = enabled }
+        dataStore.edit { SubtitlePreferenceSpecs.HIGH_CONTRAST_SUBTITLES.writeTo(it, enabled) }
     }
 
     suspend fun setSubtitlePreviewInSettings(enabled: Boolean) {
-        dataStore.edit { it[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = enabled }
+        dataStore.edit { SubtitlePreferenceSpecs.SUBTITLE_PREVIEW_IN_SETTINGS.writeTo(it, enabled) }
     }
 
     suspend fun setPreferAudioDescription(enabled: Boolean) {
-        dataStore.edit { it[Keys.PREFER_AUDIO_DESCRIPTION] = enabled }
+        dataStore.edit { SubtitlePreferenceSpecs.PREFER_AUDIO_DESCRIPTION.writeTo(it, enabled) }
     }
 
     suspend fun setAppLanguage(language: String?) {
@@ -280,59 +236,38 @@ class SubtitleLanguageStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. The subtitle/audio/track keys sit in
-     * `PreferenceResetCategory.SUBTITLES_LANGUAGE`; the in-app language and
-     * audio-description toggles are app-wide (`MISC_APP`), matching the
-     * facade's `resetCategoryKeys`.
+     * [category] — the [SubtitlePreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. The subtitle/audio/track
+     * keys sit in `PreferenceResetCategory.SUBTITLES_LANGUAGE`; the in-app
+     * language and audio-description toggles are app-wide (`MISC_APP`),
+     * matching the facade's `resetCategoryKeys`.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(
-            Keys.PREFERRED_SUBTITLE_LANG,
-            Keys.PREFERRED_AUDIO_LANG,
-            Keys.SUBTITLES_FORCED_ONLY,
-            Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
-            Keys.SUBTITLE_STYLE,
-            Keys.HIGH_CONTRAST_SUBTITLES,
-            Keys.HDR_SUBTITLE_STYLE_ENABLED,
-            Keys.HDR_SUBTITLE_STYLE,
-            Keys.SUBTITLE_DELAY_BY_ITEM,
-            Keys.TRACK_SELECTION_RULES,
-            Keys.SUBTITLE_STYLE_PRESETS,
-        )
-        PreferenceResetCategory.MISC_APP -> listOf(
-            Keys.APP_LANGUAGE,
-            Keys.PREFER_AUDIO_DESCRIPTION,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        SubtitlePreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences] (nullable
-     * language guards + JSON map/style round-trips with defaults).
+     * DataStore — the plain-typed fields and the two style blobs via their
+     * row's derived write (the same encoding the row reads with), the nullable
+     * language guards and the opted-out blobs via the hand lines whose
+     * semantics a row encoding cannot carry (see the class KDoc).
      */
     suspend fun restore(slice: SubtitleSlice) {
         dataStore.edit { prefs ->
             slice.preferredSubtitleLanguage?.let { prefs[Keys.PREFERRED_SUBTITLE_LANG] = it }
-            prefs[Keys.SUBTITLES_FORCED_ONLY] = slice.subtitlesForcedOnly
+            SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.writeTo(prefs, slice.subtitlesForcedOnly)
             slice.preferredAudioLanguage?.let { prefs[Keys.PREFERRED_AUDIO_LANG] = it }
             prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = PreferenceCodec.encodeDefaultsJson.encodeToString(
                 kotlinx.serialization.serializer<Map<String, Long>>(),
                 slice.subtitleDelayByItem,
             )
-            prefs[Keys.SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<SubtitleStyle>(),
-                slice.subtitleStyle,
-            )
-            prefs[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = slice.subtitlePreviewInSettings
-            prefs[Keys.PREFER_AUDIO_DESCRIPTION] = slice.preferAudioDescription
-            prefs[Keys.HIGH_CONTRAST_SUBTITLES] = slice.highContrastSubtitles
+            SubtitlePreferenceSpecs.SUBTITLE_STYLE.writeTo(prefs, slice.subtitleStyle)
+            SubtitlePreferenceSpecs.SUBTITLE_PREVIEW_IN_SETTINGS.writeTo(prefs, slice.subtitlePreviewInSettings)
+            SubtitlePreferenceSpecs.PREFER_AUDIO_DESCRIPTION.writeTo(prefs, slice.preferAudioDescription)
+            SubtitlePreferenceSpecs.HIGH_CONTRAST_SUBTITLES.writeTo(prefs, slice.highContrastSubtitles)
             slice.appLanguage?.let { prefs[Keys.APP_LANGUAGE] = it }
-            prefs[Keys.HDR_SUBTITLE_STYLE_ENABLED] = slice.hdrSubtitleStyleEnabled
-            prefs[Keys.HDR_SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<SubtitleStyle>(),
-                slice.hdrSubtitleStyle,
-            )
+            SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE_ENABLED.writeTo(prefs, slice.hdrSubtitleStyleEnabled)
+            SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.writeTo(prefs, slice.hdrSubtitleStyle)
             prefs[Keys.TRACK_SELECTION_RULES] = PreferenceCodec.encodeDefaultsJson.encodeToString(
                 kotlinx.serialization.serializer<LanguageRuleSet>(),
                 slice.languageRules,
@@ -347,32 +282,34 @@ class SubtitleLanguageStore constructor(
 
 /**
  * The subtitle &amp; language preference slice. Plain data class (Compose-free) so
- * the datastore module stays framework-light. Defaults mirror the projection
- * defaults in [SubtitleLanguageStore.read].
+ * the datastore module stays framework-light. Every default IS its
+ * [SubtitlePreferenceSpecs] row's declared default — read off the row via a
+ * plain accessor, so a preference's default is stated once, in its spec, and
+ * cannot drift between the spec (what an absent key reads) and the slice (what
+ * a fresh in-memory instance serves). The HDR style default is the spec's
+ * [DEFAULT_HDR_SUBTITLE_STYLE]. The
+ * spec-default equality is pinned field-for-field by
+ * `SubtitleSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class SubtitleSlice(
-    val preferredSubtitleLanguage: String? = null,
-    val subtitlesForcedOnly: Boolean = false,
-    val preferredAudioLanguage: String? = null,
-    val subtitleDelayByItem: Map<String, Long> = emptyMap(),
+    val preferredSubtitleLanguage: String? = SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.default,
+    val subtitlesForcedOnly: Boolean = SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.default,
+    val preferredAudioLanguage: String? = SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.default,
+    val subtitleDelayByItem: Map<String, Long> = SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.default,
     /** The track-language rule set; the default instance is the inert identity. */
-    val languageRules: LanguageRuleSet = LanguageRuleSet(),
-    val subtitleStyle: SubtitleStyle = SubtitleStyle(),
-    val subtitlePreviewInSettings: Boolean = true,
-    val preferAudioDescription: Boolean = false,
-    val highContrastSubtitles: Boolean = false,
-    val appLanguage: String? = null,
-    val hdrSubtitleStyleEnabled: Boolean = false,
-    val hdrSubtitleStyle: SubtitleStyle = SubtitleStyle(
-        fontSize = 28,
-        backgroundOpacity = 0.5f,
-        edgeType = SubtitleEdgeType.OUTLINE,
-    ),
+    val languageRules: LanguageRuleSet = SubtitlePreferenceSpecs.TRACK_SELECTION_RULES.default,
+    val subtitleStyle: SubtitleStyle = SubtitlePreferenceSpecs.SUBTITLE_STYLE.default,
+    val subtitlePreviewInSettings: Boolean = SubtitlePreferenceSpecs.SUBTITLE_PREVIEW_IN_SETTINGS.default,
+    val preferAudioDescription: Boolean = SubtitlePreferenceSpecs.PREFER_AUDIO_DESCRIPTION.default,
+    val highContrastSubtitles: Boolean = SubtitlePreferenceSpecs.HIGH_CONTRAST_SUBTITLES.default,
+    val appLanguage: String? = SubtitlePreferenceSpecs.APP_LANGUAGE.default,
+    val hdrSubtitleStyleEnabled: Boolean = SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE_ENABLED.default,
+    val hdrSubtitleStyle: SubtitleStyle = SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.default,
     /**
      * The user-named subtitle style presets. Absent-by-default so the
      * v2 backup slice decodes unchanged on older data (unknown keys ignored).
      */
-    val userStylePresets: List<SubtitleStylePreset> = emptyList(),
+    val userStylePresets: List<SubtitleStylePreset> = SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.default,
 )

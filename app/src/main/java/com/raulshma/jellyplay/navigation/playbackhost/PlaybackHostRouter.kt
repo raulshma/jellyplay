@@ -56,18 +56,17 @@ object PlaybackHostRouter {
 
         // Live TV quirk (deliberate, pinned by test): hands off to an external
         // app when EXTERNAL is preferred; every other engine choice mounts in
-        // the dedicated activity below (live PiP restored by
-        // hosting live playback in PlayerActivity, whose full PiP apparatus
-        // MainActivity can't offer since 55cd569f8 removed its
-        // supportsPictureInPicture).
+        // the dedicated activity below. PlayerActivity hosts live playback so
+        // it brings its full PiP apparatus, which MainActivity (no
+        // supportsPictureInPicture) cannot offer.
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
             HostDecision.ExternalPlayer(ExternalPlayerRequest(route.channelId))
 
         // PIN/biometric gate: PlayerActivity enforces
-        // MainActivity's lock itself now — its onCreate/onNewIntent redirect
+        // MainActivity's lock itself — its onCreate/onNewIntent redirect
         // to MainActivity (whose gate renders the lock screen) while a lock
         // is configured and the app-scoped AppLockState says locked, so the
-        // media-notification class-name PendingIntent no longer reaches
+        // media-notification class-name PendingIntent cannot reach
         // playback without a challenge. The router stays lock-blind by
         // design: the gate is a host-activity concern
         // (AppLockRedirect.shouldRedirect), not a routing input — gating the
@@ -81,14 +80,15 @@ object PlaybackHostRouter {
                     startPositionTicks = route.startPositionTicks,
                     subtitleStreamIndex = route.subtitleStreamIndex,
                     audioStreamIndex = route.audioStreamIndex,
+                    forceStream = route.forceStream,
                 ),
             )
 
-        // Live PiP: Live TV moved out of the nav shell — the
-        // dedicated PlayerActivity hosts LivePlayerScreen, whose PiP apparatus
-        // (auto-enter on home, remote actions, aspect-shaped window) serves
-        // live through the live VM's PipController seam. LivePlayerScreen
-        // keeps its engine lifecycle across channel zaps inside that host
+        // Live PiP: the dedicated PlayerActivity hosts LivePlayerScreen, whose
+        // PiP apparatus (auto-enter on home, remote actions, aspect-shaped
+        // window) serves live through the live VM's PipController seam.
+        // LivePlayerScreen keeps its engine lifecycle across channel zaps
+        // inside that host
         // (the reused engine survives a zap; a route swap re-tunes via
         // PlayerActivity.onNewIntent).
         route is Route.LiveTvChannelPlayer ->

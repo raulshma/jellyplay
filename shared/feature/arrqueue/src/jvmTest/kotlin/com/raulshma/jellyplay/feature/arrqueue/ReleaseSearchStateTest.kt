@@ -9,13 +9,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins the release sheet's pure reducer ([ReleaseSearchStateMachine]) — the
- * ArrQueuePresentationTest precedent: the machine carries every transition
- * rule, the screen only draws. Covers the search lifecycle (Loading →
- * Results/Empty/CacheMiss/Error, "Search again" keeping the sort), the info
- * expand toggle, and the grab arm (request → confirm → start → success/fail,
- * including FAILED badges outranking GRABBED, which the machine's input map
- * already carries — pinned here so the badge contract stays visible).
+ * Pins the release sheet's pure reducer ([ReleaseSearchStateMachine]): the
+ * machine carries every transition rule, the screen only draws. Covers the
+ * search lifecycle (Loading → Results/Empty/CacheMiss/Error, "Search again"
+ * keeping the sort), the info expand toggle, and the grab arm (request →
+ * confirm → start → success/fail, including FAILED badges outranking GRABBED,
+ * which the machine's input map already carries — pinned here so the badge
+ * contract stays visible).
  */
 class ReleaseSearchStateTest {
 

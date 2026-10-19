@@ -82,7 +82,7 @@ class WidgetConfigViewModel(
 
     /**
      * One home for the read-copy-write + per-widget-or-global persist shape that
-     * every setter above used to duplicate. Routes the updated [WidgetConfig]
+     * every setter above would otherwise duplicate. Routes the updated [WidgetConfig]
      * to the per-instance store when [appWidgetId] is set, otherwise to the
      * global default.
      */

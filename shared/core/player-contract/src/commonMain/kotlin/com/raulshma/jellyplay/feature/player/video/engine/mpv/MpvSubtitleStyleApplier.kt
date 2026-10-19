@@ -27,7 +27,7 @@ enum class MpvSubtitleStylePhase {
  *
  * Contract: implementations ABSORB their platform's write failures (log + no
  * rethrow) — the applier's choreography is exception-free by construction.
- * Ownership gating (issue #165) does NOT live here: the applier owns it, so
+ * Ownership gating does NOT live here: the applier owns it, so
  * no scalar write site can forget the check the pair lists get from
  * [MpvUserSubtitleKeys.filterOwned].
  */

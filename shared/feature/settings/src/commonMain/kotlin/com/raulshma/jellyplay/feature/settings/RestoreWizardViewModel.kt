@@ -66,7 +66,7 @@ data class FileCategoryGroup(
     val total: Int,
 )
 
-/** One Wave-2 external slice card's rendered face (same register as the categories). */
+/** One external slice card's rendered face (same register as the categories). */
 @androidx.compose.runtime.Immutable
 data class ExternalSliceGroup(
     val key: String,
@@ -101,8 +101,8 @@ data class FileRestoreState(
     val selection: FileSelection = FileSelection(),
     /** The lock-config opt-in (defaults off; the row renders only when [hasSecuritySensitive]). */
     val restoreSecuritySensitive: Boolean = false,
-    // ── Wave-3 secrets block: locked until the passphrase unlocks it; the
-    //    apply rides its own explicit confirm, never another apply arm. ──
+    // ── Secrets block: locked until the passphrase unlocks it; the apply
+    //    rides its own explicit confirm, never another apply arm. ──
     val hasSecrets: Boolean = false,
     val secretsUnlocked: SecretsRestoreSummary? = null,
     val secretsUnlocking: Boolean = false,
@@ -151,18 +151,18 @@ data class RestoreWizardUiState(
 )
 
 /**
- * The unified restore wizard's model (Wave 5): ONE flow for restoring settings
+ * The unified restore wizard's model: ONE flow for restoring settings
  * regardless of source — pick source (server restore point / backup file) →
  * diff vs the live state → select categories (two-tier) → confirm
  * (destructive + cross-account + passphrase) → automatic pre-apply snapshot
- * (Wave 6 hook #1) → apply → done.
+ * → apply → done.
  *
- * Replaces the retired `ImportPreviewViewModel` (its parser/diff/restore logic
- * is ported verbatim — the seams it rode stay: [BackupParser],
- * [PreferenceSnapshotReader], [UserPreferencesStore.restoreV2Categories] /
+ * The file arm's parser/diff/restore logic rides the store seams:
+ * [BackupParser], [PreferenceSnapshotReader],
+ * [UserPreferencesStore.restoreV2Categories] /
  * [UserPreferencesStore.restoreExternalSlice] / [UserPreferencesStore.restoreExtras],
- * [SecretsBackupAssembler]) and absorbs the sync screen's import-from-file and
- * one-click snapshot restore rows.
+ * [SecretsBackupAssembler]; the sync screen's import-from-file and one-click
+ * snapshot restore entries route into the wizard.
  *
  * The SERVER arm diffs the restore point's rows against the CURRENT server
  * state (`exportSettings()` bundle, parsed client-side) and applies as ONE
@@ -182,17 +182,17 @@ class RestoreWizardViewModel(
     private val settingsBackupIo: SettingsBackupIo,
     private val userPreferencesStore: UserPreferencesStore,
     private val snapshotReader: PreferenceSnapshotReader,
-    /** The Wave-3 secrets seam (unlock preview counts + explicit apply fan-out). */
+    /** The secrets seam (unlock preview counts + explicit apply fan-out). */
     private val secretsBackupAssembler: SecretsBackupAssembler? = null,
     /** The server arm's routes — null in file-only graphs (the server arm degrades off). */
     private val pluginApiClient: JellyPlaySettingsSyncRoutes? = null,
-    /** The gate seam the server arm re-checks before every call (ADR 0010). */
+    /** The gate seam the server arm re-checks before every call (the plugin-gating contract). */
     private val statusStore: JellyPlayPluginStatusStore? = null,
     /** The trailing `requestSync()` + this device's registry id for apply attribution. */
     private val syncRepository: ProfileSyncRepository? = null,
     /** Session identity — the cross-account warning vs the staged backup's origin ids. */
     private val serverIdentityStore: ServerIdentityStore? = null,
-    /** Wave 6's warning surface (safety-snapshot misses + success summaries). */
+    /** The wizard's warning surface (safety-snapshot misses + success summaries). */
     private val messageBus: UserMessageBus? = null,
     private val diffLabelResolver: suspend (List<StringResource>) -> (StringResource) -> String = ::resolveDiffLabels,
     /**
@@ -289,7 +289,7 @@ class RestoreWizardViewModel(
     }
 
     // ---------------------------------------------------------------------------
-    // BACKUP-FILE arm (the retired ImportPreview's logic, ported)
+    // BACKUP-FILE arm (stage the picked file, diff it against the live state)
     // ---------------------------------------------------------------------------
 
     /**
@@ -446,8 +446,9 @@ class RestoreWizardViewModel(
             val liveOutcome = apiResult { client.exportSettings() }
             val liveBundle = liveOutcome.getOrNull()
             if (liveOutcome.isFailure || liveBundle == null) {
-                // A failed export — or the pre-wave 404 null — leaves the live
-                // state unreadable; an undecodable bundle is the same failure.
+                // A failed export — or a null body from an older plugin —
+                // leaves the live state unreadable; an undecodable bundle is
+                // the same failure.
                 failServerLoad(
                     liveOutcome.exceptionOrNull()?.message
                         ?: "Could not read the current settings state",
@@ -598,7 +599,7 @@ class RestoreWizardViewModel(
     }
 
     // ---------------------------------------------------------------------------
-    // Wave-3 secrets block — unlock + explicit apply (ported verbatim)
+    // Secrets block — unlock + explicit apply
     // ---------------------------------------------------------------------------
 
     /**
@@ -703,9 +704,9 @@ class RestoreWizardViewModel(
 
     /**
      * The confirmed apply — every arm's choreography: best-effort safety
-     * snapshot first (Wave 6 hook #1; failure warns through the bus, never
-     * blocks), then the arm's own write, then the trailing `requestSync()` so
-     * local changes push / server changes adopt. The summary lands on the bus;
+     * snapshot first (failure warns through the bus, never blocks), then the
+     * arm's own write, then the trailing `requestSync()` so local changes
+     * push / server changes adopt. The summary lands on the bus;
      * [RestoreWizardUiState.completed] pops the wizard. A failure anywhere in
      * the choreography surfaces the inline error face ([RestoreWizardUiState.applyError])
      * and never claims success.
@@ -753,7 +754,7 @@ class RestoreWizardViewModel(
         uiState = uiState.copy(applyError = null)
     }
 
-    /** Wave 6 hook #1: the pre-apply restore point. Miss → bus warn, never a blocker. */
+    /** The pre-apply restore point. Miss → bus warn, never a blocker. */
     private suspend fun captureSafetySnapshotBestEffort() {
         val client = pluginApiClient
         val store = statusStore
@@ -848,8 +849,9 @@ class RestoreWizardViewModel(
     /**
      * The old-plugin degrade arm: the server-orchestrated full restore. A
      * failed call throws into [restoreSelected]'s catch; a success with a null
-     * payload (pre-wave 404, or the restore point is not the caller's) means
-     * nothing was restored — surfaced as an error, never as success.
+     * payload (a 404 null from an older plugin, or the restore point is not
+     * the caller's) means nothing was restored — surfaced as an error, never
+     * as success.
      */
     private suspend fun applyFullRestore(): String? {
         val client = pluginApiClient ?: return null
@@ -908,8 +910,8 @@ class RestoreWizardViewModel(
     }
 
     /**
-     * The Wave-3 cross-account detection: the staged backup's origin ids (when
-     * it carries them) vs the active session. Only a POSITIVE origin id that
+     * The cross-account detection: the staged backup's origin ids (when it
+     * carries them) vs the active session. Only a POSITIVE origin id that
      * differs warns — a blank origin (older export) stays silent.
      */
     private fun crossAccountDetected(

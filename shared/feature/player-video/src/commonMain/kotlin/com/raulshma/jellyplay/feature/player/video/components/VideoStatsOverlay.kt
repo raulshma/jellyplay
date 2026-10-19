@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_clock
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_color_depth
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_color_range
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_display_hdr
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_display_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_drop_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_dropped_frames
@@ -71,6 +72,8 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_quality
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_sample_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_session_id
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_spatial
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_spatial_superseded
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_state
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_stream_bitrate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_total_frames
@@ -211,6 +214,11 @@ fun VideoStatsOverlay(
                 stats.videoFrameRate?.let { StatsRow(stringResource(Res.string.player_video_frame_rate), "${formatFixed(it.toDouble(), 2)} fps") }
                 stats.videoBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
                 stats.videoHdrType?.let { StatsRow(stringResource(Res.string.player_video_stats_hdr), it) }
+                // the display's capability answers the content row above —
+                // tone-map decisions read as (content family, display family).
+                stats.displayHdrTypes?.let {
+                    StatsRow(stringResource(Res.string.player_video_stats_display_hdr), it)
+                }
                 stats.videoColorRange?.let { StatsRow(stringResource(Res.string.player_video_stats_color_range), it) }
                 stats.videoColorDepth?.let { StatsRow(stringResource(Res.string.player_video_stats_color_depth), it) }
                 stats.hdrOutputNotice?.let { notice ->
@@ -226,12 +234,28 @@ fun VideoStatsOverlay(
             }
         }
 
-        if (stats.audioCodec != null || stats.audioChannels != null) {
+        if (stats.audioCodec != null || stats.audioChannels != null || stats.audioSpatialState != null) {
             StatsSection(stringResource(Res.string.player_video_audio)) {
                 stats.audioCodec?.let { StatsRow(stringResource(Res.string.player_video_codec), it.uppercase()) }
                 stats.audioSampleRate?.let { StatsRow(stringResource(Res.string.player_video_stats_sample_rate), "${it} Hz") }
                 stats.audioChannels?.let { ch -> StatsRow(stringResource(Res.string.player_video_channels), formatChannels(ch)) }
                 stats.audioBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
+                // The platform spatializer's honest state (ExoPlayer, API 32+
+                // devices with the feature) — a report, not a control. The
+                // raw state name is technical by design (codec-style); the
+                // supersession note is localized prose, so it comes from
+                // resources rather than the policy module (commonMain pure
+                // Kotlin has no string access).
+                stats.audioSpatialState?.let { state ->
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_spatial),
+                        if (stats.audioSpatialSuperseded) {
+                            state.name + " " + stringResource(Res.string.player_video_stats_spatial_superseded)
+                        } else {
+                            state.name
+                        },
+                    )
+                }
                 if (audioSessionId != 0) {
                     StatsRow(stringResource(Res.string.player_video_stats_session_id), "$audioSessionId")
                 }

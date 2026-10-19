@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.hdrContentFromStreams
 import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 
 /**
@@ -48,7 +49,7 @@ internal object EngineConfigBuilder {
      * enters through [buildFromSlices] directly — the EngineConfigSync
      * controller takes the slices as narrow constructor lambdas, so the
      * state bag never crosses the controller boundary (the ownership
-     * ratchet).
+     * guard).
      */
     fun build(
         state: VideoPlayerUiState,
@@ -89,40 +90,46 @@ internal object EngineConfigBuilder {
         engineSpecific: EngineSpecificConfig? = null,
         deinterlace: com.raulshma.jellyplay.core.model.DeinterlaceMode =
             com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
-    ): EngineConfig = EngineConfig(
-        decoderMode = effects.decoderMode,
-        audioPassthrough = effects.audioPassthrough,
-        audioPassthroughCodecs = agg.playback.audioPassthroughCodecs,
-        audioDelayMs = effects.audioDelayMs,
-        subtitleDelayMs = subtitleStyle.offsetMs,
-        subtitleStyle = subtitleStyle,
-        videoEffects = videoEffects,
-        audioEffects = audioEffects(
-            dialogueBoostEnabled = dialogueBoostEnabled,
-            dialogueBoostStrength = dialogueBoostStrength,
-            nightModeEnabled = effects.nightModeEnabled,
-            nightModeStrength = effects.nightModeStrength,
-            equalizerEnabled = equalizerEnabled,
-            audioNormalizationMode = effects.audioNormalizationMode,
-            audioNormalizationEnabled = effects.audioNormalizationEnabled,
-            channelMixMode = effects.channelMixMode,
-            channelMixEnabled = effects.channelMixEnabled,
-            maxAudioChannels = agg.playback.maxAudioChannels,
-            downmixBoostDb = agg.playback.downmixBoostDb,
-            bassBoostEnabled = effects.bassBoostEnabled,
-            bassBoostStrength = effects.bassBoostStrength,
-            virtualizerEnabled = effects.virtualizerEnabled,
-            virtualizerStrength = effects.virtualizerStrength,
-            reverbPreset = effects.reverbPreset,
-            audioSlice = agg.audio,
-            audioEffectsSlice = agg.audioEffects,
-        ),
-        engineSpecific = engineSpecific,
-        // the session-scoped deinterlace override + the per-item HDR
-        // gate ride every runtime build (the UI-state path has the streams).
-        deinterlace = deinterlace,
-        hdrSource = isHdrFromStreams(mediaStreams),
-    )
+    ): EngineConfig {
+        val hdrContent = hdrContentFromStreams(mediaStreams)
+        return EngineConfig(
+            decoderMode = effects.decoderMode,
+            audioPassthrough = effects.audioPassthrough,
+            audioPassthroughCodecs = agg.playback.audioPassthroughCodecs,
+            audioDelayMs = effects.audioDelayMs,
+            subtitleDelayMs = subtitleStyle.offsetMs,
+            subtitleStyle = subtitleStyle,
+            videoEffects = videoEffects,
+            audioEffects = audioEffects(
+                dialogueBoostEnabled = dialogueBoostEnabled,
+                dialogueBoostStrength = dialogueBoostStrength,
+                nightModeEnabled = effects.nightModeEnabled,
+                nightModeStrength = effects.nightModeStrength,
+                equalizerEnabled = equalizerEnabled,
+                audioNormalizationMode = effects.audioNormalizationMode,
+                audioNormalizationEnabled = effects.audioNormalizationEnabled,
+                channelMixMode = effects.channelMixMode,
+                channelMixEnabled = effects.channelMixEnabled,
+                maxAudioChannels = agg.playback.maxAudioChannels,
+                downmixBoostDb = agg.playback.downmixBoostDb,
+                bassBoostEnabled = effects.bassBoostEnabled,
+                bassBoostStrength = effects.bassBoostStrength,
+                virtualizerEnabled = effects.virtualizerEnabled,
+                virtualizerStrength = effects.virtualizerStrength,
+                reverbPreset = effects.reverbPreset,
+                spatialAudioEnabled = effects.spatialAudioEnabled,
+                spatialAudioOnlyHeadphones = effects.spatialAudioOnlyHeadphones,
+                audioSlice = agg.audio,
+                audioEffectsSlice = agg.audioEffects,
+            ),
+            engineSpecific = engineSpecific,
+            // the session-scoped deinterlace override + the per-item HDR
+            // gate ride every runtime build (the UI-state path has the streams).
+            deinterlace = deinterlace,
+            hdrSource = hdrContent.isHdr,
+            hdrContent = hdrContent,
+        )
+    }
 
     /**
      * Initial-load / engine-swap variant. Builds the config directly from a
@@ -137,7 +144,8 @@ internal object EngineConfigBuilder {
         itemId: String?,
         engineSpecific: EngineSpecificConfig?,
     ): EngineConfig {
-        val isHdr = isHdrFromStreams(mediaStreams)
+        val hdrContent = hdrContentFromStreams(mediaStreams)
+        val isHdr = hdrContent.isHdr
         // Subtitle delay is per-media: resolve the per-item override (else the
         // global default) so the engine boots with the correct delay on initial
         // load / engine swap. Without this the engine starts at the global
@@ -170,12 +178,17 @@ internal object EngineConfigBuilder {
                 virtualizerEnabled = agg.audioEffects.virtualizerEnabled,
                 virtualizerStrength = agg.audioEffects.virtualizerStrength,
                 reverbPreset = agg.audioEffects.reverbPreset,
+                // The spatial prefs live on the playback slice (the settings
+                // screen's home); the engine boots with the persisted values.
+                spatialAudioEnabled = agg.playback.spatialAudioEnabled,
+                spatialAudioOnlyHeadphones = agg.playback.spatialAudioOnlyHeadphones,
                 audioSlice = agg.audio,
                 audioEffectsSlice = agg.audioEffects,
             ),
             engineSpecific = engineSpecific,
             deinterlace = com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
             hdrSource = isHdr,
+            hdrContent = hdrContent,
         )
     }
 
@@ -201,6 +214,8 @@ internal object EngineConfigBuilder {
         virtualizerEnabled: Boolean,
         virtualizerStrength: Int,
         reverbPreset: ReverbPreset,
+        spatialAudioEnabled: Boolean,
+        spatialAudioOnlyHeadphones: Boolean,
         audioSlice: com.raulshma.jellyplay.core.datastore.audio.AudioSlice,
         audioEffectsSlice: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice,
     ): AudioEffectsConfig = AudioEffectsConfig(
@@ -224,5 +239,7 @@ internal object EngineConfigBuilder {
         reverbPreset = reverbPreset,
         volumeBoostEnabled = audioEffectsSlice.volumeBoostEnabled,
         volumeBoostGain = audioEffectsSlice.volumeBoostGain,
+        spatialAudioEnabled = spatialAudioEnabled,
+        spatialAudioOnlyHeadphones = spatialAudioOnlyHeadphones,
     )
 }

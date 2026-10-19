@@ -89,8 +89,7 @@ internal fun libraryRailFirstVisibleItemIndex(
     }
 
 /**
- * The rail's letter→index fold, extracted verbatim from the library screen's
- * inline `derivedStateOf`: a single pass over the loaded items records the
+ * The rail's letter→index fold: a single pass over the loaded items records the
  * first index at which each normalized leading letter appears (`#` for every
  * non A–Z leading character). Jellyfin returns library items sorted by
  * SortName by default, so the first snapshot index per letter is stable

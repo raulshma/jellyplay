@@ -109,6 +109,26 @@
     <string name="next_up_hidden_restore_all_message">Alle %1$d ausgeblendeten Serien erscheinen wieder in der „Als Nächstes“-Reihe.</string>
     <string name="next_up_hidden_restore_cd">%1$s in „Als Nächstes“ wiederherstellen</string>
     <string name="next_up_hidden_unknown">Unbekannte Serie</string>
+    <string name="my_media_hidden_title">Ausgeblendete Bibliotheken</string>
+    <string name="my_media_hidden_empty">Nichts ausgeblendet</string>
+    <string name="my_media_hidden_empty_subtitle">Aus der Mediathek-Reihe ausgeblendete Bibliotheken erscheinen hier zum Wiederherstellen.</string>
+    <string name="my_media_hidden_restore_all">Alle wiederherstellen</string>
+    <string name="my_media_hidden_restore_all_cd">Alle ausgeblendeten Bibliotheken in Mediathek wiederherstellen</string>
+    <string name="my_media_hidden_restore_all_title">Alle Bibliotheken wiederherstellen?</string>
+    <string name="my_media_hidden_restore_all_message">Alle %1$d ausgeblendeten Bibliotheken erscheinen wieder in der Mediathek-Reihe.</string>
+    <string name="my_media_hidden_restore_cd">„%1$s“ in Mediathek wiederherstellen</string>
+    <string name="my_media_hidden_unknown">Unbekannte Bibliothek</string>
     <string name="a11y_mode_video">Videomodus</string>
     <string name="a11y_mode_music">Musikmodus</string>
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">Deine Bibliothekswoche</string>
+    <string name="home_stats_card_counts">%1$d gesehen · %2$d ungesehen</string>
+    <string name="home_stats_card_watch_approx">~%1$s h gesehen</string>
+    <string name="home_stats_card_watch_exact">%1$s h gesehen</string>
+    <string name="home_stats_card_streak">%1$d-Tage-Serie</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">Neu auf dem Startbildschirm: %1$s</string>
+    <string name="home_new_sections_customize">Anpassen</string>
 </resources>

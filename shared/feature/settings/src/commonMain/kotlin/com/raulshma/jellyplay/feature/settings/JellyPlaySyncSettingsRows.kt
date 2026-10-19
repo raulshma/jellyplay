@@ -12,16 +12,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_now_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_now_title
 
 /**
- * The JellyPlay companion-plugin sync rows (ADR 0010) — residual rows (the
+ * The JellyPlay companion-plugin sync rows — residual rows (the
  * knob lives on `ProfileSyncRepository`, no datastore spec): the opt-in
- * toggle and the manual sync-now action. The on-screen face moved onto the
- * [Route.JellyPlaySync] screen ([JellyPlaySyncScreen], the consolidation
- * wave); these declarations stay the search catalog's single home — a search
- * hit now navigates to the sync screen (their `route`), keeping the
- * declarations / ratchets byte-stable through the move.
+ * toggle and the manual sync-now action. The on-screen face lives on the
+ * [Route.JellyPlaySync] screen ([JellyPlaySyncScreen]); these declarations
+ * stay the search catalog's single home — a search hit navigates to the sync
+ * screen (their `route`).
  */
 internal object JellyPlaySyncRows {
 
@@ -39,13 +37,12 @@ internal object JellyPlaySyncRows {
         id = "jellyplay_sync_now",
         icon = Tabler.Outline.Refresh,
         titleRes = Res.string.settings_sync_now,
-        searchTitleRes = Res.string.ss_jellyplay_sync_now_title,
         searchSubtitleRes = Res.string.ss_jellyplay_sync_now_subtitle,
         keywords = listOf("sync", "refresh", "pull", "push", "jellyplay", "plugin"),
         route = Route.JellyPlaySync,
     )
 
-    /** The whole declaration — the ratchet tests' vocabulary entry. */
+    /** The whole declaration — the tests' vocabulary entry. */
     val all: List<SettingsRow> = listOf(SyncEnabled, SyncNow)
 }
 

@@ -125,3 +125,20 @@ fun Modifier.dpadKeyHandler(block: DpadKeyHandlerScope.() -> Unit): Modifier = c
         scope.handle(dpadKeyEvent)
     }
 }
+
+/**
+ * Non-composed twin of [dpadKeyHandler]: builds the same [DpadKeyHandlerScope]
+ * from the same configuration block and returns a plain handler function, so a
+ * NON-modifier dispatch path (the player screens' top-level key sink — the
+ * Activity-level fallback for keys that reach nothing because no Compose focus
+ * target exists) can interpret raw key events through the EXACT arm set the
+ * focused-dispatch modifier runs. One configuration block, one interpretation —
+ * the sink's fallback can never diverge from the focus path's semantics.
+ *
+ * Returns a function rather than a modifier so callers keep full control over
+ * gating (sheet state, layer-focus decline) before the arms run.
+ */
+fun dpadKeyHandlerHandle(block: DpadKeyHandlerScope.() -> Unit): (DpadKeyEvent) -> Boolean {
+    val scope = DpadKeyHandlerScope().apply(block)
+    return scope::handle
+}

@@ -1,5 +1,5 @@
 /*
- * Ported verbatim (Apache-2.0) from
+ * Vendored (Apache-2.0) from
  * github.com/racra/smooth-corner-rect-android-compose — see AbsoluteSmoothCornerShape.kt.
  */
 package racra.compose.smooth_corner_rect_library

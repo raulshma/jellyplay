@@ -1,11 +1,14 @@
 package com.raulshma.jellyplay.feature.player.video.engine.mpv
 
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatioMapping
 import com.raulshma.jellyplay.feature.player.video.engine.BufferedRanges
+import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
@@ -14,6 +17,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.engine.TimedCue
 import com.raulshma.jellyplay.feature.player.video.engine.TrackRefreshCoalescer
+import com.raulshma.jellyplay.feature.player.video.engine.decoderModeToHwdec
 import com.raulshma.jellyplay.feature.player.video.engine.mergeAccumulatedCues
 import com.raulshma.jellyplay.feature.player.video.engine.resolveDurationMs
 import kotlinx.coroutines.CoroutineScope
@@ -73,14 +77,44 @@ public sealed interface MpvEndFileError {
  *    refresh, `beginLoad`'s per-item resets (latches, registry, pending
  *    queue, server duration rung, cue/live-cue flows) and the
  *    demuxer→server duration ladder.
+ *  - **The mpv recovery choreography** — the stall-watchdog wiring and the
+ *    HDR probe machine (the glossary's ratified term; both are this core's
+ *    wiring, the pure decision modules `MpvStallWatchdog` /
+ *    `HdrOutputPolicy` stay in player-contract):
+ *
+ *      - The **stall watchdog** ([MpvStallWatchdog] — WHEN + WHICH) is
+ *        DRIVEN here: the per-load reset, the tick funnel
+ *        ([onStallWatchdogTick], fed from each host's position ticker with
+ *        its own monotonic clock), the log-detector feed ([onMpvLogLine],
+ *        host log pumps call it before any level filter), the sticky-hwdec
+ *        precedence ladder ([stallAwareHwdecValue]: watchdog override >
+ *        host-configured value) and the recovery execution (the runtime
+ *        `hwdec` write + kick seek). Both bindings ride it — the Android
+ *        engine's seven wiring sites became thin delegations, and the
+ *        desktop engine GAINED stall recovery it never had (its ladder
+ *        feeds `MpvConfigApplier.hwdecValue`, its tick rides its position
+ *        ticker; it has no mpv log pump, so its detector flag stays down
+ *        and the ladder's second attempt — the unconditional switch —
+ *        covers it).
+ *      - The **HDR probe machine** — the `video-target-params/gamma`
+ *        per-file probe cache ([hdrProbePending] / [hdrTargetIsHdr], the
+ *        former per-host @Volatile twins), the change-cached
+ *        `target-colorspace-hint` write ([applyTargetColorspaceHint]) and
+ *        the verbatim-duplicated `hdrPassthroughRequested` intent fold
+ *        (now [Companion.hdrPassthroughRequested]). Hosts deliver probe
+ *        values through [observeHdrTargetGamma] (their platform read seam:
+ *        Android's stats `MpvStatsReads`, desktop's `MpvLib` read) and
+ *        receive the hint write through [Hosts.writeTargetColorspaceHint]
+ *        (which keeps each host's shipped failure contract — Android's
+ *        silent-absorb vs desktop's error-code absorb).
  *
  * The genuinely per-platform residue (and why it is NOT here): the Android
  * audio-session id + AudioEffect chain, the low-level init option sets, the
  * delayed-track-refresh slot mechanic (an `android.os.Handler` postDelayed —
  * the desktop has no equivalent and no delayed refreshes), the desktop HDR
- * target probe and shader dir, the stats projection seams, and the volume
- * template wiring (the two engines sit on different base-class templates).
- * Each engine passes a [Hosts] object implementing exactly its own residue.
+ * shader dir, the stats projection seams, and the volume template wiring
+ * (the two engines sit on different base-class templates). Each engine
+ * passes a [Hosts] object implementing exactly its own residue.
  *
  * Threading: NOT internally synchronized — the same contract the engines
  * always ran. Every fold/intake application happens on the host's serialized
@@ -232,6 +266,54 @@ public class MpvCore(
          * `sub-start` update). Null falls back to the cached position.
          */
         public open fun subStartSeconds(): Double? = null
+
+        /**
+         * The stall switch's runtime `hwdec` write — the host's THROWING
+         * transport, deliberately not the absorbing [MpvPropertySurface]:
+         * the Android JNI wrapper's throw is load-bearing (a failed switch
+         * aborts the recovery with the shipped "recovery failed" log and
+         * SKIPS the kick — the shipped body's single try wraps write + kick).
+         * The desktop's JNA transport cannot throw, so its override is
+         * absorbing by nature (its gain, no shipped behavior).
+         */
+        public open fun writeStallHwdec(value: String) {}
+
+        /**
+         * The hwdec value the recovery's switch WRITES for this host — the
+         * copy path whose system-memory frames the VO can always present.
+         * The watchdog's decision names the ANDROID repro's value
+         * ([MpvStallWatchdog.HWDEC_STALL_FALLBACK], the default); the
+         * desktop overrides with `auto-copy` (its libmpv has no mediacodec —
+         * `auto-copy` is the same "any copy path" posture on its decoder
+         * set). The sticky override stores exactly this resolved value.
+         */
+        public open fun stallHwdecFallbackValue(): String = MpvStallWatchdog.HWDEC_STALL_FALLBACK
+
+        /**
+         * The `target-colorspace-hint` write — the host's transport with its
+         * SHIPPED failure contract preserved: Android writes through the
+         * local handle and lets a failure throw (older bundled libmpv
+         * without the property — the core absorbs, the change-cache stands
+         * down, the probe reports SDR and tone mapping takes over); the
+         * desktop's JNA write returns an error code and absorbs. Default
+         * no-op (a host that never arms HDR passthrough never sees it).
+         */
+        public open fun writeTargetColorspaceHint(value: String) {}
+
+        /**
+         * A stall recovery was issued and is about to run its kick — the
+         * hosts' Log.w site. [appliedHwdecValue] is the hwdec the switch
+         * wrote (null for the plain kick); [frozenPositionMs] is the cached
+         * playhead at log time (the shipped kick log's reading).
+         */
+        public open fun onStallRecoveryIssued(
+            action: MpvStallRecoveryAction,
+            appliedHwdecValue: String?,
+            frozenPositionMs: Long,
+        ) {}
+
+        /** A stall recovery threw (the switch's hwdec write — see [Hosts.writeStallHwdec]). */
+        public open fun onStallRecoveryFailed(action: MpvStallRecoveryAction, error: Throwable) {}
     }
 
     // ── Fold + refresh machinery ────────────────────────────────────────────
@@ -333,6 +415,63 @@ public class MpvCore(
     /** The not-yet-flushed side-load batch (Android logs its size at START_FILE). */
     public val pendingSubtitles: List<SubtitleSource>
         get() = pendingSubtitlesQueue
+
+    // ── mpv recovery choreography state (the glossary's ratified term) ──────
+
+    /**
+     * The stall watchdog's per-file decision state ([MpvStallWatchdog] owns
+     * WHEN + WHICH; this core drives it — [onStallWatchdogTick], the
+     * [beginLoad] per-file reset, the [executeStallRecovery] hand). One
+     * instance per core = per engine instance, matching the Android engine's
+     * shipped field.
+     */
+    private val stallWatchdog = MpvStallWatchdog()
+
+    /**
+     * The mpv log evidence that the zero-copy hwdec path is implicated for
+     * the CURRENT file — fed by [onMpvLogLine] (the host log pumps, before
+     * any level filter so detection never depends on msg-level — the log
+     * observer runs off-thread, hence @Volatile), cleared per load by
+     * [beginLoad].
+     */
+    @Volatile
+    private var aimagereaderFailureObserved: Boolean = false
+
+    /**
+     * The session-sticky hwdec override the watchdog's switch writes: every
+     * later load of this engine instance starts directly on the copy path
+     * instead of re-wedging for another confirm window (it survives
+     * [beginLoad] deliberately). Retired when the host's configured value
+     * moves elsewhere ([onHwdecConfigured]) — the user's explicit choice
+     * governs until mpv re-implicates it. Written by the recovery (the
+     * hosts' ticker surfaces) and read by the hosts' init/config-applier
+     * ladders cross-thread — @Volatile (the Android engine's plain field was
+     * main-thread-only; the desktop's ticker + event thread are not).
+     */
+    @Volatile
+    private var stallHwdecOverride: String? = null
+
+    // ── HDR probe machine state (the former per-host @Volatile twins) ───────
+
+    /**
+     * Latched until the per-file target probe resolves. Seeded INERT: the
+     * desktop's shipped seed (its FILE_LOADED extras re-arm it), and the
+     * Android engine's construction-time `true` seed was unobservable — its
+     * probe body cannot run before the per-load re-arm (the stats reader
+     * needs a published view, and publishing is always immediately followed
+     * by the configure pass that re-arms).
+     */
+    @Volatile
+    public var hdrProbePending: Boolean = false
+        private set
+
+    /** Whether mpv's `video-target-params` reports an HDR output for the current file. */
+    @Volatile
+    public var hdrTargetIsHdr: Boolean = false
+        private set
+
+    /** The last `target-colorspace-hint` value written (a change-only write cache). */
+    private var lastTargetColorspaceHint: Boolean? = null
 
     // ── Property intake ─────────────────────────────────────────────────────
 
@@ -475,10 +614,14 @@ public class MpvCore(
      * The per-item load resets BOTH engines shipped identically: the teardown
      * guard clears (Android's reuse path), the pending-subtitle queue takes
      * the request's batch, fold latches + the side-load registry reset, the
-     * server duration rung captures the request, and the cue/live-cue flows
-     * clear. The hosts add their platform residue around this (Android: the
-     * cache resets + request configure + playFile; desktop: the published
-     * tracks/stats/buffer resets + per-request options + loadfile).
+     * server duration rung captures the request, the cue/live-cue flows
+     * clear, and the stall watchdog takes fresh per-file state (window,
+     * budget, position seed, log-detector flag) — the sticky hwdec override
+     * survives (once this instance has proven the zero-copy path wedges,
+     * later items start directly on the copy path). The hosts add their
+     * platform residue around this (Android: the cache resets + request
+     * configure + playFile; desktop: the published tracks/stats/buffer
+     * resets + per-request options + loadfile).
      */
     public fun beginLoad(request: PlaybackRequest) {
         released = false
@@ -488,6 +631,8 @@ public class MpvCore(
         serverDurationMs = request.serverDurationMs
         currentCuesSink.value = emptyList()
         liveSubtitleCueSink.value = null
+        stallWatchdog.reset()
+        aimagereaderFailureObserved = false
     }
 
     /**
@@ -516,6 +661,201 @@ public class MpvCore(
     /** Clears the side-loaded-subtitle id registry (the hosts' release paths). */
     public fun resetSideLoadedRegistry() {
         sideLoadedSubtitleIds = emptyMap()
+    }
+
+    // ── mpv recovery choreography: the stall watchdog's wiring ──────────────
+
+    /**
+     * The sticky-hwdec precedence ladder: the watchdog's stall override wins,
+     * then the host's configured value. What "configured" means is the host's
+     * own dialect (Android: the user's `MpvEngineConfig.hwdecOverride` or the
+     * decoder-mode map; desktop: `hwdecFor`) — the precedence DECISION is the
+     * core's. Call-site spans the ratified term names: the Android
+     * `initOptions` write, the desktop config-applier's `hwdecValue` arm.
+     */
+    public fun stallAwareHwdecValue(hostConfiguredHwdec: String): String =
+        stallHwdecOverride ?: hostConfiguredHwdec
+
+    /**
+     * A host-configured hwdec value arrived (every config change): a
+     * user-authored move RETIRES the sticky stall override — their explicit
+     * choice governs (and if that choice wedges again, the log detector
+     * re-implicates it and the watchdog re-arms). When the configured value
+     * EQUALS the sticky one (the watchdog already moved it here, or the user
+     * picked the copy path themselves) the sticky survives — identical
+     * value, nothing to decide.
+     */
+    public fun onHwdecConfigured(hostConfiguredHwdec: String) {
+        if (stallHwdecOverride != null && stallHwdecOverride != hostConfiguredHwdec) {
+            stallHwdecOverride = null
+        }
+    }
+
+    /**
+     * One position-ticker tick — the hosts' sole watchdog entry. The core
+     * reads the fold's state, the playing flow and the cached playhead
+     * itself (the Android host passed exactly these; no released guard — the
+     * watchdog's own state gate is its protection, and a released engine's
+     * playbackState is IDLE, the not-playing branch). Runs OUTSIDE the
+     * hosts' stats gates — it must fire with the stats sheet closed (the
+     * wedged session's only observable is the frozen position on these very
+     * ticks). [nowMs] is the host's monotonic clock (Android
+     * `SystemClock.elapsedRealtime`, desktop `System.nanoTime`/1e6).
+     */
+    public fun onStallWatchdogTick(nowMs: Long) {
+        stallWatchdog.onTick(
+            nowMs = nowMs,
+            playbackState = playbackStateFlow.value,
+            isPlaying = isPlayingFlow.value,
+            positionMs = cachedPositionMs,
+            aimagereaderFailureObserved = aimagereaderFailureObserved,
+        )?.let(::executeStallRecovery)
+    }
+
+    /**
+     * One mpv log line from the host's log pump — checked BEFORE any level
+     * filter so the detection never depends on the build's msg-level (the
+     * guarantee belongs to the detector, not the logger). The desktop
+     * registers no mpv log pump, so its flag stays down — the ladder's
+     * second attempt (the unconditional switch) covers direct-path stalls
+     * whose signature was never observed.
+     */
+    public fun onMpvLogLine(prefix: String, text: String) {
+        if (isAimagereaderFailureLog(prefix, text)) {
+            aimagereaderFailureObserved = true
+        }
+    }
+
+    /**
+     * The stall watchdog's hand: [MpvStallRecoveryAction.SwitchHwdecThenKick]
+     * writes the host's copy-path hwdec ([Hosts.stallHwdecFallbackValue]) and
+     * remembers it session-sticky; both actions then kick the wedged play
+     * loop with the absolute seek restart — the rescue that verified live on
+     * the repro device (a frozen-at-0:00 session resumed video + audio the
+     * moment the seek's playback restart re-opened the audio chain).
+     *
+     * The shipped Android body's containment is preserved exactly: the
+     * `hwdec` write goes through the host's THROWING transport
+     * ([Hosts.writeStallHwdec]) inside the same try as the kick, so a failed
+     * switch aborts the recovery ([Hosts.onStallRecoveryFailed]) WITHOUT the
+     * kick — and the sticky value was already assigned (the shipped order).
+     * The dead-handle guard is the binding's aliveness (the shipped
+     * `mpvView?.mpv ?: return`).
+     */
+    private fun executeStallRecovery(action: MpvStallRecoveryAction) {
+        if (!binding.isAlive()) return
+        var appliedHwdecValue: String? = null
+        try {
+            if (action is MpvStallRecoveryAction.SwitchHwdecThenKick) {
+                val value = hosts.stallHwdecFallbackValue()
+                stallHwdecOverride = value
+                hosts.writeStallHwdec(value)
+                appliedHwdecValue = value
+            }
+            hosts.onStallRecoveryIssued(action, appliedHwdecValue, cachedPositionMs)
+            seekTo(action.kickToMs)
+        } catch (e: Exception) {
+            hosts.onStallRecoveryFailed(action, e)
+        }
+    }
+
+    // ── HDR probe machine ───────────────────────────────────────────────────
+
+    /**
+     * Per-file re-arm of the target probe — the next stats-tick read
+     * resolves it for the new file (a previous file's verdict must not
+     * leak). Call sites keep their shipped positions: Android's
+     * `configureMpvForRequest` (per load, before playFile), the desktop's
+     * FILE_LOADED extras (the target only exists after the first frame —
+     * arming at load could resolve against the PREVIOUS item's output).
+     */
+    public fun rearmHdrTargetProbe() {
+        hdrProbePending = true
+        hdrTargetIsHdr = false
+    }
+
+    /** The per-item teardown clear (the desktop's `stop` — the probe stays inert until the next FILE_LOADED re-arm). */
+    public fun clearHdrTargetProbe() {
+        hdrProbePending = false
+        hdrTargetIsHdr = false
+    }
+
+    /**
+     * One probe read delivered from the host's `video-target-params/gamma`
+     * seam (Android's stats `MpvStatsReads`, desktop's `MpvLib` read — the
+     * platform reads stay host-side; the CACHE is the core's). Returns the
+     * gamma that RESOLVED with this call (null while pending-unresolved or
+     * already resolved) — the desktop derives its badge fields from it
+     * exactly once per file, the Android host ignores the return and
+     * re-derives its decision per stats tick.
+     */
+    public fun observeHdrTargetGamma(gamma: String?): String? {
+        if (!hdrProbePending || gamma == null) return null
+        hdrProbePending = false
+        hdrTargetIsHdr = gamma == TARGET_GAMMA_PQ || gamma == TARGET_GAMMA_HLG
+        return gamma
+    }
+
+    /**
+     * The `target-colorspace-hint` write — the change-cached choreography
+     * both hosts ride (Android: onConfigChanged + per-load configure, its
+     * "yes" when passthrough is requested AND the output is `vo=gpu-next`
+     * (the only vo honoring the hint) with "no" resetting a stale value from
+     * a previous HDR item; desktop: its engine-factory one-shot "yes" — the
+     * factory's vo-path gate remains factory knowledge for construction-order
+     * reasons, but the WRITE now goes through here). A failed write
+     * ([Hosts.writeTargetColorspaceHint] throwing) is absorbed WITHOUT
+     * updating the change-cache — an older bundled libmpv without the
+     * property retries and always loses to the probe/tone-mapping fallback.
+     */
+    public fun applyTargetColorspaceHint(requested: Boolean) {
+        if (requested == lastTargetColorspaceHint) return
+        try {
+            hosts.writeTargetColorspaceHint(if (requested) "yes" else "no")
+            lastTargetColorspaceHint = requested
+        } catch (_: Exception) {
+            // Absorbed: hint unsupported → SDR output; probe + tone mapping take over.
+        }
+    }
+
+    /**
+     * The fresh-handle reset of the change-cache (the Android
+     * `createSurfaceView` site — the new mpv handle starts with mpv's option
+     * defaults; the old handle's cached value must not carry over).
+     */
+    public fun clearTargetColorspaceHintCache() {
+        lastTargetColorspaceHint = null
+    }
+
+    /**
+     * The HDR-passthrough INTENT (not the active state): the user's setting
+     * is on AND the current item's streams are HDR (the config builder folds
+     * `isHdrFromStreams` into [EngineConfig.hdrSource]). Whether the OUTPUT
+     * is actually HDR additionally depends on the display target
+     * ([hdrTargetIsHdr], read from `video-target-params` after the first
+     * frame/stats tick). Formerly duplicated verbatim on both engines —
+     * "the desktop twin" comments; this companion is its one home.
+     */
+    public companion object {
+        /** `video-target-params/gamma` values that mean an HDR output. */
+        public const val TARGET_GAMMA_PQ: String = "pq"
+        public const val TARGET_GAMMA_HLG: String = "hlg"
+
+        /** See [hdrPassthroughRequested]'s KDoc. */
+        public fun hdrPassthroughRequested(config: EngineConfig): Boolean =
+            (config.engineSpecific as? MpvEngineConfig)?.hdrPassthrough == true && config.hdrSource
+
+        /**
+         * The hint-write's requested derivation: passthrough requested AND
+         * the output is `vo=gpu-next` — the only vo honoring
+         * `target-colorspace-hint` (both hosts' shipped gate).
+         */
+        public fun targetColorspaceHintRequested(config: EngineConfig): Boolean {
+            val mpvCfg = config.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
+            return mpvCfg.hdrPassthrough &&
+                config.hdrSource &&
+                mpvCfg.videoOutput == MpvVideoOutput.GPU_NEXT
+        }
     }
 
     // ── Transport ───────────────────────────────────────────────────────────
@@ -713,7 +1053,7 @@ public class MpvCore(
         hosts.onStyleApplied(style)
     }
 
-    // ── Ownership (issue #165) ──────────────────────────────────────────────
+    // ── Ownership ──────────────────────────────────────────────
 
     /**
      * Refreshes the user-owned `sub-*` key snapshot from the host's config

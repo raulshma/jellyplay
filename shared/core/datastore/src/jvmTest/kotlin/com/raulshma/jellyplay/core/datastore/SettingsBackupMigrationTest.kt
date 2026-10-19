@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertNull
 
@@ -35,6 +36,11 @@ import kotlin.test.assertNull
 class SettingsBackupMigrationTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var store: UserPreferencesStore
     private lateinit var graph: PreferenceSliceGraph
     private lateinit var dataStore: DataStore<Preferences>
@@ -184,7 +190,7 @@ class SettingsBackupMigrationTest {
     }
 
     // ------------------------------------------------------------------
-    // Wave 2 — external backup slices (the ExternalBackupSlice seam)
+    // External backup slices (the ExternalBackupSlice seam)
     // ------------------------------------------------------------------
 
     @Test

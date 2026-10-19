@@ -40,12 +40,12 @@ import kotlin.test.assertTrue
  * [SeerrSettingsViewModelTest] pattern): tapping a history row fetches its
  * changed keys LAZILY, exactly once per seq, and the cached detail survives
  * collapse/re-expand. The degrade ladder is quiet by contract: a reset row's
- * empty diff reads "No key changes", a pre-wave 404 (null payload) and a
- * failed read both cache the "—" degrade, and a degraded gate never touches
- * the api at all. The Phase-2 faces ride the same refresh: the snapshot list
- * (null = the pre-wave hide), the namespace rows (server usage ∪ engine
- * namespaces, selective-sync flags folded in), and the device rows (model +
- * revoked carried, this-device first).
+ * empty diff reads "No key changes", a 404 (null payload) and a failed read
+ * both cache the "—" degrade, and a degraded gate never touches the api at
+ * all. The rest of the screen rides the same refresh: the snapshot list
+ * (null = hidden), the namespace rows (server usage ∪ engine namespaces,
+ * selective-sync flags folded in), and the device rows (model + revoked
+ * carried, this-device first).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlaySyncViewModelTest {
@@ -199,7 +199,7 @@ class JellyPlaySyncViewModelTest {
         coEvery { pluginApi.getSyncHistoryKeys(2, any()) } returns Result.success(
             JellyPlaySyncHistoryKeys(seq = 2, op = "reset", keys = emptyList()),
         )
-        // The pre-wave 404: the route answers null.
+        // The 404: the route answers null.
         coEvery { pluginApi.getSyncHistoryKeys(3, any()) } returns Result.success(null)
         // A failed read degrades the same quiet way.
         coEvery { pluginApi.getSyncHistoryKeys(4, any()) } returns Result.failure(IllegalStateException("500"))
@@ -233,7 +233,7 @@ class JellyPlaySyncViewModelTest {
         coVerify(exactly = 0) { pluginApi.getSyncHistoryKeys(any(), any()) }
     }
 
-    // ── the Phase-2 faces: snapshots, namespace rows, device rows, registry actions ──
+    // ── snapshots, namespace rows, device rows, registry actions ──
 
     @Test
     fun refresh_loadsSnapshots_degradesQuietlyOnPreWave404() = runTest {
@@ -250,7 +250,7 @@ class JellyPlaySyncViewModelTest {
         awaitUntil { !viewModel.uiState.value.isLoading }
         assertEquals(1, viewModel.uiState.value.snapshots?.size)
 
-        // The pre-wave 404 (null) hides the section, never errors.
+        // A 404 (null) hides the section, never errors.
         coEvery { pluginApi.getSnapshots() } returns Result.success(null)
         viewModel.refresh()
         awaitUntil { viewModel.uiState.value.snapshots == null }

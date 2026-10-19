@@ -144,7 +144,7 @@ internal fun WindowScope.DesktopTitleBar(
                                 onRefresh()
                             },
                         )
-                        //  clipboard paste-to-open: the menu twin of the
+                        //  clipboard paste-to-open: the menu path for the
                         // Ctrl+Shift+V accelerator (same row of the
                         // DesktopAccelerators table renders the shortcut
                         // literal; Main.kt's submit runs behind both).

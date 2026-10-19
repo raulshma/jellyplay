@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 
 /**
  * The push-decision state behind [NowPlayingWidgetUpdater]: everything the
- * metadata and position collectors used to juggle as loose mutable fields
+ * metadata and position collectors would otherwise juggle as loose mutable fields
  * (`lastPushedRender` / `lastItemId` / `lastArtwork` across start/stop),
  * extracted as pure decisions so the choreography stays JVM-testable — the
  * gate makes no Android framework calls (the Full decision merely CARRIES

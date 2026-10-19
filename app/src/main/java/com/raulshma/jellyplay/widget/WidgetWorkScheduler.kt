@@ -153,9 +153,9 @@ internal const val COOLDOWN_MS = 5_000L
 
 /**
  * Atomically claims [lastRefreshAt]'s cooldown slot as of [nowMs] (a test
- * seam; production passes the wall clock). The former get()-then-set() let
+ * seam; production passes the wall clock). A get()-then-set() would let
  * two triggers inside the window both pass: both read the same stale stamp,
- * then both stamped. The `compareAndSet` closes that gap — only the thread
+ * then both stamp. The `compareAndSet` closes that gap — only the thread
  * whose CAS from the observed stamp lands wins and stamps; the loser's CAS
  * fails, its re-read finds the fresh stamp inside [COOLDOWN_MS], and it is
  * suppressed without restamping.

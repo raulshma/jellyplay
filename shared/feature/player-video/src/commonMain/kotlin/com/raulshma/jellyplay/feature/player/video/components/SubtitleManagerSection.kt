@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_search_failed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_select_file
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitle_downloaded_device_only
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitle_save_to_server
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitle_provider_all
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_taking_a_while
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_unknown
@@ -133,6 +134,12 @@ fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
     configuredProviders: Set<SubtitleProviderKind>,
     onSearchAllProviders: (String) -> Unit,
     onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
+    /**
+     * Re-attempts the server upload for a device-only external-provider
+     * download (the row whose status is DOWNLOADED_DEVICE_ONLY). [rowKey] is
+     * the [providerSubtitleRowKey] composite.
+     */
+    onSaveSubtitleToServer: (String) -> Unit = {},
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     /** Row key: the remote-subtitle id (Jellyfin rows) or `"provider:id"` composite (external rows). */
     onUseSubtitle: (String) -> Unit,
@@ -225,6 +232,7 @@ fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
                 configuredProviders = configuredProviders,
                 onSearchAllProviders = onSearchAllProviders,
                 onDownloadProviderSubtitle = onDownloadProviderSubtitle,
+                onSaveSubtitleToServer = onSaveSubtitleToServer,
             )
             SubtitleManagerTab.UPLOAD -> UploadTab(
                 modifier = Modifier.weight(1f, fill = false),
@@ -451,6 +459,8 @@ private fun SubtitleDownloadStatusSlot(
     status: SubtitleDownloadStatus?,
     downloadCount: Int,
     onUse: () -> Unit,
+    /** Present only on external-provider rows: re-attempts the failed server upload. */
+    onSaveToServer: (() -> Unit)? = null,
 ) {
     when (status?.state) {
         SubtitleDownloadState.DOWNLOADING -> JellyPlayLoadingIndicator(
@@ -498,7 +508,8 @@ private fun SubtitleDownloadStatusSlot(
         ) {
             // Subtitle is usable on-device but not synced to the server — badge
             // it with the device-only note + a "Use" affordance (the durable
-            // copy still backs the side-load).
+            // copy still backs the side-load). Provider rows additionally get a
+            // save-to-server retry for the upload leg that failed.
             Icon(
                 imageVector = Tabler.Outline.DeviceMobile,
                 contentDescription = null,
@@ -510,6 +521,22 @@ private fun SubtitleDownloadStatusSlot(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (onSaveToServer != null) {
+                FilledTonalButton(
+                    onClick = onSaveToServer,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 12.dp,
+                        vertical = 0.dp,
+                    ),
+                    modifier = Modifier.harnessClickTarget("player-subtitle-save-to-server"),
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.Upload,
+                        contentDescription = stringResource(Res.string.player_video_subtitle_save_to_server),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
             FilledTonalButton(
                 onClick = onUse,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -575,6 +602,7 @@ private fun SearchTab(
     configuredProviders: Set<SubtitleProviderKind>,
     onSearchAllProviders: (String) -> Unit,
     onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
+    onSaveSubtitleToServer: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var searchLanguage by rememberSaveable { mutableStateOf(defaultLanguage) }
@@ -620,6 +648,7 @@ private fun SearchTab(
                 configuredProviders = configuredProviders,
                 downloadingSubtitles = downloadingSubtitles,
                 onDownload = onDownloadProviderSubtitle,
+                onSaveToServer = { result -> onSaveSubtitleToServer(providerSubtitleRowKey(result.provider, result.id)) },
                 onUse = { result ->
                     // Jellyfin rows key their download status + ready hints on
                     // the plain remote-subtitle id; external rows on the
@@ -727,6 +756,8 @@ private fun ProviderSearchResults(
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     onDownload: (SubtitleSearchResult) -> Unit,
     onUse: (SubtitleSearchResult) -> Unit,
+    /** Row-keyed save-to-server retry — see [SubtitleManagerSection.onSaveSubtitleToServer]. */
+    onSaveToServer: (SubtitleSearchResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var filter by rememberSaveable {
@@ -770,6 +801,7 @@ private fun ProviderSearchResults(
                             status = downloadingSubtitles[providerSubtitleRowKey(r.provider, r.id)],
                             onDownload = { onDownload(r) },
                             onUse = { onUse(r) },
+                            onSaveToServer = { onSaveToServer(r) },
                         )
                     }
                 }
@@ -889,6 +921,7 @@ private fun ProviderSubtitleRow(
     status: SubtitleDownloadStatus?,
     onDownload: () -> Unit,
     onUse: () -> Unit,
+    onSaveToServer: () -> Unit,
 ) {
     // While a download is in flight or already done, the row itself no longer
     // re-triggers a download — the right-side slot drives the next action
@@ -943,6 +976,7 @@ private fun ProviderSubtitleRow(
             status = status,
             downloadCount = result.downloadCount ?: 0,
             onUse = onUse,
+            onSaveToServer = onSaveToServer,
         )
     }
 }

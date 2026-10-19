@@ -2,12 +2,20 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 /**
  * Pure slice-diff between two [EngineConfig] values — the DECISION half of the
- * mpv adapters' `onConfigChanged` reconfiguration: which config slices moved,
- * never what to write. [of] is total (every pair of configs yields a delta),
- * and both mpv hosts — Android's `MpvPlayerEngine` and the desktop
- * `MpvDesktopEngine` — switch on the returned flags and apply their own native
- * writes, keeping each host's `lastApplied*` diff caches and dispatch
- * threading exactly as they were.
+ * hosts' `onConfigChanged` reconfiguration: which config slices moved, never
+ * what to write. [of] is total (every pair of configs yields a delta), and the
+ * four consumers — the two mpv hosts (Android's `MpvPlayerEngine` and the
+ * desktop `MpvDesktopEngine`) plus Exo (`ExoPlayerEngine`) and VLC
+ * (`LibVlcPlayerEngine`) — switch on the returned flags and apply their own
+ * native writes, keeping each host's diff caches and dispatch threading
+ * exactly as they were.
+ *
+ * Carve-out rule for [subtitleStyleChangedExcludingDelay]: it exists so hosts
+ * that apply delay through a separate live setter (Exo's offset reload, VLC's
+ * `setSpuDelay`) can gate their style path WITHOUT the delay arm. mpv's style
+ * arm legitimately INCLUDES delay — its `sub-delay` write and the style
+ * applier touch disjoint keys, so there re-firing the style applier on a
+ * delay-only move is harmless and [subtitleStyleChanged] remains its gate.
  *
  * Converged behaviour (the two hand-mirrored ladders had drifted):
  *  - The shared-pairs re-diff ([sharedPairsChanged]) fires on ANY
@@ -43,6 +51,18 @@ data class EngineConfigDelta(
     val decoderModeChanged: Boolean,
     /** `subtitleStyle` moved — the full subtitle-style application. */
     val subtitleStyleChanged: Boolean,
+    /**
+     * `subtitleStyle` moved IGNORING the [com.raulshma.jellyplay.core.model.SubtitleStyle.offsetMs]
+     * field — computed from the raw configs by normalising `old`'s offset to
+     * `new`'s, never derived from [subtitleStyleChanged] / [subtitleDelayChanged]
+     * (deriving `subtitleStyleChanged && !subtitleDelayChanged` would be
+     * unsound: in Exo the delay lives inside `subtitleStyle.offsetMs`, so a
+     * delay-only move there flips [subtitleStyleChanged] too — and a joint
+     * style+delay move must still fire the style path). Consumers whose style
+     * path must not re-run on a delay-only adjustment (VLC's reload gate) read
+     * this; see the class KDoc for the carve-out rule.
+     */
+    val subtitleStyleChangedExcludingDelay: Boolean,
     /** The `engineSpecific` slice moved as a whole (value-blind equality). */
     val engineSpecificChanged: Boolean,
     /**
@@ -87,6 +107,7 @@ data class EngineConfigDelta(
             subtitleDelayChanged = false,
             decoderModeChanged = false,
             subtitleStyleChanged = false,
+            subtitleStyleChangedExcludingDelay = false,
             engineSpecificChanged = false,
             sharedPairsChanged = false,
             audioEffectsChanged = false,
@@ -106,6 +127,8 @@ data class EngineConfigDelta(
                 subtitleDelayChanged = old.subtitleDelayMs != new.subtitleDelayMs,
                 decoderModeChanged = old.decoderMode != new.decoderMode,
                 subtitleStyleChanged = old.subtitleStyle != new.subtitleStyle,
+                subtitleStyleChangedExcludingDelay =
+                    old.subtitleStyle.copy(offsetMs = new.subtitleStyle.offsetMs) != new.subtitleStyle,
                 engineSpecificChanged = engineSpecificChanged,
                 sharedPairsChanged = engineSpecificChanged ||
                     old.audioPassthrough != new.audioPassthrough ||

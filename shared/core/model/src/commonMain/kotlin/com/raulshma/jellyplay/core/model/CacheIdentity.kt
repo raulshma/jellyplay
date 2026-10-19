@@ -30,9 +30,9 @@ public expect value class CacheIdentity private constructor(public val encoded: 
          * Encodes a `(serverId, userId)` pair as a stable cache-key segment,
          * or returns [UNKNOWN] if either id is null (before login / after
          * logout). The single source for the null-guarded `CacheIdentity.of()`
-         * shape both `MediaRepositoryImpl.currentIdentity()` (reads an
-         * `AtomicReference` mirror) and `LibraryApiClientImpl.currentHomeCacheIdentity()`
-         * (reads engine `StateFlow`s) used to hand-roll inline.
+         * shape read by `MediaRepositoryImpl.currentIdentity()` (an
+         * `AtomicReference` mirror) and
+         * `LibraryApiClientImpl.currentHomeCacheIdentity()` (engine `StateFlow`s).
          */
         public fun ofOrNull(serverId: String?, userId: String?): CacheIdentity
     }

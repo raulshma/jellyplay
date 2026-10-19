@@ -11,18 +11,23 @@ import kotlin.test.fail
 
 /**
  * Pins the PRODUCTION row-chassis dispatch ([homeRowChassis]) — the
- * offline-mirror precedence that used to live only inside HomeContentList's
+ * offline-mirror precedence lifted out of HomeContentList's
  * if/else chain — plus the See-All gate ([sectionHasSeeAll]), the shared
  * CW click routing ([resumeRowClick]) the online and offline wide rows must not
  * drift apart on, and its poster-row selection ([posterRowClick]).
  */
 class HomeRowChassisTest {
 
-    /** Every section type the offline mirror claims when not wide. */
+    /**
+     * Every section type the offline mirror claims when not wide. MY_MEDIA is
+     * claimed offline too (it is non-wide), but online it has its own tiles
+     * arm — excluded here so the online-poster pin keeps its exact membership.
+     */
     private val posterTypes = HomeSectionType.entries.filter {
         it != HomeSectionType.CONTINUE_WATCHING &&
             it != HomeSectionType.NEXT_UP &&
-            it != HomeSectionType.DOWNLOADED
+            it != HomeSectionType.DOWNLOADED &&
+            it != HomeSectionType.MY_MEDIA
     }
 
     private fun section(type: HomeSectionType) =
@@ -104,6 +109,17 @@ class HomeRowChassisTest {
     }
 
     @Test
+    fun myMedia_dispatchesOnlineTilesOnline_andTheOfflineMirrorOffline() {
+        // The row's own tiles arm online; while the offline feed renders,
+        // the non-wide mirror claim wins (and the mirrored row drops — no
+        // offline library exists for a server library id).
+        val online = section(HomeSectionType.MY_MEDIA)
+        assertEquals(HomeRowChassis.OnlineTiles(online), homeRowChassis(online, hasOfflineContent = false))
+        val offline = section(HomeSectionType.MY_MEDIA)
+        assertEquals(HomeRowChassis.OfflinePoster(offline), homeRowChassis(offline, hasOfflineContent = true))
+    }
+
+    @Test
     fun offlineContinueWatchingAndNextUp_renderOfflineWide() {
         for (type in listOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP)) {
             val section = section(type)
@@ -130,10 +146,12 @@ class HomeRowChassisTest {
     // ── sectionHasSeeAll ──
 
     @Test
-    fun sectionHasSeeAll_trueOnlyForRecentlyAddedAndLatestMedia() {
+    fun sectionHasSeeAll_trueOnlyForRecentlyAddedLatestMediaAndUpcoming() {
         for (type in HomeSectionType.entries) {
             assertEquals(
-                type == HomeSectionType.RECENTLY_ADDED || type == HomeSectionType.LATEST_MEDIA,
+                type == HomeSectionType.RECENTLY_ADDED ||
+                    type == HomeSectionType.LATEST_MEDIA ||
+                    type == HomeSectionType.UPCOMING,
                 sectionHasSeeAll(type),
                 "type=$type",
             )
@@ -287,11 +305,13 @@ class HomeRowChassisTest {
             HomeSectionType.CONTINUE_WATCHING,
             HomeSectionType.CONTINUE_READING,
             HomeSectionType.NEXT_UP,
+            // The Upcoming row rides the batch sub-call's single-row twin.
+            HomeSectionType.UPCOMING,
             HomeSectionType.RECENTLY_ADDED,
             HomeSectionType.LATEST_MEDIA,
             HomeSectionType.PINNED,
             HomeSectionType.DISCOVER,
-            // The plugin rows (companion plugin, ADR 0010) ride the fetcher's
+            // The plugin rows (companion plugin) ride the fetcher's
             // single-row PLUGIN_ROW arm like the pins do.
             HomeSectionType.PLUGIN_ROW,
         )

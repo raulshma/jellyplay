@@ -11,8 +11,8 @@ import kotlin.test.Test
 
 /**
  * The title-formatting tests assert the PRODUCTION [formatMediaTitle] —
- * previously they copy-pasted the private function's body and asserted
- * against the copy, so a regression in the real formatter passed them.
+ * asserting the production function means a regression in the real formatter
+ * fails them.
  */
 class SyncDetailsSheetTest {
 

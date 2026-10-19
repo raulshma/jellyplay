@@ -338,8 +338,7 @@ class PreferenceProjections constructor(
     /**
      * Fields read by `HomeSettingsScreen` — a single-store slice over
      * [HomeDiscoveryStore] so the home config hub recomposes only on
-     * home-discovery writes. Includes the card-display quartet since the
-     * finished Appearance → HomeSettings move (PS-4): the knobs are
+     * home-discovery writes. Includes the card-display quartet: the knobs are
      * home-discovery state and their rows render on the hub's Cards group.
      */
     val homeScreenPreferences: StateFlow<HomeScreenPreferences> =
@@ -347,26 +346,40 @@ class PreferenceProjections constructor(
             HomeScreenPreferences(
                 homeMode = home.homeMode,
                 homeHeroEnabled = home.homeHeroEnabled,
+                homeHeroVideoEnabled = home.homeHeroVideoEnabled,
+                homeHeroVideoTvEnabled = home.homeHeroVideoTvEnabled,
                 homeBackdropEnabled = home.homeBackdropEnabled,
+                homeFocusBackdrop = home.homeFocusBackdrop,
+                homeStatsCard = home.homeStatsCard,
+                homeGenreRail = home.homeGenreRail,
+                homePresenceChips = home.homePresenceChips,
+                homeNewSectionAnnouncements = home.homeNewSectionAnnouncements,
                 showClockOnHome = home.showClockOnHome,
                 showSettingsInHomeSearch = home.showSettingsInHomeSearch,
                 hideTopHeaderOnScroll = home.hideTopHeaderOnScroll,
                 continueWatchingClickBehavior = home.continueWatchingClickBehavior,
                 hiddenCwItemIds = home.hiddenCwItemIds,
                 nextUpExcludedSeriesIds = home.nextUpExcludedSeriesIds,
+                myMediaHiddenLibraryIds = home.myMediaHiddenLibraryIds,
                 mergeContinueWatchingAndNextUp = home.mergeContinueWatchingAndNextUp,
                 nextUpMaxDays = home.nextUpMaxDays,
                 nextUpRewatching = home.nextUpRewatching,
                 classicRows = home.classicRows,
+                excludeActiveSessions = home.excludeActiveSessions,
                 enabledHomeSectionTypes = home.enabledHomeSectionTypes,
                 homeSectionOrder = home.homeSectionOrder,
                 pinnedHomeSections = home.pinnedHomeSections,
                 discoverRows = home.discoverRows,
                 homeLayoutPresets = home.homeLayoutPresets,
+                homeLayoutAutopush = home.homeLayoutAutopush,
                 showUnwatchedBadge = home.showUnwatchedBadge,
                 showWatchedCheckmark = home.showWatchedCheckmark,
                 hideWatchedItems = home.hideWatchedItems,
                 showExternalRatings = home.showExternalRatings,
+                showQualityBadges = home.showQualityBadges,
+                showNewBadges = home.showNewBadges,
+                homeTrickplayPreview = home.homeTrickplayPreview,
+                antiSpoilerHome = home.antiSpoilerHome,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), HomeScreenPreferences())
@@ -374,10 +387,9 @@ class PreferenceProjections constructor(
     // -------------------------------------------------------------------------
     // Consumer-screen projections (non-settings surfaces).
     //
-    // These replace the bespoke `combine(...)` projections the feature
-    // ViewModels used to hand-roll (several with vararg + `UNCHECKED_CAST`).
-    // Field sets are a verbatim port of the former local shadows so the screen
-    // bodies keep reading `preferences.X`.
+    // These carry exactly the fields each screen reads, so the screen bodies
+    // keep reading `preferences.X` and no ViewModel needs its own
+    // `combine(...)` fan-out.
     // -------------------------------------------------------------------------
 
     /** Fields read by the audio player screen (lyrics toggle + artwork theme). */
@@ -429,6 +441,20 @@ class PreferenceProjections constructor(
             showDetailUpNext = library.showDetailUpNext,
             showMissingEpisodes = library.showMissingEpisodes,
             preferLogos = library.preferLogos,
+            showExternalLinks = library.showExternalLinks,
+            showTagline = library.showTagline,
+            preferLocalTrailers = library.preferLocalTrailers,
+            showMoreInCollection = library.showMoreInCollection,
+            showUpcomingStrip = library.showUpcomingStrip,
+            playThemeMusic = library.playThemeMusic,
+            themeMusicMutedSeriesIds = home.themeMusicMutedSeriesIds,
+            showReviews = library.showReviews,
+            showEpisodeStreamBadges = library.showEpisodeStreamBadges,
+            showFilmographyRoles = library.showFilmographyRoles,
+            showFrequentCostars = library.showFrequentCostars,
+            trailerPreviewOnFocus = library.trailerPreviewOnFocus,
+            showPromotedActionsLandscape = library.showPromotedActionsLandscape,
+            showDownloadProgress = library.showDownloadProgress,
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())

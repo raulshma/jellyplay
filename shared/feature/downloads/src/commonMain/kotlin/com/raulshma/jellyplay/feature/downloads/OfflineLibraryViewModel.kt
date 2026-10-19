@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaTypeGroup
 import com.raulshma.jellyplay.core.model.matchesOfflineQuery
 import com.raulshma.jellyplay.core.model.typeGroup
@@ -25,8 +26,9 @@ import org.jetbrains.compose.resources.StringResource
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_books
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_movies
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_music
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_videos
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_filter_series
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_name
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_rating
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_recent
@@ -40,10 +42,17 @@ enum class OfflineLibrarySort(val labelRes: StringResource) {
     SIZE(Res.string.downloads_sort_size),
 }
 
-/** Coarse media-type filter for the library tabs. */
+/**
+ * Coarse media-type filter for the library tabs (gh-175 splits Videos into
+ * Movies + Series). Note the deliberate asymmetry with
+ * [DownloadListFilter.SERIES]: this grid shows top-level rows only, so Series
+ * here matches SERIES rows, while the downloads list's Series filter matches
+ * the EPISODE files the queue stores.
+ */
 enum class OfflineLibraryFilter(val labelRes: StringResource) {
     ALL(Res.string.downloads_filter_all),
-    VIDEOS(Res.string.downloads_filter_videos),
+    MOVIES(Res.string.downloads_filter_movies),
+    SERIES(Res.string.downloads_filter_series),
     MUSIC(Res.string.downloads_filter_music),
     BOOKS(Res.string.downloads_filter_books),
 }
@@ -124,10 +133,15 @@ class OfflineLibraryViewModel(
     ): List<OfflineMediaItem> {
         // The type partition and the query-field match are the shared
         // OfflineShelf rules — the same partition the home's mode filter uses,
-        // the same field set the repository's searchOffline matches.
+        // the same field set the repository's searchOffline matches. This
+        // grid shows top-level rows only (SERIES/MOVIE/...), so Movies and
+        // Series are exact media-type matches; episodes never surface here —
+        // the series drill-down owns their ordering.
         val filtered = when (filter) {
-            OfflineLibraryFilter.VIDEOS ->
-                items.filter { it.typeGroup == OfflineMediaTypeGroup.VIDEO }
+            OfflineLibraryFilter.MOVIES ->
+                items.filter { it.mediaType == MediaType.MOVIE }
+            OfflineLibraryFilter.SERIES ->
+                items.filter { it.mediaType == MediaType.SERIES }
             OfflineLibraryFilter.MUSIC ->
                 items.filter { it.typeGroup == OfflineMediaTypeGroup.MUSIC }
             OfflineLibraryFilter.BOOKS ->

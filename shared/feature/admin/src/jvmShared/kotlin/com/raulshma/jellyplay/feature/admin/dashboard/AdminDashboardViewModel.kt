@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.admin.dashboard
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
@@ -13,7 +14,11 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 @Immutable
 data class AdminDashboardState(
@@ -41,7 +46,7 @@ data class AdminDashboardState(
 class AdminDashboardViewModel(
     private val adminRepository: AdminRepository,
     /**
-     * The JellyPlay companion-plugin seam (ADR 0010), nullable-with-default
+     * The JellyPlay companion-plugin seam, nullable-with-default
      * (SettingsViewModel pattern) so the direct-construction test harnesses
      * compile. Backs the Quick Actions "Transcodes" tile's gate — the tile is
      * offered only when the probe reports AVAILABLE **and** the `transcodes`
@@ -50,13 +55,13 @@ class AdminDashboardViewModel(
     private val jellyPlayStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store
-     * above. Nullable-with-default; without it the probe-only combine below
+     * above. Nullable-with-default; without it the gate's probe-only fallback
      * keeps the pre-toggle behavior.
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
     /**
-     * The plugin api client behind the "Send broadcast" composer (ADR 0010 —
-     * POST jellyplay/broadcast, riding the `events` stream). Nullable-with-
+     * The plugin api client behind the "Send broadcast" composer (POST
+     * jellyplay/broadcast, riding the `events` stream). Nullable-with-
      * default like the seams above; the send is refused while either gate is
      * unwired, so direct construction (tests) simply can't broadcast.
      */
@@ -67,26 +72,32 @@ class AdminDashboardViewModel(
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
 
     /**
-     * The nullable-seam gate every plugin tile rides (the transcodes monitor's
-     * exact shape): the ONE gate seam when wired, else the probe-only combine
-     * over the status store, else constant false — a tile whose seams are
-     * unwired (direct construction, tests) simply never renders.
+     * The shared capability gate (the plugin capability gate module) — the
+     * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
+     * store discipline that the tiles' gates would otherwise re-wire per
+     * flow. Null with
+     * the store: tiles whose seams are unwired (direct construction, tests)
+     * simply never render.
      */
-    private fun pluginFeatureEnabled(featureKey: String): StateFlow<Boolean> =
-        when {
-            jellyPlayFeatureGate != null -> jellyPlayFeatureGate.isAvailable(featureKey)
-            jellyPlayStatusStore != null -> {
-                val store = jellyPlayStatusStore
-                stateIn(
-                    initial = false,
-                    flow = kotlinx.coroutines.flow.combine(store.status, store.features) { status, features ->
-                        status == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.AVAILABLE &&
-                            features.contains(featureKey)
-                    },
-                )
-            }
-            else -> kotlinx.coroutines.flow.MutableStateFlow(false)
-        }
+    private val capabilityGate = jellyPlayStatusStore?.let {
+        com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityGate(it, scope)
+    }
+
+    /**
+     * The nullable-seam gate every plugin tile rides (the shared capability
+     * gate's tri-state mapped onto the tile's Boolean): the gate's verdict —
+     * the ONE gate seam when wired, its probe-only fallback when the toggle
+     * seam is absent, else constant false.
+     */
+    private fun pluginFeatureEnabled(featureKey: String): StateFlow<Boolean> {
+        val gate = capabilityGate
+            ?: return MutableStateFlow(false)
+        // Eagerly: the sendBroadcast backstop reads `.value` without holding a
+        // collector — the pre-gate-module flow was eagerly shared too.
+        return gate.state(featureKey, jellyPlayFeatureGate)
+            .map { it == JellyPlayCapabilityState.Available }
+            .stateIn(scope, SharingStarted.Eagerly, false)
+    }
 
     /**
      * Whether the dashboard may offer the companion-plugin transcodes monitor:
@@ -145,29 +156,24 @@ class AdminDashboardViewModel(
 
     /**
      * One capabilities probe; called when the dashboard becomes visible so the
-     * Transcodes tile's gate resolves without a settings detour. The store
-     * itself only acts while UNKNOWN (same discipline as the settings screen's
-     * sync section) — a stock server eats exactly one probe per visit.
+     * plugin tiles' gates resolve without a settings detour. The shared
+     * capability gate's arm — the store itself only acts while UNKNOWN — a
+     * stock server eats exactly one probe per visit.
      */
     fun refreshJellyPlayPluginStatus() {
-        val store = jellyPlayStatusStore ?: return
-        launch {
-            if (store.status.value == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNKNOWN) {
-                store.refresh()
-            }
-        }
+        capabilityGate?.arm()
     }
 
     /**
-     * Deadline (via [System.currentTimeMillis]) up to which an IDLE scan task
-     * is treated as RUNNING. Set when the user triggers a scan: the server
-     * takes a moment to flip the scheduled task from IDLE to RUNNING after
-     * [apiClient.startTask], and a WS push landing on IDLE during that window
-     * would otherwise collapse the optimistic [LibraryScanState.Running] and
-     * hide the progress UI. Cleared as soon as the WS confirms RUNNING, so a
-     * later IDLE genuinely means the scan finished.
+     * The optimistic grace-window machine ([LibraryScanWindow], extracted):
+     * armed when the user triggers a scan, disarmed the moment the WS
+     * confirms RUNNING, and cleared when it expires unconfirmed. The former
+     * private AtomicLong + constants moved with the machine.
      */
-    private val scanOptimisticUntilMs = java.util.concurrent.atomic.AtomicLong(0L)
+    private val scanWindow = LibraryScanWindow()
+
+    /** The WS-push freshness rule ([WsTaskFreshness], extracted). */
+    private val wsTasksFreshness = WsTaskFreshness()
 
     init {
         loadDashboard()
@@ -229,16 +235,14 @@ class AdminDashboardViewModel(
 
     /**
      * True while WS task pushes are recent enough to be trusted over a REST
-     * snapshot (1 Hz cadence; 30 s of silence means the socket is dead).
-     * Freshness is judged from the channel's push timestamp, not from
-     * collection: the shared flow replays its last emission to every new
-     * collector, and that replay can be arbitrarily old.
+     * snapshot — the extracted [WsTaskFreshness] rule (1 Hz cadence; 30 s of
+     * silence means the socket is dead). Freshness is judged from the
+     * channel's push timestamp, not from collection: the shared flow replays
+     * its last emission to every new collector, and that replay can be
+     * arbitrarily old.
      */
-    private fun wsTasksFresh(): Boolean {
-        val lastPushAtMs = adminRepository.scheduledTasksLastPushAtMs
-        return lastPushAtMs != 0L &&
-            System.currentTimeMillis() - lastPushAtMs < WS_PUSH_STALE_AFTER_MS
-    }
+    private fun wsTasksFresh(): Boolean =
+        wsTasksFreshness.isFresh(adminRepository.scheduledTasksLastPushAtMs)
 
     /**
      * Live running-task list from the WebSocket `ScheduledTasksInfo` push
@@ -360,7 +364,7 @@ class AdminDashboardViewModel(
      */
     fun scanLibrary() {
         if (_uiState.value.libraryScanState is LibraryScanState.Running) return
-        scanOptimisticUntilMs.set(System.currentTimeMillis() + scanOptimisticGraceMs)
+        scanWindow.start()
         launch {
             _uiState.update { it.copy(libraryScanState = LibraryScanState.Running(progress = null)) }
             adminRepository.startLibraryScan()
@@ -382,26 +386,28 @@ class AdminDashboardViewModel(
     /**
      * Reflects the "Scan media library" task's [ScheduledTaskInfo] into
      * [libraryScanState], honoring the optimistic window started by [scanLibrary].
+     * The window machine is the extracted [LibraryScanWindow]; the
+     * `state == TaskState.RUNNING` comparisons here deliberately stay raw-enum
+     * code — they read the domain fact "the server reports the task running",
+     * not a presentation decision.
      */
     private fun applyScanTask(scanTask: ScheduledTaskInfo?) {
         // Server has actually started running — no more optimistic hold.
         if (scanTask?.state == TaskState.RUNNING) {
-            scanOptimisticUntilMs.set(0L)
+            scanWindow.confirmRunning()
         }
-        val withinOptimisticWindow = scanOptimisticUntilMs.get() != 0L &&
-            System.currentTimeMillis() < scanOptimisticUntilMs.get()
         val nextState = when {
             scanTask?.state == TaskState.RUNNING ->
                 LibraryScanState.Running(progress = scanTask.currentProgressPercentage)
             // Server still IDLE but within the grace window following a user
             // tap: preserve the optimistic Running(null) state.
-            withinOptimisticWindow -> LibraryScanState.Running(progress = null)
+            scanWindow.isActive() -> LibraryScanState.Running(progress = null)
             else -> LibraryScanState.Idle
         }
         // If the grace window expired without ever observing RUNNING, give up
         // the optimistic hold so the UI can settle to Idle.
         if (nextState is LibraryScanState.Idle) {
-            scanOptimisticUntilMs.set(0L)
+            scanWindow.clear()
         }
         _uiState.update { it.copy(libraryScanState = nextState) }
     }
@@ -409,17 +415,6 @@ class AdminDashboardViewModel(
     private companion object {
         // Jellyfin scheduled-task key for "Scan media library".
         const val KEY_SCAN_LIBRARY = "RefreshLibrary"
-
-        // WS task pushes arrive at 1 Hz; past this much silence the socket
-        // is considered dead and REST snapshots may refresh runningTasks
-        // again (see [wsTasksFresh]).
-        private const val WS_PUSH_STALE_AFTER_MS = 30_000L
-
-        // How long to keep the optimistic Running state after the user taps
-        // "Scan Library", waiting for the server to flip the task to RUNNING.
-        // Generous enough to cover startTask latency + the IDLE→RUNNING flip,
-        // short enough to recover the UI if the start request silently failed.
-        const val scanOptimisticGraceMs = 15_000L
     }
 }
 

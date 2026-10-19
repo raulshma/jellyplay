@@ -9,8 +9,7 @@ import org.jetbrains.skia.Image
 /**
  * runtime-loadable app icon (window title-bar + system-tray).
  *
- * The bytes are the SAME deterministic PNG the packaging generator task draws
- * (`generatePackagingIcons` in build.gradle.kts → packaging/icons/JellyPlay-linux.png;
+ * The bytes are the committed deterministic PNG (packaging/icons/JellyPlay-linux.png;
  * byte-identical copy committed at src/main/resources/branding/jellyplay-icon.png).
  * Packaging-only assets are NOT on the runtime classpath, so a runtime copy is
  * required. If the resource is ever missing or undecodable this degrades to null

@@ -231,10 +231,14 @@ internal fun ImagesTab(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentType = { "editor-image-card" },
             ) { _, imageInfo, itemModifier ->
                 ImageCard(
                     imageInfo = imageInfo,
-                    imageUrl = viewModel.getImageUrl(itemId, imageInfo),
+                    // Memoized: the URL build re-ran per item per
+                    // recomposition, bypassing the pipeline's URL memo the
+                    // main app pays attention to.
+                    imageUrl = remember(itemId, imageInfo) { viewModel.getImageUrl(itemId, imageInfo) },
                     onDelete = { pendingDelete = pendingDelete.hold(imageInfo) },
                     onClick = { selectedImageInfo = imageInfo },
                     modifier = itemModifier,
@@ -580,7 +584,14 @@ private fun ImageBrowseSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(remoteImages, key = { it.url }) { remoteImage ->
+                    items(
+                        remoteImages,
+                        key = { it.url },
+                        // The house contentType idiom (PagedCollectionGrid et al):
+                        // one uniform card type — lets the lazy layout reuse
+                        // compositions across the browse grid.
+                        contentType = { "remote-image-card" },
+                    ) { remoteImage ->
                         RemoteImageCard(
                             remoteImage = remoteImage,
                             onDownload = {
@@ -714,12 +725,15 @@ private fun FullImageDialog(
                 placeholderIcon = Tabler.Outline.Photo,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offsetX,
-                        translationY = offsetY,
-                    ),
+                    // Lambda form (the PhotoViewerScreen idiom): pinch/pan
+                    // frames become draw-only layer updates instead of
+                    // recomposing the dialog per gesture frame.
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    },
                 contentScale = ContentScale.Fit,
             )
             IconButton(

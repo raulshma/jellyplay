@@ -28,8 +28,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Native-dialog harness — the in-app, in-window verification of the
- * AWT [FileDialog] flows that landed "manually-verified-only" before this
- * harness existed. Driven entirely by `jellyplay.dialogpass.*` system properties
+ * AWT [FileDialog] flows (otherwise manually verified only).
+ * Driven entirely by `jellyplay.dialogpass.*` system properties
  * (injected through JAVA_TOOL_OPTIONS by tools/e2e/desktop-native-dialog-pass.sh,
  * the [DesktopSessionHarness] pattern); when
  * `jellyplay.dialogpass.enabled` is unset, [runIfRequested] returns without
@@ -65,9 +65,9 @@ import kotlinx.serialization.json.jsonPrimitive
  *     restore does in the wizard.
  *  5. DIALOG_CANCEL_ESC — a LOAD dialog dismissed with ESC (native cancel):
  *     [pickAwtFile] returns null, so the production picker fires no callback
- *     and the VM's backup-restore state is untouched — the live twin of the
- *     `pickedAwtFile` cancel-shape unit test (covered the mapping in
- *     isolation; this covers the real modal dismissal).
+ *     and the VM's backup-restore state is untouched — the real-modal
+ *     counterpart of the `pickedAwtFile` cancel-shape unit test (which
+ *     covers the mapping in isolation; this covers the real modal dismissal).
  *  6. Report — `<logs>/dialog-harness.json` (same step-ledger shape as the
  *     session harness, `harness:"desktop-native-dialog"`), a screenshot of
  *     the native dialog per step under the screenshot dir, then

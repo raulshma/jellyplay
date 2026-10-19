@@ -9,15 +9,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,20 +23,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
-import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
@@ -52,7 +50,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 // ── Section host: overlay tiers over the video surface ───────────────────
 // Owns the center overlays (gesture trickplay, intro/segment skip, skipped
-// notice, up-next, HDR badge, buffering spinner), the full-screen lock
+// notice, up-next, buffering spinner), the full-screen lock
 // overlays (PIN pad / slide-to-unlock), the seek-scrub trickplay thumbnail,
 // the transparent VLC-style subtitle-delay overlay, and the shared trickplay
 // thumbnail collector feeding both trickplay surfaces. Moved verbatim from
@@ -65,7 +63,7 @@ private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
 /**
  * Input bundle for [PlayerCenterOverlayTier] (the [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
- * idiom): the 22 values the center overlays read — the gesture-trickplay and
+ * idiom): what the center overlays read — the gesture-trickplay and
  * seek feeds, the intro/segment-skip/up-next family with their TV focus
  * anchors, and the playback-context flags — riding one `@Immutable` carrier.
  * The call wall remembers it on exactly these fields, so the bundle instance
@@ -77,8 +75,14 @@ internal data class CenterOverlayInputs(
     val trickplayOnSeekGesture: Boolean,
     val gestureTrickplayVisible: Boolean,
     val gestureTrickplayBitmap: PlatformBitmap?,
-    val gestureSeekPositionMs: Long,
-    val gestureDeltaMs: Long,
+    /**
+     * The gesture-seek drag feeds — FLOWS, not values: they emit per pointer
+     * frame, so the call wall's remember must not key on them, and only the
+     * trickplay leaf below collects them (the ANR class PlayerControls'
+     * placement comment warns about).
+     */
+    val gestureSeekPositionMs: StateFlow<Long>,
+    val gestureDeltaMs: StateFlow<Long>,
     val durationMs: Long,
     val isCinemaIntroVisible: Boolean,
     val tvCinemaIntroFocusRequester: FocusRequester,
@@ -87,8 +91,14 @@ internal data class CenterOverlayInputs(
     val shouldShowUpNext: Boolean,
     val isInPipMode: Boolean,
     val tvSkipSegmentFocusRequester: FocusRequester,
-    val nextEpisode: MediaItem?,
-    val nextEpisodeImageUrl: String?,
+    /**
+     * The Up Next card — the Up Next controller's projection, already resolved
+     * with the ADVANCE's precedence (queue head beats the episode sibling, null
+     * under SyncPlay). The overlay never re-decides precedence from raw state.
+     */
+    val upNextCard: UpNextCard?,
+    /** The card's artwork: the queue row's image, or the episode item's resolved url. */
+    val upNextImageUrl: String?,
     val isNextEpisodeLoading: Boolean,
     val tvNextEpisodeFocusRequester: FocusRequester,
     val isPlaying: Boolean,
@@ -99,7 +109,7 @@ internal data class CenterOverlayInputs(
     val stillWatchingPrompt: StillWatchingPromptState?,
 )
 
-/** Center/anchored overlays: gesture trickplay, intro/segment skip, skipped notice, up-next, HDR badge, buffering spinner. */
+/** Center/anchored overlays: gesture trickplay, intro/segment skip, skipped notice, up-next, buffering spinner. */
 @Composable
 internal fun BoxScope.PlayerCenterOverlayTier(
     viewModel: VideoPlayerViewModel,
@@ -114,10 +124,15 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier.align(Alignment.Center),
     ) {
+        // Collected HERE — inside the visible overlay's own recompose scope,
+        // not the tier's: the feeds emit per drag frame, and only the
+        // trickplay surface renders them.
+        val gestureSeekPositionMs by inputs.gestureSeekPositionMs.collectAsStateWithLifecycle()
+        val gestureDeltaMs by inputs.gestureDeltaMs.collectAsStateWithLifecycle()
         TrickplayOverlay(
             bitmap = inputs.gestureTrickplayBitmap,
-            positionMs = inputs.gestureSeekPositionMs,
-            deltaMs = inputs.gestureDeltaMs,
+            positionMs = gestureSeekPositionMs,
+            deltaMs = gestureDeltaMs,
             durationMs = inputs.durationMs,
         )
     }
@@ -185,16 +200,18 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         }
     }
 
-    if (inputs.nextEpisode != null) {
-        // The confirm overlay suppresses the up-next card while visible —
-        // the answer decides the advance, the card must not race it.
+    // The Up Next card: the controller's projection (queue head beats the
+    // episode sibling — the SAME precedence the advance applies). The confirm
+    // overlay suppresses the card while visible — the answer decides the
+    // advance, the card must not race it.
+    inputs.upNextCard?.let { card ->
         NextEpisodeOverlay(
             isVisible = inputs.shouldShowUpNext && inputs.stillWatchingPrompt == null,
-            episodeTitle = inputs.nextEpisode.name,
-            seriesName = inputs.nextEpisode.seriesName,
-            seasonNumber = inputs.nextEpisode.seasonNumber,
-            episodeNumber = inputs.nextEpisode.episodeNumber,
-            thumbnailUrl = inputs.nextEpisodeImageUrl,
+            episodeTitle = card.title,
+            seriesName = card.subtitle,
+            seasonNumber = card.seasonNumber,
+            episodeNumber = card.episodeNumber,
+            thumbnailUrl = inputs.upNextImageUrl,
             countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
             autoplayEnabled = uiState.autoplay.videoAutoplayNext,
             onPlayNext = { viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) },
@@ -220,14 +237,6 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         onTick = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingTick) },
         pauseCountdown = inputs.isSheetOpen || inputs.isScreenLocked,
         modifier = Modifier.align(Alignment.Center),
-    )
-
-    HdrBadge(
-        hdrType = uiState.hdrType,
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(top = 16.dp, end = 16.dp),
     )
 
     // Buffering spinner fades/scales in and out — an abrupt pop mid-playback
@@ -314,7 +323,7 @@ internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
 }
 
 /**
- * The shared collector behind BOTH trickplay thumbnail feeds (A6): the
+ * The shared collector behind BOTH trickplay thumbnail feeds: the
  * seek-bar / D-pad scrub (seek overlay bitmap + the TV mirror, which renders
  * no gesture overlay) and the gesture-swipe preview. The two former inline
  * `LaunchedEffect(Unit)` collectors differed only in the position source, the

@@ -28,7 +28,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The JellyPlay companion-plugin's inbox messages screen (ADR 0010) — the
+ * The JellyPlay companion-plugin's inbox messages screen — the
  * durable counterpart of the live events stream: the plugin's admin-published
  * messages with read state. Deliberately minimal: the existing
  * [SettingListItem] rows carry title / body / read state, tapping an unread

@@ -72,12 +72,14 @@ import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleHeaderRewriter
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleOverrideParserFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleOverrideExtractorsFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import io.github.peerless2012.ass.media.AssHandler
-import io.github.peerless2012.ass.media.kt.withAssMkvSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
@@ -111,6 +113,12 @@ import okhttp3.OkHttpClient
 private val DEFAULT_SUBTITLE_SIZE_SP =
     SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.fontSizeSp.toFloat()
 private const val TAG = "ExoPlayerEngine"
+
+/**
+ * The buffered-band publish gate's start-step (see the positionFlow tick body):
+ * a start move smaller than this keeps the previous band published.
+ */
+private const val BUFFERED_BAND_START_STEP_MS = 500L
 
 class ExoPlayerEngine(
     private val context: Context,
@@ -237,6 +245,71 @@ class ExoPlayerEngine(
     private val replayGainProcessor = ReplayGainAudioProcessor()
 
     /**
+     * The platform spatializer facts + observer (API-32-guarded; query-only —
+     * there is no app-side enable, see [resolveEffectiveSpatialState]).
+     * Callbacks arrive on the main handler; the engine folds them into the
+     * effective state and, while spatial audio is EFFECTIVE, neutralizes the
+     * in-sink downmix/speaker cap and holds the Virtualizer off (spatial wins
+     * — the recorded supersession is [spatialSupersededVirtualizer]).
+     */
+    private val spatializerHelper = SpatializerHelper(context) { evaluation ->
+        onSpatialEvaluation(evaluation)
+    }
+
+    /**
+     * The display's HDR capability facts (`Display.HdrCapabilities` types,
+     * display-event-refreshed) behind [resolveExoHdrOutput]. Read per decision
+     * via [DisplayHdrCapabilitiesProbe.support]; a null snapshot (probe
+     * unavailable) keeps the native output path — unknown is not SDR.
+     */
+    private val displayHdrProbe = DisplayHdrCapabilitiesProbe(context)
+
+    /**
+     * Memo for the stats tick's display-HDR label: the tick
+     * computes the joined display-name string BEFORE the dedup guard, so the
+     * join re-ran per tick even when the result was discarded. Keyed on the
+     * probe snapshot's IDENTITY — a new display snapshot invalidates it.
+     */
+    private var displayHdrTypesCache: Pair<Any?, String?>? = null
+
+    /**
+     * The pure (content × display × setting) decision for the current config —
+     * the single definition both the load-time engagement and the stats fold
+     * read, so the two can never disagree.
+     */
+    private fun resolveHdrDecision(): HdrOutputDecision = resolveExoHdrOutput(
+        content = currentConfig.hdrContent,
+        display = displayHdrProbe.support.value,
+        mode = currentExoConfig.hdrToneMapping,
+    )
+
+    /**
+     * Whether the CURRENT session is in the spatial-neutralized shape
+     * (downmix + speaker cap held off, virtualizer suppressed). Drives the
+     * apply-path override and the flip-triggered audio-pipeline
+     * reconfiguration; reset on release.
+     */
+    private var spatialNeutralizationActive: Boolean = false
+
+    /**
+     * Set while spatial audio is effective AND the user also had the
+     * Virtualizer enabled — spatial wins, and this records it for the stats
+     * surface. Cleared whenever the evaluation no longer supersedes.
+     */
+    @Volatile
+    private var spatialSupersededVirtualizer: Boolean = false
+
+    /**
+     * Set by [reconfigureAudioPipeline], cleared when the rebuilt media period
+     * reports a selected audio format again (or on release). While set, the
+     * transient empty-track window's null-format evaluation is suppressed in
+     * [updateSpatialState] — otherwise one spatial flip cascades into up to
+     * three media-period rebuilds (flip → rebuild → empty tracks → UNAVAILABLE
+     * → flip back → rebuild → tracks restored → flip again → rebuild).
+     */
+    private var audioPipelineReconfiguring: Boolean = false
+
+    /**
      * Collapses the prior 7-helper + 3-processor sprawl behind a single
      * attach/apply/release surface. Owns the bookkeeping
      * (`audioEffectsAttached`, `lastAudioEffectsConfig`,
@@ -327,6 +400,21 @@ class ExoPlayerEngine(
                     subtitleTrackAutoDisabled = false
                 }
             }
+            // The selected audio track defines the playing format the spatial
+            // qualification answers for. The rebuilt media period re-selects
+            // its tracks here — clear the reconfigure guard once a playing
+            // audio format is back, or once the rebuilt selection is known to
+            // be audio-less: a null format is then the settled answer, not
+            // the reconfigure transient, and holding the guard would freeze
+            // the prior session's evaluation into an audio-less item.
+            val rebuiltSelectionKnown = tracks.groups.isNotEmpty()
+            val audioTrackPresent = tracks.groups.any {
+                it.getType() == androidx.media3.common.C.TRACK_TYPE_AUDIO
+            }
+            if (player?.audioFormat != null || (rebuiltSelectionKnown && !audioTrackPresent)) {
+                audioPipelineReconfiguring = false
+            }
+            updateSpatialState()
         }
 
         override fun onCues(cueGroup: CueGroup) {
@@ -347,8 +435,16 @@ class ExoPlayerEngine(
                 // chain re-binds to the new session instead of short-
                 // circuiting on the cached config.
                 audioEffectChain.release()
-                audioEffectChain.apply(audioSessionId, currentConfig.audioEffects, currentNormalizationGain)
+                audioEffectChain.apply(
+                    audioSessionId,
+                    currentConfig.audioEffects,
+                    currentNormalizationGain,
+                    spatialAudioActive = spatialNeutralizationActive,
+                )
             }
+            // A track switch can move the playing audio format — the
+            // canBeSpatialized answer rides the format.
+            updateSpatialState()
         }
 
         override fun onVolumeChanged(volume: Float) {
@@ -389,14 +485,29 @@ class ExoPlayerEngine(
 
     private var lastRebuildInputs: LoadRebuildInputs? = null
 
+    /**
+     * The current config's [ExoPlayerEngineConfig] payload, or the default
+     * when the config carries none — the single home for that fallback read
+     * (the load path and the spatial-state refresh both need it).
+     */
+    private val currentExoConfig: ExoPlayerEngineConfig
+        get() = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
+
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
 
         currentNormalizationGain = request.requestSpecific?.normalizationGain
 
-        val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
+        val exoCfg = currentExoConfig
         val assForRequest = AssSupport.hasAssSubtitles(request)
         val streamCacheEligible = isStreamCacheEligible(request)
+        // The HDR output posture is a CONSTRUCTION-time input: engagement of
+        // the GL video-graph path is sticky for the built player (see
+        // LoadRebuildInputs.hdrGlEngaged). DRM sessions never engage —
+        // `setVideoEffects` explicitly does not support DRM content.
+        val hdrDecision = resolveHdrDecision()
+        val hdrGlEngaged = hdrDecision.toneMappingActive &&
+            currentConfig.drmSessionManagerProvider == null
         val inputs = LoadRebuildInputs(
             decoderMode = currentConfig.decoderMode,
             exoCfg = exoCfg,
@@ -408,6 +519,7 @@ class ExoPlayerEngine(
             assSession = assForRequest,
             drmProvider = currentConfig.drmSessionManagerProvider,
             streamCacheEligible = streamCacheEligible,
+            hdrGlEngaged = hdrGlEngaged,
         )
 
         val existingPlayer = player
@@ -508,14 +620,17 @@ class ExoPlayerEngine(
         // One offset mechanism covers both paths: the OffsettingSubtitleParser
         // Factory wraps whichever delegate is active, so the subtitle-delay slider
         // shifts cues on the ASS path too (libass reads the shifted start times).
-        // On the ASS path the delegate is the concrete AssSubtitleParserFactory,
-        // which is also handed (un-wrapped) to withAssMkvSupport below — that
-        // extension requires the concrete type for embedded-MKV ASS extraction,
-        // while the offset wrapper handles side-loaded external ASS subs.
+        // On the ASS path the delegate chain is the AssStyleOverrideParserFactory
+        // (FORCE-mode header rewrite, reads currentConfig lazily) wrapping the
+        // concrete AssSubtitleParserFactory; the same wrapper is handed to
+        // [AssStyleOverrideExtractorsFactory] below for embedded-MKV ASS, while
+        // the offset wrapper handles side-loaded external ASS subs.
         val assParserFactory: AssSubtitleParserFactory? =
             if (assEnabledForSession) AssSubtitleParserFactory(assHandler!!) else null
         val delegateParserFactory: androidx.media3.extractor.text.SubtitleParser.Factory =
-            assParserFactory ?: DefaultSubtitleParserFactory()
+            assParserFactory?.let {
+                AssStyleOverrideParserFactory(it) { currentConfig.subtitleStyle }
+            } ?: DefaultSubtitleParserFactory()
         val offsetFactory = OffsettingSubtitleParserFactory(delegateParserFactory, offsetUsProvider)
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
@@ -532,18 +647,24 @@ class ExoPlayerEngine(
         // On the ASS path, wrap the extractors with Matroska+ASS support (for
         // ASS embedded in MKV) and the renderers with the libass text renderer;
         // otherwise the plain base factories reproduce the pre-ASS build exactly.
-        // withAssMkvSupport takes the extractors factory and the BARE
-        // AssSubtitleParserFactory (the concrete type), per its signature.
+        // The extractor swap mirrors ass-media's withAssMkvSupport extension but
+        // takes the style-override wrapper: AssMatroskaExtractor accepts the
+        // SubtitleParser.Factory INTERFACE, so the FORCE-mode header rewrite
+        // reaches embedded ASS too (the library's extension only accepts the
+        // concrete AssSubtitleParserFactory).
         //
-        // KNOWN LIMITATION: because withAssMkvSupport requires the concrete
-        // AssSubtitleParserFactory type, embedded ASS-in-MKV extraction bypasses
-        // the OffsettingSubtitleParserFactory — the subtitle-delay slider has no
-        // effect on embedded MKV ASS tracks in this engine. This is an ass-media
-        // library signature constraint; mpv and libVLC render embedded ASS at the
-        // correct offset via sub-delay/setSpuDelay regardless. Deliberately left
-        // as-is rather than destabilizing the working ASS path.
+        // KNOWN LIMITATION: embedded ASS-in-MKV extraction still bypasses the
+        // OffsettingSubtitleParserFactory — the subtitle-delay slider has no
+        // effect on embedded MKV ASS tracks in this engine. Preserved from the
+        // previous wiring (which passed the bare concrete factory) rather than
+        // destabilizing the working ASS path; mpv and libVLC render embedded
+        // ASS at the correct offset via sub-delay/setSpuDelay regardless.
         val (finalRenderersFactory, msf) = if (assEnabledForSession) {
-            val assExtractors = extractorsFactory.withAssMkvSupport(assParserFactory!!, assHandler!!)
+            val assExtractors = AssStyleOverrideExtractorsFactory(
+                extractorsFactory,
+                delegateParserFactory,
+                assHandler!!,
+            )
             // Own clock-pump factory instead of ass-media's AssRenderersFactory:
             // the library's appended AssRenderer derives the render clock from
             // the renderer position minus a hardcoded 10¹² µs base, and the
@@ -622,6 +743,21 @@ class ExoPlayerEngine(
         exo.addAnalyticsListener(decoderCountersListener)
         player = exo
 
+        // Engage the GL video-graph path for HDR→SDR tone mapping. Media3
+        // 1.11.1 has no force-tone-map lever (`setRequestOpenGlToneMapping` is
+        // instance-level on an unreachable wrapper), so this only REQUESTS the
+        // path: frames route through DefaultVideoFrameProcessor, whose
+        // SDR-output branch applies the HDR→SDR tone map exactly when the
+        // output surface's EGL context cannot present the content's transfer.
+        // Must be called at least once before prepare(); media3-effect is on
+        // the classpath (the implementation reflection-checks it) — a
+        // pathological failure is absorbed, leaving the native path (and the
+        // stats decision as-is, since the resolver reports expectations).
+        if (hdrGlEngaged) {
+            runCatching { exo.setVideoEffects(emptyList()) }
+                .onFailure { Log.w(TAG, "HDR GL tone-mapping path engagement failed", it) }
+        }
+
         // Wire the AssHandler to the player and inject the bundled fallback
         // font (and any user-installed fonts) so libass can resolve families.
         // ass-media's font API is per-file byte[] (AssHandler.addFont), not a
@@ -643,6 +779,9 @@ class ExoPlayerEngine(
         attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
 
         applyAudioEffects()
+        // The fresh session's inputs (config + offload mode); the format
+        // arrives with the first tracks/session-id callbacks.
+        updateSpatialState()
     }
 
     /**
@@ -677,10 +816,11 @@ class ExoPlayerEngine(
         attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
 
         applyAudioEffects()
+        updateSpatialState()
     }
 
     /**
-     * The ExoPlayer residue cleared alongside the base resets (C5): stale
+     * The ExoPlayer residue cleared alongside the base resets: stale
      * cues from the previous item would linger into the new one's loading
      * window, and the previous episode's buffered position, decoder counters,
      * and "Stats for Nerds" snapshot would surface briefly on the new item.
@@ -690,6 +830,9 @@ class ExoPlayerEngine(
         lastSelectedTextTrackId = null
         subtitleTrackAutoDisabled = false
         resetStatsGuard()
+        // The change-guard's sample dies with the item too — the new item's
+        // first stats tick must never be suppressed by the previous one.
+        statsGuard.reset()
         videoDecoderCounters = null
         wasPlayingBeforeActivityPause = false
     }
@@ -750,6 +893,13 @@ class ExoPlayerEngine(
         }
         if (request.preferredSubtitleLanguage != null) {
             params.setPreferredTextLanguage(request.preferredSubtitleLanguage)
+        }
+        if (request.preferAudioDescription) {
+            // Engine-level AD bias: prefer narrated tracks without removing the
+            // plain track from contention (no AD track → the language match
+            // stands). The selection policy's title-bridge remains the
+            // authoritative rung; this only aligns the platform selector.
+            params.setPreferredAudioRoleFlags(C.ROLE_FLAG_DESCRIBES_VIDEO)
         }
         if (request.maxVideoBitrate != null) {
             // Local val captures the non-null value: maxVideoBitrate now lives
@@ -980,6 +1130,17 @@ class ExoPlayerEngine(
         serverDurationMs = 0L
         currentSubtitleConfigs.clear()
         releaseAudioEffects()
+        // The spatial session machinery: stop observing the platform (the
+        // callbacks would otherwise fire into a player-less engine) and reset
+        // the neutralization so the next load re-derives it from a fresh
+        // evaluation.
+        spatializerHelper.release()
+        // Stop the display-event refreshes: the probe's listener is held
+        // strongly by DisplayManager, so it must not outlive the engine.
+        displayHdrProbe.release()
+        spatialNeutralizationActive = false
+        spatialSupersededVirtualizer = false
+        audioPipelineReconfiguring = false
         cachedVolume = 1f
         lastUnmuteVolume = 1f
         resetPublishedEngineState()
@@ -1015,9 +1176,13 @@ class ExoPlayerEngine(
     override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }
     override fun setPlaybackSpeed(speed: Float) = runOnPlayerThread { player?.setPlaybackSpeed(speed) }
 
+    override fun onScrubbingChanged(active: Boolean) = runOnPlayerThread {
+        player?.setScrubbingModeEnabled(active)
+    }
+
     override val volume: Float get() = cachedVolume
 
-    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // ── Volume / mute seams ────────────────────────────────────────────
     // The four command bodies are final templates in ReloadablePlayerEngine;
     // ExoPlayer contributes only the native write/read, the Media3 mute
     // vocabulary (zero the handle on mute, restore it to full on unmute — the
@@ -1041,6 +1206,7 @@ class ExoPlayerEngine(
     override fun snapshotIsPlaying(): Boolean = player?.isPlaying ?: super.snapshotIsPlaying()
 
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        val delta = EngineConfigDelta.of(oldConfig, newConfig)
         // decoderMode change: decoding changes require a reload, which is
         // handled by the upper layer recreating the player — nothing to do here.
         //
@@ -1052,22 +1218,31 @@ class ExoPlayerEngine(
         // re-evaluate the delay continuously (sub-delay / setSpuDelay), so no
         // reload is needed there.
 
-        if (oldConfig.audioEffects != newConfig.audioEffects) {
+        if (delta.audioEffectsChanged) {
             applyAudioEffects()
+            // No delta flag pins this sub-arm — it is a derived
+            // AudioEffectsConfig predicate, not a config slice — so it keeps
+            // re-diffing the two configs directly.
             if (requiresAudioPipelineReconfiguration(oldConfig.audioEffects, newConfig.audioEffects)) {
                 reconfigureAudioPipeline()
             }
+            // The spatial inputs (advisory toggle, headphones-only
+            // qualification, virtualizer claim) may have moved; the flip
+            // itself re-applies + reconfigures inside the evaluation callback.
+            updateSpatialState()
         }
 
-        if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
+        if (delta.subtitleStyleChanged) {
             applySubtitleStyle(newConfig.subtitleStyle)
-            // The offset lives on SubtitleStyle.offsetMs, so a delay change also
-            // flows through here. Media3 caches parsed cues for the active text
-            // track and will not re-invoke the OffsettingSubtitleParserFactory
-            // for the cached sample — so the overlay would look like it does
-            // nothing until the next reload/seek. Rebuild the media item so the
-            // subtitle is parsed through the offset wrapper with the new value.
-            if (oldConfig.subtitleStyle.offsetMs != newConfig.subtitleStyle.offsetMs) {
+            // The delay rides SubtitleStyle.offsetMs and is mirrored into
+            // subtitleDelayMs by EngineConfigBuilder, so delta.subtitleDelayChanged
+            // is exactly the old inner offsetMs re-diff. Media3 caches parsed
+            // cues for the active text track and will not re-invoke the
+            // OffsettingSubtitleParserFactory for the cached sample — so the
+            // overlay would look like it does nothing until the next
+            // reload/seek. Rebuild the media item so the subtitle is parsed
+            // through the offset wrapper with the new value.
+            if (delta.subtitleDelayChanged) {
                 refreshSubtitlesForOffsetChange()
             }
         }
@@ -1385,18 +1560,36 @@ class ExoPlayerEngine(
             sv.setVisibility(if (activeTrackIsAss && assOverlayView != null) View.GONE else View.VISIBLE)
         }
 
-        // libass (AssSubtitleView) styling. ass-media 0.4.0 renders ASS via
-        // libass and exposes NO colour/edge override API, so FORCE (colours,
-        // borders, edges) remains DEGRADED to as-authored on this engine — only
-        // mpv honours FORCE fully. SCALE (font size) IS now honoured: ass-kt
-        // 0.4.0's AssRender.setFontScale is reachable at compile time (direct
-        // dependency), and AssHandler.render hands back the live AssRender. The
-        // render is created lazily on the first frame (createRenderIfNeeded),
+        // libass (AssSubtitleView) styling — two mechanisms, per override mode.
+        //
+        // SCALE / embedded-default: AssRender.setFontScale scales the whole
+        // render by style.fontSize / 24 (the same PlayRes-relative ratio mpv's
+        // sub-scale uses).
+        //
+        // FORCE: the user style is baked into the track itself at parse time —
+        // AssStyleOverrideParserFactory rewrites the header's `Style: Default`
+        // line (colors, borders, bold/italic, installed font, Fontsize scaled
+        // by style.fontSize / 24) before AssHandler.createTrack feeds libass.
+        // ass-media 0.5.0 binds no style-override JNI (no ass_track_set_style /
+        // ass_set_style_overrides), so the header text is the only non-fork
+        // seam — which makes FORCE apply-at-load: the track (and header) is
+        // built when the subtitle source is parsed, so a style edit mid-playback
+        // takes effect on the NEXT track load (media item change / engine
+        // rebuild), not live like mpv's --ass-override=force. In FORCE mode the
+        // render-level scale must be neutral (the rewritten header already
+        // carries style.fontSize; a stale SCALE-mode scale on a reused handler
+        // would double-scale), hence the 1f reset.
+        // The render is created lazily on the first frame (createRenderIfNeeded),
         // so it may be null here until playback starts — guard accordingly.
         // Non-ASS tracks use the native SubtitleView path sized above.
         if (activeTrackIsAss && assEnabledForSession) {
             runCatching {
-                assHandler?.render?.setFontScale(style.fontSize / 24f)
+                val render = assHandler?.render
+                if (AssStyleHeaderRewriter.isForceOverride(style)) {
+                    render?.setFontScale(1f)
+                } else {
+                    render?.setFontScale(style.fontSize / 24f)
+                }
             }.onFailure { e ->
                 Log.w(TAG, "setFontScale on AssRender failed", e)
             }
@@ -1420,7 +1613,14 @@ class ExoPlayerEngine(
             AspectRatioMapping.ResizeMode.FIXED_WIDTH -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
         }
         playerView?.setResizeMode(resizeMode)
-        (playerView as? AspectRatioFrameLayout)?.setAspectRatio(plan.aspectValue)
+        // PlayerView delegates resize-mode changes to its content frame; the
+        // forced aspect ratio has to be set on that same frame. There is no
+        // public accessor for it in media3 1.11 (and the PlayerView itself is
+        // never an AspectRatioFrameLayout), so resolve the frame view directly
+        // — same lookup [reparentSubtitleViews] uses.
+        playerView
+            ?.findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)
+            ?.setAspectRatio(plan.aspectValue)
     }
 
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
@@ -1454,7 +1654,8 @@ class ExoPlayerEngine(
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { p.isPlaying },
             onActive = {
-                trySend(p.currentPosition)
+                val pos = p.currentPosition
+                trySend(pos)
                 val buffered = p.bufferedPosition.coerceAtLeast(0L)
                 if (buffered != _bufferedPositionMs.value) {
                     _bufferedPositionMs.value = buffered
@@ -1463,11 +1664,27 @@ class ExoPlayerEngine(
                 // DefaultLoadControl's back-buffer extent is not exposed
                 // per-range, so the contiguous ahead-window is the honest
                 // band. Normalizes + dedups into the shared flow.
-                _bufferedRanges.value = BufferedRanges.contiguous(
-                    startMs = p.currentPosition,
-                    endMs = buffered,
-                    durationMs = durationMs,
-                )
+                //
+                // Only the band's start creeps tick-to-tick (the buffered end
+                // moves on buffer events), so re-derive and publish only when
+                // the end point moved or the start jumped >= 500 ms in either
+                // direction; otherwise the previous publication stands. The
+                // consumers (seek bar band shading, stats ranges readout)
+                // tolerate sub-half-second start staleness, and the gate keeps
+                // the ticker off a fresh List<LongRange> allocation per tick.
+                // The empty-band steady state (buffered <= position) stays
+                // allocation-free: contiguous() returns the shared emptyList.
+                val previous = _bufferedRanges.value.singleOrNull()
+                if (previous == null ||
+                    buffered != previous.last ||
+                    kotlin.math.abs(pos - previous.first) >= BUFFERED_BAND_START_STEP_MS
+                ) {
+                    _bufferedRanges.value = BufferedRanges.contiguous(
+                        startMs = pos,
+                        endMs = buffered,
+                        durationMs = durationMs,
+                    )
+                }
                 if (_videoStatsEnabled.value) {
                     updateVideoStats()
                 }
@@ -1479,6 +1696,15 @@ class ExoPlayerEngine(
             try { p.removeListener(posListener) } catch (_: Exception) {}
         }
     }.conflate()
+
+    // The shared stats change-guard ([StatsPublishGuard], player-contract —
+    // the Exo/mpv hand copies unified). No cadence arm: nothing behind this
+    // adapter's guard is expensive enough to gate (the counters and format
+    // reads are in-memory), so a moved scalar is the only admit path.
+    private val statsGuard = StatsPublishGuard(
+        fullRereadCadenceMs = null,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+    )
 
     private fun updateVideoStats() {
         val p = player ?: return
@@ -1492,15 +1718,52 @@ class ExoPlayerEngine(
             .toLong()
         val rendered = (counters?.renderedOutputBufferCount ?: 0).toLong()
 
-        val last = lastVideoStats
-        if (last != null && last.bufferedPositionMs == bufferedPos &&
-            last.estimatedBandwidthBps == bandwidthEstimate &&
-            last.droppedFrames == dropped && last.totalVideoFrames == rendered
+        // The HDR fold is computed BEFORE the dedup guard and compared by its
+        // PUBLISHED shape: the observed-SDR downgrade (below) can flip
+        // hdrOutputActive while every counter stays frozen, and a guard keyed
+        // on the decision's expectation would swallow that flip. The fold is
+        // exactly why the guard takes VALUES, not a read source — the folded
+        // trio below is what the shared guard compares.
+        val hdrDecision = resolveHdrDecision()
+        val videoFormat = p.videoFormat
+        // The OBSERVED content transfer (the selected track's color metadata —
+        // what is actually decoding, not what the server metadata claimed). A
+        // clearly-SDR observed format downgrades the decision's passthrough
+        // expectation (the classic case: an adaptive transcode rendition that
+        // is SDR even though the item's streams said HDR).
+        val observedHdr = videoFormat?.let { f ->
+            f.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION ||
+                f.colorInfo?.hdrStaticInfo != null ||
+                f.colorInfo?.colorTransfer == C.COLOR_TRANSFER_HLG ||
+                f.colorInfo?.colorTransfer == C.COLOR_TRANSFER_ST2084
+        }
+        val hdrOutputActive =
+            if (observedHdr == false) false else hdrDecision.hdrOutputExpected
+        // Memoized on the probe snapshot's identity - the join is
+        // pure churn while the display list is unchanged.
+        val displayHdrProbeValue = displayHdrProbe.support.value
+        val displayHdrTypes = displayHdrTypesCache
+            ?.takeIf { it.first === displayHdrProbeValue }
+            ?.second
+            ?: displayHdrProbeValue
+                ?.let { it.displayHdrTypesSummary() }
+                ?.also { displayHdrTypesCache = displayHdrProbeValue to it }
+        // The dedup guard over the PUBLISHED-shape values (the folded HDR
+        // trio included — see the comment above); [publishStatsIfChanged]
+        // stays the final emit funnel.
+        if (!statsGuard.admit(
+                bufferedPos,
+                bandwidthEstimate,
+                dropped,
+                rendered,
+                hdrOutputActive,
+                hdrDecision.notice,
+                displayHdrTypes,
+            )
         ) {
             return
         }
 
-        val videoFormat = p.videoFormat
         val audioFormat = p.audioFormat
 
         val combinedBitrate = (videoFormat?.bitrate ?: 0) + (audioFormat?.bitrate ?: 0)
@@ -1522,8 +1785,8 @@ class ExoPlayerEngine(
             videoBitrate = videoFormat?.bitrate?.let { if (it > 0) it else null },
             videoColorRange = videoFormat?.colorInfo?.let { ci ->
                 when (ci.colorRange) {
-                    androidx.media3.common.C.COLOR_RANGE_LIMITED -> "Limited"
-                    androidx.media3.common.C.COLOR_RANGE_FULL -> "Full"
+                    C.COLOR_RANGE_LIMITED -> "Limited"
+                    C.COLOR_RANGE_FULL -> "Full"
                     else -> null
                 }
             },
@@ -1533,22 +1796,30 @@ class ExoPlayerEngine(
                 // function — ST2084/PQ is shared by HDR10 and DV, so the prior
                 // mapping mislabeled every HDR10 stream as "Dolby Vision".
                 when {
-                    f.sampleMimeType == androidx.media3.common.MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+                    f.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
                     ci?.hdrStaticInfo != null -> "HDR10"
-                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG -> "HLG"
-                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 -> "HDR10"
-                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_SDR -> null
+                    ci?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HLG"
+                    ci?.colorTransfer == C.COLOR_TRANSFER_ST2084 -> "HDR10"
+                    ci?.colorTransfer == C.COLOR_TRANSFER_SDR -> null
                     else -> null
                 }
             },
             videoColorDepth = videoFormat?.colorInfo?.let { ci ->
                 val depth = ci.lumaBitdepth
-                if (depth > 0 && depth != androidx.media3.common.Format.NO_VALUE) "$depth-bit" else null
+                if (depth > 0 && depth != Format.NO_VALUE) "$depth-bit" else null
             },
             audioCodec = audioFormat?.sampleMimeType?.let { codecFromMime(it) },
             audioSampleRate = audioFormat?.sampleRate?.let { if (it > 0) it else null },
             audioChannels = audioFormat?.channelCount?.let { if (it > 0) it else null },
             audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
+            audioSpatialState = spatialStatsState(),
+            audioSpatialSuperseded = spatialSupersededVirtualizer,
+            // The HDR output rows — the decision's expectation, downgraded
+            // when the observed track's transfer is clearly SDR (see
+            // [observedHdr]); the notice rides the decision unchanged.
+            hdrOutputActive = hdrOutputActive,
+            hdrOutputNotice = hdrDecision.notice,
+            displayHdrTypes = displayHdrTypes,
             estimatedBandwidthBps = bandwidthEstimate,
             droppedFrames = dropped,
             totalVideoFrames = rendered,
@@ -1565,12 +1836,93 @@ class ExoPlayerEngine(
         else -> mime
     }
 
+    /**
+     * The stats-for-nerds spatial state: the effective [SpatialAudioState].
+     * Null while the platform reports no spatializer support (pre-API-32
+     * devices, devices without the feature) — a row that explains nothing is
+     * not shown. The supersession note rides the separate
+     * [EngineVideoStats.audioSpatialSuperseded] flag, not this value.
+     */
+    private fun spatialStatsState(): SpatialAudioState? {
+        val evaluation = spatializerHelper.evaluation.value
+        if (!evaluation.supported) return null
+        return evaluation.state
+    }
+
     private fun applyAudioEffects() {
-        audioEffectChain.apply(audioSessionId, currentConfig.audioEffects, currentNormalizationGain)
+        // The supersession record tracks two inputs: the spatial evaluation
+        // (refreshed in [onSpatialEvaluation]) and the virtualizer claim
+        // (refreshed here). Toggling the Virtualizer while spatial stays
+        // ACTIVE doesn't re-fire the evaluation — virtualizerEnabled is not
+        // an evaluation input — so the stats note would keep the pre-toggle
+        // answer without this refresh.
+        spatialSupersededVirtualizer = spatialSupersedesVirtualizer(
+            spatializerHelper.evaluation.value.state,
+            currentConfig.audioEffects.virtualizerEnabled,
+        )
+        audioEffectChain.apply(
+            audioSessionId,
+            currentConfig.audioEffects,
+            currentNormalizationGain,
+            spatialAudioActive = spatialNeutralizationActive,
+        )
     }
 
     private fun releaseAudioEffects() {
         audioEffectChain.release()
+    }
+
+    /**
+     * Pushes the current session inputs into the [SpatializerHelper] and
+     * re-evaluates the effective spatial state. Cheap: the platform
+     * canBeSpatialized query is memoized per playing format. Called on every
+     * path that can move an input — load (format/config), config change,
+     * audio-session change (track switch) and tracks change (audio format).
+     */
+    private fun updateSpatialState() {
+        val format = player?.audioFormat
+        // The reconfigure transient: replacing the media item momentarily
+        // clears the track selection, and a null-format evaluation would
+        // report UNAVAILABLE — flipping the neutralization off and cascading
+        // into another rebuild. Hold the last evaluation until the rebuilt
+        // period reports a format (cleared in onTracksChanged above).
+        if (audioPipelineReconfiguring && format == null) return
+        spatializerHelper.update(
+            format = format,
+            inputs = SpatialAudioInputs(
+                userEnabled = currentConfig.audioEffects.spatialAudioEnabled,
+                onlyHeadphones = currentConfig.audioEffects.spatialAudioOnlyHeadphones,
+                offloadActive = currentExoConfig.audioOffloadMode !=
+                    com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED,
+            ),
+        )
+    }
+
+    /**
+     * The [SpatializerHelper] evaluation callback (main handler thread).
+     *
+     * The spatial state's effect on the engine is binary — while EFFECTIVE
+     * (ACTIVE) the in-sink downmix/cap + virtualizer are held off; when it
+     * stops being effective the configured values return. A flip changes what
+     * [DefaultAudioSink] must configure, so it re-runs the audio pipeline
+     * ([reconfigureAudioPipeline], the same lever the channel-mix knobs use).
+     * The supersession record (spatial winning over a concurrently-enabled
+     * virtualizer) is refreshed on every evaluation for the stats surface.
+     */
+    private fun onSpatialEvaluation(evaluation: SpatialAudioEvaluation) {
+        val neutralize = evaluation.state == SpatialAudioState.ACTIVE
+        spatialSupersededVirtualizer = spatialSupersedesVirtualizer(
+            evaluation.state,
+            currentConfig.audioEffects.virtualizerEnabled,
+        )
+        if (neutralize != spatialNeutralizationActive) {
+            spatialNeutralizationActive = neutralize
+            // Re-apply so the chain writes the overridden (or restored)
+            // processor state, then rebuild the media period so the sink
+            // reconfigures with the new channel layout.
+            applyAudioEffects()
+            reconfigureAudioPipeline()
+        }
     }
 
     /**
@@ -1583,6 +1935,7 @@ class ExoPlayerEngine(
     private fun reconfigureAudioPipeline() {
         val exo = player ?: return
         val mediaItem = currentMediaItem ?: return
+        audioPipelineReconfiguring = true
         withPreservedPlayback { snap ->
             exo.setMediaItem(mediaItem, snap.positionMs)
             exo.prepare()

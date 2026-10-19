@@ -173,7 +173,7 @@ seerr.displayName,
     @Test
     fun `id-less calendar items get distinct non-zero ids`() {
         // Regression guard: multiple Sonarr episodes with no tmdb AND no tvdb
-        // previously all collapsed to id = 0, crashing Compose LazyRow keys.
+        // ids must not collapse to id = 0, which crashes Compose LazyRow keys.
         val a = ArrCalendarItem(title = "Ep A", mediaType = ArrMediaType.SERIES).toSeerrSearchItem().id
         val b = ArrCalendarItem(title = "Ep B", mediaType = ArrMediaType.SERIES).toSeerrSearchItem().id
         assertTrue(

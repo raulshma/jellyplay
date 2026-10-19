@@ -29,17 +29,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_track_subt
 /**
  * The track-selection domain's fused row declarations — the feature-side
  * single home of the language screen's "Track Selection" group (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `TrackSelectionIds` holder constant
- * (all retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * HAND-MAINTAINED residuals: the track-selection knobs live in the spec-less
  * track-selection store — the rows carry their full hand search faces and
  * always render ([RowAdmission.Always] derived from their non-advanced
  * flags). The projection ([List.toSearchItems]) is the pure
- * hand-projection; search results, catalog order and group membership are
- * byte-identical to the retired declarations.
+ * hand-projection; search results, catalog order and group membership
+ * derive from these declarations.
  */
 internal object TrackSelectionRows {
 
@@ -93,7 +91,7 @@ internal object TrackSelectionRows {
     )
 
     /**
-     * Every fused trackSelection row — the ratchet's vocabulary. A computed accessor
+     * Every fused trackSelection row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

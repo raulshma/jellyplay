@@ -7,15 +7,13 @@ import androidx.compose.runtime.Immutable
  * A self-describing spec for a settings picker sheet, rendered by
  * [SettingsPickerDialog].
  *
- * **Why this exists.** Every settings screen used to declare its own
+ * **Why this exists.** A picker sheet otherwise needs its own
  * `sealed class XxxSettingsDialog { object None; object Picker1; ... }`
  * hierarchy plus a ladder of `if (activeDialog == XxxSettingsDialog.PickerK)`
  * blocks — one per picker — each structurally identical: build an option
  * list, render `SettingsList/Chip/SliderSheet`, wire `isSelected` /
- * `onSelect` to a ViewModel setter. Across 9 screens that ladder ran ~110
- * times. The "convert dialog enums to sealed classes" refactor promised
- * exhaustive `when` dispatch but delivered 0 — the type change happened, the
- * call-site pattern did not.
+ * `onSelect` to a ViewModel setter. An identity tag alone yields no
+ * exhaustive `when` dispatch over the picker's payload.
  *
  * `PickerState` carries the picker's *payload* (title, options, label,
  * selection predicate, select callback) instead of just an identity tag, so a

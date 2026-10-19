@@ -71,11 +71,6 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_refresh
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_run
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_scheduled_tasks_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stop
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_trigger_daily
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_trigger_every_days
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_trigger_every_hours
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_trigger_on_startup
-import com.raulshma.jellyplay.feature.admin.generated.resources.admin_trigger_weekly
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -191,11 +186,9 @@ private fun TaskItem(
     val stopFocusState = rememberTvFocusState()
     val runFocusState = rememberTvFocusState()
 
-    val stateColor = when (task.state) {
-        TaskState.RUNNING -> MaterialTheme.colorScheme.primary
-        TaskState.CANCELLING -> StatusColors.warning
-        TaskState.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // The state→(tint, Stop?, Run?) ladder reads the shared table; placement
+    // and button styling stay this screen's own.
+    val stateColor = TaskStatePresentation[task.state].colorRole.toColor()
 
     Card(
         modifier = Modifier
@@ -238,8 +231,9 @@ private fun TaskItem(
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                when (task.state) {
-                    TaskState.RUNNING -> {
+                val stateRow = TaskStatePresentation[task.state]
+                when {
+                    stateRow.cancellable -> {
                         OutlinedButton(
                             onClick = onCancel,
                             colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
@@ -255,7 +249,7 @@ private fun TaskItem(
                             Text(stringResource(Res.string.admin_stop), style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    TaskState.IDLE -> {
+                    stateRow.startable -> {
                         FilledTonalButton(
                             onClick = onStart,
                             modifier = Modifier
@@ -268,7 +262,7 @@ private fun TaskItem(
                             Text(stringResource(Res.string.admin_run), style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    TaskState.CANCELLING -> {
+                    else -> {
                         Text(
                             "Cancelling...",
                             style = MaterialTheme.typography.labelSmall,
@@ -437,11 +431,9 @@ private fun formatTaskDuration(startIso: String?, endIso: String?): String? {
 
 @Composable
 private fun TaskStateBadge(state: TaskState) {
-    val (text, color) = when (state) {
-        TaskState.RUNNING -> "Running" to MaterialTheme.colorScheme.primary
-        TaskState.CANCELLING -> "Cancelling" to StatusColors.warning
-        TaskState.IDLE -> "Idle" to MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    // The (label, tint) pair is the shared table's row; only the drawing lives here.
+    val row = TaskStatePresentation[state]
+    val color = row.colorRole.toColor()
     Box(
         modifier = Modifier
             .clip(ShapeCache.smooth4)
@@ -449,7 +441,7 @@ private fun TaskStateBadge(state: TaskState) {
             .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(
-            text,
+            text = row.label,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = color,
@@ -459,20 +451,13 @@ private fun TaskStateBadge(state: TaskState) {
 
 @Composable
 private fun TriggerChip(type: String, intervalTicks: Long?, dayOfWeek: String?) {
-    val label = when {
-        type == "IntervalTrigger" && intervalTicks != null -> {
-            val hours = intervalTicks / 36_000_000_000
-            if (hours > 24) {
-                stringResource(Res.string.admin_trigger_every_days, (hours / 24).toInt())
-            } else {
-                stringResource(Res.string.admin_trigger_every_hours, hours.toInt())
-            }
-        }
-        type == "DailyTrigger" -> stringResource(Res.string.admin_trigger_daily)
-        type == "WeeklyTrigger" -> dayOfWeek?.lowercase()?.replaceFirstChar { it.uppercase() }
-            ?: stringResource(Res.string.admin_trigger_weekly)
-        type == "StartupTrigger" -> stringResource(Res.string.admin_trigger_on_startup)
-        else -> type.removeSuffix("Trigger")
+    // The trigger-label decision (type parse + tick math) is the shared
+    // table's; only the resource resolution happens here.
+    val label = when (val resolved = triggerLabel(type, intervalTicks, dayOfWeek)) {
+        is TriggerLabel.Literal -> resolved.text
+        is TriggerLabel.Resource -> resolved.arg
+            ?.let { stringResource(resolved.resource, it) }
+            ?: stringResource(resolved.resource)
     }
     Box(
         modifier = Modifier

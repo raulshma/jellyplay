@@ -93,6 +93,35 @@ class PreferenceCategoryPresentationTest {
     }
 
     @Test
+    fun `detail display toggles are surfaced as changed fields`() {
+        // The library-slice detail prefs diff in the HOME_DISCOVERY category
+        // beside the other library rows; the trailer-before-movie knob diffs
+        // in PLAYBACK beside cinema mode.
+        val labels = mapOf(
+            Res.string.settings_show_tagline to "Show Tagline",
+            Res.string.settings_prefer_local_trailers to "Prefer Local Trailers",
+            Res.string.ss_play_trailer_before_movie_title to "Play Trailer Before Movie",
+        )
+        val prefs = snapshot(
+            factorySlices.copy(
+                library = factorySlices.library.copy(showTagline = false, preferLocalTrailers = true),
+                videoPlayer = factorySlices.videoPlayer.copy(playTrailerBeforeMovie = true),
+            ),
+            labels,
+        )
+        val factory = snapshot(factorySlices, labels)
+
+        assertEquals(
+            setOf("Show Tagline", "Prefer Local Trailers"),
+            changedLabels(prefs, factory, PreferenceResetCategory.HOME_DISCOVERY).toSet(),
+        )
+        assertEquals(
+            setOf("Play Trailer Before Movie"),
+            changedLabels(prefs, factory, PreferenceResetCategory.PLAYBACK).toSet(),
+        )
+    }
+
+    @Test
     fun `security pin state is surfaced as changed fields`() {
         val labels = mapOf(
             Res.string.ss_pin_lock_title to "PIN Lock",

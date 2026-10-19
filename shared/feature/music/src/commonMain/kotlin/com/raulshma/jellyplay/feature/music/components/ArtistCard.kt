@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -87,12 +88,25 @@ fun ArtistCard(
 
     // The ring runs two infinite animations (rotation + pulse). On low-end
     // devices these drive a continuous redraw coroutine per card, and artist
-    // grids show dozens at once — collapse to static values in performance mode.
-    val ringRotation: Float
-    val ringPulse: Float
-    if (!reducedMotion) {
+    // grids show dozens at once — collapse to static values in performance
+    // mode, and GATE the transition behind press/focus (the
+    // VinylRecordPeek discipline: no rememberInfiniteTransition below screen
+    // scope without a visibility/press gate). At rest the ring sits static
+    // (rotation 0, base pulse width) — the resting breathing ring is the one
+    // deliberate, near-invisible visual change; while pressed or focused the
+    // animations run exactly as before.
+    //
+    // The animated State<Float>s are kept as State and read INSIDE the
+    // draw-phase drawBehind block below, so a per-frame animation tick
+    // invalidates only the draw — reading .value here would recompose the
+    // whole card (Column, Text, image slot) every frame while pressed or
+    // focused.
+    val ringRotationState: State<Float>?
+    val ringPulseState: State<Float>?
+    val ringActive = isPressed || tvFocusState.isFocused
+    if (!reducedMotion && ringActive) {
         val ringTransition = rememberInfiniteTransition(label = "artist_ring")
-        ringRotation = ringTransition.animateFloat(
+        ringRotationState = ringTransition.animateFloat(
             initialValue = 0f,
             targetValue = if (isPressed) 360f else 0f,
             animationSpec = infiniteRepeatable(
@@ -100,8 +114,8 @@ fun ArtistCard(
                 repeatMode = RepeatMode.Restart
             ),
             label = "rotation"
-        ).value
-        ringPulse = ringTransition.animateFloat(
+        )
+        ringPulseState = ringTransition.animateFloat(
             initialValue = 2.dp.value,
             targetValue = 3.5.dp.value,
             animationSpec = infiniteRepeatable(
@@ -109,11 +123,15 @@ fun ArtistCard(
                 repeatMode = RepeatMode.Reverse
             ),
             label = "pulse"
-        ).value
+        )
     } else {
-        ringRotation = if (isPressed) 180f else 0f
-        ringPulse = 2.dp.value
+        ringRotationState = null
+        ringPulseState = null
     }
+    // Resting values for the inactive arm — plain floats (the press flip is a
+    // rare recomposition, unlike the per-frame animation reads above).
+    val restingRingRotation = if (isPressed) 180f else 0f
+    val restingRingPulse = 2.dp.value
 
     Column(
         modifier = modifier
@@ -160,6 +178,8 @@ fun ArtistCard(
                     scaleY = ringMorphScale
                 }
                 .drawBehind {
+                    val ringRotation = ringRotationState?.value ?: restingRingRotation
+                    val ringPulse = ringPulseState?.value ?: restingRingPulse
                     rotate(ringRotation) {
                         drawCircle(
                             brush = ringBrush,

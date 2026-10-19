@@ -32,7 +32,7 @@ internal class MarkSeasonReactor(
      * emission catches up — the provider's re-emission is reduced by the VM
      * asynchronously, so immediately-after taps cannot trust the episode
      * snapshot alone. Entries are recorded on success only, matching the
-     * mutator's "flip only on success" contract (plan 03): a failed write
+     * mutator's "flip only on success" contract: a failed write
      * records nothing, so a retry of the same direction is never swallowed.
      * Once the session snapshot adopts the recorded target the entry is
      * retired, so a later same-direction tap (the user re-watched episodes

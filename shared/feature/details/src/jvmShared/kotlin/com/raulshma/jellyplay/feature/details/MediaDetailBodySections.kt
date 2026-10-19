@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -78,11 +79,16 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_pa
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_percent_progress
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_episodes_count
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_imdb
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tmdb
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_more_like_this_on_device
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_notify_new_episodes
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_stop_notify_new_episodes
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_cast_crew
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_chapters
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_items
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_more_like_this
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_airing_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_recommendations
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_similar
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_special_features
@@ -91,7 +97,6 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_see_all
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
-import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_ratings_title
 import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_similar_badge
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
@@ -244,6 +249,16 @@ private const val LOGO_TITLE_WIDTH_FRACTION = 0.5f
 /** Cinematic clear-logo aspect (the ratio Jellyfin documents for Logo art). */
 private const val LOGO_TITLE_ASPECT_RATIO = 2.39f
 
+/**
+ * The pure decision behind the detail header's tagline line: the first
+ * non-blank tagline when the user opted into "show tagline", else null —
+ * and null on an empty/blank taglines list, so an older server (no Taglines
+ * on the wire) or an offline snapshot simply renders no line. Pure →
+ * directly unit-testable (the [preferLogoTitleEnabled] pattern).
+ */
+internal fun detailHeaderTagline(taglines: List<String>, showTagline: Boolean): String? =
+    if (showTagline) taglines.firstOrNull { it.isNotBlank() } else null
+
 
 // ── Header (delayIndex 0) ─────────────────────────────────────────────────
 
@@ -260,7 +275,7 @@ internal fun DetailHeaderSection(
     // reading card and the Contents section come from the book state (null
     // for every other media type), and the video-only sections hide.
     val isBook = item.mediaType == MediaType.BOOK
-    val book = state.book
+    val book = state.core.book
 
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         Column(
@@ -386,6 +401,28 @@ internal fun DetailHeaderSection(
                     }
                 }
 
+            // The item's first tagline under the title — italic, muted,
+            // capped at two lines. Silent absence is the contract when the
+            // snapshot carries no taglines (older servers / offline) or the
+            // show_tagline preference is off.
+            detailHeaderTagline(
+                taglines = detail.taglines,
+                showTagline = state.preferences.showTagline,
+            )?.let { tagline ->
+                FadingItem {
+                    Column {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = tagline,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
             // Book author line — the one credit a book carries. From
             // whichever field the server populated (person or artist item).
             if (isBook) {
@@ -480,6 +517,30 @@ internal fun DetailHeaderSection(
                             }
                         }
                     }
+                    // The no-plugin ratings strip (Seerr first, TMDB
+                    // fallback), rendered after the critic chip. Standalone
+                    // placement only — when the plugin ratings row is present
+                    // the chips merge into THAT row's FlowRow instead
+                    // (PluginRatingsSectionModule), so the strip never
+                    // renders twice. Chips deep-link to the provider when
+                    // their source carries a url (the shared RatingsRow).
+                    if (
+                        externalRatingsStandaloneInHeader(
+                            showExternalRatings = state.preferences.showExternalRatings,
+                            hasPluginRatings = state.core.pluginRatings.isNotEmpty(),
+                            external = state.core.externalRatings,
+                        )
+                    ) {
+                        RatingsRow(
+                            critics = state.core.externalRatings.critics,
+                            audience = state.core.externalRatings.audience,
+                            imdb = state.core.externalRatings.imdb,
+                            tmdb = state.core.externalRatings.tmdb,
+                            rtUrl = state.core.externalRatings.rtUrl,
+                            imdbUrl = state.core.externalRatings.imdbUrl,
+                            tmdbUrl = state.core.externalRatings.tmdbUrl,
+                        )
+                    }
                     // Book meta: file format + reading progress (the
                     // video-oriented year/runtime/rating set above renders
                     // mostly empty for books; these are the slots that count).
@@ -537,8 +598,8 @@ internal fun DetailHeaderSection(
                         }
                     }
                     SegmentAvailabilityChip(
-                        hasIntro = state.hasIntroSegment,
-                        hasCredits = state.hasCreditSegment,
+                        hasIntro = state.core.hasIntroSegment,
+                        hasCredits = state.core.hasCreditSegment,
                     )
                 }
             }
@@ -549,7 +610,7 @@ internal fun DetailHeaderSection(
                 // LOCAL origin renders as non-clickable labels — gated by
                 // capabilities.tagNavigation so a local origin never offers a
                 // drill-in it can't fulfill. Mirrors the studio chip pattern.
-                val genreNavEnabled = state.capabilities.tagNavigation
+                val genreNavEnabled = state.core.capabilities.tagNavigation
                 DetailChipRow(
                     chips = genres,
                     key = { it },
@@ -569,7 +630,7 @@ internal fun DetailHeaderSection(
                 )
             }
 
-            detail.tagItems.takeIf { it.isNotEmpty() && state.capabilities.tagNavigation }?.let { tags ->
+            detail.tagItems.takeIf { it.isNotEmpty() && state.core.capabilities.tagNavigation }?.let { tags ->
                 Spacer(Modifier.height(10.dp))
                 // Tag chips: tappable → a filtered library section (REMOTE only).
                 // Same tagNavigation gate as genres; tagItems carry a name + id
@@ -599,7 +660,7 @@ internal fun DetailHeaderSection(
                 // (detail.item.studios names only, no server id) renders as
                 // non-clickable labels. Gated by capabilities.studioNavigation
                 // so a local origin never offers a drill-in it can't fulfill.
-                val studioNavEnabled = state.capabilities.studioNavigation
+                val studioNavEnabled = state.core.capabilities.studioNavigation
                 DetailChipRow(
                     chips = studios,
                     key = { it.id },
@@ -622,7 +683,7 @@ internal fun DetailHeaderSection(
             // in the title metadata block so the count is visible alongside
             // genres/studios.
             if (item.mediaType == MediaType.SERIES) {
-                state.detailContext?.seriesAggregate?.let { aggregate ->
+                state.core.detailContext?.seriesAggregate?.let { aggregate ->
                     if (aggregate.downloadedEpisodeCount > 0 || aggregate.totalSizeBytes > 0L) {
                         Spacer(Modifier.height(10.dp))
                         FadingItem {
@@ -684,7 +745,7 @@ internal fun DetailBookReadingCardSection(
     // ── Book reading card ──
     // Progress bar + percent/pages + local marks counts. Occupies the
     // media-info slot (delayIndex 2) which never renders for books.
-    val book = state.book
+    val book = state.core.book
     StaggeredDetailSection(visible = book != null, delayIndex = delayIndex) {
         book?.let { bookState ->
             val progress = resolveBookReadingProgress(
@@ -730,17 +791,17 @@ internal fun DetailMediaInfoSection(
         // source still renders nothing.
         val source = detail.mediaSources.firstOrNull()
         when {
-            state.capabilities.remoteStreamSelection && source != null -> {
+            state.core.capabilities.remoteStreamSelection && source != null -> {
                 MediaInfoSection(
                     mediaStreams = source.mediaStreams,
-                    selectedAudioIndex = state.selectedAudioIndex,
-                    selectedSubtitleIndex = state.selectedSubtitleIndex,
+                    selectedAudioIndex = state.core.selectedAudioIndex,
+                    selectedSubtitleIndex = state.core.selectedSubtitleIndex,
                     onAudioSelect = callbacks.playback.onAudioSelect,
                     onSubtitleSelect = callbacks.playback.onSubtitleSelect,
                     preferences = state.preferences,
                 )
             }
-            state.capabilities.localStreamInfo && source != null -> {
+            state.core.capabilities.localStreamInfo && source != null -> {
                 // Quality + audio (read-only, probed) share a single badge row
                 // with the local subtitle pill, matching the remote section's
                 // 3-pill layout. The pill always renders (OFF when the manifest
@@ -748,16 +809,16 @@ internal fun DetailMediaInfoSection(
                 // a list is passed.
                 LocalMediaInfoSection(
                     mediaStreams = source.mediaStreams,
-                    subtitles = if (state.capabilities.localSubtitleSelection) state.localSubtitles else emptyList(),
-                    selectedSubtitleIndex = state.selectedLocalSubtitleIndex,
+                    subtitles = if (state.core.capabilities.localSubtitleSelection) state.core.localSubtitles else emptyList(),
+                    selectedSubtitleIndex = state.core.selectedLocalSubtitleIndex,
                     onSelectSubtitle = callbacks.playback.onSelectLocalSubtitle,
                     horizontalPadding = bodyContentPad,
                 )
             }
-            state.capabilities.localSubtitleSelection -> {
+            state.core.capabilities.localSubtitleSelection -> {
                 LocalSubtitlePicker(
-                    subtitles = state.localSubtitles,
-                    selectedIndex = state.selectedLocalSubtitleIndex,
+                    subtitles = state.core.localSubtitles,
+                    selectedIndex = state.core.selectedLocalSubtitleIndex,
                     onSelect = callbacks.playback.onSelectLocalSubtitle,
                     modifier = Modifier.padding(horizontal = bodyContentPad),
                 )
@@ -772,23 +833,73 @@ internal fun DetailMediaInfoSection(
 internal fun DetailOverviewSection(
     delayIndex: Int,
     state: DetailContentState,
+    detail: MediaDetail,
     item: MediaItem,
     bodyContentPad: Dp,
 ) {
+    // External-link chips — the server's externalUrls first, then
+    // TMDB/IMDb constructed from the provider ids, deduped by host so
+    // a server-sourced entry outranks its constructed twin. The whole
+    // row hides when the merged list is empty, when the origin is
+    // LOCAL (offline detail: nothing reachable to open) or when the
+    // show_external_links preference is off. Shown after the media description.
+    val tmdbLinkLabel = stringResource(Res.string.detail_link_tmdb)
+    val imdbLinkLabel = stringResource(Res.string.detail_link_imdb)
+    // Memoized on exactly the inputs the merge reads (the SeasonsSection
+    // note: collection keys, not the whole detail's data-class equality).
+    val externalLinks = remember(
+        detail.externalUrls,
+        detail.providerIds,
+        item.mediaType,
+        tmdbLinkLabel,
+        imdbLinkLabel,
+    ) {
+        buildDetailExternalLinks(
+            detail = detail,
+            mediaType = if (item.mediaType == MediaType.MOVIE) "movie" else "tv",
+            tmdbLabel = tmdbLinkLabel,
+            imdbLabel = imdbLinkLabel,
+        )
+    }
+    val showExternalLinks = detailExternalLinksVisible(
+        showExternalLinks = state.preferences.showExternalLinks,
+        origin = state.core.origin,
+        links = externalLinks,
+    )
+
+    val overview = item.overview?.takeIf { it.isNotBlank() }
+    if (overview == null && !showExternalLinks) return
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        item.overview?.let { overview ->
-            FadingItem {
-                // F5: cap the overview so long synopses don't push everything
-                // below the fold, with a "Read more" toggle (collapsed=4 lines).
-                ExpandableText(
-                    text = overview,
-                    collapsedMaxLines = 4,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(horizontal = bodyContentPad),
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = bodyContentPad),
+        ) {
+            if (overview != null) {
+                FadingItem {
+                    // F5: cap the overview so long synopses don't push everything
+                    // below the fold, with a "Read more" toggle (collapsed=4 lines).
+                    ExpandableText(
+                        text = overview,
+                        collapsedMaxLines = 4,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    )
+                }
+            }
+            if (showExternalLinks) {
+                if (overview != null) {
+                    Spacer(Modifier.height(12.dp))
+                }
+                FadingItem {
+                    DetailExternalLinksRow(
+                        links = externalLinks,
+                        arrangement = Arrangement.spacedBy(12.dp),
+                    )
+                }
             }
         }
     }
@@ -811,10 +922,10 @@ internal fun DetailChaptersSection(
     // the server chapter thumbnail row that resumes the player at the
     // chapter's start position (gated by capabilities.chapters so an item
     // without chapter data never offers a drill-in it can't fulfill).
-    val book = state.book
+    val book = state.core.book
     val showBookToc = item.mediaType == MediaType.BOOK && !book?.toc.isNullOrEmpty()
     StaggeredDetailSection(
-        visible = showBookToc || (state.capabilities.chapters && detail.chapters.isNotEmpty()),
+        visible = showBookToc || (state.core.capabilities.chapters && detail.chapters.isNotEmpty()),
         delayIndex = delayIndex,
     ) {
         if (showBookToc) {
@@ -847,8 +958,11 @@ internal fun DetailChaptersSection(
                     // which crashes LazyRow with a duplicate key. Pair each chapter with
                     // its list index so the key is collision-free. The index is already
                     // the stable identity used for /Images/Chapter/{index} lookups below.
+                    // Memoized on [chapters] so the pair list is not re-allocated per
+                    // recomposition (the SeasonsPresentation idiom).
+                    val chapterPairs = remember(chapters) { chapters.mapIndexed { i, c -> i to c } }
                     TvFocusableItemRow(
-                        items = chapters.mapIndexed { i, c -> i to c },
+                        items = chapterPairs,
                         key = { (index, chapter) -> "chapter_${index}_${chapter.startPositionTicks}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -886,7 +1000,7 @@ internal fun DetailAlbumTracksSection(
     bodyContentPad: Dp,
 ) {
     StaggeredDetailSection(
-        visible = item.mediaType.isAudioType && state.albumTracks.isNotEmpty(),
+        visible = item.mediaType.isAudioType && state.core.albumTracks.isNotEmpty(),
         delayIndex = delayIndex,
     ) {
         Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
@@ -902,7 +1016,7 @@ internal fun DetailAlbumTracksSection(
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                state.albumTracks.forEachIndexed { index, track ->
+                state.core.albumTracks.forEachIndexed { index, track ->
                     val trackClick = remember(track.id) { { callbacks.navigation.onItemClick(track.id) } }
                     val trackPlayClick = remember(track.id, index) { { callbacks.playback.onPlayAlbumTrack(index); callbacks.navigation.onItemClick(track.id) } }
                     val trackImageUrl = remember(track.id) { callbacks.artwork.getImageUrl(track.id) }
@@ -934,7 +1048,7 @@ internal fun DetailUpNextCardSection(
     // on. The card captures the target it was composed with; a preference flip
     // or a resolved target change recomposes the whole slot before any tap can
     // land on it.
-    val target = state.smartPlayTarget ?: return
+    val target = state.core.smartPlayTarget ?: return
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
             UpNextSection(
@@ -945,6 +1059,111 @@ internal fun DetailUpNextCardSection(
                 },
                 onHideClick = callbacks.userData.onHideDetailUpNext,
             )
+        }
+    }
+}
+
+// ── Airing next (delayIndex 6, between up-next and seasons) ───────────
+
+@Composable
+internal fun DetailUpcomingEpisodesSection(
+    delayIndex: Int,
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    bodyContentPad: Dp,
+) {
+    // Admission guarantees the strip has rows (and the preference on); the
+    // empty gate here mirrors the sibling renderers' content check.
+    val upcoming = state.core.upcomingEpisodes
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val isCompact = !isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact
+
+    // The per-row bell rides the slot the upcoming slot reserved for it —
+    // hidden outright on desktop (no notification stack) and
+    // keyed to the strip's one shared per-series state.core.
+    val bellVisible = showsSeriesNotifyBell(
+        platformSupported = platformHasNotificationStack,
+        mediaType = state.core.detail?.item?.mediaType,
+    )
+    val bellEnabledLabel = stringResource(Res.string.detail_option_stop_notify_new_episodes)
+    val bellDisabledLabel = stringResource(Res.string.detail_option_notify_new_episodes)
+    val bellContent: (@Composable () -> Unit)? = if (bellVisible) {
+        {
+            UpcomingEpisodeNotifyBell(
+                enabled = state.core.seriesNotificationsEnabled,
+                contentDescription = if (state.core.seriesNotificationsEnabled) {
+                    bellEnabledLabel
+                } else {
+                    bellDisabledLabel
+                },
+                onClick = {
+                    callbacks.userData.onToggleSeriesNotifications(
+                        !state.core.seriesNotificationsEnabled,
+                    )
+                },
+            )
+        }
+    } else {
+        null
+    }
+
+    StaggeredDetailSection(visible = upcoming.isNotEmpty(), delayIndex = delayIndex) {
+        Column {
+            FadingItem {
+                Text(
+                    text = stringResource(Res.string.detail_section_airing_next),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier
+                        .padding(horizontal = bodyContentPad)
+                        .semantics { heading() },
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Spacer(Modifier.height(if (isCompact) 12.dp else 16.dp))
+            if (isCompact) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = bodyContentPad),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    upcoming.forEach { episode ->
+                        val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
+                        val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                        FadingItem {
+                            UpcomingEpisodeCard(
+                                episode = episode,
+                                imageUrl = episodeImageUrl,
+                                onClick = episodeClick,
+                                trailingContent = bellContent,
+                                isCompact = true,
+                            )
+                        }
+                    }
+                }
+            } else {
+                TvFocusableItemRow(
+                    items = upcoming,
+                    key = { "upcoming_${it.id}" },
+                    contentPadding = PaddingValues(horizontal = bodyContentPad),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    onFocusedIndexChange = { index ->
+                        upcoming.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
+                    },
+                ) { _, episode, focusModifier ->
+                    val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
+                    val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                    UpcomingEpisodeCard(
+                        episode = episode,
+                        imageUrl = episodeImageUrl,
+                        onClick = episodeClick,
+                        modifier = focusModifier,
+                        trailingContent = bellContent,
+                        isCompact = false,
+                    )
+                }
+            }
         }
     }
 }
@@ -960,10 +1179,13 @@ internal fun DetailSeasonsSection(
     isLocalOrigin: Boolean,
     bodyContentPad: Dp,
 ) {
+    // Media-type membership is the admission fold's job (SEASONS admits only
+    // SERIES/EPISODE/SEASON); what remains here is the content-presence half.
+    val showSeasons = state.core.seasons.isNotEmpty()
+    if (!showSeasons) return
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        val showSeasons = showsSeasonTree(item.mediaType) && state.seasons.isNotEmpty()
-        if (showSeasons) {
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                 // The section's presentation (skip-specials filter + hide-
                 // thumbnails neutralization for a LOCAL origin, the downloaded-
                 // episode three-way fold, the SEASON entry filter, the
@@ -974,11 +1196,11 @@ internal fun DetailSeasonsSection(
                 // (scroll-driven FadingItem animations, sibling sections
                 // animating).
                 val presentation = remember(
-                    state.seasons,
-                    state.episodes,
+                    state.core.seasons,
+                    state.core.episodes,
                     state.preferences,
-                    state.downloadedEpisodeIds,
-                    state.assets,
+                    state.downloads.downloadedEpisodeIds,
+                    state.core.assets,
                     item.id,
                     item.mediaType,
                     item.seasonId,
@@ -1012,18 +1234,17 @@ internal fun DetailSeasonsSection(
                 SeasonsSection(
                     presentation = presentation,
                     seriesItem = item,
-                    smartPlayTarget = state.smartPlayTarget,
-                    fetchedSeasonIds = state.fetchedSeasonIds,
+                    smartPlayTarget = state.core.smartPlayTarget,
+                    fetchedSeasonIds = state.core.fetchedSeasonIds,
                     persistedSeasonId = state.persistedSeasonId,
                     getImageUrl = callbacks.artwork.getImageUrl,
                     callbacks = sectionCallbacks,
-                    animeMarkers = state.animeMarkers,
-                    seasonRatings = state.seasonRatings,
+                    animeMarkers = state.core.animeMarkers,
+                    seasonRatings = state.core.seasonRatings,
                 )
             }
         }
     }
-}
 
 // ── Collection (delayIndex 7) ─────────────────────────────────────────────
 
@@ -1032,44 +1253,46 @@ internal fun DetailCollectionItemsSection(
     delayIndex: Int,
     state: DetailContentState,
     callbacks: DetailContentCallbacks,
-    item: MediaItem,
     bodyContentPad: Dp,
 ) {
+    // COLLECTION membership is the admission fold's job; what remains here
+    // is the content-presence half.
+    val showCollection = state.core.collectionItems.isNotEmpty()
+    if (!showCollection) return
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        if (item.mediaType == MediaType.COLLECTION && state.collectionItems.isNotEmpty()) {
-            Column {
-                FadingItem {
-                    Text(
-                        text = stringResource(Res.string.detail_section_items),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier
-                            .padding(horizontal = bodyContentPad)
-                            .semantics { heading() },
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                TvFocusableItemRow(
-                    items = state.collectionItems,
-                    key = { "collection_${it.id}" },
-                    contentPadding = PaddingValues(horizontal = bodyContentPad),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    onFocusedIndexChange = { index ->
-                        state.collectionItems.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
-                    },
-                ) { _, collectionItem, focusModifier ->
-                    val collectionClick = remember(collectionItem.id) { { callbacks.navigation.onItemClick(collectionItem.id) } }
-                    val collectionProgress = collectionItem.progressFraction()
-                    val collectionImageUrl = remember(collectionItem.id) { callbacks.artwork.getImageUrl(collectionItem.id) }
-                    PosterCard(
-                        item = collectionItem,
-                        imageUrl = collectionImageUrl,
-                        onClick = collectionClick,
-                        showProgress = collectionProgress != null && collectionProgress > 0f,
-                        progressPercent = collectionProgress ?: 0f,
-                        modifier = focusModifier.width(160.dp),
-                    )
-                }
+        Column {
+            FadingItem {
+                Text(
+                    text = stringResource(Res.string.detail_section_items),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier
+                        .padding(horizontal = bodyContentPad)
+                        .semantics { heading() },
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            TvFocusableItemRow(
+                items = state.core.collectionItems,
+                key = { "collection_${it.id}" },
+                contentPadding = PaddingValues(horizontal = bodyContentPad),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                onFocusedIndexChange = { index ->
+                    state.core.collectionItems.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
+                },
+            ) { _, collectionItem, focusModifier ->
+                val collectionClick = remember(collectionItem.id) { { callbacks.navigation.onItemClick(collectionItem.id) } }
+                val collectionProgress = collectionItem.progressFraction()
+                val collectionImageUrl = remember(collectionItem.id) { callbacks.artwork.getImageUrl(collectionItem.id) }
+                PosterCard(
+                    item = collectionItem,
+                    imageUrl = collectionImageUrl,
+                    onClick = collectionClick,
+                    showProgress = collectionProgress != null && collectionProgress > 0f,
+                    progressPercent = collectionProgress ?: 0f,
+                    modifier = focusModifier.width(160.dp),
+                )
             }
         }
     }
@@ -1095,13 +1318,15 @@ internal fun DetailCastSection(
     item: MediaItem,
     bodyContentPad: Dp,
 ) {
-    StaggeredDetailSection(visible = item.mediaType != MediaType.BOOK, delayIndex = delayIndex) {
-        if (detail.people.isNotEmpty()) {
-            Column {
+    val showCast = item.mediaType != MediaType.BOOK && detail.people.isNotEmpty()
+    if (!showCast) return
+
+    StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
+        Column {
                 // "See all" appears only when the cast is large enough to hide
                 // people behind the single row, and only for a navigable (remote)
                 // origin — the Cast & Crew screen re-fetches the full people list.
-                val showSeeAllCast = detail.people.size > 12 && state.capabilities.personNavigation
+                val showSeeAllCast = detail.people.size > 12 && state.core.capabilities.personNavigation
                 FadingItem {
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
@@ -1140,7 +1365,7 @@ internal fun DetailCastSection(
                     //  - LOCAL (personNavigation false): OfflinePersonItem with
                     //    the on-disk cast portrait (assets.castImages[id])
                     //    preferred over the server URL fallback, NO click.
-                    val personNavEnabled = state.capabilities.personNavigation
+                    val personNavEnabled = state.core.capabilities.personNavigation
                     TvFocusableItemRow(
                         items = detail.people,
                         key = { "person_${it.id}" },
@@ -1158,7 +1383,7 @@ internal fun DetailCastSection(
                             )
                         } else {
                             // Local portrait preferred, then server URL fallback.
-                            val localPortrait = state.assets.castImages[person.id]
+                            val localPortrait = state.core.assets.castImages[person.id]
                             val personImageUrl = remember(person.id, localPortrait) {
                                 localPortrait ?: callbacks.artwork.getImageUrl(person.id)
                             }
@@ -1171,6 +1396,39 @@ internal fun DetailCastSection(
                         }
                     }
                 }
+            }
+    }
+}
+
+// ── More in this collection (delayIndex 10, ahead of the similar rows) ─
+
+@Composable
+internal fun DetailMoreInCollectionSection(
+    delayIndex: Int,
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    bodyContentPad: Dp,
+) {
+    // The admission fold admits the slot only for VISIBLE rows (the
+    // eye-hidden ones excluded), so the wrapper re-filters with the same
+    // predicate — a hidden row never composes.
+    val hidden = state.core.hiddenFranchiseCollections[state.itemId].orEmpty()
+    val rows = state.core.franchiseCollections.filterNot { it.id in hidden }
+    StaggeredDetailSection(visible = rows.isNotEmpty(), delayIndex = delayIndex) {
+        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            rows.forEach { collection ->
+                FranchiseCollectionRow(
+                    collection = collection,
+                    bodyContentPad = bodyContentPad,
+                    onPlayCollectionInOrder = callbacks.playback.onPlayCollectionInOrder,
+                    onHideRow = { callbacks.userData.onHideFranchiseRow(collection.id) },
+                    onSeeAll = {
+                        callbacks.navigation.onNavigate(Route.CollectionDetail(collection.id))
+                    },
+                    onItemClick = callbacks.navigation.onItemClick,
+                    onItemFocus = callbacks.screen.onFocusedMediaItem,
+                    getImageUrl = callbacks.artwork.getImageUrl,
+                )
             }
         }
     }
@@ -1191,7 +1449,7 @@ internal fun DetailMoreLikeThisSection(
         // titles mined from the offline library (localRelatedItems) instead;
         // remote keeps the server-sourced relatedItems. Either way the row
         // renders identically — only the source + an "On-device" badge differ.
-        val moreLikeThis = if (isLocalOrigin) state.localRelatedItems else state.relatedItems
+        val moreLikeThis = if (isLocalOrigin) state.core.localRelatedItems else state.core.relatedItems
         if (moreLikeThis.isNotEmpty()) {
             Column {
                 FadingItem {
@@ -1250,53 +1508,8 @@ internal fun DetailMoreLikeThisSection(
 
 // ── JellyPlay plugin sections (ADR 0010): ratings chips + scored similar ──
 
-/**
- * The companion plugin's aggregated external-ratings row (mdblist): one
- * non-clickable chip per source the server sent, rendered verbatim
- * ("Source Score"). Silent absence is the plugin contract — the admission
- * gate (state.pluginRatings non-empty) means a failed/null probe simply
- * never admits this slot; there is no error or loading state by design.
- */
-@Composable
-internal fun DetailPluginRatingsSection(
-    delayIndex: Int,
-    state: DetailContentState,
-    bodyContentPad: Dp,
-) {
-    val ratings = state.pluginRatings
-    StaggeredDetailSection(visible = ratings.isNotEmpty(), delayIndex = delayIndex) {
-        Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-            FadingItem {
-                Text(
-                    text = stringResource(Res.string.jellyplay_det_ratings_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.semantics { heading() },
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            FadingItem {
-                // Chips wrap (the header metadata row's FlowRow shape) — the
-                // source set is small (≤6) and reads as one line on every
-                // width that matters.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    ratings.forEach { entry ->
-                        val score = entry.score ?: return@forEach
-                        TagChip(
-                            label = "${entry.source} ${formatPluginScore(score)}",
-                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
-                            enabled = false,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+// (The PLUGIN_RATINGS row renders through PluginRatingsSectionModule — the
+// detail section registry's wave-1 pilot; its renderer moved there verbatim.)
 
 /**
  * Score rendering for a plugin rating chip: whole scores stay integers
@@ -1324,7 +1537,7 @@ internal fun DetailJellyPlaySimilarSection(
     callbacks: DetailContentCallbacks,
     bodyContentPad: Dp,
 ) {
-    val similar = state.pluginSimilarItems
+    val similar = state.core.pluginSimilarItems
     StaggeredDetailSection(visible = similar.isNotEmpty(), delayIndex = delayIndex) {
         Column {
             FadingItem {
@@ -1415,10 +1628,10 @@ internal fun DetailSpecialFeaturesSection(
     // Remote-only: the fetch is gated by capabilities.remoteDiscovery (see
     // triggerRemoteSideEffects), and an empty list hides the section entirely.
     StaggeredDetailSection(
-        visible = state.capabilities.remoteDiscovery && state.specialFeatures.isNotEmpty(),
+        visible = state.core.capabilities.remoteDiscovery && state.core.specialFeatures.isNotEmpty(),
         delayIndex = delayIndex,
     ) {
-        val extras = state.specialFeatures
+        val extras = state.core.specialFeatures
         Column {
             FadingItem {
                 Text(
@@ -1476,14 +1689,14 @@ internal fun DetailDownloadFooterSection(
     // so the footer is the final step of the entrance stagger). The
     // seriesAggregate-only local series (no per-item download) is handled
     // by the header above; this card is per-item.
-    val attachedDownload = state.detailContext?.download
+    val attachedDownload = state.core.detailContext?.download
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
             // Freshness banner: surfaces a server-detected update or a media-file
             // change that needs a full re-download. Tappable -> opens the resync
             // sheet. Hidden when there's nothing to act on.
             SyncUpdateBanner(
-                syncState = state.detailContext?.syncState,
+                syncState = state.core.detailContext?.syncState,
                 resyncState = state.resyncState,
                 onClick = callbacks.download.onOpenResync,
             )

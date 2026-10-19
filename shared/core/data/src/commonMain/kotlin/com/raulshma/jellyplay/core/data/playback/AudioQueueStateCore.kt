@@ -138,7 +138,7 @@ class AudioQueueStateCore(
     // these cells has one core-side home; everyone else reads the read-only
     // flows below. The ONE declared exception is the Android adapter's
     // `_currentIndex` transition writes (the media3 transition-echo
-    // reconciliation — [reportsRideEngineTransition]'s carve-out), and the
+    // reconciliation [reportsRideEngineTransition] declares), and the
     // jvmTest/androidHostTest seeds, which write the cells directly by the
     // same internal visibility.
 
@@ -706,8 +706,8 @@ class AudioQueueStateCore(
      * Teardown display reset (the adapter calls it after releasing the
      * engine, before its lyrics reset): clears the session's item claim and
      * the five tracker display fields — artistId deliberately survives (the
-     * tracker's recorded divergence — Android's stop behaved identically
-     * pre-extraction) — then parks the playback display flows.
+     * tracker's recorded divergence — Android's stop behaves identically)
+     * — then parks the playback display flows.
      */
     internal fun onEngineReleased() {
         currentItemId = null

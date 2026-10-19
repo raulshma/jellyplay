@@ -122,10 +122,10 @@ class MpvDesktopEngineTest {
 
     @Test
     fun capabilities_deriveFromEngineCapabilityMatrix_withDesktopWindowingDivergences() {
-        // Ratchet: the engine must publish the matrix's MPV row verbatim
-        // except the two declared desktop windowing flags. The former
-        // hand-typed copy omitted supportsImageSubtitles (matrix: true),
-        // silently disabling offline image-subtitle side-loading on desktop.
+        // The engine must publish the matrix's MPV row exactly except the two
+        // declared desktop windowing flags. A hand-typed copy would omit
+        // supportsImageSubtitles (matrix: true), silently disabling offline
+        // image-subtitle side-loading on desktop.
         assumeTrue(libmpvAvailable(), { "libmpv not available on this machine" })
         val engine = MpvDesktopEngine(
             extraOptions = mapOf("vo" to "null", "ao" to "null"),

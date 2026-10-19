@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.shell
 
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -56,7 +56,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class ShellInfra(
     val networkStatusLazy: Lazy<StateFlow<NetworkStatus>>,
-    val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
+    val audioPlaybackManagerLazy: Lazy<ShellAudioSurface>,
     val remoteNavigationBridgeLazy: Lazy<RemoteNavigationBridge>,
     val remoteControlReceiverLazy: Lazy<RemoteControlReceiver>,
     val sessionCoordinatorLazy: Lazy<SessionCoordinator>,

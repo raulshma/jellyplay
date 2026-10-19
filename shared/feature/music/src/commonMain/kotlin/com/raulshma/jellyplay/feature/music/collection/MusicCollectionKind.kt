@@ -27,11 +27,10 @@ import org.jetbrains.compose.resources.StringResource
  *
  * **Sort-admission policy** (pinned by `MusicCollectionSortTableTest`): a
  * collection offers exactly [sortOptions] — nothing else may appear in its
- * sort menu, and the list is the richer of the two lists the browse tab and
- * the standalone screen used to declare separately:
- *  - ARTISTS gains DATE_PLAYED on the browse side (the browse tab offered
- *    NAME/DATE_ADDED/RANDOM while the standalone screen offered the
- *    four-entry list unified here);
+ * sort menu, and the list is the union of the browse tab's and the standalone
+ * screen's menus:
+ *  - ARTISTS gains DATE_PLAYED on the browse side (the browse tab offers
+ *    NAME/DATE_ADDED/RANDOM; the four-entry list is unified here);
  *  - ALBUMS keeps all [MusicSortOption] entries (both families already offered
  *    the full set — YEAR is an albums-only axis);
  *  - TRACKS keeps the standalone four-entry list (YEAR was offered by neither);

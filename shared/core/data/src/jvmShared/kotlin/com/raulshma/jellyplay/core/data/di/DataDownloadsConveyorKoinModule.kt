@@ -15,7 +15,9 @@ import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriterCore
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -42,7 +44,7 @@ internal val dataDownloadsConveyorModule: Module = module {
     // OfflinePlaybackFacade, AudioLibraryBrowser, workers, feature modules)
     // resolve this single from Koin directly.
     //
-    // D6: the artifact-write half lives in the OfflineDownloadWriterCore
+    // The artifact-write half lives in the OfflineDownloadWriterCore
     // single below — over its own DAOs and seams with NO back-reference to
     // the repository — so the graph is a straight line (writer → delegate →
     // repo, writer → repo) and the repository's former Lazy<DownloadDelegate>
@@ -101,13 +103,31 @@ internal val dataDownloadsConveyorModule: Module = module {
             downloadsStore = get(),
             storagePolicy = get(),
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
-            progressNotifier = get<DownloadProgressNotifier>(),
             timeSource = get(),
             writer = get(),
             downloadDelegate = get(),
         )
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
+
+    // The download summary surface (glossary: Download summary surface) — ONE
+    // collector over the in-flight count flow, posting through the
+    // DownloadProgressNotifier port on transitions only. LAZY on purpose: the
+    // registration here would otherwise resolve DownloadDao → open Room and
+    // start the invalidation tracker on the main thread inside startKoin. The
+    // shells' background prewarm groups call the idempotent start() (desktop
+    // DesktopStartup's Dispatchers.Default block, Android AppStartupPrewarms'
+    // background-scheduler group); the summary tracks the pipeline whether or
+    // not anything resolves the surface (download lifecycles span screens and
+    // workers); the application scope is the MediaDownloadActions precedent
+    // for a process-lifetime coroutine home.
+    single {
+        DownloadSummarySurface(
+            inFlightCount = get<DownloadDao>().getInFlightDownloadCountFlow(),
+            notifier = get<DownloadProgressNotifier>(),
+            scope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
 
     // The unified quick-action download/remove delegate every host surface
     // shares (library, favorites, search, detail rows). Koin-owned
@@ -136,7 +156,7 @@ internal val dataDownloadsConveyorModule: Module = module {
     // directly — the DownloadIntake precedent, no verbatim-forward adapter).
     single<QuickDownloadActions> { get<MediaDownloadActions>() }
 
-    // D5: the cold-start row-state recovery policy moved here from the app
+    // The cold-start row-state recovery policy moved here from the app
     // module's DownloadRecoveryInitializer (which injected DownloadDao
     // directly — the one non-test DAO consumer above core:data). The app's
     // startup shell now resolves this port and only fires recover(); the

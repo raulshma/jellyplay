@@ -6,22 +6,19 @@ import java.time.ZoneId
 
 /**
  * The canonical controllable [TimeSource] fake for feature-module jvmTest
- * suites — the richest of the per-module copies that used to drift (livetv's
- * former private one was a strict subset of this shape). core:data's former
- * same-shaped local copy was adopted into this one (its consumer files import
- * this class now).
+ * suites.
  *
- * D3: implements the core:model TimeSource (the seam moved there; the
- * old core:data FQIN is a deprecated typealias).
+ * Implements the core:model TimeSource (the core:data FQIN is a deprecated
+ * typealias).
  *
- * Semantics are the shape all the copies shared:
+ * Semantics:
  *  - [nowEpochMillis] / [nowElapsedRealtimeMillis] both read [nowMs]
  *    (tests advance time by assigning/incrementing it directly).
- *  - [today] ignores the zone and returns the fixed [todayDate] (whose
- *    default, 2026-01-01, is the date the old per-module hardcodes pinned).
+ *  - [today] ignores the zone and returns the fixed [todayDate] (default
+ *    2026-01-01).
  *  - With [autoAdvance] set, [nowEpochMillis] ticks [nowMs] forward 1 ms per
- *    read, so repeated saves get distinct monotone stamps (the ordering the
- *    real `Thread.sleep` pauses used to buy) — [nowElapsedRealtimeMillis]
+ *    read, so repeated saves get distinct monotone stamps (the ordering
+ *    real `Thread.sleep` pauses provide) — [nowElapsedRealtimeMillis]
  *    does not tick.
  */
 class FakeTimeSource(

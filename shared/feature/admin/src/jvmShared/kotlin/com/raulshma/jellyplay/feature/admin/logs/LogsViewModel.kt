@@ -6,11 +6,15 @@ import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.trimToSize
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.RefreshCycle
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 data class LogLine(
     val index: Int,
@@ -40,6 +44,9 @@ data class LogsState(
 
 class LogsViewModel(
     private val adminRepository: AdminRepository,
+    // The multi-MB parse/diff off-Main home (the EpgViewModel gridDispatcher
+    // seam): production omits it; tests pin the test scheduler.
+    private val parseDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(LogsState())
@@ -53,10 +60,19 @@ class LogsViewModel(
 
         /** Server page size for the paginated activity fetch (cold load + more-loads). */
         const val ACTIVITY_PAGE_SIZE = 50
+
+        /** Cadence of the selected-file view-refresh poll. */
+        const val LOG_POLL_INTERVAL_MS = 5_000L
     }
 
     private var liveCollectJob: Job? = null
-    private var logFilePollingJob: Job? = null
+
+    // Poll bookkeeping for the selected file: the metadata-first check
+    // (size / modification date) collapses the 5 s tick to one cheap list
+    // request while the file is unchanged — the multi-MB content
+    // re-download + lines() re-split + diff only run on a real change.
+    private var lastLogSize = -1L
+    private var lastLogModified = ""
 
     private val liveEntriesBuffer = ArrayDeque<ActivityLogEntry>(MAX_LIVE_ENTRIES)
     private val activityEntriesBuffer = ArrayDeque<ActivityLogEntry>(MAX_LIVE_ENTRIES)
@@ -64,6 +80,38 @@ class LogsViewModel(
 
     init {
         loadInitialData()
+    }
+
+    /**
+     * The 5 s selected-file view-refresh poll, registered once and bound to
+     * screen visibility by [startLogPolling]/[stopLogPolling] (the
+     * JellyPlayTranscodesViewModel shape — the refresh-cycle module's
+     * gate/poll/fetch split, not a hand-rolled cancel-delay-fetch loop). The
+     * user's pause toggle and "a file is selected" are the round gate: a
+     * closed round fetches nothing and does not advance the backoff.
+     */
+    private val logFilePollCycle = RefreshCycle(
+        scope = scope,
+        poll = PollSpec(intervalMs = LOG_POLL_INTERVAL_MS),
+        gate = {
+            _state.value.isLogPollingActive && _state.value.selectedLogFileName != null
+        },
+        fetch = { refreshSelectedLogFile() },
+    )
+
+    /**
+     * Screen-visibility hook: arms the selected-file poll (the screen calls
+     * this from its `LifecycleStartEffect`). Safe to call on every entry
+     * into START — a repeated call replaces the running loop
+     * ([RefreshCycle.start]).
+     */
+    fun startLogPolling() {
+        logFilePollCycle.start()
+    }
+
+    /** Stops the poll started by [startLogPolling]; the VM owner kills it for good. */
+    fun stopLogPolling() {
+        logFilePollCycle.stop()
     }
 
     fun loadInitialData() {
@@ -101,7 +149,6 @@ class LogsViewModel(
     }
 
     fun loadLogFile(fileName: String) {
-        logFilePollingJob?.cancel()
         _state.value = _state.value.copy(
             isLoadingLogContent = true,
             selectedLogFileName = fileName,
@@ -109,22 +156,27 @@ class LogsViewModel(
             selectedLogFileLines = emptyList(),
             isLogPollingActive = true
         )
-        logFilePollingJob = launch {
+        lastLogSize = -1L
+        lastLogModified = ""
+        launch {
             // File metadata (size / modification date) drives the poll: when
             // unchanged, the multi-MB content re-download + lines() re-split +
             // diff are all skipped. Jellyfin logs are routinely multi-MB, so
             // this collapses the 5 s poll to one cheap list request.
-            var lastSize = -1L
-            var lastModified = ""
-            suspend fun fetchMeta(): LogFile? =
-                adminRepository.getLogFiles().getOrNull()
-                    ?.firstOrNull { it.name == fileName }
-            fetchMeta()?.let { lastSize = it.size; lastModified = it.dateModified }
+            fetchLogMeta(fileName)?.let {
+                lastLogSize = it.size
+                lastLogModified = it.dateModified
+            }
 
             val initialResult = adminRepository.getLogFileContent(fileName)
             initialResult.onSuccess { content ->
-                val lines = content.lines().mapIndexed { index, text ->
-                    LogLine(index = index, text = text, isNew = false, addedTime = 0L)
+                // Multi-MB files: the lines() split alone allocates 50k-200k
+                // Strings — parse off Main (the LicensesViewModel idiom),
+                // publish on Main.
+                val lines = withContext(parseDispatcher) {
+                    content.lines().mapIndexed { index, text ->
+                        LogLine(index = index, text = text, isNew = false, addedTime = 0L)
+                    }
                 }
                 _state.value = _state.value.copy(
                     selectedLogFileContent = content,
@@ -137,75 +189,90 @@ class LogsViewModel(
                     isLoadingLogContent = false
                 )
             }
+        }
+    }
 
-            // 5s view-refresh polling of the selected file — view policy, owned here.
-            while (_state.value.selectedLogFileName == fileName) {
-                delay(5000)
-                if (_state.value.isLogPollingActive) {
-                    val meta = fetchMeta()
-                    if (meta != null && meta.size == lastSize && meta.dateModified == lastModified) {
-                        continue
+    /**
+     * One round of the [logFilePollCycle]: metadata-first (unchanged ⇒
+     * nothing else runs), then the changed-file content fetch + diff. The
+     * parse/diff runs off Main — the continuation here resumes on the
+     * main-immediate VM scope, and a multi-MB `lines()` split or prefix walk
+     * on it is the frame-drop source this wrap exists for.
+     */
+    private suspend fun refreshSelectedLogFile() {
+        val fileName = _state.value.selectedLogFileName ?: return
+        val meta = fetchLogMeta(fileName)
+        if (meta != null && meta.size == lastLogSize && meta.dateModified == lastLogModified) return
+        val result = adminRepository.getLogFileContent(fileName)
+        result.onSuccess { content ->
+            if (meta != null) {
+                lastLogSize = meta.size
+                lastLogModified = meta.dateModified
+            }
+            // A file switch/clear landing mid-fetch must not publish into the
+            // new selection (the old loop's while-condition check).
+            if (_state.value.selectedLogFileName != fileName) return@onSuccess
+            val oldLines = _state.value.selectedLogFileLines
+            val diffed = withContext(parseDispatcher) {
+                diffAgainst(oldLines, content)
+            } ?: return@onSuccess
+            _state.value = _state.value.copy(
+                selectedLogFileContent = content,
+                selectedLogFileLines = diffed,
+            )
+        }
+    }
+
+    private suspend fun fetchLogMeta(fileName: String): LogFile? =
+        adminRepository.getLogFiles().getOrNull()
+            ?.firstOrNull { it.name == fileName }
+
+    /**
+     * The content→[LogLine] transformation, run on [Dispatchers.Default] by
+     * both callers. Returns null when the new content produces no visible
+     * change (nothing to publish).
+     *
+     * Append-only fast path: server logs only append, so when every previous
+     * line still lines up, reuse the existing LogLine instances and build
+     * only the new tail — a full re-walk builds a second list just to
+     * compare. Non-append shapes (rotation, truncation, rewrite) fall
+     * through to the full re-diff.
+     */
+    private fun diffAgainst(oldLines: List<LogLine>, content: String): List<LogLine>? {
+        val newLinesText = content.lines()
+        val appendOnly = isAppendOf(oldLines, newLinesText)
+
+        return when {
+            appendOnly && newLinesText.size == oldLines.size -> null
+            appendOnly -> {
+                val startIndex = oldLines.size
+                val now = System.currentTimeMillis()
+                val appended = newLinesText.subList(startIndex, newLinesText.size)
+                    .mapIndexed { i, text ->
+                        LogLine(
+                            index = startIndex + i,
+                            text = text,
+                            isNew = true,
+                            addedTime = now,
+                        )
                     }
-                    val result = adminRepository.getLogFileContent(fileName)
-                    result.onSuccess { content ->
-                        if (meta != null) {
-                            lastSize = meta.size
-                            lastModified = meta.dateModified
-                        }
-                        val oldLines = _state.value.selectedLogFileLines
-                        val newLinesText = content.lines()
-
-                        // Append-only fast path: server logs only append, so
-                        // when every previous line still lines up, reuse the
-                        // existing LogLine instances and build only the new
-                        // tail — the old path re-walked the whole (multi-MB)
-                        // file and built a second full list just to compare.
-                        // The prefix walk allocates nothing; non-append shapes
-                        // (rotation, truncation, rewrite) fall through to the
-                        // full re-diff.
-                        val appendOnly = isAppendOf(oldLines, newLinesText)
-
-                        when {
-                            appendOnly && newLinesText.size == oldLines.size -> Unit
-                            appendOnly -> {
-                                val startIndex = oldLines.size
-                                val now = System.currentTimeMillis()
-                                val appended = newLinesText.subList(startIndex, newLinesText.size)
-                                    .mapIndexed { i, text ->
-                                        LogLine(
-                                            index = startIndex + i,
-                                            text = text,
-                                            isNew = true,
-                                            addedTime = now,
-                                        )
-                                    }
-                                _state.value = _state.value.copy(
-                                    selectedLogFileContent = content,
-                                    selectedLogFileLines = oldLines + appended,
-                                )
-                            }
-                            newLinesText != oldLines.map { it.text } -> {
-                                val updatedLines = newLinesText.mapIndexed { index, text ->
-                                    if (index < oldLines.size && oldLines[index].text == text) {
-                                        oldLines[index]
-                                    } else {
-                                        LogLine(
-                                            index = index,
-                                            text = text,
-                                            isNew = index >= oldLines.size,
-                                            addedTime = if (index >= oldLines.size) System.currentTimeMillis() else 0L,
-                                        )
-                                    }
-                                }
-                                _state.value = _state.value.copy(
-                                    selectedLogFileContent = content,
-                                    selectedLogFileLines = updatedLines,
-                                )
-                            }
-                        }
+                oldLines + appended
+            }
+            newLinesText != oldLines.map { it.text } -> {
+                newLinesText.mapIndexed { index, text ->
+                    if (index < oldLines.size && oldLines[index].text == text) {
+                        oldLines[index]
+                    } else {
+                        LogLine(
+                            index = index,
+                            text = text,
+                            isNew = index >= oldLines.size,
+                            addedTime = if (index >= oldLines.size) System.currentTimeMillis() else 0L,
+                        )
                     }
                 }
             }
+            else -> null
         }
     }
 
@@ -228,8 +295,6 @@ class LogsViewModel(
     }
 
     fun clearSelectedLogFile() {
-        logFilePollingJob?.cancel()
-        logFilePollingJob = null
         _state.value = _state.value.copy(
             selectedLogFileContent = null,
             selectedLogFileName = null,
@@ -289,10 +354,9 @@ class LogsViewModel(
     /**
      * Fetches the next activity page at `startIndex = currentSize`, routed
      * through the [PageAppender] guard: a call landing while an older-page
-     * fetch is in flight is suppressed — a fast fling used to fire this
-     * re-entrantly with the same startIndex before the buffer grew,
-     * double-appending the same server page (the screen's `!isLoadingMore`
-     * guard was fed a hardcoded `false`). The in-flight flag stays in
+     * fetch is in flight is suppressed — a fast fling can fire this
+     * re-entrantly with the same startIndex before the buffer grows,
+     * double-appending the same server page. The in-flight flag stays in
      * [LogsState] (the stateless guard reads the site's flag), raised
      * synchronously before the coroutine so both this guard and the
      * screen's infinite-list guard see it. The fetch offset stays the live
@@ -328,6 +392,7 @@ class LogsViewModel(
     override fun onCleared() {
         super.onCleared()
         liveCollectJob?.cancel()
-        logFilePollingJob?.cancel()
+        // The poll cycle rides the VM scope — it dies with it; the screen's
+        // STOP-side stopLogPolling is the visibility arm.
     }
 }

@@ -33,16 +33,16 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
+import com.raulshma.jellyplay.core.testfixtures.FakeImages
+import com.raulshma.jellyplay.core.testfixtures.FakeLyricsRepository
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.FakePlaybackRepository
+import com.raulshma.jellyplay.core.testfixtures.FakeResolver
+import com.raulshma.jellyplay.core.testfixtures.InMemoryQueueDao
+import com.raulshma.jellyplay.core.testfixtures.TestTimeSource
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.NavigationState
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.desktop.player.FakeImages
-import com.raulshma.jellyplay.desktop.player.FakeLyricsRepository
-import com.raulshma.jellyplay.desktop.player.FakePlaybackRepository
-import com.raulshma.jellyplay.desktop.player.FakeResolver
-import com.raulshma.jellyplay.desktop.player.InMemoryQueueDao
-import com.raulshma.jellyplay.desktop.player.TestTimeSource
 import com.raulshma.jellyplay.feature.music.feedback.DesktopMusicMessageBus
 import java.io.File
 import java.io.IOException
@@ -92,7 +92,7 @@ import okhttp3.OkHttpClient
  * [NavigationState]s (DesktopNavGuardTest), the app-level audio fixtures
  * (DesktopAudioQueueManagerFixtures), a real
  * [PreferenceDataStoreFactory.create]-backed file for the stores
- * (HomeDiscoveryStoreTest's Unconfined-scope shape), and the ADR-trap fake
+ * (HomeDiscoveryStoreTest's Unconfined-scope shape), and the check-only fake
  * shape for [AppUpdateRepository] (DesktopUpdateCheckControllerTest). The
  * two seams the holder consumes as plain lambdas/flows — MoveFocus and the
  * receiver's displayMessages — need no doubles at all.
@@ -179,7 +179,7 @@ class DesktopShellServicesTest {
             error("unreachable from DesktopShellServices — the holder consumes only the flows and the sign-out arms")
     }
 
-    /** The ADR-trap fake shape: only the check member is reachable. */
+    /** The check-only fake shape: only the check member is reachable. */
     private class FakeAppUpdateRepository : AppUpdateRepository {
         override suspend fun checkForUpdate(): Result<AppUpdateInfo> =
             Result.failure(IOException("offline"))

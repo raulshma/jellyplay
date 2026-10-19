@@ -115,7 +115,7 @@ internal object PlayerInputPolicy {
  * The per-detector-arm gate bundle the player surface reads: every boolean
  * is "this pattern has an enabled, non-NONE binding" — the exact question
  * the old two coarse tier flags (`tapGesturesEnabled`/`swipeGesturesEnabled`)
- * answered at 1/13th the granularity (issue #171's brightness-vs-volume
+ * answered at 1/13th the granularity (brightness-vs-volume
  * split lives here). Compose-free so it snapshots cheaply into
  * `pointerInput` keys and test assertions.
  */

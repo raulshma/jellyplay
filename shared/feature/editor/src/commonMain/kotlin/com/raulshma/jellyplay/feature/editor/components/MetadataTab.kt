@@ -159,8 +159,8 @@ internal fun MetadataTab(
 
     val mediaType = state.mediaDetail?.item?.mediaType
 
-    // The metadata form value slice (layout/behavior identical to the former
-    // flat UiState fields — reads re-pointed, writes unchanged).
+    // The metadata form value slice (reads and writes go through the same
+    // fields).
     val form = state.metadata.value
 
     val isTv = LocalTvMode.current

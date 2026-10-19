@@ -6,9 +6,8 @@ import androidx.lifecycle.ProcessLifecycleOwner
 
 /**
  * Android actual of the home process-lifecycle seam: a `DefaultLifecycleObserver`
- * registered against [ProcessLifecycleOwner], field-for-field the legacy
- * feature:home behavior (observer added in the VM's init, removed in
- * onCleared; both `runCatching`-guarded so an uninitialised process
+ * registered against [ProcessLifecycleOwner] (observer added in the VM's init,
+ * removed in onCleared; both `runCatching`-guarded so an uninitialised process
  * LifecycleOwner degrades to a no-op instead of crashing).
  */
 internal actual fun registerHomeProcessLifecycle(

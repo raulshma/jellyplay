@@ -19,14 +19,14 @@ import kotlin.test.Test
  * leaf-by-leaf; the two ORDER constraints below are observable neither
  * through the final state (the navigator's reset writes the same episode
  * slice the rebuild just wiped, so both orders converge) nor through
- * injectable seams (the episode continuation controller and the session
+ * injectable seams (the Up Next controller and the session
  * teardown halves are wiring-built, so the EngineAttachControllerTest
  * callLog idiom does not reach them) — they are pinned at the source, the
  * ControllerOwnershipTest.constructionOrderConvention_wiringPhaseOneBeforeArm
  * precedent:
  *
  * 1. the [keepAcrossItems] rebuild runs BEFORE
- *    `episodeContinuation.resetForItemSwitch()` — the rebuild wipes the
+ *    `upNext.resetForItemSwitch()` — the rebuild wipes the
  *    whole state (episode slice included) and the navigator, the episode
  *    slice's single writer, re-derives that slice from the post-rebuild
  *    state (the declared contract on [keepAcrossItems]);
@@ -55,7 +55,7 @@ class ItemSwitchResetOrderTest {
 
     @Test
     fun releaseInternalsVmPart_rebuildsUiState_beforeTheNavigatorResetsTheEpisodeSlice() {
-        // The VM half moved session-side with the C6 collapse (every
+        // The VM half moved session-side (every
         // collaborator it touches is session-internal now) — the order pin
         // moved with it.
         val session = moduleSource("PlaybackSession.kt")
@@ -64,12 +64,12 @@ class ItemSwitchResetOrderTest {
             .substringBefore("override fun clearTrickplay()")
 
         val rebuild = body.indexOf("uiState.update { it.keepAcrossItems() }")
-        val navigatorReset = body.indexOf("episodeContinuation.resetForItemSwitch()")
+        val navigatorReset = body.indexOf("upNext.resetForItemSwitch()")
         assertTrue(rebuild >= 0, "the keepAcrossItems rebuild is missing from releaseInternalsVmPart")
         assertTrue(navigatorReset >= 0, "the episode-slice reset is missing from releaseInternalsVmPart")
         assertTrue(
             rebuild < navigatorReset,
-            "the keepAcrossItems rebuild must run BEFORE episodeContinuation.resetForItemSwitch: the " +
+            "the keepAcrossItems rebuild must run BEFORE upNext.resetForItemSwitch: the " +
                 "rebuild wipes the whole state (episode slice included) and the navigator — the slice's " +
                 "single writer — re-derives it from the post-rebuild state; a reset that ran first would " +
                 "write into the outgoing state only for the rebuild to clobber it",
@@ -82,7 +82,7 @@ class ItemSwitchResetOrderTest {
         // Only whitespace may sit between the session half's call and the VM
         // half's hook: the pair is one synchronous call chain on both the
         // per-item re-initialization path and the full-release path. The VM
-        // half rides the session's own lifecycleHooks override since the C6
+        // half rides the session's own lifecycleHooks override since the 
         // collapse (the former wiring builder's receiver).
         val adjacency = Regex("releaseInternalsSessionPart\\(\\)\\s*\\n\\s*lifecycleHooks\\.releaseInternalsVmPart\\(\\)")
         val sites = adjacency.findAll(session).toList()
@@ -106,6 +106,7 @@ class ItemSwitchResetOrderTest {
             subtitleStyle = SubtitleStyle(fontSize = 40),
             dialogueBoostEnabled = true,
             dialogueBoostStrength = EffectStrength.HIGH,
+            hasQueuedNext = true,
             uiPrefs = seed.uiPrefs.copy(controlsTimeoutMs = 12_345L, showVideoStats = true),
             gestures = seed.gestures.copy(seekDurationMs = 20_000L, isHoldSpeedActive = true),
             segmentState = seed.segmentState.copy(
@@ -127,6 +128,11 @@ class ItemSwitchResetOrderTest {
         )
         assertEquals(25f, after.videoFx.tvZoomModePercent)
         assertEquals(SubtitleStyle(fontSize = 40), after.subtitleStyle)
+        assertTrue(
+            after.hasQueuedNext,
+            "the queue mirror carries across the item switch: the queue is process-scoped " +
+                "and the queue flow does not re-emit to re-set a dropped mirror",
+        )
 
         // Everything else resets: slice defaults, the per-item dialogue-boost
         // zeroing, and the episode slice (the navigator re-derives it through

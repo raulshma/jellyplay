@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">Forzati</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">Predefinito</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">Ottieni</string>
     <string name="player_video_subtitle_hub_section_delay">Ritardo</string>
     <string name="player_video_subtitle_downloaded_device_only">Salvato solo sul dispositivo (offline)</string>
+    <string name="player_video_subtitle_save_to_server">Salva sul server</string>
     <string name="player_video_chapters">Capitoli</string>
+    <string name="player_video_scrub_slow">lento</string>
+    <string name="player_video_queue_title">Coda di riproduzione</string>
+    <string name="player_video_queue_subtitle">%1$d in coda</string>
+    <string name="player_video_queue_clear">Svuota coda</string>
+    <string name="player_video_queue_up_next">Successivo</string>
+    <string name="player_video_queue_move_up">Sposta su</string>
+    <string name="player_video_queue_move_down">Sposta giù</string>
+    <string name="player_video_queue_remove">Rimuovi dalla coda</string>
+    <string name="player_video_queue_open">Coda di riproduzione (%1$d)</string>
     <string name="player_video_episodes">Episodi</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">Proporzioni</string>
@@ -163,6 +174,11 @@
     <string name="player_video_dialogue_boost">Esalta dialoghi</string>
     <string name="player_video_dialogue_boost_on">Esalta dialoghi \u00B7 %1$s</string>
     <string name="player_video_night_mode">Modalità notturna</string>
+    <string name="player_video_spatial_audio">Audio spaziale</string>
+    <string name="player_video_spatial_audio_on">Audio spaziale attivo — spazializzatore di sistema attivo</string>
+    <string name="player_video_spatial_audio_unavailable">Non spazializzabile su questa uscita</string>
+    <string name="player_video_stats_spatial">Stato spaziale</string>
+    <string name="player_video_stats_spatial_superseded">(virtualizer sostituito)</string>
     <string name="player_video_night_mode_on">Modalità notturna \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">Normalizzazione audio</string>
     <string name="player_video_normalization_on">Normalizzazione \u00B7 %1$s</string>
@@ -261,10 +277,9 @@
     <string name="player_video_no_episodes_found">Nessun episodio trovato per questa stagione</string>
     <string name="player_video_poster">Locandina</string>
     <string name="player_video_selected">Selezionato</string>
-    <string name="player_video_volume">Volume</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">Durata</string>
+    <string name="player_video_volume">Volume</string>    <string name="player_video_duration">Durata</string>
     <string name="player_video_remember_audio_language">Ricorda la lingua audio per questa serie</string>
+    <string name="player_video_remember_audio_description">Preferisci l'audiodescrizione per questa serie</string>
     <string name="player_video_remember_subtitle_language">Ricorda la lingua dei sottotitoli per questa serie</string>
     <string name="player_video_remember_subtitles_off">Mantieni sottotitoli disattivati per questa serie</string>
     <string name="player_video_error_offline_file_missing">Errore: file offline mancante</string>
@@ -293,6 +308,7 @@
     <string name="player_video_stats_clock">Orologio</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">Uscita HDR attiva</string>
+    <string name="player_video_stats_display_hdr">HDR del display</string>
     <string name="player_video_stats_color_range">Gamma colori</string>
     <string name="player_video_stats_color_depth">Profondita colore</string>
     <string name="player_video_stats_sample_rate">Frequenza di campionamento</string>

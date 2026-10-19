@@ -9,8 +9,7 @@ import org.koin.dsl.module
  * (desktopSettingsPlatformModule / desktopMusicMessageBusModule shape): the
  * desktop JVM has no Android-17-style local-network runtime permission, so
  * the gate never blames a connection failure on one — the classifier falls
- * through to the concrete network error (resolve/connect/timeout/SSL), which
- * is exactly the legacy behavior on non-enforcing Android versions.
+ * through to the concrete network error (resolve/connect/timeout/SSL).
  */
 val desktopAuthPlatformModule: Module = module {
     single<LocalNetworkStatus> { LocalNetworkStatus { false } }

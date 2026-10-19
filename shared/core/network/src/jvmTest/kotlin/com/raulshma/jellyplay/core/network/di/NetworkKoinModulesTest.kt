@@ -53,7 +53,7 @@ class NetworkKoinModulesTest {
             modules(
                 module {
                     single<OkHttpConfigProvider> { testConfigProvider }
-                    // D3: Library/MediaInfoApiClientImpl read the clock seam;
+                    // Library/MediaInfoApiClientImpl read the clock seam;
                     // the app graph supplies dataJvmModule's SystemTimeSource
                     // single — this lane loads only the network family, so the
                     // stub stands in for it.

@@ -59,6 +59,15 @@ enum class MediaSegmentType(
         val SEGMENT_PRIORITY = listOf(
             COMMERCIAL, RECAP, PREVIEW, INTRO, OUTRO, UNKNOWN,
         )
+
+        /**
+         * Per-type auto-skip delays, in milliseconds, added on top of a
+         * segment's start before an AUTO_SKIP behavior fires. All zero —
+         * skip at segment start remains the default; the sibling
+         * `segment_skip_delays_ms` preference blob stores overrides.
+         */
+        val DEFAULT_SKIP_DELAYS_MS: Map<MediaSegmentType, Long> =
+            entries.associateWith { 0L }
     }
 }
 

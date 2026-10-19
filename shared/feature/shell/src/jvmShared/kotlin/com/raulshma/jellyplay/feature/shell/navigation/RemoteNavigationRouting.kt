@@ -7,12 +7,10 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
  * Pure remote-navigation routing shared by both shells — the decisions behind
- * the `RemoteNavigationBridge` collectors, extracted with no compose, no
+ * the `RemoteNavigationBridge` collectors, with no compose, no
  * navigator and no back-stack access so both are unit-pinned on the JVM (see
- * `RemoteNavigationRoutingTest`; the PlaybackHostRouter precedent). The
- * former hand-mirrored twins (the Android app's `RemoteNavigationRouting`
- * folds and the desktop mirror in `DesktopRemoteNavigation`) both folded onto
- * this one home; the target→seam LADDER around these folds — including the
+ * `RemoteNavigationRoutingTest`). The
+ * target→seam LADDER around these folds — including the
  * tab-vs-push fork for the folded routes — is
  * [RemoteNavigationDispatcher] (beside this file, the one ladder both shell
  * collectors run), leaving only the focus/select/context-menu ARMS per-shell

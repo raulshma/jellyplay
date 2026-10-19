@@ -748,7 +748,7 @@ data class SeerrAuthLocalRequest(
 /**
  * The Seerr preference slice. [useServerBridge] selects the connection MODE
  * on the Seerr settings surface (direct server fields vs the jellyfin-plugin-
- * jellyplay Seerr bridge, ADR 0010).
+ * jellyplay Seerr bridge).
  *
  * seam: this flag is the consumer seam for switching the Seerr DATA PATH to
  * the plugin proxy. Today only the settings UI reads it; the follow-up task

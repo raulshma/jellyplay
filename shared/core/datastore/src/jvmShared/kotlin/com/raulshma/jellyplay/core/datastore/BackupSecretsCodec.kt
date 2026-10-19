@@ -10,7 +10,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * Encrypts/decrypts the [BackupSecrets] payload behind a [SecretsEnvelope] —
- * the Wave-3 passphrase-protected secrets block of the LOCAL FILE settings
+ * the passphrase-protected secrets block of the LOCAL FILE settings
  * backup. Lives in `jvmShared` because `javax.crypto` is JVM-only and both
  * JellyPlay targets (Android + desktop) are JVM.
  *
@@ -57,7 +57,7 @@ object BackupSecretsCodec {
     /** Envelope format version stamped into [SecretsEnvelope.v]. */
     const val ENVELOPE_VERSION = 1
 
-    /** PBKDF2 work factor (the settled Wave-3 decision — 600,000). */
+    /** PBKDF2 work factor — 600,000 iterations. */
     const val KDF_ITERATIONS = 600_000
 
     /** Random PBKDF2 salt length in bytes. */

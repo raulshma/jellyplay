@@ -23,9 +23,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the subtitle &amp; language preference store, focusing on the JSON-
- * encoded style round-trip and the per-item-delay LRU invariant that previously
- * lived inline in the `UserPreferencesStore` god object with **no** unit
- * coverage.
+ * encoded style round-trip and the per-item-delay LRU invariant.
  */
 class SubtitleLanguageStoreTest {
 

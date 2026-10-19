@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.feature.player.video.session.CastSessionSlice
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
@@ -41,9 +42,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  *    engaged after install still resets (the issue-#145 unlock trap).
  *
  * The ViewModel dispatches and the mutable view-ref write arrive as plain
- * lambdas; the PiP/cast controllers are passed whole (the seams the screen
- * already reads). No Compose state is returned — the session composes the
- * effects and nothing else.
+ * lambdas; the PiP controller and the cast session slice are passed whole
+ * (the seams the screen already reads). No Compose state is returned — the
+ * session composes the effects and nothing else.
  */
 @Composable
 internal fun PlayerWindowSessionEffects(
@@ -61,7 +62,7 @@ internal fun PlayerWindowSessionEffects(
     isScreenLocked: Boolean,
     lifecycleOwner: LifecycleOwner,
     pipController: PipController,
-    cast: PlayerCastController,
+    cast: CastSessionSlice,
     releasePlayer: () -> Unit,
     detachForBackgroundCast: () -> Unit,
     setScreenLocked: (Boolean) -> Unit,
@@ -106,7 +107,7 @@ internal fun PlayerWindowSessionEffects(
 
         onDispose {
             val currentlyInPip = pipController.isInPipMode.value
-            val isBgCasting = cast.isCastConnected && cast.castIsPlaying.value &&
+            val isBgCasting = cast.isConnectedFlow.value && cast.castIsPlaying.value &&
                 cast.backgroundCastingEnabled
             val restoreOrientation = if (isTv)
                 PlayerOrientationLock.TV_LANDSCAPE
@@ -173,7 +174,7 @@ internal fun PlayerWindowSessionEffects(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Issue #145: the screen lock has no lifecycle reset anywhere, and its
+    // The screen lock has no lifecycle reset anywhere, and its
     // overlay is a transparent fillMaxSize layer that consumes every
     // pointer event (LockScreenOverlay). If it stayed engaged across a system
     // lock/unlock, the player silently swallowed all input after unlock.

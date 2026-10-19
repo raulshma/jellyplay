@@ -85,7 +85,7 @@ internal data class ContinueWatchingRowVisibility(
 /**
  * The row's responsive width rules: the progress bar + remaining label hide
  * below 240dp and the poster below 180dp. An unresolved dimension read
- * (widthDp null) shows both — same as the pre-extraction `widgetDims?.let`
+ * (widthDp null) shows both — same as the former `widgetDims?.let`
  * branch whose arms defaulted to false.
  */
 internal fun continueWatchingRowVisibility(widthDp: Int?): ContinueWatchingRowVisibility {

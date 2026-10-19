@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeFreshness
@@ -26,6 +27,8 @@ import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.network.api.JellyPlayHeroCandidate
+import com.raulshma.jellyplay.core.network.api.JellyPlayHeroResult
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowItem
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowResult
 import kotlin.concurrent.Volatile
@@ -58,9 +61,18 @@ import kotlinx.coroutines.sync.Semaphore
  * exposes it; direct implementations elsewhere are not supported.
  */
 public interface HomeSectionSources {
-    suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>>
+    suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>>
     suspend fun getContinueReading(limit: Int): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
+
+    /**
+     * Unaired episodes across the followed series (`GET /Shows/Upcoming`)
+     * — the batch sub-call behind the Upcoming row. Signature borrowed
+     * verbatim from [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
+     * (defaults dropped, the port convention), so the production client
+     * satisfies it for free.
+     */
+    suspend fun getUpcoming(userId: String?, parentId: String?, limit: Int): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
     suspend fun getLatestMedia(parentId: String, limit: Int, classicEpisodePool: Int?): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>>
@@ -99,9 +111,9 @@ public interface SeerrHomeSectionSources {
 }
 
 /**
- * The plugin-side sibling of [SeerrHomeSectionSources]: the two jellyplay row
- * reads the PLUGIN_ROW home rows need (the transport twin of
- * `JellyPlayRowsRoutes.getSeasonalRow/getCustomRow`), the plugin's
+ * The plugin-side sibling of [SeerrHomeSectionSources]: the jellyplay row and
+ * curated-hero reads the PLUGIN_ROW home rows and the hero need (the
+ * transport twin of `JellyPlayRowsRoutes`), the plugin's
  * local-library matches resolved to full [MediaItem]s, and the capability
  * gates. Signatures deliberately carry the raw wire payload — the port stays
  * a dumb transport; payload→[HomeSection] mapping, TTL memoisation and the
@@ -126,11 +138,14 @@ public interface JellyPlayHomeSectionSources {
     suspend fun seasonalRowsEnabled(): Boolean
 
     /**
-     * Capability gate for admin-defined custom rows (probe + `custom-rows`
+     * Capability gate for the admin-defined custom rows (probe + `custom-rows`
      * feature). Unused by the batch home path in v1 — see
      * [HomeSectionsFetcher.fetchPluginCustomRow] for the one blocker.
      */
     suspend fun customRowsEnabled(): Boolean
+
+    /** Capability gate for the plugin-curated hero (probe + `hero` feature). */
+    suspend fun curatedHeroEnabled(): Boolean
 
     /** The plugin's seasonal row; null = unconfigured this season (plugin 404). */
     suspend fun getSeasonalRow(keyword: String?): Result<JellyPlayRowResult?>
@@ -140,6 +155,13 @@ public interface JellyPlayHomeSectionSources {
 
     /** The admin-defined row catalog (the enumerate capability — titles in plugin config order); null = unavailable. */
     suspend fun getCustomRowCatalog(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowCatalog?>
+
+    /**
+     * The plugin's curated hero billboards in the plugin's serve order (weight
+     * descending, config order breaking ties); null = unconfigured / the
+     * `hero` route predates the installed plugin wave (plugin 404).
+     */
+    suspend fun getCuratedHero(): Result<JellyPlayHeroResult?>
 
     /**
      * The batched library read resolving a row entry's `localItemId` to the
@@ -163,10 +185,12 @@ public interface JellyPlayHomeSectionSources {
  * recommendations chain.
  *
  * Schedule (verbatim from the JVM impl it replaces):
- *  - Continue Watching / Continue Reading / Next Up / folders / pinned launch
+ *  - Continue Watching / Continue Reading / Next Up / Upcoming /
+ *    folders / pinned launch
  *    concurrently; a disabled section makes ZERO port calls (resolved locally
  *    as `Result.success(emptyList())`); folders are gated on
- *    LATEST_MEDIA || RECENTLY_ADDED; pinned sections are fetched ALWAYS,
+ *    LATEST_MEDIA || RECENTLY_ADDED || MY_MEDIA (the tiles assemble the
+ *    same folders read); pinned sections are fetched ALWAYS,
  *    regardless of [HomeSectionQuery.enabledSections].
  *  - The recommendations chain launches only AFTER Continue Watching and
  *    Next Up resolve (deliberate serialization, not an oversight — their
@@ -270,28 +294,24 @@ public class HomeSectionsFetcher(
     /**
      * The write guard for the Jellyfin discover-row memo reads
      * ([fetchJellyfinDiscoverRows] and [refreshSection]'s DISCOVER arm): a
-     * MIRROR of the data layer's ONE home cache-write generation token
-     * (`MediaRepositoryImpl.homeWriteGeneration`). This class owns no
-     * counter — the only writes here are the [generation] parameter of the
-     * two mutating [HomeSectionsCachePort] verbs ([invalidateDiscoverRow] /
-     * [seedDiscoverRow]), each carrying the repo funnel's post-bump value,
-     * so the mirror is provably fed by the token's single owner and the
-     * bump-at-invalidate-AND-commit rule has exactly one writer (see
-     * `HomeFeed.rerollDiscoverRow`, the roll protocol's single owner).
-     * `@Volatile` because the writers arrive through port calls on the
-     * caller's thread while the guard reads ride fetch coroutines — the
-     * same explicit-visibility idiom as [lastKnownSeerrRows]. The guard
-     * compares captured-vs-current values only (never against a constant),
-     * so the mirror skipping the repo bump that has no port verb (the
-     * single-row refetch's) changes no outcome — that bump never guarded a
-     * row memo before either. One decision window IS tighter than the
-     * retired counter: the seed verb also advances the mirror (the counter
-     * moved only on invalidate), so a row writer that captured between the
-     * roll's invalidate and its seed is now rejected instead of pinning a
-     * pre-roll payload — strictly safer, never looser.
+     * MIRROR of the data layer's ONE home cache-write generation token,
+     * delivered as [HomeWriteGeneration] by the two mutating
+     * [HomeSectionsCachePort] verbs ([invalidateDiscoverRow] /
+     * [seedDiscoverRow]). This class owns no counter — the mirror is provably
+     * fed by the token's single owner (the repo funnel; the roll protocol's
+     * rules live on `HomeFeed.rerollDiscoverRow`). `@Volatile` because the
+     * writers arrive through port calls on the caller's thread while the
+     * guard reads ride fetch coroutines — the same explicit-visibility idiom
+     * as [lastKnownSeerrRows]. The guard compares captured-vs-current values
+     * only (never against a constant), so the mirror skipping the repo bump
+     * that has no port verb (the single-row refetch's) changes no outcome.
+     * One decision window is deliberately tighter than the retired internal
+     * counter: the seed verb also advances the mirror, so a row writer that
+     * captured between the roll's invalidate and its seed is rejected instead
+     * of pinning a pre-roll payload — strictly safer, never looser.
      */
     @Volatile
-    private var observedGeneration: Long = 0L
+    private var observedGeneration: HomeWriteGeneration = HomeWriteGeneration.INITIAL
 
     // ── Seerr discover rows (moved from the feature layer's ─────────────────
     // fetchCustomSeerrRows) ─────────────────────────────────────────────────
@@ -324,20 +344,43 @@ public class HomeSectionsFetcher(
     private val homePluginRowCache = TtlCache<PluginRowValue>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     /**
-     * Drops both sub-call caches so the next home fetch re-hits the server for the
-     * latest/similar rows. The rows carry per-item UserData (played badge,
-     * favorite heart, resume bar), so a watched/favorite/progress write must
-     * not let this TTL layer serve the pre-write rows — reached from the data
-     * layer through [HomeSectionsCachePort.invalidateSubcallCaches].
+     * The plugin-curated hero: identity-scoped like every entry with the
+     * sibling sub-call TTL — the cached VALUE is the resolved entry list (full
+     * MediaItems with per-item UserData), so a hit costs zero port calls and a
+     * watched/favorite write must not let the memo serve the pre-write hero
+     * (cleared in [invalidateCaches] with the plugin-row memo).
+     */
+    private val homeCuratedHeroCache = TtlCache<List<CuratedHeroEntry>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
+
+    /**
+     * The registry the wholesale drop iterates — this class's cacheSpecs
+     * (MediaRepositoryImpl's registry pattern): every home sub-call memo the
+     * fetcher keeps, in one list. A new memo joins every future drop by
+     * declaring itself here instead of growing [invalidateCaches] by
+     * append-with-comment (the growth pattern that list used to be). Order is
+     * declaration order of the caches above — latest, similar, discover,
+     * plugin rows, curated hero — and unobservable beyond that (the members
+     * are independent clears).
+     */
+    private val homeSubcallCaches: List<TtlCache<*>> = listOf(
+        homeLatestMediaCache,
+        homeSimilarCache,
+        homeDiscoverRowCache,
+        homePluginRowCache,
+        homeCuratedHeroCache,
+    )
+
+    /**
+     * Drops every home sub-call cache in [homeSubcallCaches] so the next home
+     * fetch re-hits the server for the memoised rows (latest, similar,
+     * discover, plugin rows, curated hero). The rows carry per-item UserData
+     * (played badge, favorite heart, resume bar), so a watched/favorite/
+     * progress write must not let this TTL layer serve the pre-write rows —
+     * reached from the data layer through
+     * [HomeSectionsCachePort.invalidateSubcallCaches].
      */
     fun invalidateCaches() {
-        homeLatestMediaCache.clear()
-        homeSimilarCache.clear()
-        homeDiscoverRowCache.clear()
-        // Plugin rows carry resolved MediaItems with per-item UserData, so a
-        // watched/favorite write must not let this memo serve the pre-write
-        // row either.
-        homePluginRowCache.clear()
+        homeSubcallCaches.forEach { it.clear() }
     }
 
     /**
@@ -350,7 +393,7 @@ public class HomeSectionsFetcher(
      * the drop (the same bump-then-drop order this guard always observed);
      * see `HomeFeed.rerollDiscoverRow`.
      */
-    fun invalidateDiscoverRow(rowId: String, generation: Long) {
+    fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
         observedGeneration = generation
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
         homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
@@ -376,7 +419,7 @@ public class HomeSectionsFetcher(
      * parameter — the repo funnel's post-bump token, a roll-protocol rule
      * owned by the data layer (see `HomeFeed.rerollDiscoverRow`).
      */
-    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: Long) {
+    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
         if (items.isEmpty()) return
         observedGeneration = generation
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
@@ -395,18 +438,30 @@ public class HomeSectionsFetcher(
 
         val continueWatchingDeferred = async {
             // The resume-row trio's per-type sub-call (enabled gate + query
-            // parameter wiring) lives in HomeRowBatchSubcalls — the row's own
-            // registration; the schedule (what launches when) stays here.
-            HomeRowBatchSubcalls.getValue(HomeSectionType.CONTINUE_WATCHING)(sources, query)
+            // parameter wiring) lives in the row's transport registration —
+            // the schedule (what launches when) stays here.
+            homeRowBatchSubcall(HomeSectionType.CONTINUE_WATCHING)(sources, query)
         }
         val continueReadingDeferred = async {
-            HomeRowBatchSubcalls.getValue(HomeSectionType.CONTINUE_READING)(sources, query)
+            homeRowBatchSubcall(HomeSectionType.CONTINUE_READING)(sources, query)
         }
         val nextUpDeferred = async {
-            HomeRowBatchSubcalls.getValue(HomeSectionType.NEXT_UP)(sources, query)
+            homeRowBatchSubcall(HomeSectionType.NEXT_UP)(sources, query)
+        }
+        // The Upcoming sub-call rides the same per-type registration the
+        // resume trio uses — the schedule stays here, the call shape lives in
+        // the row's own batch arm.
+        val upcomingDeferred = async {
+            homeRowBatchSubcall(HomeSectionType.UPCOMING)(sources, query)
         }
         val foldersDeferred = async {
-            if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
+            // The shared folders fetch backs THREE rows now: the latest
+            // fan-out (LATEST_MEDIA + RECENTLY_ADDED) and the My Media
+            // tiles (which assemble the folders directly, zero extra calls).
+            if (HomeSectionType.LATEST_MEDIA in enabledSections ||
+                HomeSectionType.RECENTLY_ADDED in enabledSections ||
+                HomeSectionType.MY_MEDIA in enabledSections
+            ) {
                 sources.getLibraryFolders()
             } else {
                 Result.success(emptyList())
@@ -439,9 +494,16 @@ public class HomeSectionsFetcher(
                 fetchTitledPluginRows(force = force, identity = identity)
         }
 
+        // The plugin-curated hero: fetched ALWAYS beside the plugin rows (the
+        // same capability-registry gate posture — not user layout config),
+        // concurrently with everything else. Empty = gated off / unconfigured
+        // / unresolvable — the hero silently falls back to its local pool.
+        val curatedHeroDeferred = async { fetchCuratedHero(force = force, identity = identity) }
+
         val continueWatchingResult = continueWatchingDeferred.await()
         val continueReadingResult = continueReadingDeferred.await()
         val nextUpResult = nextUpDeferred.await()
+        val upcomingResult = upcomingDeferred.await()
         val foldersResult = foldersDeferred.await()
 
         // Launch the recommendations chain now: it depends only on the
@@ -458,48 +520,48 @@ public class HomeSectionsFetcher(
                 val recommendationSeeds =
                     continueWatchingResult.getOrDefault(emptyList()) +
                         nextUpResult.getOrDefault(emptyList())
+                // Whether the seed rows were FETCHED at all: only a
+                // disabled source row justifies the fallback's own seed fetch
+                // — enabled-but-empty rows already proved there is nothing to
+                // seed with, and re-hitting both endpoints per home load was
+                // two guaranteed-wasted round-trips.
+                val seedSourcesDisabled =
+                    HomeSectionType.CONTINUE_WATCHING !in enabledSections &&
+                        HomeSectionType.NEXT_UP !in enabledSections
                 async {
                     recommendations(
                         limit = 20,
                         seeds = recommendationSeeds,
+                        seedSourcesDisabled = seedSourcesDisabled,
                         force = force,
                         identity = identity,
                         classicRows = query.classicRows,
+                        excludeActiveSessions = query.excludeActiveSessions,
                     )
                 }
             } else null
 
         // Latest-media fan-out: one /Items/Latest per non-music folder,
-        // semaphore-bounded at 4, collected in folder order for the
-        // assembler — the fetch half stays here, the section-building
+        // semaphore-bounded at 4, collected in folder order for the assembler
+        // (the shared [latestFoldersFanOut] shape the RECENTLY_ADDED refresh
+        // arm re-runs) — the fetch half stays here, the section-building
         // and ordering policy lives in the shared pure assembler.
         var latestPerFolder: List<Pair<LibraryFolder, Result<List<MediaItem>>>> = emptyList()
         if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
             foldersResult.onSuccess { folders ->
-                val filteredFolders = folders
-                    .filter { it.collectionType != "music" }
-                latestPerFolder = Semaphore(4).mapConcurrent(filteredFolders) { folder ->
-                    folder to latestForLibrary(
-                        libraryId = folder.id,
-                        collectionType = folder.collectionType,
-                        classicRows = query.classicRows,
-                        force = force,
-                        identity = identity,
-                    )
-                }
+                latestPerFolder = latestFoldersFanOut(folders, query.classicRows, force, identity)
             }
         }
 
         val recommendationsResult = recommendationsDeferred?.await()
-        // Suggestions fallback fetched only when recommendations succeeded
-        // but produced no items — the SAME predicate the assembler's
-        // fallback branch (~162) renders on; the two are pinned together by
-        // HomeSectionsFetcherTest.
-        val suggestions = recommendationsResult
-            ?.getOrNull()
-            ?.takeIf { it.items.isEmpty() }
-            ?.let { sources.getSearchSuggestions(limit = 20).getOrNull()?.items.orEmpty() }
-            .orEmpty()
+        // Suggestions fallback fetched only when the shared predicate says the
+        // recommendations payload earned nothing ([suggestionsFallbackApplies],
+        // beside the assembler whose branch renders on the SAME predicate).
+        val suggestions = if (suggestionsFallbackApplies(recommendationsResult)) {
+            sources.getSearchSuggestions(limit = 20).getOrNull()?.items.orEmpty()
+        } else {
+            emptyList()
+        }
 
         val output = assembleHomeSections(
             HomeSectionsAssemblyInputs(
@@ -507,6 +569,7 @@ public class HomeSectionsFetcher(
                 continueWatchingResult = continueWatchingResult,
                 continueReadingResult = continueReadingResult,
                 nextUpResult = nextUpResult,
+                upcomingResult = upcomingResult,
                 foldersResult = foldersResult,
                 latestPerFolder = latestPerFolder,
                 recommendationsResult = recommendationsResult,
@@ -514,6 +577,7 @@ public class HomeSectionsFetcher(
                 pinnedSections = pinnedDeferred.await(),
                 discoverSections = discoverDeferred.await(),
                 pluginRowSections = pluginRowsDeferred.await(),
+                curatedHero = curatedHeroDeferred.await(),
             ),
         )
         if (output.result.sections.isEmpty() && output.firstError != null) {
@@ -547,38 +611,15 @@ public class HomeSectionsFetcher(
      * persist — those live a layer up (MediaRepository), keyed by the whole
      * query, and a single-row result must never masquerade as one.
      *
-     * The per-type arms themselves live in [HomeRowRefreshArms] (the
-     * transport half of the home row registry — one arm per row type); this
-     * method owns the outcome contract and the context wiring. Mapping:
-     *  - CONTINUE_WATCHING / CONTINUE_READING / NEXT_UP: the direct port call
-     *    with the [query]'s parameters, then the assembler's filters verbatim
-     *    (hidden-CW set; Next Up's CW-overlap + excluded-series drops — the
-     *    CW ids come from one extra Continue Watching read, mirroring the
-     *    assembler's seed reuse). CONTINUE_WATCHING additionally honours
-     *    [mergeNextUpIntoContinueWatching]: when the user's layout folds Next
-     *    Up into this row (OrderHomeSectionsUseCase, batch time), the refetch
-     *    rebuilds that fold from BOTH fresh sources — a CW-only refetch would
-     *    swap away the row's Next Up half (and the CW-empty + Next Up-present
-     *    relabel arm would drop a non-empty row).
-     *  - LATEST_MEDIA: one `/Items/Latest` for the row's library (resolved
-     *    from the `latest_<libraryId>` id), through the same TTL memo.
-     *  - RECENTLY_ADDED: the whole latest fan-out (folders → per-library
-     *    latest, music filtered, semaphore-bounded) re-aggregated with the
-     *    assembler's per-folder override + CW-overlap filters — the row is an
-     *    aggregate, so its refetch costs the aggregate.
-     *  - DISCOVER (JELLYFIN rows only): the row's memoised query, behind the
-     *    same dice-roll generation guard ([observedGeneration]).
-     *  - PINNED: the pin's item resolution, same routing table as the batch.
-     *  - PLUGIN_ROW: the same plugin leaf read the batch runs (seasonal under
-     *    the `seasonal` instance id, a titled row under `custom_<title>`),
-     *    rebuilt through the shared section builder so only the payload
-     *    moves.
-     *
-     * RECOMMENDATIONS and Seerr-sourced DISCOVER rows are deliberately NOT
-     * refreshable here (the recommendations seed chain and the Seerr group
-     * gate/last-known-good policy are batch-shaped); the feature layer keeps
-     * the edge-pull gesture off those rows, and an unguarded call fails with
-     * [IllegalStateException] rather than guessing.
+     * This method owns the OUTCOME CONTRACT and the context wiring only: the
+     * per-type mapping lives on the row's transport registration
+     * ([HomeRowTransports] — the row's read, wire parameters and refresh arm
+     * in one place; see its file KDoc). RECOMMENDATIONS and Seerr-sourced
+     * DISCOVER rows are deliberately NOT refreshable here (the recommendations
+     * seed chain and the Seerr group gate/last-known-good policy are
+     * batch-shaped); the feature layer keeps the edge-pull gesture off those
+     * rows, and an unguarded call fails with [IllegalStateException] rather
+     * than guessing.
      */
     suspend fun refreshSection(
         section: HomeSection,
@@ -587,11 +628,7 @@ public class HomeSectionsFetcher(
         force: Boolean = true,
     ): Result<HomeSection?> = runCatchingRethrowingCancellation {
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        // The per-type arms live in HomeRowRefreshArms (the transport half of
-        // the home row registry — see its KDoc); this method owns the
-        // outcome contract only. Non-refreshable types fail with the same
-        // caller-bug error the former `else` arm threw.
-        HomeRowRefreshArms.forType(section.type).refresh(
+        homeRowRefreshArm(section.type).refresh(
             ctx = HomeRowRefreshContext(
                 sources = sources,
                 query = query,
@@ -605,6 +642,9 @@ public class HomeSectionsFetcher(
                         force = force,
                         identity = identity,
                     )
+                },
+                latestFanOut = { folders ->
+                    latestFoldersFanOut(folders, query.classicRows, force, identity)
                 },
                 continueWatchingFilterIds = { continueWatchingIdsForFilters(query) },
                 discoverRowItems = { row, rowForce -> discoverRowItemsCached(row, rowForce, identity) },
@@ -628,8 +668,12 @@ public class HomeSectionsFetcher(
     private suspend fun continueWatchingIdsForFilters(query: HomeSectionQuery): Set<String> =
         if (HomeSectionType.CONTINUE_WATCHING in query.enabledSections) {
             continueWatchingFilterIds(
-                continueWatchingItems = sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
-                    .getOrDefault(emptyList()),
+            continueWatchingItems = sources.getContinueWatching(
+                limit = 20,
+                classicRows = query.classicRows,
+                excludeActiveSessions = query.excludeActiveSessions,
+            )
+                .getOrDefault(emptyList()),
                 hiddenItemIds = query.hiddenCwItemIds,
             )
         } else {
@@ -639,8 +683,8 @@ public class HomeSectionsFetcher(
     /**
      * The dice-roll generation-guarded discover-row memo read — the ONE
      * cache-through shape both readers share: the batch fan-out
-     * ([fetchJellyfinDiscoverRows]) and the DISCOVER refresh arm
-     * (HomeRowRefreshArms, through the refresh context).
+     * ([fetchJellyfinDiscoverRows]) and the DISCOVER refresh arm (through the
+     * refresh context).
      */
     private suspend fun discoverRowItemsCached(
         row: DiscoverRowConfig,
@@ -650,7 +694,7 @@ public class HomeSectionsFetcher(
         identity,
         discoverRowCacheKey(row.id, row.limit),
         force = force,
-        currentEpoch = { observedGeneration },
+        currentEpoch = { observedGeneration.value },
     ) {
         sources.getDiscoverRowItems(row)
     }
@@ -936,6 +980,68 @@ public class HomeSectionsFetcher(
         }
     }
 
+    // ── Plugin-curated hero (the `hero` feature, beside the rows) ────
+    //
+    // The same leaf shape as the rows: the capability registry is the WHAT
+    // gate, the TTL memo is [homeCuratedHeroCache], and every failure mode
+    // degrades to an empty list — a curated hero must never fail home, and
+    // the hero's fallback IS the local candidate pool (there are no fallback
+    // tiles to keep, unlike a row).
+
+    /**
+     * The plugin-curated hero for the batch home fetch: gate → TTL memo →
+     * resolve under the `jellyplay_hero` cache key. Empty list = gated off /
+     * unconfigured / failed / nothing resolvable — silently absent, never an
+     * error. Public for the leaf-test suite (the rows' convention).
+     */
+    public suspend fun fetchCuratedHero(
+        force: Boolean = false,
+        identity: CacheIdentity? = null,
+    ): List<CuratedHeroEntry> {
+        if (jellyPlaySources == null || !jellyPlaySources.curatedHeroEnabled()) return emptyList()
+        return homeCuratedHeroCache.cacheThrough(
+            identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN,
+            "jellyplay_hero",
+            force = force,
+        ) {
+            // A failed plugin read is an empty hero, not a fetch failure —
+            // normalize to an empty success (the plugin-row arm's policy).
+            runCatchingRethrowingCancellation {
+                jellyPlaySources.getCuratedHero().getOrNull()
+                    ?.let { payload -> resolveCuratedHeroEntries(payload.candidates) }
+                    .orEmpty()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /**
+     * Maps the wire candidates to [CuratedHeroEntry]s in serve order: the ids
+     * resolve through ONE batched [JellyPlayHomeSectionSources.getItemsByIds]
+     * read (the plugin rows' resolution pattern), and an id the server no
+     * longer knows DROPS — a curated hero never renders a fallback tile. The
+     * serve order is authoritative end-to-end; a duplicated id keeps its
+     * FIRST slot (the earlier candidate wins) and resolves once.
+     */
+    private suspend fun resolveCuratedHeroEntries(candidates: List<JellyPlayHeroCandidate>): List<CuratedHeroEntry> {
+        val deduped = candidates
+            .filter { it.itemId.isNotBlank() }
+            .distinctBy { it.itemId }
+        if (deduped.isEmpty()) return emptyList()
+        val resolved = jellyPlaySources?.getItemsByIds(deduped.map { it.itemId })
+            ?.getOrDefault(emptyList())
+            .orEmpty()
+            .associateBy { it.id }
+        return deduped.mapNotNull { candidate ->
+            resolved[candidate.itemId]?.let { item ->
+                CuratedHeroEntry(
+                    item = item,
+                    headline = candidate.headline?.takeIf { it.isNotBlank() },
+                    subhead = candidate.subhead?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
+
     /**
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
      * consults [homeLatestMediaCache] first. Only the home path uses this —
@@ -979,6 +1085,32 @@ public class HomeSectionsFetcher(
     )
 
     /**
+     * The latest fan-out's ONE shape — the batch schedule ([fetch]) and the
+     * RECENTLY_ADDED refresh arm (through the refresh context) both run it:
+     * the music filter, then one TTL-memoised per-library latest read per
+     * folder, semaphore-bounded at 4 and collected in folder order.
+     * [includeFolder] lets the aggregate refresh skip a disabled library
+     * BEFORE any port call (the batch applies the same per-library overrides
+     * at assembly, after the fetch — one fact, two stages).
+     */
+    private suspend fun latestFoldersFanOut(
+        folders: List<LibraryFolder>,
+        classicRows: Boolean,
+        force: Boolean,
+        identity: CacheIdentity,
+        includeFolder: (LibraryFolder) -> Boolean = { true },
+    ): List<Pair<LibraryFolder, Result<List<MediaItem>>>> =
+        Semaphore(4).mapConcurrent(folders.filter { it.collectionType != "music" && includeFolder(it) }) { folder ->
+            folder to latestForLibrary(
+                libraryId = folder.id,
+                collectionType = folder.collectionType,
+                classicRows = classicRows,
+                force = force,
+                identity = identity,
+            )
+        }
+
+    /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that
      * memoises each seed's similar-items list in [homeSimilarCache]. The
      * recommendations fan-out (up to 5 concurrent similar-items calls) is
@@ -989,28 +1121,40 @@ public class HomeSectionsFetcher(
         homeSimilarCache.cacheThrough(identity, "${seedId}_$limit", force = force) { sources.getSimilarItems(seedId, limit) }
 
     /**
-     * The recommendations ("Recommended For You") core. Preserved wart, kept
-     * deliberately: with NO usable seeds it fetches its own via
-     * getContinueWatching(5) / getNextUp(limit 5, rewatching false, maxDays 0)
-     * — a second pair of round-trips when the sections themselves are merely
-     * empty rather than disabled.
+     * The recommendations ("Recommended For You") core. With no usable seeds,
+     * it fetches its own via getContinueWatching(5) / getNextUp(limit 5,
+     * rewatching false, maxDays 0) — but ONLY when the seed source rows are
+     * disabled ([seedSourcesDisabled]): that is the one case where
+     * the data was never fetched. Enabled-but-empty rows already answered
+     * "nothing to seed with" this load; the fallback used to re-hit both
+     * endpoints there anyway — the labeled-in-code wart, now gated.
      */
     private suspend fun recommendations(
         limit: Int,
         seeds: List<MediaItem>,
+        seedSourcesDisabled: Boolean,
         force: Boolean,
         identity: CacheIdentity,
         classicRows: Boolean,
+        excludeActiveSessions: Boolean,
     ): Result<RecommendationResult> = runCatchingRethrowingCancellation {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
         // /Items/Resume and /Shows/NextUp round-trips within the same load.
-        val seedItems = if (seeds.isNotEmpty()) {
-            seeds.distinctBy { it.id }.take(5)
-        } else {
-            val continueWatching = sources.getContinueWatching(limit = 5, classicRows = classicRows).getOrDefault(emptyList())
-            val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
-            (continueWatching + nextUp).distinctBy { it.id }.take(5)
+        val seedItems = when {
+            seeds.isNotEmpty() -> seeds.distinctBy { it.id }.take(5)
+            seedSourcesDisabled -> {
+                val continueWatching = sources.getContinueWatching(
+                    limit = 5,
+                    classicRows = classicRows,
+                    excludeActiveSessions = excludeActiveSessions,
+                ).getOrDefault(emptyList())
+                val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
+                (continueWatching + nextUp).distinctBy { it.id }.take(5)
+            }
+            // Seeds empty AND their source rows ran this load: there is
+            // genuinely nothing to recommend from.
+            else -> emptyList()
         }
 
         if (seedItems.isEmpty()) return@runCatchingRethrowingCancellation RecommendationResult(emptyList(), null)

@@ -9,11 +9,11 @@ kotlin {
     }
 
     sourceSets {
-        // The jvmShared slice (now empty of Kotlin — the QuickDownloadActions
-        // wrapper/fragment actuals were deleted when core:data took over the
-        // seam), kept so android + desktop share any future JVM-only Kotlin
-        // like the newsletter/requests jvmShared source sets. (The jvmShared
-        // middle source set comes from the convention plugin.)
+        // The jvmShared slice is empty of Kotlin (core:data owns the
+        // QuickDownloadActions seam), kept so android + desktop share any
+        // future JVM-only Kotlin like the newsletter/requests jvmShared source
+        // sets. (The jvmShared middle source set comes from the convention
+        // plugin.)
 
         commonMain.dependencies {
             implementation(project(":shared:core:model"))
@@ -26,12 +26,12 @@ kotlin {
             implementation(libs.jb.compose.saveable)
             // StudioDetailViewModel ctor arg (nav-entry SavedStateHandle, KMP
             // since lifecycle 2.9 — synthesized from CreationExtras by Koin's
-            // Android parameters holder, same extras the Hilt factory used).
+            // Android parameters holder).
             implementation(libs.lifecycle.viewmodel.savedstate)
             implementation(libs.paging.compose)
             // coil3.size.Size for MediaImage sizing in LibraryListItem/
-            // ThumbCard (the PhotoViewerScreen user moved to feature/photos
-            // with the photo-suite extraction, which carries its own edge).
+            // ThumbCard (feature/photos carries its own edge for the
+            // PhotoViewerScreen).
             implementation(libs.coil.compose)
             implementation(libs.kotlinx.serialization.json)
         }
@@ -45,13 +45,11 @@ kotlin {
         // (coil-compose → coil-core-android; core-ktx via :shared:core:ui).
         getByName("androidMain").dependencies {
             // The user-messenger actual bridges to the app-wide
-            // LocalUserMessageBus (:shared:core:ui androidMain since the
-            // cutover dissolved the legacy :core:ui shim).
+            // LocalUserMessageBus (:shared:core:ui androidMain).
         }
     }
 }
 
 // The compose-resources `packageOfResClass`
-// (`...feature.library.generated.resources`, same as the legacy value) is a
-// path-derived default from the convention plugin now — see
-// KmpLibraryComposePlugin.
+// (`...feature.library.generated.resources`) is a path-derived default from
+// the convention plugin — see KmpLibraryComposePlugin.

@@ -118,7 +118,7 @@ class LiveTvPlayerViewModel(
     private val pip: PipController? = null,
     /**
      * The cross-player exclusivity authority (the video focus slice,
-     * ADR-0004): the live stream claims [PlaybackSurfaceId.VIDEO] on the
+     * the playback-focus contract): the live stream claims [PlaybackSurfaceId.VIDEO] on the
      * play edge (the music manager's onIsPlayingChanged pattern) and OS
      * losses come back as pause/duck commands through the bound
      * [com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface].
@@ -138,7 +138,7 @@ class LiveTvPlayerViewModel(
      * One-shot screen events (record/cancel feedback, PiP-dismiss screen
      * close) on the [LivePlayerEvent] vocabulary — ONE intake replacing the
      * former messages/closePlayer member pair (the VOD `SessionEvent`
-     * pattern; the VM's public-member ratchet stays at its ceiling). Backed
+     * pattern; the VM's public-member guard stays at its ceiling). Backed
      * by a `tryEmit`-only, DROP_OLDEST pipe mirroring the engine-session
      * shell's one-shot contract (a mid-teardown emission never suspends).
      */
@@ -242,12 +242,22 @@ class LiveTvPlayerViewModel(
             .onEach { ms -> _state.value = _state.value.copy(controlsTimeoutMs = ms) }
             .launchIn(viewModelScope)
 
+        // The persisted input mapping rides the same aggregate store (the
+        // GLOSSARY "Input dispatch module"): the live D-pad surface resolves
+        // its arm gates through it, so a disabled/rebound row applies to live
+        // exactly as it does to the VOD player.
+        aggregateStore.aggregate
+            .map { it.videoPlayer.videoInputBindings }
+            .distinctUntilChanged()
+            .onEach { map -> _state.value = _state.value.copy(inputMap = map) }
+            .launchIn(viewModelScope)
+
         // PiP auto-exit discharge (the VOD VM's pipDismissed collector): the
         // host Activity's autoExitPip collector translates requestAutoExitPip
         // (fired by the EngineStateChanged fold on engine END/ERROR in PiP)
         // into notifyPipDismissed; landing here means the window is showing a
         // dead stream and the screen must close. The ordering (pause →
-        // teardown → close → the defensive latch clear, issue #145) lives on
+        // teardown → close → the defensive latch clear) lives on
         // the shared helper — this host supplies only its teardown list and
         // its close pipe.
         viewModelScope.dischargePipDismissal(
@@ -423,7 +433,7 @@ class LiveTvPlayerViewModel(
         // process singleton whose one-shot event flags outlive this Activity.
         // A flag left set by an abnormally torn-down previous session must
         // never greet the next tune — the fresh screen would react to it
-        // instantly and close (issue #145). Legitimate in-flight dismiss
+        // instantly and close. Legitimate in-flight dismiss
         // flows end in stop + close, never a new initialize.
         pip?.clearPipDismissed()
         pip?.consumeAutoExitPip()

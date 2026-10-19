@@ -7,15 +7,14 @@ package com.raulshma.jellyplay.core.model
  * `core:database` stale-while-revalidate snapshot) plus the feature-layer
  * refresh cadence that drives refills.
  *
- * Previously these were four uncoordinated clocks: a 2-minute constant in
- * `LibraryApiClientImpl`, a 60-second one in `MediaRepositoryImpl`, a
- * `fetchedAt` column written but never read, and cadence constants on
- * `HomeRefresher`. They lived in modules that cannot see each other
- * (`core:network`, `core:data`, `feature:home`), so every cross-layer
- * "keep these in lockstep" rule was a comment instead of code. All three
- * depend on `core:model`, so — same common-ancestor reasoning as
- * [TtlCache] — the canonical policy lives here and the duplicates were
- * removed.
+ * Four uncoordinated clocks — a 2-minute constant in `LibraryApiClientImpl`,
+ * a 60-second one in `MediaRepositoryImpl`, a `fetchedAt` column written but
+ * never read, and cadence constants on `HomeRefresher` — would drift because
+ * they live in modules that cannot see each other (`core:network`,
+ * `core:data`, `feature:home`), making every cross-layer "keep these in
+ * lockstep" rule a comment instead of code. All three depend on
+ * `core:model`, so — same common-ancestor reasoning as [TtlCache] — the
+ * canonical policy lives here.
  *
  * Passive-`now` API: like feature/home's `TtlCacheGate`, [isRoomSnapshotFresh]
  * takes the current time as a parameter instead of reading a clock. This
@@ -59,13 +58,6 @@ object HomeFreshness {
 
     /** Foreground periodic-refresh interval. */
     const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
-
-    /**
-     * Background periodic-refresh interval: the Home VM survives in the back
-     * stack, so a short interval kept fanning out Seerr requests while the user
-     * was on another screen; the resume-if-stale check re-syncs on return.
-     */
-    const val REFRESH_INTERVAL_BACKGROUND_MS = 15 * 60_000L
 
     /** Minimum spacing between any two periodic-loop fetches (jitter guard). */
     const val MIN_REFRESH_INTERVAL_MS = 30_000L

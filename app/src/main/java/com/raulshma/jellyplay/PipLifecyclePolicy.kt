@@ -3,7 +3,7 @@ package com.raulshma.jellyplay
 /**
  * Pure PiP ordering machine for [PlayerActivity] — the three-callback
  * protocol (`onPipModeChanged(false)` / `onResume` / `onStop`), the auto-enter
- * guards and the param-builder folds, extracted verbatim from the Activity so
+ * guards and the param-builder folds — so
  * the OEM-ordering rules are executable and JVM-testable. No Android
  * framework types cross this file: lifecycle phases, aspect ratios and source
  * rects arrive as plain enums/ints, and every event returns a [Decision]
@@ -11,8 +11,7 @@ package com.raulshma.jellyplay
  * The `justExitedPip` flag stays at the call site; each [Decision] carries its
  * new value so the Activity's `onStop`/resume plumbing is a thin feed.
  *
- * ## The dismiss/expand protocol (the Activity's OEM-ordering comments — now
- * the spec)
+ * ## The dismiss/expand protocol (the OEM-ordering contract)
  *
  * Leaving PiP fires `onPictureInPictureModeChanged(false)` for BOTH
  * expand-to-fullscreen and dismiss; the two are distinguished by the
@@ -23,7 +22,7 @@ package com.raulshma.jellyplay
  *    genuine expand.
  *
  *  - **Dismiss (close icon / swipe-away)**: on some OEMs onStop fires BEFORE
- *    this callback (observed: onStop at isInPipMode=true, screenOff=false,
+ *    this callback (onStop at isInPipMode=true, screenOff=false,
  *    justExitedPip=false — so onStop's dismiss arm misses — then this
  *    callback at state=CREATED). When state < STARTED the activity is already
  *    past onStop and will not resume, so finish here directly. This drives
@@ -36,7 +35,7 @@ package com.raulshma.jellyplay
  *    never torn down — playback keeps running exactly like the
  *    fullscreen→home minimise path. If the keyguard or a screen-off lands
  *    inside the dismissal transition, fall back to the finish path — that is
- *    issue #145's lock-dismiss territory where the dismiss machinery must
+ *    the lock-dismiss territory where the dismiss machinery must
  *    stay deterministic.
  *
  * When state is >= STARTED but < RESUMED, the callback arms `justExitedPip`
@@ -53,21 +52,21 @@ package com.raulshma.jellyplay
  *
  * ## Auto-enter divergences (modelled explicitly, NOT unified)
  *
- * The three auto-enter predicates genuinely differ today and stay as three
+ * The three auto-enter predicates genuinely differ and stay as three
  * named functions:
  *
  *  - [userLeaveAutoEnter] (`onUserLeaveHint`) gates on should-auto-enter +
  *    controls lock + screen/keyguard. It does NOT consult `isPlaying`.
  *  - [topResumedLossAutoEnter] (the `onTopResumedActivityChanged` fallback
  *    for OEMs/API levels where onUserLeaveHint is not reliably fired for
- *    gesture "slide up to home") ADDS `isPlaying` — that is the hand-copied
- *    divergence, kept: the fallback must not steal the screen for a paused
+ *    gesture "slide up to home") ADDS `isPlaying` — the deliberate
+ *    divergence: the fallback must not steal the screen for a paused
  *    session.
  *  - [systemAutoEnterEnabled] (the `setAutoEnterEnabled` pre-arm) checks
  *    should-auto-enter + isPlaying + screen/keyguard but deliberately NOT
  *    the controls lock — the system-side flag has never gated on it.
  *
- * All three share the screen/keyguard term for the same reason (issue #145):
+ * All three share the screen/keyguard term for the same reason:
  * several OEMs fire these callbacks for the power button too — entering PiP
  * behind the keyguard arms the dismiss/finish machinery while nothing can
  * observe it, and unlock then lands on the browse UI with the player gone.
@@ -155,8 +154,7 @@ internal object PipLifecyclePolicy {
      * armed `justExitedPip` finishes (re-checked against [keepPlayerAlive] so
      * a keyguard landing between the callback and this stop keeps the player
      * alive); an unarmed stop while in PiP pauses only for screen-lock or
-     * keyguard. The branches are exclusive exactly as the inline original's
-     * `if / else if` was — an armed stop never also pauses.
+     * keyguard. The branches are exclusive — an armed stop never also pauses.
      */
     fun onStop(
         inPip: Boolean,
@@ -226,7 +224,7 @@ internal object PipLifecyclePolicy {
         else -> Decision(Action.None, justExitedPip)
     }
 
-    // ── Auto-enter predicates (the three genuinely-different copies) ────────
+    // ── Auto-enter predicates (the three genuinely-different guards) ────────
 
     /** `onUserLeaveHint`'s guard — no isPlaying term. */
     fun userLeaveAutoEnter(
@@ -237,7 +235,7 @@ internal object PipLifecyclePolicy {
 
     /**
      * The top-resumed-loss fallback's guard — [userLeaveAutoEnter] plus the
-     * `isPlaying` term (the documented hand-copied divergence).
+     * `isPlaying` term (the documented divergence).
      */
     fun topResumedLossAutoEnter(
         shouldAutoEnter: Boolean,

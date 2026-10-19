@@ -50,10 +50,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * the composition root reads off its
  * [com.raulshma.jellyplay.shell.ShellInfra] bundle — MainActivity bundles the
  * same Koin singles this class constructor-injects, so the split is one
- * resolution path per concern: startup (start-on-scope) stays here,
- * consumption resolves once in the bundle, and the former second resolution
- * (MainActivity lazy fields + three explicit parameters through JellyPlayApp
- * → MainContent) is gone. Stores and managers this class merely wires
+ * resolution path per concern: startup (start-on-scope) stays here, and
+ * consumption resolves once in the bundle. Stores and managers this class
+ * merely wires
  * (network monitor, message bus, audio playback, remote navigation) are
  * injected where they are consumed instead of exposed from here.
  */
@@ -93,13 +92,12 @@ class MainViewModel(
 
     /**
      * True while a user-initiated offline→online transition is in flight, so
-     * the global nav overflow can show a spinner on "Go Online" (see #115).
+     * the global nav overflow can show a spinner on "Go Online".
      * Pass-through of [OfflineModeManager.goingOnline] — the flag's single
      * owner, beside the transition that raises it: the manager's manual
      * toggle arms it when the direction is going online, and the mode flow's
-     * ONLINE emission (or the manager's lost-write watchdog) clears it. This
-     * shell used to keep a hand-synced mirror with its own clear collector;
-     * that second owner is exactly what stuck-spinner bugs bred on.
+     * ONLINE emission (or the manager's lost-write watchdog) clears it. The
+     * single owner keeps the spinner state from sticking.
      */
     override val isGoingOnline: StateFlow<Boolean> = offlineModeManager.goingOnline
 
@@ -129,9 +127,9 @@ class MainViewModel(
     }
 
     /**
-     * App-shell offline toggle for the global nav overflow (#115). Going
+     * App-shell offline toggle for the global nav overflow. Going
      * online is async (preference write → mode flip → network fetch), but
-     * the busy flag's lifecycle is not this shell's problem anymore:
+     * the busy flag's lifecycle is not this shell's problem:
      * [OfflineModeManager.toggleManualOffline] arms
      * [OfflineModeManager.goingOnline] when the toggle's direction is going
      * online, and the mode flow clears it — [isGoingOnline] is the
@@ -167,8 +165,9 @@ class MainViewModel(
 
     /**
      * The shell session-policy wiring, owned by the shared
-     * [ShellSessionController] (ADR 0001) instead of duplicated here: admin
-     * status + [com.raulshma.jellyplay.feature.shell.AdminRefreshGate]
+     * [ShellSessionController] (the shell-session contract) instead of
+     * duplicated here: admin status +
+     * [com.raulshma.jellyplay.feature.shell.AdminRefreshGate]
      * arbitration, homeMode persist, and the revoke/plain logout fork.
      * Constructed over this shell's own collaborators — logout lands in
      * [sessionCoordinator] (remote-control stop + sign-out), the admin and

@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 
 /**
  * THE single owner of the Continue Watching row's rule (the GLOSSARY's "home
- * row module" seed): the played-row exclusion (#157), the hidden-item drop,
+ * row module" seed): the played-row exclusion, the hidden-item drop,
  * Next Up eligibility, and the Continue Watching + Next Up merge with id
  * dedupe. Online and offline both consume it from here — the network fetch
  * path, the single-row refresh, the ordering use case, and the offline home
@@ -20,7 +20,7 @@ import com.raulshma.jellyplay.core.model.MediaType
  * the offline mirror's `OfflineMediaItem` maps its local playstate into the
  * `isPlayed` parameter instead of running a parallel rule (its local "counts
  * as watched" test is `isPlayed || isFinishedOffline`, the local rendering of
- * the same #157 fact).
+ * the same played-row fact).
  *
  * Members are deliberately small and composable — the sites combine them in
  * different orders (the network resume rows fold parental + distinct + rollup
@@ -30,10 +30,10 @@ import com.raulshma.jellyplay.core.model.MediaType
  */
 object ContinueWatchingRowRule {
 
-    // ── #157: the played-row exclusion ──────────────────────────────────────
+    // ── The played-row exclusion ────────────────────────────────────────────
 
     /**
-     * The video resume row's #157 fold: a played row never occupies Continue
+     * The video resume row's played-row fold: a played row never occupies Continue
      * Watching, and BOOK rows are excluded outright (books surface in their
      * own Continue Reading row, [filterReadingResumable]). /Items/Resume
      * filters on position > 0 only and does NOT exclude played items — a
@@ -55,7 +55,7 @@ object ContinueWatchingRowRule {
         filterResumable(items, isPlayed = { it.isPlayed }, mediaType = { it.mediaType })
 
     /**
-     * The books half of the #157 rule — the exact complement of
+     * The books half of the played-row rule — the exact complement of
      * [filterResumable]'s book exclusion: keep only BOOK items, under the same
      * played-row drop (a finished book's lingering position must not occupy
      * Continue Reading forever).
@@ -158,7 +158,7 @@ object ContinueWatchingRowRule {
      * resume fold is id-distinct before this runs; the offline rows are
      * per-item unique by construction). Under that precondition this fold is
      * exactly the distinct-by-id of the concatenation — the shape the
-     * single-row refresh used to hand-roll.
+     * single-row refresh uses.
      */
     fun <T> mergeCwNextUp(cw: List<T>, nextUp: List<T>, id: (T) -> String): List<T> {
         val seen = cw.mapTo(mutableSetOf(), id)
@@ -168,4 +168,28 @@ object ContinueWatchingRowRule {
     /** [MediaItem] convenience overload — the merge's online callers' shape. */
     fun mergeCwNextUp(cw: List<MediaItem>, nextUp: List<MediaItem>): List<MediaItem> =
         mergeCwNextUp(cw, nextUp, id = { it.id })
+
+    /**
+     * The single-row refresh's rebuild of the batch merge fold — the
+     * item-list projection of OrderHomeSectionsUseCase's section fold (THE
+     * canonical owner of the anchor/donor/relabel policy; this member and the
+     * offline mirror run its mechanics through [mergeCwNextUp] instead of
+     * re-deriving the fold). The [cw] list passes through verbatim; the
+     * [nextUp] list folds through [nextUpEligible] first (the CW-overlap set
+     * keyed on the fresh cw list itself — the same filters the NEXT_UP arm
+     * applies) and the survivors join through [mergeCwNextUp]. An empty
+     * result means BOTH halves came back empty — the row drops.
+     */
+    fun mergedContinueWatchingRow(
+        cw: List<MediaItem>,
+        nextUp: List<MediaItem>,
+        excludedSeriesIds: Set<String>,
+    ): List<MediaItem> = mergeCwNextUp(
+        cw,
+        nextUpEligible(
+            nextUp,
+            continueWatchingIds = cw.mapTo(mutableSetOf()) { it.id },
+            excludedSeriesIds = excludedSeriesIds,
+        ),
+    )
 }

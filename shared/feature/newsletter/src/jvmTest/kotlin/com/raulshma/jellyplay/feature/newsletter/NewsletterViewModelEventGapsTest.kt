@@ -49,8 +49,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsletterViewModelEventGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (NewsletterViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (NewsletterViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: NewsletterApiClient

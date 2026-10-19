@@ -64,10 +64,10 @@ data class PlayOnUiState(
  * [uiState] metadata-precedence fold all live here. It is constructed ONCE
  * at the shell (`MainContent` in JellyPlayApp, above the TV / phone /
  * full-screen fork) and threaded to every surface as an explicit parameter;
- * no surface resolves it itself. The companion screen used to self-resolve
- * through `koinViewModel()` — an identity that held only because both call
- * sites happened to sit under MainActivity's ViewModelStoreOwner, and would
- * have silently forked state the moment the screen moved to another host.
+ * no surface resolves it itself. Self-resolving the companion screen through
+ * `koinViewModel()` would hold identity only while every call site sits under
+ * MainActivity's ViewModelStoreOwner, and would silently fork state the
+ * moment the screen moved to another host.
  *
  * Talks to [JellyfinRemotePlayCastStrategy] **directly** rather than through
  * the shared [com.raulshma.jellyplay.core.data.cast.CastManager]. This is
@@ -82,7 +82,7 @@ data class PlayOnUiState(
  * commands below are the narrow surface the screens drive, and the Home nav
  * graph's probe + fling rides [flingIfConnected] (adapted into its
  * [com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect] seam
- * at `MainNavDisplay`) — nothing outside reaches the strategy anymore.
+ * at `MainNavDisplay`) — nothing outside reaches the strategy.
  *
  * The PlayTo call is `JellyfinRemotePlayCastStrategy.loadMedia` →
  * `AdminApiClient.play(sessionId, "PlayNow", [itemId], …)`.

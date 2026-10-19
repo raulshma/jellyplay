@@ -265,7 +265,7 @@ class MusicHomeViewModel(
     }
 
     fun refresh() {
-        // No cache bypass needed (plan 08): every query this screen shows
+        // No cache bypass needed: every query this screen shows
         // (favorites + filtered items) is an uncached passthrough in the
         // repository, so the old global invalidateCaches() call was a
         // no-op for this screen's data.
@@ -341,7 +341,7 @@ class MusicHomeViewModel(
     /**
      * Parallel ([DEFAULT_FANOUT_PARALLELISM]) album-track fetch. Returns each track paired with
      * its own album fallback (the source album's name) so the facade can map
-     * per-album naming before concatenation — plan 04 risk 2.
+     * per-album naming before concatenation.
      */
     private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<TrackWithAlbumFallback> {
         return fetchSemaphore.mapConcurrent(albums) { album ->

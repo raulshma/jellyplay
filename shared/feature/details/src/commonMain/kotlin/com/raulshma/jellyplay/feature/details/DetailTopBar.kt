@@ -23,6 +23,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,12 +36,15 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.DotsVertical
+import com.composables.icons.tabler.outline.Volume2
+import com.composables.icons.tabler.outline.VolumeOff
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -48,6 +53,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_options
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_theme_music_mute
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_theme_music_unmute
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -69,10 +76,21 @@ internal fun DetailTopBar(
     contentFocusRequester: FocusRequester,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
+    /** Whether the mute chip renders at all — only while theme audio plays. */
+    themeMusicVisible: Boolean = false,
+    /** The per-series memory the chip's icon reflects (muted → VolumeOff). */
+    themeMusicMuted: Boolean = false,
+    onToggleThemeMusicMuted: (Boolean) -> Unit = {},
 ) {
-    val scrollCollapsed = scrollState.scrollCollapsed
-    val animatedContainerColor = scrollState.animatedContainerColor
-    val animatedTitleAlpha = scrollState.animatedTitleAlpha
+    // Per-frame values are read as State refs: the container colour inside the
+    // drawBehind below, the collapse progress inside the title's graphicsLayer,
+    // and threshold decisions behind a derived boolean that recomposes only on
+    // the flip (never per collapse-animation tick).
+    val scrollCollapsedState = scrollState.scrollCollapsedState
+    val containerColorState = scrollState.containerColorState
+    val iconsOnBackdrop by remember(scrollCollapsedState) {
+        derivedStateOf { scrollCollapsedState.value < 0.5f }
+    }
     val isTv = LocalTvMode.current
     var menuExpanded by remember { mutableStateOf(false) }
     var showTvOptionsMenu by remember { mutableStateOf(false) }
@@ -80,7 +98,7 @@ internal fun DetailTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .drawBehind { drawRect(animatedContainerColor) },
+            .drawBehind { drawRect(containerColorState.value) },
     ) {
         MediumTopAppBar(
             title = {
@@ -88,18 +106,52 @@ internal fun DetailTopBar(
                     text = itemName,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = animatedTitleAlpha),
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    // The fade-in rides a graphicsLayer read so the collapse
+                    // animation redraws the layer without recomposing the title.
+                    modifier = Modifier.graphicsLayer { alpha = scrollCollapsedState.value },
                 )
             },
             navigationIcon = {
-                CircleBgBackButton(
+                // CircleBgBackButton takes a plain Float, so the collapse
+                // progress is read inside a dedicated scope: collapse-animation
+                // ticks recompose only the button, not the bar.
+                CollapsingCircleBgBackButton(
+                    scrollCollapsedState = scrollCollapsedState,
                     onClick = onBack,
-                    scrollCollapsed = scrollCollapsed,
                 )
             },
             actions = {
-                val editIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
+                val editIconColor = if (iconsOnBackdrop) Color.White else MaterialTheme.colorScheme.onSurface
+                // The ambient theme-music mute chip — visible only while a
+                // theme plays; tapping mutes immediately AND writes the
+                // per-series memory (the VM command does both).
+                if (themeMusicVisible) {
+                    IconButton(
+                        onClick = { onToggleThemeMusicMuted(!themeMusicMuted) },
+                        modifier = Modifier
+                            .focusIndicator(CircleShape)
+                            .focusProperties { down = contentFocusRequester }
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                color = if (iconsOnBackdrop) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent,
+                            ),
+                    ) {
+                        Icon(
+                            if (themeMusicMuted) Tabler.Outline.VolumeOff else Tabler.Outline.Volume2,
+                            contentDescription = stringResource(
+                                if (themeMusicMuted) {
+                                    Res.string.detail_cd_theme_music_unmute
+                                } else {
+                                    Res.string.detail_cd_theme_music_mute
+                                },
+                            ),
+                            tint = editIconColor,
+                        )
+                    }
+                }
                 Box {
                     IconButton(
                         onClick = {
@@ -115,7 +167,7 @@ internal fun DetailTopBar(
                             .padding(8.dp)
                             .clip(CircleShape)
                             .background(
-                                color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent,
+                                color = if (iconsOnBackdrop) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent,
                             ),
                     ) {
                         Icon(
@@ -172,6 +224,19 @@ internal fun DetailTopBar(
             }
         }
     }
+}
+
+/**
+ * Reads the collapse progress in its own scope so the collapse animation's
+ * ticks recompose only the back button ([CircleBgBackButton] takes a plain
+ * Float), not the whole top bar. Values are unchanged.
+ */
+@Composable
+private fun CollapsingCircleBgBackButton(
+    scrollCollapsedState: State<Float>,
+    onClick: () -> Unit,
+) {
+    CircleBgBackButton(onClick = onClick, scrollCollapsed = scrollCollapsedState.value)
 }
 
 @Composable

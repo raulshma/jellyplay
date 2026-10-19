@@ -61,7 +61,7 @@ internal class TrackSelectionHelper(
     private val getPlayMethod: () -> PlayMethod,
     private val onReloadForStreamChange: (selection: MediaStreamSelection) -> Unit,
     private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
-    // Persists the remembered track to the series-scope preference row (G5).
+    // Persists the remembered track to the series-scope preference row.
     // Default no-op so unit tests that don't exercise persistence compile unchanged.
     private val persistRememberedTrack: (TrackType, RememberedTrack?) -> Unit = { _, _ -> },
     // Rule-engine context: what kind of item is playing and the display
@@ -102,7 +102,7 @@ internal class TrackSelectionHelper(
     // silently restores exactly that track (re-resolved against the CURRENT
     // picker list by [SubtitleTogglePolicy.resolveRestore], so a stale memory
     // across an item switch degrades to a no-op instead of a wrong pick).
-    // Deliberately in-memory only — unlike the G5 cross-episode memory above,
+    // Deliberately in-memory only — unlike the cross-episode memory above,
     // this never persists and never leaves with the series.
     private var subtitleTrackBeforeToggleOff: TrackOption? = null
 
@@ -142,7 +142,7 @@ internal class TrackSelectionHelper(
         // New item: a selection has not yet been applied for it.
         audioSelectionHeld = false
         subtitleSelectionHeld = false
-        // G5: forget the cross-episode track memory when the series changes, so
+        // Forget the cross-episode track memory when the series changes, so
         // a different show's track layout doesn't bleed into the new one. Same
         // series (next episode) keeps the memory — that is the whole point.
         val series = getCurrentSeriesId()
@@ -190,7 +190,7 @@ internal class TrackSelectionHelper(
             })
         }
         // Remember a real (>= 0) audio selection so the next episode can score
-        // against it (G5). "Off"/Default selections don't carry forward intent.
+        // against it. "Off"/Default selections don't carry forward intent.
         if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
             val tracks = _state.value.audioTracks
             val remembered = RememberedTrack(
@@ -237,7 +237,7 @@ internal class TrackSelectionHelper(
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
         }
-        // Remember a real subtitle selection for cross-episode scoring (G5).
+        // Remember a real subtitle selection for cross-episode scoring.
         if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
             val tracks = _state.value.subtitleTracks
             val remembered = RememberedTrack(
@@ -504,7 +504,11 @@ internal class TrackSelectionHelper(
             val resolvedLang = playbackPreferenceResolver.resolved.value?.audioLanguage
                 ?: resolution?.audioLanguage
                 ?: sub.preferredAudioLanguage ?: "eng"
-            // The full precedence ladder — G5 scoring pre-pass →
+            // Same precedence for the audio-description pin: the per-series
+            // three-state pin (TRUE/FALSE) wins; null falls back to the global
+            // toggle.
+            val resolvedPref = playbackPreferenceResolver.resolved.value?.preferAudioDescription
+            // The full precedence ladder — scoring pre-pass →
             // audio-description preference → language match — lives in
             // TrackSelectionPolicy now. Returns null when no match
             // exists; we then select the Default placeholder. The rule-set
@@ -515,7 +519,7 @@ internal class TrackSelectionHelper(
                     tracks = tracks.filteredByAllowList(sub.languageRules, StreamType.AUDIO),
                     streams = streams,
                     resolvedLang = resolvedLang,
-                    preferAudioDescription = sub.preferAudioDescription,
+                    preferAudioDescription = resolvedPref ?: sub.preferAudioDescription,
                     remembered = rememberedAudioTrack,
                 ),
             )
@@ -591,7 +595,7 @@ internal class TrackSelectionHelper(
                     // tie-breaking inside the matcher.
                     val forcedOnly = sub.subtitlesForcedOnly ||
                         resolution?.subtitleMode == SubtitleTrackMode.FORCED_ONLY
-                    // The full precedence ladder — G5 scoring pre-pass (non-forced
+                    // The full precedence ladder — scoring pre-pass (non-forced
                     // only) → forced-only stream pick → tiered SubtitleTrackMatcher
                     // → null — lives in TrackSelectionPolicy now. Returns null when
                     // no same-language track exists; we then select Off. The
@@ -779,7 +783,7 @@ internal class TrackSelectionHelper(
         val mergedSubOptions = when {
             getPlayMethod() != PlayMethod.DIRECT_PLAY ->
                 mergeServerStreams(enrichedSubOptions, streams, StreamType.SUBTITLE)
-            // Direct-play safety net (#144): the picker is engine-tracks-only on
+            // Direct-play safety net: the picker is engine-tracks-only on
             // direct play, so a silently-failed side-load chain (unmappable
             // codec, dropped engine fetch) empties the sheet even though the
             // server lists the subtitle. When the engine published NO subtitle
@@ -948,6 +952,7 @@ internal class TrackSelectionHelper(
         val newSub = isSeries && (pref.subtitleLanguage != null || pref.subtitleDisabled == true)
         val newSubOff = isSeries && pref.subtitleDisabled == true
         val newBoost = isSeries && pref.dialogueBoostStrength != null
+        val newAdPin = isSeries && pref.preferAudioDescription == true
         // The preferred-version memory applies at BOTH scopes (a standalone
         // movie pins its own ITEM row), so it is not series-gated like the
         // language/boost flags above.
@@ -955,6 +960,7 @@ internal class TrackSelectionHelper(
         val s = _state.value
         if (s.hasSeriesAudioPref != newAudio || s.hasSeriesSubtitlePref != newSub ||
             s.hasSeriesSubtitleOffPref != newSubOff || s.hasSeriesDialogueBoostPref != newBoost ||
+            s.hasSeriesAudioDescriptionPref != newAdPin ||
             s.hasPreferredMediaSource != newPreferredSource
         ) {
             _state.update {
@@ -963,6 +969,7 @@ internal class TrackSelectionHelper(
                     hasSeriesSubtitlePref = newSub,
                     hasSeriesSubtitleOffPref = newSubOff,
                     hasSeriesDialogueBoostPref = newBoost,
+                    hasSeriesAudioDescriptionPref = newAdPin,
                     hasPreferredMediaSource = newPreferredSource,
                 )
             }
@@ -1187,7 +1194,7 @@ internal class TrackSelectionHelper(
 
     /**
      * Seeds in-process remembered-audio memory from the persisted series-scope
-     * preference (G5). The resolver reads the DAO asynchronously; this runs on
+     * preference. The resolver reads the DAO asynchronously; this runs on
      * the hot path so once the resolver has published a value the memory is
      * hydrated (once) and the scoring pre-pass can use it without a restart.
      */

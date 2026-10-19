@@ -78,7 +78,6 @@ import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Cast
-import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Settings
@@ -222,8 +221,7 @@ internal fun HomeTopDock(
                             appBarIconColorFaded = appBarIconColorFaded,
                             // Both forward to the caller's HomeSearchSession
                             // close (collapse + clear + defocus as ONE
-                            // ordered sequence) — formerly each path here
-                            // hand-assembled a partial copy of that triple.
+                            // ordered sequence).
                             onBack = { callbacks.onSearchExpanded(false) },
                             onQueryChange = callbacks.onSearchQueryChange,
                             onClear = callbacks.onClearSearch,
@@ -389,8 +387,15 @@ private fun SyncStatusIcon(
 ) {
     val syncFocusState = rememberTvFocusState()
     val reducedMotion = LocalReducedMotion.current
-    val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
+    // One remembered fallback rotation shared by both branches — the
+    // non-draining branch (badge visible, motor idle: the common state) used
+    // to allocate a fresh, un-remembered MutableState per recomposition. The
+    // transition is created only while draining; while draining the delegate
+    // is still the animation's own State, so frames land in the draw phase
+    // exactly as before.
+    val fallbackRotation = remember { mutableStateOf(0f) }
     val rotation by if (isDraining && !reducedMotion) {
+        val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
         infiniteTransition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
@@ -400,7 +405,7 @@ private fun SyncStatusIcon(
             ),
             label = "sync_draining_rotation",
         )
-    } else androidx.compose.runtime.mutableStateOf(0f)
+    } else fallbackRotation
     val contentDescription = stringResource(
         Res.string.sync_icon_content_description,
         pendingCount,

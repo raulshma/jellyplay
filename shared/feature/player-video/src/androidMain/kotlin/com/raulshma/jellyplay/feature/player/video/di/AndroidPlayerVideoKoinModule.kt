@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.feature.player.video.AndroidUserMessageBridge
 import com.raulshma.jellyplay.feature.player.video.AndroidVideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.CastManager
 import com.raulshma.jellyplay.feature.player.video.JellyfinRemotePlayCastStrategy
+import com.raulshma.jellyplay.feature.player.video.NextStreamByteWarmer
 import com.raulshma.jellyplay.feature.player.video.PlayerStores
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
@@ -74,7 +75,18 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             // Eager StateFlow store: the cache-open path reads videoCacheSizeMb
             // (playback settings' video cache size) synchronously at open time.
             videoPlayerStore = get(),
+            // The shared streaming client — feeds only the next-item head
+            // warm's throwaway upstream chain (warmStreamHead); the engines
+            // keep receiving their client through AndroidPlayerEngineFactory.
+            streamingOkHttpClient = get(NetworkQualifiers.streamingHttpClient),
         )
+    }
+    // Next-item stream-cache pre-warm: commonMain seam over VideoStreamCache's
+    // bounded head warm; the ViewModel gates it (engine-mirrored eligibility +
+    // card/handover/playback state) and triggers it off the session's warm slot.
+    single<NextStreamByteWarmer> {
+        val cache = get<VideoStreamCache>()
+        NextStreamByteWarmer { url, maxBytes -> cache.warmStreamHead(url, maxBytes) }
     }
     single { AndroidSubtitlePreviewRepository(context = context, okHttpClient = get()) }
     single<SubtitlePreviewRepository> { get<AndroidSubtitlePreviewRepository>() }
@@ -95,7 +107,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
         AndroidVideoPlayerPlatform(
             context = context,
             castManager = get(),
-            // The video focus slice (ADR-0004): the module-owned exclusivity
+            // The video focus slice: the module-owned exclusivity
             // authority + the VIDEO-family commandable surface singleton the
             // wiring binds its engine into.
             playbackFocus = get(),
@@ -120,6 +132,9 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // core:data port, bound (to the AndroidPipController singleton the host
     // PlayerActivity also injects) in androidCoreDataModule.
     single<PlayerVideoMessageBus> { AndroidUserMessageBridge(get()) }
+    // "Play (with pre-rolls)": the one-shot Cinema Mode override the
+    // detail screen arms before the play dispatch (core:player-contract).
+    single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
@@ -129,6 +144,8 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             playbackRepository = get(),
             playbackIdentity = get(),
             subtitleProviderRepository = get(),
+            videoQueue = get(),
+            cinemaModeOverride = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
             downloadRepository = get(),
@@ -171,6 +188,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             subtitlePreviewRepository = get(),
             userDataMutator = get(),
             nowPlayingReporter = get(),
+            nextStreamByteWarmer = get(),
         )
     }
 }

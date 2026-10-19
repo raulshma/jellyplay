@@ -28,6 +28,10 @@ interface SmartPlaylistDao {
     @Query("DELETE FROM smart_playlists WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    /** The sync tombstone's batch form of [deleteById] — one statement for the whole adopted delete. */
+    @Query("DELETE FROM smart_playlists WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Query("DELETE FROM smart_playlists")
     suspend fun deleteAll()
 }

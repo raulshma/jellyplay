@@ -61,9 +61,7 @@ fun SubtitleStylePreview(
     ) {
         // verticalPosition is a 0..0.5 fraction of the preview height from the
         // bottom; the box's height is exactly maxWidth / 2.35 (the aspectRatio
-        // above), so the offset derives from the real width — the former
-        // hardcoded 200dp only matched at a 470dp preview width and pushed the
-        // sample up on narrower screens.
+        // above), so the offset derives from the real width.
         val previewHeightDp = maxWidth / 2.35f
         val bottomOffsetDp = previewHeightDp * resolved.verticalPosition
         Column(

@@ -149,7 +149,7 @@ class TrackDownloadActionsTest {
         advanceUntilIdle()
         job.cancel()
         // join() returns on cancellation too — the pin is the FINAL state: a
-        // swallowed CancellationException (the pre-extraction `catch (_:
+        // swallowed CancellationException (a bare `catch (_:
         // Exception)`) would complete the job NORMALLY instead.
         job.join()
 

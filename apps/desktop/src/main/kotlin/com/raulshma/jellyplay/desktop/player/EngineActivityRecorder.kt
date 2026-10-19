@@ -25,11 +25,12 @@ import java.util.concurrent.CopyOnWriteArrayList
  * classification helpers the harness asserts with and the unit tests cover).
  *
  * Koin single (DesktopPlayerModule); app-lifetime, like the factory it serves.
- * Per-engine observers are CANCELLED on engine release (they used to run for the process lifetime, so N released engines kept N×3
- * coroutines waking 2×/s against dead JNA handles): the desktop factory wires
- * every engine it owns into [onEngineReleased], which cancels the three observer
- * jobs while KEEPING the record itself (accumulated evidence is the point —
- * only the live observation stops). Engines without a desktop release hook
+ * Per-engine observers are CANCELLED on engine release (otherwise N released
+ * engines keep N×3 coroutines waking 2×/s against dead JNA handles): the
+ * desktop factory wires every engine it owns into [onEngineReleased], which
+ * cancels the three observer jobs while KEEPING the record itself
+ * (accumulated evidence is the point — only the live observation stops).
+ * Engines without a desktop release hook
  * (the shared no-op EXTERNAL engine) are never released, so their observers
  * stop only when a later playback re-records the same instance — the
  * displaced record's jobs are cancelled then ([recordCreated]); their reads

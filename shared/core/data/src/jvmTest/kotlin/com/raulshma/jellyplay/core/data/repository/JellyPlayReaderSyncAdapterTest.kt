@@ -153,10 +153,10 @@ class JellyPlayReaderSyncAdapterTest {
 
         database.bookAnnotationDao().deleteByItemId("book-1")
 
-        assertEquals(setOf("ann/book-1"), adapter.deletedKeys())
+        assertEquals(setOf("ann/book-1"), adapter.deletedKeys(adapter.snapshot()))
 
         adapter.deleteRemote(setOf("ann/book-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(rows().isEmpty())
         assertNullMirror("ann/book-1")
     }

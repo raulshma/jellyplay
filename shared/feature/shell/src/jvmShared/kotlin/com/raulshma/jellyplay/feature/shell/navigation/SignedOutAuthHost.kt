@@ -15,23 +15,21 @@ import com.raulshma.jellyplay.feature.auth.navigation.authSection
 
 /**
  * The signed-out half of the shell session gate, SHARED by both shells —
- * the former hand-copies (Android's inline AuthContent in JellyPlayApp and
- * apps/desktop's DesktopSignedOutAuthHost) collapsed into one composable
- * beside the rest of the shared shell wiring ([appSections],
- * [ShellHostHooks]). One top-level route, [Route.ServerList] — the seed both
- * shells ran identically — with authSection's five entries
+ * one composable beside the rest of the shared shell wiring ([appSections],
+ * [ShellHostHooks]). One top-level route, [Route.ServerList], with
+ * authSection's five entries
  * (ServerList/AddServer/Login/QuickConnect/UserSelection) stacked on it.
  *
  * The seed is deliberately ServerList, NOT a Login prefilled with the last
  * server address: landing on the picker is strictly stronger for the common
- * home-server case (server card → user card → in, no password), and the
- * prefill it replaced read an in-memory currentServer that is null in every
+ * home-server case (server card → user card → in, no password), and an
+ * in-memory currentServer prefill would be null in every
  * state this host composes in — boot after a signed-out shutdown
  * (restoreSession published nothing) and after a mid-session logout
  * (disconnect publishes the null pair).
  *
  * Success needs no callback wiring of its own: [onAuthenticated] defaults to
- * a no-op exactly as both shells passed — the caller's isAuthenticated
+ * a no-op — the caller's isAuthenticated
  * observer flips, its session gate swaps this host out for the signed-in
  * shell, and the flip disposes the stack. (A signed-in shell's own
  * authSection registration passes goBack instead, because there the section
@@ -44,11 +42,11 @@ import com.raulshma.jellyplay.feature.auth.navigation.authSection
  * needs the [Navigator] and the live stack depth that live inside the host.
  * [savedStateConfiguration] stays a parameter because the saved-state
  * serializer seam is genuinely platform-specific (see
- * rememberNavigationState): Android must pass null (the reflection overload
- * is the device-pass fix), desktop passes its Route-serializer
+ * rememberNavigationState): Android must pass null (routing through the
+ * reflection overload), desktop passes its Route-serializer
  * configuration.
  *
- * Session policy is NOT shared here — ADR 0001: each shell's gate decides
+ * Session policy is NOT shared here: each shell's gate decides
  * when this host composes, and the host is UI seeding only.
  *
  * @param savedStateConfiguration `null` on Android; desktop passes its
@@ -74,8 +72,8 @@ fun SignedOutAuthHost(
     val backStack = checkNotNull(navigationState.backStacks[Route.ServerList]) {
         "no signed-out back stack for ${Route.ServerList}"
     }
-    // Explicit holder + decorator (the Android original's form): the no-arg
-    // overload the desktop hand-copy used only resolves through the desktop
+    // Explicit holder + decorator: the no-arg
+    // overload only resolves through the desktop
     // app's fork substitution, which this module's own compilations cannot
     // depend on.
     val saveableStateHolder = rememberSaveableStateHolder()

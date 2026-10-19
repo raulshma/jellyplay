@@ -31,16 +31,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quick_conn
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quick_connect_authorize_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_control_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_control_enabled_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_display_content_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_display_content_title
 
 /**
  * The security domain's fused row declarations — the feature-side single home
  * of every security row's presentation, ordering, and capability (the
- * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
- * used to declare per row: the `SettingsSearchBinding` entry, the
- * `SettingsRowRecord` entry, and the `SecuritySettingsIds` holder constant
- * (all retired).
+ * [AppearanceRows] template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * Every row is a HAND-MAINTAINED residual (the knobs live in spec-less
  * stores) and carries its full hand search faces; the PIN rows ride the
@@ -52,7 +48,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_dis
  * emission (the screen's own `if`s carry their content gates). The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * drift; search results, catalog order, group membership and per-gate
- * visibility are byte-identical to the retired declarations.
+ * visibility derive from these declarations.
  */
 internal object SecurityRows {
 
@@ -123,8 +119,7 @@ internal object SecurityRows {
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_remote_display_content,
         subtitleRes = Res.string.settings_remote_display_content_subtitle,
-        searchTitleRes = Res.string.ss_remote_display_content_title,
-        searchSubtitleRes = Res.string.ss_remote_display_content_subtitle,
+        searchSubtitleRes = Res.string.settings_remote_display_content_subtitle,
         keywords = listOf("remote", "display content", "browse", "remote browse", "cast", "details"),
         route = Route.SecuritySettings(),
         gate = RowAdmission.ContentGated,
@@ -145,7 +140,7 @@ internal object SecurityRows {
     )
 
     /**
-     * Every fused security row — the ratchet's vocabulary. A computed accessor
+     * Every fused security row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

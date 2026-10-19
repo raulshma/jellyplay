@@ -20,9 +20,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
  *
  * State is fire-and-forget: each action runs in a VM coroutine and posts a
  * confirmation to [messages] (buffered Channel, single collector, never
- * replayed — same semantics as the legacy UserMessageBus). The FS cache wipes
- * delegate to the [StorageAreas] platform seam (the legacy bodies read
- * `Context` directly); binds the actuals at the Koin edge.
+ * replayed). The FS cache wipes delegate to the [StorageAreas] platform seam
+ * (which reads `Context` directly); binds the actuals at the Koin edge.
  *
  * Sign-out is intentionally NOT handled here: it is an app-level concern
  * (`MainViewModel.logout`) and is invoked from the screen via the `onLogout`

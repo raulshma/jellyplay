@@ -32,7 +32,7 @@ import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
 internal class AndroidVideoPlayerPlatform(
     private val context: Context,
     private val castManager: CastManager,
-    // The video focus slice (ADR-0004): resolved by the Koin module from the
+    // The video focus slice: resolved by the Koin module from the
     // androidCoreData focus bindings (the module-owned executor + the VIDEO
     // surface singleton it commands).
     override val playbackFocus: PlaybackFocus,

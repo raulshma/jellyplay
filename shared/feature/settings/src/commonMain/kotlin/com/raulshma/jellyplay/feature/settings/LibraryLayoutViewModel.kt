@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.toHomeLayoutConfig
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.PreferencesJson
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
@@ -86,8 +87,7 @@ class LibraryLayoutViewModel(
     /**
      * Enables or disables a home sub-section ([type]) for a single library
      * ([libraryId]). Delegates to the store's section-prefs command — the
-     * shared toggle/override algebra home's inline sheet also routes through
-     * (this used to hold a verbatim policy copy that could drift).
+     * shared toggle/override algebra home's inline sheet also routes through.
      */
     fun setLibrarySectionEnabled(libraryId: String, type: HomeSectionType, enabled: Boolean) {
         launch { homeDiscoveryStore.setLibrarySectionVisible(libraryId, type, enabled) }
@@ -191,8 +191,27 @@ class LibraryLayoutViewModel(
 
     // ----- Home layout presets (save / load / import / export / reset) ----
 
-    val homeLayoutPresets: List<HomeLayoutPreset>
-        get() = homeDiscoveryStore.homeDiscovery.value.homeLayoutPresets
+    /**
+     * Slice of the saved layout presets — collected (not read via `.value`)
+     * so save/delete/apply recompose the presets screen without an unrelated
+     * recomposition trigger.
+     */
+    val homeLayoutPresetsFlow: StateFlow<List<HomeLayoutPreset>> =
+        homeDiscoveryStore.homeDiscovery
+            .map { it.homeLayoutPresets }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Whether the current layout mirrors to the Jellyfin server (the
+     * autopush pref) — the presets screen's cheap "also on server" note; the
+     * full server-state fetch lives on the sync controller.
+     */
+    val homeLayoutAutopushFlow: StateFlow<Boolean> =
+        homeDiscoveryStore.homeDiscovery
+            .map { it.homeLayoutAutopush }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     var presetImportError by composeState<String?>(null)
         private set
@@ -209,20 +228,13 @@ class LibraryLayoutViewModel(
         editor.edit { homeDiscovery.saveHomeLayoutPreset(preset) }
     }
 
-    /** Applies a preset's layout to the current preferences. */
+    /**
+     * Applies a preset's layout to the current preferences. ONE command:
+     * the store's [applyLayout] — the same setter sequence the server-restore
+     * action runs, so the two can never drift.
+     */
     fun applyPreset(config: HomeLayoutConfig) {
-        editor.edit {
-            homeDiscovery.setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
-            homeDiscovery.setHomeSectionOrder(config.homeSectionOrder)
-            homeDiscovery.setLibraryHomeSectionOverrides(config.libraryHomeSectionOverrides)
-            homeDiscovery.setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
-            homeDiscovery.setNextUpMaxDays(config.nextUpMaxDays)
-            homeDiscovery.setNextUpRewatching(config.nextUpRewatching)
-            homeDiscovery.setPinnedHomeSections(config.pinnedHomeSections)
-            homeDiscovery.setDiscoverRows(config.discoverRows)
-            homeDiscovery.setHomeHeroEnabled(config.homeHeroEnabled)
-            homeDiscovery.setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
-        }
+        editor.edit { homeDiscovery.applyLayout(config) }
     }
 
     fun deleteHomeLayoutPreset(presetId: String) {
@@ -274,19 +286,11 @@ class LibraryLayoutViewModel(
         applyPreset(HomeLayoutConfig.DEFAULT)
     }
 
-    private fun currentLayoutConfig(): HomeLayoutConfig {
-        val prefs = homeDiscoveryStore.homeDiscovery.value
-        return HomeLayoutConfig(
-            enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
-            homeSectionOrder = prefs.homeSectionOrder,
-            libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides,
-            mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp,
-            nextUpMaxDays = prefs.nextUpMaxDays,
-            nextUpRewatching = prefs.nextUpRewatching,
-            pinnedHomeSections = prefs.pinnedHomeSections,
-            discoverRows = prefs.discoverRows,
-            homeHeroEnabled = prefs.homeHeroEnabled,
-            continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
-        )
-    }
+    /**
+     * The slice→[HomeLayoutConfig] projection — the shared
+     * [toHomeLayoutConfig] extension (the sync controller serializes the
+     * exact same mapping, so an autopushed layout equals a shared preset).
+     */
+    private fun currentLayoutConfig(): HomeLayoutConfig =
+        homeDiscoveryStore.homeDiscovery.value.toHomeLayoutConfig()
 }

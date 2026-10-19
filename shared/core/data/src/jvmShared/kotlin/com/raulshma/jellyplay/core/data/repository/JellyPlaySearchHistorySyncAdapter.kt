@@ -49,13 +49,11 @@ import kotlinx.serialization.json.put
 class JellyPlaySearchHistorySyncAdapter(
     private val historyDao: SearchHistoryDao,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
+    mirrorStore: DataStore<Preferences>,
     /** The active session's user id (null = signed out — the store reads empty and stays untouched). */
     private val userIdProvider: suspend () -> String?,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore, tombstonesRoam = true) {
 
     // ------------------------------------------------------------------
     // key <-> query: the fixed-length sha1 hex of the query text. The hash
@@ -74,11 +72,6 @@ class JellyPlaySearchHistorySyncAdapter(
         val userId = userIdProvider() ?: return emptyMap()
         return historyDao.getRecent(userId, CAP).first().associate { keyOf(it) to valueOf(it) }
     }
-
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
-    override suspend fun deletedKeys(): Set<String> = mirror.deletedKeys(snapshot())
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         val userId = userIdProvider() ?: return
@@ -99,21 +92,17 @@ class JellyPlaySearchHistorySyncAdapter(
         }
     }
 
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
+    override suspend fun deleteLocally(keys: Set<String>) {
         val userId = userIdProvider()
         if (userId != null) {
+            // One statement for the whole adopted delete (the per-row
+            // deleteById loop was one statement each); the doomed rows are
+            // the same read the loop was.
             val doomed = historyDao.getRecent(userId, CAP).first()
                 .filter { keyOf(it) in keys }
-            for (row in doomed) historyDao.deleteById(row.id)
+            if (doomed.isNotEmpty()) historyDao.deleteByIds(doomed.map { it.id })
         }
-        // The mirror entries go REGARDLESS of key shape or session: an
-        // unparseable key must not wedge in the mirror forever re-reading as
-        // deleted.
-        mirror.clear(keys)
     }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     private fun JsonElement.toQueryOrNull(): String? = try {
         (jsonObject["query"] as? JsonPrimitive)?.content

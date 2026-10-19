@@ -6,19 +6,14 @@ import kotlin.test.assertTrue
 
 /**
  * Integrity tests for the settings-search catalog: every aggregated item must
- * have a unique, non-blank id and carry resources + keywords. The item lists
- * moved verbatim from core/ui's old `SettingsSearchRegistry`; this suite pins
- * that nothing was lost or corrupted in the move and that future items keep
- * the invariants.
+ * have a unique, non-blank id and carry resources + keywords. This suite pins
+ * id uniqueness, resource/category cardinality, keywords, and the catalog's
+ * aggregation shape (count + flat order).
  *
- * Legacy version (Android unit test) reflected `R.string` ids and parsed
- * `strings.xml` off disk to prove each item resolved a non-blank string. The
- * catalog now holds Compose-Resources [org.jetbrains.compose.resources.StringResource]s
- * whose accessors are generated from those same strings.xml files, so
- * resolvability is compile-time guaranteed — a stale resource reference
- * breaks the build, not this test. The XML parsing therefore died with the R
- * ids; what remains pinned is id uniqueness, resource/category cardinality,
- * keywords, and the verbatim-move shape (count + flat order).
+ * The catalog holds Compose-Resources
+ * [org.jetbrains.compose.resources.StringResource]s whose accessors are
+ * generated from strings.xml, so resolvability is compile-time guaranteed — a
+ * stale resource reference breaks the build, not this test.
  */
 class SettingsSearchCatalogTest {
 
@@ -59,22 +54,16 @@ class SettingsSearchCatalogTest {
     @Test
     fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
-        // 316 through the fused conversion; +12 for the ADR-0010 companion-
-        // plugin wave (the per-feature switch rows + their group), re-pinned
-        // there and again through the sync-screen consolidation (zero net);
-        // +1 for the push wave's 13th per-feature switch row; +1 for the
-        // analytics wave's 14th per-feature switch row; +1 for the Wave-3
-        // "Export with Secrets" backup row.
-        assertEquals(331, items.size)
-        // Curated flat order starts with the account/session pair that used to
-        // open the old registry, and the aggregation is a pure concatenation
-        // of the decorated per-screen groups (no dedup, no reordering).
+        assertEquals(365, items.size)
+        // Curated flat order starts with the account/session pair, and the
+        // aggregation is a pure concatenation of the decorated per-screen
+        // groups (no dedup, no reordering).
         assertEquals("logout", items.first().id)
         // The aggregation is a pure concatenation of the derived groups —
-        // no dedup, no reordering, no filtering. (The retired hand-written
-        // per-val sum no longer partitions: post-fusion, vals like
-        // ExternalEngineSearchItems are slices of their group, not disjoint
-        // members.)
+        // no dedup, no reordering, no filtering. Per-val sums do not
+        // partition the catalog: fused groups let vals like
+        // ExternalEngineSearchItems be slices of their group, not disjoint
+        // members.
         assertEquals(SettingsScreenGroups.all.sumOf { it.items.size }, items.size)
         assertEquals(ExperimentalSettingsSearchItems.last().id, items.last().id)
     }

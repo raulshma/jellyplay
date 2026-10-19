@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayBookmarksSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayCwSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayHomeLayoutSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.HomeLayoutSyncController
 import com.raulshma.jellyplay.core.data.repository.JellyPlayIntegrationsSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayItemPrefsSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayPlaylistsSyncAdapter
@@ -24,6 +25,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayReaderSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlaySearchHistorySyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
 import com.raulshma.jellyplay.core.data.repository.JpsyncReservation
+import com.raulshma.jellyplay.core.data.repository.ProfileSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -44,11 +46,10 @@ import com.raulshma.jellyplay.core.model.deviceModelName
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
-import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
-import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
 import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 /**
@@ -68,7 +69,7 @@ internal val dataSessionPlaybackModule: Module = module {
     // (playback flips) PlaybackSourceResolverImpl all moved off that
     // list as their ctor deps became Koin-resolvable.
 
-    // D3: the seam types moved to :shared:core:model (so core:network below
+    // The seam types moved to :shared:core:model (so core:network below
     // this module can adopt them); this module stays their Koin owner —
     // core:model deliberately carries no Koin module.
     single<TimeSource> { SystemTimeSource() }
@@ -129,6 +130,15 @@ internal val dataSessionPlaybackModule: Module = module {
     single {
         SleepCountdown(
             clock = SleepCountdownClock { get<TimeSource>().nowElapsedRealtimeMillis() },
+            // Explicit scope injection, the same applicationScope the sibling
+            // singles here receive: the production single no longer falls
+            // back to the class's self-created scope (the reader and the
+            // tests keep that default-parameter behavior). The countdown's
+            // expiry/ramp callbacks only call engine methods, and the engines
+            // marshal their own threading (ExoPlayer posts to its player
+            // thread; mpv/LibVLC commands are cross-thread), so the scope's
+            // Default dispatcher is safe for them.
+            scope = get(DatastoreQualifiers.applicationScope),
         )
     }
 
@@ -146,7 +156,14 @@ internal val dataSessionPlaybackModule: Module = module {
     // VideoPlayerViewModel, livetv's ChannelsViewModel) resolve this single
     // directly from Koin; ChannelsViewModel resolves it
     // directly from here.
-    single { VideoMiniPlayerState() }
+    single {
+        // The session-cache registry seam releases a deposited mini-player
+        // engine on sign-out / user switch / server switch (the class's init
+        // registers the reaction) — otherwise a native MPV/LibVLC engine
+        // would ride into the next identity on the 5-minute auto-release
+        // window.
+        VideoMiniPlayerState(sessionCacheRegistry = get())
+    }
 
     single {
         AudioCachePolicyGuard(
@@ -242,15 +259,21 @@ internal val dataSessionPlaybackModule: Module = module {
             // shared with the settings-catalog generator so the catalog keeps
             // describing exactly what syncs.
             excludedPrefixes = PreferenceSyncPolicy.EXCLUDED_PREFIXES,
-            // Secrets and device/session identity never sync either — the
-            // owning stores export their key-name sets so renames stay in
-            // lockstep (same "never synced" list as docs/jellyplay-plugin.md;
-            // pin_hash leaving the device was a real leak this closes).
-            excludedKeys = SecurityStore.SyncExcludedKeys +
-                PinRateLimiter.SyncExcludedKeys +
-                ServerIdentityStore.SyncExcludedKeys,
+            // Secrets, device/session identity, and the widget payload cache
+            // never sync either — the ONE assembled exclusion set
+            // (PreferenceSyncPolicy) the catalog's denylist consumes too, so
+            // the two faces cannot drift (same "never synced" list as
+            // docs/jellyplay-plugin.md; pin_hash leaving the device was a
+            // real leak this closes). Mirror entries stranded by a
+            // retroactive exclusion (the widget payload keys synced before
+            // theirs landed) are swept by the adapter's one-time prune.
+            // SYNC_EXCLUDED_KEYS adds the install-global bookkeeping markers
+            // (home_ns_migrated, home_v3_upgrade_baseline_done) — raw
+            // non-namespaced keys the policy documents; a marker that
+            // synced before this exclusion lands is swept by the same prune.
+            excludedKeys = PreferenceSyncPolicy.SYNC_EXCLUDED_KEYS,
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The reader's bookmarks under the general sync protocol (ADR 0011): the
     // `books` namespace adapter over the Room `book_bookmarks` store, full
@@ -263,7 +286,7 @@ internal val dataSessionPlaybackModule: Module = module {
             bookmarkDao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The search history under the general sync protocol (ADR 0011): the
     // `search` namespace adapter over the Room `search_history` store —
@@ -278,7 +301,7 @@ internal val dataSessionPlaybackModule: Module = module {
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
             userIdProvider = { identities.currentIdentity()?.userId },
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The continue-watching removals under the general sync protocol (ADR
     // 0011): the `cw` namespace adapter over the home store's hidden-CW set —
@@ -291,7 +314,7 @@ internal val dataSessionPlaybackModule: Module = module {
             homeDiscoveryStore = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The reader's annotation backup under the general sync protocol (ADR
     // 0011, ADR 0003 local-first): the `reader` namespace adapter over the
@@ -305,7 +328,7 @@ internal val dataSessionPlaybackModule: Module = module {
             annotationDao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The home LAYOUT under the general sync protocol (ADR 0011): the
     // `homelayout` namespace adapter over the home store's layout domains
@@ -320,10 +343,25 @@ internal val dataSessionPlaybackModule: Module = module {
             homeDiscoveryStore = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
+    } bind ProfileSyncAdapter::class
+
+    // The DisplayPreferences home-layout sync bridge: collects the home
+    // store's layoutRevision dirty signal (armed by the home_layout_autopush
+    // pref + sign-in state), debounces 2s, and pushes the current layout
+    // through the preset codec — plus the manual Upload/Restore actions'
+    // transport. Sits beside the adapter above because both are the
+    // home-layout-to-network bridge family; the store layer owns no client.
+    single {
+        HomeLayoutSyncController(
+            homeDiscoveryStore = get(),
+            identityStore = get<ServerIdentityStore>(),
+            apiClient = get(),
+            externalScope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+        )
     }
 
     // The NON-SECRET integration settings under the general sync protocol
-    // (the settings-backup wave): the `integrations` namespace adapter over
+    // (the settings-backup cluster): the `integrations` namespace adapter over
     // the Seerr / *arr / subtitle-provider preference stores' sync-only
     // surfaces — the stores' allowlists are the single source of truth for
     // what may ride the wire (the credentials live in the encrypted stores
@@ -337,10 +375,10 @@ internal val dataSessionPlaybackModule: Module = module {
             subtitleProviderPreferencesStore = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The per-item/per-series playback preferences under the general sync
-    // protocol (the settings-backup wave): the `itemprefs` namespace adapter
+    // protocol (the settings-backup cluster): the `itemprefs` namespace adapter
     // over the Room `item_playback_preferences` store — one `"{scope}/{key}"`
     // key per row, the full row as the payload, deletes roaming. The roam set
     // is capped at the 100 most-recent rows by updatedAt (the Room store
@@ -351,10 +389,10 @@ internal val dataSessionPlaybackModule: Module = module {
             dao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     // The playlist DEFINITIONS under the general sync protocol (the
-    // settings-backup wave): the `playlists` namespace adapter over the Room
+    // settings-backup cluster): the `playlists` namespace adapter over the Room
     // smart/mood playlist stores — smart/{id}, mood/{id} and
     // moodpref/{playlistId} keys, whole definition rows as payloads (no
     // cached item lists anywhere), deletes roaming so a deleted playlist
@@ -365,7 +403,7 @@ internal val dataSessionPlaybackModule: Module = module {
             moodPlaylistDao = get(),
             mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
         )
-    }
+    } bind ProfileSyncAdapter::class
 
     single {
         val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
@@ -374,22 +412,24 @@ internal val dataSessionPlaybackModule: Module = module {
             apiClient = get(),
             statusStore = get(),
             sessionCacheRegistry = get(),
-            // The shared adapter registrations above (with their exclusions) —
+            // The shared adapter registrations above (with their exclusions),
+            // collected through the ProfileSyncAdapter multi-binding —
             // constructing a fresh adapter here would silently sync the
             // excluded keys (that drift is how dream/screensaver leaked
             // before). The books adapter rides the same engine: one toggle,
-            // one cycle, per-namespace adapters.
-            adapters = listOf(
-                get<JellyPlayPreferencesSyncAdapter>(),
-                get<JellyPlayBookmarksSyncAdapter>(),
-                get<JellyPlaySearchHistorySyncAdapter>(),
-                get<JellyPlayCwSyncAdapter>(),
-                get<JellyPlayReaderSyncAdapter>(),
-                get<JellyPlayHomeLayoutSyncAdapter>(),
-                get<JellyPlayIntegrationsSyncAdapter>(),
-                get<JellyPlayItemPrefsSyncAdapter>(),
-                get<JellyPlayPlaylistsSyncAdapter>(),
-            ),
+            // one cycle, per-namespace adapters. ORDER: Koin's `getAll` on
+            // secondary (`bind`) definitions returns them in
+            // index-allocation order, not declaration order — so the cycle's
+            // adapter order (and `activeNamespaces`' row order) is the
+            // engine's own REGISTRATION_ORDER sequence, which the collection
+            // is sorted by; an unlisted namespace rides last. Pinned by
+            // DataKoinModulesTest; a tenth adapter adds its binding beside
+            // these nine and never re-touches this definition.
+            adapters = getKoin().getAll<ProfileSyncAdapter>()
+                .sortedBy { adapter ->
+                    ProfileSyncRepository.REGISTRATION_ORDER.indexOf(adapter.namespace)
+                        .let { if (it < 0) Int.MAX_VALUE else it }
+                },
             deviceProfile = detectDeviceProfile(),
             deviceIdProvider = jpsyncDeviceIdProvider(dataStore),
             nowMillis = { get<TimeSource>().nowEpochMillis() },
@@ -441,7 +481,7 @@ internal val dataSessionPlaybackModule: Module = module {
         )
     }
 
-    // The push face (the plugin's push wave): the SAME device identity as the
+    // The push face (the plugin's push support): the SAME device identity as the
     // events repository above (jpsync.device.id + name/platform/version), the
     // distributor seam resolved getOrNull — Android's notification module
     // registers the UnifiedPush connector impl, desktop registers nothing and
@@ -470,11 +510,15 @@ internal val dataSessionPlaybackModule: Module = module {
     // JellyPlayNewMediaNotifier — the Android tray path, registered in the
     // platform notification module (desktop registers nothing → log-only);
     // JellyPlayBroadcastMessenger — bridged to the shared UserMessageBus by
-    // both shells' interop modules. Self-starting on the shared application
-    // scope at Koin creation, the same singleton-collector idiom as
-    // HomeSession / SessionCacheRegistry — one wiring covers the Android and
-    // desktop shells.
-    single(createdAtStart = true) {
+    // both shells' interop modules. LAZY on purpose: constructing this graph
+    // eagerly would pull AuthRepositoryImpl → Room + migrations + the WebSocket
+    // client onto the main thread inside startKoin, for signed-out sessions
+    // too. The shells' background prewarm groups call the idempotent start()
+    // (desktop DesktopStartup's Dispatchers.Default block, Android
+    // AppStartupPrewarms' background-scheduler group) — the same
+    // singleton-collector idiom as HomeSession / SessionCacheRegistry, one
+    // wiring covers both shells.
+    single {
         com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController(
             authRepository = get(),
             eventsRepository = get(),
@@ -484,16 +528,18 @@ internal val dataSessionPlaybackModule: Module = module {
             newMediaNotifier = getOrNull(),
             pushRepository = get(),
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
-        ).apply { start() }
+        )
     }
 
     // The sync engine's live half (ADR 0010 §4): the settings SSE stream →
     // requestSync. Rides auth AND the engine's own enabled edge (no connection
-    // for a user who never opted in, none doomed while signed out); the
-    // createdAtStart singleton-collector idiom again — one wiring covers both
-    // shells. Reconnects resume from the last-seen event id, persisted per
-    // user beside the delta cursor (the `Last-Event-ID` reconnect contract).
-    single(createdAtStart = true) {
+    // for a user who never opted in, none doomed while signed out); lazy for
+    // the same off-main reason as the events controller above, with the
+    // idempotent start() kicked from the shells' background prewarm groups —
+    // one wiring covers both shells. Reconnects resume from the last-seen
+    // event id, persisted per user beside the delta cursor (the
+    // `Last-Event-ID` reconnect contract).
+    single {
         val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
             get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
         com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector(
@@ -504,7 +550,7 @@ internal val dataSessionPlaybackModule: Module = module {
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
             loadLastEventId = jpsyncCursorLoader(dataStore, get<SessionIdentityProvider>(), CURSOR_SSE),
             saveLastEventId = jpsyncCursorSaver(dataStore, get<SessionIdentityProvider>(), CURSOR_SSE),
-        ).apply { start() }
+        )
     }
 }
 
@@ -600,10 +646,11 @@ private fun appVersionString(): String =
 /**
  * The session-aware transport satisfying the home fetcher's
  * [com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources]
- * for the PLUGIN_ROW home rows: the row reads forward verbatim onto the
- * plugin api client (ADR 0010's one-family rule — every `jellyplay/` route
- * rides the `JellyPlayRowsRoutes` role of the one plugin client family), the item resolution forwards onto the
- * library client's batched ids read, and the two capability gates read ONLY
+ * for the PLUGIN_ROW home rows and the plugin-curated hero: the reads
+ * forward verbatim onto the plugin api client (ADR 0010's one-family rule —
+ * every `jellyplay/` route rides the `JellyPlayRowsRoutes` role of the one
+ * plugin client family), the item resolution forwards onto the
+ * library client's batched ids read, and the capability gates read ONLY
  * the probe store's registry — the ONE gating mechanism (ADR 0010 §6).
  *
  * Gate semantics: a store still UNKNOWN (never probed this session) runs the
@@ -639,6 +686,9 @@ private class JellyPlayHomeSectionSourcesImpl(
     override suspend fun customRowsEnabled(): Boolean =
         rowsEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.CustomRows)
 
+    override suspend fun curatedHeroEnabled(): Boolean =
+        rowsEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Hero)
+
     override suspend fun getSeasonalRow(keyword: String?): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowResult?> =
         apiClient.getSeasonalRow(keyword)
 
@@ -647,6 +697,9 @@ private class JellyPlayHomeSectionSourcesImpl(
 
     override suspend fun getCustomRow(title: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowResult?> =
         apiClient.getCustomRow(title)
+
+    override suspend fun getCuratedHero(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayHeroResult?> =
+        apiClient.getCuratedHero()
 
     override suspend fun getItemsByIds(ids: List<String>): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
         libraryClient().getItemsByIds(ids)

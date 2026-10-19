@@ -36,6 +36,8 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // RefreshCycle (the group-list backoff poll's registration).
+            implementation(project(":shared:core:concurrency"))
             // SyncPlayCastStore (join-behavior + auto-accept-invites slice).
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))

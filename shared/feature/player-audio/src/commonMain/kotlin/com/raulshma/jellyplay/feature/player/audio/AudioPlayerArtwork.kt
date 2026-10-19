@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -432,7 +433,7 @@ internal fun AlbumArtwork(
     isExpanded: Boolean,
     lyricsVisible: Boolean = false,
     lyrics: List<com.raulshma.jellyplay.core.model.LyricsLine> = emptyList(),
-    currentLyricIndex: Int = -1,
+    currentLyricIndex: kotlinx.coroutines.flow.StateFlow<Int>,
     isFetchingLyrics: Boolean = false,
     lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource = com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     onSearchClick: () -> Unit = {},
@@ -505,6 +506,11 @@ internal fun AlbumArtwork(
             enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
             exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
         ) {
+            // The position-derived index is collected HERE — the leaf that
+            // renders the active line — so a lyric-line flip recomposes only
+            // this scope (never composed when the overlay is hidden), not the
+            // artwork body or the screen root (AudioPlayerViewModel.currentLyricIndex).
+            val currentLyricIndex by currentLyricIndex.collectAsStateWithLifecycle()
             if (karaokeMode && lyrics.any { it.words.isNotEmpty() }) {
                 com.raulshma.jellyplay.feature.player.audio.lyrics.KaraokeLyricsView(
                     lyrics = lyrics,

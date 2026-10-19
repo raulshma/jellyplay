@@ -7,8 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * The dead-end guard's decision + message, extracted from
- * DesktopNavScaffold's inline `Navigator(navigation) { … }` adapter (runtime
+ * The dead-end guard's decision + message (runtime
  * safety, not polish): NavDisplay with an unregistered top-of-stack entry is
  * a crash hazard, and the shared screens freely push routes that have no
  * desktop section. The decision is DERIVED, not enumerated —
@@ -16,10 +15,9 @@ import kotlinx.coroutines.launch
  * ledger the entry provider re-attaches on every rebuild, so a route is a
  * dead end exactly when no shellEntryProvider section registered it
  * (LiveTvChannelPlayer/SubtitleTester because their builders are
- * Android-only, VideoPlayer wherever the surface probe fails). The former
- * hand-kept three-route mirror is gone. Unregistered routes surface as a
- * snackbar — the desktop twin of the Android shell's PlaybackHostRouter
- * navigateFilter.
+ * Android-only, VideoPlayer wherever the surface probe fails). Unregistered
+ * routes surface as a snackbar — the desktop counterpart of the Android
+ * shell's PlaybackHostRouter navigateFilter.
  *
  * Pure wiring over constructor-style lambdas (the DesktopUpdateCheckController
  * idiom): no Compose imports, JVM-pinnable by DesktopNavGuardTest.

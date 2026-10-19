@@ -49,7 +49,7 @@ import okio.Path
 import okio.Path.Companion.toPath
 
 /**
- * Pins the Wave 3 mark/jump/resume logic of [BookReaderViewModel]: the
+ * Pins the mark/jump/resume logic of [BookReaderViewModel]: the
  * bookmark toggle encodings (paged page-ticks vs reflowable percent+CFI),
  * match-and-remove semantics, paged jumps, selection → annotation, and the
  * exact-resume CFI round trip through the ReaderStore map. Repository and
@@ -84,7 +84,7 @@ class BookReaderViewModelTest {
         every { readerStore.lastCfi(any()) } returns null
         coEvery { readerStore.setLastCfi(any(), any()) } returns Unit
         coEvery { playbackRepository.reportBookProgress(any(), any(), any()) } returns Result.success(Unit)
-        // Wave 4 preference setters (strict mockk needs the stubs up front).
+        // preference setters (strict mockk needs the stubs up front).
         coEvery { readerStore.setReaderTheme(any()) } returns Unit
         coEvery { readerStore.setReaderFontSizePx(any()) } returns Unit
         coEvery { readerStore.setPerBookAppearance(any(), any()) } returns Unit
@@ -213,7 +213,7 @@ class BookReaderViewModelTest {
     @Test
     fun `null-cfi reflowable bookmark matches by encoded percent`() = runTest(mainDispatcher) {
         stubDetail("novel.epub", positionTicks = 0L)
-        // A pre-Wave-3 row: percent ticks, no CFI anchor.
+        // A legacy row: percent ticks, no CFI anchor.
         annotationsRepository.seedBookmark(
             ReaderBookmark(
                 id = 42L,
@@ -473,7 +473,7 @@ class BookReaderViewModelTest {
     }
 
     // ------------------------------------------------------------------
-    // Wave 4: typography + behavior setters, per-book appearance routing
+    // typography + behavior setters, per-book appearance routing
     // ------------------------------------------------------------------
 
     @Test
@@ -617,7 +617,7 @@ class BookReaderViewModelTest {
     }
 
     // ------------------------------------------------------------------
-    // Wave 5: read aloud (context requests, chapter continuation, book end)
+    // read aloud (context requests, chapter continuation, book end)
     // ------------------------------------------------------------------
 
     @Test
@@ -738,7 +738,7 @@ class BookReaderViewModelTest {
     }
 
     // ------------------------------------------------------------------
-    // Wave 5: sleep timer
+    // sleep timer
     // ------------------------------------------------------------------
 
     @Test
@@ -864,7 +864,7 @@ class BookReaderViewModelTest {
     /**
      * Pins the displaced-claimant collector: music claiming the floor while
      * read-aloud plays pauses the loop, and the claim releasing does NOT
-     * auto-resume — the user's next play tap is the only way back (ADR-0004).
+     * auto-resume — the user's next play tap is the only way back.
      */
     @Test
     fun `a displaced focus claimant pauses read aloud and release never auto resumes`() =

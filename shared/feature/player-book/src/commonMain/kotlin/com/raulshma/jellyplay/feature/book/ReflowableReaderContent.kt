@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.feature.book.epub.EpubAnnotationStyle
 import com.raulshma.jellyplay.feature.book.epub.EpubAppearance
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderHandle
 import com.raulshma.jellyplay.feature.book.epub.EpubReaderStatus
+import com.raulshma.jellyplay.feature.book.epub.EpubTocItem
 import com.raulshma.jellyplay.feature.book.epub.rememberEpubReaderHost
 import com.raulshma.jellyplay.feature.book.generated.resources.Res
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_copied
@@ -65,6 +66,7 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_error
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_preparing_locations
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_title_fallback
 import okio.Path
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
@@ -294,10 +296,15 @@ internal fun ReflowableReaderContent(
     // single "a sheet holds the screen" predicate for nav gating and
     // auto-hide (ReaderSheetStack) — the settings sheet included.
     val sheets = remember { ReaderSheetStack() }
+    // Cold slices only at the renderer root: bookmarks/annotations/selection
+    // move on user edits, prefs on settings commits. The HOT flows
+    // (currentEpubLocation re-emits per page turn, speechState per utterance,
+    // sleepTimerState per tick, speechAvailability on engine init) are
+    // collected in the leaf composables that render them — a hot emission
+    // must not re-execute this root (session-slice placement rule).
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     val annotations by viewModel.annotations.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
-    val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
 
     // Global typography + behavior slices ride ONE preference snapshot
     // instead of one collect per knob.
@@ -310,19 +317,8 @@ internal fun ReflowableReaderContent(
     val readingSpeedWpm = global.readingSpeedWpm
     val tocRailVisible = global.tocRailVisible
 
-    // Read aloud + sleep timer + auto-scroll (Wave 5). Speech/auto-scroll
-    // STATE lives in the VM/screen as noted; the AUTO-SCROLL speed is the
-    // persisted ReaderStore preference (sessions reopen at the chosen speed).
-    val speechState by viewModel.speechState.collectAsStateWithLifecycle()
-    // != UNAVAILABLE (not == AVAILABLE): the Android engine is lazy — its
-    // INITIALIZING window lasts until the first speak, so keying the play
-    // button on AVAILABLE would hide it behind its own starting condition.
-    // Platforms without an engine report UNAVAILABLE and hide the controls.
-    val speechAvailable =
-        viewModel.speechAvailability.collectAsStateWithLifecycle().value != BookSpeechAvailability.UNAVAILABLE
     val speechRate = global.speechRate
     val speechPitch = global.speechPitch
-    val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
 
     // The "pending mark" snapshot the selection bar previews and the note
     // dialog saves with — also the last-used style/color memory.
@@ -359,7 +355,7 @@ internal fun ReflowableReaderContent(
         )
     }
     // The VM's speech loop + sleep timer execute their host-side halves
-    // through this port (the collapsed command channel's replacement).
+    // through this port (replacing the former command channel).
     LaunchedEffect(session) { viewModel.attachReaderSession(session) }
     // The full appearance bundle: rides the chunked load protocol on boot
     // AND re-fires the hosts' change push whenever any axis moves (their
@@ -367,10 +363,11 @@ internal fun ReflowableReaderContent(
     // EpubAppearance.from: theme/font from the EFFECTIVE appearance
     // (override ?: global), typography axes from the global slice.
     val appearance = EpubAppearance.from(prefs)
-    // Session end (stop/finish/engine loss) drops the painted highlight.
-    LaunchedEffect(speechState.active) {
-        session.onSpeechActiveChanged(speechState.active)
-    }
+    // Session end (stop/finish/engine loss) drops the painted highlight —
+    // its own leaf (see [SpeechActiveEffect]) so an utterance's emission
+    // never re-executes this root and the dispatch survives chrome/sheet
+    // visibility.
+    SpeechActiveEffect(session, viewModel.speechState)
 
     // Overlay vs in-flow chrome (see epubChromeOverlaysContent): the overlay
     // tree composes the long-standing floating layout; the desktop tree lays
@@ -384,13 +381,11 @@ internal fun ReflowableReaderContent(
 
     // The EPUB TOC tick rail's ticks: hoisted — the overlay branch floats the
     // rail over the content edge while the in-flow branch docks it beside the
-    // browser, but both render the same window.
+    // browser, but both render the same window. The current-index fold reads
+    // the position flow, so it lives in the rail leaf ([ReflowableTocRail]).
     val tocTicks = remember(session.tocItems) { epubTocTicks(session.tocItems) }
-    val tocTickIndex = remember(tocTicks, epubLocation?.chapterHref) {
-        epubCurrentTocIndex(session.tocItems, epubLocation?.chapterHref)
-    }
 
-    // Exact resume (ADR 0003 point 4): the latch + jump decision are the
+    // Exact resume (the local-first resume rule): the latch + jump decision are the
     // session's (see [ReflowableReaderSession.resumeJump]); this shell just
     // re-offers the anchors whenever the boot status or either anchor moves.
     LaunchedEffect(session.status, content.resumeCfi, content.jumpHref) {
@@ -408,7 +403,6 @@ internal fun ReflowableReaderContent(
     val existingAnnotation = remember(selection, annotations) {
         selection?.let { sel -> annotations.firstOrNull { it.cfi == sel.cfi } }
     }
-    val bookmarked = remember(bookmarks, epubLocation, state) { viewModel.hasBookmarkAtCurrentPosition() }
 
     // Auto-hide the chrome like player controls; suppress while a sheet
     // holds the screen (the holder's fold includes the settings sheet and
@@ -460,6 +454,14 @@ internal fun ReflowableReaderContent(
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
+                // Hot top-bar slices collected HERE — the leaf that renders
+                // them — so a page turn or a timer tick recomposes only this
+                // bar (not composed while the chrome is hidden).
+                val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
+                val bookmarked = remember(bookmarks, epubLocation, state) {
+                    viewModel.hasBookmarkAtCurrentPosition()
+                }
+                val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
                 ReaderTopBar(
                     state = state,
                     bookmarked = bookmarked,
@@ -482,9 +484,10 @@ internal fun ReflowableReaderContent(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
                 if (tocRailVisible) {
-                    ReaderTocRail(
-                        ticks = tocTicks,
-                        currentIndex = tocTickIndex,
+                    ReflowableTocRail(
+                        currentEpubLocation = viewModel.currentEpubLocation,
+                        tocItems = session.tocItems,
+                        tocTicks = tocTicks,
                         onJump = { tick -> tick.href?.let { href -> hostHolder.value?.goTo(href) } },
                         modifier = Modifier
                             .align(Alignment.CenterVertically)
@@ -566,6 +569,18 @@ internal fun ReflowableReaderContent(
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
+                // Hot bar slices (location percent, speech state/availability)
+                // collected HERE — the leaf that renders them — so a page turn
+                // or an utterance recomposes only this bar.
+                val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
+                val speechState by viewModel.speechState.collectAsStateWithLifecycle()
+                // != UNAVAILABLE (not == AVAILABLE): the Android engine is lazy — its
+                // INITIALIZING window lasts until the first speak, so keying the play
+                // button on AVAILABLE would hide it behind its own starting condition.
+                // Platforms without an engine report UNAVAILABLE and hide the controls.
+                val speechAvailable =
+                    viewModel.speechAvailability.collectAsStateWithLifecycle().value !=
+                        BookSpeechAvailability.UNAVAILABLE
                 ReflowableBottomBar(
                     // Same single-percent-carrier read as the overlay branch.
                     percent = epubLocation?.percent ?: content.resumePercent,
@@ -670,27 +685,38 @@ internal fun ReflowableReaderContent(
             }
         }
 
-        ReaderTopBar(
-            state = state,
-            bookmarked = bookmarked,
-            onToggleBookmark = viewModel::toggleBookmarkAtCurrentPosition,
-            onOpenBookmarks = { sheets.showBookmarks = true },
-            onOpenAnnotations = { sheets.showAnnotations = true },
-            onOpenSettings = { sheets.showSettings = true },
-            onBack = onBack,
-            sleepTimerActive = sleepTimerState.running,
-            onOpenSleepTimer = { sheets.showSleepTimer = true },
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
+        // Hot top-bar slices collected in this wrapping scope — the leaf that
+        // renders them — so a page turn or a timer tick recomposes only this
+        // bar, never the renderer root (the bar hides itself via
+        // state.showControls inside ReaderTopBar).
+        Box(modifier = Modifier.align(Alignment.TopCenter)) {
+            val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
+            val bookmarked = remember(bookmarks, epubLocation, state) {
+                viewModel.hasBookmarkAtCurrentPosition()
+            }
+            val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
+            ReaderTopBar(
+                state = state,
+                bookmarked = bookmarked,
+                onToggleBookmark = viewModel::toggleBookmarkAtCurrentPosition,
+                onOpenBookmarks = { sheets.showBookmarks = true },
+                onOpenAnnotations = { sheets.showAnnotations = true },
+                onOpenSettings = { sheets.showSettings = true },
+                onBack = onBack,
+                sleepTimerActive = sleepTimerState.running,
+                onOpenSleepTimer = { sheets.showSleepTimer = true },
+            )
+        }
         // The EPUB TOC tick rail (opt-in via the reader controls):
         // current-chapter-neighborhood ticks on the start edge. Current entry
         // rides the relocated event's spine href (the chapter label alone
         // collides on duplicate titles); hidden until both the toc event and
         // the first relocation have landed.
         if (tocRailVisible) {
-            ReaderTocRail(
-                ticks = tocTicks,
-                currentIndex = tocTickIndex,
+            ReflowableTocRail(
+                currentEpubLocation = viewModel.currentEpubLocation,
+                tocItems = session.tocItems,
+                tocTicks = tocTicks,
                 onJump = { tick -> tick.href?.let { href -> overlayHost.goTo(href) } },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -705,6 +731,18 @@ internal fun ReflowableReaderContent(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
+            // Hot bar slices (location percent, speech state/availability)
+            // collected HERE — the leaf that renders them — so a page turn
+            // or an utterance recomposes only this bar.
+            val epubLocation by viewModel.currentEpubLocation.collectAsStateWithLifecycle()
+            val speechState by viewModel.speechState.collectAsStateWithLifecycle()
+            // != UNAVAILABLE (not == AVAILABLE): the Android engine is lazy — its
+            // INITIALIZING window lasts until the first speak, so keying the play
+            // button on AVAILABLE would hide it behind its own starting condition.
+            // Platforms without an engine report UNAVAILABLE and hide the controls.
+            val speechAvailable =
+                viewModel.speechAvailability.collectAsStateWithLifecycle().value !=
+                    BookSpeechAvailability.UNAVAILABLE
             ReflowableBottomBar(
                 // The location flow is the single percent carrier: the VM
                 // seeds it with the boot resume percent at open, so the
@@ -787,6 +825,11 @@ internal fun ReflowableReaderContent(
     // binding, so the sheets stay home there.
     hostHolder.value?.let { sheetsHost ->
         if (sheets.showSettings) {
+            // Engine capability, collected in the sheet's own scope (see the
+            // bottom bars for the != UNAVAILABLE rule).
+            val speechAvailable =
+                viewModel.speechAvailability.collectAsStateWithLifecycle().value !=
+                    BookSpeechAvailability.UNAVAILABLE
             ReflowableSettingsSheet(
                 prefs = prefs,
                 speechAvailable = speechAvailable,
@@ -811,6 +854,9 @@ internal fun ReflowableReaderContent(
             )
         }
         if (sheets.showSleepTimer) {
+            // The countdown ticks per second while armed — collected in the
+            // sheet's own scope so a tick never re-executes the renderer root.
+            val sleepTimerState by viewModel.sleepTimerState.collectAsStateWithLifecycle()
             SleepTimerSheet(
                 state = sleepTimerState,
                 onSelect = viewModel::startSleepTimer,
@@ -884,6 +930,45 @@ internal fun ReflowableReaderContent(
                 onDismiss = { sheets.noteTarget = null },
             )
         }
+    }
+}
+
+/**
+ * The reflowable toc rail's binding: the current-index fold reads the
+ * position flow (hot — re-emits per page turn), so the collection and the
+ * fold live in THIS scope and a page turn recomposes only the rail. The
+ * ticks themselves change only with the session's TOC (root-hoisted).
+ */
+@Composable
+private fun ReflowableTocRail(
+    currentEpubLocation: StateFlow<EpubLocation?>,
+    tocItems: List<EpubTocItem>,
+    tocTicks: List<ReaderTocTick>,
+    onJump: (ReaderTocTick) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val epubLocation by currentEpubLocation.collectAsStateWithLifecycle()
+    val currentIndex = remember(tocTicks, epubLocation?.chapterHref) {
+        epubCurrentTocIndex(tocItems, epubLocation?.chapterHref)
+    }
+    ReaderTocRail(ticks = tocTicks, currentIndex = currentIndex, onJump = onJump, modifier = modifier)
+}
+
+/**
+ * The speech-active → session dispatch: session end (stop/finish/engine loss)
+ * drops the painted highlight. Collected in its own leaf so an utterance's
+ * speech-state emission never re-executes the renderer root — and so the
+ * dispatch stays live regardless of chrome/sheet visibility (unlike the
+ * bars, this must never stop collecting).
+ */
+@Composable
+private fun SpeechActiveEffect(
+    session: ReflowableReaderSession,
+    speechState: StateFlow<ReaderSpeechState>,
+) {
+    val state by speechState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.active) {
+        session.onSpeechActiveChanged(state.active)
     }
 }
 

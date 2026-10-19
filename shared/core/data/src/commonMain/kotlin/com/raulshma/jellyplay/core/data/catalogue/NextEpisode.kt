@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.catalogue
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 
 /**
  * The label a smart-play / up-next surface should show for the resolved target
@@ -11,15 +12,13 @@ import com.raulshma.jellyplay.core.model.MediaItem
 enum class NextUpKind { RESUME, NEXT_UP, PLAY, REPLAY, NONE }
 
 /**
- * The pure next-up / adjacency decision over a playback-sorted episode list.
- *
- * This is the catalogue-side twin of `feature.details.SmartPlayResolver`: a
- * verbatim port of `SmartPlayResolver.resolveSeries` (resume > next-unplayed >
- * replay-first) plus the prev/next-by-sorted-order helpers the player needs.
- * It lives in `core:data` (below the feature layer) so the catalogue can expose
- * a [NextEpisode] from [EpisodeCatalogue.loadSeriesEpisodes] without forcing the
- * player to depend on `feature.details`, and so the decision has a synchronous,
- * reflection-free test surface of its own.
+ * The pure next-up / adjacency decision over a playback-sorted episode list —
+ * THE single owner of the smart-play rule (resume > next-unplayed >
+ * replay-first). `feature.details.SmartPlayResolver.resolveSeries` delegates
+ * here and only maps [NextUpKind] → its UI-side `LabelKind`; the catalogue
+ * exposes a [NextEpisode] from [EpisodeCatalogue.loadSeriesEpisodes] without
+ * forcing the player to depend on `feature.details`, and the decision has a
+ * synchronous, reflection-free test surface of its own.
  *
  * @param kind the [NextUpKind] label; [NextUpKind.NONE] with a null episode when
  *   the sorted list is empty.
@@ -38,12 +37,14 @@ data class NextEpisode(
         val NONE = NextEpisode(NextUpKind.NONE, null, 0L)
 
         /**
-         * Series-level decision over a playback-sorted list, a verbatim port of
-         * `SmartPlayResolver.resolveSeries`. Returns [NONE] when [sorted] is
+         * Series-level decision over a playback-sorted list — the smart-play
+         * rule's one body (SmartPlayResolver.resolveSeries ran a verbatim
+         * copy of it before delegating here). Returns [NONE] when [sorted] is
          * empty.
          *
          * Resolution order:
-         *   1. First episode with resume progress (>0 ticks, not finished).
+         *   1. First episode with resume progress (>0 ticks, not finished —
+         *      [hasWatchProgress], the model-layer predicate).
          *   2. First unplayed episode — NEXT_UP when something before it was
          *      watched/started, else plain PLAY.
          *   3. All played → REPLAY the first from 0.
@@ -58,7 +59,7 @@ data class NextEpisode(
             val playable = sorted.filterNot { it.isVirtual }
             if (playable.isEmpty()) return NONE
 
-            val resumeEpisode = playable.firstOrNull { it.hasResumeProgress() }
+            val resumeEpisode = playable.firstOrNull { it.hasWatchProgress }
             if (resumeEpisode != null) {
                 return NextEpisode(
                     kind = NextUpKind.RESUME,
@@ -102,8 +103,5 @@ data class NextEpisode(
             val next = sorted.drop(index + 1).firstOrNull { !it.isVirtual }
             return previous to next
         }
-
-        private fun MediaItem.hasResumeProgress(): Boolean =
-            (playbackPositionTicks ?: 0L) > 0L && !isPlayed
     }
 }

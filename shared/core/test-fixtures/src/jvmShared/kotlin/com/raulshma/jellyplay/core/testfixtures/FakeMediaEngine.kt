@@ -23,13 +23,10 @@ import kotlinx.coroutines.flow.flowOf
 
 /**
  * The one behavioural [MediaEngine] test double for JVM test lanes — the
- * union of the per-module copies that used to drift (player-video's
- * session-suite fake and core:data's audio-queue fake, which had already
- * diverged on load/play/stop semantics before the merge; apps/desktop's
- * app-side copy joined in the fake-twin merge — its audio queue-semantics,
- * real-engine-adjacent and engine-activity suites construct
- * [LoadBehavior.AUTO_PLAY] instances, which carries the desktop-mpv
- * personality their former app-side fake hardcoded).
+ * union of the session-suite, audio-queue and desktop app-side behaviours.
+ * The audio queue-semantics, real-engine-adjacent and engine-activity
+ * suites construct [LoadBehavior.AUTO_PLAY] instances, which carries the
+ * desktop-mpv personality.
  *
  * The genuinely divergent behaviours are the state transitions engines
  * perform around [load]/[play]/[stop]. They are parameterized as
@@ -197,7 +194,7 @@ class FakeMediaEngine(
         when (loadBehavior) {
             // MANUAL's order (isPlaying → IDLE) is the session suites' shape;
             // AUTO_PLAY's (IDLE → isPlaying, + duration reset) is the queue
-            // suite's — both preserved verbatim from their former copies.
+            // suite's shape.
             LoadBehavior.MANUAL -> {
                 isPlayingState.value = false
                 playbackState.value = EnginePlaybackState.IDLE

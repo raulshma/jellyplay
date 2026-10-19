@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -115,6 +116,15 @@ fun LogsScreen(
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
     val tabs = listOf(Res.string.admin_tab_log_files, Res.string.admin_tab_activity_log)
+
+    // The 5 s selected-file poll is visibility-bound (the JellyPlayTranscodesScreen
+    // shape): it runs only between START and STOP, so a back-stacked Logs
+    // screen no longer polls. The user's pause toggle stays the VM-internal
+    // round gate.
+    LifecycleStartEffect(Unit) {
+        viewModel.startLogPolling()
+        onStopOrDispose { viewModel.stopLogPolling() }
+    }
 
     // TV focus-on-launch: focus the active tab's list once data arrives so D-pad input lands on
     // content, not the navigation drawer. Resets when the user switches tabs.
@@ -343,7 +353,7 @@ private fun LogFilesTab(
                         key = { line -> line.index },
                         contentType = { "logLine" },
                     ) { line ->
-                        val annotatedLine = remember(line.text) { parseLogLine(line.text) }
+                        val annotatedLine = remember(line.text) { annotatedLogLine(parseLogLineSpans(line.text)) }
                         
                         var isHighlighted by remember(line.index, line.addedTime) {
                             mutableStateOf(line.isNew)
@@ -642,25 +652,27 @@ private fun ActivityEntryItem(entry: ActivityLogEntry, isNew: Boolean = false) {
     }
 }
 
-private val LOG_LEVEL_REGEX = Regex("\\b(ERROR|FATAL|WARN|WARNING|INFO|DEBUG|TRACE)\\b", RegexOption.IGNORE_CASE)
-
-private fun parseLogLine(line: String): AnnotatedString = buildAnnotatedString {
-    val match = LOG_LEVEL_REGEX.find(line)
-    if (match != null) {
-        append(line.substring(0, match.range.first))
-        val level = match.value.uppercase()
-        val color = when (level) {
-            "ERROR", "FATAL" -> StatusColors.error
-            "WARN", "WARNING" -> StatusColors.warning
-            "INFO" -> StatusColors.info
-            "DEBUG", "TRACE" -> StatusColors.debug
-            else -> Color.Unspecified
+/**
+ * Draws a parsed log line: the severity decision (token find + span split)
+ * is [parseLogLineSpans]'s (JVM-tested); this map applies the role → tint
+ * ladder (the static [StatusColors] palette — no theme reads, so it stays a
+ * plain function and the caller's `remember(line.text)` memoization
+ * survives) and bolds the severity spans.
+ */
+private fun annotatedLogLine(spans: List<LogLineSpan>): AnnotatedString = buildAnnotatedString {
+    spans.forEach { span ->
+        if (span.role == null) {
+            append(span.text)
+        } else {
+            val color = when (span.role) {
+                LogLineRole.ERROR -> StatusColors.error
+                LogLineRole.WARNING -> StatusColors.warning
+                LogLineRole.INFO -> StatusColors.info
+                LogLineRole.DEBUG -> StatusColors.debug
+            }
+            withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) {
+                append(span.text)
+            }
         }
-        withStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold)) {
-            append(match.value)
-        }
-        append(line.substring(match.range.last + 1))
-    } else {
-        append(line)
     }
 }

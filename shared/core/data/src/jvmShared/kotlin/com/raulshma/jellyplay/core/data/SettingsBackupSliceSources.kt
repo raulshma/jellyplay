@@ -361,6 +361,7 @@ internal fun ItemPlaybackPreferenceEntity.toPayload(): ItemPlaybackPreferencePay
     subtitleDisabled = subtitleDisabled,
     subtitleForced = subtitleForced,
     subtitleHearingImpaired = subtitleHearingImpaired,
+    preferAudioDescription = preferAudioDescription,
     dialogueBoostStrength = dialogueBoostStrength,
     rememberedAudioLabel = rememberedAudioLabel,
     rememberedAudioLanguage = rememberedAudioLanguage,
@@ -389,6 +390,11 @@ internal fun entityFrom(payload: ItemPlaybackPreferencePayload, scope: String, k
         subtitleDisabled = payload.subtitleDisabled.takeIf { payload.subtitleLanguage == null },
         subtitleForced = payload.subtitleForced,
         subtitleHearingImpaired = payload.subtitleHearingImpaired,
+        // The audio-description pin is an independent three-state column with
+        // no invariant binding it to another field — unlike subtitleDisabled
+        // above, it rides the adopt verbatim (a local write could have set it
+        // to true, false, or null with anything else on the row).
+        preferAudioDescription = payload.preferAudioDescription,
         dialogueBoostStrength = payload.dialogueBoostStrength,
         rememberedAudioLabel = payload.rememberedAudioLabel,
         rememberedAudioLanguage = payload.rememberedAudioLanguage,

@@ -24,7 +24,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 
 /**
  * The [ProfileSyncAdapter] that backs the playlist DEFINITIONS up onto the
- * general settings-sync protocol (the settings-backup wave's `playlists`
+ * general settings-sync protocol (the settings-backup cluster's `playlists`
  * namespace): three key families over the Room playlist stores —
  * `smart/{id}` for smart-playlist definitions ([SmartPlaylistPayload]),
  * `mood/{id}` for mood-playlist definitions ([MoodPlaylistPayload]), and
@@ -64,15 +64,9 @@ class JellyPlayPlaylistsSyncAdapter(
     private val smartPlaylistDao: SmartPlaylistDao,
     private val moodPlaylistDao: MoodPlaylistDao,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    // encodeDefaults: the payload always carries every column, so a receiving
-    // device sees explicit values (not merely absent fields) — the codec
-    // stance lives in [SliceJson], shared with the backup slice source.
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore, tombstonesRoam = true) {
 
     // ------------------------------------------------------------------
     // key <-> id: `"{family}/{id}"` with family one of smart/ / mood/ /
@@ -82,6 +76,9 @@ class JellyPlayPlaylistsSyncAdapter(
     // shared with the backup slice source.
     // ------------------------------------------------------------------
 
+    // encodeDefaults: the payload always carries every column, so a receiving
+    // device sees explicit values (not merely absent fields) — the codec
+    // stance lives in [SliceJson], shared with the backup slice source.
     private fun SmartPlaylistEntity.valueOf(): JsonElement = SliceJson.encodeToJsonElement(toPayload())
 
     private fun MoodPlaylistEntity.valueOf(): JsonElement = SliceJson.encodeToJsonElement(toPayload())
@@ -94,17 +91,12 @@ class JellyPlayPlaylistsSyncAdapter(
         moodPlaylistDao.getAllPreferences().forEach { put("moodpref/${it.playlistId}", it.valueOf()) }
     }
 
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
-    override suspend fun deletedKeys(): Set<String> = mirror.deletedKeys(snapshot())
-
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         for ((key, value) in entries) {
             if (value is JsonNull) {
                 // Defensive: the engine routes tombstones through
                 // [deleteRemote]; a null here is treated identically.
-                parseSlashKey(key)?.let { (family, id) -> deleteLocal(family, id) }
+                parseSlashKey(key)?.let { deleteLocally(setOf(key)) }
                 continue
             }
             if (!adopt(key, value)) {
@@ -150,24 +142,25 @@ class JellyPlayPlaylistsSyncAdapter(
         return true
     }
 
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
+    override suspend fun deleteLocally(keys: Set<String>) {
+        // Grouped per family so each DAO's delete runs as one batched
+        // statement (the per-key loop was one statement each); rows are
+        // independent, so the grouped end-state is the loop's.
+        val smartIds = mutableListOf<String>()
+        val moodIds = mutableListOf<String>()
+        val moodprefIds = mutableListOf<String>()
         for (key in keys) {
-            parseSlashKey(key)?.let { (family, id) -> deleteLocal(family, id) }
+            parseSlashKey(key)?.let { (family, id) ->
+                when (family) {
+                    FAMILY_SMART -> smartIds += id
+                    FAMILY_MOOD -> moodIds += id
+                    FAMILY_MOODPREF -> moodprefIds += id
+                }
+            }
         }
-        // The mirror entries go REGARDLESS of key shape: an unparseable key
-        // must not wedge in the mirror forever re-reading as deleted.
-        mirror.clear(keys)
-    }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
-
-    private suspend fun deleteLocal(family: String, id: String) {
-        when (family) {
-            FAMILY_SMART -> smartPlaylistDao.deleteById(id)
-            FAMILY_MOOD -> moodPlaylistDao.deleteById(id)
-            FAMILY_MOODPREF -> moodPlaylistDao.deletePreferenceById(id)
-        }
+        if (smartIds.isNotEmpty()) smartPlaylistDao.deleteByIds(smartIds)
+        if (moodIds.isNotEmpty()) moodPlaylistDao.deleteByIds(moodIds)
+        if (moodprefIds.isNotEmpty()) moodPlaylistDao.deletePreferenceByIds(moodprefIds)
     }
 
     private companion object {

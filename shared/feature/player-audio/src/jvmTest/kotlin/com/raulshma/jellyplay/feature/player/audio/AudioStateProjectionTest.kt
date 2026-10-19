@@ -15,6 +15,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -24,6 +25,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Pins the ONE projection fold behind AudioPlayerUiState's flow-driven half
@@ -71,7 +73,6 @@ class AudioStateProjectionTest {
         every { engine.isLoadingItem } returns MutableStateFlow(false)
         every { engine.crossfadeDurationMs } returns MutableStateFlow(0L)
         every { engine.lyrics } returns MutableStateFlow(emptyList())
-        every { engine.currentLyricIndex } returns MutableStateFlow(-1)
         every { engine.lyricsSource } returns MutableStateFlow(LyricsSource.UNKNOWN)
         every { engine.isFetchingLyrics } returns MutableStateFlow(false)
         every { engine.lyricsOffsetMs } returns MutableStateFlow(200L)
@@ -123,7 +124,6 @@ class AudioStateProjectionTest {
         every { engine.isLoadingItem } returns MutableStateFlow(true)
         every { engine.crossfadeDurationMs } returns MutableStateFlow(4_000L)
         every { engine.lyrics } returns MutableStateFlow(listOf(LyricsLine(timeMs = 0L, text = "la")))
-        every { engine.currentLyricIndex } returns MutableStateFlow(2)
         every { engine.lyricsSource } returns MutableStateFlow(LyricsSource.LRCLIB)
         every { engine.isFetchingLyrics } returns MutableStateFlow(true)
         every { engine.lyricsOffsetMs } returns MutableStateFlow(-300L)
@@ -157,7 +157,6 @@ class AudioStateProjectionTest {
             p.queue,
         )
         assertEquals(listOf(LyricsLine(timeMs = 0L, text = "la")), p.lyrics.lyrics)
-        assertEquals(2, p.lyrics.currentLyricIndex)
         assertEquals(LyricsSource.LRCLIB, p.lyrics.lyricsSource)
         assertEquals(true, p.lyrics.isFetchingLyrics)
         assertEquals(-300L, p.lyrics.lyricsOffsetMs)
@@ -178,6 +177,32 @@ class AudioStateProjectionTest {
         assertEquals(900_000L, p.sleepTimerLastUsedDurationMs)
     }
 
+    /**
+     * The lyric index is position-derived and hot: the projection must not
+     * subscribe it (it rides the VM's dedicated `currentLyricIndex` flow into
+     * the artwork leaf). Pinned as an emit count — a flip on the engine flow
+     * must not re-run the combine tree.
+     */
+    @Test
+    fun `projection does not emit on a lyric-line flip`() = runTest(testDispatcher) {
+        val lyricIndex = MutableStateFlow(-1)
+        every { engine.currentLyricIndex } returns lyricIndex
+
+        val projection = newProjection()
+        advanceUntilIdle()
+        var emissions = 0
+        val collector = launch { projection.state.collect { emissions += 1 } }
+        advanceUntilIdle()
+        val baseline = emissions
+        assertTrue(baseline > 0, "the projection must have emitted before the flip")
+
+        lyricIndex.value = 3
+        advanceUntilIdle()
+
+        assertEquals(baseline, emissions, "a lyric-line flip must not re-run the combine tree")
+        collector.cancel()
+    }
+
     @Test
     fun `appliedTo writes exactly the projection fields and preserves imperative slices`() {
         val projection = AudioProjectionState(
@@ -193,7 +218,7 @@ class AudioStateProjectionTest {
             speed = 2.0f,
             crossfadeDurationMs = 7L,
             queue = QueueState(queue = emptyList(), currentIndex = 3, shuffleMode = true, repeatMode = 2),
-            lyrics = ProjectionLyrics(currentLyricIndex = 4, lyricsOffsetMs = -100L),
+            lyrics = ProjectionLyrics(lyricsOffsetMs = -100L),
             sleepTimerActive = true,
             sleepTimerEndOfEpisode = false,
             sleepTimerLastUsedDurationMs = 60_000L,
@@ -220,7 +245,6 @@ class AudioStateProjectionTest {
         assertEquals(2.0f, applied.speed)
         assertEquals(7L, applied.crossfadeDurationMs)
         assertEquals(QueueState(queue = emptyList(), currentIndex = 3, shuffleMode = true, repeatMode = 2), applied.queue)
-        assertEquals(4, applied.lyrics.currentLyricIndex)
         assertEquals(-100L, applied.lyrics.lyricsOffsetMs)
         assertEquals(true, applied.sleepTimer.active)
         assertEquals(false, applied.sleepTimer.endOfEpisode)

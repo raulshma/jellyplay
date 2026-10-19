@@ -243,7 +243,7 @@ private fun UserCard(
     }
 
     // ShapeCache tokens already flatten to sharp corners while the synthwave
-    // variant is active (SynthwaveDynamicShape), so only soothing's larger
+    // variant is active (the flag branch in ShapeCache), so only soothing's larger
     // radius needs a branch here.
     val shape = if (isSoothing) ShapeCache.smooth16 else ShapeCache.smooth12
     // Pick-account = discrete selection among peers — the tick, not the

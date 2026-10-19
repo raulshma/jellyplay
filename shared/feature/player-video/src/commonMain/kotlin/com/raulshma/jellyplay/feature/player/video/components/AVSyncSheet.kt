@@ -75,6 +75,15 @@ fun AVSyncSheet(
     onAudioDelayChange: (Long) -> Unit,
     onDismiss: () -> Unit,
     audioDelaySupported: Boolean = true,
+    /**
+     * The drag-settle leg (scrub-then-commit): [onAudioDelayChange]
+     * is the live leg (debounced engine sync, no disk write); this lands the
+     * final value — one immediate engine apply + the persist. Touch fires it
+     * on release; the D-pad slider path invokes it per step, and the ±
+     * steppers call it per click, so every non-drag input path commits
+     * exactly like the old per-change wiring.
+     */
+    onAudioDelayChangeFinished: (Long) -> Unit = onAudioDelayChange,
 ) {
     var audioDelayMs by remember { mutableLongStateOf(currentAudioDelayMs) }
     val isTv = LocalTvMode.current
@@ -110,6 +119,7 @@ fun AVSyncSheet(
                         isTv = isTv,
                         helperText = stringResource(Res.string.player_video_av_sync_audio_helper),
                         onValueChange = { audioDelayMs = it; onAudioDelayChange(it) },
+                        onValueChangeFinished = { onAudioDelayChangeFinished(it) },
                     )
                 }
 
@@ -132,6 +142,7 @@ fun AVSyncSheet(
                             .clickable(enabled = anyOffset) {
                                 audioDelayMs = 0L
                                 onAudioDelayChange(0L)
+                                onAudioDelayChangeFinished(0L)
                             }
                             .padding(horizontal = 18.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center,
@@ -189,6 +200,7 @@ private fun DelayRow(
     isTv: Boolean,
     helperText: String,
     onValueChange: (Long) -> Unit,
+    onValueChangeFinished: (Long) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -217,6 +229,10 @@ private fun DelayRow(
                 DelayStepper(icon = Tabler.Outline.Minus, description = stringResource(Res.string.player_video_av_sync_decrease, label)) {
                     val newDelay = (delayMs - DELAY_STEP_MS).coerceIn(MIN_DELAY_MS, MAX_DELAY_MS)
                     onValueChange(newDelay)
+                    // Steppers are click-driven — commit per click (the old
+                    // per-change wiring persisted here; the live/settle split
+                    // must not make nudges transient).
+                    onValueChangeFinished(newDelay)
                 }
             }
 
@@ -229,12 +245,14 @@ private fun DelayRow(
                 steps = 1199,
                 dpadStep = DELAY_STEP_MS.toFloat(),
                 focusRequester = focusRequester,
+                onValueChangeFinished = { onValueChangeFinished(delayMs) },
             )
 
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Plus, description = stringResource(Res.string.player_video_av_sync_increase, label)) {
                     val newDelay = (delayMs + DELAY_STEP_MS).coerceIn(MIN_DELAY_MS, MAX_DELAY_MS)
                     onValueChange(newDelay)
+                    onValueChangeFinished(newDelay)
                 }
             }
         }

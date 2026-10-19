@@ -5,12 +5,12 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Ratchet against the ViewModel regrowing into a god object (the reader
+ * Guards against the ViewModel regrowing into a god object (the reader
  * module's BookReaderViewModelOwnershipTest pattern): the count of
  * EditorViewModel's public + internal members (properties and functions,
  * primary-constructor parameters and private members excluded) must never
  * increase past the current ceiling. The VM is a flows + `onEvent` facade
- * (the HomeViewModel precedent): commands arrive as [EditorUiEvent]s through
+ * (the HomeViewModel pattern): commands arrive as [EditorUiEvent]s through
  * the single funnel, private handlers own the choreography, and the only
  * public members beyond the funnel are the two sync image-URL getters.
  * New behaviour belongs in an extracted
@@ -18,11 +18,9 @@ import kotlin.test.assertTrue
  * MetadataEditSession shape the editor already folds its ~30 metadata fields
  * through — with the VM left a thin caller that owns the uiState writes.
  *
- * Baseline: 5 members (16 before the ImagesTab/SubtitlesTab delegate
- * retirement: uiState, onEvent, the 11 kept tab delegates, the two sync
- * image-URL getters, and EditorUiState.isDirty, which shares the file).
- * Lower the ceiling when a slice moves out and deletes members; never raise
- * it to admit new ones.
+ * Ceiling: 5 members (uiState, onEvent, the two sync image-URL getters, and
+ * EditorUiState.isDirty, which shares the file). Lower the ceiling when
+ * members move out; never raise it to admit new ones.
  */
 class EditorViewModelOwnershipTest {
 
@@ -51,7 +49,7 @@ class EditorViewModelOwnershipTest {
     }
 
     /**
-     * Removes line and block comments so the ratchet checks *code*, not KDoc
+     * Removes line and block comments so the guard checks *code*, not KDoc
      * prose (the ViewModel legitimately mentions its members in
      * documentation), while leaving string literals intact.
      */

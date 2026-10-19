@@ -123,7 +123,7 @@ class PlayerInputPolicyTest {
         )
         assertFalse(PlayerInputPolicy.isActionEnabled(map, swipeLeft))
         assertFalse(PlayerInputPolicy.isActionEnabled(map, InputPattern.VerticalSwipe(SwipeSide.RIGHT)))
-        // Issue #171's exact scenario: brightness off, volume stays on when
+        // The exact scenario: brightness off, volume stays on when
         // only the brightness row is disabled.
         val issue171 = PlayerInputMap(
             bindings = listOf(

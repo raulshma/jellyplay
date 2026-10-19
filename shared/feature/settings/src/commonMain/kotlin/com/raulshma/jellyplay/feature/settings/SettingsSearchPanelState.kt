@@ -26,9 +26,9 @@ internal const val TV_HIGHLIGHT_REFOCUS_DELAY_MS = 1000L
  * like [com.raulshma.jellyplay.core.ui.reorder.ReorderState] (Compose snapshot state is fine on the JVM; the gesture and
  * focus wiring stay in the composable).
  *
- * Owns the five loose pieces of panel state the screen used to scatter across
- * `remember` vars — query, active flag, category filter, the filtered display
- * list and the recent-settings mirror — plus their interactions:
+ * Owns the five pieces of panel state — query, active flag, category filter,
+ * the filtered display list and the recent-settings mirror — plus their
+ * interactions:
  * open → type ([onQueryChange]) → filter ([selectCategory]) → tap-through
  * ([recordRecent] + [dismiss]) → back-key dismiss, and the recents
  * add/dedupe/clear commands.

@@ -81,19 +81,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
  *
  * The scaffold's SERVICE WIRING lives in [rememberDesktopShellServices] —
  * the remembered [DesktopShellServices] holder owning construction +
- * collection of the session controller (ADR 0001), the About update check
- * (ADR desktop-auto-update), the dead-end guarded navigator + section
- * registry, the user-message source list, the remote-nav collector and the
- * idle-ambient controller; this composable reads them through the holder's
- * properties and keeps only the chrome: rail, NavDisplay, snackbar surface,
- * key handling, the idle overlay's rendering. ALL of this composition's
+ * collection of the session controller (the shell-session pattern), the
+ * About update check, the dead-end guarded navigator + section registry, the
+ * user-message source list, the remote-nav collector and the idle-ambient
+ * controller; this composable reads them through the holder's properties and
+ * keeps only the chrome: rail, NavDisplay, snackbar surface, key handling,
+ * the idle overlay's rendering. ALL of this composition's
  * Koin reads ride the holder too — this composition carries no Koin read of
  * its own
  * (only DesktopAppRoot's pre-scaffold window does, per the
  * composition-order contract on [rememberDesktopShellServices]).
  *
- * The scaffold's DECISIONS live in extracted, test-pinned top-level
- * declarations (the DesktopUpdateCheckController idiom):
+ * The scaffold's DECISIONS live in test-pinned top-level declarations:
  *  - the dead-end guard adapter: [desktopGuardedNavigator] /
  *    [desktopDeadEndMessage] (constructed by [DesktopShellServices]);
  *  - the first-run onboarding gate's one-shot read:
@@ -177,7 +176,7 @@ internal fun DesktopNavScaffold(
 
     // ── the shell services (DesktopShellServices) ───────────────────
     // Everything between here and the graph build that constructs, collects
-    // or guards a shell SERVICE — the ADR 0001 session controller, the About
+    // or guards a shell SERVICE — the shell-session controller, the About
     // update check, the dead-end guarded navigator + its section registry,
     // the user-message source list (receiver DisplayMessages included), the
     // remote-nav collector and the idle-ambient controller — is owned by
@@ -194,7 +193,7 @@ internal fun DesktopNavScaffold(
     val guardedNavigator = services.guardedNavigator
     val idleAmbientController = services.idleAmbientController
     val homeMode by sessionController.homeMode.collectAsState()
-    // Bottom-nav customization (#152): the same NavigationStore the phone
+    // Bottom-nav customization: the same NavigationStore the phone
     // settings write through drives which items this rail shows and in what
     // order (see the rail composition below).
     val navigationStore = services.navigationStore
@@ -202,7 +201,7 @@ internal fun DesktopNavScaffold(
     // Network status is LIVE: the flow comes from :core:data's
     // DesktopNetworkMonitor (desktopDataModule single — NetworkInterface
     // probing with a 15 s re-probe and a synchronous construction-time seed),
-    // so offline banners now reflect real connectivity. Read through the
+    // so offline banners reflect real connectivity. Read through the
     // holder like every other Koin collaborator of this composition.
     val networkMonitor = services.networkMonitor
 
@@ -217,7 +216,7 @@ internal fun DesktopNavScaffold(
     // session entry — and a not-yet-onboarded session gets the shared wizard
     // pushed (the same Route.Onboarding the Shortcuts entry and the settings
     // "rerun setup" row open). The read + dispatch live in
-    // [runDesktopOnboardingGateOnce] (extracted; pinned by
+    // [runDesktopOnboardingGateOnce] (pinned by
     // DesktopOnboardingGateTest) — the one-shot isOnboardingCompleted() read
     // (not the eagerly-shared state flow, whose seed is all-defaults before
     // the prefs file lands) is what keeps an already-onboarded user from
@@ -264,11 +263,10 @@ internal fun DesktopNavScaffold(
     // source this shell shows — the shared [UserMessageBus] flow, the
     // DesktopMusicMessageBus relay AND the remote-control receiver's
     // server-pushed DisplayMessages, assembled in [desktopUserMessageSources]
-    // (extracted; pinned by DesktopUserMessagesTest; constructed by
+    // (pinned by DesktopUserMessagesTest; constructed by
     // [DesktopShellServices]). The present adapter — the snackbar below with
-    // withDismissAction, matching the Android collector this seam replaced —
-    // is this shell's share; the severity→duration policy stays in the shared
-    // module.
+    // withDismissAction, matching the Android collector — is this shell's
+    // share; the severity→duration policy stays in the shared module.
     val sharedUserMessageBus = services.sharedUserMessageBus
     rememberShellUserMessages(
         { text, duration ->
@@ -381,16 +379,16 @@ internal fun DesktopNavScaffold(
     // recomposition of this scaffold (same memoization the Android shell
     // applies). The graph — and with it the sectionRegistry the guard (in
     // [DesktopShellServices]) reads — is the shared appSections canonical
-    // order (nav3 resolves by key, so the former per-shell ordering was never
-    // routing behaviour) plus the one desktop-side registration below.
+    // order (nav3 resolves by key, so per-shell ordering carries no routing
+    // behaviour) plus the one desktop-side registration below.
     val shellSections = remember(guardedNavigator, shellHost) {
         shellEntryProvider(
             navigator = guardedNavigator,
             host = shellHost,
             registry = services.sectionRegistry,
         ) {
-            // …player-video, a conveyor — live where a surface story
-            // exists: the commonMain VideoPlayerScreen renders the
+            // …player-video — live where a surface story exists: the
+            // commonMain VideoPlayerScreen renders the
             // software-render pane wherever its probe smoke-passed (primary —
             // the video sits inside the compose tree, so controls and clicks
             // work), falling back to the SwingPanel/HWND mpv surface, and the
@@ -408,6 +406,7 @@ internal fun DesktopNavScaffold(
                         startPositionTicks = key.startPositionTicks,
                         subtitleStreamIndex = key.subtitleStreamIndex,
                         audioStreamIndex = key.audioStreamIndex,
+                        forceStream = key.forceStream,
                         onBack = { guardedNavigator.goBack() },
                     )
                 }
@@ -436,8 +435,8 @@ internal fun DesktopNavScaffold(
             //
             // Deterministic media-key delivery: this preview is the
             // TOPMOST key-input chain, so it receives EVERY key with or
-            // without any Compose focus owner (the null-focus fallback; ESC
-            // has worked here since then). When the video player route is
+            // without any Compose focus owner (the null-focus fallback;
+            // ESC arrives through it too). When the video player route is
             // current, every non-back key is offered to the player screen's
             // OWN handler through DesktopPlayerKeyBridge — the screen stays
             // the single interpreter of media-key semantics (this shell never
@@ -496,9 +495,9 @@ internal fun DesktopNavScaffold(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                // Breathing room now that the rail header is gone (the rail's
-                // own vertical padding is only 4dp) and under the last item
-                // when the list is scrolled to the bottom.
+                // Breathing room at the rail's top (its own vertical padding
+                // is only 4dp) and under the last item when the list is
+                // scrolled to the bottom.
                 Spacer(Modifier.height(12.dp))
                 // Rail items come from the shared composition policy (core/ui
                 // VisibleTopLevelRoutes — by construction the same rules the
@@ -538,13 +537,12 @@ internal fun DesktopNavScaffold(
             }
         }
 
-        // Adaptive shell wiring (issue #166): the shared screens previously
-        // rendered against LocalAdaptiveInfo's Compact DEFAULT because this
-        // scaffold never provided it — desktop was permanently phone-layout
-        // regardless of window size. Provide the live measurement (the Compose
-        // window frame) plus the stored layout override, and derive the same
-        // DeviceClass/InputMode tokens Android's shell does. isTv=false — the
-        // TV branch never runs on this shell.
+        // Adaptive shell wiring: the shared screens read the live measurement
+        // (the Compose window frame) plus the stored layout override, and the
+        // same DeviceClass/InputMode tokens Android's shell derives — without
+        // this provider they would fall back to LocalAdaptiveInfo's Compact
+        // default (permanent phone-layout regardless of window size).
+        // isTv=false — the TV branch never runs on this shell.
         val appearanceStore = services.appearanceStore
         val layoutMode by appearanceStore.layoutMode.collectAsState()
         val desktopAdaptiveInfo = layoutMode.applyOverride(rememberAdaptiveInfo())

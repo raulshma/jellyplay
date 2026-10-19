@@ -38,7 +38,7 @@ import kotlinx.coroutines.test.runTest
 /**
  * Pins the reader.js command scripts byte-for-byte: the appearance bundle's
  * JSON (and its escaping), the annotation list serialization, and the new
- * Wave 2 command signatures both platform hosts evaluate.
+ * command signatures both platform hosts evaluate.
  */
 class EpubReaderScriptTest {
 

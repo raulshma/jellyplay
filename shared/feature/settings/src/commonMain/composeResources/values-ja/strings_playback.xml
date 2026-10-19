@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d 自動スキップ、%2$d ボタン表示</string>
     <string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
     <string name="settings_skip_segments_on_seek_on">前方シークが自動スキップ対象に重なった場合にスキップします</string>
+    <string name="settings_segment_skip_delay">自動スキップの遅延</string>
+    <string name="settings_segment_skip_delay_off">オフ</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d 秒</string>
     <string name="settings_skip_segments_on_seek_off">オフ</string>
     <string name="settings_syncplay_join_summary">参加動作：%1$s</string>
     <string name="settings_join_behavior">参加動作</string>
@@ -245,6 +248,7 @@
     <string name="settings_player_engine_subtitle">メディア再生エンジンを選択</string>
     <string name="settings_shader_pack">シェーダーパック</string>
     <string name="settings_tone_mapping">トーンマッピング</string>
+    <string name="settings_exo_hdr_tone_mapping">HDRトーンマッピング</string>
     <string name="settings_render_quality">品質プロファイル</string>
     <string name="settings_interpolation_tscale">補間フィルター（tscale）</string>
     <string name="settings_power_user_mode">パワーユーザーモード</string>
@@ -265,6 +269,12 @@
     <string name="settings_passthrough_codec_off">ソフトウェアデコード</string>
     <string name="settings_max_audio_channels">最大オーディオチャンネル数</string>
     <string name="settings_downmix_boost">ステレオダウンミックスブースト</string>
+    <string name="settings_spatial_audio">スペーシャルオーディオ</string>
+    <string name="settings_spatial_audio_on">有効なとき、システムのスパイシャライザーがマルチチャンネル音声を立体再生します</string>
+    <string name="settings_spatial_audio_off">通常の音声処理</string>
+    <string name="settings_spatial_audio_only_headphones">ヘッドホンのみ</string>
+    <string name="settings_spatial_audio_only_headphones_on">ヘッドホン出力でのみダウンミックスを退けます</string>
+    <string name="settings_spatial_audio_only_headphones_off">すべての出力に適用</string>
     <string name="settings_offline_playback">オフライン再生</string>
     <string name="settings_offline_playback_prefer_downloaded">ダウンロードを優先</string>
     <string name="settings_offline_playback_prefer_streaming">ストリーミングを優先</string>

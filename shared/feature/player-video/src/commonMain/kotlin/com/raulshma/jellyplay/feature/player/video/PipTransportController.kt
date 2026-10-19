@@ -25,8 +25,8 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
  *
  * The dispatch targets arrive as constructor lambdas so the routing stays
  * exactly where it lives on the VM: PLAY/PAUSE through the shared
- * `routedPlay` funnel (SyncPlay → cast → local, A1), the skip steps through
- * `seekByStep` (the clamped step funnel, C3), NEXT through the
+ * `routedPlay` funnel (SyncPlay → cast → local), the skip steps through
+ * `seekByStep` (the clamped step funnel), NEXT through the
  * episode-continuation controller. This class never references the ui state
  * bag — like every migrated controller, its interface is commands plus these
  * narrow seams.
@@ -40,9 +40,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 internal class PipTransportController(
     private val pipController: PipController,
     private val getEngine: () -> MediaEngine?,
-    /** The shared transport routing funnel (A1): SyncPlay → cast → local. */
+    /** The shared transport routing funnel: SyncPlay → cast → local. */
     private val routedPlay: (play: Boolean) -> Unit,
-    /** The shared clamped skip-step funnel (C3). */
+    /** The shared clamped skip-step funnel. */
     private val seekByStep: (direction: Int) -> Unit,
     /** The episode-continuation controller's next-episode choreography. */
     private val playNextEpisode: () -> Unit,
@@ -67,13 +67,13 @@ internal class PipTransportController(
             }
             Log.d(TAG, "PiP action $action -> engine")
             when (action) {
-                // PLAY/PAUSE route through the shared funnel (A1): same
+                // PLAY/PAUSE route through the shared funnel: same
                 // SyncPlay -> cast -> local order as the screen's transport,
                 // previously raw engine.play()/pause() that bypassed routing
                 // while in a SyncPlay group or casting.
                 PipAction.PLAY -> routedPlay(true)
                 PipAction.PAUSE -> routedPlay(false)
-                // Skip steps route through the shared funnel (C3): same clamp
+                // Skip steps route through the shared funnel: same clamp
                 // math and same SyncPlay/cast/local routing as the screen's
                 // skip buttons, previously computed inline with only a 0-floor.
                 PipAction.SKIP_FORWARD -> seekByStep(+1)

@@ -7,12 +7,12 @@ import androidx.room3.PrimaryKey
 /**
  * A text-anchored reader annotation (highlight / underline, with an optional
  * attached note) for one library item
- * (docs/adr/0003-local-first-reader-marks.md: local-first marks; Jellyfin has
+ * (local-first marks; Jellyfin has
  * no annotation field, so export is the portability contract).
  *
  * [cfi] is the exact `epubcfi(...)` range anchor produced by the reader
  * engine — stored opaque, never parsed natively beyond equality (a CFI that
- * no longer displays after a book replacement degrades to the chapter label).
+ * stops displaying after a book replacement degrades to the chapter label).
  * [anchorText] is the excerpt captured at creation time, so the export and
  * the annotation sheet stay readable even when the anchor goes stale.
  *

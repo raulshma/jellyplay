@@ -10,11 +10,11 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the search screen's pure result-presentation folds — the did-you-mean
- * typo heuristic ([didYouMeanSuggestions], extracted verbatim from the
- * NoResults branch) and the on-device section's offline-vs-online dedup
+ * typo heuristic ([didYouMeanSuggestions], behind the NoResults branch) and
+ * the on-device section's offline-vs-online dedup
  * ([dedupeOfflineAgainstLibrary]). Pure JVM over the folds' inputs, the
- * [SearchSurfaceTest] pattern: every rule the screen used to decide inline
- * is asserted here.
+ * [SearchSurfaceTest] pattern: every rule the screen decides inline is
+ * asserted here.
  */
 class SearchResultFoldsTest {
 

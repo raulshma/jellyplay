@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">强制</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">默认</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">获取</string>
     <string name="player_video_subtitle_hub_section_delay">延迟</string>
     <string name="player_video_subtitle_downloaded_device_only">仅保存到设备（离线）</string>
+    <string name="player_video_subtitle_save_to_server">保存到服务器</string>
     <string name="player_video_chapters">章节</string>
+    <string name="player_video_scrub_slow">慢速</string>
+    <string name="player_video_queue_title">播放队列</string>
+    <string name="player_video_queue_subtitle">队列中 %1$d 个</string>
+    <string name="player_video_queue_clear">清空队列</string>
+    <string name="player_video_queue_up_next">接下来播放</string>
+    <string name="player_video_queue_move_up">上移</string>
+    <string name="player_video_queue_move_down">下移</string>
+    <string name="player_video_queue_remove">从队列中移除</string>
+    <string name="player_video_queue_open">播放队列 (%1$d)</string>
     <string name="player_video_episodes">剧集</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">宽高比</string>
@@ -163,6 +174,11 @@
     <string name="player_video_dialogue_boost">对白增强</string>
     <string name="player_video_dialogue_boost_on">对白增强 \u00B7 %1$s</string>
     <string name="player_video_night_mode">夜间模式</string>
+    <string name="player_video_spatial_audio">空间音频</string>
+    <string name="player_video_spatial_audio_on">空间音频已开启 — 系统空间音频渲染中</string>
+    <string name="player_video_spatial_audio_unavailable">当前输出不支持空间化</string>
+    <string name="player_video_stats_spatial">空间音频状态</string>
+    <string name="player_video_stats_spatial_superseded">(虚拟器已被取代)</string>
     <string name="player_video_night_mode_on">夜间模式 \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">音频标准化</string>
     <string name="player_video_normalization_on">标准化 \u00B7 %1$s</string>
@@ -261,10 +277,9 @@
     <string name="player_video_no_episodes_found">未找到此季的剧集</string>
     <string name="player_video_poster">海报</string>
     <string name="player_video_selected">已选中</string>
-    <string name="player_video_volume">音量</string>
-    <string name="player_video_hdr_label">HDR：%1$s</string>
-    <string name="player_video_duration">时长</string>
+    <string name="player_video_volume">音量</string>    <string name="player_video_duration">时长</string>
     <string name="player_video_remember_audio_language">为此剧集记住音频语言</string>
+    <string name="player_video_remember_audio_description">此系列优先使用音频描述</string>
     <string name="player_video_remember_subtitle_language">为此剧集记住字幕语言</string>
     <string name="player_video_remember_subtitles_off">为此剧集保持字幕关闭</string>
     <string name="player_video_error_offline_file_missing">错误：离线文件缺失</string>
@@ -292,6 +307,7 @@
     <string name="player_video_stats_clock">时钟</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR 输出已激活</string>
+    <string name="player_video_stats_display_hdr">显示器HDR</string>
     <string name="player_video_stats_color_range">色彩范围</string>
     <string name="player_video_stats_color_depth">色彩深度</string>
     <string name="player_video_stats_sample_rate">采样率</string>

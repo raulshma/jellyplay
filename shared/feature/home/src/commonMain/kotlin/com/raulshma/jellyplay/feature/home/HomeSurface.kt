@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.HomeMode
 
 /**
  * WHICH surface the home renders, folded ONCE from [HomeUiState] + the
- * [OfflineHomeContent] aggregate by [homeSurface] — the pure successor of the
- * three differently-derived branch conditions that used to open
+ * [OfflineHomeContent] aggregate by [homeSurface] — the single fold behind
  * `MainHomeContent`'s render `when` (error+sections+renderSource vs
  * offlineMode+offlineSections vs homeMode+offlineMode).
  *
@@ -57,8 +57,9 @@ internal sealed interface HomeSurface {
      * gate's offline decodes for an offline one — FallbackPending included,
      * its feed is offline), so no render site re-derives the pick.
      */
+    @Immutable
     data class Content(
-        val feed: HomeFeed,
+        val feed: HomeRenderFeed,
         val renderSource: HomeRenderSource,
         val bookProgressFractions: Map<String, Float>,
     ) : HomeSurface
@@ -74,8 +75,9 @@ internal fun homeSurface(
     state: HomeUiState,
     offlineContent: OfflineHomeContent,
 ): HomeSurface = when {
-    state.error != null && state.sections.isEmpty() &&
-        state.renderSource == HomeRenderSource.Online -> HomeSurface.HardError
+    // The hard-error verdict, folded once on [HomeUiState.isHardError] — the
+    // same three terms this arm renders on.
+    state.isHardError -> HomeSurface.HardError
 
     state.renderSource == HomeRenderSource.Offline.Explicit &&
         offlineContent.sections.isEmpty() -> HomeSurface.NoDownloads(state.isGoingOnline)
@@ -85,14 +87,14 @@ internal fun homeSurface(
 
     else -> {
         val feed = when (state.renderSource) {
-            HomeRenderSource.Online -> HomeFeed.Online(
+            HomeRenderSource.Online -> HomeRenderFeed.Online(
                 sections = state.sections,
                 isLoading = state.isLoading,
                 partialLoadError = state.partialLoadError,
                 newsletterBannerVisible = state.newsletterBannerVisible,
             )
-            HomeRenderSource.FallbackPending -> HomeFeed.Offline(offlineContent, isLoading = true)
-            is HomeRenderSource.Offline -> HomeFeed.Offline(offlineContent)
+            HomeRenderSource.FallbackPending -> HomeRenderFeed.Offline(offlineContent, isLoading = true)
+            is HomeRenderSource.Offline -> HomeRenderFeed.Offline(offlineContent)
         }
         HomeSurface.Content(
             feed = feed,
@@ -101,7 +103,7 @@ internal fun homeSurface(
             // FallbackPending window renders the offline feed, so it reads
             // the gate's decodes even while the offline-mode mirror still
             // says ONLINE.
-            bookProgressFractions = if (feed is HomeFeed.Offline) {
+            bookProgressFractions = if (feed is HomeRenderFeed.Offline) {
                 state.offlineBookProgressFractions
             } else {
                 state.bookProgressFractions

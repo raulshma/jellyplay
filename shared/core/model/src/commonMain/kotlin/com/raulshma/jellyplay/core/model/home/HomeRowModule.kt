@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.descriptor
 
 /**
  * Everything one [HomeSectionType] knows about itself — the "home row module"
- * deep module (ADR-0009 discipline): a row's identity, its per-type data
+ * deep module: a row's identity, its per-type data
  * gates and its offline projection live in ONE registration instead of being
  * smeared across the pipeline's per-type `when` dispatches. Adding a row type
  * becomes one module object + one registration line (plus the enum constant),
@@ -20,12 +20,14 @@ import com.raulshma.jellyplay.core.model.descriptor
  *    the offline projection (see [HomeRowOfflineProjection]).
  *  - The transport arms (which port call produces the row, how a single row
  *    refetches) reference network types (`HomeSectionSources`, the fetcher's
- *    TTL caches) and therefore live in a sibling arm registry keyed by the
- *    same enum — core/network's `HomeRowFetchArms`/`HomeRowRefreshArms`.
- *    The model layer must not know the transport, so the module cannot hold
- *    those members; the split is deliberate, not a missing merge.
+ *    TTL caches) and therefore live in a sibling transport registration keyed
+ *    by the same enum — core/network's `HomeRowFetchArms.kt`
+ *    (`HomeRowTransports`, one registration per type carrying both the batch
+ *    sub-call and the refresh arm). The model layer must not know the
+ *    transport, so the module cannot hold those members; the split is
+ *    deliberate, not a missing merge.
  *
- * NOT covered, on purpose (ADR-0009 protects hand-written emission): the
+ * NOT covered, on purpose: the
  * Compose rendering bodies, the localized row titles, the section
  * construction at the render sites, and the icon mapping (a UI-resource
  * concern in core/ui). The row module exposes the typed data those
@@ -64,11 +66,21 @@ public interface HomeRowModule {
     public val resumeLike: Boolean get() = false
 
     /**
+     * The row's title is rendered from its SEED item ("Because You Watched
+     * …") rather than the section's own display string: Recommendations, the
+     * only seed-chain row. The render site still needs the seed itself (a
+     * null seed falls back to the plain title) — this fact only says the
+     * title FORM carries it.
+     */
+    public val titleCarriesSeed: Boolean get() = false
+
+    /**
      * The row can be refetched on its own (the home screen's edge-pull
      * refresh): the type half of the gesture gate — a registered single-row
-     * fetch arm exists for it in core/network's `HomeRowRefreshArms`. The
-     * per-INSTANCE half (Seerr-sourced discover rows ride the batch group
-     * gate) stays with the section at the call site.
+     * refresh arm exists for it in core/network's transport registration
+     * (`HomeRowTransports`). The per-INSTANCE half (Seerr-sourced discover
+     * rows ride the batch group gate) stays with the section at the call
+     * site.
      */
     public val edgeRefreshable: Boolean get() = false
 
@@ -104,6 +116,8 @@ public object HomeRowModules {
         ContinueWatching,
         ContinueReading,
         NextUp,
+        Upcoming,
+        MyMedia,
         LatestMedia,
         RecentlyAdded,
         Recommendations,
@@ -133,7 +147,7 @@ public object HomeRowModules {
         registry.values.filter { it.descriptor.isConfigurable }.map { it.type }
 }
 
-// ── The 12 registrations ────────────────────────────────────────────────────
+// ── The 14 registrations ────────────────────────────────────────────────────
 // One object per row type; identity delegates to the descriptor, and each
 // registration overrides exactly the facts its row carries (everything else
 // keeps the interface's inert default).
@@ -167,6 +181,33 @@ public object NextUp : HomeRowModule {
     override val offline = NextUpOfflineProjection
 }
 
+/**
+ * Upcoming - unaired episodes across the followed series, Next Up's
+ * watch-state-independent complement. Poster chassis (not wide), See All (the
+ * full airing schedule lives behind a library browse) and edge refresh via the
+ * batch sub-call's single-row twin. Inert offline: unaired air-times are a
+ * live server fact.
+ */
+public object Upcoming : HomeRowModule {
+    override val type = HomeSectionType.UPCOMING
+    override val descriptor = type.descriptor
+    override val hasSeeAll = true
+    override val edgeRefreshable = true
+}
+
+/**
+ * My Media - the library-tiles row (jellyfin-web's SmallLibraryTiles);
+ * home's only non-poster shape (the chassis's OnlineTiles arm renders it).
+ * Assembles the library folders the batch already fetched for the Latest
+ * fan-out — no port call of its own — so edge refresh buys nothing (the row
+ * is exactly as fresh as the batch that fetched it). Inert offline: the
+ * offline mirror drops the tiles (library art is a server artifact).
+ */
+public object MyMedia : HomeRowModule {
+    override val type = HomeSectionType.MY_MEDIA
+    override val descriptor = type.descriptor
+}
+
 /** Latest Media — one row per library; per-library overrides gate it. */
 public object LatestMedia : HomeRowModule {
     override val type = HomeSectionType.LATEST_MEDIA
@@ -187,6 +228,7 @@ public object RecentlyAdded : HomeRowModule {
 public object Recommendations : HomeRowModule {
     override val type = HomeSectionType.RECOMMENDATIONS
     override val descriptor = type.descriptor
+    override val titleCarriesSeed = true
     override val offline = RecommendationsOfflineProjection
 }
 
@@ -224,7 +266,7 @@ public object Pinned : HomeRowModule {
     override val edgeRefreshable = true
 }
 
-/** Plugin Rows — the companion server plugin's capability-gated rows (ADR 0010); refreshable per row. */
+/** Plugin Rows — the companion server plugin's capability-gated rows; refreshable per row. */
 public object PluginRows : HomeRowModule {
     override val type = HomeSectionType.PLUGIN_ROW
     override val descriptor = type.descriptor

@@ -1,9 +1,16 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.focus.FocusRequester
 import com.raulshma.jellyplay.core.model.RefreshRateMode
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyHandlerScope
+import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandlerHandle
+import com.raulshma.jellyplay.core.ui.tv.input.toDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 
 /**
@@ -228,12 +235,129 @@ internal fun PlayerKeyboardFocusGrabEffect(
     targetHoldsFocus: Boolean,
 ) {
     if (!grabsKeyboardFocusWithControlsVisible()) return
+    PlayerFocusGrabEffect(focusRequester, layerComposed, targetHoldsFocus, tag = "keyboard_player")
+}
+
+/**
+ * The TV twin of [PlayerKeyboardFocusGrabEffect]: the surface Box's D-pad
+ * layer (`playerBoxKeyInputModifier`'s TV branch — `.focusable()` +
+ * `onDpadKeyEvent`) only receives keys while the Box subtree holds Compose
+ * focus, and the historical single fire-and-forget re-grab on the
+ * controls-hidden edge loses races (the controls' `AnimatedVisibility` exits
+ * dispose the previously focused play button; an overlay unmount later
+ * orphans focus again). When the Box ends up with no focus target at all,
+ * Compose's null-focus fallback dispatch stops at the topmost key-input node —
+ * on Android there is none above the player, so EVERY D-pad key died (issue
+ * #174: controls auto-hide, then no remote key brings them back; Back survives
+ * only because `OnBackPressedDispatcher` needs no focus).
+ *
+ * Same mechanics as the keyboard grab (see its KDoc for the live-pass
+ * rationale): grabs on every [layerComposed] true edge and re-asserts whenever
+ * [targetHoldsFocus] flips false while composed, both with the 3-frame retry.
+ * The screen computes [layerComposed] so the grab runs ONLY when the layer
+ * should own focus — controls hidden, sheet closed, no overlay claiming focus
+ * (the cinema-intro / next-episode / skip-segment overlays own focus when
+ * visible; when one unmounts, the layerComposed edge re-arms here). While the
+ * controls are visible the TV layer composes nothing: the play button's own
+ * grab ([PlayerControls]' TV focus grab) owns focus, exactly as before.
+ *
+ * Public because the LIVE player's screen composes it too (same D-pad shape,
+ * worse gap — it had no hide-edge re-grab at all); mirrors the
+ * [PlayerWindowOps] public-for-live precedent.
+ */
+@Composable
+public fun PlayerTvFocusGrabEffect(
+    focusRequester: FocusRequester,
+    layerComposed: Boolean,
+    targetHoldsFocus: Boolean,
+) {
+    PlayerFocusGrabEffect(focusRequester, layerComposed, targetHoldsFocus, tag = "tv_player")
+}
+
+/**
+ * The TV key-sink seam: while a player screen's TV D-pad layer
+ * is up, publishes that screen's EXACT arm set ([config]) to the platform
+ * key bridge ([installPlayerKeySink] → AndroidPlayerKeyBridge), so keys that
+ * reach nothing — no Compose focus target left, PlayerActivity's
+ * dispatchKeyEvent finding nothing consumed — are still interpreted by the
+ * screen's own arms. PlayerActivity forwards post-dispatch-unconsumed keys
+ * into the bridge, so a key the focused chain consumed never reaches the
+ * sink (no double handling); the declines keep the desktop sink's
+ * single-interpretation guard for the fall-through cases:
+ *
+ *  - [isSheetOpen] — the sheet owns its own key handling; the arms disarm
+ *    together with the focused-dispatch modifier branch.
+ *  - [isOverlayScreenActive] — a host-composed overlay screen ABOVE this
+ *    screen (PlayerActivity's subtitle tester) owns the keys: the sink must
+ *    not act on keys the overlay declined, and must not act on the player
+ *    hiding underneath it.
+ *  - [layerHoldsFocus] — the focused dispatch chain owns the key (an arm
+ *    declined it there); re-running it here would double-handle.
+ *
+ * The [config] block is compiled into a [dpadKeyHandlerHandle] ONCE per
+ * config instance ([remember] keyed on it — the screens hand in the same
+ * remembered instance the focused-dispatch modifier runs, so a root
+ * recomposition no longer pays the scope construction), and delivered
+ * through a live-read delegate. Composes nothing off-TV ([LocalTvMode]).
+ *
+ * Public because the LIVE player's screen composes it too (same D-pad shape;
+ * it previously installed its arm set on the bridge directly, which is why
+ * [installPlayerKeySink]/[uninstallPlayerKeySink] stayed module-private);
+ * mirrors the [PlayerTvFocusGrabEffect] public-for-live precedent.
+ */
+@Composable
+public fun PlayerTvKeySinkEffect(
+    isSheetOpen: Boolean,
+    isOverlayScreenActive: Boolean,
+    layerHoldsFocus: Boolean,
+    onResetLayerFocus: () -> Unit,
+    config: DpadKeyHandlerScope.() -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    if (!isTv) return
+    val handle = remember(config) { dpadKeyHandlerHandle(config) }
+    val latestHandle = rememberUpdatedState(handle)
+    val latestSheetOpen = rememberUpdatedState(isSheetOpen)
+    val latestOverlayActive = rememberUpdatedState(isOverlayScreenActive)
+    val latestLayerHoldsFocus = rememberUpdatedState(layerHoldsFocus)
+    val latestResetLayerFocus = rememberUpdatedState(onResetLayerFocus)
+    DisposableEffect(isTv) {
+        val sink: (androidx.compose.ui.input.key.KeyEvent) -> Boolean = { keyEvent ->
+            when {
+                latestSheetOpen.value -> false
+                latestOverlayActive.value -> false
+                latestLayerHoldsFocus.value -> false
+                else -> keyEvent.toDpadKeyEvent()?.let(latestHandle.value) ?: false
+            }
+        }
+        installPlayerKeySink(sink)
+        onDispose {
+            uninstallPlayerKeySink(sink)
+            // onFocusChanged never fires for a composition that simply left;
+            // the screen resets its flag so a stale true can't decline a
+            // future sink.
+            latestResetLayerFocus.value()
+        }
+    }
+}
+
+/**
+ * The shared grab/re-assert body behind [PlayerKeyboardFocusGrabEffect] and
+ * [PlayerTvFocusGrabEffect] ([tag] only disambiguates the diagnostics lines).
+ */
+@Composable
+private fun PlayerFocusGrabEffect(
+    focusRequester: FocusRequester,
+    layerComposed: Boolean,
+    targetHoldsFocus: Boolean,
+    tag: String,
+) {
     LaunchedEffect(layerComposed) {
         if (layerComposed) {
             val startMs = System.currentTimeMillis()
             for (attempt in 1..3) {
                 androidx.compose.runtime.withFrameNanos { }
-                val ok = focusRequester.tryRequestFocus("keyboard_player")
+                val ok = focusRequester.tryRequestFocus(tag)
                 harnessFocusDiag(
                     "grab effect: attempt=$attempt ok=$ok t=+" +
                         (System.currentTimeMillis() - startMs) + "ms layerComposed=true",
@@ -250,7 +374,7 @@ internal fun PlayerKeyboardFocusGrabEffect(
             val startMs = System.currentTimeMillis()
             for (attempt in 1..3) {
                 androidx.compose.runtime.withFrameNanos { }
-                val ok = focusRequester.tryRequestFocus("keyboard_player_regrab")
+                val ok = focusRequester.tryRequestFocus("${tag}_regrab")
                 harnessFocusDiag(
                     "re-assert: attempt=$attempt ok=$ok t=+" +
                         (System.currentTimeMillis() - startMs) + "ms targetHoldsFocus=false",

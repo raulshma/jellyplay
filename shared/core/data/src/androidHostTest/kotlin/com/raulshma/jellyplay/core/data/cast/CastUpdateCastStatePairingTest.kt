@@ -12,6 +12,9 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.coVerify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -95,6 +98,7 @@ class CastUpdateCastStatePairingTest {
         dlnaCastStrategy = dlnaCastStrategy,
         jellyfinRemotePlayCastStrategy = jellyfinCastStrategy,
         syncPlayCastStore = syncPlayCastStore,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
 
     private fun idleMain() = shadowOf(Looper.getMainLooper()).idle()

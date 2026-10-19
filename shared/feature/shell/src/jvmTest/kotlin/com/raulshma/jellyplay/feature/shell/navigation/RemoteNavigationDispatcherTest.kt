@@ -77,7 +77,7 @@ class RemoteNavigationDispatcherTest {
 
         assertEquals(
             listOf(
-                "navigate:VideoPlayer(itemId=item-1, mediaSourceId=null, startPositionTicks=10000, subtitleStreamIndex=null, audioStreamIndex=null)",
+                "navigate:VideoPlayer(itemId=item-1, mediaSourceId=null, startPositionTicks=10000, subtitleStreamIndex=null, audioStreamIndex=null, forceStream=false)",
                 "navigate:AudioPlayer(itemId=track-1)",
                 "navigate:MediaDetail(itemId=item-2, openDownloadSheet=false)",
             ),

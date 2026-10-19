@@ -67,12 +67,12 @@ private const val CONTINUE_READING_LIMIT = 20
 
 /**
  * The shared resume-row shape of the offline Continue Watching / Continue
- * Reading rows: position > 0, not played (the #157 rule — the server never
+ * Reading rows: position > 0, not played (the played-row rule — the server never
  * resets a finished item's lingering position), not finished by the local
  * watched threshold, not user-hidden, most recently played first, capped.
  *
  * [floor] selects the row's minimum-progress rule — see [ResumeRowFloor] —
- * and with it the #157 rule's half: the video row runs
+ * and with it the played-row rule's half: the video row runs
  * [ContinueWatchingRowRule.filterResumable] (books excluded outright — the
  * candidates above already dropped them), the book row
  * [ContinueWatchingRowRule.filterReadingResumable]. The offline "played"

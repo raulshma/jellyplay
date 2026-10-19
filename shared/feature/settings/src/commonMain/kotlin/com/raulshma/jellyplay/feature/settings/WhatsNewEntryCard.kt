@@ -49,7 +49,7 @@ import org.jetbrains.compose.resources.stringResource
  * provided (the entry's `target` resolved against the compiled-in route map
  * by the caller) — a "Take me there" button.
  *
- * Shared verbatim by the post-update sheet (app shell) and the Settings
+ * Shared by the post-update sheet (app shell) and the Settings
  * archive screen, so a release reads identically in both places.
  */
 @Composable

@@ -78,7 +78,7 @@ class AudioQueuePolicyTest {
     @Test
     fun `nextIndex coerces nothing but is total for stray indices`() {
         // An unset cursor (-1) on a live queue behaves like "before the
-        // head": step to 0 — identical to the pre-extraction inline rule.
+        // head": step to 0.
         assertEquals(0, AudioQueuePolicy.nextIndex(-1, 3, AudioQueuePolicy.REPEAT_NONE))
         assertEquals(0, AudioQueuePolicy.nextIndex(-1, 3, AudioQueuePolicy.REPEAT_ALL))
     }
@@ -180,8 +180,8 @@ class AudioQueuePolicyTest {
 
     @Test
     fun `planMove keeps an unset cursor at -1`() {
-        // Nothing playing: a -1 cursor never remaps (the pre-extraction
-        // else-arm — every from > -1 with to >= 0 falls through to it).
+        // Nothing playing: a -1 cursor never remaps (every
+        // from > -1 with to >= 0 falls through to the else-arm).
         val q = queue("a", "b", "c")
         assertEquals(-1, AudioQueuePolicy.planMove(q, -1, 0, 2)!!.currentIndex)
         assertEquals(-1, AudioQueuePolicy.planMove(q, -1, 2, 0)!!.currentIndex)
@@ -294,7 +294,7 @@ class AudioQueuePolicyTest {
         }
 
         // Engine "unknown duration" sentinels coerce to 0 (both adapters
-        // coerced identically pre-extraction). The dedup compares the
+        // coerce identically). The dedup compares the
         // COERCED value (the adapters' original order), so a stale nonzero
         // last-published duration still publishes the coerced 0 — while a
         // sentinel over an already-0 duration publishes nothing.

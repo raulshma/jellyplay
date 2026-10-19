@@ -6,20 +6,15 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the Newsletter feature (docs/kmp-migration-plan.md
- *  conveyor item after search, library, music, livetv, downloads,
- * syncplay, settings, admin, editor, requests and calendar). The
- * HiltViewModel/@Inject annotations were stripped at the move — Koin is the
- * single constructor owner (one framework per type). Dep posture:
- *  - imageUrlProvider, notificationStore and authRepository were already
- *    Koin-native before this feature moved (AndroidDataModule +
- *    desktopDataModule / datastoreCommonModule / DataKoinModule), resolving
- *    on BOTH platforms;
- *  - newsletterApiClient was the last Hilt-interop dep historically; since the
- *     Hilt extinction Koin owns MediaRepositoryImpl natively
- *    (dataJvmModule, which binds the NewsletterApiClient view of that same
- *    single), so this VM is fully live-resolvable on desktop too
- *    (the shell nav entry remains the only gate).
+ * Koin construction owner for the Newsletter feature. Koin is the single
+ * constructor owner (one framework per type). Dep posture:
+ *  - imageUrlProvider, notificationStore and authRepository resolve from the
+ *    shared Koin graph (AndroidDataModule + desktopDataModule /
+ *    datastoreCommonModule / DataKoinModule) on BOTH platforms;
+ *  - newsletterApiClient resolves through dataJvmModule, which binds the
+ *    NewsletterApiClient view of MediaRepositoryImpl, so this VM is fully
+ *    live-resolvable on desktop too (the shell nav entry remains the only
+ *    gate).
  */
 val newsletterModule: Module = module {
     viewModel {

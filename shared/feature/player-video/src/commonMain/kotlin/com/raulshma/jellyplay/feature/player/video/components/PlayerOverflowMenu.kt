@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,8 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.SpatialAudioState
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio_only
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio_only_on
@@ -47,6 +50,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_channel_mixing
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_gestures
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_gestures_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_queue_open
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_clear_ab_repeat
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deinterlace
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder
@@ -69,6 +73,9 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_set_b_point_at
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_spatial_audio
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_spatial_audio_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_spatial_audio_unavailable
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitles
@@ -90,7 +97,7 @@ private val NoSleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L)
 
 /**
  * One tap-to-flip row of the overflow menu's input-binding quick toggles
- * (issue #171's mid-playback use case: kill the brightness swipe without
+ * (mid-playback use case: kill the brightness swipe without
  * leaving the player). [bindingId] is the stable row id from the persisted
  * [com.raulshma.jellyplay.core.model.PlayerInputMap].
  */
@@ -99,6 +106,50 @@ internal data class PlayerOverflowMenuInputToggle(
     /** Pre-resolved label (core:ui's input-label seam resolves the resource). */
     val labelText: String,
     val enabled: Boolean,
+)
+
+/**
+ * The overflow menu's action bundle (the [PlayerEffectsControls] idiom): every
+ * `onClick`/`onChange` lambda the menu's rows dispatch rides one `@Immutable`
+ * carrier, so the composable's parameter wall is capabilities + values + this
+ * one bundle instead of thirty-one loose lambdas interleaved with them. The
+ * per-row gating decisions (which capability hides which row, when a click
+ * also dismisses the panel) stay code inside the menu — the bundle is the
+ * verbs only.
+ */
+@Immutable
+internal data class PlayerOverflowMenuActions(
+    val onSubtitleHubClick: () -> Unit = {},
+    val onDialogueBoostClick: () -> Unit = {},
+    val onDialogueBoostStrengthChange: (EffectStrength) -> Unit = {},
+    val onNightModeClick: () -> Unit = {},
+    val onNightModeStrengthChange: (EffectStrength) -> Unit = {},
+    val onAVSyncClick: () -> Unit = {},
+    val onPlaybackModeClick: () -> Unit = {},
+    val onVersionClick: () -> Unit = {},
+    val onDecoderClick: () -> Unit = {},
+    val onPassthroughClick: () -> Unit = {},
+    val onSpatialAudioClick: () -> Unit = {},
+    val onVideoStatsClick: () -> Unit = {},
+    val onAudioNormalizationClick: () -> Unit = {},
+    val onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
+    val onChannelMixClick: () -> Unit = {},
+    val onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
+    val onSleepTimerClick: () -> Unit = {},
+    val onVideoFilterClick: () -> Unit = {},
+    val onScreenshotClick: () -> Unit = {},
+    val onAbRepeatToggle: () -> Unit = {},
+    val onAbRepeatSetA: () -> Unit = {},
+    val onAbRepeatSetB: () -> Unit = {},
+    val onAbRepeatClear: () -> Unit = {},
+    val onToggleAudioOnly: () -> Unit = {},
+    val onPreviousEpisode: () -> Unit = {},
+    val onQueueClick: () -> Unit = {},
+    val onMarkWatchedAndSkip: () -> Unit = {},
+    val onMarkUnwatchedAndQuit: () -> Unit = {},
+    val onRenderClick: () -> Unit = {},
+    val onDeinterlaceCycle: () -> Unit = {},
+    val onInputQuickToggle: (bindingId: String, enabled: Boolean) -> Unit = { _, _ -> },
 )
 
 /**
@@ -120,27 +171,35 @@ internal data class PlayerOverflowMenuInputToggle(
  *
  * Extracted verbatim from `PlayerControls.kt` — decompose
  * the 1.6 kLOC controls overlay into smaller, self-contained stateless
- * composables). All state is hoisted to the caller via explicit parameters;
- * only the per-submenu open/close state is local to this composable.
+ * composables). The per-engine row gates ride the `@Immutable`
+ * [EngineCapabilities] data class whole (the [PlayerControls] call-wall
+ * idiom — never twelve `supportsX` booleans flattened at the signature) and
+ * the action lambdas ride [PlayerOverflowMenuActions]; the remaining
+ * parameters are the session values the rows render. All state is hoisted to
+ * the caller via those parameters; only the per-submenu open/close state is
+ * local to this composable.
  */
 
 @Composable
 internal fun BoxScope.PlayerOverflowMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    supportsSubtitleStyle: Boolean,
-    supportsDialogueBoost: Boolean,
-    supportsNightMode: Boolean,
-    supportsAudioDelay: Boolean,
-    supportsSubtitleDelay: Boolean,
-    supportsAudioPassthrough: Boolean,
-    supportsAudioNormalization: Boolean,
-    supportsChannelMixing: Boolean,
-    dialogueBoostEnabled: Boolean,
-    dialogueBoostStrength: EffectStrength,
-    nightModeEnabled: Boolean,
-    nightModeStrength: EffectStrength,
-    audioPassthrough: Boolean,
+    // The per-engine row gates, passed whole (the SubtitleStyleControls
+    // capabilities precedent): which submenu/entry rows render at all.
+    capabilities: EngineCapabilities,
+    // Every row's action lambda (the [PlayerOverflowMenuActions] bundle).
+    menu: PlayerOverflowMenuActions,
+    dialogueBoostEnabled: Boolean = false,
+    dialogueBoostStrength: EffectStrength = EffectStrength.NONE,
+    nightModeEnabled: Boolean = false,
+    nightModeStrength: EffectStrength = EffectStrength.NONE,
+    audioPassthrough: Boolean = false,
+    // The ADVISORY spatial-audio toggle: [spatialAudioState] is the engine's
+    // live platform answer (null when none reported — unsupported device /
+    // engine, or stats not yet emitted). UNAVAILABLE disables the row with the
+    // reason label; otherwise the row is a plain preference toggle.
+    spatialAudioEnabled: Boolean = false,
+    spatialAudioState: SpatialAudioState? = null,
     showVideoStats: Boolean = false,
     audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     audioNormalizationEnabled: Boolean = false,
@@ -149,37 +208,20 @@ internal fun BoxScope.PlayerOverflowMenu(
     sleepTimerActive: Boolean = false,
     sleepTimerEndOfEpisode: Boolean = false,
     sleepTimerRemainingFlow: StateFlow<Long> = NoSleepTimerRemainingFlow,
-    onSubtitleHubClick: () -> Unit,
-    onDialogueBoostClick: () -> Unit,
-    onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
-    onNightModeClick: () -> Unit,
-    onNightModeStrengthChange: (EffectStrength) -> Unit,
-    onAVSyncClick: () -> Unit,
     playbackMode: PlaybackMode = PlaybackMode.AUTO,
-    onPlaybackModeClick: () -> Unit = {},
     // The Version sheet entry — multi-version items only (gated by the caller).
     hasMultipleVersions: Boolean = false,
-    onVersionClick: () -> Unit = {},
-    onDecoderClick: () -> Unit,
-    onPassthroughClick: () -> Unit,
-    onVideoStatsClick: () -> Unit = {},
-    onAudioNormalizationClick: () -> Unit = {},
-    onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
-    onChannelMixClick: () -> Unit = {},
-    onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
-    onSleepTimerClick: () -> Unit = {},
-    supportsVideoFilters: Boolean = false,
+    // the Rendering sheet (shader pack / tone mapping / quality) —
+    // mpv engines only, gated by the caller (a player-type fact, not an
+    // [EngineCapabilities] field).
+    supportsRenderPanel: Boolean = false,
+    // the session-scoped deinterlace cycle (capability-gated
+    // [EngineCapabilities.supportsDeinterlace] — mpv engines only). [mode] is
+    // the CURRENT session mode, surfaced in the item's label.
+    deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
     videoFiltersActive: Boolean = false,
-    onVideoFilterClick: () -> Unit = {},
-    supportsScreenshot: Boolean = false,
-    onScreenshotClick: () -> Unit = {},
     abRepeat: AbRepeatState = AbRepeatState(),
-    onAbRepeatToggle: () -> Unit = {},
-    onAbRepeatSetA: () -> Unit = {},
-    onAbRepeatSetB: () -> Unit = {},
-    onAbRepeatClear: () -> Unit = {},
     audioOnly: Boolean = false,
-    onToggleAudioOnly: () -> Unit = {},
     // The mark-and-exit pair. The watched item's label flips between
     // "…& skip" (a next episode exists) and "…& exit" (it doesn't) — one
     // action, the VM's markWatchedAndSkip owns the advance-vs-close branch.
@@ -188,28 +230,18 @@ internal fun BoxScope.PlayerOverflowMenu(
     // exists; this menu item mirrors it as a discoverable, labelled path (the
     // row buttons are icon-only and disabled state carries no explanation).
     hasPreviousEpisode: Boolean = false,
-    onPreviousEpisode: () -> Unit = {},
+    // The manual up-next queue entry: visible when the queue holds items and
+    // no SyncPlay group session owns the order (its queue sheet replaces it).
+    queueItemCount: Int = 0,
+    isInSyncPlaySession: Boolean = false,
     // Incognito leaves no watch state — the unwatched variant hides.
     incognitoModeEnabled: Boolean = false,
-    onMarkWatchedAndSkip: () -> Unit = {},
-    onMarkUnwatchedAndQuit: () -> Unit = {},
-    // the Rendering sheet (shader pack / tone mapping / quality) —
-    // mpv engines only, gated by the caller.
-    supportsRenderPanel: Boolean = false,
-    onRenderClick: () -> Unit = {},
-    // the session-scoped deinterlace cycle (gated by
-    // EngineCapabilities.supportsDeinterlace — mpv engines only). [mode] is
-    // the CURRENT session mode, surfaced in the item's label.
-    supportsDeinterlace: Boolean = false,
-    deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
-    onDeinterlaceCycle: () -> Unit = {},
     // The input-binding quick toggles: grouped behind one "Gestures" entry
     // (expands like the normalization submenu). The collapsed row shows the
     // enabled count; inside, "✓ <input>" = enabled, bare label = disabled.
-    // Flipping emits through [onInputQuickToggle] (persisted via the
-    // ViewModel), no dismissal.
+    // Flipping emits through [PlayerOverflowMenuActions.onInputQuickToggle]
+    // (persisted via the ViewModel), no dismissal.
     inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
-    onInputQuickToggle: (bindingId: String, enabled: Boolean) -> Unit = { _, _ -> },
 ) {
     if (!expanded) return
     val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
@@ -321,10 +353,10 @@ internal fun BoxScope.PlayerOverflowMenu(
             OverflowMenuItem(
                 icon = Tabler.Outline.Subtitles,
                 label = stringResource(Res.string.player_video_subtitles),
-                onClick = onSubtitleHubClick,
+                onClick = menu.onSubtitleHubClick,
             )
 
-            // Input-binding quick toggles (issue #171): grouped behind one
+            // Input-binding quick toggles: grouped behind one
             // "Gestures" entry like the audio normalization submenu — the
             // collapsed row shows the enabled count, expanding it reveals the
             // tap-to-flip rows. Flipping stays in place (persisted), the
@@ -342,7 +374,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                             icon = Tabler.Outline.HandMove,
                             label = toggle.labelText,
                             checked = toggle.enabled,
-                            onClick = { onInputQuickToggle(toggle.bindingId, !toggle.enabled) },
+                            onClick = { menu.onInputQuickToggle(toggle.bindingId, !toggle.enabled) },
                         )
                     }
                 } else {
@@ -361,7 +393,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 }
             }
 
-            if (supportsDialogueBoost) {
+            if (capabilities.supportsDialogueBoost) {
                 if (showDialogueBoostSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
@@ -386,7 +418,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                             // Selecting a strength (including NONE/off) routes through the
                             // per-item strength setter, which clears the pref for NONE.
                             onClick = {
-                                onDialogueBoostStrengthChange(strength)
+                                menu.onDialogueBoostStrengthChange(strength)
                                 onDismiss()
                             },
                             leadingIcon = {
@@ -411,7 +443,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                     )
                 }
             }
-            if (supportsNightMode) {
+            if (capabilities.supportsNightMode) {
                 if (showNightModeSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
@@ -429,8 +461,8 @@ internal fun BoxScope.PlayerOverflowMenu(
                                 )
                             },
                             onClick = {
-                                if (!nightModeEnabled) onNightModeClick()
-                                onNightModeStrengthChange(strength)
+                                if (!nightModeEnabled) menu.onNightModeClick()
+                                menu.onNightModeStrengthChange(strength)
                                 onDismiss()
                             },
                             leadingIcon = {
@@ -455,7 +487,31 @@ internal fun BoxScope.PlayerOverflowMenu(
                     )
                 }
             }
-            if (supportsAudioNormalization) {
+            if (capabilities.supportsSpatialAudio) {
+                // The honest ADVISORY spatial row (see
+                // AudioEffectsConfig.spatialAudioEnabled in MediaEngine.kt for
+                // the full rationale). UNAVAILABLE — the current output cannot
+                // be spatialized — disables the row with the reason instead of
+                // offering a dead switch.
+                val spatialUnavailable = spatialAudioState == SpatialAudioState.UNAVAILABLE
+                OverflowMenuItem(
+                    icon = Tabler.Outline.Headphones,
+                    label = when (spatialAudioState) {
+                        SpatialAudioState.UNAVAILABLE -> stringResource(Res.string.player_video_spatial_audio_unavailable)
+                        SpatialAudioState.ACTIVE -> stringResource(Res.string.player_video_spatial_audio_on)
+                        else -> stringResource(Res.string.player_video_spatial_audio)
+                    },
+                    onClick = menu.onSpatialAudioClick,
+                    tint = if (spatialAudioEnabled && !spatialUnavailable) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    enabled = !spatialUnavailable,
+                    checked = if (spatialUnavailable) null else spatialAudioEnabled,
+                )
+            }
+            if (capabilities.supportsAudioNormalization) {
                 if (showAudioNormalizationSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
@@ -473,7 +529,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                 )
                             },
                             onClick = {
-                                onAudioNormalizationModeChange(mode)
+                                menu.onAudioNormalizationModeChange(mode)
                                 onDismiss()
                             },
                             leadingIcon = {
@@ -498,7 +554,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                     )
                 }
             }
-            if (supportsChannelMixing) {
+            if (capabilities.supportsChannelMixing) {
                 if (showChannelMixSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
@@ -516,7 +572,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                                 )
                             },
                             onClick = {
-                                onChannelMixModeChange(mode)
+                                menu.onChannelMixModeChange(mode)
                                 onDismiss()
                             },
                             leadingIcon = {
@@ -544,25 +600,25 @@ internal fun BoxScope.PlayerOverflowMenu(
             // A/V Sync now hosts audio delay only — subtitle delay moved into
             // the unified subtitle hub's "Delay" tab, so this item gates on
             // audio delay alone.
-            if (supportsAudioDelay) {
+            if (capabilities.supportsAudioDelay) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Adjustments,
                     label = stringResource(Res.string.player_video_av_sync),
-                    onClick = onAVSyncClick,
+                    onClick = menu.onAVSyncClick,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.Bolt,
                 label = if (playbackMode == PlaybackMode.AUTO) stringResource(Res.string.player_video_playback_mode)
                     else stringResource(Res.string.player_video_playback_mode_on, playbackMode.displayName),
-                onClick = onPlaybackModeClick,
+                onClick = menu.onPlaybackModeClick,
                 tint = if (playbackMode != PlaybackMode.AUTO) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface,
             )
             OverflowMenuItem(
                 icon = Tabler.Outline.InfoCircle,
                 label = stringResource(Res.string.player_video_decoder),
-                onClick = onDecoderClick,
+                onClick = menu.onDecoderClick,
             )
             // Multi-version items only (1080p + 4K, HDR variants, alternate
             // cuts): opens the Version sheet for a position-preserving swap.
@@ -570,21 +626,21 @@ internal fun BoxScope.PlayerOverflowMenu(
                 OverflowMenuItem(
                     icon = Tabler.Outline.Stack2,
                     label = stringResource(Res.string.player_video_version),
-                    onClick = onVersionClick,
+                    onClick = menu.onVersionClick,
                 )
             }
             if (supportsRenderPanel) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Wand,
                     label = stringResource(Res.string.player_video_rendering),
-                    onClick = onRenderClick,
+                    onClick = menu.onRenderClick,
                 )
             }
-            if (supportsDeinterlace && deinterlaceMode != null) {
+            if (capabilities.supportsDeinterlace && deinterlaceMode != null) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Scan,
                     label = stringResource(Res.string.player_video_deinterlace, deinterlaceMode.displayName),
-                    onClick = onDeinterlaceCycle,
+                    onClick = menu.onDeinterlaceCycle,
                     tint = if (deinterlaceMode != com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -592,45 +648,45 @@ internal fun BoxScope.PlayerOverflowMenu(
                     },
                 )
             }
-            if (supportsAudioPassthrough) {
+            if (capabilities.supportsAudioPassthrough) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Volume,
                     label = stringResource(Res.string.player_video_passthrough),
-                    onClick = onPassthroughClick,
+                    onClick = menu.onPassthroughClick,
                     tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.InfoCircle,
                 label = if (showVideoStats) stringResource(Res.string.player_video_stats_for_nerds_on) else stringResource(Res.string.player_video_stats_for_nerds),
-                onClick = onVideoStatsClick,
+                onClick = menu.onVideoStatsClick,
                 tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             OverflowMenuItem(
                 icon = Tabler.Outline.Stopwatch,
                 label = if (sleepTimerActive) stringResource(Res.string.player_video_sleep_timer_on, sleepTimerDisplayText) else stringResource(Res.string.player_video_sleep_timer),
-                onClick = onSleepTimerClick,
+                onClick = menu.onSleepTimerClick,
                 tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
-            if (supportsVideoFilters) {
+            if (capabilities.supportsVideoFilters) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.ColorSwatch,
                     label = if (videoFiltersActive) stringResource(Res.string.player_video_video_filters_on) else stringResource(Res.string.player_video_video_filters),
-                    onClick = onVideoFilterClick,
+                    onClick = menu.onVideoFilterClick,
                     tint = if (videoFiltersActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
-            if (supportsScreenshot) {
+            if (capabilities.supportsScreenshot) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Photo,
                     label = stringResource(Res.string.player_video_capture_frame),
-                    onClick = onScreenshotClick,
+                    onClick = menu.onScreenshotClick,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.Repeat,
                 label = if (abRepeat.enabled) stringResource(Res.string.player_video_ab_repeat_on) else stringResource(Res.string.player_video_ab_repeat),
-                onClick = onAbRepeatToggle,
+                onClick = menu.onAbRepeatToggle,
                 tint = if (abRepeat.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             // The set-point items must be reachable the moment A/B repeat is
@@ -640,24 +696,24 @@ internal fun BoxScope.PlayerOverflowMenu(
                 OverflowMenuItem(
                     icon = Tabler.Outline.ArrowLeft,
                     label = if (abRepeat.aMs != null) stringResource(Res.string.player_video_set_a_point_at, formatDuration(abRepeat.aMs)) else stringResource(Res.string.player_video_set_a_point),
-                    onClick = onAbRepeatSetA,
+                    onClick = menu.onAbRepeatSetA,
                 )
                 OverflowMenuItem(
                     icon = Tabler.Outline.ArrowRight,
                     label = if (abRepeat.bMs != null) stringResource(Res.string.player_video_set_b_point_at, formatDuration(abRepeat.bMs)) else stringResource(Res.string.player_video_set_b_point),
-                    onClick = onAbRepeatSetB,
+                    onClick = menu.onAbRepeatSetB,
                 )
                 OverflowMenuItem(
                     icon = Tabler.Outline.X,
                     label = stringResource(Res.string.player_video_clear_ab_repeat),
-                    onClick = onAbRepeatClear,
+                    onClick = menu.onAbRepeatClear,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.Volume,
                 label = if (audioOnly) stringResource(Res.string.player_audio_only_on)
                     else stringResource(Res.string.player_audio_only),
-                onClick = onToggleAudioOnly,
+                onClick = menu.onToggleAudioOnly,
                 tint = if (audioOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             // Mark-and-exit actions. TV reaches them through the same
@@ -666,20 +722,27 @@ internal fun BoxScope.PlayerOverflowMenu(
             OverflowMenuItem(
                 icon = Tabler.Outline.PlayerSkipBack,
                 label = stringResource(Res.string.player_video_previous_episode),
-                onClick = onPreviousEpisode,
+                onClick = menu.onPreviousEpisode,
                 enabled = hasPreviousEpisode,
             )
+            if (queueItemCount > 0 && !isInSyncPlaySession) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.ListDetails,
+                    label = stringResource(Res.string.player_video_queue_open, queueItemCount),
+                    onClick = menu.onQueueClick,
+                )
+            }
             OverflowMenuItem(
                 icon = Tabler.Outline.Checks,
                 label = if (hasNextEpisode) stringResource(Res.string.player_video_mark_watched_and_skip)
                     else stringResource(Res.string.player_video_mark_watched_and_exit),
-                onClick = onMarkWatchedAndSkip,
+                onClick = menu.onMarkWatchedAndSkip,
             )
             if (!incognitoModeEnabled) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.EyeOff,
                     label = stringResource(Res.string.player_video_mark_unwatched_and_exit),
-                    onClick = onMarkUnwatchedAndQuit,
+                    onClick = menu.onMarkUnwatchedAndQuit,
                 )
             }
         }

@@ -213,14 +213,22 @@ class VideoPlayerUiStateTest {
     }
 
     @Test
-    fun shouldShowUpNext_noSeriesId_returnsFalse() {
+    fun shouldShowUpNext_queuedMovieWithoutSibling_nearEnd_returnsTrue() {
+        // The former seriesId bypass is GONE (the calculator is pure
+        // time-window math; the projection folds the queue mirror into
+        // hasNextEpisode) — so this replaces the old
+        // shouldShowUpNext_noSeriesId_returnsFalse pin, which only passed
+        // vacuously (duration 0 kept the window closed). A queued movie with
+        // NO episode sibling near the end is exactly the case it used to
+        // misjudge: the card must show.
         val state = VideoPlayerUiState(
-            episodes = EpisodeBrowserState(
-                nextEpisode = MediaItem(id = "2", name = "Ep 2", mediaType = MediaType.EPISODE),
-            ),
+            episodes = EpisodeBrowserState(nextEpisode = null),
+            hasQueuedNext = true,
             media = MediaContentState(seriesId = null),
+            duration = 3_600_000L,
+            currentPosition = 3_570_000L,
         )
-        assertFalse(state.shouldShowUpNext)
+        assertTrue(state.shouldShowUpNext)
     }
 
     @Test

@@ -140,7 +140,7 @@ class EpisodeNavigatorTest {
         // virtual time past the settle timeout, which is itself under test.
         runCurrent()
         // initialize() returned but the session has not rebound: the transient
-        // null-item reset must NOT release the latch (#146).
+        // null-item reset must NOT release the latch.
         sessionState.value = sessionState.value.copy(currentItemId = null)
         runCurrent()
         assertTrue(nav.isNextEpisodeLoading.value)

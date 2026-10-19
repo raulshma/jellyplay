@@ -19,23 +19,20 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_logout_sub
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_logout_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_sign_out_from_server_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_sign_out_from_server_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_user_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_user_management_title
 
 /**
  * The account domain's fused row declarations — the feature-side single home
  * of the main screen's account-group rows (the [AppearanceRows] template).
- * Each [SettingsRow] replaces the trio the domain used to declare per row:
- * the `SettingsSearchBinding` entry, the `SettingsRowRecord` entry, and the
- * `SettingsScreenIds` holder constant (all retired).
+ * Each [SettingsRow] carries the search binding, the screen face
+ * and the row identity in one declaration.
  *
  * HAND-MAINTAINED residuals: the account/session rows are navigation facts
  * whose knobs live in stores without spec machinery — they carry their full
  * hand search faces. The projection ([List.toSearchItems]) is the pure
- * hand-projection; search results, catalog order and group membership are
- * byte-identical to the retired declarations.
+ * hand-projection; search results, catalog order and group membership
+ * derive from these declarations.
  */
 internal object AccountRows {
 
@@ -57,8 +54,7 @@ internal object AccountRows {
         icon = Tabler.Outline.Logout,
         titleRes = Res.string.settings_sign_out_from_server,
         subtitleRes = Res.string.settings_sign_out_from_server_subtitle,
-        searchTitleRes = Res.string.ss_sign_out_from_server_title,
-        searchSubtitleRes = Res.string.ss_sign_out_from_server_subtitle,
+        searchSubtitleRes = Res.string.settings_sign_out_from_server_subtitle,
         keywords = listOf("sign out", "server", "remove device", "revoke", "session", "remote", "disconnect"),
         route = Route.Settings,
     )
@@ -86,7 +82,7 @@ internal object AccountRows {
     )
 
     /**
-     * Every fused account row — the ratchet's vocabulary. A computed accessor
+     * Every fused account row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

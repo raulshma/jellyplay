@@ -3,9 +3,9 @@ package com.raulshma.jellyplay.desktop
 import androidx.compose.ui.input.key.Key
 
 /**
- * The one desktop window-accelerator table, folded out of the two handlers
- * that used to hand-copy it — Main.kt's window-level `onPreviewKeyEvent`
- * (the matching half, replacing the old AWT MenuBar's native delivery) and
+ * The one desktop window-accelerator table, shared by both handlers —
+ * Main.kt's window-level `onPreviewKeyEvent`
+ * (the matching half, the replacement for the AWT MenuBar's native delivery) and
  * DesktopTitleBar's dropdown items (the same combos rendered as display
  * literals): **Ctrl+R** refresh, **Ctrl+Q** quit, **F11** toggle fullscreen,
  * **Ctrl+Shift+V** open the clipboard's link. One fact, one home:
@@ -19,10 +19,10 @@ import androidx.compose.ui.input.key.Key
  * matched row carries (the effects — refresh emit, exitApplication, the
  * placement toggle, the clipboard read — stay there).
  *
- * Row semantics are exactly the old if/else-if chain: a `requiresCtrl = true`
+ * Row semantics: a `requiresCtrl = true`
  * row needs `isCtrlPressed` (so plain R/Q fall through), while a
- * `requiresCtrl = false` row IGNORES modifiers entirely — the F11 arm never
- * checked Ctrl, and Ctrl+F11 still toggles fullscreen today. The
+ * `requiresCtrl = false` row IGNORES modifiers entirely — the F11 arm
+ * ignores Ctrl, so Ctrl+F11 also toggles fullscreen. The
  * [DesktopAccelerator.requiresShift] gate exists for the ONE row that needs
  * it (Ctrl+Shift+V): the preview handler sees every key BEFORE the Compose
  * focus chain, so a shift-less Ctrl+V must decline here or it would eat the

@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.remote
 
 
+import com.raulshma.jellyplay.core.data.playback.AudioNowPlayingFace
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
@@ -18,6 +20,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,8 +72,28 @@ class RemoteControlReceiverTest {
     private val uiDispatcher: UiRemoteControlDispatcher = mockk(relaxed = true)
     private val activePlayerController: ActivePlayerController = mockk(relaxed = true)
     private val securityStore: SecurityStore = mockk(relaxed = true)
-    private val audioQueueManager: com.raulshma.jellyplay.core.data.playback.AudioQueueManager = mockk(relaxed = true)
     private val bridge = RemoteNavigationBridge()
+
+    /**
+     * The idle gate is the Now-playing verdict's [NowPlayingVerdict.isIdle]
+     * now (the former `engine == null && audioQueueManager…` restatement),
+     * so the harness drives a REAL verdict over the mocked registry and a
+     * mutable audio face — the fold itself is pinned once in
+     * NowPlayingVerdictTest.
+     */
+    private val audioFace = object : AudioNowPlayingFace {
+        val itemId = MutableStateFlow<String?>(null)
+        override val isPlaying = MutableStateFlow(false)
+        override val currentPosition = MutableStateFlow(0L)
+        override val currentPlayingItemId: MutableStateFlow<String?> = itemId
+        override val title = MutableStateFlow("")
+        override var hasActiveSession: Boolean = false
+    }
+
+    private val verdict = NowPlayingVerdict(
+        videoEngines = activePlayerController,
+        audio = audioFace,
+    )
 
     private val events = MutableSharedFlow<WebSocketEvent>(extraBufferCapacity = 16)
     private val security = MutableStateFlow(
@@ -84,7 +109,6 @@ class RemoteControlReceiverTest {
         // DisplayContent's opt-in) go through firstPersistedSecurity — answer
         // from the same flow the tests toggle via `security.value = …`.
         coEvery { securityStore.firstPersistedSecurity() } answers { security.value }
-        every { audioQueueManager.currentPlayingItemId } returns MutableStateFlow(null)
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(IOException("down"))
     }
 
@@ -98,7 +122,8 @@ class RemoteControlReceiverTest {
         activePlayerController = activePlayerController,
         securityStore = securityStore,
         remoteNavigationBridge = bridge,
-        audioQueueManager = audioQueueManager,
+        nowPlayingVerdict = verdict,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
 
     private fun startAndAwaitSubscription(r: RemoteControlReceiver) {

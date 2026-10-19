@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -40,7 +39,7 @@ import kotlinx.coroutines.test.runTest
  * repositories are relaxed mocks and the VM-facing seams
  * ([SessionLifecycleHooks], [SessionPositionStore]) are recording fakes. The
  * session builds its release scope internally ([PlaybackSession.releaseScope],
- * a real IO scope, the C6 composition-root behavior) — the per-test teardown
+ * a real IO scope, the composition-root behavior) — the per-test teardown
  * cancels it AFTER its work was verified: that teardown must outlive the
  * caller's scope, so it cannot run on the test dispatcher. The wall clock is
  * injected as a controllable fake ([nowMs]), so the seek-freshness window and
@@ -533,8 +532,8 @@ class PlaybackSessionReportingTest {
         override fun wasInSyncPlay(): Boolean = false
     }
 
-    // [FakePositionStore] is the shared recording double
-    // (com.raulshma.jellyplay.core.testfixtures.FakePositionStore) since the
-    // fixtures hoist — this file's former private variant (records persists,
-    // serves nulls) is its DEFAULT shape (the saved*Value fields stay null).
+    // [FakePositionStore] is the recording double (player-video jvmTest, the
+    // the test-placement rule move out of test-fixtures) — this file's former
+    // private variant (records persists, serves nulls) is its DEFAULT shape
+    // (the saved*Value fields stay null).
 }

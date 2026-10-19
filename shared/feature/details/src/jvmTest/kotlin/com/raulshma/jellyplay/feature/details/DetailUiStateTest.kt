@@ -171,41 +171,21 @@ class DetailUiStateTest {
     @Test
     fun detailContentState_defaultsKeepTheRemoteRenderingPathUnchanged() {
         val state = DetailContentState(
+            core = DetailUiState(),
             itemId = "m1",
-            detail = null,
-            seasons = emptyList(),
-            episodes = emptyMap(),
-            fetchedSeasonIds = emptySet(),
-            smartPlayTarget = null,
-            selectedSubtitleIndex = null,
-            selectedAudioIndex = null,
-            isDownloading = false,
-            isDownloadingSeries = false,
-            activeDownload = null,
-            loadState = DetailUiLoadState.Loaded,
-            albumTracks = emptyList(),
-            collectionItems = emptyList(),
-            relatedItems = emptyList(),
-            relatedVideos = emptyList(),
-            seerrRecommendations = emptyList(),
-            seerrSimilar = emptyList(),
-            isSeerrConnected = false,
-            isSeerrRecommendationsEnabled = false,
-            preferences = DetailPreferences(),
-            canManageSeries = false,
         )
 
-        assertNull(state.origin, "no snapshot landed yet")
-        assertNull(state.detailContext)
-        assertEquals(DetailUiState.DefaultCapabilities, state.capabilities)
+        assertNull(state.core.origin, "no snapshot landed yet")
+        assertNull(state.core.detailContext)
+        assertEquals(DetailUiState.DefaultCapabilities, state.core.capabilities)
         assertEquals(ResyncUiState.Idle, state.resyncState)
         assertNull(state.persistedSeasonId)
-        assertNull(state.selectedLocalSubtitleIndex)
-        assertTrue(state.localSubtitles.isEmpty())
-        assertTrue(state.downloadedEpisodeIds.isEmpty(), "no per-episode delete badges without downloads")
-        assertFalse(state.hasIntroSegment)
-        assertFalse(state.hasCreditSegment)
-        assertTrue(state.tmdbReviews.isEmpty())
-        assertEquals(DownloadPickerState(), state.downloadPicker, "picker starts closed")
+        assertNull(state.core.selectedLocalSubtitleIndex)
+        assertTrue(state.core.localSubtitles.isEmpty())
+        assertTrue(state.downloads.downloadedEpisodeIds.isEmpty(), "no per-episode delete badges without downloads")
+        assertFalse(state.core.hasIntroSegment)
+        assertFalse(state.core.hasCreditSegment)
+        assertTrue(state.core.tmdbReviews.isEmpty())
+        assertEquals(DownloadPickerState(), state.downloads.downloadPicker, "picker starts closed")
     }
 }

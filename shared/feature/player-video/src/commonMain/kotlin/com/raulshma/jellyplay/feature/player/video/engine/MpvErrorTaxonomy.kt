@@ -64,19 +64,19 @@ object MpvErrorTaxonomy {
      * a STRING (the Android binding): tolerates both the numeric form
      * ("-13") and a descriptive string (e.g. "loading_failed",
      * "ao_init_failed", or a raw network message). Null / blank map to the
-     * unknown placeholder exactly as the pre-extraction Android engine did.
+     * unknown placeholder exactly as the Android engine did.
      */
     fun fromCodeString(code: String?): EngineError {
         if (code.isNullOrBlank()) return EngineError.Unknown("Playback error (mpv): unknown")
         // Numeric mpv_error path — the documented END_FILE contract. The
         // original string (not the re-rendered int) stays the Unknown arm's
-        // raw text, byte-identical to the pre-extraction engine.
+        // raw text, byte-identical to the Android engine.
         val numeric = code.toIntOrNull()
         if (numeric != null) return fromCode(numeric, unknownDetail = code)
         // Descriptive-string fallback: some bindings surface the error name or
         // a network message rather than the numeric code. Match keywords so we
         // still recover the retry affordance for transient drops; network
-        // keywords win on overlap (checked first — the pre-extraction order).
+        // keywords win on overlap (checked first — the original order).
         val textual = code.lowercase()
         return when {
             "loading_failed" in textual ||

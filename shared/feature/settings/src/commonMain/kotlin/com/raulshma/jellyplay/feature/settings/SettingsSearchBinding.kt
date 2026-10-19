@@ -25,11 +25,9 @@ import org.jetbrains.compose.resources.StringResource
  * spec's declared key, or a route kind the domain's route map doesn't
  * carry).
  *
- * **Fused-row rollout state:** every domain with row records converted to the
- * fused [SettingsRow] declarations (the `*SettingsRows.kt` files — a
- * converted row IS its own binding), so the retired
- * `List<SettingsRowRecord>.toSearchItems(…)` overload deleted with the
- * records. What stays is the SPEC-DIRECT path the experimental screen uses:
+ * **Fused-row shape:** every domain declares its rows as fused [SettingsRow]
+ * declarations (the `*SettingsRows.kt` files — a converted row IS its own
+ * binding). The experimental screen uses the SPEC-DIRECT path:
  * its five rows derive from
  * [com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs]
  * through [toSettingsSearchItems] (their per-row search categories differ —
@@ -55,8 +53,8 @@ internal data class SettingsSearchBinding(
  * Derives the catalog rows for a domain's spec declarations, in spec order:
  * semantics from each [PreferenceSearchSpec], presentation from its binding,
  * the Route from [routes] keyed by the spec's routeKind. Produced items are
- * field-for-field what the retired hand-written lists carried —
- * `SettingsSearchItem` itself is untouched (no field added).
+ * field-for-field what [SettingsSearchItem] carries — the type itself is
+ * untouched (no field added).
  */
 internal fun List<PreferenceSearchSpec>.toSettingsSearchItems(
     bindings: List<SettingsSearchBinding>,
@@ -93,7 +91,7 @@ internal fun List<PreferenceSearchSpec>.toSettingsSearchItems(
 
 /**
  * The declared spec key and the bound resource must name the same string —
- * the ratchet that keeps the datastore-side key strings honest (they are the
+ * the guard that keeps the datastore-side key strings honest (they are the
  * declaration; the binding cannot silently swap a resource in under them).
  */
 private fun verifyResourceKey(id: String, field: String, declaredKey: String, bound: StringResource) {

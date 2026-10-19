@@ -32,6 +32,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.isAvailable
@@ -208,6 +209,8 @@ fun SeerrMediaCard(
  * Bottom-left UPCOMING / SERIES / MOVIE label for Seerr cards. Routes through
  * [GlassBadge] (the shared badge primitive) instead of a hand-rolled
  * background box, so badge styling stays consistent with the rest of the app.
+ * The kind reads the model's [SeerrMediaKind.fromWire] (the one ignoreCase
+ * parse); an exotic mediaType keeps the raw uppercase passthrough.
  */
 @Composable
 private fun SeerrMediaLabelBadge(
@@ -218,9 +221,11 @@ private fun SeerrMediaLabelBadge(
     val label = remember(isUpcoming, mediaType) {
         when {
             isUpcoming -> "UPCOMING"
-            mediaType.equals("tv", ignoreCase = true) -> "SERIES"
-            mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
-            else -> mediaType.uppercase()
+            else -> when (SeerrMediaKind.fromWire(mediaType)) {
+                SeerrMediaKind.TV -> "SERIES"
+                SeerrMediaKind.MOVIE -> "MOVIE"
+                SeerrMediaKind.UNKNOWN -> mediaType.uppercase()
+            }
         }
     }
     val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer

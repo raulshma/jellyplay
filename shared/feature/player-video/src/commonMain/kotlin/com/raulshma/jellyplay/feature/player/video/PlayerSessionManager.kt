@@ -86,6 +86,25 @@ data class PlayerSessionState(
     val isOffline: Boolean = false,
 )
 
+/**
+ * The settled next-item warm slot, published for the ViewModel's next-stream
+ * byte pre-warm ([NextStreamByteWarmer]): the resolved stream facts the slot's
+ * PlaybackInfo resolution produced for the Up Next card's item — the same
+ * shape [loadOnline] would rebuild at advance time. [playMethod] is
+ * normalized exactly like the live path folds it ([loadOnline]'s
+ * `resolved?.playMethod ?: DIRECT_PLAY` — the StaticFallback arm IS the
+ * client-built direct URL); [container] is the server-reported media-source
+ * container (`null` for VOD sources, so the eligibility gate infers HLS from
+ * the URL, the same way the engine does for VOD requests).
+ */
+data class WarmNextStream(
+    val itemId: String,
+    val streamUrl: String,
+    val playMethod: PlayMethod,
+    val playerType: PlayerType,
+    val container: String?,
+)
+
 internal class PlayerSessionManager(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
@@ -119,7 +138,7 @@ internal class PlayerSessionManager(
      */
     private val offlineMediaProbe: OfflineMediaProbe,
     /**
-     * Fail-fast gate for online resolution (#146): without it a dead network
+     * Fail-fast gate for online resolution: without it a dead network
      * made every load stage block on full OkHttp timeouts before silently
      * bailing, which read as "the Next button did nothing".
      */
@@ -341,7 +360,7 @@ internal class PlayerSessionManager(
 
         // Offline gate: an Online-resolved item cannot play without the server.
         // Fail fast with feedback instead of dead-airing through every network
-        // stage's timeout (#146). Offline (download) sources are unaffected —
+        // stage's timeout. Offline (download) sources are unaffected —
         // that is exactly the path offline mode exists for.
         // KMP seam: compose-resources' suspend resolver replaces
         // context.getString (loadMedia is suspend).
@@ -369,7 +388,7 @@ internal class PlayerSessionManager(
     /**
      * Fail a load: publish the not-ready state and surface the reason to the
      * user. Every [loadMedia] failure path converges here so the state write
-     * and the feedback emission cannot drift apart (#146).
+     * and the feedback emission cannot drift apart.
      */
     private fun failLoad(message: String) {
         _sessionState.update { it.copy(title = message, isReady = false) }
@@ -405,7 +424,7 @@ internal class PlayerSessionManager(
 
         var runTimeTicks = offlineItem?.runTimeTicks
         if (runTimeTicks == null || runTimeTicks <= 0L) {
-            //  seam: the MediaMetadataRetriever extraction moved behind
+            //  seam: the MediaMetadataRetriever read moved behind
             // OfflineMediaProbe (androidMain actual runs it verbatim).
             val extractedDurationMs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 offlineMediaProbe.extractDurationMs(localFile.absolutePath)
@@ -486,7 +505,7 @@ internal class PlayerSessionManager(
         sessionSubtitleSources.loadStreamingSubtitles(itemId, currentStreams = null)
 
         // Best-effort catch-up for sidecar subtitles added on the server AFTER
-        // the download was made (#144): the bundle is a download-time snapshot,
+        // the download was made: the bundle is a download-time snapshot,
         // so a newly added .srt never reached it, and offline sessions (empty
         // server streams, engine-tracks-only picker) would never show it. When
         // the server is reachable, re-fetch the detail in the background and
@@ -516,6 +535,126 @@ internal class PlayerSessionManager(
         publishNowPlayingMeta()
     }
 
+    // ── Next-episode warm resolve ────────────────────────────────────────────
+
+    /**
+     * Single-slot warm resolve behind the Up-Next card (the autoplay handoff).
+     * While the card is visible, [warmNextEpisode] pre-runs the next item's
+     * media-detail and segments fetches through the same repository caches
+     * [loadOnline] reads (their cost lands during the countdown, not after),
+     * and stores the PlaybackInfo resolution for single-consume reuse in
+     * [loadOnline] — removing the server round-trips from the
+     * episode-to-episode switch. Engine-agnostic: mpv/VLC ride the same
+     * pipeline. Byte pre-caching stays out of THIS slot's scope (the resolve
+     * is still metadata-only); the settled resolution is mirrored through
+     * [warmNextStream] so the ViewModel can pre-warm the next item's first
+     * bytes into the stream cache on its own trigger.
+     *
+     * One slot, keyed by item: a new warm call replaces the previous one.
+     * The stored resolution is consumed only when the freshly-built
+     * [PlaybackResolveRequest] equals the warmed one — any input drift
+     * (bitrate estimate, playback mode, player type) silently re-resolves.
+     * A stale entry for an item the user never plays is harmless: it is
+     * overwritten by the next warm call and never read otherwise.
+     */
+    private var warmNextJob: Job? = null
+    private var warmNextItemId: String? = null
+    private var warmNextResolution: Pair<PlaybackResolveRequest, PlaybackResolution>? = null
+
+    /**
+     * The slot's settled resolution, mirrored as a [WarmNextStream] snapshot
+     * for the ViewModel's byte pre-warm (the resolve itself stays
+     * single-consume for the advance — this mirror is read-only and never
+     * consumed). Cleared wherever the slot clears: a new warm target, a
+     * resolve miss, and the advance's single-consume take (the handover —
+     * the real load owns the item from there).
+     */
+    private val _warmNextStream = MutableStateFlow<WarmNextStream?>(null)
+    val warmNextStream: StateFlow<WarmNextStream?> = _warmNextStream.asStateFlow()
+
+    fun warmNextEpisode(itemId: String) {
+        if (itemId == warmNextItemId) return
+        warmNextJob?.cancel()
+        warmNextItemId = itemId
+        warmNextResolution = null
+        _warmNextStream.value = null
+        warmNextJob = scope.launch { warmNextNow(itemId) }
+    }
+
+    private suspend fun warmNextNow(itemId: String) {
+        // Detail + segments warm through the repository's own per-item caches
+        // (single-flight detail read, session-scoped segments cache), so the
+        // warming call is the exact call loadOnline/fetchMediaSegments make —
+        // they hit the warm entries with no integration.
+        val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: run {
+            // Offline miss / vanished item: drop the slot so a later trigger
+            // can re-attempt, and stay silent (autoplay re-resolves anyway).
+            warmNextItemId = null
+            _warmNextStream.value = null
+            return
+        }
+        playbackRepository.getMediaSegments(itemId)
+
+        val agg = aggregateStore.aggregateRaw.first()
+        val source = detail.preferredMediaSource(
+            getPreferredMediaSourceId(itemId, detail.item.seriesId),
+        )
+        // The auto-advance path always starts at 0.
+        val request = buildResolveRequest(itemId, source, startTimeTicks = 0L, agg = agg)
+        val resolution = playbackRepository.resolvePlayable(request)
+        warmNextResolution = request to resolution
+        // Publish the byte-warm snapshot: the same play-method fold the live
+        // path applies (Resolved rides as-is; StaticFallback is the client-
+        // built direct URL, i.e. the DIRECT_PLAY default; Unplayable clears).
+        when (resolution) {
+            is PlaybackResolution.Resolved -> _warmNextStream.value = WarmNextStream(
+                itemId = itemId,
+                streamUrl = resolution.playback.streamUrl,
+                playMethod = resolution.playback.playMethod,
+                playerType = request.playerType,
+                container = resolution.playback.container,
+            )
+            is PlaybackResolution.StaticFallback -> _warmNextStream.value = WarmNextStream(
+                itemId = itemId,
+                streamUrl = resolution.streamUrl,
+                playMethod = PlayMethod.DIRECT_PLAY,
+                playerType = request.playerType,
+                container = null,
+            )
+            PlaybackResolution.Unplayable -> _warmNextStream.value = null
+        }
+    }
+
+    /** Single-consume: reuse the warmed resolution only on an exact request match. */
+    private fun takeWarmResolution(request: PlaybackResolveRequest): PlaybackResolution? {
+        val (warmRequest, resolution) = warmNextResolution ?: return null
+        if (warmRequest != request) return null
+        warmNextResolution = null
+        warmNextItemId = null
+        _warmNextStream.value = null
+        return resolution
+    }
+
+    /**
+     * One builder for the resolve request, called by both the warm slot and
+     * the live path — the warm hit is an exact-equality guard, so the two
+     * sites must never drift apart on how the request is shaped.
+     */
+    private fun buildResolveRequest(
+        itemId: String,
+        source: MediaSource?,
+        startTimeTicks: Long,
+        agg: VideoPlayerAggregate,
+    ): PlaybackResolveRequest = PlaybackResolveRequest(
+        itemId = itemId,
+        mediaSourceId = source?.id ?: "",
+        startTimeTicks = startTimeTicks,
+        maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+        mode = agg.playback.playbackMode,
+        playerType = agg.playback.preferredPlayer,
+        staticFallbackLiveStreamId = source?.liveStreamId,
+    )
+
     private suspend fun loadOnline(
         itemId: String,
         mediaSourceId: String?,
@@ -524,7 +663,7 @@ internal class PlayerSessionManager(
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
             // Surface the failure — the old silent bail left the user staring
-            // at a "loading" veil that had lifted over nothing (#146).
+            // at a "loading" veil that had lifted over nothing.
             // KMP seam: compose-resources' suspend resolver replaces
             // context.getString (loadOnline is suspend).
             failLoad(getString(Res.string.player_video_error_loading_media))
@@ -547,7 +686,6 @@ internal class PlayerSessionManager(
         // flow blocks until the real DataStore values arrive.
         val agg = aggregateStore.aggregateRaw.first()
         val playerType = agg.playback.preferredPlayer
-        val sourceId = source?.id ?: ""
 
         // Consult the PlaybackInfo endpoint so the server decides Direct
         // Play / Direct Stream / Transcode based on the device profile and
@@ -556,18 +694,17 @@ internal class PlayerSessionManager(
         // request falls through to the static direct URL with the
         // DIRECT_PLAY default (preserving the historical behaviour for
         // non-conforming sources).
-        val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
-        val resolution = playbackRepository.resolvePlayable(
-            PlaybackResolveRequest(
-                itemId = itemId,
-                mediaSourceId = sourceId,
-                startTimeTicks = startPositionTicks,
-                maxStreamingBitrateBits = maxBitrate,
-                mode = agg.playback.playbackMode,
-                playerType = playerType,
-                staticFallbackLiveStreamId = source?.liveStreamId,
-            ),
+        val resolveRequest = buildResolveRequest(
+            itemId = itemId,
+            source = source,
+            startTimeTicks = startPositionTicks,
+            agg = agg,
         )
+        // Warm-slot first (the Up-Next card pre-resolved this exact request
+        // during the countdown); any input drift falls through to the live
+        // resolve, so this is never a correctness rung — only a latency one.
+        val resolution = takeWarmResolution(resolveRequest)
+            ?: playbackRepository.resolvePlayable(resolveRequest)
         // Resolved rides as-is; StaticFallback is the fold above; Unplayable
         // is a live-only miss and cannot reach a request without a
         // liveStreamOption — the empty sentinel keeps the type exhaustive.
@@ -686,6 +823,7 @@ internal class PlayerSessionManager(
             headers = headers,
             preferredAudioLanguage = ruleResolution?.audioLanguage
                 ?: agg.subtitle.preferredAudioLanguage,
+            preferAudioDescription = agg.subtitle.preferAudioDescription,
             // A rule-driven OFF keeps the engine's native subtitle preference
             // unset — the helper's ladder enforces the Off itself.
             preferredSubtitleLanguage = if (ruleResolution?.subtitleDisabled == true) {

@@ -38,7 +38,10 @@ import kotlin.test.assertTrue
  *    startLiveStream resets the tail;
  *  - the selected-file poll skips the multi-MB content re-download when the
  *    file's size/dateModified metadata is unchanged, marks appended lines
- *    `isNew`, and clearSelectedLogFile cancels the poll and resets state;
+ *    `isNew`, and runs only between startLogPolling/stopLogPolling (the
+ *    screen's LifecycleStartEffect arms) with the pause toggle + "a file is
+ *    selected" as the round gate — clearSelectedLogFile resets state and
+ *    closes the gate;
  *  - loadMoreActivity is re-entry safe via the PageAppender guard: a second
  *    call while an older-page fetch is still in flight is dropped, so a fast
  *    fling cannot re-fetch and double-append the same server page
@@ -80,7 +83,7 @@ class LogsViewModelTest {
             Result.success(listOf(LogFile(name = "server.log", size = 10L, dateModified = "t1")))
         coEvery { adminRepository.getActivityLogEntries(any(), any()) } returns Result.success(initial)
         coEvery { adminRepository.getLogFileContent(any()) } returns Result.success("")
-        return LogsViewModel(adminRepository).also { advanceUntilIdle() }
+        return LogsViewModel(adminRepository, parseDispatcher = mainDispatcher).also { advanceUntilIdle() }
     }
 
     // ── initial load ──
@@ -212,11 +215,6 @@ class LogsViewModelTest {
             listOf(LogLine(index = 0, text = "line1"), LogLine(index = 1, text = "line2")),
             vm.state.selectedLogFileLines,
         )
-
-        // Stop the 5s poll before the test scope closes — runTest's quiescence
-        // advance would otherwise spin the rescheduling loop to its timeout.
-        vm.clearSelectedLogFile()
-        advanceUntilIdle()
     }
 
     @Test
@@ -225,6 +223,7 @@ class LogsViewModelTest {
         coEvery { adminRepository.getLogFileContent("server.log") } returns Result.success("line1")
 
         vm.loadLogFile("server.log")
+        vm.startLogPolling() // the screen's LifecycleStartEffect arm
         testScheduler.runCurrent() // initial fetch
         coVerify(exactly = 1) { adminRepository.getLogFileContent("server.log") }
 
@@ -235,6 +234,7 @@ class LogsViewModelTest {
 
         // Stop the 5s poll before the test scope closes — runTest's quiescence
         // advance would otherwise spin the rescheduling loop forever.
+        vm.stopLogPolling()
         vm.clearSelectedLogFile()
         advanceUntilIdle()
     }
@@ -245,6 +245,7 @@ class LogsViewModelTest {
         coEvery { adminRepository.getLogFileContent("server.log") } returns
             Result.success("line1\nline2")
         vm.loadLogFile("server.log")
+        vm.startLogPolling()
         testScheduler.runCurrent()
 
         // The file grew: metadata changes, so the poll re-downloads.
@@ -261,6 +262,7 @@ class LogsViewModelTest {
         assertEquals(listOf(false, false, true), lines.map { it.isNew })
         assertEquals(listOf(0, 1, 2), lines.map { it.index })
 
+        vm.stopLogPolling()
         vm.clearSelectedLogFile()
         advanceUntilIdle()
         coVerify(exactly = 2) { adminRepository.getLogFileContent("server.log") }
@@ -279,10 +281,11 @@ class LogsViewModelTest {
     }
 
     @Test
-    fun `clear resets selection and stops the poll job`() = runTest(mainDispatcher) {
+    fun `clear resets selection and the poll gate stays closed`() = runTest(mainDispatcher) {
         val vm = loadedViewModel()
         coEvery { adminRepository.getLogFileContent("server.log") } returns Result.success("line1")
         vm.loadLogFile("server.log")
+        vm.startLogPolling()
         testScheduler.runCurrent()
         vm.toggleLogPolling()
         assertFalse(vm.state.isLogPollingActive)
@@ -294,8 +297,10 @@ class LogsViewModelTest {
         assertEquals(emptyList(), vm.state.selectedLogFileLines)
         // The polling flag resets so the next selection starts live.
         assertTrue(vm.state.isLogPollingActive)
-        // Completes only because the poll job was cancelled — otherwise the
-        // 5s loop would keep the scheduler busy forever.
+        // Completes only because the cycle is stopped — otherwise the 5s
+        // loop would keep the scheduler busy forever (the screen's
+        // LifecycleStartEffect STOP arm is this call in production).
+        vm.stopLogPolling()
         advanceUntilIdle()
         coVerify(exactly = 1) { adminRepository.getLogFileContent("server.log") }
     }

@@ -762,7 +762,6 @@
     <string name="settings_sync_never">동기화된 적 없음</string>
     <string name="ss_jellyplay_sync_enabled_title">기기 간 설정 동기화</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">설정, 레이아웃, 환경설정이 JellyPlay 플러그인을 통해 Jellyfin 계정을 따라갑니다</string>
-    <string name="ss_jellyplay_sync_now_title">지금 동기화</string>
     <string name="ss_jellyplay_sync_now_subtitle">동기화된 설정을 즉시 올리고 내려받습니다</string>
     <string name="settings_jellyplay_sync_last_sync">마지막 동기화 %1$s</string>
     <string name="settings_jellyplay_sync_in_flight">동기화 중…</string>

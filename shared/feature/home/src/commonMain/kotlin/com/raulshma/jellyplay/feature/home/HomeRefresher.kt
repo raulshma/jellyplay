@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopRecentLocalUserDataWrites
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -16,6 +18,7 @@ import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
@@ -48,18 +51,16 @@ import kotlin.time.TimeSource
  * interface — who may fetch, when, how often, and which spinners show while
  * it happens.
  *
- * Previously this policy lived inline on the ~1390-LOC [HomeViewModel] as
- * ~250 lines of interleaved machinery: a [Mutex] plus a replaceable refresh
- * [Job], a single `lastRefreshTime` clock read by three different
+ * Holding this policy in one module keeps interleaved machinery — a [Mutex]
+ * plus a replaceable refresh [Job], the `lastRefreshTime` clock shared by the
  * throttle/staleness rules, a foreground/background-jittered `while(true)`
- * loop, a debounced server-push collector, a discover TTL gate, and seven
- * `_uiState` writes scattered across the fetch fan-out. Every home change
- * had to re-learn those invariants by reading the whole VM, and testing any
- * of them required constructing the VM itself — Robolectric,
- * ProcessLifecycleOwner, and a `while(true)` loop leaked past each test's
- * teardown. The bug class this extraction kills: split-brain refresh state
- * (two call sites disagreeing about who owns the spinner or the clock) and
- * cadence/throttle changes that could only be regression-tested end-to-end.
+ * loop, a debounced server-push collector, a discover TTL gate, and the
+ * `_uiState` writes of the fetch fan-out — from re-spreading across
+ * [HomeViewModel]: testing any of it there would need the whole VM
+ * (Robolectric, ProcessLifecycleOwner, a `while(true)` loop leaking past test
+ * teardown). The bug class the seam kills: split-brain refresh state (two call
+ * sites disagreeing about who owns the spinner or the clock) and
+ * cadence/throttle changes testable only end-to-end.
  *
  * Division of labour (deliberate):
  *  * The refresher owns WHAT and WHEN: exclusive mutex ownership, the
@@ -123,6 +124,16 @@ internal class HomeRefresher(
      * passes the Room-backed single.
      */
     private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
+    /**
+     * The write-log of this device's recent user-data writes (the same
+     * single MediaRepositoryImpl's local-notify path records into). A
+     * `UserDataChanged` push names only user + item ids, so this is what
+     * lets the user-data chain below tell a socket echo of THIS device's
+     * own write burst from an external push and run the echo non-forced.
+     * Defaults to the neutral no-op (tests, no recorder wired): every echo
+     * stays forced, the pre-demotion behavior.
+     */
+    private val recentLocalWrites: RecentLocalUserDataWrites = NoopRecentLocalUserDataWrites(),
     /** Offline gate consulted inside the fetch (plus the loop's skip check), and the source of the offline-mode mirror below. */
     private val offlineModeManager: OfflineModeManager,
     /**
@@ -134,9 +145,9 @@ internal class HomeRefresher(
      */
     private val stateStore: MutableStateFlow<HomeRefreshState>,
     /**
-     * The discover/arr side-fetch bodies (the legacy Seerr discover-grid
+     * The discover/arr side-fetch bodies (the Seerr discover-grid
      * fan-out and the direct *arr "Recently Grabbed" calendar fetch) — WHAT
-     * to fetch, moved out of this class; the fetch-group schedule and await
+     * to fetch, kept out of this class; the fetch-group schedule and await
      * points that call them stay here (WHEN). Factory-owned, so a new
      * side-effect repository widens [HomeDiscoverSources], not this
      * constructor.
@@ -165,15 +176,15 @@ internal class HomeRefresher(
          * Hard deadline on the offline→online fetch, applied with the shared
          * governor vocabulary (core:concurrency FetchGovernor's
          * [com.raulshma.jellyplay.core.concurrency.withDeadlineMs] — same
-         * withTimeoutOrNull semantics, now declared policy at the call site).
-         * The gap it caps is UNCHANGED until Wave-4's owner lands: there is
-         * still no deadline anywhere down the getHomeSections /
+         * withTimeoutOrNull semantics, declared policy at the call site).
+         * The gap it caps has no other bound: there is no deadline anywhere
+         * down the getHomeSections /
          * fetchDiscoverSections / fetchRecentlyGrabbed chain — only OkHttp's
          * per-call read timeout (which a half-open socket or a hung Seerr
          * await can defeat). Without this cap a stuck fetch parks on
          * refreshMutex forever and the handshake's full-screen loader never
          * clears, leaving the home stuck until the app is restarted. (The
-         * going-online busy flag is not at risk anymore:
+         * going-online busy flag is not at risk:
          * [OfflineModeManager.goingOnline] owns it and clears it at the ONLINE
          * emission, before this fetch even starts.) The loader
          * MAY legitimately stay up across the handshake's whole bounded
@@ -217,7 +228,7 @@ internal class HomeRefresher(
     // NOT in [refreshJob]: its fetch must survive a mid-flight [stop] ([stop]
     // cancels only [refreshJob]). Replaced per request so a back-to-back
     // transition cancels the stale handler, mirroring the collectLatest
-    // cancellation semantics this used to inherit from the VM's collector.
+    // cancellation semantics the VM's collector applies.
     private var transitionJob: Job? = null
     // Standalone discover fetches (pref-enable trigger) run outside
     // [refreshJob] — replacing the refresh job for them would cancel an
@@ -233,6 +244,16 @@ internal class HomeRefresher(
     private var isAppInForeground = true
     // Set when a user-data change lands while backgrounded; consumed by [start].
     private var pendingUserDataRefresh = false
+    /**
+     * The item ids of the most recent (debounced) [UserDataChange] —
+     * overwritten on every push, consumed by [flushPendingUserDataChange]:
+     * consulting the write-log with them is what demotes an echo of
+     * this device's own writes to a non-forced fetch. Cleared once that
+     * fetch lands, alongside [pendingUserDataRefresh]; empty makes
+     * [RecentLocalUserDataWrites.wereAllRecentlyWritten] answer false, so a
+     * flush reached without a named change stays forced.
+     */
+    private var pendingUserDataChangeItemIds: List<String> = emptyList()
     /**
      * The trailing-edge deferral timer of [refreshAfterUserDataChange], on its
      * OWN job — deliberately not [refreshJob]. Installing the delay by
@@ -354,7 +375,7 @@ internal class HomeRefresher(
                     // force = the home screen's manual refresh /
                     // pull-to-refresh: bypass this query's home-sections
                     // cache rather than dropping every cache in the
-                    // repository (plan 08). The main fetch carries the
+                    // repository. The main fetch carries the
                     // custom discover rows of BOTH sources (Jellyfin +
                     // Seerr) — the network layer owns their fan-out, TTL and
                     // ordering; nothing is spliced here anymore.
@@ -377,14 +398,14 @@ internal class HomeRefresher(
                         // Surface a non-blocking notice only when a section
                         // type actually failed to load (403/500/network).
                         // Sections that returned zero items (e.g. no watch
-                        // history, no Next Up) are NOT failures — previously
-                        // the size-mismatch heuristic false-positived on new
+                        // history, no Next Up) are NOT failures — a
+                        // size-mismatch heuristic false-positives on new
                         // users and after merges.
                         _state.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
                         // OrderHomeSectionsUseCase is pure and operates on a
                         // handful of sections (sub-microsecond), so no thread
                         // offload. A withContext(Dispatchers.Default) hop here
-                        // previously escaped the test scheduler and made
+                        // would escape the test scheduler and make
                         // isRefreshing/isLoading assertions racy under
                         // StandardTestDispatcher — state writes stay on the
                         // caller's dispatcher.
@@ -421,33 +442,24 @@ internal class HomeRefresher(
                         // between this drain and the write below, by
                         // construction.
                         val rolledSections = discoverRows.drainRolls(finalSections)
-                        _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
-
-                        val continueWatching = rolledSections
-                            .find { it.type == HomeSectionType.CONTINUE_WATCHING }
-                            ?.items ?: emptyList()
-                        val currentIds = continueWatching.map { it.id }.toSet()
-                        if (currentIds != lastContinueWatchingIds) {
-                            lastContinueWatchingIds = currentIds
-                            widgetDataStore.setContinueWatching(continueWatching)
-                            // Defer the widget broadcast + TV Watch Next
-                            // refresh until after the mutex is released (see
-                            // pendingCwSideEffect above).
-                            pendingCwSideEffect = {
-                                // Push the CW change to the home-screen
-                                // widget. The broadcaster owns the
-                                // explicit-component broadcast so no Android
-                                // Context is needed here.
-                                continueWatchingBroadcaster.refreshContinueWatching()
-                                // Refresh the Android TV "Watch Next" OS row
-                                // so the system home stays in sync with the
-                                // user's progress. Worker is a no-op on
-                                // phones and respects its preference.
-                                if (fetchInputs.androidTvWatchNextEnabled()) {
-                                    tvWatchNextScheduler.scheduleRefresh()
-                                }
-                            }
-                        }
+                        // The batch arm of [applySectionOutcome] — the shared
+                        // post-fetch choreography (single-emission write; CW
+                        // widget store under the mutex with the broadcast /
+                        // Watch-Next side effect captured past it). The
+                        // fractions were decoded BEFORE the drain above, per
+                        // the helper's pairing contract.
+                        pendingCwSideEffect = applySectionOutcome(
+                            sections = rolledSections,
+                            bookProgressFractions = bookFractions,
+                            // The hero billboards ride the SAME
+                            // single-emission write as the sections they
+                            // rotate with — a partial paint (new rows,
+                            // stale hero) never lands.
+                            curatedHero = homeResult.curatedHero,
+                            continueWatching = rolledSections
+                                .find { it.type == HomeSectionType.CONTINUE_WATCHING }
+                                ?.items ?: emptyList(),
+                        )
 
                         _state.update { it.copy(error = null) }
 
@@ -482,7 +494,7 @@ internal class HomeRefresher(
             // Defensive spinner clear — but only if this fetch was NOT
             // cancelled: whoever cancelled it (the user-switch paint, a
             // replaced refresh job, [stop], the going-online timeout) owns
-            // the flags now. A cancelled fetch clearing them here used to
+            // the flags now. A cancelled fetch clearing them here would
             // land between the user-switch paint and its replacement fetch,
             // exposing sections=empty + isLoading=false + error=null — the
             // cold-launch "No Content Available" flash. A fetch that merely
@@ -522,11 +534,12 @@ internal class HomeRefresher(
      *    inline spinner.
      *  * [PrefsChanged]: replace [refreshJob] with a NON-forced fetch (the
      *    new query is what matters, not cache bypass) followed by the loop.
-     *    Previously this fetch ran in the VM's prefs collector outside any
-     *    refresh job, so a backgrounding could not cancel it; folding it
-     *    into the refresh job aligns it with every other trigger.
-     *  * [UserDataChanged]: throttled silent forced refresh — see
-     *    [refreshAfterUserDataChange].
+     *    Folding this fetch into the refresh job (rather than running it in
+     *    the VM's prefs collector) lets a backgrounding cancel it and aligns
+     *    it with every other trigger.
+     *  * [UserDataChanged]: throttled silent refresh — forced for external
+     *    pushes, non-forced for echoes of this device's own writes —
+     *    see [refreshAfterUserDataChange].
      *  * [UserSwitched] / [SignedOut]: identity-transition choreography —
      *    the SWR snapshot paint + outside-the-job fetch below, and the
      *    sign-out reset respectively.
@@ -576,8 +589,8 @@ internal class HomeRefresher(
             RefreshTrigger.DiscoverEnabled -> fetchDiscover()
             RefreshTrigger.GoingOnline -> {
                 // Going online is async (preference write → mode flip →
-                // drain + fetch) and previously gave zero feedback. The busy
-                // flag's whole lifecycle lives in the manager now: the
+                // drain + fetch); the busy flag is the feedback. Its whole
+                // lifecycle lives in the manager: the
                 // toggle below arms it (direction: going online), and the
                 // mode flow's ONLINE emission — or the manager's own
                 // watchdog, if the preference write is lost — clears it.
@@ -593,19 +606,31 @@ internal class HomeRefresher(
     /**
      * The single sanctioned way to mutate items inside the cached sections
      * from outside the fetch machinery — the VM's optimistic played/unplayed
-     * container forwards here. Maps the patch over EVERY section, because
-     * the same item can appear in several (e.g. Continue Watching and Latest
-     * in X) and every visible card must flip together. Keeps
-     * [HomeRefreshState.sections] single-writer: the VM folds emissions, it
-     * never writes them.
+     * container forwards here. Checks EVERY section, because the same item
+     * can appear in several (e.g. Continue Watching and Latest in X) and
+     * every visible card must flip together — but only a section actually
+     * containing the id rebuilds (a whole-section remap would allocate the
+     * whole home per quick-action toggle).
+     * Keeps [HomeRefreshState.sections] single-writer: the VM folds
+     * emissions, it never writes them.
      */
     fun patchItems(itemId: String, patch: (MediaItem) -> MediaItem) {
         _state.update { state ->
             state.copy(
                 sections = state.sections.map { section ->
-                    section.copy(
-                        items = section.items.map { if (it.id == itemId) patch(it) else it }
-                    )
+                    // The id can repeat WITHIN a section too, not just across
+                    // sections — every occurrence must flip. The `none` scan is
+                    // allocation-free, so non-containing sections still don't
+                    // rebuild.
+                    if (section.items.none { it.id == itemId }) {
+                        section
+                    } else {
+                        section.copy(
+                            items = section.items.map { item ->
+                                if (item.id == itemId) patch(item) else item
+                            },
+                        )
+                    }
                 }
             )
         }
@@ -712,8 +737,10 @@ internal class HomeRefresher(
      * normal refresh / pull-to-refresh can still repopulate sections once
      * the network recovers.
      */
-    private suspend fun cappedForcedFetch(): Boolean =
-        withDeadlineMs(GOING_ONLINE_TIMEOUT_MS) { fetchOnce(force = true) } != null
+    private suspend fun cappedForcedFetch(): Boolean {
+        bumpImageReloadEpoch()
+        return withDeadlineMs(GOING_ONLINE_TIMEOUT_MS) { fetchOnce(force = true) } != null
+    }
 
     /**
      * onStart: network re-check, stale fetch, periodic-loop start, then the
@@ -721,8 +748,8 @@ internal class HomeRefresher(
      * share ONE [refreshJob] (a bare scope.launch here was invisible to
      * [stop], so a fetch started at onStart kept running after an immediate
      * onStop); the loop continues in the same job once the (possible) stale
-     * fetch lands. The deferred flush below REPLACES this job — its forced
-     * fetch supersedes the stale-check.
+     * fetch lands. The deferred flush below REPLACES this job — its fetch
+     * supersedes the stale-check.
      */
     fun start() {
         isAppInForeground = true
@@ -740,7 +767,7 @@ internal class HomeRefresher(
         // and the user is looking at it now. The pending flag is NOT cleared
         // before the fetch lands, so a stop() mid-fetch re-arms the flush for
         // the next onStart. Runs AFTER startPeriodicRefresh so the deferred
-        // refresh's job (forced fetch + loop) replaces the bare periodic loop
+        // refresh's job (fetch + loop) replaces the bare periodic loop
         // instead of being cancelled by it.
         if (pendingUserDataRefresh) {
             flushPendingUserDataChange()
@@ -773,8 +800,8 @@ internal class HomeRefresher(
      * Resets the discover-sections TTL so the next fetch actually hits the
      * network. Called on user-initiated refresh — the custom Seerr rows ride
      * the forced home-sections fetch instead (the network layer's force acts
-     * as their invalidation), and the legacy fixed grid is what the gate
-     * still covers. WHEN is here (the manual-refresh preamble); the gate
+     * as their invalidation), and the fixed grid is what the gate
+     * covers. WHEN is here (the manual-refresh preamble); the gate
      * itself lives on [HomeDiscoverSources].
      */
     private fun invalidateDiscoverCache() {
@@ -832,9 +859,10 @@ internal class HomeRefresher(
      * row's refetch rebuilds the CW + Next Up fold, so a pull cannot swap
      * away — or drop — the row's Next Up half. A Continue Watching swap
      * updates the widget store under the mutex and defers the
-     * broadcast/Watch-Next side effect past it (exactly [fetchOnce]'s shape);
-     * a Continue Reading swap or drop decodes its fractions for the same
-     * single emission as the batch's.
+     * broadcast/Watch-Next side effect past it, and a Continue Reading swap
+     * or drop decodes its fractions for the same single emission as the
+     * batch's — the shared [applySectionOutcome] choreography, the same
+     * three rules [fetchOnce]'s write arm applies.
      *
      * Known (accepted) corner: a concurrent [patchItems] landing between this
      * refresh's sections read and write could be reverted by the write —
@@ -883,53 +911,60 @@ internal class HomeRefresher(
                         )
                             .onSuccess { fresh ->
                                 if (fresh != null) {
-                                    val patched = _state.value.sections.map {
-                                        if (it.id == sectionId) fresh else it
-                                    }
-                                    // Same single-emission pairing as the batch
-                                    // fetch's CR write: sections and their
-                                    // fractions land together.
-                                    if (section.type == HomeSectionType.CONTINUE_READING) {
-                                        val fractions = decodeBookProgressFractionsFor(patched)
-                                        _state.update { s ->
-                                            s.copy(sections = patched, bookProgressFractions = fractions)
-                                        }
-                                    } else {
-                                        _state.update { s -> s.copy(sections = patched) }
-                                    }
-                                    if (section.type == HomeSectionType.CONTINUE_WATCHING) {
-                                        val currentIds = fresh.items.map { it.id }.toSet()
-                                        if (currentIds != lastContinueWatchingIds) {
-                                            lastContinueWatchingIds = currentIds
-                                            widgetDataStore.setContinueWatching(fresh.items)
-                                            pendingCwSideEffect = {
-                                                continueWatchingBroadcaster.refreshContinueWatching()
-                                                if (fetchInputs.androidTvWatchNextEnabled()) {
-                                                    tvWatchNextScheduler.scheduleRefresh()
-                                                }
-                                            }
-                                        }
-                                    }
+                                    // Single-index replacement — only the
+                                    // matching section is rebuilt; the rest
+                                    // are reused.
+                                    val sections = _state.value.sections
+                                    val index = sections.indexOfFirst { it.id == sectionId }
+                                    val patched = if (index < 0) sections else sections.toMutableList().also { it[index] = fresh }
+                                    // Swap arm of [applySectionOutcome] — the
+                                    // batch fetch's single-emission CR pairing
+                                    // and CW widget choreography, scoped to
+                                    // THIS row: the fractions decode rides only
+                                    // a CONTINUE_READING swap, and only a
+                                    // swapped CONTINUE_WATCHING row can change
+                                    // the widget's item set (a sibling swap
+                                    // must not re-read the TOC cache or touch
+                                    // the widget store).
+                                    pendingCwSideEffect = applySectionOutcome(
+                                        sections = patched,
+                                        bookProgressFractions =
+                                            if (section.type == HomeSectionType.CONTINUE_READING) {
+                                                decodeBookProgressFractionsFor(patched)
+                                            } else {
+                                                null
+                                            },
+                                        continueWatching =
+                                            if (section.type == HomeSectionType.CONTINUE_WATCHING) fresh.items else null,
+                                    )
                                 } else {
-                                    // The row legitimately emptied (e.g. the
-                                    // user finished everything in it) — drop it,
-                                    // the batch assembler renders nothing for an
+                                    // Drop arm of [applySectionOutcome] — the
+                                    // row legitimately emptied (e.g. the
+                                    // user finished everything in it), the
+                                    // batch assembler renders nothing for an
                                     // empty source either. A CONTINUE_READING
                                     // drop pairs the fractions write with it
                                     // (same single-emission rule as the swap
                                     // above — the dropped books' stale fractions
-                                    // must not outlive the row).
-                                    val remaining = _state.value.sections.filterNot { it.id == sectionId }
-                                    if (section.type == HomeSectionType.CONTINUE_READING) {
-                                        val fractions = decodeBookProgressFractionsFor(remaining)
-                                        _state.update { s ->
-                                            s.copy(sections = remaining, bookProgressFractions = fractions)
-                                        }
-                                    } else {
-                                        _state.update { s ->
-                                            s.copy(sections = s.sections.filterNot { it.id == sectionId })
-                                        }
-                                    }
+                                    // must not outlive the row); a dropped
+                                    // CONTINUE_WATCHING row deliberately passes
+                                    // no items — the batch arm's empty-list
+                                    // comparison (widget clear on a vanished
+                                    // row) stays batch-only.
+                                    // Single-index removal — same principle
+                                    // as the swap arm, for the drop.
+                                    val sections = _state.value.sections
+                                    val index = sections.indexOfFirst { it.id == sectionId }
+                                    val remaining = if (index < 0) sections else sections.toMutableList().also { it.removeAt(index) }
+                                    applySectionOutcome(
+                                        sections = remaining,
+                                        bookProgressFractions =
+                                            if (section.type == HomeSectionType.CONTINUE_READING) {
+                                                decodeBookProgressFractionsFor(remaining)
+                                            } else {
+                                                null
+                                            },
+                                    )
                                 }
                             }
                             .onFailure { e ->
@@ -1003,9 +1038,9 @@ internal class HomeRefresher(
      *    [RefreshTrigger.GoingOnline] path raised the manager-owned busy
      *    flag on its toggle, and the manager cleared it at this very ONLINE
      *    emission; external flips (nav ⋮ toggle from the app shell) and
-     *    auto-detect reconnects used to mirror the field only, which left
-     *    the home sitting on dropped-empty sections until a manual refresh
-     *    or the next periodic tick.
+     *    auto-detect reconnects run the same handshake: mirroring the field
+     *    alone would leave the home sitting on dropped-empty sections until a
+     *    manual refresh or the next periodic tick.
      */
     private fun observeOfflineMode() {
         scope.launch {
@@ -1084,14 +1119,19 @@ internal class HomeRefresher(
      * favorite flips from any client, including this one). Bursts are
      * debounced into a single silent refresh; a change that lands while
      * backgrounded (or offline) is deferred to the next [start] instead of
-     * refreshing into the void.
+     * refreshing into the void. Whether the refresh runs forced is decided
+     * at the flush: an echo of this device's own recent writes runs
+     * non-forced, an external push stays forced.
      */
     @OptIn(FlowPreview::class)
     private fun observeUserDataChanges() {
         scope.launch {
             userDataChanges.userDataChanges
                 .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
-                .collect {
+                .collect { change ->
+                    // Remember what the (debounced) change named — the
+                    // flush consults the write-log with these ids.
+                    pendingUserDataChangeItemIds = change.itemIds
                     when {
                         // Offline behaves like backgrounded: arm the pending
                         // flag rather than swallowing the change — a push that
@@ -1107,28 +1147,34 @@ internal class HomeRefresher(
     }
 
     /**
-     * Silent forced refresh after a user-data change. force = true because
-     * server-side changes must bypass the TtlCache'd home sections. Guarded
-     * by [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
+     * Silent refresh after a user-data change. FORCE remains the rule for
+     * external pushes: server-side changes must bypass the TtlCache'd home
+     * sections. An echo of THIS device's own writes — every item id of the
+     * pushed change recently recorded by [recentLocalWrites] — demotes
+     * to a non-forced fetch (TTL semantics): forcing a full
+     * cache-bypassing refetch behind the player for every playback-save
+     * burst is wasted when only this device's own state moved. The
+     * demotion decision itself lives at the flush; this function owns the
+     * throttle either way, guarded by
+     * [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
      * [lastRefreshTime] (same clock the refresh path writes) so a push
-     * arriving right after a regular refresh doesn't re-fetch, and so the
-     * server's echo of this device's own playback saves cannot force-refresh
-     * more than once a minute — UNLESS the last fetch raced a still-pending
-     * outbox drain ([lastFetchRacedPendingSync]): the drain-completion echo is
-     * then the sync-complete signal, the one notice that the painted snapshot
-     * is pre-sync, and must refresh regardless of the clock. No spinner:
+     * arriving right after a regular refresh doesn't re-fetch — UNLESS the
+     * last fetch raced a still-pending outbox drain
+     * ([lastFetchRacedPendingSync]): the drain-completion echo is then the
+     * sync-complete signal, the one notice that the painted snapshot is
+     * pre-sync, and must refresh regardless of the clock. No spinner:
      * isRefreshing/isLoading stay untouched.
      *
      * A change that lands inside the throttle window is DEFERRED, not
-     * dropped: it arms [pendingUserDataRefresh] and schedules the forced
-     * fetch at throttle expiry (each further echo re-arms the timer on
+     * dropped: it arms [pendingUserDataRefresh] and schedules the fetch at
+     * throttle expiry (each further echo re-arms the timer on
      * [userDataRefreshJob] — trailing edge, so a playback session's ~10s
      * position saves collapse into one fetch after the last save). Dropping
-     * instead used to strand the final echo of a session — the position save
+     * instead strands the final echo of a session — the position save
      * or markPlayed that lands <60s after the last refresh, exactly the
      * state the user sees when they leave the player: Continue Watching /
-     * Next Up stayed mid-playback stale until the periodic loop's non-forced
-     * fetch worked through the cache TTLs, or a pull-to-refresh forced it.
+     * Next Up stay mid-playback stale until the periodic loop's non-forced
+     * fetch works through the cache TTLs, or a pull-to-refresh forces it.
      */
     private fun refreshAfterUserDataChange() {
         pendingUserDataRefresh = true
@@ -1152,14 +1198,19 @@ internal class HomeRefresher(
 
     /**
      * The shared tail of [refreshAfterUserDataChange]: the armed pending
-     * flag becomes an immediate forced fetch. Also called directly as the
-     * [start] flush (the pending change predates the return to the screen,
-     * the user is looking at it now, and the throttle's anti-spam rationale —
-     * don't refetch behind the player for every position save — does not
-     * apply) and as the [lastFetchRacedPendingSync] consumer (the
-     * sync-complete echo must refresh regardless of the clock).
+     * flag becomes an immediate fetch — forced for external pushes,
+     * non-forced when the change was an echo of this device's own recent
+     * writes (the [recentLocalWrites] consult below). Also called
+     * directly as the [start] flush (the pending change predates the return
+     * to the screen, the user is looking at it now, and the throttle's
+     * anti-spam rationale — don't refetch behind the player for every
+     * position save — does not apply) and as the
+     * [lastFetchRacedPendingSync] consumer (the sync-complete echo must
+     * refresh regardless of the clock — and stays forced regardless of the
+     * demotion, since a TTL-semantics fetch could serve the pre-drain
+     * cache).
      *
-     * Tracked in refreshJob so onStop cancels the forced fetch with it;
+     * Tracked in refreshJob so onStop cancels the fetch with it;
      * the periodic loop continues in the same job once the fetch lands
      * (a separate startPeriodicRefresh() call here would either be
      * cancelled by its own refreshJob hand-off or restart the loop while
@@ -1176,9 +1227,19 @@ internal class HomeRefresher(
         userDataRefreshJob?.cancel()
         userDataRefreshJob = null
         replaceRefreshJob {
-            fetchOnce(force = true)
+            bumpImageReloadEpoch()
+            // An echo whose every named item was recently written by THIS
+            // device runs non-forced (TTL semantics — still debounced,
+            // throttled and chained exactly as before); the forced path stays
+            // reserved for external pushes. The raced-sync bypass overrides
+            // the demotion: that echo is the sync-complete signal, and a
+            // non-forced fetch could serve the pre-drain cache — exactly what
+            // the going-online handshake's forced fetch exists to prevent.
+            val echoOfOwnWrites = recentLocalWrites.wereAllRecentlyWritten(pendingUserDataChangeItemIds)
+            fetchOnce(force = !echoOfOwnWrites || lastFetchRacedPendingSync)
             lastFetchRacedPendingSync = false
             pendingUserDataRefresh = false
+            pendingUserDataChangeItemIds = emptyList()
             periodicRefreshLoop()
         }
     }
@@ -1190,8 +1251,20 @@ internal class HomeRefresher(
      * (spinner/clear state, discover-cache invalidation); fetch and loop
      * stay in ONE job so [stop] cancels them together.
      */
+    /**
+     * Advances [HomeRefreshState.imageReloadEpoch] — the one re-trigger for
+     * visible images whose load failed earlier (MediaImage's reload-epoch
+     * contract). Called at every forced-fetch entry point BEFORE the fetch so
+     * the recovery never depends on the fetch succeeding; see the state
+     * field's KDoc for the entry-point enumeration.
+     */
+    private fun bumpImageReloadEpoch() {
+        _state.update { it.copy(imageReloadEpoch = it.imageReloadEpoch + 1) }
+    }
+
     private fun startForcedRefresh(preamble: suspend () -> Unit = {}) {
         replaceRefreshJob {
+            bumpImageReloadEpoch()
             preamble()
             fetchOnce(force = true)
             periodicRefreshLoop()
@@ -1216,8 +1289,7 @@ internal class HomeRefresher(
      * The identity-transition counterpart of [replaceRefreshJob]: a new
      * [RefreshTrigger.UserSwitched] / [SignedOut] request cancels the
      * previous transition's handler mid-flight — the collectLatest
-     * cancellation semantics the VM's HomeSession collector used to supply
-     * when these bodies still ran inside its `collectLatest` block.
+     * cancellation semantics the VM's HomeSession collector supplies.
      */
     private fun replaceTransitionJob(block: suspend () -> Unit) {
         transitionJob?.cancel()
@@ -1225,18 +1297,19 @@ internal class HomeRefresher(
     }
 
     /**
-     * The periodic home-refresh loop: sleep one jittered interval, skip
-     * while offline or when a fetch landed recently, then fetch. Runs inside
-     * [refreshJob] so lifecycle ([stop]) cancels it together with any forced
-     * fetch that preceded it in the same job.
+     * The periodic home-refresh loop: sleep one jittered foreground interval,
+     * skip while offline or when a fetch landed recently, then fetch. Runs
+     * inside [refreshJob] so lifecycle ([stop]) cancels it together with any
+     * forced fetch that preceded it in the same job.
+     *
+     * Foreground cadence unconditionally: a backgrounded interval once
+     * existed here, but [stop] cancels [refreshJob] on backgrounding before
+     * the loop ever sleeps through a tick, so the branch was unreachable —
+     * and reading it suggested a background cadence policy that is not there.
      */
     private suspend fun periodicRefreshLoop() {
         while (true) {
-            val interval = if (isAppInForeground) {
-                HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS
-            } else {
-                HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS
-            }
+            val interval = HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS
             // ±10% jitter avoids synchronized refresh storms when multiple
             // devices hit the server on the same fixed mark.
             val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
@@ -1285,6 +1358,66 @@ internal class HomeRefresher(
             ?: return emptyMap()
         return bookTocCacheRepository.decodeBookProgressFractions(continueReading.items)
     }
+
+    /**
+     * The post-fetch choreography shared by [fetchOnce]'s batch arm and
+     * [refreshSectionRow]'s single-row arm — one write, three shared rules:
+     *  * (a) Continue Watching: a changed item set writes the widget store
+     *    UNDER [refreshMutex], with the broadcast / TV Watch-Next refresh
+     *    captured into the returned runner for the caller to fire after the
+     *    mutex releases (a slow broadcast IPC or WorkManager enqueue must
+     *    not hold the refresh lock — both callers' `pendingCwSideEffect`).
+     *    The comparison input is the caller's: the batch arm always passes
+     *    the row's current items (so a vanished row clears the widget), a
+     *    single-row swap only a swapped Continue Watching row's, and a drop
+     *    passes `null` — it deliberately leaves the widget store alone.
+     *  * (b) Continue Reading: [sections] and their progress fractions land
+     *    as ONE emission — never a two-step paint that flashes the percent
+     *    fallback. The decode happens at the caller (the batch arm must
+     *    decode BEFORE its roll-registry drain — the generation invariant;
+     *    the single-row arm only for a CONTINUE_READING swap or drop), so
+     *    `null` here leaves the current map untouched: a sibling-row write
+     *    doesn't re-pair fractions that didn't change.
+     *  * (c) drop-on-empty has no branch here — the batch assembler applies
+     *    its zero-items rule upstream — but the single-row drop routes its
+     *    write through this helper too, so rule (b) covers it identically.
+     *
+     * Must run under [refreshMutex] (both call sites hold it). The only
+     * suspension point is the widget-store write itself — nothing may
+     * separate the paired write from the side-effect capture. Returns the
+     * deferred CW side effect, or null when the write has none.
+     */
+    private suspend fun applySectionOutcome(
+        sections: List<HomeSection>,
+        bookProgressFractions: Map<String, Float>? = null,
+        curatedHero: List<CuratedHeroEntry>? = null,
+        continueWatching: List<MediaItem>? = null,
+    ): (() -> Unit)? {
+        _state.update {
+            it.copy(
+                sections = sections,
+                bookProgressFractions = bookProgressFractions ?: it.bookProgressFractions,
+                curatedHero = curatedHero ?: it.curatedHero,
+            )
+        }
+        if (continueWatching == null) return null
+        val currentIds = continueWatching.map { it.id }.toSet()
+        if (currentIds == lastContinueWatchingIds) return null
+        lastContinueWatchingIds = currentIds
+        widgetDataStore.setContinueWatching(continueWatching)
+        return {
+            // Push the CW change to the home-screen widget. The broadcaster
+            // owns the explicit-component broadcast so no Android Context is
+            // needed here.
+            continueWatchingBroadcaster.refreshContinueWatching()
+            // Refresh the Android TV "Watch Next" OS row so the system home
+            // stays in sync with the user's progress. Worker is a no-op on
+            // phones and respects its preference.
+            if (fetchInputs.androidTvWatchNextEnabled()) {
+                tvWatchNextScheduler.scheduleRefresh()
+            }
+        }
+    }
 }
 
 /** What caused a refresh — decides the job-replacement policy in [HomeRefresher.request]. */
@@ -1295,7 +1428,7 @@ internal enum class RefreshTrigger {
     PullToRefresh,
     /** Home-section preference diff: non-forced fetch with the new query, then loop restart. */
     PrefsChanged,
-    /** Server UserDataChanged push: debounced, throttled, silent forced fetch. */
+    /** Server UserDataChanged push: debounced, throttled, silent refresh (force per the echo demotion). */
     UserDataChanged,
     /**
      * Sign-in / user switch (from the HomeSession transitions collector):
@@ -1326,6 +1459,15 @@ internal enum class RefreshTrigger {
 @Immutable
 internal data class HomeRefreshState(
     val sections: List<HomeSection> = emptyList(),
+    /**
+     * The plugin-curated hero billboards, resolved by the fetcher and
+     * merged AHEAD of the local hero candidates at the screen (server order,
+     * dedup by item id, curated wins). Cleared wherever the sections clear —
+     * server-curated data must never outlive its fetch the way sections
+     * don't (the SWR repaint deliberately doesn't restore it; the hero falls
+     * back to its local pool until the revalidation lands).
+     */
+    val curatedHero: List<CuratedHeroEntry> = emptyList(),
     /**
      * Continue Reading progress bars, keyed by item id — decoded from the
      * book ticks encodings (see [com.raulshma.jellyplay.core.model.bookProgressFraction])
@@ -1358,13 +1500,29 @@ internal data class HomeRefreshState(
     val refreshingSectionIds: Set<String> = emptySet(),
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
+    /**
+     * Monotonic counter bumped once per forced fetch, BEFORE the fetch runs
+     * ([bumpImageReloadEpoch]) — entry points: [startForcedRefresh] (Manual,
+     * PullToRefresh), [flushPendingUserDataChange] (the silent user-data
+     * refresh, including the onStart deferred flush) and [cappedForcedFetch]
+     * (the going-online handshake). Not the per-row edge pulls, the periodic
+     * loop, or the stale checks. The screen mirrors it into
+     * [HomeUiState.imageReloadEpoch] and provides it as the core-ui
+     * [com.raulshma.jellyplay.core.ui.image.LocalImageReloadEpoch], so image
+     * composables whose loads failed earlier re-issue their requests on every
+     * forced fetch. Refresh alone doesn't achieve that: a forced fetch of
+     * unchanged data re-emits structurally-equal sections that conflate in
+     * the state flow, and the image URL (a pure function of item id + width)
+     * never changes, so without this counter a failed load has no retrigger.
+     */
+    val imageReloadEpoch: Long = 0L,
 ) {
     /**
      * The server fetch failed — the precondition for the implicit-offline
      * fallback (online mode + downloads present). Sections on screen do NOT
      * disqualify the fallback: they are the stale pre-failure snapshot, and
      * keeping them rendered would freeze Continue Watching / Next Up at
-     * server data that can no longer refresh. The offline collection gate in
+     * server data that cannot refresh. The offline collection gate in
      * [com.raulshma.jellyplay.feature.home.HomeViewModel] keys on this, and
      * the same gate folds it into
      * [com.raulshma.jellyplay.feature.home.HomeUiState.renderSource] via
@@ -1376,6 +1534,32 @@ internal data class HomeRefreshState(
     val fetchFailed: Boolean
         get() = error != null
 }
+
+/**
+ * The narrow, UI-facing projection of [HomeRefreshState]: just the per-row
+ * spinner mirrors — the edge-pull in-flight section ids and the dice-roll
+ * in-flight row ids. Exposed by [HomeViewModel.refreshSpinners] so the
+ * content rows can leaf-collect the two sets WITHOUT the rest of
+ * [HomeRefreshState]: collecting the full state would re-invalidate every
+ * row on every `sections` emission (in-place item patches included) — the
+ * exact churn the leaf-collection split exists to remove. Derivation at the
+ * row is set membership on these small sets.
+ */
+@Immutable
+internal data class HomeRefreshSpinnerState(
+    /**
+     * Section ids with an edge-pull refresh in flight (see
+     * [HomeRefresher.refreshSectionRow]) — the matching online row's edge
+     * spinner. Mirrors [HomeRefreshState.refreshingSectionIds].
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
+    /**
+     * Custom discover rows with a dice roll in flight — the matching row's
+     * dice icon tumbles while the re-fetch runs. Mirrors
+     * [HomeRefreshState.rollingDiscoverRowIds].
+     */
+    val rollingDiscoverRowIds: Set<String> = emptySet(),
+)
 
 /**
  * The shared content-drop fold: the sections, the discover rows, and the
@@ -1397,6 +1581,8 @@ private fun HomeRefreshState.withContentDropped(
     sections = sections,
     discoverSections = emptyMap(),
     bookProgressFractions = bookProgressFractions,
+    // Server-curated hero billboards clear with the sections that carry them.
+    curatedHero = emptyList(),
     error = error,
     isLoading = isLoading,
     recentlyGrabbed = if (dropRecentlyGrabbed) emptyList() else this.recentlyGrabbed,

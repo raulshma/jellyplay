@@ -26,8 +26,8 @@ import kotlinx.coroutines.withTimeout
  *
  * Reports are fire-and-forget on this class's OWN scope
  * ([SupervisorJob] + [Dispatchers.Main.immediate] — the app-module
- * single-owned-scope pattern), not on any activity/ViewModel scope. Declared
- * behaviour delta of that ownership: a report may outlive the shell
+ * single-owned-scope pattern), not on any activity/ViewModel scope. A
+ * consequence of that ownership: a report may outlive the shell
  * activity's destroy. The stop report fires from the ActivityResult callback
  * — the activity is alive at that moment — and an in-flight report
  * *completing* after a subsequent finish() is acceptable and strictly better

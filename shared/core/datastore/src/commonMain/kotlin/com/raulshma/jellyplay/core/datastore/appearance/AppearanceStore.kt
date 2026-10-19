@@ -59,7 +59,7 @@ import kotlinx.serialization.Serializable
  *
  * **Theme style invariant:** a single `theme_variant` key selects the active
  * variant — variants are inherently mutually exclusive. The legacy
- * `synthwave_mode` / `soothing_mode` / `monochrome_mode` booleans are no longer
+ * `synthwave_mode` / `soothing_mode` / `monochrome_mode` booleans are not
  * written but still drive the `themeVariant` derivation so existing installs
  * (and old backups) keep their theme; they remain in the reset list.
  *
@@ -135,7 +135,7 @@ class AppearanceStore constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     /**
-     * The manual layout override (issue #166). Surfaced independently so the
+     * The manual layout override. Surfaced independently so the
      * desktop shell can rewire its adaptive locals without collecting (and
      * recomposing on) the whole appearance aggregate.
      */
@@ -334,8 +334,8 @@ class AppearanceStore constructor(
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
      * DataStore via its row's derived write (the same encoding the row reads
-     * with) — including the gap keys the legacy facade-level
-     * `restorePreferences` omitted (the theme-variant + accent keys, haptics,
+     * with) — including the gap keys a flat preference restore
+     * misses (the theme-variant + accent keys, haptics,
      * date format, font scale, scheduled-theme hours, and color-blind/hand
      * mode).
      */

@@ -125,7 +125,7 @@ class UserPreferencesStore constructor(
     // watch-later playlist, onboarding flag, recent DLNA devices). Injected here
     // so backup export/import can fan out to it alongside the 19 domain stores.
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
-    // Wave 2: backup slices contributed OUTSIDE the domain-store fan-out (Room
+    // Backup slices contributed OUTSIDE the domain-store fan-out (Room
     // config, integration settings, widget config) — see
     // settings.ExternalBackupSlice. Core:datastore cannot depend on Room, so
     // the concrete sources are injected from core:data's Koin module; the
@@ -554,7 +554,7 @@ class UserPreferencesStore constructor(
      * that carry [category]'s fields. Used only to decide *which* slices to
      * touch; the actual per-category write for co-owned slices is field-level
      * via `SliceCategoryMergers` (so `AUDIO` + `PLAYBACK` sharing
-     * `AudioSlice.audioDelayMs` no longer bleeds). Keeping the routing here
+     * `AudioSlice.audioDelayMs` cannot bleed). Keeping the routing here
      * (not in `feature:settings`'s presentation registry) avoids a
      * `core:datastore → feature:settings` dependency cycle — the registry
      * already lives in `feature:settings`, but the store must know the slice
@@ -613,7 +613,7 @@ class UserPreferencesStore constructor(
     }
 
     // ----------------------------------------------------------------------
-    // External backup slices (Wave 2) — Room-backed config + integration /
+    // External backup slices — Room-backed config + integration /
     // widget settings contributed from core:data. Not category-bound; the
     // import preview renders them through their own cards.
     // ----------------------------------------------------------------------

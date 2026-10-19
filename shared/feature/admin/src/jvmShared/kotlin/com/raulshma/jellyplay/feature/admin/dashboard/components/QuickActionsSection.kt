@@ -71,14 +71,14 @@ fun QuickActionsSection(
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
     /**
-     * The JellyPlay companion-plugin transcodes monitor (ADR 0010). [showTranscodes]
+     * The JellyPlay companion-plugin transcodes monitor. [showTranscodes]
      * is the plugin gate (AVAILABLE + `transcodes` feature) — when off the tile
      * does not render and the row stays exactly as it was on a stock server.
      */
     showTranscodes: Boolean = false,
     onTranscodes: () -> Unit = {},
     /**
-     * The JellyPlay companion-plugin broadcast composer (ADR 0010).
+     * The JellyPlay companion-plugin broadcast composer.
      * [showBroadcast] is the plugin gate (AVAILABLE + `events` feature —
      * broadcasts ride the events stream); when off the tile does not render.
      * The plugin tiles share their own trailing row so a stock server's
@@ -87,7 +87,7 @@ fun QuickActionsSection(
     showBroadcast: Boolean = false,
     onBroadcast: () -> Unit = {},
     /**
-     * The JellyPlay companion-plugin analytics dashboard (ADR 0010).
+     * The JellyPlay companion-plugin analytics dashboard.
      * [showAnalytics] is the plugin gate (AVAILABLE + `analytics` feature);
      * when off the tile does not render.
      */
@@ -192,7 +192,7 @@ fun QuickActionsSection(
                 modifier = Modifier.weight(1f),
             )
         }
-        // The JellyPlay companion-plugin tiles (ADR 0010) — each gated by its
+        // The JellyPlay companion-plugin tiles — each gated by its
         // own feature key, so the row composes only where the plugin exposes
         // at least one of them (a stock server never renders it).
         if (showTranscodes || showBroadcast || showAnalytics) {

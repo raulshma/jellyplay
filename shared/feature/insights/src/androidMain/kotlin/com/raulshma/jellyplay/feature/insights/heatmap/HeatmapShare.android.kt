@@ -16,14 +16,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Android actual of the [HeatmapShare] seam. The legacy body captured the
- * whole window via `View.drawToBitmap`; a later revision replaced that with a
- * GraphicsLayer subtree capture — the grid records itself into
- * [captureLayer] on every draw pass (see [WatchProgressHeatmapScreen]'s
- * HeatmapGrid), and `toImageBitmap()` snapshots exactly that subtree, so the
- * shared PNG carries the heatmap alone (no app bar, no pull-to-refresh
- * chrome). The chooser title arrives pre-resolved from composition (the
- * legacy body called Context.getString at share time).
+ * Android actual of the [HeatmapShare] seam. The shared PNG is a GraphicsLayer
+ * subtree capture: the grid records itself into [captureLayer] on every draw
+ * pass (see [WatchProgressHeatmapScreen]'s HeatmapGrid), and `toImageBitmap()`
+ * snapshots exactly that subtree, so the PNG carries the heatmap alone (no app
+ * bar, no pull-to-refresh chrome). The chooser title arrives pre-resolved from
+ * composition, keeping the locale of the composition that launched the share.
  */
 internal class AndroidHeatmapShare(
     private val context: Context,
@@ -34,7 +32,7 @@ internal class AndroidHeatmapShare(
     override suspend fun shareHeatmapImage() {
         withContext(Dispatchers.IO) {
             runCatchingRethrowingCancellation {
-                // Silent-swallow like the legacy body: a failed capture (or a
+                // Silent-swallow: a failed capture (or a
                 // layer never recorded — the share button only exists once the
                 // grid has drawn) does nothing, never crashes. Cancellation
                 // still propagates instead of masquerading as a failed share.

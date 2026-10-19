@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d salto automatico, %2$d mostra pulsante</string>
     <string name="settings_skip_segments_on_seek">Salta segmenti durante la ricerca</string>
     <string name="settings_skip_segments_on_seek_on">Le ricerche in avanti saltano i segmenti con salto automatico</string>
+    <string name="settings_segment_skip_delay">Ritardo salto automatico</string>
+    <string name="settings_segment_skip_delay_off">Disattivato</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">Disattivato</string>
     <string name="settings_syncplay_join_summary">Comportamento di adesione: %1$s</string>
     <string name="settings_join_behavior">Comportamento di adesione</string>
@@ -245,6 +248,7 @@
     <string name="settings_player_engine_subtitle">Scegli il motore di riproduzione multimediale</string>
     <string name="settings_shader_pack">Pacchetto shader</string>
     <string name="settings_tone_mapping">Mappatura tonale</string>
+    <string name="settings_exo_hdr_tone_mapping">Mappatura tonale HDR</string>
     <string name="settings_render_quality">Profilo di qualità</string>
     <string name="settings_interpolation_tscale">Filtro di interpolazione (tscale)</string>
     <string name="settings_power_user_mode">Modalità utente avanzato</string>
@@ -265,6 +269,12 @@
     <string name="settings_passthrough_codec_off">Decodificato via software</string>
     <string name="settings_max_audio_channels">Canali audio massimi</string>
     <string name="settings_downmix_boost">Potenziamento downmix stereo</string>
+    <string name="settings_spatial_audio">Audio spaziale</string>
+    <string name="settings_spatial_audio_on">Consente allo spazializzatore di sistema di riprodurre audio multicanale quando attivo</string>
+    <string name="settings_spatial_audio_off">Elaborazione audio predefinita</string>
+    <string name="settings_spatial_audio_only_headphones">Solo cuffie</string>
+    <string name="settings_spatial_audio_only_headphones_on">Tiene fuori il downmix solo sulle uscite cuffia</string>
+    <string name="settings_spatial_audio_only_headphones_off">Applica su ogni uscita</string>
     <string name="settings_offline_playback">Riproduzione offline</string>
     <string name="settings_offline_playback_prefer_downloaded">Preferisci scaricato</string>
     <string name="settings_offline_playback_prefer_streaming">Preferisci streaming</string>

@@ -8,12 +8,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,6 +23,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarDuration
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -57,11 +60,15 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.feature.home.generated.resources.home_error_load_content
 import com.raulshma.jellyplay.feature.home.generated.resources.home_go_online_action
 import com.raulshma.jellyplay.feature.home.generated.resources.home_implicit_offline_banner
+import com.raulshma.jellyplay.feature.home.generated.resources.home_new_sections_announcement
+import com.raulshma.jellyplay.feature.home.generated.resources.home_new_sections_customize
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_description
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -73,11 +80,13 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
+import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -102,6 +111,8 @@ import com.raulshma.jellyplay.core.ui.components.downloads.rememberRemoveDownloa
 import com.raulshma.jellyplay.core.ui.components.seerr.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
+import com.raulshma.jellyplay.core.ui.image.LocalImageReloadEpoch
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -144,11 +155,23 @@ data class HomeCallbacks(
      * overrides). Reached from the inline section-config sheet when a
      * per-library (LATEST_MEDIA) row is being configured. */
     val onConfigureLibraries: () -> Unit = {},
+    /** Open Home Settings from the new-section announcement snackbar's
+     * Customize action (the config hub where the just-enabled sections are
+     * reordered/toggled). */
+    val onCustomizeHome: () -> Unit = {},
     /** Open the full library screen for a home-section "See All" action.
      * Carries the section [HomeSectionType], the optional per-library id (non-null
      * only for LATEST_MEDIA), the optional per-library [collectionType] (used to
      * reproduce the home row's leaf item type + sort), and the resolved title. */
     val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
+    /**
+     * Navigate to a caller-constructed route — the in-feature routing:
+     * the stats card's admin user-statistics detail and the genre rail's
+     * filtered library section. Same Route-carrying shape as
+     * [onSettingsSearchItemClick]; default no-op keeps every existing
+     * constructor call site compiling.
+     */
+    val onOpenRoute: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 )
 
 /**
@@ -188,6 +211,14 @@ internal data class HomeRenderInputs(
     val seerrCardLoadingState: SeerrCardLoadingState,
     /** Focus requester attached to the hero row (D-pad enter routing). */
     val heroFocusRequester: FocusRequester,
+    /**
+     * The refresher's per-row spinner mirrors (edge-pull + dice-roll
+     * in-flight sets — see [HomeRefreshSpinnerState]). The content rows
+     * leaf-collect this at ROW scope (the `pendingSyncEntries` pattern), so
+     * a single-row refresh's spin-up/data/spin-down emissions recompose only
+     * the matching row — never the MainHomeContent orchestrator.
+     */
+    val refreshSpinners: StateFlow<HomeRefreshSpinnerState>,
 )
 
 @Composable
@@ -224,10 +255,13 @@ private fun MainHomeContent(
 
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val serverHealth by LocalServerHealth.current.collectAsStateWithLifecycle()
-    val headerStatus = remember(state.isLoading, state.error != null, networkStatus, serverHealth) {
+    // The header chip reads the refresher's folded verdict
+    // ([HomeUiState.fetchFailed]) — not the raw `error` field: the two stay
+    // separate by design.
+    val headerStatus = remember(state.isLoading, state.fetchFailed, networkStatus, serverHealth) {
         resolveHeaderStatus(
             isLoading = state.isLoading,
-            hasError = state.error != null,
+            hasError = state.fetchFailed,
             networkStatus = networkStatus,
             serverHealth = serverHealth,
         )
@@ -262,14 +296,28 @@ private fun MainHomeContent(
     }
 
     // Offline home = the normal home content list fed with sections derived
-    // from the offline library (#147) — no dedicated offline screen. The whole
+    // from the offline library — no dedicated offline screen. The whole
     // render model (filtered lists, derived sections, id→item lookup) is
     // derived in ONE place (buildOfflineHomeContent) and passed down as a
     // single value; derived here (above the hero setup, not inside the content
     // lambda) so the hero rotates the same offline titles while offline.
     val offlineTitles = rememberOfflineHomeSectionTitles()
+    // Render-relevant fingerprints over the two big offline lists —
+    // remembered off each coarse list so the hashing runs only when a new
+    // list arrives, while the key compare below is one Int per body
+    // recomposition instead of deep-equals over every item. A
+    // download-progress emission rebuilds these lists with unchanged
+    // rendered fields (see [offlineHomeRenderFingerprint] for the field
+    // set), and those re-instances are exactly what this key skips. The
+    // remember sites downstream of [offlineContent] keep keying on the
+    // aggregate itself: it now re-derives only on a real input change, so
+    // their equals are same-instance O(1) in the steady state.
+    val offlineLibraryFingerprint =
+        remember(state.offlineLibrary) { offlineHomeRenderFingerprint(state.offlineLibrary) }
+    val offlineEpisodesFingerprint =
+        remember(state.offlineEpisodes) { offlineHomeRenderFingerprint(state.offlineEpisodes) }
     val offlineContent = remember(
-        state.offlineLibrary, state.offlineEpisodes, state.homeMode, offlineTitles,
+        offlineLibraryFingerprint, offlineEpisodesFingerprint, state.homeMode, offlineTitles,
         state.offlineSectionPrefs, state.offlineLayoutSections,
     ) {
         buildOfflineHomeContent(
@@ -301,9 +349,15 @@ private fun MainHomeContent(
     } else null
 
     // Hero featured-candidate selection — single-pass (was up to 3x flatMap/filter).
-    val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections) {
-        selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections)
+    // The plugin-curated billboards merge ahead of the local pool (server
+    // order, dedupe by item id, curated wins); offline rendering ignores them.
+    val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero) {
+        selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero)
     }
+    // The featured item's curated billboard copy, keyed by item id — the hero
+    // reads the headline/subhead overrides for whichever candidate is
+    // featured (curated or local; a miss renders the item's own metadata).
+    val curatedHeroOverlay = remember(state.curatedHero) { state.curatedHero.associateBy { it.item.id } }
     val heroFocusRequester = remember { FocusRequester() }
     val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
@@ -346,7 +400,7 @@ private fun MainHomeContent(
         getBackdropUrl = heroBackdropUrlBuilder,
     )
 
-    // Global nav overflow "Surprise Me" (#115): the hero controller lives here
+    // Global nav overflow "Surprise Me": the hero controller lives here
     // (it owns the hero LazyListState + featured candidates), so the app shell
     // emits a one-shot signal that Home forwards to it.
     androidx.compose.runtime.LaunchedEffect(heroController, surpriseRequests) {
@@ -512,6 +566,7 @@ private fun MainHomeContent(
         seerrPrefetch,
         seerrCardLoadingState,
         heroFocusRequester,
+        viewModel.refreshSpinners,
     ) {
         HomeRenderInputs(
             mediaOnItemClick = mediaOnItemClick,
@@ -524,6 +579,7 @@ private fun MainHomeContent(
             seerrPrefetch = seerrPrefetch,
             seerrCardLoadingState = seerrCardLoadingState,
             heroFocusRequester = heroFocusRequester,
+            refreshSpinners = viewModel.refreshSpinners,
         )
     }
 
@@ -568,6 +624,11 @@ private fun MainHomeContent(
         closeSearch()
     }
 
+    // The image-reload epoch scopes MediaImage's retry contract to the home
+    // content subtree: every forced refresh bumps the counter (HomeRefresher),
+    // resetting image chains that failed on a transient error so the next
+    // pull-to-refresh actually recovers cards stuck on their blurHash.
+    CompositionLocalProvider(LocalImageReloadEpoch provides state.imageReloadEpoch) {
     ArtworkThemeWrapper(
         imageUrl = heroController.backdropUrl,
         dynamicTheming = state.appearance.dynamicTheming,
@@ -601,15 +662,61 @@ private fun MainHomeContent(
                     },
                 ),
         ) {
-            // Recovery path for search-history delete/clear. Home
-            // previously had no SnackbarHost at all; this is the single host.
+            // Recovery path for search-history delete/clear. This is the
+            // single SnackbarHost.
+            // The new-section announcement rides the SAME host, mapped
+            // here from the VM's structural event to localized text (the VM
+            // has no resource access); its Customize action adds the
+            // navigation onto the VM's stamp closure (the VM cannot route),
+            // while the stamp itself stays on the action either way (button
+            // tap or dismissal).
+            val newOnHomeTemplate = stringResource(Res.string.home_new_sections_announcement)
+            val customizeLabel = stringResource(Res.string.home_new_sections_customize)
+            val snackbarActions = remember(viewModel, callbacks, newOnHomeTemplate, customizeLabel) {
+                merge(
+                    viewModel.undoActions,
+                    viewModel.sectionAnnouncements.map { announcement ->
+                        UndoableAction(
+                            message = newOnHomeTemplate.replace(
+                                "%1\$s",
+                                announcement.addedSections.joinToString(", ") { it.descriptor.displayName },
+                            ),
+                            onUndo = {
+                                announcement.stampAnnounced()
+                                callbacks.onCustomizeHome()
+                            },
+                            actionLabel = customizeLabel,
+                            duration = SnackbarDuration.Long,
+                            onDismiss = announcement.stampAnnounced,
+                        )
+                    },
+                )
+            }
             UndoSnackbarOverlay(
-                actions = viewModel.undoActions,
+                actions = snackbarActions,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
             // Ambient backdrop: the hero artwork's BlurHash, or a palette-derived
             // gradient when no hero/blurhash is available. Sits behind all content
             // and above the flat background fill. Suppressed in performance mode.
+            //
+            // While a TV card holds focus (and `home_focus_backdrop` is on),
+            // the backdrop reads THE CARD's artwork instead — the in-memory
+            // BlurHash crossfades in at focus arrival, the backdrop URL (the
+            // ambient palette's source) only resolves after the settle window,
+            // and focus exit folds back to the hero-driven inputs here. Offline
+            // the URL half is skipped (a server URL is unreachable; blank folds
+            // to the arrival blurhash alone).
+            val focusBackdropUrlFor = if (renderingOffline) {
+                remember { { _: MediaItem -> "" } }
+            } else {
+                mediaBackdropUrlBuilder
+            }
+            val focusBackdrop = rememberFocusBackdropState(
+                focusedItem = { tvFocusedItem },
+                enabled = isTv && state.focusBackdropEnabled,
+                backdropUrlFor = focusBackdropUrlFor,
+            )
             HomeBackdrop(
                 state = HomeBackdropState(
                     enabled = state.homeBackdropEnabled,
@@ -619,9 +726,13 @@ private fun MainHomeContent(
                     blurHash = heroController.featuredItem?.blurHashes?.backdrop,
                     backdropUrl = heroController.backdropUrl,
                     backgroundColor = backgroundColor,
-                ),
+                ).withFocusBackdrop(focusBackdrop),
             )
-            CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+            CompositionLocalProvider(
+                LocalMediaQuickActionController provides quickActionController,
+                // The wide-card trickplay peek's pref gate.
+                LocalHomeTrickplayPreview provides state.trickplayPreviewEnabled,
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -660,6 +771,8 @@ private fun MainHomeContent(
                     onConfigureHomeLayout = onConfigureHomeLayout,
                     onConfigureLibraries = onConfigureLibraries,
                     onFocusedMediaItem = onFocusedMediaItem,
+                    clearFocusedMediaItem = remember { { tvFocusedItem = null } },
+                    curatedHeroOverlay = curatedHeroOverlay,
                     listState = listState,
                     density = density,
                 )
@@ -689,6 +802,7 @@ private fun MainHomeContent(
         }
     }
     }
+    } // end CompositionLocalProvider(LocalImageReloadEpoch)
 
     // Long-press / TV-Menu quick actions for home cards.
     MediaQuickActionHost(quickActionController)
@@ -739,6 +853,13 @@ private fun HomeSurfaceContent(
     onConfigureHomeLayout: () -> Unit,
     onConfigureLibraries: () -> Unit,
     onFocusedMediaItem: (MediaItem) -> Unit,
+    /** The focus-exit half: drops the screen's tracked card when focus
+     * leaves the rows for the hero — the row reporting only ever names a card
+     * that GAINED focus, so without this the tracked item (and the focus
+     * backdrop) would go stale once the hero re-engages. */
+    clearFocusedMediaItem: () -> Unit,
+    /** The curated billboard copy, keyed by item id (null copy = item metadata). */
+    curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry>,
     listState: LazyListState,
     density: Density,
 ) {
@@ -773,24 +894,64 @@ private fun HomeSurfaceContent(
             musicContent()
         }
         is HomeSurface.Content -> {
+            // ── non-section home content ────────────────────────
+            // The newsletter banner is the precedent for non-section home
+            // content; that banner mounts as a gated LazyColumn item inside
+            // HomeContentList, which this agent does not own — so the stats
+            // card + genre rail mount here instead, directly above the
+            // content list (the closest HomeScreen-owned slot between the
+            // hero and the first row). Both are ONLINE-FEED-ONLY:
+            // `s.feed is HomeRenderFeed.Online` is the same suppression posture the
+            // banner's `online?.newsletterBannerVisible` gate applies (that
+            // gate reads HomeContentState.online = feed as? HomeRenderFeed.Online),
+            // so an offline render (explicit or implicit) shows neither.
+            val onlineFeed = s.feed is HomeRenderFeed.Online
+            // Documented relative order: the stats card first, the genre
+            // rail directly above the first row (the chips read as the
+            // row-adjacent quick nav; the plan leaves the pair unordered).
+            val statsCardData = state.statsCard
+            val currentUser = state.currentUser
+            val statsCardClick: (() -> Unit)? = if (currentUser != null && currentUser.isAdmin) {
+                // Tap → the admin area's user-statistics detail for the
+                // signed-in user (the route that exists is
+                // UserStatisticsDetail);
+                // hidden for non-admins, per the admin gate.
+                remember(callbacks, currentUser.id) {
+                    { callbacks.onOpenRoute(Route.UserStatisticsDetail(currentUser.id)) }
+                }
+            } else {
+                null
+            }
             HomeContentList(
                 state = HomeContentState(
+                    // The VM's slice, embedded as ONE value (the
+                    // DetailContentState precedent) — readers qualify through
+                    // state.core.X; the extras below are the screen's own
+                    // resolutions.
+                    core = HomeContentState.Core(
+                        homeHeroEnabled = state.homeHeroEnabled,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        discoverEnabled = state.discoverEnabled,
+                        experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
+                        continueWatchingClickBehavior = state.continueWatchingClickBehavior,
+                        recentlyGrabbed = state.recentlyGrabbed,
+                        homeLastVisitEpochMs = state.homeLastVisitEpochMs,
+                        statsCard = statsCardData,
+                        statsCardEnabled = state.statsCardEnabled,
+                        genreChips = state.genreChips,
+                        genreRailEnabled = state.genreRailEnabled,
+                    ),
                     // WHAT renders was decided by the fold — the
                     // feed carries the online or offline surface
                     // with the offline-only masks (spinner,
                     // banners) and the FallbackPending loading
                     // window already applied.
                     feed = s.feed,
-                    homeHeroEnabled = state.homeHeroEnabled,
-                    homeBackdropEnabled = state.homeBackdropEnabled,
-                    discoverEnabled = state.discoverEnabled,
-                    experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
                     featuredItem = heroController.featuredItem,
+                    curatedHeroOverlay = curatedHeroOverlay,
                     backgroundColor = backgroundColor,
                     contentPad = contentPad,
                     headerHeight = headerHeight,
-                    isLightTheme = isLightTheme,
-                    continueWatchingClickBehavior = state.continueWatchingClickBehavior,
                     // The CR progress bars ride the fold too —
                     // the surface carries whichever map belongs
                     // to the carried feed (online vs offline
@@ -798,18 +959,11 @@ private fun HomeSurfaceContent(
                     bookProgressFractions = s.bookProgressFractions,
                     discoverRows = discoverRows,
                     allDiscoverItems = allDiscoverItems,
-                    recentlyGrabbed = state.recentlyGrabbed,
                     randomDiscoverRowIds = remember(state.sectionConfig.discoverRows) {
                         state.sectionConfig.discoverRows
                             .filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN && it.filters.sortBy == SortOption.RANDOM }
                             .mapTo(mutableSetOf()) { it.id }
                     },
-                    // The dice-roll in-flight mirror: tumbles the
-                    // matching row's dice icon while the re-fetch runs.
-                    rollingDiscoverRowIds = state.rollingDiscoverRowIds,
-                    // The edge-pull in-flight mirror: spins the matching
-                    // row's edge chip while its single-row refetch runs.
-                    refreshingSectionIds = state.refreshingSectionIds,
                     statusBanner = implicitOfflineBanner,
                 ),
                 callbacks = HomeContentCallbacks(
@@ -818,7 +972,15 @@ private fun HomeSurfaceContent(
                     onNewsletterClick = callbacks.onNewsletterClick,
                     onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                     onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
-                    onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
+                    // The hero re-engaging means no card holds focus —
+                    // drop the tracked card (the focus backdrop reverts; the
+                    // Menu key stops targeting a card the user left).
+                    onFocusChange = remember {
+                        { focused: Boolean ->
+                            if (focused) clearFocusedMediaItem()
+                            heroController.onFocusChange(focused)
+                        }
+                    },
                     getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                     photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                     onSeerrItemClick = callbacks.onSeerrItemClick,
@@ -830,10 +992,44 @@ private fun HomeSurfaceContent(
                     onFocusedMediaItem = onFocusedMediaItem,
                     onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
                     onRefreshSection = remember(viewModel) { { sectionId: String -> viewModel.onEvent(HomeUiEvent.RefreshSection(sectionId)) } },
+                    onPresenceChipClick = remember(callbacks) {
+                        { chip: HomePresenceChip ->
+                            callbacks.onItemClick(chip.itemId, chip.mediaType, null, chip.itemName)
+                        }
+                    },
+                    onPresenceJoinClick = remember(viewModel, callbacks) {
+                        { chip: HomePresenceChip ->
+                            viewModel.onEvent(
+                                HomeUiEvent.JoinPresenceWatchParty(chip) { startPositionTicks ->
+                                    callbacks.onPlayClick(
+                                        chip.itemId,
+                                        null,
+                                        startPositionTicks,
+                                        chip.mediaType,
+                                        null,
+                                        chip.itemName,
+                                    )
+                                },
+                            )
+                        }
+                    },
+                    onPresenceDismiss = remember(viewModel) {
+                        { chip: HomePresenceChip ->
+                            viewModel.onEvent(HomeUiEvent.DismissPresenceChip(chip.sessionId))
+                        }
+                    },
+                    onStatsCardClick = statsCardClick,
+                    onGenreClick = remember(callbacks) {
+                        { genre: String -> callbacks.onOpenRoute(homeGenreRoute(genre)) }
+                    },
                 ),
                 renderInputs = renderInputs,
                 listState = listState,
                 density = density,
+                // The chips' own flow (see HomeViewModel.presenceChips) —
+                // collected at the chip row inside the content list, never
+                // mirrored through the whole uiState.
+                presenceChips = viewModel.presenceChips,
             )
         }
     }
@@ -896,7 +1092,7 @@ private fun HomeDockArea(
     }
 
     // Lift the HomeTopDock lambdas. The per-keystroke query string
-    // no longer flows through MainHomeContent (it's collected in the
+    // does not flow through MainHomeContent (it's collected in the
     // HomeTopDockScrim leaf via viewModel.searchQuery), but the
     // lambdas are still hoisted so HomeTopDock stays skippable on
     // the recompositions that DO reach it (scroll, search focus).
@@ -1035,8 +1231,8 @@ private fun HomeTailSheets(
     if (showSyncDetails) {
         // Collect pendingSyncEntries / pendingItemDetails ONLY while the sheet
         // is open. Hoisting these collections out of MainHomeContent (and
-        // gating them on showSyncDetails) means each outbox write no longer
-        // re-subscribes / invalidates the ~510-line orchestrator body — the
+        // gating them on showSyncDetails) keeps an outbox write from
+        // re-subscribing / invalidating the ~510-line orchestrator body — the
         // VM's own StateFlow(WhileSubscribed(5_000)) even pauses the upstream
         // flow while the sheet is closed.
         val entries by viewModel.pendingSyncEntries.collectAsStateWithLifecycle()
@@ -1175,8 +1371,7 @@ private fun HomeSeriesDeleteSheet(
  * Reads `scrollFraction` (a per-pixel-changing value over the first 140 dp of
  * hero scroll) inside its own scope, so only this composable + [HomeTopDock]
  * + the menu button recompose during scroll — [MainHomeContent] (450+ lines)
- * is left untouched. Previously the color computation lived in
- * `MainHomeContent`, which meant every scroll frame re-executed the entire
+ * is left untouched; otherwise every scroll frame re-executes the entire
  * function body.
  *
  * `scrollFraction` is passed as a `() -> Float` getter rather than a `Float`

@@ -20,8 +20,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * Pins the shared session-restore choreography (the Android
- * SessionCoordinator twin desktop used to lack): a successful restore with a
+ * Pins the shared session-restore choreography: a successful restore with a
  * persisted (server, user) pair settles the splash gate only AFTER the
  * rendered authenticated mirror has flipped (the measured splash-flash bug
  * class — the release riding the mirror write, never the host flow, never

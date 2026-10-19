@@ -6,7 +6,7 @@ kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.player.video"
         // Rehomed :app androidTest suites (AVSyncSheet, AspectRatioSheet,
-        // DecoderPickerSheet, HdrBadge, NextEpisodeOverlay, PlaybackInfoOverlay,
+        // DecoderPickerSheet, NextEpisodeOverlay, PlaybackInfoOverlay,
         // SkipOverlay, SubtitleDelayOverlay, SubtitleManagerSection,
         // SubtitleStyleSheet, TrickplayOverlay) — withHostTest creates the
         // androidUnitTest variant bound to the Kotlin test tree (AGP-9 KMP
@@ -134,6 +134,10 @@ kotlin {
             // StandaloneDatabaseProvider backs the video SimpleCache's index
             // (VideoStreamCache), mirroring the audio cache in :core:data.
             implementation(libs.media3.database)
+            // GL video-graph path for HDR→SDR tone mapping: ExoPlayerEngine
+            // engages it via setVideoEffects (whose implementation reflection-
+            // checks SingleInputVideoGraph$Factory from this module).
+            implementation(libs.media3.effect)
             // FFmpeg software audio decoder for codecs the platform can't
             // decode (DTS, MLP/TrueHD, EAC3, etc.). DefaultRenderersFactory
             // loads it via reflection when EXTENSION_RENDERER_MODE is ON (the

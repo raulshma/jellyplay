@@ -121,8 +121,9 @@ actual fun PlatformBitmap.asPlatformImageBitmap(): ImageBitmap = toComposeImageB
 
 // ── Cast chrome ────────────────────────────────────────────────────────────
 
-internal actual val VideoPlayerViewModel.platformCastManager: Any?
-    get() = null
+internal actual fun VideoPlayerViewModel.platformCastRouteButton(): com.raulshma.jellyplay.feature.player.video.session.CastRouteButton? =
+    // No desktop cast stack — the controls keep the cast slot hidden.
+    null
 
 @Composable
 internal actual fun rememberCastDisconnect(viewModel: VideoPlayerViewModel): () -> Unit =
@@ -133,9 +134,9 @@ internal actual fun CoroutineScope.launchPlatformCastSessionEvents(viewModel: Vi
 }
 
 @Composable
-internal actual fun PlatformCastButton(castManager: Any?) {
-    // Never composed: platformCastManager is null on desktop, so the controls
-    // keep the cast slot hidden.
+internal actual fun PlatformCastButton(routeButton: com.raulshma.jellyplay.feature.player.video.session.CastRouteButton) {
+    // Never composed: platformCastRouteButton is null on desktop, so the
+    // controls keep the cast slot hidden.
 }
 
 // ── Engine surfaces ────────────────────────────────────────────────────────

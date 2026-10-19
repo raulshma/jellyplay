@@ -20,6 +20,20 @@ internal fun tvSeekStepFraction(isTv: Boolean, durationMs: Long): Float =
     if (isTv) 30_000f / durationMs else 10_000f / durationMs
 
 /**
+ * The fraction of the bar a Jellyfin position tick sits at: [ticks] divided
+ * through the 10_000-ticks-per-ms factor (Jellyfin's runTimeTicks unit) and
+ * by the duration, coerced into `0f..1f` — a marker past the duration clamps
+ * to the bar's end, a negative tick clamps to its start, and a duration-less
+ * stream renders 0. The shared core of the seek bar's segment / A-B /
+ * chapter marker math: the former inline `(x / duration)` derivations in
+ * `TvControllableSeekBar` juggled the ticks-vs-ms unit at the 10_000 factor
+ * site by site (ms values ride in as `ms * 10_000`, the same conversion
+ * every other ticks↔ms site in the module performs).
+ */
+internal fun ticksToFraction(ticks: Long, durationMs: Long): Float =
+    if (durationMs <= 0L) 0f else ((ticks / 10_000f) / durationMs).coerceIn(0f, 1f)
+
+/**
  * The TV/touch seek bar's input-event state machine, extracted from
  * `PlayerControls.TvControllableSeekBar` (the [GestureSeekController]
  * shape: a plain class remembered in the composable, [StateFlow] state out,

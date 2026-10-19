@@ -3,9 +3,8 @@ package com.raulshma.jellyplay.feature.settings
 import android.content.Context
 
 /**
- * Android actual of the [AppLocaleSetter] seam — the pre-migration
- * LanguageSettingsViewModel body, verbatim: LocaleManager on TIRAMISU+, the
- * legacy core:ui LocaleApplier fallback below that.
+ * Android actual of the [AppLocaleSetter] seam: LocaleManager on TIRAMISU+,
+ * the core:ui LocaleApplier fallback below that.
  */
 internal class AndroidAppLocaleSetter(
     private val context: Context,

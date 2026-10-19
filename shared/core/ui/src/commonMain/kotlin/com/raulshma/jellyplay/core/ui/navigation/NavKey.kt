@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.navigation
 
 import androidx.compose.runtime.Immutable
 import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkTarget
 import kotlinx.serialization.Serializable
 
 /**
@@ -156,6 +157,11 @@ sealed class Route : NavKey {
         override val isDetail = true
     }
 
+    /** Full TMDB reviews screen reached from "All reviews (N)" on a detail screen's reviews preview. */
+    @Serializable data class Reviews(val itemId: String) : Route() {
+        override val isDetail = true
+    }
+
     /** Sonarr-style series management screen (collapsible seasons, per-episode actions). */
     @Serializable data class ManageSeries(val seriesId: String) : Route() {
         override val isDetail = true
@@ -181,6 +187,13 @@ sealed class Route : NavKey {
         val startPositionTicks: Long = 0,
         val subtitleStreamIndex: Int? = null,
         val audioStreamIndex: Int? = null,
+        /**
+         * Resolve the session to [com.raulshma.jellyplay.feature.player.video.PlaybackSource.Online]
+         * even when a completed download exists — the "Stream instead" action
+         * on a downloaded item. Default false keeps the Auto behavior (local
+         * file wins when usable).
+         */
+        val forceStream: Boolean = false,
     ) : Route() {
         override val isFullScreen = true
         override val isPlayer = true
@@ -305,6 +318,14 @@ sealed class Route : NavKey {
      * Reached from the Home settings hub's "Hidden from Next Up" row.
      */
     @Serializable data object NextUpExcluded : Route()
+
+    /**
+     * "Hidden libraries" management screen — the libraries the user hid from
+     * the home My Media tiles row (the home-discovery store's
+     * `MY_MEDIA_HIDDEN_LIBRARY_IDS` set), with per-library and bulk restore.
+     * Reached from the Home settings hub's "Hidden libraries" row.
+     */
+    @Serializable data object MyMediaHidden : Route()
 
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
@@ -678,3 +699,34 @@ interface HighlightableRoute {
  */
 fun Route.withHighlightSettingId(id: String): Route =
     (this as? HighlightableRoute)?.withHighlightSettingId(id) ?: this
+
+/**
+ * The parsed deep-link target → [Route] fold — the ONE target→destination
+ * table every platform shell consumes. [DeepLinkTarget] lives in core:model
+ * (it must stay UI-free for the link grammar), [Route] here; this extension
+ * sits beside [Route] so the Android shell's DeepLinkHandler and the desktop
+ * shell's DesktopLinkOpenPolicy consume the same rows instead of two
+ * hand-mirrored when-expressions kept in agreement by "same rows, same nulls"
+ * KDoc. The shells keep only their Uri→target parsing glue.
+ *
+ * Rows (pinned by DeepLinkTargetRouteTest):
+ *  - MediaDetail / NewsletterSection / SeerrDetail → their detail routes;
+ *  - Search / Settings / Downloads / Library → their top-level routes;
+ *  - SyncPlayJoin → `null` on EVERY shell: it is the Discord Rich Presence
+ *    Join button's payload, consumed by the desktop's
+ *    DiscordPresenceService.handleJoinSecret — Android has no join-by-link
+ *    surface either (SyncPlay groups are joined through the group browser),
+ *    so the link parses but routes nowhere;
+ *  - `null` (a grammar parse miss) → `null`.
+ */
+fun DeepLinkTarget?.toRoute(): Route? = when (this) {
+    is DeepLinkTarget.MediaDetail -> Route.MediaDetail(itemId)
+    is DeepLinkTarget.NewsletterSection -> Route.NewsletterSectionList(section)
+    is DeepLinkTarget.SeerrDetail -> Route.SeerrDetail(tmdbId = tmdbId, mediaType = mediaType)
+    DeepLinkTarget.Search -> Route.Search
+    DeepLinkTarget.Settings -> Route.Settings
+    DeepLinkTarget.Downloads -> Route.Downloads
+    DeepLinkTarget.Library -> Route.Library
+    is DeepLinkTarget.SyncPlayJoin -> null
+    null -> null
+}

@@ -21,6 +21,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -34,9 +36,9 @@ private const val POLL_INTERVAL_MS = 60_000L
 /**
  * Idle cadence for the same poll while NO collector watches the badge flow
  * (app backgrounded, or polling kept alive by a consumer with no badge on
- * screen): 15 minutes, matching HomeRefresher's
- * `HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS` discipline — the singleton
- * keeps the shared count warm, but at 1/15th of the foreground rate.
+ * screen): 15 minutes, matching HomeRefresher's background-refresh
+ * discipline — the singleton keeps the shared count warm, but at 1/15th of
+ * the foreground rate.
  */
 private const val POLL_INTERVAL_IDLE_MS = 15 * 60_000L
 
@@ -251,11 +253,14 @@ class SeerrRepositoryImpl(
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> =
         detailCache.getOrFetchTyped({ sessionIdentity.cacheIdentity() }, "ratings_${tmdbId}_$mediaType") {
             withSeerrSession { url, credentials ->
-                if (mediaType == "movie") {
-                    seerrApiClient.getMovieRatingsCombined(url, credentials, tmdbId)
-                } else {
-                    seerrApiClient.getTvRatings(url, credentials, tmdbId)
-                }
+                // The kind fork reads the model's SeerrMediaKind (one
+                // ignoreCase parse): the former `== "movie"` was case-sensitive,
+                // so a "Movie" payload hit the tv-ratings leg — the fold's
+                // declared fix.
+                SeerrMediaKind.fromWire(mediaType).pick(
+                    movie = { seerrApiClient.getMovieRatingsCombined(url, credentials, tmdbId) },
+                    tv = { seerrApiClient.getTvRatings(url, credentials, tmdbId) },
+                )
             }
         }
 
@@ -503,12 +508,21 @@ class SeerrRepositoryImpl(
             // Track the latest enabled flag without delaying the collector.
             var enabled = false
             val prefsJob = launch {
-                seerrPreferencesStore.preferences.collect { prefs ->
-                    enabled = prefs.enabled
-                    // Refresh immediately when Seerr is (re)enabled so the UI
-                    // doesn't wait a full interval for the first poll.
-                    if (enabled) doPoll()
-                }
+                seerrPreferencesStore.preferences
+                    .map { it.enabled }
+                    .distinctUntilChanged()
+                    .collect { enabledValue ->
+                        enabled = enabledValue
+                        // Refresh immediately when Seerr is (re)enabled so the
+                        // UI doesn't wait a full interval for the first poll.
+                        // The distinctUntilChanged confines this to the actual
+                        // enable EDGES: while enabled, ANY other
+                        // pref emission (URL, apiKey, badge toggles) used to
+                        // re-fire doPoll() here — 1-2 network calls per edit,
+                        // against the KDoc's decouple-cadence-from-prefs
+                        // intent.
+                        if (enabledValue) doPoll()
+                    }
             }
             try {
                 while (isActive) {

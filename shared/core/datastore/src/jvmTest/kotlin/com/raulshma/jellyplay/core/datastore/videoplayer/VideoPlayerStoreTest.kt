@@ -29,8 +29,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the in-player video preference store, focusing on the
- * segment-behaviour legacy migration and bounds coercions that previously lived
- * inline in the `UserPreferencesStore` god object with **no** unit coverage.
+ * segment-behaviour legacy migration and bounds coercions.
  */
 class VideoPlayerStoreTest {
 
@@ -215,7 +214,7 @@ class VideoPlayerStoreTest {
 
     @Test
     fun `a locked-out stored map is healed on read and persisted by the next mapping write`() = runTest {
-        // The broken-editor fallout (issue #171): every summon surface off —
+        // The broken-editor fallout: every summon surface off —
         // the controls can never be shown. The heal rides the read, so the
         // projection is repaired even though the stored blob is not.
         val locked = PlayerInputDefaults.defaultMap()
@@ -308,6 +307,17 @@ class VideoPlayerStoreTest {
         assertTrue(store.videoPlayer.first().skipSegmentsOnSeek)
         store.setSkipSegmentsOnSeek(false)
         assertFalse(store.videoPlayer.first().skipSegmentsOnSeek)
+    }
+
+    @Test
+    fun `play_trailer_before_movie defaults off and toggles`() = runTest {
+        // Opt-in by default — trailer-then-feature changes today's
+        // feature-first play behavior.
+        assertFalse(store.videoPlayer.first().playTrailerBeforeMovie)
+        store.setPlayTrailerBeforeMovie(true)
+        assertTrue(store.videoPlayer.first().playTrailerBeforeMovie)
+        store.setPlayTrailerBeforeMovie(false)
+        assertFalse(store.videoPlayer.first().playTrailerBeforeMovie)
     }
 
     @Test

@@ -68,8 +68,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_what
  * the CompositionLocalProvider-wrapped LazyColumn wiring the profile /
  * power-user / devices / account / activity / system groups, the item rows,
  * and the TV screensaver + platform-gated desktop groups through
- * [settingsSection]. Relocated verbatim from [SettingsScreen]'s inline `else`
- * arm; the screen keeps the header chrome, dialogs, and state ownership.
+ * [settingsSection]. The screen keeps the header chrome, dialogs, and state
+ * ownership.
  */
 @Composable
 internal fun SettingsBrowsePane(
@@ -178,10 +178,10 @@ internal fun SettingsBrowsePane(
                 }
 
                 // The JellyPlay companion plugin's whole root-screen face
-                // (ADR 0010) in ONE grouped row: the navigation entries
+                // in ONE grouped row: the navigation entries
                 // (sync / messages / my ratings / your watching) above the
-                // per-feature switches, inside a single SettingsGroup card —
-                // the old five sibling sections consolidated. Same
+                // per-feature switches, inside a single SettingsGroup card.
+                // Same
                 // graceful-absent gating: the section hides unless the probe
                 // reports AVAILABLE, and each row rides its own gate.
                 settingsSection("group_jellyplay", isTv) {
@@ -212,7 +212,8 @@ internal fun SettingsBrowsePane(
 
                 // The converted domains' entrances: key, icon, title and
                 // deep-link row id read the domain's declaration
-                // ([AppearanceEntrance] and its wave siblings) — the same
+                // ([AppearanceEntrance] and the other entrance declarations)
+                // — the same
                 // declaration spliced into SETTINGS_ENTRANCE_SECTIONS derives
                 // the section's entrance step — so emission and numbering
                 // single-home on it.

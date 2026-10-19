@@ -18,6 +18,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -69,8 +70,10 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
+import com.raulshma.jellyplay.core.model.EpisodeStreamInfo
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MissingEpisodeReason
+import com.raulshma.jellyplay.core.model.hasDisplayableBadges
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.MediaCardProgressOverlay
@@ -486,6 +489,8 @@ internal fun SeasonsSection(
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
                                     animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
                                     tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
+                                    showStreamBadges = presentation.showStreamBadges,
+                                    showDownloadProgress = presentation.showDownloadProgress,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -520,6 +525,8 @@ internal fun SeasonsSection(
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
                                     animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
                                     tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
+                                    showStreamBadges = presentation.showStreamBadges,
+                                    showDownloadProgress = presentation.showDownloadProgress,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -597,6 +604,10 @@ internal fun EpisodeCard(
     animeBadge: AnimeBadgeKind? = null,
     /** Plugin TMDB score for this episode number (null = none — ADR 0010). */
     tmdbScore: Double? = null,
+    /** Render the stream-info badge row (CC / audio layout / languages). */
+    showStreamBadges: Boolean = false,
+    /** Render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
+    showDownloadProgress: Boolean = false,
 ) {
     // Build the episode image URL once per episode instead of 3× per recomposition.
     // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
@@ -671,6 +682,16 @@ internal fun EpisodeCard(
     )
     val isDimmed = presentation.isDimmed
 
+    // This row's in-flight download fraction (provided by the screen from
+    // the download-lifecycle slice); null = not downloading. Read here so a
+    // ~2 s progress tick recomposes only the downloading rows — the local is a
+    // compositionLocalOf (reader-tracked), not static.
+    val downloadProgressFraction = if (showDownloadProgress) {
+        LocalEpisodeDownloadProgress.current[episode.id]
+    } else {
+        null
+    }
+
     Column(
         modifier = modifier
             .width(cardWidth)
@@ -740,6 +761,14 @@ internal fun EpisodeCard(
                         .align(Alignment.TopStart)
                         .padding(6.dp),
                 )
+            }
+
+            // In-flight download bar + percent chip — along the thumbnail's
+            // TOP edge (the watch-progress / played bars own the bottom edge);
+            // the delete affordance co-occupies top-end only once the download
+            // completes and this overlay is gone.
+            downloadProgressFraction?.let { fraction ->
+                EpisodeDownloadOverlay(fraction = fraction)
             }
 
             if (presentation.hasWatchProgress) {
@@ -823,6 +852,7 @@ internal fun EpisodeCard(
                 metaStyle = MaterialTheme.typography.labelMedium,
                 runtimeTopPadding = 4.dp,
                 tmdbScore = tmdbScore,
+                showStreamBadges = showStreamBadges,
             )
             episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                 Spacer(Modifier.height(8.dp))
@@ -874,6 +904,10 @@ private fun CompactEpisodeRow(
     animeBadge: AnimeBadgeKind? = null,
     /** Plugin TMDB score for this episode number (null = none — ADR 0010). */
     tmdbScore: Double? = null,
+    /** Render the stream-info badge row (CC / audio layout / languages). */
+    showStreamBadges: Boolean = false,
+    /** Render the in-flight download bar + percent chip (fraction comes from [LocalEpisodeDownloadProgress]). */
+    showDownloadProgress: Boolean = false,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -903,6 +937,12 @@ private fun CompactEpisodeRow(
         showWatchedCheckmark = cardPrefs.showWatchedCheckmark,
     )
     val isDimmed = presentation.isDimmed
+    // This row's in-flight download fraction (see EpisodeCard).
+    val downloadProgressFraction = if (showDownloadProgress) {
+        LocalEpisodeDownloadProgress.current[episode.id]
+    } else {
+        null
+    }
 
     // Press-and-hold "peek" preview; mirrors EpisodeCard.
     val peek = rememberMediaPeek(
@@ -975,6 +1015,11 @@ private fun CompactEpisodeRow(
                 )
             }
 
+            // In-flight download bar + percent chip — see EpisodeCard.
+            downloadProgressFraction?.let { fraction ->
+                EpisodeDownloadOverlay(fraction = fraction)
+            }
+
             if (presentation.hasWatchProgress) {
                 val progress = presentation.progressFraction ?: 0f
                 Box(
@@ -1025,6 +1070,7 @@ private fun CompactEpisodeRow(
                 metaStyle = MaterialTheme.typography.labelSmall,
                 runtimeTopPadding = 2.dp,
                 tmdbScore = tmdbScore,
+                showStreamBadges = showStreamBadges,
             )
         }
 
@@ -1149,8 +1195,9 @@ private fun EpisodePlayedBar(modifier: Modifier = Modifier) {
 
 /**
  * The episode row's metadata stack — title ("N. Name"), the runtime line
- * ("Xm left • 42m", or a bare "42m"), and the last-watched relative
- * timestamp. Shared by [EpisodeCard] and [CompactEpisodeRow]; the caller
+ * ("Xm left • 42m", or a bare "42m") with stream-info badges on the
+ * right side of the time, the TMDB score chip (ADR 0010), and the last-watched
+ * relative timestamp. Shared by [EpisodeCard] and [CompactEpisodeRow]; the caller
  * picks the type scale and the runtime line's top padding (the only
  * per-layout differences) and keeps its own column padding/geometry.
  * Extension on [ColumnScope] so the texts join the caller's column directly
@@ -1165,6 +1212,8 @@ private fun ColumnScope.EpisodeMetaLines(
     runtimeTopPadding: Dp,
     /** Plugin TMDB score for this episode (null = no chip — ADR 0010). */
     tmdbScore: Double? = null,
+    /** Render the stream-info badge row (CC / audio layout / languages). */
+    showStreamBadges: Boolean = false,
 ) {
     Text(
         text = buildString {
@@ -1179,35 +1228,54 @@ private fun ColumnScope.EpisodeMetaLines(
     )
     val remainingTime = presentation.remainingTime
     val totalTime = presentation.totalTime
-    if (remainingTime != null && totalTime != null) {
+    val hasTime = remainingTime != null || totalTime != null
+    val streamInfo = if (showStreamBadges) episode.episodeStreamInfo else null
+    val hasBadges = streamInfo?.hasDisplayableBadges == true
+
+    if (hasTime || hasBadges) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(top = runtimeTopPadding)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = runtimeTopPadding),
         ) {
-            Text(
-                text = stringResource(Res.string.detail_time_left_format, remainingTime),
-                style = metaStyle,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "•",
-                style = metaStyle,
-                color = MaterialTheme.colorScheme.outlineVariant,
-            )
-            Text(
-                text = totalTime,
-                style = metaStyle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // remainingTime derives from runtimeTicks, which also produces
+            // totalTime — a remaining-without-total case can't occur.
+            if (remainingTime != null && totalTime != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.detail_time_left_format, remainingTime),
+                        style = metaStyle,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "•",
+                        style = metaStyle,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Text(
+                        text = totalTime,
+                        style = metaStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (totalTime != null) {
+                Text(
+                    text = totalTime,
+                    style = metaStyle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Stream-info badge row: CC / audio layout / audio-language count,
+            // from the per-season fetch's MediaStreams projection. Rendered along the
+            // right side of the episode runtime line.
+            if (hasBadges) {
+                EpisodeStreamBadges(info = streamInfo)
+            }
         }
-    } else if (totalTime != null) {
-        Text(
-            text = totalTime,
-            style = metaStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = runtimeTopPadding)
-        )
     }
 
     // Plugin TMDB score chip (ADR 0010, `ratings`) — the compact "★ 7.8"
@@ -1417,6 +1485,113 @@ internal fun TmdbScoreChip(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/**
+ * The episode row's stream-info badge row: the "CC" chip when any
+ * subtitle stream exists, the best audio track's layout chip ("Atmos" /
+ * "7.1" / "5.1" — absent for stereo and below), and the audio-language-count
+ * chip (only when more than one language — a single language is the default
+ * and carries no information). Chip chrome mirrors [TmdbScoreChip]'s compact
+ * sizing; callers render nothing at all when the episode carries no
+ * [EpisodeStreamInfo].
+ */
+@Composable
+private fun EpisodeStreamBadges(
+    info: EpisodeStreamInfo,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (info.hasSubtitles) {
+            EpisodeStreamChip(text = "CC")
+        }
+        info.audioLayout?.let { layout ->
+            EpisodeStreamChip(text = layout)
+        }
+        if (info.audioLanguageCount > 1) {
+            Surface(
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                shape = ShapeCache.smooth12,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.Language,
+                        contentDescription = null,
+                        modifier = Modifier.size(11.dp),
+                    )
+                    Text(
+                        text = info.audioLanguageCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One compact text chip of the [EpisodeStreamBadges] row (the [TmdbScoreChip] chrome). */
+@Composable
+private fun EpisodeStreamChip(text: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+        shape = ShapeCache.smooth12,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/**
+ * The episode thumbnail's in-flight download overlay: the thin
+ * determinate bar along the thumbnail's TOP edge — mirroring the played-bar
+ * styling (3 dp, primary) the rows render along the bottom edge for watch
+ * state, so the two never stack — plus the percent chip at the top-end (the
+ * delete affordance owns top-end only once the download completes and this
+ * overlay is gone). The fraction comes from [LocalEpisodeDownloadProgress]
+ * via the row composables.
+ */
+@Composable
+private fun BoxScope.EpisodeDownloadOverlay(fraction: Float) {
+    Box(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .fillMaxWidth(fraction)
+            .height(3.dp)
+            .background(MaterialTheme.colorScheme.primary),
+    )
+    Surface(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(4.dp),
+        color = Color.Black.copy(alpha = 0.55f),
+        contentColor = Color.White.copy(alpha = 0.9f),
+        shape = ShapeCache.smooth12,
+    ) {
+        Text(
+            text = "${(fraction * 100).toInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
 }

@@ -3,10 +3,8 @@ package com.raulshma.jellyplay
 import com.raulshma.jellyplay.core.data.playback.PipAction
 
 /**
- * Pure decision half of [PlayerActivity]'s PiP remote-action apparatus — the
- * recorded deferred "PiP action apparatus" design, landed now that PiP churn
- * resumed. Two tables that used to live Activity-inline with nothing pinning
- * their sync:
+ * Pure decision half of [PlayerActivity]'s PiP remote-action apparatus — two
+ * tables that must stay in sync:
  *
  *  - the **action-set fold** ([actionSpecs]) — which actions render, in what
  *    order, given `isPlaying` / `pipHasNext`: the fixed skip-back →
@@ -24,9 +22,9 @@ import com.raulshma.jellyplay.core.data.playback.PipAction
  * resource ids (`Int`), resolved by the Activity.
  *
  * Protocol constants ([PIP_ACTION_BROADCAST], [PIP_ACTION_EXTRA], the id
- * table) moved verbatim from PlayerActivity's companion; their values are
- * wire-stable — outstanding PendingIntents and in-flight broadcasts reference
- * them across app updates, so they must never be renumbered or renamed.
+ * table): their values are wire-stable — outstanding PendingIntents and
+ * in-flight broadcasts reference them across app updates, so they must never
+ * be renumbered or renamed.
  */
 internal object PipActionSet {
 

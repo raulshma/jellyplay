@@ -7,10 +7,8 @@ import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
 import com.raulshma.jellyplay.navigation.externalPlaybackOutcome
 
 /**
- * The external-player launch protocol — the recorded deferred
- * `ExternalPlayerHost` design, landed now that the shell churned. Every step
- * that used to live composable-inline in `JellyPlayApp`'s navigate-filter and
- * ActivityResult callback is owned here, so the ORDERING between the pure
+ * The external-player launch protocol. Every step of the hand-off is owned
+ * here, so the ORDERING between the pure
  * inputs/outputs around it (already pinned: [externalPlaybackOutcome],
  * `ExternalPlayerResultPolicy`, the [ExternalPlayerReports] report pair) is
  * pinned too (`ExternalPlayerHostTest`, fake-lambda choreography in the
@@ -82,11 +80,9 @@ internal class ExternalPlayerHost(
      * Runs the launch protocol (steps 1–5 in the class KDoc) for one
      * external-player hand-off. [startChooser] starts the chooser activity —
      * the shell's `ActivityResultLauncher.launch`; a non-cancellation throw
-     * from it is the failure arm (step 5), absorbed exactly as the former
-     * inline hand copy absorbed it. Declared upgrade over that copy: the
-     * wrapper rethrows cancellation, so a cancelled hand-off leaves the stash
-     * for a potential retry instead of clearing it and firing the
-     * no-player-found error.
+     * from it is the failure arm (step 5). The wrapper rethrows cancellation,
+     * so a cancelled hand-off leaves the stash for a potential retry instead
+     * of clearing it and firing the no-player-found error.
      */
     suspend fun launch(
         request: ExternalPlayerRequest,
@@ -135,7 +131,7 @@ internal class ExternalPlayerHost(
     }
 
     private companion object {
-        /** Chooser title, verbatim from the former inline hand copy. */
+        /** Chooser title for the system hand-off. */
         const val CHOOSER_TITLE = "Open with…"
     }
 }

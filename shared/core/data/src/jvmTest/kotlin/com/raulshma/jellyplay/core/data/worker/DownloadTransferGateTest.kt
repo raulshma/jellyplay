@@ -65,8 +65,11 @@ import kotlin.test.assertTrue
  *  - a thrown non-IO failure routes through DownloadFailurePolicy with the
  *    documented outer-path flags (madeProgress = false,
  *    isResumablePartial = true → bytes preserved, partial kept, no retry);
- *  - the notifications port receives the start-of-transfer summary refresh on
- *    BOTH paths (the healed runner-vs-multi divergence).
+ *  - NO summary refresh rides the notifications port and the in-flight COUNT
+ *    query is never issued — the DownloadSummarySurface single observes the
+ *    count flow and posts on transitions; the transfer paths carry no
+ *    summary/refresh duty anymore (the former start-of-transfer refresh is
+ *    gone).
  *
  * The PREAMBLE performs no network I/O — the HEAD probe belongs to [execute]
  * (declared in the gate's KDoc).
@@ -101,7 +104,6 @@ class DownloadTransferGateTest {
         every { tokenCipher.decrypt(storedTokenCipherText) } returns "plain-token"
         every { downloadsStore.downloads } returns MutableStateFlow(slice(downloadConnections = 4))
         coEvery { dao.getStatus("dl-1") } returns DownloadStatus.QUEUED.name
-        coEvery { dao.getInFlightDownloadCount() } returns 1
     }
 
     private fun userEntity(accessToken: String) = UserEntity(
@@ -405,8 +407,10 @@ class DownloadTransferGateTest {
         coVerify { dao.markCompleted("dl-1", 1024L, any()) }
         // Resume never re-writes the total (updateTotalSize is fresh-start-only).
         coVerify(exactly = 0) { dao.updateTotalSize(any(), any()) }
-        // The healed summary refresh reached the port on the resume path too.
-        assertEquals(listOf("refreshSummary:1"), notifications.calls)
+        // No summary duty on the transfer path: the port saw nothing and the
+        // count query was never issued (DownloadSummarySurface owns it).
+        assertEquals(emptyList(), notifications.calls)
+        coVerify(exactly = 0) { dao.getInFlightDownloadCount() }
     }
 
     @Test
@@ -437,12 +441,12 @@ class DownloadTransferGateTest {
         assertEquals(total, tempFile.length())
         coVerify { dao.markCompleted("dl-1", total, any()) }
         // The multi path is identifiable through the port (the strategy's
-        // start promotion), and the healed summary refresh PRECEDED it —
-        // execute pushes it through the port before the dispatch on BOTH
-        // paths (the former divergence: the runner path refreshed alongside
-        // its promotions, the multi path's start promotion did not).
-        assertTrue("showForeground" in notifications.calls)
-        assertEquals("refreshSummary:1", notifications.calls.first())
+        // start promotion + completion dismissal) — and NOTHING else: the
+        // start-of-transfer summary refresh is gone (DownloadSummarySurface
+        // owns the summary; the former divergence-heal push does not ride
+        // the port anymore).
+        assertEquals(listOf("showForeground", "dismissNotification"), notifications.calls)
+        coVerify(exactly = 0) { dao.getInFlightDownloadCount() }
     }
 
     @Test
@@ -466,8 +470,10 @@ class DownloadTransferGateTest {
         assertEquals(2, client.requests.size)
         assertEquals(null, client.requests[1].range)
         assertTrue("showForeground" !in notifications.calls, "the multi-connection strategy must not run at the threshold")
-        // ...and the fresh single path still received the entry summary refresh.
-        assertEquals(listOf("refreshSummary:1"), notifications.calls)
+        // ...and the fresh single path carries no summary refresh either
+        // (DownloadSummarySurface owns the summary).
+        assertEquals(emptyList(), notifications.calls)
+        coVerify(exactly = 0) { dao.getInFlightDownloadCount() }
     }
 
     @Test

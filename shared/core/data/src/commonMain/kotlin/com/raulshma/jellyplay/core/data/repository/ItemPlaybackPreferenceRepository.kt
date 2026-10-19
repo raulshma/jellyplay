@@ -64,6 +64,15 @@ interface ItemPlaybackPreferenceRepository {
      */
     suspend fun setSubtitleDisabled(scope: PlaybackPrefScope, key: String, disabled: Boolean)
 
+    /**
+     * Sets or clears the per-item/series audio-description pin for [scope]/[key].
+     * [value] = `true`/`false` pins the preference (prefer / explicitly avoid AD
+     * narration); `null` clears it — the global setting stands again. Other
+     * fields on the row are preserved; clearing drops the row entirely when
+     * nothing else is remembered.
+     */
+    suspend fun setPreferAudioDescription(scope: PlaybackPrefScope, key: String, value: Boolean?)
+
     /** Clears the dialogue-boost field for [scope]/[key] (other fields are preserved). */
     suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String)
 

@@ -144,6 +144,7 @@ class JellyPlayFeatureGate(
             JellyPlayPluginFeatures.Ratings,
             JellyPlayPluginFeatures.CustomRows,
             JellyPlayPluginFeatures.SeasonalRows,
+            JellyPlayPluginFeatures.Hero,
             JellyPlayPluginFeatures.AnimeMarkers,
             JellyPlayPluginFeatures.Recommendations,
             JellyPlayPluginFeatures.UserRatings,

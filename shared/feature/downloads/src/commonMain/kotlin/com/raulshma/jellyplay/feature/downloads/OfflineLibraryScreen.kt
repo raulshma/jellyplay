@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.GlassBadge
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
@@ -73,6 +74,7 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_clear_cd
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_episode_count
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_item_count
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_library_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_no_downloaded_content
@@ -263,6 +265,32 @@ fun OfflineLibraryScreen(
                                         onSeriesClick(item.id)
                                     } else {
                                         onItemClick(item.id)
+                                    }
+                                },
+                                // Series cards badge their downloaded episode count in
+                                // the poster's top-left slot (the same slot the online
+                                // air-date badge uses) — "how much of this show is on
+                                // device" at a glance. Unplayed counts already render
+                                // via PosterCard's pref-gated unwatched badge.
+                                topStartBadge = item.downloadedEpisodeCount?.takeIf { it > 0 }?.let { count ->
+                                    {
+                                        GlassBadge(
+                                            background = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                                            shape = ShapeCache.smooth4,
+                                            horizontalPadding = 6.dp,
+                                            verticalPadding = 3.dp,
+                                        ) {
+                                            Text(
+                                                text = pluralStringResource(
+                                                    Res.plurals.downloads_episode_count,
+                                                    count,
+                                                    count,
+                                                ),
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                            )
+                                        }
                                     }
                                 },
                                 modifier = itemModifier,

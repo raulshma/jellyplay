@@ -9,7 +9,7 @@ kotlin {
     }
 
     sourceSets {
-        // The JVM-only edges moved behind seams: the subtitle-upload Base64
+        // The JVM-only edges sit behind seams: the subtitle-upload Base64
         // became the stdlib kotlin.io.encoding encoder (RFC 4648 with padding,
         // byte-identical to java.util.Base64.getEncoder()), java.util.UUID
         // became kotlin.uuid.Uuid, and core:data's jvmShared
@@ -18,7 +18,7 @@ kotlin {
         //
         // The jvmShared actuals for the seams (EditorSubtitleStore wrapper
         // over core:data's jvmShared StreamingSubtitleStore single, the
-        // PlatformFormats String.format bodies), shared verbatim by android +
+        // PlatformFormats String.format bodies), shared by android +
         // desktop like the newsletter/requests jvmShared source sets. (The
         // jvmShared middle source set comes from the convention plugin.)
 
@@ -27,11 +27,10 @@ kotlin {
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
             implementation(project(":shared:core:ui"))
-            // (The legacy build's lifecycle-viewmodel-navigation3 and
-            // hilt-navigation-compose edges were dropped: no editor file
-            // imports them — navigation entries use entry<Route> from the
-            // nav3 runtime/ui artifacts only, and the screen's ViewModel is
-            // Koin-owned via koinViewModel.)
+            // Editor does not need lifecycle-viewmodel-navigation3 or
+            // hilt-navigation-compose: no file imports them — navigation
+            // entries use entry<Route> from the nav3 runtime/ui artifacts
+            // only, and the screen's ViewModel is Koin-owned via koinViewModel.
             implementation(libs.coil.compose)
         }
         // (kotlin("test") comes from the convention plugin.)
@@ -39,7 +38,7 @@ kotlin {
             implementation(libs.coroutines.test)
             implementation(libs.mockk)
         }
-        // SAF file-picker actual (settings BackupFilePicker precedent):
+        // SAF file-picker actual (settings BackupFilePicker pattern):
         // androidx.activity.compose (rememberLauncherForActivityResult) rides
         // navigation3-ui's transitive Android edge, so androidMain needs no
         // new dependency.
@@ -49,6 +48,5 @@ kotlin {
 }
 
 // The compose-resources `packageOfResClass`
-// (`...feature.editor.generated.resources`, same as the legacy value) is a
-// path-derived default from the convention plugin now — see
-// KmpLibraryComposePlugin.
+// (`...feature.editor.generated.resources`) is a path-derived default from the
+// convention plugin — see KmpLibraryComposePlugin.

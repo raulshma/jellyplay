@@ -137,7 +137,7 @@ class ExoErrorTaxonomyTest {
 
     @Test
     fun drmContentError6003_staysUnknown() {
-        // 6003 (DRM_CONTENT_ERROR) was never in the pre-extraction bucket —
+        // 6003 (DRM_CONTENT_ERROR) was never in the Unknown bucket —
         // pin that it did not silently join the DRM arm.
         val error = ExoErrorTaxonomy.fromCode(6003, message = "drm content", cause = null)
         assertIs<EngineError.Unknown>(error)

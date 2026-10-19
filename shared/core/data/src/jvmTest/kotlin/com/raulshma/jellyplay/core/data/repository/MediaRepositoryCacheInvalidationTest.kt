@@ -37,6 +37,9 @@ import kotlin.test.Test
  */
 class MediaRepositoryCacheInvalidationTest {
 
+    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
+    private var built: MediaRepositoryImpl? = null
+
     // Atomic (server, user) session flow consumed by the shared HomeSession
     // detector — one value per identity step (see JellyfinApiEngine.session).
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
@@ -73,8 +76,8 @@ class MediaRepositoryCacheInvalidationTest {
             // The home cache-maintenance port (inert here — this suite pins
             // the detail/series cache choreography).
             homeSectionsCachePort = mockk(relaxed = true),
-            // Snapshot-store extraction: the persisted home pipeline moved
-            // into the store single the Koin graph wires (inert here — this
+            // The persisted home pipeline is the store single the Koin graph
+            // wires (inert here — this
             // suite pins the detail/series cache choreography).
             homeSnapshotStore = HomeSectionsSnapshotStore(homeSectionCacheDao, homeSession, SystemTimeSource()),
             playedStateSync = playedStateSync,
@@ -82,11 +85,12 @@ class MediaRepositoryCacheInvalidationTest {
             userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
             timeSource = SystemTimeSource(),
             homeSession = homeSession,
+            userDataAnnouncer = announcerFor(homeSession) { built },
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
             internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        )
+        ).also { built = it }
     }
 
     /** Waits long enough for the `Dispatchers.Default` collector to observe the latest emission. */

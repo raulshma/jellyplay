@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,11 @@ fun NewsletterContent(
 
     val contentPadding = PaddingValues(bottom = 24.dp)
 
+    // Sections that already played their entrance, hoisted above the
+    // LazyColumn so the record outlives item disposal — a section scrolled
+    // out and back composes settled instead of re-running its fade.
+    val entranceSeenSections = remember { mutableSetOf<String>() }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -58,7 +64,7 @@ fun NewsletterContent(
 
         if (state.libraryStats != null) {
             item(key = "aggregated_stats") {
-                val alpha by animateEntranceAlpha()
+                val alpha by animateEntranceAlpha(key = "aggregated_stats", seenSections = entranceSeenSections)
                 NewsletterAggregatedStats(
                     stats = state.libraryStats,
                     recentlyAddedCount = state.recentlyAdded.size,
@@ -91,7 +97,7 @@ fun NewsletterContent(
             }
             if (!hasContent) return@items
 
-            val alpha by animateEntranceAlpha()
+            val alpha by animateEntranceAlpha(key = sectionType.name, seenSections = entranceSeenSections)
             val sectionModifier = Modifier.graphicsLayer {
                 this.alpha = alpha
                 val scale = 0.97f + (0.03f * alpha)
@@ -151,9 +157,22 @@ fun NewsletterContent(
 }
 
 @Composable
-private fun animateEntranceAlpha(): State<Float> {
-    var hasBeenVisible by remember { mutableStateOf(false) }
-    hasBeenVisible = true
+private fun animateEntranceAlpha(
+    key: String,
+    seenSections: MutableSet<String>,
+): State<Float> {
+    // The visible flip lives in the effect coroutine — never a snapshot write
+    // during composition — and the hoisted [seenSections] record means a
+    // section re-entering view after disposal starts settled (alreadyVisible)
+    // instead of replaying the entrance.
+    val alreadyVisible = key in seenSections
+    var hasBeenVisible by remember { mutableStateOf(alreadyVisible) }
+    if (!alreadyVisible) {
+        LaunchedEffect(Unit) {
+            hasBeenVisible = true
+            seenSections += key
+        }
+    }
     return animateFloatAsState(
         targetValue = if (hasBeenVisible) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),

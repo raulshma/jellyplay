@@ -67,7 +67,7 @@ class MediaRepositorySurfaceTest {
      * music member left on the union is getAlbumTracks: the detail provider's
      * session resolves detail + album tracks together and is a mixed consumer,
      * so its read rides the union. getMusicVideos (already seam-only, zero
-     * callers) retired from the seam outright in the same wave. 29 added
+     * callers) retired from the seam outright at the same time. 29 added
      * refreshHomeSection — the home-sections family's single-row refetch (the
      * home screen's edge-pull refresh), the same row-scoped reasoning as the
      * discover-row trio. 23 after the home-feed split: the whole home family
@@ -77,9 +77,15 @@ class MediaRepositorySurfaceTest {
      * read val gained the UserDataChanges seam beside it — the home feature's
      * refresh stack injects the seam alone, and the mixed consumers (the
      * background home-sections refetchers, the widget, the discover-row
-     * editor) keep the union for their non-home members.
+     * editor) keep the union for their non-home members. 18 after the
+     * series-reads diet: getSeasons / getEpisodes / getAllEpisodesGrouped had
+     * ZERO repo-typed production callers (EpisodeCatalogueImpl reads its
+     * client family directly; the DownloadRepositoryImpl mention is a
+     * comment), so the three catalogue pass-throughs retired off the union
+     * and the impl both — the catalogue stays the read seam, the impl keeps
+     * only the invalidation edge into it.
      */
-    private val maxInterfaceMembers = 21
+    private val maxInterfaceMembers = 18
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

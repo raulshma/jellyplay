@@ -155,6 +155,14 @@ fun MediaCardScaffold(
     val themeVariant = LocalThemeVariant.current
     val cardShape = ShapeCache.smooth12
 
+    // Anti-spoiler: the scaffold owns the card's progress surfaces (the
+    // bottom bar AND the play ring's arc), so it owns the suppression gate —
+    // force-false when anti-spoiler home is on, regardless of the caller's
+    // showProgress. The composition-local read keeps every call site unchanged.
+    val cardPrefs = LocalCardDisplayPreferences.current
+    val spoilerSafe = remember(cardPrefs) { spoilerSafeCardState(cardPrefs) }
+    val effectiveShowProgress = showProgress && spoilerSafe.showProgress
+
     // Shared-element transition: wrap the image when a key and both scopes are
     // present. Only PosterCard participates today; Wide/Seerr gain it for free
     // when a caller passes a sharedElementKey.
@@ -184,12 +192,7 @@ fun MediaCardScaffold(
     val borderAlpha = border?.alpha
     val surfaceColor = MaterialTheme.colorScheme.surface
     val resolvedScrimBrush = scrim?.brush ?: remember(surfaceColor) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                surfaceColor.copy(alpha = 0.45f),
-            ),
-        )
+        DefaultCardScrimBrushCache.brushFor(surfaceColor)
     }
     val resolvedScrimHeight = scrim?.height ?: DefaultCardScrimHeight
 
@@ -241,7 +244,7 @@ fun MediaCardScaffold(
 
                 play?.let {
                     PlayButtonWithProgress(
-                        progressPercent = if (showProgress) progressFraction else 0f,
+                        progressPercent = if (effectiveShowProgress) progressFraction else 0f,
                         dominantColor = it.dominantColor ?: MaterialTheme.colorScheme.primary,
                         onClick = it.onClick,
                         icon = it.icon ?: Tabler.Outline.PlayerPlay,
@@ -254,7 +257,7 @@ fun MediaCardScaffold(
                     )
                 }
 
-                if (showProgress && progressFraction > 0f) {
+                if (effectiveShowProgress && progressFraction > 0f) {
                     MediaCardProgressOverlay(
                         progressFraction = progressFraction,
                         modifier = Modifier
@@ -281,6 +284,33 @@ fun MediaCardScaffold(
                 modifier = Modifier.enableMarqueeOnFocus(focused = chrome.focus.isFocused),
             )
             footer()
+        }
+    }
+}
+
+/**
+ * Tiny LRU behind the scaffold's default bottom-scrim path: cards that don't
+ * receive a caller-supplied [CardScrim] all draw the same
+ * transparent→surface gradient, so the [Brush] is cached per surface colour
+ * instead of being re-allocated by every card composition. Same shape and
+ * rationale as [DominantColorLruCache] ([AccessOrderLruMap] + [withUiLock]).
+ */
+private object DefaultCardScrimBrushCache {
+    private const val MAX_ENTRIES = 16
+    private val lock = Any()
+    private val map = AccessOrderLruMap<Color, Brush>()
+
+    fun brushFor(surfaceColor: Color): Brush = withUiLock(lock) {
+        map[surfaceColor] ?: Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                surfaceColor.copy(alpha = 0.45f),
+            ),
+        ).also { brush ->
+            map.put(surfaceColor, brush)
+            while (map.size > MAX_ENTRIES) {
+                map.removeEldestOrNull() ?: break
+            }
         }
     }
 }

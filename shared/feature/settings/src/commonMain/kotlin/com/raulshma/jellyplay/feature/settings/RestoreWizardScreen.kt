@@ -126,22 +126,21 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The unified restore wizard (Wave 5): ONE screen, two internal steps. SOURCE
+ * The unified restore wizard: ONE screen, two internal steps. SOURCE
  * picks the payload — the server's restore points (gated by the sync probe,
  * an explanatory state when sync is off/unavailable) or a backup file (the
  * platform picker seam). DIFF renders the source's diff as two-tier selectable
  * cards — Preferences (parent) → per-domain category cards for the file arm;
  * whole namespaces → prefs domains (with the counted "Other" bucket) for the
  * snapshot arm — behind a destructive confirm carrying the cross-account
- * warning line, then the pre-apply safety capture (Wave 6 hook #1) and the
+ * warning line, then the pre-apply safety capture and the
  * apply run inside the ViewModel; success posts the summary to the bus and
  * pops the wizard.
  *
  * The old-plugin degrade face (`getSnapshotContent` 404) renders the
  * "preview unavailable" card and offers the full server-orchestrated restore
- * instead. The Wave-3 secrets card rides at the bottom of the file diff
- * exactly as the retired import preview staged it: locked → unlock → counts +
- * its own explicit apply confirm.
+ * instead. The secrets card rides at the bottom of the file diff: locked →
+ * unlock → counts + its own explicit apply confirm.
  */
 @Composable
 fun RestoreWizardScreen(
@@ -170,7 +169,7 @@ fun RestoreWizardScreen(
         }
     }
 
-    // Wave-3 unlock: drop the passphrase dialog once the counts land (a wrong
+    // Secrets unlock: drop the passphrase dialog once the counts land (a wrong
     // passphrase keeps it up for the inline retry).
     var showUnlockDialog by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.file?.secretsUnlocked) {
@@ -275,7 +274,7 @@ fun RestoreWizardScreen(
         )
     }
 
-    // ── Wave-3 secrets: the passphrase unlock + the explicit apply confirm ──
+    // ── Secrets: the passphrase unlock + the explicit apply confirm ──
     if (showUnlockDialog) {
         UnlockPassphraseDialog(
             isBusy = uiState.file?.secretsUnlocking == true,
@@ -409,6 +408,11 @@ private fun snapshotSubtitle(snapshot: JellyPlaySnapshot): String = buildString 
     }
 }
 
+// DateTimeFormatter is immutable and thread-safe, so one instance is shared
+// instead of re-parsing the pattern for every snapshot row on every restart.
+private val WIZARD_TIMESTAMP_FORMAT: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm")
+
 /**
  * The entry timestamp's compact face ("MMM d, HH:mm") — informational only;
  * a clock failure falls back to the raw millis (the sync screen's idiom).
@@ -418,11 +422,11 @@ private fun formatWizardTimestamp(epochMillis: Long): String =
     runCatching {
         val dateTime = java.time.Instant.ofEpochMilli(epochMillis)
             .atZone(java.time.ZoneId.systemDefault())
-        java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm").format(dateTime)
+        WIZARD_TIMESTAMP_FORMAT.format(dateTime)
     }.getOrDefault(epochMillis.toString())
 
 // ---------------------------------------------------------------------------
-// DIFF step — BACKUP-FILE flavor (the retired import preview's faces, ported)
+// DIFF step — BACKUP-FILE flavor
 // ---------------------------------------------------------------------------
 
 private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callbacks: WizardCallbacks) {
@@ -515,7 +519,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
         }
     }
 
-    // ── Wave-2 external slices: an "All" parent tier + the per-slice cards ──
+    // ── External slices: an "All" parent tier + the per-slice cards ──
     if (file.externalSlices.isNotEmpty()) {
         item(key = "slices_parent") {
             WizardGroupCard(
@@ -547,7 +551,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
         }
     }
 
-    // ── Wave-3 secrets card (always last) ──
+    // ── Secrets card (always last) ──
     if (file.hasSecrets) {
         item(key = "secrets") {
             SecretsCard(
@@ -1048,9 +1052,9 @@ private fun iconForDomain(domain: String): ImageVector = when (domain) {
 }
 
 /**
- * The Wave-3 secrets card: locked state offers the passphrase unlock; the
+ * The secrets card: locked state offers the passphrase unlock; the
  * unlocked state lists WHAT will be restored behind the explicit apply
- * button (never automatic). Ported from the retired import preview.
+ * button (never automatic).
  */
 @Composable
 private fun SecretsCard(

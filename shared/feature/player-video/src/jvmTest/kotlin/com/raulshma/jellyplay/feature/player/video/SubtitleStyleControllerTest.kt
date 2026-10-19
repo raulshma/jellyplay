@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 
 /**
  * Tests for [SubtitleStyleController] — the subtitle-style + dialogue-boost +
- * subtitle-delay choreography extracted from the ViewModel (A7, step 1: the
+ * subtitle-delay choreography extracted from the ViewModel (the
  * state stays in the VM's mirrors; the controller writes through the narrow
  * constructor lambdas faked here). Pins the three load-bearing invariants:
  * the in-memory offsetMs is the per-item resolved delay and never persists
@@ -139,7 +139,7 @@ class SubtitleStyleControllerTest {
         // Every nudged value was mirrored (the overlay readout is live)…
         assertEquals(300L, styleMirror.offsetMs)
         // …and each was persisted per-item (the store write is not debounced —
-        // same order as the pre-extraction VM body).
+        // same order as the original VM body).
         assertEquals(listOf("item-1" to 100L, "item-1" to 200L, "item-1" to 300L), savedItemDelays)
 
         testScope.advanceTimeBy(SUBTITLE_DELAY_APPLY_DEBOUNCE_MS)

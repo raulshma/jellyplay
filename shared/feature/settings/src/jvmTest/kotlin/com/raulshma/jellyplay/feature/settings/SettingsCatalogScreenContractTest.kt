@@ -15,8 +15,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The catalog ↔ screen contract (the drift ratchet), rerolled for the
- * single-sourced row ids ("rows own their identity"): every
+ * The catalog ↔ screen contract (the drift guard) for the single-sourced row
+ * ids ("rows own their identity"): every
  * settings row id is declared ONCE — as the `val id` of its fused
  * [SettingsRow] beside the `*Rows` declarations (every domain but the
  * experimental screen), or (the one hold-out) as a `const val` in the
@@ -24,9 +24,8 @@ import kotlin.test.assertTrue
  * `ExperimentalSettingsSearchItems`. The search-item declarations, the
  * screens' `highlighted` comparisons, the gates and the row-total
  * derivations all reference those single sources, so the screen-row ↔
- * catalog pairing that used to need a 900-line source-tree regex scanner is
- * pinned by compilation instead: a row's comparison and the catalog item
- * literally share one declaration.
+ * catalog pairing is pinned by compilation instead: a row's comparison and
+ * the catalog item literally share one declaration.
  *
  * What still needs a runtime test — and lives here — is the REFERENTIAL
  * integrity the compiler cannot see: every id must resolve to exactly one
@@ -35,7 +34,7 @@ import kotlin.test.assertTrue
  * that bypasses the fused rows or the experimental holder, or an orphan
  * highlight target). On top of that sit the behavioral pins: the fixed
  * drifts' scroll behavior, the aggregation-decoration splits, the declared
- * row admissions and the per-group totals. The four shipped drifts each would
+ * row admissions and the per-group totals. The four known drift shapes each
  * still fail loudly:
  *  - `vlc_video_output` (declared, in NO screen group) — caught by the
  *    vocabulary↔catalog↔group integrity test;
@@ -48,7 +47,7 @@ import kotlin.test.assertTrue
  * `SettingsSearchCatalogPlatformFilterTest`) keep the raw id literals: they
  * guard the persisted deep-link/recents strings — a change there is a
  * reviewed schema change at the single sources, not a refactor. The
- * conversion ratchets themselves live in `FusedRowsRatchetTest`.
+ * row-catalog guards themselves live in `FusedRowsRatchetTest`.
  */
 class SettingsCatalogScreenContractTest {
 
@@ -156,14 +155,14 @@ class SettingsCatalogScreenContractTest {
     }
 
     /**
-     * The strict derivation's coverage ratchet: [rowTotalFor] counts nothing
+     * The strict derivation's coverage guard: [rowTotalFor] counts nothing
      * for an id that declares no gate, so every group a screen feeds a
      * `SettingsItemList` total from must declare EVERY id's admission — the
      * listed exceptions are the deliberately-undeclared rows (screen-local or
      * content-gated rows the screens add explicitly, each commented at its
      * declaration). The one remaining size-derived exception
      * (storage.network) is pinned separately below — its screen feeds the
-     * declaration size itself, so the per-id ratchet cannot apply.
+     * declaration size itself, so the per-id guard cannot apply.
      */
     @Test
     fun `groups the screens feed totals from declare every id's admission`() {
@@ -178,10 +177,10 @@ class SettingsCatalogScreenContractTest {
             "language.subtitles" to emptySet(),
             "storage.cache" to emptySet(),
             "storage.downloads" to emptySet(),
-            // The shipped count quirks: pin_for_player_lock renders behind the
-            // pin toggle but has never been admitted into the count, and the
-            // quick-connect / remote-control / remote-display rows render in
-            // their own single-row groups outside the lock-group total.
+            // The count quirks: pin_for_player_lock renders behind the pin
+            // toggle but is not admitted into the count, and the quick-connect /
+            // remote-control / remote-display rows render in their own
+            // single-row groups outside the lock-group total.
             "security" to setOf(
                 SecurityRows.PinForPlayerLock.id,
                 SecurityRows.QuickConnectAuthorize.id,
@@ -191,25 +190,24 @@ class SettingsCatalogScreenContractTest {
             // The unhide row rides hidden-CW content state — no admission
             // vocabulary; the screen adds the +1 explicitly.
             "home.display" to setOf(HomeRows.UnhideCw.id),
-            // The cards group (the PS-4 Appearance → HomeSettings move)
-            // renders every declared row unconditionally — declared Always
-            // per id, fully covered.
+            // The cards group renders every declared row unconditionally —
+            // declared Always per id, fully covered.
             "home.cards" to emptySet(),
             // The theme group's content-gated rows: their emission depends on
             // theme state the admission vocabulary does not carry (variant
             // accent support, standard-vs-themed branch, active-dark + OLED
             // allowance, the SCHEDULED theme mode). They are DECLARED
             // RowAdmission.ContentGated on their fused rows, so the derived
-            // admissions carry no entry for them (the strict ratchet shape:
+            // admissions carry no entry for them (the strict derivation shape:
             // the pin list must be the literal rows — a row switching to
             // ContentGated without being pinned here fails). The rows'
             // content terms are added explicitly by
             // appearanceThemeScreenRowTotal. theme_scheduler is the
             // highlight-alias row (its screen face is the theme_mode row via
             // THEME_HIGHLIGHT_IDS) — ContentGated and counted by no total,
-            // the shipped quirk shape. (layout_mode left this exception set
-            // in the fused conversion: its All(Advanced, NotTv) gate is
-            // flags-expressible and derives with the advanced base.)
+            // the quirk shape. (layout_mode is not an exception: its
+            // All(Advanced, NotTv) gate is flags-expressible and derives with
+            // the advanced base.)
             "appearance.theme" to setOf(
                 AppearanceRows.StyleAccent.id,
                 AppearanceRows.AccentColor.id,
@@ -248,11 +246,10 @@ class SettingsCatalogScreenContractTest {
         // unconditionally, so the screen feeds the declaration size itself —
         // no conditional, so no admission overrides. A total that IS the
         // declaration size self-tracks a new unconditional row, so the per-id
-        // ratchet above cannot apply; pin instead that the group admits ALL
+        // guard above cannot apply; pin instead that the group admits ALL
         // eleven rows under the default flags — the four advanced-tagged rows
-        // carry an explicit [RowAdmission.Always] gate (the legacy tags the
-        // screen never honored), so the derived admissions agree with the
-        // screen's unconditional size.
+        // carry an explicit [RowAdmission.Always] gate, so the derived
+        // admissions agree with the screen's unconditional size.
         val sizeDerivedGroups = mapOf(
             "storage.network" to 11,
         )
@@ -419,10 +416,10 @@ class SettingsCatalogScreenContractTest {
     fun `every playback WhenOn parent rides the screen's admission flags`() {
         // All parent toggles on: playbackRowAdmissionFlags' parentsOn set must
         // then cover EVERY WhenOn parentId the playback groups declare. The
-        // AUDIO_PASSTHROUGH pair dropping out of the wiring is exactly how the
-        // five per-codec passthrough rows went permanently invisible — this
-        // ratchet turns that drift into a loud test failure instead of a
-        // blank stretch of settings screen.
+        // AUDIO_PASSTHROUGH pair dropping out of the wiring makes the five
+        // per-codec passthrough rows invisible — this guard turns that drift
+        // into a loud test failure instead of a blank stretch of settings
+        // screen.
         val everyParentOn = playbackRowAdmissionFlags(
             isTv = false,
             showAdvanced = true,
@@ -430,6 +427,7 @@ class SettingsCatalogScreenContractTest {
                 dialogueBoostEnabled = true,
                 videoAutoplayNext = true,
                 audioPassthrough = true,
+                spatialAudioEnabled = true,
             ),
         )
         val declaredParents = listOf(
@@ -549,28 +547,37 @@ class SettingsCatalogScreenContractTest {
 
     // ── 3. The fixed drifts, pinned behaviorally ────────────────────────
 
-    /** The playback screen groups in LazyColumn order, from the declaration. */
-    private val playbackGroups = listOf(
-        SettingsScreenGroups.playbackPlayer.itemIdSet,
-        SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
-        SettingsScreenGroups.playbackEngine.itemIdSet,
-        SettingsScreenGroups.playbackMediaSegments.itemIdSet,
-        SettingsScreenGroups.playbackSyncPlay.itemIdSet,
-        SettingsScreenGroups.playbackCasting.itemIdSet,
-        SettingsScreenGroups.playbackDvr.itemIdSet,
+    /**
+     * The playback screen sections in LazyColumn order — the same
+     * [SettingsScreenSection] declaration the screen consumes, so the adjust
+     * pins below run the very [deriveAdjustForAdvanced] the screen passes to
+     * `PreferenceScreenScaffold` (no per-screen hand-written lambda left to
+     * drift from the shipped shapes).
+     */
+    private val playbackSections = listOf(
+        SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackAdvancedVideo.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.playbackEngine.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.playbackMediaSegments.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.playbackSyncPlay.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackCasting.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackDvr.itemIdSet),
     )
+
+    /** The playback screen groups in LazyColumn order, from the declaration. */
+    private val playbackGroups = playbackSections.map { it.idSet }
 
     @Test
     fun `vlc_video_output deep-links into the engine group`() {
         assertTrue(PlaybackRows.VlcVideoOutput.id in SettingsScreenGroups.playbackEngine.itemIdSet)
         assertEquals(
             2,
-            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
         // With advanced hidden the engine group doesn't compose — no scroll.
         assertEquals(
             -1,
-            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
     }
 
@@ -581,29 +588,27 @@ class SettingsCatalogScreenContractTest {
         assertTrue(PlaybackRows.DialogueBoostStrength.id in advanced)
         assertEquals(
             1,
-            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
         assertEquals(
             1,
-            resolveHighlightScrollIndex(PlaybackRows.DialogueBoostStrength.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.DialogueBoostStrength.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
     }
 
     @Test
     fun `auto_delete_after_watch is declared in the downloads group with a screen row`() {
         assertTrue(StorageRows.AutoDeleteAfterWatch.id in SettingsScreenGroups.storageDownloads.itemIdSet)
-        // The row itself shares the same declaration (compile-paired) — the
-        // source-scan that used to assert the literal is retired.
+        // The row itself shares the same declaration (compile-paired).
         assertTrue(StorageRows.AutoDeleteAfterWatch.id in allFusedIds)
     }
 
     @Test
     fun `gesture_indicator_side scrolls within the player group`() {
-        // Not one of the four shipped drifts, but the hand-typed player scroll
-        // list had omitted it all the same; the derivation keeps it honest.
+        // The derivation keeps this row reachable in the player scroll list.
         assertEquals(
             0,
-            resolveHighlightScrollIndex(PlaybackRows.GestureIndicatorSide.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.GestureIndicatorSide.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
     }
 
@@ -613,20 +618,20 @@ class SettingsCatalogScreenContractTest {
         // LazyColumn indices 1/2/3 behind the player group.
         assertEquals(
             1,
-            resolveHighlightScrollIndex(PlaybackRows.SyncplayJoinBehavior.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.SyncplayJoinBehavior.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
         assertEquals(
             2,
-            resolveHighlightScrollIndex(PlaybackRows.BackgroundCasting.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.BackgroundCasting.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
         assertEquals(
             3,
-            resolveHighlightScrollIndex(PlaybackRows.DvrRecordingQuality.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.DvrRecordingQuality.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
         // The player group never moves.
         assertEquals(
             0,
-            resolveHighlightScrollIndex(PlaybackRows.PlayerEngine.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.PlayerEngine.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
     }
 
@@ -1012,11 +1017,12 @@ class SettingsCatalogScreenContractTest {
 
         // Advanced video: the whole group only composes behind the advanced
         // toggle (its declared Advanced base — the flags carry that toggle);
-        // the dialogue-boost strength row AND the five per-codec passthrough
-        // rows additionally ride their parent toggles (their declared All
-        // gates) — with no parents on, those six drop.
+        // the dialogue-boost strength row, the five per-codec passthrough
+        // rows AND the spatial headphones sub-knob additionally ride their
+        // parent toggles (their declared All gates) — with no parents on,
+        // those seven drop.
         assertEquals(
-            SettingsScreenGroups.playbackAdvancedVideo.items.size - 6,
+            SettingsScreenGroups.playbackAdvancedVideo.items.size - 7,
             rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
         )
         val boostOn = RowAdmissionFlags(
@@ -1024,6 +1030,7 @@ class SettingsCatalogScreenContractTest {
             parentsOn = rowParentsOn(
                 PlaybackRows.DialogueBoost.id to true,
                 PlaybackRows.AudioPassthrough.id to true,
+                PlaybackRows.SpatialAudio.id to true,
             ),
         )
         assertEquals(
@@ -1052,7 +1059,7 @@ class SettingsCatalogScreenContractTest {
             playbackEngineScreenRowTotal("exo_"),
         )
         assertEquals(
-            SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } - 3 - 5 + 1, // minus the audio-device trio and the five render rows (both capabilities off); +1: the reset row
+            SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } - 3 - 4 + 1, // minus the audio-device trio and the FOUR render rows (both capabilities off — mpv_hdr_passthrough left the render-profile gate for the plain advanced gate when passthrough went cross-host); +1: the reset row
             playbackEngineScreenRowTotal(
                 "mpv_",
                 supportsAudioDeviceSelection = false,
@@ -1083,9 +1090,10 @@ class SettingsCatalogScreenContractTest {
     fun `notification row total tracks the declaration through every gate`() {
         // The naive derivation, over the same declarations the screen reads:
         // the master toggle always renders (its declared Always gate); the
-        // five toggle rows ride it; the four advanced rows
+        // five toggle rows ride it; the five advanced rows
         // (respect_system_dnd, quiet_hours, max_per_check,
-        // notification_libraries) additionally ride the advanced toggle; the
+        // notification_libraries, notification_series — the per-series
+        // management entry) additionally ride the advanced toggle; the
         // quiet pair additionally rides the quiet-hours toggle; the
         // system-settings row additionally rides the platform-intent
         // capability.
@@ -1101,6 +1109,7 @@ class SettingsCatalogScreenContractTest {
             NotificationRows.QuietHours.id,
             NotificationRows.MaxPerCheck.id,
             NotificationRows.NotificationLibraries.id,
+            NotificationRows.NotificationSeries.id,
         )
         val quietPairRows = listOf(
             NotificationRows.QuietStart.id,
@@ -1159,7 +1168,7 @@ class SettingsCatalogScreenContractTest {
                     parentsOn = rowParentsOn(NotificationRows.NotificationsEnable.id to true),
                 ),
             ),
-        ) // + quiet hours/dnd/max-per-check/libraries
+        ) // + quiet hours/dnd/max-per-check/libraries/series
         assertEquals(
             naiveNotificationTotal(
                 showAdvanced = true,
@@ -1230,10 +1239,9 @@ class SettingsCatalogScreenContractTest {
 
     @Test
     fun `home display row total is the nine declared rows plus the conditional unhide row`() {
-        // The retired oracle double-counted: items.size (10, including the
-        // unhide row) + 1 — while the screen emits 9 rows without hidden CW
-        // items and 10 with. The derivation fixes the count to the emitted
-        // rows: the nine always-declared rows plus the explicit unhide +1.
+        // The count follows the emitted rows: the nine always-declared rows
+        // plus the explicit unhide +1 when hidden CW items exist, rather than
+        // items.size (10, including the unhide row) + 1.
         val displayRowsWithoutUnhide = SettingsScreenGroups.homeDisplay.items.count { it.id != HomeRows.UnhideCw.id }
         assertEquals(displayRowsWithoutUnhide, homeDisplayScreenRowTotal(hiddenCwItems = 0))
         assertEquals(
@@ -1246,7 +1254,7 @@ class SettingsCatalogScreenContractTest {
             "the display declaration changed — update this pin",
         )
         // The unhide row is declared last, so the derived emission order
-        // matches the retired hand-built list.
+        // keeps it at the end.
         assertEquals(HomeRows.UnhideCw.id, SettingsScreenGroups.homeDisplay.itemIds.last())
         // …and it admits for emission (rowAdmitted's no-gate default) — the
         // screen's content-state `if` carries its gate.
@@ -1266,9 +1274,9 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.appearanceLibrary.items.size + 1,
             appearanceLibraryScreenRowTotal(),
         )
-        // 8 declared rows (the shipped set minus the home-discovery
-        // card-display quartet that moved to HomeSettingsScreen — PS-4) plus
-        // the screen-local confirm-library-reset action row.
+        // Declared rows (the library-content + detail-display residuals and
+        // the spec-backed toggles) plus the screen-local
+        // confirm-library-reset action row.
         assertEquals(
             SettingsScreenGroups.appearanceLibrary.items.size + 1, // +1: the screen-local confirm-library-reset action row
             appearanceLibraryScreenRowTotal(),
@@ -1276,16 +1284,32 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home cards row total is the four moved card-display rows`() {
-        // The PS-4 moved quartet: every row renders unconditionally on the
-        // home hub (no advanced gate), so the strict derivation counts all
-        // four under the no-flag input.
-        assertEquals(4, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
+    fun `home cards row total is the card-display toggles with the TV-gated trickplay fork`() {
+        // The card-display quartet plus the badge/spoiler toggles: every row
+        // renders unconditionally on the home hub except the
+        // TV-only trickplay row (its declared RowAdmission.Tv), so the strict
+        // derivation counts all eight on TV and all but the trickplay row
+        // off it.
+        assertEquals(8, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
         assertEquals(
             SettingsScreenGroups.homeCards.items.size,
-            homeCardsScreenRowTotal(),
+            homeCardsScreenRowTotal(isTv = true),
         )
-        assertTrue(SettingsScreenGroups.homeCards.items.all { !it.isAdvanced }, "the cards rows must stay always-on")
+        assertEquals(
+            SettingsScreenGroups.homeCards.items.size - 1,
+            homeCardsScreenRowTotal(isTv = false),
+        )
+        assertTrue(
+            SettingsScreenGroups.homeCards.items.all { !it.isAdvanced },
+            "the cards rows must stay always-on",
+        )
+        // The trickplay row is the one TV fork.
+        assertEquals(
+            listOf(HomeRows.TrickplayPreview.id),
+            SettingsScreenGroups.homeCards.items
+                .filter { SettingsScreenGroups.homeCards.admissionOf(it.id) == RowAdmission.Tv }
+                .map { it.id },
+        )
     }
 
     @Test
@@ -1386,8 +1410,8 @@ class SettingsCatalogScreenContractTest {
         )
         // The declared half is exactly the advanced-flag base minus the
         // content-gated exceptions and the theme_scheduler highlight-alias —
-        // the strict ratchet keeps them in sync. (Fused conversion: the
-        // exception set is 7 ContentGated rows + the alias. The form-factor
+        // the strict guard keeps them in sync. (The exception set is 7
+        // ContentGated rows + the alias. The form-factor
         // fork is a SWAP: under the default (non-TV) flags layout_mode's
         // All(Advanced, NotTv) admits and screen_fit's Tv drops; on TV it
         // swaps — either way exactly one of the pair drops, so the declared
@@ -1430,6 +1454,52 @@ class SettingsCatalogScreenContractTest {
         assertEquals(
             SettingsScreenGroups.appearanceNewsletter.items.size - 1 + sectionCount,
             rowTotalFor(SettingsScreenGroups.appearanceNewsletter, RowAdmissionFlags(showAdvanced = true)) - 1 + sectionCount,
+        )
+    }
+
+    /**
+     * The appearance screen sections in LazyColumn order — the same
+     * [SettingsScreenSection] declaration the screen consumes, so the
+     * trailing-shape adjust pin below runs the very [deriveAdjustForAdvanced]
+     * the screen passes to `PreferenceScreenScaffold` (the hand-written
+     * per-screen lambda is gone).
+     */
+    private val appearanceSections = listOf(
+        SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.appearanceNavigation.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.appearanceLibrary.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.appearancePerformance.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.appearanceEyeCare.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.appearanceNewsletter.itemIdSet, advancedOnly = true),
+    )
+
+    @Test
+    fun `appearance trailing expert groups stay out of the derived scroll adjust when advanced is hidden`() {
+        // The shipped trailing shape: with advanced hidden the three trailing
+        // expert groups don't compose (their ids cannot scroll → -1) and
+        // nothing trails them, so the three always-visible leading groups
+        // keep their indices; with advanced shown every group composes and
+        // the adjust is the identity.
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(3))
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(4))
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(5))
+        assertEquals(0, deriveAdjustForAdvanced(appearanceSections, false)(0))
+        assertEquals(1, deriveAdjustForAdvanced(appearanceSections, false)(1))
+        assertEquals(2, deriveAdjustForAdvanced(appearanceSections, false)(2))
+        for (raw in appearanceSections.indices) {
+            assertEquals(raw, deriveAdjustForAdvanced(appearanceSections, true)(raw))
+        }
+        // End-to-end over the same resolver the scaffold drives: an expert id
+        // lands on its declared index when shown and scrolls nowhere when hidden.
+        val appearanceGroups = appearanceSections.map { it.idSet }
+        val expertId = SettingsScreenGroups.appearancePerformance.itemIds.first()
+        assertEquals(
+            3,
+            resolveHighlightScrollIndex(expertId, appearanceGroups, deriveAdjustForAdvanced(appearanceSections, true)),
+        )
+        assertEquals(
+            -1,
+            resolveHighlightScrollIndex(expertId, appearanceGroups, deriveAdjustForAdvanced(appearanceSections, false)),
         )
     }
 
@@ -1529,3 +1599,4 @@ class SettingsCatalogScreenContractTest {
         assertFalse(on.enableAdvanced)
     }
 }
+

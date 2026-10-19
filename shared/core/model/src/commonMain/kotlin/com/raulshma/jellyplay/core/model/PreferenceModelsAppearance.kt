@@ -37,7 +37,7 @@ enum class ContrastLevel {
 }
 
 /**
- * Manual override for the adaptive window-size layout (issue #166). AUTO
+ * Manual override for the adaptive window-size layout. AUTO
  * keeps the measured [com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass];
  * PHONE / TABLET clamp it so phones can opt into the expanded two-pane shell
  * and tablets into the compact single-pane one, as many apps allow.

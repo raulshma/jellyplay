@@ -778,7 +778,7 @@ class LiveTvPlayerViewModelTest {
         )
         assertEquals(1, pip.resetCount)
         assertNull(pip.pipTransport)
-        // TWO clears land: initialize's defensive clear (issue #145) plus the
+        // TWO clears land: initialize's defensive clear plus the
         // dismiss handler's re-clear after handling (defence against a reuse
         // path that skipped the full reset).
         assertEquals(2, pip.clearedDismissals.size)

@@ -27,8 +27,9 @@ import androidx.compose.ui.unit.dp
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.image.rememberMediaImageMemoryCacheKey
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 /**
  * How BOOK items (which ship no 16:9 backdrop — their one asset is the
@@ -58,7 +59,7 @@ internal fun DetailBackdrop(
     targetBackdropId: String,
     backdropBlurHash: String?,
     getBackdropUrl: (String) -> String,
-    relatedVideos: List<SeerrRelatedVideo>,
+    trailers: List<DetailUiState.TrailerEntry>,
     preferences: DetailPreferences,
     scrollState: DetailScrollState,
     modifier: Modifier = Modifier,
@@ -69,6 +70,21 @@ internal fun DetailBackdrop(
      */
     localBackdropPath: String? = null,
     coverHero: BookCoverHero = BookCoverHero.NONE,
+    /**
+     * The resolved server ThemeVideo stream URL (the `themeVideo`
+     * enrichment's write; null = none resolved). When present — and the
+     * platform can render ambient video — it is preferred OVER the YouTube
+     * embed (the muted ExoPlayer surface degrades to the static backdrop on
+     * desktop, where the URL is simply never fetched).
+     */
+    themeVideoStreamUrl: String? = null,
+    /**
+     * The play-target focus port (DetailContent provides the instance
+     * the Play button writes). Null = no gating wired — the non-gated
+     * posture, so a call site that never heard of the port keeps today's
+     * immediate mount.
+     */
+    trailerFocusPreview: TrailerFocusPreviewState? = null,
 ) {
     val baseBackdropHeight = scrollState.baseBackdropHeight
     val backdropHeight = scrollState.backdropHeight
@@ -79,13 +95,32 @@ internal fun DetailBackdrop(
     val scrollFractionState = scrollState.scrollFractionState
     val backgroundColorState = scrollState.backgroundColorState
 
-    val trailerVideo = remember(relatedVideos) {
-        relatedVideos.firstOrNull {
-            it.site?.lowercase() == "youtube" &&
-                (it.type?.lowercase() == "trailer" || it.type?.lowercase() == "teaser")
-        } ?: relatedVideos.firstOrNull { it.site?.lowercase() == "youtube" }
+    // The autoplay pick runs over the MERGED trailer list. With
+    // `preferLocalTrailers` on, a local clip wins the pick — but only the
+    // pick: the embed below is the WebView YouTube mount and cannot play a
+    // local file, and the ThemeVideo mount below takes only the server
+    // ThemeVideo clip, so a Local pick leaves the hero on the backdrop image
+    // (mounting local file clips stays with the later video-hero wave).
+    // Off (or no local) → the historical YouTube trailer/teaser rule.
+    val trailerPick = remember(trailers, preferences.preferLocalTrailers) {
+        pickBackdropTrailerEntry(trailers, preferences.preferLocalTrailers)
     }
+    val trailerVideo = (trailerPick as? DetailUiState.TrailerEntry.Remote)?.video
     var autoplayEmbedFailed by remember(targetBackdropId) { mutableStateOf(false) }
+
+    // The focus-gated mount decision (a no-op off TV — the pure
+    // machine mounts immediately whenever `trailerAutoplay` holds and the
+    // focus-preview semantic is not gating). The port being absent counts
+    // as NOT focus-gated: an unwired call site keeps today's mount.
+    val isTv = LocalTvMode.current
+    val windowVisible = rememberWindowVisible()
+    val mountPreview = trailerPreviewShouldMount(
+        trailerAutoplayEnabled = preferences.trailerAutoplay,
+        focusPreviewEnabled = preferences.trailerPreviewOnFocus,
+        isTv = isTv,
+        playTargetFocused = trailerFocusPreview?.playTargetFocused ?: false,
+        windowVisible = windowVisible,
+    )
 
     Box(
         modifier = modifier
@@ -131,10 +166,20 @@ internal fun DetailBackdrop(
             // Prefer the on-disk backdrop (DetailAssets.backdropPath, or the
             // book cover's poster path) for a LOCAL origin; fall back to the
             // server URL for REMOTE or when no local path was resolved.
+            // The placeholder handoff reuses the wide-row tile's cached decode
+            // (the resume/next-up cards show the SAME server backdrop URL at
+            // MediaImage's 384² default) while this full-bleed decode runs, so
+            // the artwork stays on screen across the navigation instead of
+            // dropping to the blurHash. Key built from the DISPLAY url: a local
+            // origin hands off from the offline row's identical local path.
             MediaImage(
                 url = localBackdropPath ?: getBackdropUrl(backdropId),
                 contentDescription = null,
                 blurHash = backdropBlurHash,
+                placeholderMemoryCacheKey = rememberMediaImageMemoryCacheKey(
+                    url = localBackdropPath ?: getBackdropUrl(backdropId),
+                    size = CoilSize(384, 384),
+                ),
                 modifier = backdropModifier
                     .then(
                         if (coverHero == BookCoverHero.BLURRED) Modifier.blur(28.dp)
@@ -150,27 +195,52 @@ internal fun DetailBackdrop(
             )
         }
 
-        // Trailer player rendered outside AnimatedContent so it composes
-        // independently when relatedVideos loads asynchronously.
-        val playAutoplayTrailer = preferences.trailerAutoplay && trailerVideo != null && !autoplayEmbedFailed
-        val trailerKey = trailerVideo?.key
-        if (playAutoplayTrailer && trailerKey != null) {
-            InlineTrailerPlayerHost(
-                videoKey = trailerKey,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
-                        scaleX = scale
-                        scaleY = scale
-                    },
-                muted = true,
-                showControls = false,
-                autoplay = true,
-                focusable = false,
-                cropToFill = true,
-                onEmbedFailed = { autoplayEmbedFailed = true },
-            )
+        // Trailer/clip preview rendered outside AnimatedContent so it composes
+        // independently when the merged trailer list loads asynchronously.
+        // The whole preview family is gated by [mountPreview] — autoplay
+        // off mounts nothing, TV focus-gating unmounts on focus-exit (the
+        // embed's own lifecycle observer handles an app backgrounding while
+        // mounted). Within the family the server ThemeVideo clip is
+        // preferred over the embed (both are muted, crop-to-fill fills).
+        // Mounted only for a Remote pick (the embed cannot play a local
+        // clip — see the pick note above).
+        if (mountPreview) {
+            // mountPreview already carries the `trailerAutoplay` leg (the
+            // pure machine returns false without it), so both branches below
+            // are the autoplay-on posture.
+            val themeVideoUrl = themeVideoStreamUrl
+            val trailerKey = trailerVideo?.key
+            when {
+                themeVideoUrl != null ->
+                    AmbientThemeVideoSurface(
+                        url = themeVideoUrl,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
+                                scaleX = scale
+                                scaleY = scale
+                            },
+                    )
+
+                trailerVideo != null && trailerKey != null && !autoplayEmbedFailed ->
+                    InlineTrailerPlayerHost(
+                        videoKey = trailerKey,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
+                                scaleX = scale
+                                scaleY = scale
+                            },
+                        muted = true,
+                        showControls = false,
+                        autoplay = true,
+                        focusable = false,
+                        cropToFill = true,
+                        onEmbedFailed = { autoplayEmbedFailed = true },
+                    )
+            }
         }
 
         Box(

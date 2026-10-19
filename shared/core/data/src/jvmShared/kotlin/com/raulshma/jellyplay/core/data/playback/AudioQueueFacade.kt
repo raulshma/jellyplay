@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The single seam for "build a queue of [AudioQueueItem]s, then play or
- * enqueue it, optionally seeding it from an instant mix" (plan 04).
+ * enqueue it, optionally seeding it from an instant mix".
  *
  * Owns the five concerns every former call site re-decided: image-URL
  * resolution (via [ImageUrlProvider], width explicit per call site), album

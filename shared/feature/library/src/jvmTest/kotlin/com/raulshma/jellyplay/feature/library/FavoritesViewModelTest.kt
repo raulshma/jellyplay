@@ -33,7 +33,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Delegation assertion (plan 03): Favorites' mark-played is intentionally
+ * Delegation assertion: Favorites' mark-played is intentionally
  * silent — the paged grid keeps the user's scroll position — so the whole
  * contract is "routes through the mutator with the silent defaults". The
  * mutation protocol itself is pinned by UserDataMutatorTest in :core:data.

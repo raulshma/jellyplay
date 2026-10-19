@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Platform seams for the detail feature (V3/ conveyor move from
@@ -36,6 +37,20 @@ interface DetailThemeMusic {
 
     /** Stops and releases any playing theme music. */
     fun stop()
+
+    /**
+     * The top-bar mute chip's live-volume half — mute/unmute the playing
+     * theme immediately (no stop/restart). The per-series memory write is the
+     * ViewModel's job; this only touches audio.
+     */
+    fun setMuted(muted: Boolean)
+
+    /**
+     * Whether theme audio is currently playing — the mute chip's
+     * visibility gate (the chip exists only while something is audible to
+     * mute).
+     */
+    val isPlaying: StateFlow<Boolean>
 }
 
 interface DetailStorageProbe {
@@ -80,3 +95,42 @@ internal expect fun InlineTrailerPlayerHost(
     cropToFill: Boolean = false,
     onEmbedFailed: () -> Unit = {},
 )
+
+/**
+ * The ambient clip: the ambient ThemeVideo clip surface behind the detail hero — the
+ * same muted-by-contract transport the home hero uses (core:data's
+ * `AmbientVideoPlayer` ExoPlayer single; starting here stops the home hero's
+ * clip and vice versa). Android actual binds a `TextureView` to the single;
+ * desktop actual renders nothing — the hero stays the backdrop image (the
+ * YouTube embed path handles its own degradation through
+ * [InlineTrailerPlayerHost]'s `onEmbedFailed`).
+ */
+@Composable
+internal expect fun AmbientThemeVideoSurface(url: String, modifier: Modifier = Modifier)
+
+/**
+ * Whether the platform has a notification stack (Android/TV: yes — the
+ * WorkManager poller + the tray; desktop: no — the seams are no-ops). Gates
+ * the ⋮ menu's "Notify me about new episodes" entry and the upcoming
+ * rows' per-row bell; on desktop both are hidden outright.
+ */
+internal expect val platformHasNotificationStack: Boolean
+
+/**
+ * The POST_NOTIFICATIONS runtime-flow seam behind the per-series notify
+ * toggle's first enable. Mirrors the app's cold-start prompt pattern
+ * (MainActivity: checkSelfPermission → launcher.launch): the returned lambda
+ * fires the Android 13+ system dialog when the permission is not yet
+ * granted and no-ops otherwise. Desktop actual: no-op (its bell/menu are
+ * hidden by [platformHasNotificationStack] anyway).
+ */
+@Composable
+internal expect fun rememberSeriesNotificationPermissionRequest(): () -> Unit
+
+/**
+ * The pure permission gate behind the Android actual: the runtime prompt
+ * exists on Android 13+ (API 33) only and fires only when the permission is
+ * not yet granted. Pure — pinned by the jvmTest gating matrix.
+ */
+internal fun shouldRequestPostNotifications(sdkInt: Int, granted: Boolean): Boolean =
+    sdkInt >= 33 && !granted

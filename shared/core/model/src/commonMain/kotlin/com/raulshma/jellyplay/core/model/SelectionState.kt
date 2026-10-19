@@ -10,7 +10,7 @@ import androidx.compose.runtime.Immutable
  *
  * Selection mode is never stored — [active] is always derived from the id set,
  * and each transform returns the new state with the derivation applied once,
- * so the `selectionMode = next.isNotEmpty()` copy can no longer drift or be
+ * so the `selectionMode = next.isNotEmpty()` copy can never drift or be
  * forgotten at a call site. The id type is generic (String row keys in the
  * *arr queue and downloads lists, Int ids in the Seerr requests list); each
  * screen keeps its own id mapping and passes the resulting ids in.

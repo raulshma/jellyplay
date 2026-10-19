@@ -5,9 +5,9 @@ import kotlin.test.Test
 
 /**
  * Pure-state tests for [ScrollPositionStore] — no coroutines, no mocks.
- * Migrated from HomeViewModelTest.saveHomeScrollPosition_storesPositiveValues_
- * andClampsNegatives (the VM wrappers are now one-line delegates), plus the
- * reset behaviour that used to be pinned only via the refresh test.
+ * Covers HomeViewModelTest.saveHomeScrollPosition_storesPositiveValues_
+ * andClampsNegatives (the VM wrappers are one-line delegates) plus the
+ * reset behaviour.
  */
 class ScrollPositionStoreTest {
 

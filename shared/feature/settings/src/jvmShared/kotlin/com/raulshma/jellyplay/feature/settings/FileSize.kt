@@ -11,8 +11,8 @@ import java.io.File
  * location that the OS symlinks onto external storage still reports its size.
  *
  * Shared by [SettingsViewModel] (cache size on the settings root) and
- * [StorageSettingsViewModel] (full storage breakdown) — previously the body was
- * duplicated in both, so a fix to one could silently diverge from the other.
+ * [StorageSettingsViewModel] (full storage breakdown), so a fix to one applies
+ * to both.
  */
 internal fun directorySizeBytes(dir: File): Long {
     var size = 0L

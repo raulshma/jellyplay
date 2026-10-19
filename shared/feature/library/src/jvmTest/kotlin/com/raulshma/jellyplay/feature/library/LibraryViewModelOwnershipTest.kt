@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Ratchet against the ViewModel regrowing into a god object (the reader
+ * Guard against the ViewModel regrowing into a god object (the reader
  * module's BookReaderViewModelOwnershipTest pattern): the count of
  * LibraryViewModel's public + internal members (properties and functions,
  * primary-constructor parameters and private members excluded) must never
@@ -15,9 +15,10 @@ import kotlin.test.assertTrue
  * `LibraryUiEvent` fold routed through the single `onEvent` funnel (the
  * HomeViewModel precedent) instead of new per-action command members.
  *
- * Baseline: 18 members (was 37 before the LibraryUiEvent intent fold deleted
- * the per-command publics in favour of `onEvent`). Lower the ceiling when a
- * slice moves out and deletes members; never raise it to admit new ones.
+ * Baseline: 18 members (the LibraryUiEvent intent fold routes user intents
+ * through the single `onEvent` funnel rather than per-command publics). Lower
+ * the ceiling when a slice moves out and deletes members; never raise it to
+ * admit new ones.
  */
 class LibraryViewModelOwnershipTest {
 
@@ -46,7 +47,7 @@ class LibraryViewModelOwnershipTest {
     }
 
     /**
-     * Removes line and block comments so the ratchet checks *code*, not KDoc
+     * Removes line and block comments so the guard checks *code*, not KDoc
      * prose (the ViewModel legitimately mentions its members in
      * documentation), while leaving string literals intact.
      */

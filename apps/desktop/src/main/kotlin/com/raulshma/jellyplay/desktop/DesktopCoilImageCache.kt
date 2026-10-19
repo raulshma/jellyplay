@@ -9,13 +9,12 @@ import kotlinx.coroutines.withContext
 
 /**
  * The shell's [DesktopImageCacheOps] over the desktop image pipeline. Desktop Coil is NOT memory-only: Main.kt builds its loader with an
- * EXPLICIT disk cache (previously coil3's default
- * applied, a process-wide singleton DiskCache under the SYSTEM TEMP
- * directory): rooted at `<configDir>/image_cache` (declared in the same
- * Main.kt builder that registers the OkHttp fetcher) and sized from the
- * user's max-cache-size preference, the desktop twin of Android's
- * `cacheDir/image_cache`. Every request with the default ENABLED disk-cache
- * policy writes decoded files to it.
+ * EXPLICIT disk cache — rooted at `<configDir>/image_cache` (declared in the
+ * same Main.kt builder that registers the OkHttp fetcher) and sized from the
+ * user's max-cache-size preference, the desktop counterpart of Android's
+ * `cacheDir/image_cache` (coil3's own default would be a process-wide
+ * singleton DiskCache under the SYSTEM TEMP directory). Every request with
+ * the default ENABLED disk-cache policy writes decoded files to it.
  *
  * Both operations go through the shell's SingletonImageLoader instance
  * (Main.kt's setSafe factory) and its `diskCache` — so whatever disk cache

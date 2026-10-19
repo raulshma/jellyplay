@@ -38,7 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
  * narrow interface. Mirrors the `ServerIdentityStore` / `WidgetDataStore` /
  * `PinRateLimiter` shape.
  *
- * **Stage B spec derivation:** every key this store owns is declared exactly
+ * **Spec derivation:** every key this store owns is declared exactly
  * once as a row in [PlaybackPreferenceSpecs] (wire name, default, reset
  * category, read/write encoding) and the machinery below is derived from those
  * rows — each [Keys] member rebuilds its row's typed key from the row's wire
@@ -97,6 +97,8 @@ class PlaybackStore constructor(
         val AUDIO_PASSTHROUGH_CODECS = stringPreferencesKey(PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.keyName)
         val MAX_AUDIO_CHANNELS = stringPreferencesKey(PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.keyName)
         val DOWNMIX_BOOST_DB = floatPreferencesKey(PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.keyName)
+        val SPATIAL_AUDIO_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.keyName)
+        val SPATIAL_AUDIO_ONLY_HEADPHONES = booleanPreferencesKey(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.keyName)
         val FRAME_RATE_MATCHING = booleanPreferencesKey(PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.keyName)
         val REFRESH_RATE_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.REFRESH_RATE_MODE.keyName)
         val LIVE_STREAM_OPTION = stringPreferencesKey(PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.keyName)
@@ -139,6 +141,8 @@ class PlaybackStore constructor(
         audioPassthroughCodecs = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.readFrom(prefs),
         maxAudioChannels = PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.readFrom(prefs),
         downmixBoostDb = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.readFrom(prefs),
+        spatialAudioEnabled = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.readFrom(prefs),
+        spatialAudioOnlyHeadphones = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.readFrom(prefs),
         frameRateMatching = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.readFrom(prefs),
         refreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.readFrom(prefs),
         keepScreenOnDuringVideo = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.readFrom(prefs),
@@ -216,6 +220,20 @@ class PlaybackStore constructor(
     }
 
     /**
+     * The ADVISORY "allow spatial audio" toggle (Android-only) — see
+     * AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+     * rationale.
+     */
+    suspend fun setSpatialAudioEnabled(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.writeTo(it, enabled) }
+    }
+
+    /** Qualifies the spatial toggle to headphone-class outputs only. */
+    suspend fun setSpatialAudioOnlyHeadphones(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.writeTo(it, enabled) }
+    }
+
+    /**
      * Enables/disables frame-rate matching, keeping the legacy boolean in sync
      * with the new [RefreshRateMode] enum in a single atomic edit. `true` maps
      * to the least-surprising frame-rate-only mode (the old single-resolution
@@ -262,8 +280,8 @@ class PlaybackStore constructor(
     /**
      * Whether leaving the player during playback auto-enters
      * picture-in-picture. Default `true` preserves the historical behaviour;
-     * turning it off makes Home/recents background the app normally instead
-     * (issue #167). The manual PiP button in the controls is unaffected.
+     * turning it off makes Home/recents background the app normally instead.
+     * The manual PiP button in the controls is unaffected.
      */
     suspend fun setAutoEnterPip(enabled: Boolean) {
         dataStore.edit { PlaybackPreferenceSpecs.AUTO_ENTER_PIP.writeTo(it, enabled) }
@@ -323,6 +341,8 @@ class PlaybackStore constructor(
             PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.writeTo(prefs, slice.audioPassthroughCodecs)
             PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.writeTo(prefs, slice.maxAudioChannels)
             PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.writeTo(prefs, slice.downmixBoostDb)
+            PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.writeTo(prefs, slice.spatialAudioEnabled)
+            PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.writeTo(prefs, slice.spatialAudioOnlyHeadphones)
             PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.writeTo(prefs, slice.frameRateMatching)
             PlaybackPreferenceSpecs.REFRESH_RATE_MODE.writeTo(prefs, slice.refreshRateMode)
             PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.writeTo(prefs, slice.keepScreenOnDuringVideo)
@@ -340,36 +360,47 @@ class PlaybackStore constructor(
 
 /**
  * The media-delivery preference slice. Plain data class (Compose-free) so the
- * datastore module stays framework-light. Defaults mirror the projection
- * defaults in [PlaybackStore.read] (declared on the [PlaybackPreferenceSpecs]
- * rows).
+ * datastore module stays framework-light. Every default IS its
+ * [PlaybackPreferenceSpecs] row's declared default — read off the row via a
+ * plain accessor, so a preference's default is stated exactly once, in its
+ * spec, and cannot drift between the spec (what an absent key reads) and the
+ * slice (what a fresh in-memory instance serves). Two rows read platform- or
+ * migration-adjusted values on absence ([PlaybackStore.read] of
+ * `preferred_player` clamps to the platform's shipped engines;
+ * `refresh_rate_mode`'s corrupt-value rescue) — those rows keep their
+ * pre-clamp declared default here, exactly as the slice always has. The
+ * legacy-only row (`force_direct_play`) has no slice property by design. The
+ * spec-default equality is pinned field-for-field by
+ * `PlaybackSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class PlaybackSlice(
-    val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
-    val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,
-    val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val cellularStreamingQuality: StreamingQuality = StreamingQuality.AUTO,
-    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
-    val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
-    val offlinePlaybackPreference: OfflinePlaybackPreference = OfflinePlaybackPreference.PREFER_DOWNLOADED,
-    val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
-    val audioPassthrough: Boolean = false,
-    val audioPassthroughCodecs: Set<AudioPassthroughCodec> = DEFAULT_AUDIO_PASSTHROUGH_CODECS,
-    val maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
-    val downmixBoostDb: Float = DEFAULT_DOWNMIX_BOOST_DB,
-    val frameRateMatching: Boolean = false,
-    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
-    val keepScreenOnDuringVideo: Boolean = true,
-    val pauseOnAudioFocusLoss: Boolean = true,
-    val duckOnTransientFocusLoss: Boolean = false,
-    val autoPlayCountdownSec: Int = 10,
-    val backgroundVideoAudioEnabled: Boolean = false,
-    val autoEnterPip: Boolean = true,
-    val pgsSubtitleDirectPlay: Boolean = false,
-    val userDataSyncEnabled: Boolean = true,
-    val androidTvWatchNextEnabled: Boolean = true,
+    val preferredPlayer: PlayerType = PlaybackPreferenceSpecs.PREFERRED_PLAYER.default,
+    val preferredExternalPlayer: ExternalPlayerApp = PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.default,
+    val streamingQuality: StreamingQuality = PlaybackPreferenceSpecs.STREAMING_QUALITY.default,
+    val cellularStreamingQuality: StreamingQuality = PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.default,
+    val playbackMode: PlaybackMode = PlaybackPreferenceSpecs.PLAYBACK_MODE.default,
+    val liveStreamOption: LiveStreamOption = PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.default,
+    val offlinePlaybackPreference: OfflinePlaybackPreference = PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.default,
+    val decoderMode: DecoderMode = PlaybackPreferenceSpecs.DECODER_MODE.default,
+    val audioPassthrough: Boolean = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH.default,
+    val audioPassthroughCodecs: Set<AudioPassthroughCodec> = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.default,
+    val maxAudioChannels: MaxAudioChannelsEnum = PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.default,
+    val downmixBoostDb: Float = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.default,
+    val spatialAudioEnabled: Boolean = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.default,
+    val spatialAudioOnlyHeadphones: Boolean = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.default,
+    val frameRateMatching: Boolean = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.default,
+    val refreshRateMode: RefreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.default,
+    val keepScreenOnDuringVideo: Boolean = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.default,
+    val pauseOnAudioFocusLoss: Boolean = PlaybackPreferenceSpecs.PAUSE_ON_AUDIO_FOCUS_LOSS.default,
+    val duckOnTransientFocusLoss: Boolean = PlaybackPreferenceSpecs.DUCK_ON_TRANSIENT_FOCUS_LOSS.default,
+    val autoPlayCountdownSec: Int = PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.default,
+    val backgroundVideoAudioEnabled: Boolean = PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.default,
+    val autoEnterPip: Boolean = PlaybackPreferenceSpecs.AUTO_ENTER_PIP.default,
+    val pgsSubtitleDirectPlay: Boolean = PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.default,
+    val userDataSyncEnabled: Boolean = PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.default,
+    val androidTvWatchNextEnabled: Boolean = PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.default,
 )
 
 /**

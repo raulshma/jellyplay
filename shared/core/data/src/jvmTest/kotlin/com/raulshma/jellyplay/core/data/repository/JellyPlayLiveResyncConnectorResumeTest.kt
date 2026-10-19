@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent
+import kotlin.coroutines.ContinuationInterceptor
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -20,7 +22,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The settings stream's resume cursor (the Phase 1 `Last-Event-ID` wave),
+ * The settings stream's resume cursor,
  * driven through [JellyPlayLiveResyncConnector] on the test scheduler's
  * virtual time: the first connect resumes from the persisted per-user id, the
  * id seen on the wire is persisted and becomes the reconnect's `Last-Event-ID`
@@ -164,6 +166,9 @@ class JellyPlayLiveResyncConnectorResumeTest {
             deviceProfile = "desktop",
             deviceIdProvider = { "test-device" },
             nowMillis = { 1_000L },
+            // The follow-up cycles ride the test scheduler too — a hardcoded
+            // Default would run them off the virtual clock this suite drives.
+            syncDispatcher = coroutineContext[ContinuationInterceptor] as CoroutineDispatcher,
         )
         repo.setEnabled(true)
         JellyPlayLiveResyncConnector(

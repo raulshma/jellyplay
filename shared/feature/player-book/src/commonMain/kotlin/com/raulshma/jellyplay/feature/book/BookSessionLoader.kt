@@ -96,7 +96,7 @@ internal class BookSessionLoader(
         onFormatResolved(format)
         // Reflowable books never enter the document/pager layer: the WebView
         // host owns rendering, and the position math is percent-based. The
-        // locally stored CFI (ADR 0003 point 4) outranks the server percent
+        // locally stored CFI (the local-first resume rule) outranks the server percent
         // on this install; a deep-link destination (detail "Contents" tap)
         // outranks both.
         if (format.isReflowable) {

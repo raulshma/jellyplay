@@ -188,6 +188,50 @@ internal class AudioEffectsController(
         persist = { audioEffectsStore.setEqualizerSettings(effectsManager.equalizerSettings.value) },
     )
 
+    /**
+     * The slider LIVE legs: the EQ-band / virtualizer / balance /
+     * pitch sliders fired 60-120 drag frames per second, and each frame paid
+     * the full command — the synchronous DSP apply (kept — it IS the live
+     * feel, and it's cheap) PLUS a fire-and-forget DataStore write that was
+     * overwritten milliseconds later. The live leg is apply-only; the state
+     * mirror rides the manager-flow collectors as before. The settle leg
+     * (`onValueChangeFinished` → the commit funs below) persists the
+     * manager-held value once per gesture. The full
+     * [setEqualizerBand]/[setVirtualizerStrength]/[setLrBalance]/
+     * [setPitchSemitones] commands stay for the non-slider callers.
+     */
+    fun setEqualizerBandLive(bandIndex: Int, levelDb: Int) {
+        effectsManager.setEqualizerBand(bandIndex, levelDb)
+    }
+
+    fun commitEqualizerBands() = persistOnly {
+        audioEffectsStore.setEqualizerSettings(effectsManager.equalizerSettings.value)
+    }
+
+    fun setVirtualizerStrengthLive(strength: Int) {
+        effectsManager.setVirtualizerStrength(strength)
+    }
+
+    fun commitVirtualizerStrength() = persistOnly {
+        audioEffectsStore.setVirtualizerStrength(effectsManager.virtualizerStrength.value)
+    }
+
+    fun setLrBalanceLive(balance: Float) {
+        effectsManager.setLrBalance(balance)
+    }
+
+    fun commitLrBalance() = persistOnly {
+        audioEffectsStore.setLrBalance(effectsManager.lrBalance.value)
+    }
+
+    fun setPitchSemitonesLive(semitones: Float) {
+        effectsManager.setPitchSemitones(semitones)
+    }
+
+    fun commitPitchSemitones() = persistOnly {
+        audioEffectsStore.setPitchSemitones(effectsManager.pitchSemitones.value)
+    }
+
     fun resetEqualizer() = core.applyAndPersist(
         apply = effectsManager::resetEqualizer,
         persist = {
@@ -244,6 +288,9 @@ internal class AudioEffectsController(
         apply = { effectsManager.setAutoEqByGenre(enabled) },
         persist = { audioEffectsStore.setAutoEqByGenre(enabled) },
     )
+
+    /** The settle leg for the live slider pairs above: no apply, no state write — the manager already holds the settled value. */
+    private fun persistOnly(persist: suspend () -> Unit) = core.applyAndPersist(apply = {}, persist = persist)
 
     /**
      * The ONE ordered seeding entry for [AudioPlayerViewModel.play] — the same

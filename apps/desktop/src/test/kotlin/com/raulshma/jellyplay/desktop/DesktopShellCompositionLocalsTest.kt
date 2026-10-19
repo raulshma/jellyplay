@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Shell composition-locals ratchet (the KoinModuleRegistrationGuardTest
+ * Shell composition-locals guard (the KoinModuleRegistrationGuardTest
  * source-text idiom, applied to the CompositionLocalProvider block):
  * composition-local provisioning is runtime-only wiring — a local the
  * desktop shell forgets to provide compiles fine and fails at first read,

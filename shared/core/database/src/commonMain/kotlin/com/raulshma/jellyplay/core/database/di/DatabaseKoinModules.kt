@@ -4,14 +4,12 @@ import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the JellyPlayDatabase DAOs
- * (docs/kmp-migration-plan.md). Mirrors the legacy Hilt
+ * Koin construction owner for the JellyPlayDatabase DAOs. Mirrors the
  * DatabaseModule provider list one-to-one; the JellyPlayDatabase instance
  * itself (and the TokenCipher feeding the migration chain) comes from the
  * platform modules [androidDatabaseModule] / [desktopDatabaseModule].
  *
- * promotion: this module moved verbatim from jvmShared to commonMain —
- * every declaration it touches ([JellyPlayDatabase] and the DAO getters) is
+ * Every declaration it touches ([JellyPlayDatabase] and the DAO getters) is
  * commonMain Room 3, and Koin 4.2.2 koin-core is multiplatform, so the DAO
  * bindings resolve identically on android/desktop.
  */

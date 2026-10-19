@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * Pure model tests for the [DetailSnapshot] contract introduced with the
- * unified media-detail screen. These invariants were previously only exercised
+ * Pure model tests for the [DetailSnapshot] contract behind the unified
+ * media-detail screen. Without these, the invariants are exercised only
  * indirectly through the provider/ViewModel; pinning them here keeps the
  * capability/attachment/label decisions first-class as the model evolves.
  *

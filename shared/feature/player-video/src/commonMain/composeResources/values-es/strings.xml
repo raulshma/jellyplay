@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">Forzado</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">Predeterminado</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">Obtener</string>
     <string name="player_video_subtitle_hub_section_delay">Retardo</string>
     <string name="player_video_subtitle_downloaded_device_only">Guardado solo en el dispositivo (sin conexión)</string>
+    <string name="player_video_subtitle_save_to_server">Guardar en el servidor</string>
     <string name="player_video_chapters">Capítulos</string>
+    <string name="player_video_scrub_slow">lento</string>
+    <string name="player_video_queue_title">Cola de reproducción</string>
+    <string name="player_video_queue_subtitle">%1$d en la cola</string>
+    <string name="player_video_queue_clear">Vaciar cola</string>
+    <string name="player_video_queue_up_next">A continuación</string>
+    <string name="player_video_queue_move_up">Subir</string>
+    <string name="player_video_queue_move_down">Bajar</string>
+    <string name="player_video_queue_remove">Quitar de la cola</string>
+    <string name="player_video_queue_open">Cola de reproducción (%1$d)</string>
     <string name="player_video_episodes">Episodios</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">Relación de aspecto</string>
@@ -163,6 +174,11 @@
     <string name="player_video_dialogue_boost">Realce de diálogos</string>
     <string name="player_video_dialogue_boost_on">Realce de diálogos \u00B7 %1$s</string>
     <string name="player_video_night_mode">Modo nocturno</string>
+    <string name="player_video_spatial_audio">Audio espacial</string>
+    <string name="player_video_spatial_audio_on">Audio espacial activado — espacializador del sistema activo</string>
+    <string name="player_video_spatial_audio_unavailable">No espacializable en esta salida</string>
+    <string name="player_video_stats_spatial">Estado espacial</string>
+    <string name="player_video_stats_spatial_superseded">(virtualizador sustituido)</string>
     <string name="player_video_night_mode_on">Modo nocturno \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">Normalización de audio</string>
     <string name="player_video_normalization_on">Normalización \u00B7 %1$s</string>
@@ -261,10 +277,9 @@
     <string name="player_video_no_episodes_found">No se encontraron episodios para esta temporada</string>
     <string name="player_video_poster">Póster</string>
     <string name="player_video_selected">Seleccionado</string>
-    <string name="player_video_volume">Volumen</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">Duración</string>
+    <string name="player_video_volume">Volumen</string>    <string name="player_video_duration">Duración</string>
     <string name="player_video_remember_audio_language">Recordar idioma de audio para esta serie</string>
+    <string name="player_video_remember_audio_description">Preferir audiodescripción para esta serie</string>
     <string name="player_video_remember_subtitle_language">Recordar idioma de subtítulos para esta serie</string>
     <string name="player_video_remember_subtitles_off">Mantener subtítulos desactivados para esta serie</string>
     <string name="player_video_error_offline_file_missing">Error: falta el archivo sin conexión</string>
@@ -293,6 +308,7 @@
     <string name="player_video_stats_clock">Reloj</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">Salida HDR activa</string>
+    <string name="player_video_stats_display_hdr">HDR de pantalla</string>
     <string name="player_video_stats_color_range">Rango de color</string>
     <string name="player_video_stats_color_depth">Profundidad de color</string>
     <string name="player_video_stats_sample_rate">Frecuencia de muestreo</string>

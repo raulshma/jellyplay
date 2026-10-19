@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
@@ -79,6 +80,11 @@ fun RequestsScreen(
 ) {
     val state by viewModel.state
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    // The hot enrichment maps collect beside (not inside) the ui state:
+    // an enrichment completion now recomposes only the rows reading it.
+    val mediaInfo by viewModel.mediaInfo.collectAsStateWithLifecycle()
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val queueItems by viewModel.queueItems.collectAsStateWithLifecycle()
 
     var selectedRequest by remember { mutableStateOf<SeerrRequestItem?>(null) }
 
@@ -90,6 +96,16 @@ fun RequestsScreen(
         itemCount = if (state.isLoading && state.requests.isEmpty()) 0 else state.requests.size,
         tag = "requests_init",
     )
+
+    // The repository's shared background poll (badge + current user) is bound
+    // to screen visibility: it runs only while Requests is foregrounded, not
+    // for the VM's whole lifetime in the back stack (the refresh cycle
+    // module's binding discipline; the loop itself lives behind the
+    // repository's refcounted start/stop).
+    LifecycleStartEffect(Unit) {
+        viewModel.startBackgroundPolling()
+        onStopOrDispose { viewModel.stopBackgroundPolling() }
+    }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.requests_title),
@@ -147,9 +163,17 @@ fun RequestsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(state.requests, key = { it.id }) { request ->
+                                // Mechanical per-row remember: the media-info
+                                // map lookup is keyed per request id + map
+                                // identity so unrelated recompositions (selection
+                                // toggles, action-state churn) don't re-hash
+                                // every visible row.
+                                val requestMediaInfo = remember(request.id, mediaInfo) {
+                                    mediaInfo[request.media.tmdbId]
+                                }
                                 RequestListItem(
                                     request = request,
-                                    mediaInfo = state.mediaInfo[request.media.tmdbId],
+                                    mediaInfo = requestMediaInfo,
                                     isAdmin = isAdmin,
                                     actionInProgress = state.actionInProgress,
                                     selectionMode = state.selectionMode,
@@ -242,9 +266,9 @@ fun RequestsScreen(
             selectedRequest?.let { request ->
                 RequestDetailBottomSheet(
                     request = request,
-                    mediaInfo = state.mediaInfo[request.media.tmdbId],
+                    mediaInfo = mediaInfo[request.media.tmdbId],
                     isAdmin = isAdmin,
-                    downloadProgress = state.downloadProgress[request.media.tmdbId],
+                    downloadProgress = downloadProgress[request.media.tmdbId],
                     onRemoveFromQueue = { b, s ->
                         viewModel.removeQueueItem(request.media.tmdbId, b, s)
                     },

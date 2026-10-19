@@ -74,7 +74,7 @@ data class PersonInfo(
      *
      * Originally restricted to Actor/Director; broadened to include crew types
      * (Writer/Producer/Composer/GuestStar/…) that carry a `primaryImageTag`, so
-     * the offline main detail cast row no longer suppresses crew portraits.
+     * the offline main detail cast row keeps crew portraits.
      * Equivalent to [hasPortrait]; both now agree on "a tag means a portrait".
      */
     fun hasCastImage(): Boolean = hasPortrait()

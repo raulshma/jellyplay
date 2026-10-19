@@ -18,7 +18,7 @@ import kotlinx.serialization.json.Json
  * Each id is a [com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem.id];
  * the ids are resolved back to renderable items against the registry in the settings
  * UI, so this store only owns the ordered id list as a single JSON blob. Stale ids
- * (an entry whose setting no longer exists in the registry) are dropped silently at
+ * (an entry whose setting is absent from the registry) are dropped silently at
  * resolve time and naturally age out as new ids displace them.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file under a

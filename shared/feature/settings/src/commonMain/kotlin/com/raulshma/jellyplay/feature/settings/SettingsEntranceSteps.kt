@@ -16,8 +16,8 @@ internal data class SettingsEntranceSection(
 )
 
 /**
- * One root-screen entrance section OWNED by its domain — the fused-conversion
- * twin of [SettingsEntranceSection]. A converted domain declares one of these
+ * One root-screen entrance section OWNED by its domain — the fused twin of
+ * [SettingsEntranceSection]. A converted domain declares one of these
  * and single-homes what it owns: the entrance [key] (the step index derives
  * from the entry's position in [SETTINGS_ENTRANCE_SECTIONS]) AND the
  * section's static row face (icon, title resource, deep-link row id), which
@@ -25,10 +25,9 @@ internal data class SettingsEntranceSection(
  * domain's preferences) and the route builder stay at the call site — they
  * read the root screen's state, not the domain's declaration.
  *
- * The rollout recipe (appearance first): declare the section row in the
- * domain's rows file, splice [section] into [SETTINGS_ENTRANCE_SECTIONS] at
- * the domain's render position, consume the faces at the
- * `settingsSection(…)` call site, and add the key to
+ * To add a section: declare the section row in the domain's rows file, splice
+ * [section] into [SETTINGS_ENTRANCE_SECTIONS] at the domain's render position,
+ * consume the faces at the `settingsSection(…)` call site, and add the key to
  * `SettingsSectionKeysGuardTest`'s converted set — the guard's regex scanner
  * cannot see declaration-driven call sites, and the compile-time key pairing
  * makes the scan redundant for converted domains.
@@ -63,8 +62,8 @@ internal data class SettingsEntranceSectionRow(
  * pins the mirror so the drift cannot ship again.
  *
  * Converted domains splice their OWN entry ([SettingsEntranceSectionRow.section])
- * at their render position — appearance first, then the whole fused-catalog
- * wave (home, playback, audio, language, notifications, storage, security,
+ * at their render position — appearance first, then the whole fused
+ * catalog (home, playback, audio, language, notifications, storage, security,
  * backup, integrations, about — each entry declared in the domain's rows file
  * beside its rows) — so the emission and the step index derive from one
  * declaration. The remaining literal entries are the sections with no fused

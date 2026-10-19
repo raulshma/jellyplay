@@ -17,31 +17,26 @@ enum class UserMessageDuration { Short, Long }
 
 /**
  * The one message-presentation seam behind both shells: the severity→duration
- * policy plus the merge→resolve→present choreography that the Android shell
- * used to hand-copy into two parallel `LaunchedEffect` collectors (one per
- * bus) and that desktop never had for the shared bus at all (its messages
- * were silently dropped). The shell owns only the final surface — snackbar on
- * phone/desktop, Toast on TV — through [present].
+ * policy plus the merge→resolve→present choreography. The shell owns only the
+ * final surface — snackbar on phone/desktop, Toast on TV — through [present].
  *
- * Choreography (pinned by UserMessageHostTest, mirrored from the Android
- * collectors this replaces): all [host]ed sources are merged and drained by
- * ONE collector, so presentation is serial — a message arriving while another
- * is showing QUEUES until [present] returns, it is never dropped and never
- * displaces the message on screen (the snackbar host's own serialization made
- * that implicit before; TV Toasts, whose [present] returns immediately, keep
- * their fire-and-forget cadence). Each message is presented exactly once and
- * per-source order is preserved; order across sources is arrival order, not
- * source priority.
+ * Choreography (pinned by UserMessageHostTest): all [host]ed sources are
+ * merged and drained by ONE collector, so presentation is serial — a message
+ * arriving while another is showing QUEUES until [present] returns, it is
+ * never dropped and never displaces the message on screen (TV Toasts, whose
+ * [present] returns immediately, keep their fire-and-forget cadence). Each
+ * message is presented exactly once and per-source order is preserved; order
+ * across sources is arrival order, not source priority.
  *
  * commonMain stays pure: no Android types here. The TV-vs-touch fork is the
  * [present] adapter's decision (it reads [UserMessageDuration] as data), and
- * the legacy Android `:core:ui` feedback bus — whose payload type this module
+ * the Android `:core:ui` feedback bus — whose payload type this module
  * cannot see — feeds [hostAdapted] with the shell's own severity view and
  * resolver instead.
  *
  * The host runs where the shell launches it (an `LaunchedEffect` body, so the
- * collector dies with the composition that keyed it, exactly as the inlined
- * collectors did); it holds no scope and no state of its own.
+ * collector dies with the composition that keyed it); it holds no scope and
+ * no state of its own.
  *
  * @param resolveText resolves a message's [UiText] payload off-composition —
  *   compose-resources' suspend `getString` for [UiText.Resource], the value
@@ -71,7 +66,7 @@ class UserMessageHost(
 
     /**
      * The same choreography for a shell-OWNED message payload this module
-     * cannot name (the Android shell's legacy `:core:ui` feedback bus): the
+     * cannot name (the Android shell's `:core:ui` feedback bus): the
      * shell supplies its own [severityOf] projection onto the shared severity
      * enum and its own [resolveText] (`UiText.resolve(context)` there),
      * keeping Android types out of commonMain. Desktop-style shells whose
@@ -89,8 +84,7 @@ class UserMessageHost(
 
     companion object {
         /**
-         * The severity→duration policy both Android collectors hand-copied:
-         * errors linger, info does not.
+         * The severity→duration policy: errors linger, info does not.
          */
         fun durationFor(severity: UserMessage.Severity): UserMessageDuration = when (severity) {
             UserMessage.Severity.Error -> UserMessageDuration.Long

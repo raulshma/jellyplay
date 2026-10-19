@@ -71,7 +71,7 @@ internal const val DEFAULT_READER_CONTROLS_TIMEOUT_MS = 4_000L
  * either way. [setUsePerBookAppearance] seeds the override with the current
  * effective values (the look does not move), and copies them back into the
  * globals when switched off. Direction stays per-book-only by design (its own
- * map); the last-CFI exact-resume anchor rides [setLastCfi] (ADR-0003 point 4).
+ * map); the last-CFI exact-resume anchor rides [setLastCfi] (the local-first resume rule).
  *
  * The VM re-exposes [snapshot] and forwards the commands; ReaderStore stays
  * the storage seam (datastore module), this module its deep consumer.
@@ -341,7 +341,7 @@ class ReaderPreferences(
         }
     }
 
-    /** The exact-resume anchor read at open time (ADR-0003 point 4). */
+    /** The exact-resume anchor read at open time (the local-first resume rule). */
     fun lastCfi(itemId: String): String? = store.lastCfi(itemId)
 
     /**

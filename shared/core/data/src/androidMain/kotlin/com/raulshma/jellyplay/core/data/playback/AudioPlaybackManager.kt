@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import kotlin.math.pow
@@ -56,7 +57,16 @@ import kotlin.math.pow
  * app-scoped Koin SINGLE, identity-stable for the app's lifetime (the
  * remember-key contract the shells' audio-clicks helper reads; its four
  * now-playing flows are the surface's members, satisfied by the
- * [AudioQueueManager]/[AudioPlayerEngine] overrides below).
+ * [AudioQueueManager]/[AudioPlayerEngine] overrides below). It is also the
+ * ANDROID HALF of the [NowPlayingVerdict]'s audio input: the
+ * [AudioNowPlayingFace] members below are by-reference re-exposures of the
+ * same overrides plus the [hasActiveSession] pull, and the remote-session
+ * flag the verdict owns is read here only through the [remoteSessionActive]
+ * gate lambda (the former manager-local `@Volatile var` — its storage and
+ * single-writer contract moved into the verdict; the audio side never
+ * writes it). [ShellAudioSurface] — the app shell's narrowed
+ * metadata+transport parameter — folds onto the same overrides with no
+ * member of its own; the Koin alias binds the same single.
  */
 @Stable
 class AudioPlaybackManager(
@@ -109,7 +119,17 @@ class AudioPlaybackManager(
      * callers omit it and the media3 player is built as before.
      */
     playerFactory: (() -> ExoPlayer)? = null,
-) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface {
+    /**
+     * The remote-session gate, read by [progressReporter]'s loop-start
+     * check ("the remote session owns server reporting then"). Production
+     * wiring resolves the [NowPlayingVerdict]'s flag cell at call time (a
+     * deferred Koin `get` — the verdict ctor-injects THIS manager, so an
+     * eager edge would be a construction cycle). Defaulted off so plain
+     * constructions (tests, previews) keep the pre-verdict semantics —
+     * the flag's resting value was `false` too.
+     */
+    private val remoteSessionActive: () -> Boolean = { false },
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace, ShellAudioSurface {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
@@ -120,6 +140,12 @@ class AudioPlaybackManager(
         // (POSITION_PAUSED_RECHECK_MS / POSITION_NOT_READY_*), which now owns
         // this loop.
         private const val POSITION_POLL_INTERVAL_MS = 250L
+
+        // Downgraded poll cadence for the no-collector session — the common
+        // screen-off background-playback case, where the position flow feeds
+        // nothing (the MediaSession serves the notification seekbar on
+        // demand). Matches the video side's controls-hidden cadence.
+        private const val POSITION_POLL_IDLE_INTERVAL_MS = 1_000L
     }
 
     private var exoPlayer: ExoPlayer? = null
@@ -147,11 +173,13 @@ class AudioPlaybackManager(
 
     // Promoted reporter (commonMain): the former `exoPlayerProvider`
     // seam became the ExoPlayer-backed lambda pair below — behaviour
-    // byte-identical (same cadence/dedup/stop ordering).
+    // byte-identical (same cadence/dedup/stop ordering). The remote gate
+    // is the ctor lambda over the verdict's flag cell — same read point
+    // (the loop's start check), same resting value.
     private val progressReporter = AudioProgressReporter(
         scope = scope,
         playbackRepository = playbackRepository,
-        remoteSessionActive = { remoteSessionActive },
+        remoteSessionActive = remoteSessionActive,
         positionMsProvider = { exoPlayer?.currentPosition },
         isPlayingProvider = { exoPlayer?.isPlaying == true },
         itemIdProvider = { currentItemId },
@@ -265,6 +293,14 @@ class AudioPlaybackManager(
             positionProvider = { state.currentPosition.value },
             durationProvider = { state.duration.value },
         )
+        // The reactive twins above: the engine's trigger watcher re-runs its
+        // evaluation on track changes and per-track threshold crossings
+        // derived from these flows (mid-queue warming).
+        audioPrefetchEngine.bindTriggerFlows(
+            positionFlow = state.currentPosition,
+            durationFlow = state.duration,
+            currentIndexFlow = state.currentIndex,
+        )
         audioPrefetchEngine.start()
         scope.launch(Dispatchers.IO) {
             restorePersistedQueue()
@@ -274,6 +310,18 @@ class AudioPlaybackManager(
     private var mediaSession: MediaSession? = null
     private var _isLoadingItemFlag = false
     private var positionJob: Job? = null
+
+    /**
+     * The live poll cadence the position ticker reads at every `delay()` —
+     * [POSITION_POLL_INTERVAL_MS] while anything collects [currentPosition]
+     * (mini-player / now-playing smoothness: 4 Hz for the seekbar) or a
+     * crossfade is armed (the fade trigger rides the tick body, so it needs
+     * the fast cadence), [POSITION_POLL_IDLE_INTERVAL_MS] otherwise. The
+     * governor below writes it; [startPositionTracking] hands the flow to
+     * [EnginePositionTicker], which re-reads `.value` every loop iteration —
+     * a write takes effect from the next tick with no further wiring.
+     */
+    private val positionPollIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS)
 
     private val _gaplessEnabled = MutableStateFlow(true)
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
@@ -342,9 +390,11 @@ class AudioPlaybackManager(
         },
     )
 
-    @Volatile
-    var remoteSessionActive: Boolean = false
-        internal set
+    // The remote-session flag that used to live here (@Volatile var,
+    // internal set) is the [NowPlayingVerdict]'s cell now — the manager
+    // reads it only through the [remoteSessionActive] ctor gate, and the
+    // single writer (RemotePlaybackReporter, via the verdict's internal
+    // mark) never touched this class's API surface anyway.
 
     /**
      * Sole writer of the now-playing metadata below; the manager re-exposes
@@ -466,7 +516,16 @@ class AudioPlaybackManager(
         }
     }
 
-    val hasActiveSession: Boolean
+    /**
+     * [AudioNowPlayingFace.hasActiveSession] — a live engine AND a claimed
+     * item. A PULL on purpose (the face's one non-flow member): the item
+     * CLAIM is a chassis cell written synchronously at `play()` entry,
+     * while the tracker flow feeding [currentPlayingItemId] publishes only
+     * after the detail resolve — no flow folds these two without changing
+     * what the reporter's gate and the tile's paused fold read inside the
+     * window where they disagree.
+     */
+    override val hasActiveSession: Boolean
         get() = exoPlayer != null && currentItemId != null
 
     init {
@@ -489,6 +548,26 @@ class AudioPlaybackManager(
         }
         scope.launch {
             playbackStore.playback.collect { playback -> currentPlayback = playback }
+        }
+        // Poll-cadence governor: 250 ms only while a position collector exists
+        // (subscriptionCount rises on every subscribe — mini-player, now-
+        // playing screen, widget — and falls on cancellation) or a crossfade
+        // is armed; 1 s otherwise, so a session nobody watches no longer wakes
+        // the main dispatcher 4×/s. The ticker re-reads the interval at every
+        // delay(), so each transition lands from the next tick. Read from the
+        // chassis's backing MutableStateFlow: subscriptionCount is a
+        // MutableSharedFlow member there (the public StateFlow alias only
+        // exposes it via the same underlying instance).
+        scope.launch {
+            combine(
+                state._currentPosition.subscriptionCount,
+                crossfadeDurationMs,
+            ) { subscribers, xfadeMs -> subscribers > 0 || xfadeMs > 0L }
+                .distinctUntilChanged()
+                .collect { needsFastPoll ->
+                    positionPollIntervalMs.value =
+                        if (needsFastPoll) POSITION_POLL_INTERVAL_MS else POSITION_POLL_IDLE_INTERVAL_MS
+                }
         }
         // Note: there is intentionally no `repeatMode.collect { exoPlayer?.repeatMode = ... }`
         // here. `setRepeatMode()` sets `exoPlayer.repeatMode` inline, the player
@@ -1594,7 +1673,10 @@ class AudioPlaybackManager(
         // on EnginePositionTicker's primeFirstTick KDoc).
         positionJob = EnginePositionTicker(
             scopeProvider = { scope },
-            pollingIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS),
+            // Mutable on purpose — the init-block governor downgrades/restores
+            // this cadence as position collectors come and go (see
+            // positionPollIntervalMs).
+            pollingIntervalMs = positionPollIntervalMs,
             isPlayingFlow = state._isPlaying,
             isCurrentlyPlaying = { exoPlayer?.isPlaying == true },
             isReady = { exoPlayer != null },

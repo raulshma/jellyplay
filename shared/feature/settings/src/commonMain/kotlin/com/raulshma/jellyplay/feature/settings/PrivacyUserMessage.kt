@@ -5,9 +5,7 @@ import androidx.compose.runtime.Immutable
 /**
  * One-shot destructive-action confirmation emitted by
  * [PrivacyDataViewModel] and rendered by [PrivacyDataScreen], which posts the
- * resolved text to the shared UserMessageBus — the commonMain-safe
- * replacement for the legacy `uiTextOf(R.string.…)` values the ViewModel used
- * to post through the Android-only UserMessageBus (LiveTvUserMessage
+ * resolved text to the shared UserMessageBus (LiveTvUserMessage
  * screen-forward pattern). The screen resolves the resource text
  * (compose-resources), so no R class or UiText machinery leaks into shared
  * code.

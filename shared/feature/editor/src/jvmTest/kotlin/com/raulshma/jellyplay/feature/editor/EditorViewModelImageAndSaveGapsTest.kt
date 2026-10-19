@@ -55,8 +55,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelImageAndSaveGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (EditorViewModelMetadataTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (EditorViewModelMetadataTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var editorRepository: MetadataEditorRepository

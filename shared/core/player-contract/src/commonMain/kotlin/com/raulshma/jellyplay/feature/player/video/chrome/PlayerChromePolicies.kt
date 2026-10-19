@@ -139,7 +139,7 @@ fun shouldScheduleControlsAutoHide(
 
 /**
  * Whether a play/pause transport toggle may SUMMON the control overlay — the
- * The pref's decision (jellyfin-androidtv #3924: pausing should not summon the
+ * The pref's decision (pausing should not summon the
  * control overlay). [isPause] is the toggle's DIRECTION: the play arm keeps
  * today's summon (the option is "don't summon on pause", not "never show"),
  * and the pause arm is suppressed exactly when [hideOsdOnPause] is on.

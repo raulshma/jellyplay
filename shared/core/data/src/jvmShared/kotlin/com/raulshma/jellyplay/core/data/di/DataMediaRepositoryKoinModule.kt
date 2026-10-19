@@ -12,7 +12,9 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -20,9 +22,13 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWritesImpl
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncerImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
@@ -64,18 +70,35 @@ internal val dataMediaRepositoryModule: Module = module {
     // UserDataMutator / MediaSearchEngine were deleted from the app module —
     // Koin builds them natively now, on both platforms.
 
+    // The synthetic-push fan-out (see [UserDataAnnouncer]): the leaf single
+    // that owns the shared flow the media repo's userDataChanges merges and
+    // the local-write record the refresher's echo demotion consults. Its
+    // leafness is the point — PlayedStateSyncImpl / PlaybackRepositoryImpl /
+    // MediaRepositoryImpl all announce through it EAGERLY, which is what let
+    // the former `lazy { get<MediaRepository>() }` cycle-breakers die.
+    single {
+        UserDataAnnouncerImpl(
+            homeSession = get(),
+            recentLocalWrites = get(),
+            // The confirmed-write arming (#157) resolves the repository at
+            // ANNOUNCE time — lazy inside the lambda, so the announcer's
+            // construction never touches the repository's graph.
+            onConfirmedWrite = { get<MediaRepositoryImpl>().armStaleReadGroupsForConfirmedWrite() },
+        )
+    }
+    single<UserDataAnnouncer> { get<UserDataAnnouncerImpl>() }
+
     single {
         PlayedStateSyncImpl(
             apiClient = get(),
             offlineRepository = get(),
             playbackOutboxRepository = get(),
             offlineModeManager = get(),
-            // Lazy breaks the MediaRepositoryImpl ↔ PlayedStateSync
-            // construction cycle (the downloadDelegate pattern):
-            // MediaRepositoryImpl ctor-injects PlayedStateSync eagerly, this
-            // side defers MediaRepository until first use. The download
-            // stack params stay Lazy too (defensive, per the ctor kdoc).
-            mediaRepository = lazy { get<MediaRepository>() },
+            // The confirmed-write announcements ride the announcer leaf —
+            // no media-repository edge, no deferral (see the binding above).
+            userDataAnnouncer = get(),
+            // The download stack params stay Lazy (defensive, per the ctor
+            // kdocs — those edges are already acyclic).
             downloadsStore = lazy { get<DownloadsStore>() },
             downloadRepository = lazy { get<DownloadRepository>() },
             timeSource = get(),
@@ -114,6 +137,12 @@ internal val dataMediaRepositoryModule: Module = module {
             timeSource = get(),
         )
     }
+    // The local-write log the user-data echo demotion consults — recorded
+    // by MediaRepositoryImpl's local-notify path, consulted by the home
+    // refresher's user-data chain. ONE single so an echo is matched against
+    // the writes that caused it; declared before its two consumers.
+    single { RecentLocalUserDataWritesImpl() }
+    single<RecentLocalUserDataWrites> { get<RecentLocalUserDataWritesImpl>() }
     single {
         MediaRepositoryImpl(
             libraryApiClient = get(),
@@ -127,6 +156,7 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             internals = get(),
+            userDataAnnouncer = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
@@ -140,6 +170,11 @@ internal val dataMediaRepositoryModule: Module = module {
     // the user-data feed). getAlbumTracks is the one member still dual-declared:
     // the detail provider's session resolves detail + album tracks together.
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
+    // The browse-catalogue enrichments (filter-sheet tags, the detail
+    // franchise row) — same over-the-impl aliasing for their two screens.
+    single<MediaCatalogueEnrichments> { get<MediaRepositoryImpl>() }
+    // The series-notification family (the per-series Next Up diff read).
+    single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
     // The home-feed family (the sections payload, the single-row edge-pull
     // refetch, the SWR snapshot reads, the discover-row verbs) and the
@@ -148,7 +183,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // refetchers take it beside the surfaces they are mixed consumers of.
     single<HomeFeed> { get<MediaRepositoryImpl>() }
     single<UserDataChanges> { get<MediaRepositoryImpl>() }
-    // Plan 08's module-internal cache-maintenance view (the former DataModule
+    // Module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
     // Worker port of the wholesale cache drop (same single, narrow seam — the
@@ -180,7 +215,7 @@ internal val dataMediaRepositoryModule: Module = module {
     }
     single<PlaylistRepository> { get<PlaylistRepositoryImpl>() }
     // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
-    // since the extraction from MediaRepositoryImpl — no longer a view of the
+    // since it left MediaRepositoryImpl — no longer a view of the
     // media single.
     single {
         LyricsRepositoryImpl(
@@ -195,14 +230,14 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         UserDataMutatorImpl(
-            // Both deferred: the provider and repository reference each
-            // other's graphs (UnifiedMediaDetailProviderImpl ctor-injects
-            // MediaRepository; UserDataMutator reaches MediaDetailProvider),
-            // and deferring construction keeps this module out of any cycle.
+            // Both eager now: with the media-repository edge out of
+            // PlayedStateSyncImpl / PlaybackRepositoryImpl (the
+            // UserDataAnnouncer leaf above), neither the write family's impl
+            // nor the detail provider's graph cycles back into this one.
             // The write dep is the family seam, not the union — the mutator
             // is the user-data-write family's clean sole consumer.
-            userDataWrites = lazy { get<UserDataWriteOperations>() },
-            mediaDetailProvider = lazy { get<MediaDetailProvider>() },
+            userDataWrites = get(),
+            mediaDetailProvider = get(),
         )
     }
     single<UserDataMutator> { get<UserDataMutatorImpl>() }
@@ -274,7 +309,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // MediaRepository) is Koin-owned above.
     single { AudioLyricsManager(get()) }
 
-    single { TimeSyncManager(get()) }
+    single { TimeSyncManager(get(), applicationScope = get(DatastoreQualifiers.applicationScope)) }
     single { SyncPlayController(get()) }
     single { SyncPlayEventHandler() }
     single { SyncPlayQueueCore(get()) }
@@ -283,6 +318,7 @@ internal val dataMediaRepositoryModule: Module = module {
             timeSyncManager = get(),
             controller = get(),
             syncPlayCastStore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     single {
@@ -302,6 +338,7 @@ internal val dataMediaRepositoryModule: Module = module {
             syncPlayController = get(),
             playbackCore = get(),
             queueCore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 

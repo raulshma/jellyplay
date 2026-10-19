@@ -44,8 +44,8 @@ class AppRuntimeStateStore constructor(
 ) {
     private val scope = externalScope
     // Raw read arm for the point flows below; same degrade-to-defaults policy
-    // as the [state] chassis (this store previously had NO corrupt-read arm —
-    // a failed read propagated into the eager collector uncaught).
+    // as the [state] chassis — without it a failed read would propagate into
+    // the eager collector uncaught.
     private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
     private val json get() = PreferenceCodec.json
 
@@ -178,8 +178,7 @@ class AppRuntimeStateStore constructor(
     /**
      * Full-restore variant used by backup import's "Everything" path.
      * When [clearNullIds] is true, a `null` id explicitly removes the key so
-     * importing a backup with `null` does not leave a stale prior value
-     * (review finding: stale-clear bug).
+     * importing a backup with `null` does not leave a stale prior value.
      */
     suspend fun restore(slice: AppRuntimeState, clearNullIds: Boolean) {
         dataStore.edit { prefs ->

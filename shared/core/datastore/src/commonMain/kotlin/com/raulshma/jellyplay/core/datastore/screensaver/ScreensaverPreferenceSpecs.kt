@@ -102,8 +102,10 @@ object ScreensaverPreferenceSpecs {
         encode = { PreferenceCodec.json.encodeToString(it) },
         search = PreferenceSearchSpec(
             id = "screensaver_categories",
-            titleKey = "ss_screensaver_categories_title",
-            subtitleKey = "ss_screensaver_categories_subtitle",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_categories",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_categories_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "categories", "tv", "movies", "music", "content"),
             routeKind = ROUTE_SETTINGS,
@@ -116,8 +118,10 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_slideshow_interval",
-            titleKey = "ss_screensaver_slideshow_interval_title",
-            subtitleKey = "ss_screensaver_slideshow_interval_subtitle",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_slideshow_interval",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_slideshow_interval_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "slideshow", "interval", "tv", "duration", "seconds"),
             routeKind = ROUTE_SETTINGS,
@@ -130,8 +134,10 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_ken_burns",
-            titleKey = "ss_screensaver_ken_burns_title",
-            subtitleKey = "ss_screensaver_ken_burns_subtitle",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_ken_burns",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_ken_burns_on",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "ken burns", "pan", "zoom", "animation", "tv"),
             routeKind = ROUTE_SETTINGS,
@@ -144,7 +150,8 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_transition_style",
-            titleKey = "ss_screensaver_transition_style_title",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_transition_style",
             subtitleKey = "ss_screensaver_transition_style_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "transition", "style", "crossfade", "slide", "tv"),
@@ -158,8 +165,10 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "screensaver_show_title",
-            titleKey = "ss_screensaver_show_title_title",
-            subtitleKey = "ss_screensaver_show_title_subtitle",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_show_title",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_display_media_title",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "title", "tv", "show", "media title", "display"),
             routeKind = ROUTE_SETTINGS,
@@ -183,7 +192,8 @@ object ScreensaverPreferenceSpecs {
             // catalog row declares no ss_*_title twin.
             titleKey = "settings_dream_max_parental_rating",
             id = "screensaver_max_parental_rating",
-            subtitleKey = "ss_screensaver_max_parental_rating_subtitle",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_dream_max_parental_rating_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "parental", "rating", "mature", "adult", "kids", "family", "filter"),
             routeKind = ROUTE_SETTINGS,
@@ -200,7 +210,8 @@ object ScreensaverPreferenceSpecs {
             // catalog row declares no ss_*_title twin.
             titleKey = "settings_dream_dim_after",
             id = "screensaver_dim_after",
-            subtitleKey = "ss_screensaver_dim_after_subtitle",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_dream_dim_after_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "dim", "fade", "dark", "night", "delay", "timer", "tv"),
             routeKind = ROUTE_SETTINGS,
@@ -217,7 +228,8 @@ object ScreensaverPreferenceSpecs {
             // catalog row declares no ss_*_title twin.
             titleKey = "settings_dream_dim_percent",
             id = "screensaver_dim_percent",
-            subtitleKey = "ss_screensaver_dim_percent_subtitle",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_dream_dim_percent_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("screensaver", "dream", "dim", "brightness", "dark", "opacity", "percent", "tv"),
             routeKind = ROUTE_SETTINGS,
@@ -235,8 +247,10 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "idle_ambient_enabled",
-            titleKey = "ss_idle_ambient_enabled_title",
-            subtitleKey = "ss_idle_ambient_enabled_subtitle",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_idle_ambient_enabled",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_idle_ambient_enabled_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("idle", "ambient", "ready to play", "screensaver", "desktop", "standby"),
             routeKind = ROUTE_SETTINGS,
@@ -250,8 +264,10 @@ object ScreensaverPreferenceSpecs {
         resetCategory = PreferenceResetCategory.SCREENSAVER,
         search = PreferenceSearchSpec(
             id = "idle_ambient_timeout",
-            titleKey = "ss_idle_ambient_timeout_title",
-            subtitleKey = "ss_idle_ambient_timeout_subtitle",
+            // One-key family: a single screen-face key.
+            titleKey = "settings_idle_ambient_timeout",
+            // One-key family: a single screen-face key.
+            subtitleKey = "settings_idle_ambient_timeout_subtitle",
             categoryKey = "ss_cat_system",
             keywords = listOf("idle", "ambient", "timeout", "minutes", "screensaver", "desktop", "standby"),
             routeKind = ROUTE_SETTINGS,
@@ -416,7 +432,7 @@ object ScreensaverPreferenceSpecs {
 
     /**
      * The domain's settings-search declarations, in the settings feature's
-     * catalog order (the order the retired hand records carried): every row
+     * catalog order: every row
      * above that carries a [PreferenceSearchSpec]. The settings feature
      * derives its spec-backed catalog rows from this list over its ordered
      * record spine; the two navigation rows (admin dashboard, setup wizard)

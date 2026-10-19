@@ -10,29 +10,27 @@ import org.gradle.api.tasks.testing.Test
 
 /**
  * Packaging convention plugin for the desktop shell (:apps:desktop) — the
- * release-engineering mechanics relocated out of that 797-line build script
+ * release-engineering mechanics kept separate from the module's build script
  * (which keeps plugins, dependencies, the navigation3 fork substitution, and
  * the compose.desktop/nativeDistributions config):
  *
  *  - registers `fetchBundledLibmpv` ([FetchBundledLibmpvTask]) — the pinned,
  *    sha256-verified Windows libmpv download — and wires it into `run`,
  *    `test` (jna.library.path), `prepareAppResources`, and every
- *    `package…`/`createDistributable…` task (exactly the module script's
- *    former wiring; the task self-gates by OS and dll presence, so
- *    non-Windows lanes no-op);
+ *    `package…`/`createDistributable…` task (the task self-gates by OS and
+ *    dll presence, so non-Windows lanes no-op);
  *  - registers `writeDesktopBuildInfo` ([WriteDesktopBuildInfoTask]) and
  *    feeds its output directory into the main resources (processResources
- *    depends on it implicitly through the srcDir wiring — same mechanism as
- *    before, the bare task-output provider is what makes the implicit edge);
+ *    depends on it implicitly through the srcDir wiring — the bare
+ *    task-output provider is what makes the implicit edge);
  *  - publishes the [DesktopPackagingExtension] (`jellyplayDesktopPackaging`):
  *    the numeric packageVersion grammar (a non-conforming -PjellyplayVersion
- *    fails CONFIGURATION here, eagerly, exactly as the module script did),
- *    the display version, the release channel, and the macOS 0.x.y -> 1.x.y
- *    bundle-version shift.
+ *    fails CONFIGURATION here, eagerly), the display version, the release
+ *    channel, and the macOS 0.x.y -> 1.x.y bundle-version shift.
  *
- * Task NAMES are byte-compatible with the old script on purpose: CI release
- * lanes and the README reference `fetchBundledLibmpv`, and the release.yml /
- * kmp-release.yml comments reference `WriteDesktopBuildInfoTask`.
+ * Task NAMES are stable API: CI release lanes and the README reference
+ * `fetchBundledLibmpv`, and the release.yml / kmp-release.yml comments
+ * reference `WriteDesktopBuildInfoTask`.
  *
  * Applied AFTER org.jetbrains.kotlin.jvm + the Compose plugin in the
  * module's plugins block (the sourceSets wiring needs the java/Kotlin
@@ -48,9 +46,9 @@ class DesktopPackagingPlugin : Plugin<Project> {
         // observed serving byte-unstable responses. Both URLs and sha256s
         // are pinned; bump the build inside the URLs (and re-hash the
         // archives) to move to a newer mpv — deliberately: the engine's
-        // property semantics and the real-engine test expectations were
-        // live-probed against this v0.41-era build, and an Aug-2026 git
-        // build already showed `vf` readback drift in MpvDesktopEngineVideoTest.
+        // property semantics and the real-engine test expectations are
+        // live-probed against this v0.41-era build, and a newer git build can
+        // show `vf` readback drift in MpvDesktopEngineVideoTest.
         // The dev archive carries only libmpv-2.dll; the PLAYER archive from
         // the same build supplies lua51.dll, which this libmpv links
         // dynamically (verified: the dll fails to load with "module not
@@ -137,7 +135,7 @@ class DesktopPackagingPlugin : Plugin<Project> {
         // but we keep one version grammar), so a git-describe-style fallback
         // would poison every package, not just msi. Anything non-conforming
         // passed explicitly FAILS configuration rather than silently falling
-        // back — a packaged 0.1.0 shipped while believing it was 2.0.0 is
+        // back — a package that believes it is 2.0.0 while being 0.1.0 is
         // the failure mode this guard exists for.
         val requested = project.findProperty("jellyplayVersion")?.toString()
         val numericTriple = Regex("""\d+\.\d+\.\d+""")
@@ -164,10 +162,8 @@ class DesktopPackagingPlugin : Plugin<Project> {
         // a CI release lane produced this build. The "0.1.0" dev-machine
         // fallback (and any bare `gradlew run`/IDE build) is channel=dev, and
         // the update check then reports "up to date" BY CONSTRUCTION (see
-        // DesktopPackagingExtension.releaseChannel / docs/adr/
-        // desktop-auto-update.md) — this replaces the old 999999.0.0
-        // sentinel's job with an explicit, generated flag instead of a fake
-        // version number.
+        // DesktopPackagingExtension.releaseChannel) — an explicit, generated
+        // flag rather than a fake sentinel version number.
         val releaseChannel = project.providers.gradleProperty("jellyplayVersion")
             .map { "release" }
             .orElse("dev")

@@ -176,8 +176,7 @@ fun AudioSettingsScreen(
     // (SettingsSearchItemGroup.rowAdmitted).
     val rowFlags = audioRowAdmissionFlags(showAdvanced, preferences)
     // The one remaining dialog slot (beside the activePicker): the co-located
-    // EqualizerEditorSheet. The former sealed AudioSettingsDialog identity tag
-    // carried a single real variant.
+    // EqualizerEditorSheet.
     var showEqualizerEditor by remember { mutableStateOf(false) }
 
     PreferenceScreenScaffold(
@@ -703,7 +702,18 @@ fun AudioSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = 19,
+                        // Derived from the fused declarations (hiddenRowsFor):
+                        // the audio group's 17 plain-advanced rows plus the
+                        // parent-gated effect rows whose toggle is on, and the
+                        // cache group's three advanced rows where that group
+                        // composes.
+                        hiddenCount = hiddenRowsFor(
+                            buildList {
+                                add(SettingsScreenGroups.audio)
+                                if (settingsCapabilities.supportsAudioCache) add(SettingsScreenGroups.audioCache)
+                            },
+                            rowFlags,
+                        ),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

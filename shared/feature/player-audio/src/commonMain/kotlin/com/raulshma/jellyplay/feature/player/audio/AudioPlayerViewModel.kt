@@ -124,8 +124,16 @@ class AudioPlayerViewModel(
      */
     val currentPositionState: LongState get() = currentPositionHolder.asState()
 
-    val hasKaraokeLyrics: Boolean
-        get() = _uiState.value.lyrics.hasKaraokeLyrics
+    /**
+     * Position-derived active lyric line, sourced directly from the engine.
+     * Kept OUT of [uiState] (mirroring [sleepTimerRemainingMs]) so a
+     * lyric-line flip does not copy the whole [AudioPlayerUiState] and
+     * re-invalidate the screen root. Collected only by the artwork leaf that
+     * renders the active line (KaraokeLyricsView / LyricsOverlay). Trades
+     * against the deleted dead `hasKaraokeLyrics` re-exposure — the screen
+     * reads [LyricsState.hasKaraokeLyrics] off the collected state.
+     */
+    val currentLyricIndex: StateFlow<Int> get() = engine.currentLyricIndex
 
     var nightModeVolume by composeFloatState(0.4f)
         private set
@@ -287,15 +295,19 @@ class AudioPlayerViewModel(
             is AudioPlayerUiEvent.SetReplayGainMode -> setReplayGainMode(event.mode)
             is AudioPlayerUiEvent.ToggleEqualizer -> toggleEqualizer()
             is AudioPlayerUiEvent.SetEqualizerBand -> setEqualizerBand(event.bandIndex, event.levelDb)
+            is AudioPlayerUiEvent.SetEqualizerBandLive -> effects.setEqualizerBandLive(event.bandIndex, event.levelDb)
             is AudioPlayerUiEvent.ResetEqualizer -> resetEqualizer()
             is AudioPlayerUiEvent.SetEqualizerPreset -> setEqualizerPreset(event.preset)
             is AudioPlayerUiEvent.ToggleBassBoost -> toggleBassBoost()
             is AudioPlayerUiEvent.SetBassBoostStrength -> setBassBoostStrength(event.strength)
             is AudioPlayerUiEvent.ToggleVirtualizer -> toggleVirtualizer()
             is AudioPlayerUiEvent.SetVirtualizerStrength -> setVirtualizerStrength(event.strength)
+            is AudioPlayerUiEvent.SetVirtualizerStrengthLive -> effects.setVirtualizerStrengthLive(event.strength)
             is AudioPlayerUiEvent.SetReverbPreset -> setReverbPreset(event.preset)
             is AudioPlayerUiEvent.SetLrBalance -> setLrBalance(event.balance)
+            is AudioPlayerUiEvent.SetLrBalanceLive -> effects.setLrBalanceLive(event.balance)
             is AudioPlayerUiEvent.SetPitchSemitones -> setPitchSemitones(event.semitones)
+            is AudioPlayerUiEvent.SetPitchSemitonesLive -> effects.setPitchSemitonesLive(event.semitones)
             is AudioPlayerUiEvent.SetAutoEqByGenre -> setAutoEqByGenre(event.enabled)
             is AudioPlayerUiEvent.SearchLyrics -> searchLyrics(event.query)
             is AudioPlayerUiEvent.ApplyLyrics -> applyLyrics(event.track)

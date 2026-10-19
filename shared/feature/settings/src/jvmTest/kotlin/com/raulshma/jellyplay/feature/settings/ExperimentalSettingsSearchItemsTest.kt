@@ -11,14 +11,12 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Pins the spec-derived Experimental catalog (Stage A pilot) against the
- * retired hand-written `ExperimentalSettingsSearchItems` list, field for
- * field: the derivation ([toSettingsSearchItems] over
- * `ExperimentalPreferenceSpecs.searchEntries`) must be byte-equivalent in
- * behavior — same ids in the same order, same bound resources, same
- * keywords, routes, icons, isAdvanced flags and platform availability — so
- * the switch to spec-derived entries changes nothing downstream (deep-link
- * highlighting, group membership, search tie-break order).
+ * Pins the spec-derived Experimental catalog: the derivation
+ * ([toSettingsSearchItems] over `ExperimentalPreferenceSpecs.searchEntries`)
+ * must hold field for field — same ids in the same order, same bound
+ * resources, same keywords, routes, icons, isAdvanced flags and platform
+ * availability — so downstream behavior (deep-link highlighting, group
+ * membership, search tie-break order) stays consistent.
  */
 class ExperimentalSettingsSearchItemsTest {
 
@@ -52,7 +50,8 @@ class ExperimentalSettingsSearchItemsTest {
         val peek = items[2]
         assertEquals("MEDIA_CARD_PEEK", peek.id)
         assertEquals("ss_MEDIA_CARD_PEEK_title", peek.titleRes.key)
-        assertEquals("ss_MEDIA_CARD_PEEK_subtitle", peek.subtitleRes.key)
+        // One-key family: the verbatim ss_ twin was deleted — the screen-face key survives.
+        assertEquals("settings_exp_press_hold_preview_subtitle", peek.subtitleRes.key)
         assertEquals("ss_cat_experimental", peek.categoryRes.key)
         assertEquals(listOf("press", "hold", "peek", "preview", "media card", "long press", "experimental"), peek.keywords)
         assertEquals(Route.ExperimentalSettings(), peek.route)

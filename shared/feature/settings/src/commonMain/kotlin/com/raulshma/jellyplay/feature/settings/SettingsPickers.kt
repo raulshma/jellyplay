@@ -355,9 +355,8 @@ internal fun SettingsSliderSheet(
 }
 
 // Note: the TV-vs-Mobile sheet branch lives canonically in
-// `core/ui/.../components/TvSafeSheet.kt`. The local `AdaptiveSheet` wrapper that used to forward
-// to it (and to a divergent Material3 `ModalBottomSheet` on mobile) was collapsed — callers now
-// invoke `TvSafeSheet` directly.
+// `core/ui/.../components/TvSafeSheet.kt`; callers invoke `TvSafeSheet`
+// directly.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

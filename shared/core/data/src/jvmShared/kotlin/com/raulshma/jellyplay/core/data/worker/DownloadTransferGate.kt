@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.worker
 
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
 import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.DownloadStates
@@ -41,7 +40,7 @@ import java.io.File
  *     body hold one shared [DownloadConcurrencyLimiter] slot, so at most
  *     `maxConcurrentDownloads` transfers run at once; the rest block here.
  *     Releasing after the preamble alone would uncap the actual transfers —
- *     the pre-extraction code kept the entire transfer inside `withPermit`.
+ *     the original code kept the entire transfer inside `withPermit`.
  *  4. **Post-QUEUED re-check** — with a slot in hand, re-read the row's
  *     status: the user may have paused or cancelled while the row was
  *     QUEUED. An inactive row expresses through the caller's [onInactive]
@@ -181,14 +180,12 @@ class DownloadTransferGate(
      *    throwables with `false`) — then applies the outcome to the row with
      *    [existingBytes] preserved and maps it onto [TransferOutcome].
      *
-     * **Declared fix of a former divergence:** the runner path refreshed the
-     * notification group summary alongside its foreground promotions
-     * (Android's `updateForeground`) while the multi-connection path's start
-     * promotion did not refresh anything. [execute] now pushes ONE
-     * start-of-transfer summary refresh through [notifications] on BOTH
-     * paths (Android: the helper's summary refresh; desktop: the no-op
-     * port). The strategy keeps its own lifecycle refreshes and the runner
-     * path keeps its per-tick refresh in the platform lambda.
+     * **What used to ride here:** the start-of-transfer summary refresh — once
+     * the declared heal of the runner-refreshes-multi-does-not divergence — is
+     * GONE. The [DownloadSummarySurface] single observes the in-flight count
+     * flow and posts on transitions, and the DOWNLOADING write at step 5 of
+     * the preamble is one of the transitions it observes; the transfer paths
+     * (and the [notifications] port) carry no count queries anymore.
      */
     suspend fun execute(
         preparation: Preparation,
@@ -200,12 +197,6 @@ class DownloadTransferGate(
         val runner = preparation.runner
         val accessToken = preparation.accessToken
         return try {
-            // The start-of-transfer summary refresh rides the notifications
-            // port on BOTH paths — the healed divergence (see KDoc). Best-effort:
-            // a notify failure must never be classified as a transfer failure.
-            runCatchingRethrowingCancellation {
-                notifications.refreshSummary(dao.getInFlightDownloadCount())
-            }
             if (existingBytes > 0L) {
                 // Resume: re-probe the authoritative size so the integrity
                 // check in the runner can catch a truncated stream — a

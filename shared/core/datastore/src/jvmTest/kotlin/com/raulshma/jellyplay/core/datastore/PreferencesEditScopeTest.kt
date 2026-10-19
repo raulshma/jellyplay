@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
@@ -32,6 +33,11 @@ import kotlin.test.Test
 class PreferencesEditScopeTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var graph: PreferenceSliceGraph
     private lateinit var store: UserPreferencesStore
     private lateinit var editor: PreferencesEditor
@@ -110,7 +116,7 @@ class PreferencesEditScopeTest {
 
     @Test
     fun `verifyPin round-trips against the security store's hash`() = runTest {
-        // The editor no longer re-exposes setPin — the write goes through the
+        // The editor does not re-expose setPin — the write goes through the
         // edit scope (the owning store), the read through the editor seam the
         // security VM actually uses.
         editor.edit { security.setPin("1234") }.join()

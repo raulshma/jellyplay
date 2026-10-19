@@ -87,7 +87,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -176,6 +178,16 @@ class HomeViewModelEventsTest {
     }
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
+
+    /**
+     * Loader doubles — see [HomeViewModelTest]'s harness note: relaxed
+     * mocks with defensive null/empty stubs; the default pref state never
+     * triggers them.
+     */
+    private val statsCardLoader: HomeStatsCardLoader = mockk(relaxed = true)
+    private val genreRailCache: HomeGenreRailCache = mockk(relaxed = true)
+    private val presenceChips: HomePresenceChipsController = mockk(relaxed = true)
+
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val sessionApiClient: AuthApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
@@ -272,6 +284,9 @@ class HomeViewModelEventsTest {
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
         coEvery { homeFeed.getOfflineHomeLayout() } returns null
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
+        coEvery { statsCardLoader.load(any(), any()) } returns null
+        coEvery { genreRailCache.genres(any(), any()) } returns emptyList()
+        coEvery { presenceChips.refresh(any()) } returns emptyList()
     }
 
     @AfterTest
@@ -291,6 +306,7 @@ class HomeViewModelEventsTest {
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
+        clock = fakeTimeSource,
         prefs = HomeStores(
             homeDiscovery = homeDiscoveryStore,
             appearance = appearanceStore,
@@ -331,6 +347,9 @@ class HomeViewModelEventsTest {
             userMessageBus = userMessageBus,
             offlineRepository = offlineRepository,
         ),
+        statsCardLoader = statsCardLoader,
+        genreRailCache = genreRailCache,
+        presenceChipsController = presenceChips,
     )
 
     private fun vmTest(block: suspend kotlinx.coroutines.test.TestScope.() -> Unit): Unit =
@@ -343,6 +362,13 @@ class HomeViewModelEventsTest {
                 }
             }
         }
+
+    /** [HomeViewModel.refreshSpinners] is WhileSubscribed — leaf-collect like the content rows do. */
+    private fun kotlinx.coroutines.test.TestScope.collectRefreshSpinners() {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.refreshSpinners.collect { }
+        }
+    }
 
     // ── RollDiscoverRow (dice affordance, end-to-end through uiState) ────────
 
@@ -376,6 +402,7 @@ class HomeViewModelEventsTest {
             listOf("m1", "m2"),
             viewModel.uiState.value.sections.first { it.type == HomeSectionType.DISCOVER }.items.map { it.id },
         )
+        collectRefreshSpinners()
 
         val rolled = listOf(item("r9"), item("r4"))
         coEvery { homeFeed.rerollDiscoverRow(row) } returns Result.success(rolled)
@@ -390,7 +417,9 @@ class HomeViewModelEventsTest {
         )
         advanceTimeBy(701)
         runCurrent()
-        assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
+        // The rolling mirror leaf-collects off the VM's spinner flow, not a
+        // HomeUiState field.
+        assertTrue(viewModel.refreshSpinners.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
         // The cache choreography is the repository's now (rerollDiscoverRow
         // owns invalidate → fetch → seed); the end-to-end pin here is that the
         // roll reached it exactly once.
@@ -416,6 +445,7 @@ class HomeViewModelEventsTest {
         viewModel = buildViewModel()
         signIn("u1")
         runCurrent()
+        collectRefreshSpinners()
 
         coEvery { homeFeed.rerollDiscoverRow(row) } returns
             Result.failure(RuntimeException("server hiccup"))
@@ -431,7 +461,7 @@ class HomeViewModelEventsTest {
         verify(exactly = 1) { userMessageBus.error(any<UiText>()) }
         advanceTimeBy(701)
         runCurrent()
-        assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty())
+        assertTrue(viewModel.refreshSpinners.value.rollingDiscoverRowIds.isEmpty())
     }
 
     // ── MarkItemUnplayed ─────────────────────────────────────────────────────

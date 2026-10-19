@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
+import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -186,6 +187,8 @@ class NextUpExcludedViewModelTest {
         coEvery { homeDiscovery.includeSeriesInNextUp("s1") } coAnswers {
             homeDiscoverySlice.value = homeDiscoverySlice.value
                 .copy(nextUpExcludedSeriesIds = homeDiscoverySlice.value.nextUpExcludedSeriesIds - "s1")
+            // editForUser returns the written Preferences snapshot.
+            emptyPreferences()
         }
 
         val vm = viewModel()
@@ -206,6 +209,8 @@ class NextUpExcludedViewModelTest {
         }
         coEvery { homeDiscovery.clearNextUpExclusions() } coAnswers {
             homeDiscoverySlice.value = homeDiscoverySlice.value.copy(nextUpExcludedSeriesIds = emptySet())
+            // editForUser returns the written Preferences snapshot.
+            emptyPreferences()
         }
 
         val vm = viewModel()

@@ -165,7 +165,7 @@ import kotlinx.coroutines.launch
  *  - **[stopAndRelease] no longer resets `artistId`** — declared delta of the
  *    [NowPlayingTracker] adoption: the tracker's `clear()` returns the five
  *    display fields to their defaults but deliberately keeps the artist id
- *    (Android's stop behaved identically pre-extraction; the desktop's former
+ *    (Android's stop behaves identically; the desktop's former
  *    hand-rolled reset cleared all six). Harmless surface — the flow is only
  *    read while a now-playing row renders — and it keeps ONE clear shape
  *    shared by both managers.
@@ -237,7 +237,7 @@ class DesktopAudioQueueManager(
      * constructions (tests, other hosts) compile and behave unchanged.
      */
     private val nowPlayingReporter: NowPlayingReporter? = null,
-) : AudioQueueManager, AudioPlayerEngine, NowPlayingSurface {
+) : AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace {
 
     private companion object {
         // Same cadences as the Android manager/ticker pair.
@@ -263,6 +263,20 @@ class DesktopAudioQueueManager(
 
     private var engine: MediaEngine? = null
     private var engineObserverJobs: List<Job> = emptyList()
+
+    /**
+     * [AudioNowPlayingFace.hasActiveSession] — the exact Android twin
+     * (live engine AND claimed item), added for the [NowPlayingVerdict]'s
+     * audio face (the desktop remote-control receiver resolves the verdict
+     * over this manager). No desktop consumer reads it yet — the reporter
+     * and tile are Android surfaces — but the fold is not an invention:
+     * the desktop manager's session lifecycle is the same
+     * lazy-engine-plus-chassis-claim shape Android's gate computes, so the
+     * honest answer here is the same conjunction over this manager's own
+     * cells rather than a defaulted stub.
+     */
+    override val hasActiveSession: Boolean
+        get() = engine != null && state.currentItemId != null
 
     /**
      * The manager's engine-command port — [AudioQueueStateCore]'s ONLY way

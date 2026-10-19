@@ -7,8 +7,8 @@ package com.raulshma.jellyplay.widget
  * condition is treated as permanent — the worker should not retry it, since
  * retrying a 401/403/404 will never succeed and only burns WorkManager quota.
  *
- * Extracted verbatim from the previously duplicated private helpers in
- * `LibraryRecommendationsWidgetWorker` and `SeerrRecommendationsWidgetWorker`.
+ * Shared by the `LibraryRecommendationsWidgetWorker` and
+ * `SeerrRecommendationsWidgetWorker`.
  */
 fun isPermanentWidgetFailure(throwable: Throwable): Boolean {
     val message = throwable.message ?: return false

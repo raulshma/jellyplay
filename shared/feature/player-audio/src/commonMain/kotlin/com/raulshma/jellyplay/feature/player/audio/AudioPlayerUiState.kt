@@ -81,7 +81,6 @@ data class AudioEffectsState(
 @Immutable
 data class LyricsState(
     val lyrics: List<LyricsLine> = emptyList(),
-    val currentLyricIndex: Int = -1,
     val lyricsSource: LyricsSource = LyricsSource.UNKNOWN,
     val isFetchingLyrics: Boolean = false,
     val lyricsOffsetMs: Long = com.raulshma.jellyplay.core.data.playback.AudioLyricsManager.DEFAULT_OFFSET_MS,

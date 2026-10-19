@@ -12,7 +12,10 @@ import kotlinx.coroutines.sync.withLock
 //  - `dagger.Lazy<T>` ctor params → kotlin `Lazy<T>` (the module has no
 //    dagger dependency; memoizing single-evaluation semantics preserved).
 //    dagger.Lazy's `.get()` call sites became `.value` (kotlin.Lazy's
-//    accessor) — the only body-level change, one-for-one mechanical.
+//    accessor). Both lazies later died: with the media-repository edge out
+//    of PlayedStateSyncImpl/PlaybackRepositoryImpl (the [UserDataAnnouncer]
+//    leaf), neither the write family's impl nor the detail provider's graph
+//    cycles back into this one — the deps resolve eagerly.
 //
 // promotion from jvmShared: every ctor dep (MediaRepository,
 // MediaDetailProvider) is a commonMain interface, so the impl crosses with
@@ -24,13 +27,11 @@ import kotlinx.coroutines.sync.withLock
  * [MediaDetailProvider] (the active-session rewrite). The repository dep is
  * the user-data-write family seam, not the [MediaRepository] union, since
  * this module is the clean sole consumer of that family (the family-seam
- * flip). Both are `Lazy` for the same reason [PlayedStateSyncImpl] takes
- * them: the provider and repository reference each other's graphs, and
- * deferring construction keeps this module out of any DI cycle.
+ * flip).
  */
 class UserDataMutatorImpl(
-    private val userDataWrites: Lazy<UserDataWriteOperations>,
-    private val mediaDetailProvider: Lazy<MediaDetailProvider>,
+    private val userDataWrites: UserDataWriteOperations,
+    private val mediaDetailProvider: MediaDetailProvider,
 ) : UserDataMutator {
 
     /**
@@ -59,7 +60,7 @@ class UserDataMutatorImpl(
         containers: List<UserDataContainer>,
         seriesId: String?,
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
-        userDataWrites.value.toggleFavorite(itemId)
+        userDataWrites.toggleFavorite(itemId)
             .map { target -> AppliedMutation(itemId = itemId, favorite = target) }
             .onSuccess { applied -> applyPostSuccessRefresh(itemId, applied, mode, containers, seriesId) }
     }
@@ -78,7 +79,7 @@ class UserDataMutatorImpl(
                 // episode of the season for the active series session (the
                 // reducer adopts the new generation and recomputes smart-play)
                 // and drops the series catalogue for re-entry itself.
-                mediaDetailProvider.value.applyOptimisticSeasonRewrite(seriesId, seasonId) { episodes ->
+                mediaDetailProvider.applyOptimisticSeasonRewrite(seriesId, seasonId) { episodes ->
                     episodes.map(applied::patch)
                 }
             }
@@ -86,13 +87,13 @@ class UserDataMutatorImpl(
 
     /** Repository call for the played direction, shared by [setPlayed] and [setSeasonPlayed]. */
     private suspend fun writePlayed(itemId: String, played: Boolean): Result<Unit> =
-        if (played) userDataWrites.value.markPlayed(itemId)
-        else userDataWrites.value.markUnplayed(itemId)
+        if (played) userDataWrites.markPlayed(itemId)
+        else userDataWrites.markUnplayed(itemId)
 
     /** Season variant of [writePlayed] — the server recurses into the season's children. */
     private suspend fun writeSeasonPlayed(seriesId: String, seasonId: String, played: Boolean): Result<Unit> =
-        if (played) userDataWrites.value.markSeasonPlayed(seasonId, seriesId)
-        else userDataWrites.value.markSeasonUnplayed(seasonId, seriesId)
+        if (played) userDataWrites.markSeasonPlayed(seasonId, seriesId)
+        else userDataWrites.markSeasonUnplayed(seasonId, seriesId)
 
     /**
      * Post-success refresh pass, in the order callers used to hand-assemble:
@@ -119,7 +120,7 @@ class UserDataMutatorImpl(
         // Keep the provider's replayed snapshot aligned with the caller's
         // optimistic state so leaving and immediately re-entering detail does
         // not flash the pre-mutation state (no-op without an active session).
-        mediaDetailProvider.value.applyOptimisticItemState(
+        mediaDetailProvider.applyOptimisticItemState(
             itemId = itemId,
             isFavorite = applied.favorite,
             isPlayed = applied.played,
@@ -128,6 +129,6 @@ class UserDataMutatorImpl(
         // seasons/episodes catalogue serving stale watched state on the next
         // screen entry. The repository dropped its own caches around the write
         // already; this is the provider-owned catalogue only.
-        if (seriesId != null) mediaDetailProvider.value.invalidate(seriesId)
+        if (seriesId != null) mediaDetailProvider.invalidate(seriesId)
     }
 }

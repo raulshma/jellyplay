@@ -75,8 +75,16 @@ class ClientCertificateManager(
     private val keyFile: File = File(certsDir, KEY_FILE)
     private val caFile: File = File(certsDir, CA_FILE)
 
-    private val statusFlow = MutableStateFlow(readStatus())
-    override val status: StateFlow<ClientCertificateStatus> = statusFlow.asStateFlow()
+    // Lazy: the initial status read stats/parses the material files and
+    // isEnabled() opens the encrypted prefs — deferring it keeps that IO off
+    // whatever thread first constructs the manager (the Android cold-start
+    // path resolves this single inside its off-main prewarm, but the desktop
+    // constructs it on the main thread inside startKoin). First read pays
+    // the same work, just later; synchronized lazy is safe from any thread.
+    private val statusFlow: MutableStateFlow<ClientCertificateStatus> by lazy {
+        MutableStateFlow(readStatus())
+    }
+    override val status: StateFlow<ClientCertificateStatus> by lazy { statusFlow.asStateFlow() }
 
     // ── ClientCertificateFacade ─────────────────────────────────────────────
 

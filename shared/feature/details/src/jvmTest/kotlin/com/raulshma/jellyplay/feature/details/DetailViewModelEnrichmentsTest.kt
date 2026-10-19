@@ -7,6 +7,10 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
+import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -29,6 +33,8 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DetailAssets
@@ -36,6 +42,7 @@ import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
+import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -69,6 +76,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
@@ -103,6 +111,20 @@ class DetailViewModelEnrichmentsTest {
     private val strings = fakeDetailStrings()
 
     private lateinit var mediaRepository: MediaRepository
+
+    // The browse-catalogue enrichments fake (the franchise row's source read).
+    // Defaults to success/empty; tests override via boxSetResults and assert
+    // reachability via boxSetCalls.
+    private val catalogueEnrichments = object : MediaCatalogueEnrichments {
+        val boxSetResults = HashMap<String, Result<List<com.raulshma.jellyplay.core.model.CollectionSummary>>>()
+        val boxSetCalls = mutableListOf<String>()
+        override suspend fun getTags(parentId: String?): Result<List<String>> =
+            Result.success(emptyList())
+        override suspend fun getBoxSetsContaining(itemId: String): Result<List<com.raulshma.jellyplay.core.model.CollectionSummary>> {
+            boxSetCalls += itemId
+            return boxSetResults[itemId] ?: Result.success(emptyList())
+        }
+    }
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var playbackRepository: PlaybackRepository
@@ -110,6 +132,7 @@ class DetailViewModelEnrichmentsTest {
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
     private lateinit var themeMusicPlayer: DetailThemeMusic
+    private lateinit var projections: PreferenceProjections
 
     private val providerFlows = mutableMapOf<String, MutableStateFlow<DetailLoadState>>()
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
@@ -126,15 +149,35 @@ class DetailViewModelEnrichmentsTest {
         seerrRepository = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
         themeMusicPlayer = mockk(relaxed = true)
+        // The VM folds the seam's playing flow into uiState — a real
+        // StateFlow, not a relaxed mock.
+        every { themeMusicPlayer.isPlaying } returns MutableStateFlow(false)
 
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         val offlineModeManager = mockk<OfflineModeManager>(relaxed = true)
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        // The franchise rows' BoxSet-ancestor read — the injected
+        // [catalogueEnrichments] fake defaults to success/empty (no ancestor
+        // → no rows). Individual tests override via boxSetResults.
+        // The "Airing next" strip fetch — empty keeps the strip absent.
+        // Individual tests override.
+        coEvery { libraryApiClient.getUpcoming(any(), any(), any()) } returns Result.success(emptyList())
+        // The merged trailer list's local leg — empty keeps the list
+        // remote-only (the remote-only shape). Individual tests override.
+        coEvery { libraryApiClient.getLocalTrailers(any()) } returns Result.success(emptyList())
+        // The ambient ThemeVideo leg — empty keeps the hero on the
+        // embed/static (every embed/static shape). Individual tests override.
+        coEvery { libraryApiClient.getThemeVideos(any()) } returns Result.success(emptyList())
         coEvery { playbackRepository.getMediaSegments(any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbVideos(any(), any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.success(emptyList())
+        // The externalRatings enrichment's Seerr leg — an empty payload
+        // keeps every fallback behavior (the strip falls through to the TMDB
+        // seam, unwired unless a test injects it, and stays absent).
+        coEvery { seerrRepository.getRatings(any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrRatings())
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
         every { mediaRepository.userDataChanges } returns userDataEvents
         coEvery { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) } returns Unit
@@ -142,7 +185,7 @@ class DetailViewModelEnrichmentsTest {
         coEvery { arrRepository.resolveServers() } returns Result.success(ArrServiceSummary())
         coEvery { offlineRepository.getLocalRelated(any(), any(), any(), any()) } returns emptyList()
 
-        val projections = mockk<PreferenceProjections>(relaxed = true)
+        projections = mockk(relaxed = true)
         every { projections.detailPreferences } returns MutableStateFlow(DetailPreferences())
         val homeDiscoveryStore = mockk<HomeDiscoveryStore>(relaxed = true)
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
@@ -153,61 +196,92 @@ class DetailViewModelEnrichmentsTest {
         val libraryStore = mockk<LibraryStore>(relaxed = true)
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
 
-        viewModel = DetailViewModel(
-            storageProbe = mockk<DetailStorageProbe>(relaxed = true),
-            strings = strings,
-            mediaRepository = mediaRepository,
-            libraryApiClient = libraryApiClient,
-            collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
-            userDataMutator = FakeUserDataMutator(mediaDetailProvider),
-            mediaDetailProvider = mediaDetailProvider,
-            playbackRepository = playbackRepository,
-            imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true),
-            offlineRepository = offlineRepository,
-            stores = DetailStores(
-                projections = projections,
-                libraryStore = libraryStore,
-                homeDiscoveryStore = homeDiscoveryStore,
-                experimentalStore = experimentalStore,
-                engineStore = engineStore,
+        viewModel = buildViewModel()
+    }
+
+    /**
+     * The setUp construction, extractable so a single test can flip a
+     * pre-construction stub (the Seerr connection flags — the combine captures
+     * the preferences flow at construction time) or inject the TMDB
+     * fallback seam before building.
+     */
+    private fun buildViewModel(
+        tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
+        pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
+        jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
+        pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
+    ): DetailViewModel = DetailViewModel(
+        storageProbe = mockk<DetailStorageProbe>(relaxed = true),
+        strings = strings,
+        mediaRepository = mediaRepository,
+        mediaCatalogueEnrichments = catalogueEnrichments,
+        libraryApiClient = libraryApiClient,
+        collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
+        userDataMutator = FakeUserDataMutator(mediaDetailProvider),
+        mediaDetailProvider = mediaDetailProvider,
+        playbackRepository = playbackRepository,
+        imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true),
+        offlineRepository = offlineRepository,
+        stores = DetailStores(
+            projections = projections,
+            libraryStore = mockk<LibraryStore>(relaxed = true).also {
+                every { it.library } returns MutableStateFlow(LibrarySlice())
+            },
+            homeDiscoveryStore = mockk<HomeDiscoveryStore>(relaxed = true).also {
+                every { it.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
+            },
+            experimentalStore = mockk<ExperimentalStore>(relaxed = true).also {
+                every { it.experimental } returns MutableStateFlow(ExperimentalSlice())
+            },
+            engineStore = mockk<PlayerEngineStore>(relaxed = true).also {
+                every { it.playerEngine } returns MutableStateFlow(PlayerEngineSlice())
+            },
+            notificationStore = mockk<NotificationStore>(relaxed = true).also {
+                every { it.notification } returns MutableStateFlow(NotificationSlice())
+            },
+        ),
+        remoteDiscovery = RemoteDiscoveryClients(
+            seerrRepository = seerrRepository,
+            seerrRequestDelegate = mockk<SeerrRequestDelegate>(relaxed = true),
+            arrRepository = arrRepository,
+            offlineModeManager = mockk<OfflineModeManager>(relaxed = true).also {
+                every { it.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
+            },
+        ),
+        audioQueueFacade = mockk<AudioQueueFacade>(),
+        themeMusicPlayer = themeMusicPlayer,
+        actionFactories = DetailActionFactories(
+            downloads = DownloadLifecycleActions.Factory(
+                downloadIntake = mockk<DownloadIntake>(relaxed = true),
+                downloadsStore = mockk<DownloadsStore>(relaxed = true),
+                adaptiveBitrateManager = mockk(relaxed = true),
+                downloadRepository = mockk(relaxed = true),
             ),
-            remoteDiscovery = RemoteDiscoveryClients(
-                seerrRepository = seerrRepository,
-                seerrRequestDelegate = mockk<SeerrRequestDelegate>(relaxed = true),
-                arrRepository = arrRepository,
-                offlineModeManager = offlineModeManager,
+            resync = ResyncActions.Factory(
+                offlineSyncManager = mockk<OfflineSyncManager>(relaxed = true),
+                downloadIntake = mockk<DownloadIntake>(relaxed = true),
             ),
-            audioQueueFacade = mockk<AudioQueueFacade>(),
-            themeMusicPlayer = themeMusicPlayer,
-            actionFactories = DetailActionFactories(
-                downloads = DownloadLifecycleActions.Factory(
-                    downloadIntake = mockk<DownloadIntake>(relaxed = true),
-                    downloadsStore = mockk<DownloadsStore>(relaxed = true),
-                    adaptiveBitrateManager = mockk(relaxed = true),
-                    downloadRepository = mockk(relaxed = true),
-                ),
-                resync = ResyncActions.Factory(
-                    offlineSyncManager = mockk<OfflineSyncManager>(relaxed = true),
-                    downloadIntake = mockk<DownloadIntake>(relaxed = true),
-                ),
-                playlists = PlaylistTargets.Factory(
-                    playlistRepository = mockk<PlaylistRepository>(relaxed = true),
-                    appRuntimeStateStore = mockk<AppRuntimeStateStore>(relaxed = true),
-                ),
-                watchParty = WatchPartyActions.Factory(
-                    syncPlayRepository = mockk<SyncPlayRepository>(relaxed = true),
-                    syncPlayManager = mockk<SyncPlayManager>(relaxed = true),
-                ),
+            playlists = PlaylistTargets.Factory(
+                playlistRepository = mockk<PlaylistRepository>(relaxed = true),
+                appRuntimeStateStore = mockk<AppRuntimeStateStore>(relaxed = true),
+            ),
+            watchParty = WatchPartyActions.Factory(
+                syncPlayRepository = mockk<SyncPlayRepository>(relaxed = true),
+                syncPlayManager = mockk<SyncPlayManager>(relaxed = true),
+            ),
                 metadataAdmin = MetadataAdminActions.Factory(
                     editorRepository = mockk<MetadataEditorRepository>(relaxed = true),
                     mediaRepository = mockk(relaxed = true),
                     authRepository = mockk<AuthRepository>(relaxed = true),
                 ),
-            ),
-            mediaDownloadActions = mockk<MediaDownloadActions>(relaxed = true),
-            smartPlayDispatcher = mainDispatcher,
-        )
-    }
+        ),
+        mediaDownloadActions = mockk<MediaDownloadActions>(relaxed = true),
+        smartPlayDispatcher = mainDispatcher,
+        tmdbApiClient = tmdbApiClient,
+        pluginStatusStore = pluginStatusStore,
+        pluginRatingsApi = pluginRatingsApi,
+        jellyPlayFeatureGate = jellyPlayFeatureGate,
+    )
 
     private fun stubProvider(
         itemId: String,
@@ -224,6 +298,7 @@ class DetailViewModelEnrichmentsTest {
         detail: MediaDetail,
         remoteDiscoveryAllowed: Boolean,
         contentGeneration: Long = 0L,
+        seasons: List<MediaItem> = emptyList(),
     ): DetailLoadState.Loaded = DetailLoadState.Loaded(
         MediaDetailSnapshot(
             detail = detail,
@@ -252,7 +327,7 @@ class DetailViewModelEnrichmentsTest {
                 chapters = false,
             ),
             assets = DetailAssets(),
-            seasons = emptyList(),
+            seasons = seasons,
             episodesBySeason = emptyMap(),
             fetchedSeasonIds = emptySet(),
             sortedEpisodes = emptyList(),
@@ -505,4 +580,448 @@ class DetailViewModelEnrichmentsTest {
         coVerify(exactly = 1) { mediaRepository.getSimilarItems("m3", limit = 12) }
         verify(exactly = 1) { themeMusicPlayer.playThemeFor(any()) }
     }
+
+    // ── the themeMusic enrichment gate — the pref/mute matrix ────────
+
+    @Test
+    fun themeMusic_gate_respectsGlobalPrefAndPerSeriesMute() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val prefs = MutableStateFlow(DetailPreferences())
+        every { projections.detailPreferences } returns prefs
+        viewModel = buildViewModel()
+
+        fun stubSeries(id: String) {
+            stubProvider(
+                id,
+                snapshot(
+                    origin = DetailOrigin.REMOTE,
+                    detail = MediaDetail(item = MediaItem(id = id, name = "Series", mediaType = MediaType.SERIES)),
+                    remoteDiscoveryAllowed = true,
+                ),
+            )
+        }
+
+        // (a) defaults (pref ON, nothing muted) → plays.
+        stubSeries("g1")
+        viewModel.onEvent(DetailUiEvent.LoadItem("g1"))
+        advanceUntilIdle()
+        verify(exactly = 1) { themeMusicPlayer.playThemeFor("g1") }
+
+        // (b) global pref OFF → no series plays at all.
+        prefs.value = prefs.value.copy(playThemeMusic = false)
+        stubSeries("g2")
+        viewModel.onEvent(DetailUiEvent.LoadItem("g2"))
+        advanceUntilIdle()
+        verify(exactly = 0) { themeMusicPlayer.playThemeFor("g2") }
+
+        // (c) pref back ON but THIS series muted → still no play.
+        prefs.value = DetailPreferences(themeMusicMutedSeriesIds = setOf("g3"))
+        stubSeries("g3")
+        viewModel.onEvent(DetailUiEvent.LoadItem("g3"))
+        advanceUntilIdle()
+        verify(exactly = 0) { themeMusicPlayer.playThemeFor("g3") }
+
+        // (d) pref ON and a DIFFERENT series muted → plays.
+        stubSeries("g4")
+        viewModel.onEvent(DetailUiEvent.LoadItem("g4"))
+        advanceUntilIdle()
+        verify(exactly = 1) { themeMusicPlayer.playThemeFor("g4") }
+    }
+
+    // ── external-ratings: the externalRatings enrichment — source-fallback matrix ──────
+
+    private fun tmdbRatedMovie(itemId: String = "er1") =
+        MediaDetail(
+            item = MediaItem(id = itemId, name = "Movie", mediaType = MediaType.MOVIE),
+            providerIds = mapOf("tmdb" to "123"),
+        )
+
+    @Test
+    fun externalRatings_seerrConnected_mapsTheSeerrPayload_andSkipsTmdb() = runTest(mainDispatcher) {
+        // Flip the connection-flag stub BEFORE constructing the ViewModel:
+        // the uiState combine captures the preferences flow at construction
+        // time (the loadSeerrData regression test's convention).
+        every { seerrRepository.preferences } returns MutableStateFlow(
+            SeerrPreferences(serverUrl = "https://seerr.example.com"),
+        )
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        viewModel = buildViewModel(tmdbApiClient = tmdbApiClient)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        // Settle the seerr-flags combine BEFORE the load: the enrichment reads
+        // the published isSeerrConnected at fan-out time, so the connection
+        // flag must already be folded into uiState (runTest's single
+        // advanceUntilIdle at the end races it against the enrichment).
+        advanceUntilIdle()
+        coEvery { seerrRepository.getMovieDetails(123) } returns
+            Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails())
+        coEvery { seerrRepository.getRatings(123, "movie") } returns Result.success(
+            com.raulshma.jellyplay.core.model.seerr.SeerrRatings(
+                rt = com.raulshma.jellyplay.core.model.seerr.SeerrRtRating(criticsScore = 96, audienceScore = 88),
+                imdb = com.raulshma.jellyplay.core.model.seerr.SeerrImdbRating(rating = 8.4f),
+                tmdb = com.raulshma.jellyplay.core.model.seerr.SeerrTmdbRating(rating = 7.7f),
+            ),
+        )
+        stubProvider("er1", snapshot(DetailOrigin.REMOTE, tmdbRatedMovie(), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("er1"))
+        advanceUntilIdle()
+
+        val ratings = viewModel.uiState.value.externalRatings
+        assertEquals(96, ratings.critics)
+        assertEquals(88, ratings.audience)
+        assertEquals(8.4f, ratings.imdb)
+        assertEquals(7.7f, ratings.tmdb)
+        // Seerr answered — the TMDB fallback never ran.
+        coVerify(exactly = 0) { tmdbApiClient.getDetails(any(), any()) }
+    }
+
+    @Test
+    fun externalRatings_seerrDisconnected_fallsBackToTheTmdbVoteAggregate() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        viewModel = buildViewModel(tmdbApiClient = tmdbApiClient)
+        coEvery { tmdbApiClient.getDetails(123, MediaType.MOVIE) } returns Result.success(
+            com.raulshma.jellyplay.core.model.seerr.TmdbDetails(voteAverage = 7.456, voteCount = 12),
+        )
+        stubProvider("er2", snapshot(DetailOrigin.REMOTE, tmdbRatedMovie("er2"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("er2"))
+        advanceUntilIdle()
+
+        val ratings = viewModel.uiState.value.externalRatings
+        assertEquals(7.456f, ratings.tmdb)
+        assertEquals("https://www.themoviedb.org/movie/123", ratings.tmdbUrl)
+        // Disconnected — the Seerr ratings fetch never started.
+        coVerify(exactly = 0) { seerrRepository.getRatings(any(), any()) }
+    }
+
+    @Test
+    fun externalRatings_seerrFetchFailure_fallsBackToTmdb() = runTest(mainDispatcher) {
+        every { seerrRepository.preferences } returns MutableStateFlow(
+            SeerrPreferences(serverUrl = "https://seerr.example.com"),
+        )
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        viewModel = buildViewModel(tmdbApiClient = tmdbApiClient)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { seerrRepository.getMovieDetails(123) } returns
+            Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails())
+        coEvery { seerrRepository.getRatings(123, "movie") } returns Result.failure(RuntimeException("seerr down"))
+        coEvery { tmdbApiClient.getDetails(123, MediaType.MOVIE) } returns Result.success(
+            com.raulshma.jellyplay.core.model.seerr.TmdbDetails(voteAverage = 6.0),
+        )
+        stubProvider("er3", snapshot(DetailOrigin.REMOTE, tmdbRatedMovie("er3"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("er3"))
+        advanceUntilIdle()
+
+        val ratings = viewModel.uiState.value.externalRatings
+        assertEquals(6.0f, ratings.tmdb)
+        assertNull(ratings.critics)
+        assertFalse(viewModel.uiState.value.externalRatingsSuppressedByPlugin)
+    }
+
+    @Test
+    fun externalRatings_preferenceOff_startsNoFetch() = runTest(mainDispatcher) {
+        every { projections.detailPreferences } returns
+            MutableStateFlow(DetailPreferences(showExternalRatings = false))
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        viewModel = buildViewModel(tmdbApiClient = tmdbApiClient)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider("er4", snapshot(DetailOrigin.REMOTE, tmdbRatedMovie("er4"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("er4"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.externalRatings.isEmpty)
+        coVerify(exactly = 0) { seerrRepository.getRatings(any(), any()) }
+        coVerify(exactly = 0) { tmdbApiClient.getDetails(any(), any()) }
+    }
+
+    @Test
+    fun externalRatings_pluginRatingsLive_setsTheDedupeSuppressionFlag() = runTest(mainDispatcher) {
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        val pluginStatusStore =
+            mockk<com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore>(relaxed = true)
+        val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
+        // The catch-all must be registered FIRST: a later matching stub wins,
+        // and the Ratings feature must answer true.
+        coEvery { featureGate.isAvailableNow(any()) } returns false
+        coEvery { featureGate.isAvailableNow(JellyPlayPluginFeatures.Ratings) } returns true
+        viewModel = buildViewModel(
+            tmdbApiClient = tmdbApiClient,
+            pluginStatusStore = pluginStatusStore,
+            jellyPlayFeatureGate = featureGate,
+        )
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { tmdbApiClient.getDetails(123, MediaType.MOVIE) } returns Result.success(
+            com.raulshma.jellyplay.core.model.seerr.TmdbDetails(voteAverage = 7.0),
+        )
+        stubProvider("er5", snapshot(DetailOrigin.REMOTE, tmdbRatedMovie("er5"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("er5"))
+        advanceUntilIdle()
+
+        // The chips resolved (TMDB fallback — the fetch still runs so a live
+        // probe against an EMPTY plugin row never loses the strip), and the
+        // dedupe flag rode the same write.
+        assertEquals(7.0f, viewModel.uiState.value.externalRatings.tmdb)
+        assertTrue(viewModel.uiState.value.externalRatingsSuppressedByPlugin)
+        // …which stands the chips down exactly while the plugin row renders:
+        // merged into the plugin row when it has content...
+        assertFalse(
+            externalRatingsMergedIntoPluginRow(
+                hasPluginRatings = true,
+                external = viewModel.uiState.value.externalRatings,
+                externalSuppressedByPlugin = viewModel.uiState.value.externalRatingsSuppressedByPlugin,
+            ),
+        )
+        // ...and never lost when the plugin row is empty/absent — there the
+        // strip stands alone in the header (the placement contract: merge
+        // only "while the plugin row renders").
+        assertTrue(
+            externalRatingsStandaloneInHeader(
+                showExternalRatings = true,
+                hasPluginRatings = false,
+                external = viewModel.uiState.value.externalRatings,
+            ),
+        )
+    }
+
+    // (The franchise and upcoming enrichment arms moved to their
+    // section modules — their case suites live on in
+    // DetailSectionEnrichmentArmsTest, the registry fake-host style where the
+    // DetailSectionEnrichmentHost interface is the test surface. The VM-level
+    // fan-out pins above still cover the arms firing through the registry
+    // splice: the movie matrix's specialFeatures write, the collection
+    // members write above, and the discovery-capped cold-start assertions.)
+
+    // ── pluginSeasonRatings: the bounded-parallel per-season TMDB fetch ──
+
+    /**
+     * The ratings role's minimal counting fake: per-season canned results
+     * (missing seasons degrade to the plugin-404 null payload) plus a
+     * per-season-number call log the merge assertions read — a re-run that
+     * re-fetches a settled season shows up here immediately.
+     */
+    private class CountingSeasonRatingsApi(
+        private val resultsBySeasonNumber: Map<Int, Result<Map<Int, JellyPlayEpisodeScore>?>> = emptyMap(),
+    ) : JellyPlayRatingsRoutes {
+        val callsBySeasonNumber = mutableMapOf<Int, Int>()
+
+        override suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?> =
+            Result.success(null)
+
+        override suspend fun getTmdbSeasonRatings(
+            tmdbId: String,
+            seasonNumber: Int,
+        ): Result<Map<Int, JellyPlayEpisodeScore>?> {
+            callsBySeasonNumber[seasonNumber] = (callsBySeasonNumber[seasonNumber] ?: 0) + 1
+            return resultsBySeasonNumber[seasonNumber] ?: Result.success(null)
+        }
+    }
+
+    private fun tmdbRatedSeries(itemId: String) =
+        MediaDetail(
+            item = MediaItem(id = itemId, name = "Series", mediaType = MediaType.SERIES),
+            providerIds = mapOf("tmdb" to "123"),
+        )
+
+    private fun season(id: String, indexNumber: Int?) =
+        MediaItem(id = id, name = "Season", mediaType = MediaType.SEASON, indexNumber = indexNumber)
+
+    /** The plugin wiring the season-ratings enrichment needs: the status
+     *  store probe plus a feature gate whose catch-all answers first so only
+     *  the `Ratings` feature is live. */
+    private fun ratingsFeatureWiredViewModel(ratingsApi: JellyPlayRatingsRoutes): DetailViewModel {
+        val pluginStatusStore =
+            mockk<com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore>(relaxed = true)
+        val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
+        // The catch-all must be registered FIRST: a later matching stub wins,
+        // and only Ratings may answer true (the externalRatings test's convention).
+        coEvery { featureGate.isAvailableNow(any()) } returns false
+        coEvery { featureGate.isAvailableNow(JellyPlayPluginFeatures.Ratings) } returns true
+        return buildViewModel(
+            pluginStatusStore = pluginStatusStore,
+            jellyPlayFeatureGate = featureGate,
+            pluginRatingsApi = ratingsApi,
+        )
+    }
+
+    @Test
+    fun seasonRatings_multipleSeasons_mapsEveryScoredSeasonById() = runTest(mainDispatcher) {
+        val ratingsApi = CountingSeasonRatingsApi(
+            mapOf(
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.5, tmdbVotes = 120))),
+                2 to Result.success(
+                    mapOf(
+                        3 to JellyPlayEpisodeScore(tmdbScore = 8.0, tmdbVotes = 90),
+                        4 to JellyPlayEpisodeScore(tmdbScore = 6.5, tmdbVotes = 70),
+                    ),
+                ),
+                // An empty payload drops its season (the serial loop's
+                // `isEmpty → continue` leg).
+                3 to Result.success(emptyMap()),
+            ),
+        )
+        viewModel = ratingsFeatureWiredViewModel(ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr1",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr1"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(
+                    season("season1", 1),
+                    season("season2", 2),
+                    season("season3", 3),
+                    // Numberless seasons never fetch (the `?: continue` leg).
+                    season("seasonUnnumbered", null),
+                ),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr1"))
+        advanceUntilIdle()
+
+        val seasonRatings = viewModel.uiState.value.seasonRatings
+        assertEquals(setOf("season1", "season2"), seasonRatings.keys)
+        assertEquals(7.5, seasonRatings["season1"]?.get(1)?.tmdbScore)
+        assertEquals(120, seasonRatings["season1"]?.get(1)?.tmdbVotes)
+        assertEquals(8.0, seasonRatings["season2"]?.get(3)?.tmdbScore)
+        assertEquals(6.5, seasonRatings["season2"]?.get(4)?.tmdbScore)
+    }
+
+    @Test
+    fun seasonRatings_perSeasonFailure_dropsOnlyTheFailedSeason() = runTest(mainDispatcher) {
+        val ratingsApi = CountingSeasonRatingsApi(
+            mapOf(
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.0))),
+                2 to Result.failure(RuntimeException("season 2 down")),
+            ),
+        )
+        viewModel = ratingsFeatureWiredViewModel(ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr2",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr2"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(season("season1", 1), season("season2", 2)),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr2"))
+        advanceUntilIdle()
+
+        // The failed season drops alone — the survivors keep their scores
+        // and no error surfaces.
+        val seasonRatings = viewModel.uiState.value.seasonRatings
+        assertEquals(setOf("season1"), seasonRatings.keys)
+        assertEquals(7.0, seasonRatings["season1"]?.get(1)?.tmdbScore)
+    }
+
+    @Test
+    fun seasonRatings_lazySeasonExpansion_rerunFetchesOnlyTheNewSeason() = runTest(mainDispatcher) {
+        val ratingsApi = CountingSeasonRatingsApi(
+            mapOf(
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.5))),
+                2 to Result.success(mapOf(2 to JellyPlayEpisodeScore(tmdbScore = 8.0))),
+            ),
+        )
+        viewModel = ratingsFeatureWiredViewModel(ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val flow = stubProvider(
+            "sr3",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr3"),
+                remoteDiscoveryAllowed = true,
+                contentGeneration = 0L,
+                seasons = listOf(season("season1", 1)),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr3"))
+        advanceUntilIdle()
+        assertEquals(setOf("season1"), viewModel.uiState.value.seasonRatings.keys)
+
+        // The lazily-expanded season re-emits a NEW contentGeneration, the
+        // fan-out re-runs, and the merge must fetch (and change) only the
+        // new arrival — season 1's entry survives from the previous
+        // generation untouched.
+        flow.value = (flow.value as DetailLoadState.Loaded).let { loaded ->
+            loaded.copy(
+                snapshot = loaded.snapshot.copy(
+                    seasons = loaded.snapshot.seasons + season("season2", 2),
+                    contentGeneration = 1L,
+                ),
+            )
+        }
+        advanceUntilIdle()
+
+        assertEquals(1, ratingsApi.callsBySeasonNumber[1])
+        assertEquals(1, ratingsApi.callsBySeasonNumber[2])
+        val seasonRatings = viewModel.uiState.value.seasonRatings
+        assertEquals(setOf("season1", "season2"), seasonRatings.keys)
+        assertEquals(7.5, seasonRatings["season1"]?.get(1)?.tmdbScore)
+        assertEquals(8.0, seasonRatings["season2"]?.get(2)?.tmdbScore)
+    }
+
+    @Test
+    fun seasonRatings_gateOffOrWhollyFailingFetch_leavesTheFieldEmpty() = runTest(mainDispatcher) {
+        // (a) The Ratings feature toggled off: the enrichment never reaches
+        // the fetch (the franchise preferenceOff convention).
+        val gatedApi = CountingSeasonRatingsApi(
+            mapOf(1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.0)))),
+        )
+        val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
+        coEvery { featureGate.isAvailableNow(any()) } returns false
+        viewModel = buildViewModel(
+            pluginStatusStore = mockk(relaxed = true),
+            jellyPlayFeatureGate = featureGate,
+            pluginRatingsApi = gatedApi,
+        )
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr4",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr4"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(season("season1", 1)),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr4"))
+        advanceUntilIdle()
+
+        assertTrue(gatedApi.callsBySeasonNumber.isEmpty())
+        assertTrue(viewModel.uiState.value.seasonRatings.isEmpty())
+
+        // (b) Default prefs again so the wholly-failing fetch exercises the
+        // fetch, not the gate: every season drops, the fold comes up empty,
+        // and the field stays empty — silent absence, never an error.
+        val failingApi = CountingSeasonRatingsApi(
+            mapOf(1 to Result.failure(RuntimeException("plugin down"))),
+        )
+        viewModel = ratingsFeatureWiredViewModel(failingApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr5",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr5"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(season("season1", 1)),
+            ),
+        )
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr5"))
+        advanceUntilIdle()
+
+        assertEquals(1, failingApi.callsBySeasonNumber[1])
+        assertTrue(viewModel.uiState.value.seasonRatings.isEmpty())
+    }
+
 }

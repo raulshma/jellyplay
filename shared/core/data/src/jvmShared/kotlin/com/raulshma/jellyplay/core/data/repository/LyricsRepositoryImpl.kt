@@ -214,6 +214,9 @@ class LyricsRepositoryImpl(
             lastLyricsEvictionMs = now
             try {
                 lyricsCacheDao.deleteOlderThan(now - 30L * 24 * 60 * 60 * 1000)
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                // Never swallow cancellation — breaks structured concurrency.
+                throw ce
             } catch (e: Exception) {
                 Log.d("LyricsRepo", "Failed to evict old lyrics cache", e)
             }
@@ -223,6 +226,9 @@ class LyricsRepositoryImpl(
     override suspend fun cleanupLyricsCache() {
         try {
             lyricsCacheDao.deleteOlderThan(timeSource.nowEpochMillis() - 30L * 24 * 60 * 60 * 1000)
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (e: Exception) {
             Log.d("LyricsRepo", "Failed to cleanup lyrics cache", e)
         }

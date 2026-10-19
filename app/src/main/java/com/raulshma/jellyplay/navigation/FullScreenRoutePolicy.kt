@@ -4,9 +4,9 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Route
 
 /**
- * Pure predicate (extracted verbatim from MainContent's full-screen-layout
+ * Pure predicate extracted from MainContent's full-screen-layout
  * branch decision so the composition rule is JVM-testable, same pattern as
- * core/ui's VisibleTopLevelRoutes fold): `true` while *any* route on
+ * core/ui's VisibleTopLevelRoutes fold: `true` while *any* route on
  * [backStack] is a full-screen [Route].
  *
  * A full-screen route may sit below the top of the back stack (e.g. the
@@ -22,7 +22,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * it reads the top entry only (DesktopNavScaffold's `topRouteIsFullscreen`),
  * because both hazards above are Android-shaped: a single always-composed
  * NavDisplay never re-registers keys against a read flip, and the subtitle
- * tester is not registered there. Recorded at both sites; do not unify on
+ * tester is not registered there. Both sites carry this note; do not unify on
  * either behavior without re-deriving both halves.
  */
 internal fun isFullScreenRouteActive(backStack: List<NavKey>?): Boolean =

@@ -8,9 +8,8 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.system.exitProcess
 
 /**
- *  Skia startup/memory baseline — measurement-only scaffold (no
- * optimization applied; the numbers this produces are the measuring stick,
- * see docs/perf/desktop-skia-baseline.md).
+ *  Skia startup/memory baseline — measurement-only scaffold. The numbers
+ * this produces are the measuring stick.
  *
  * Marks are plain AtomicLong stores (~zero cost, always on). Everything that
  * touches disk or schedules exit is gated behind `jellyplay.perf.*` system
@@ -33,10 +32,17 @@ import kotlin.system.exitProcess
  *    anything else (used for manual one-off runs).
  *
  * Output schema (single compact JSON line each):
- *  * `<logs>/startup-latest.json`: bootNanos/koinStartedNanos/windowShownNanos/
- *    firstFrameNanos (absolute monotonic System.nanoTime, machine-local) plus
- *    koinStartMs/windowShownMs/firstFrameMs deltas relative to bootNanos;
- *    unrecorded marks serialize as null.
+ *  * `<logs>/startup-latest.json`: bootNanos/preKoinDoneNanos/koinStartedNanos/
+ *    appEntryNanos/firstCompositionNanos/windowShownNanos/firstFrameNanos
+ *    (absolute monotonic System.nanoTime, machine-local) plus
+ *    preKoinDoneMs/koinStartMs/appEntryMs/firstCompositionMs/windowShownMs/
+ *    firstFrameMs deltas relative to bootNanos; unrecorded marks serialize as
+ *    null. The pre-Koin mark splits Main's synchronous pre-Koin IO
+ *    (paths/lock/drop-file/crash-marker) from the `startKoin` graph-
+ *    construction segment, so Koin A/Bs (e.g. eager-singleton changes) aren't
+ *    polluted by the IO share; the app-entry and first-composition marks
+ *    split the koin→windowShown gap into main()'s post-Koin sync work,
+ *    Compose/Skia init + window creation, and the composition itself.
  *  * `<logs>/memory-latest.json`: sampledUptimeMs + used/max heap bytes.
  */
 class DesktopStartupPerf(
@@ -47,7 +53,10 @@ class DesktopStartupPerf(
     private val memoryFile = logsDirNio.resolve("memory-latest.json")
 
     private val boot = AtomicLong(bootT0Nanos)
+    private val preKoinDone = AtomicLong(MISSING_MARK)
     private val koinStarted = AtomicLong(MISSING_MARK)
+    private val appEntry = AtomicLong(MISSING_MARK)
+    private val firstComposition = AtomicLong(MISSING_MARK)
     private val windowShown = AtomicLong(MISSING_MARK)
     private val firstFrame = AtomicLong(MISSING_MARK)
 
@@ -59,14 +68,35 @@ class DesktopStartupPerf(
         listOf(PROP_DATA_DIR, PROP_AUTO_EXIT_SECONDS, PROP_HEAP_SAMPLE_SECONDS, PROP_PERSIST)
             .any { System.getProperty(it) != null }
 
+    /** Called immediately before `startKoin` — closes Main's pre-Koin IO segment. */
+    fun markPreKoinDone() {
+        preKoinDone.set(System.nanoTime())
+    }
+
     fun markKoinStarted() {
         koinStarted.set(System.nanoTime())
+    }
+
+    /** Called immediately before `application {}` — closes main()'s post-Koin
+     * segment (startup kicks, image loader install, window-state load). */
+    fun markAppEntry() {
+        appEntry.set(System.nanoTime())
+    }
+
+    /**
+     * Called from the first statement of the application content's first
+     * composition — the call site wraps it in a `remember` initializer, which
+     * runs during composition exactly once per composition lifetime, so the
+     * mark fires on the first pass only.
+     */
+    fun markFirstComposition() {
+        firstComposition.set(System.nanoTime())
     }
 
     /**
      * Called from the AWT event thread when the ComposeWindow becomes visible.
      *
-     * Persistence ordering (review round 1): whichever of window-shown /
+     * Persistence ordering: whichever of window-shown /
      * first-frame lands LAST triggers the single flush. Flushing from only one
      * site would CAS-lock a partial JSON whenever that mark ran first — e.g.
      * first-frame before AWT visibility would latch `windowShownMs: null`
@@ -172,10 +202,16 @@ class DesktopStartupPerf(
             val json = buildString {
                 append('{')
                 append("\"bootNanos\":").append(b)
+                append(",\"preKoinDoneNanos\":").append(jsonNumber(preKoinDone.get()))
                 append(",\"koinStartedNanos\":").append(jsonNumber(koinStarted.get()))
+                append(",\"appEntryNanos\":").append(jsonNumber(appEntry.get()))
+                append(",\"firstCompositionNanos\":").append(jsonNumber(firstComposition.get()))
                 append(",\"windowShownNanos\":").append(jsonNumber(windowShown.get()))
                 append(",\"firstFrameNanos\":").append(jsonNumber(firstFrame.get()))
+                append(",\"preKoinDoneMs\":").append(jsonDeltaMs(b, preKoinDone.get()))
                 append(",\"koinStartMs\":").append(jsonDeltaMs(b, koinStarted.get()))
+                append(",\"appEntryMs\":").append(jsonDeltaMs(b, appEntry.get()))
+                append(",\"firstCompositionMs\":").append(jsonDeltaMs(b, firstComposition.get()))
                 append(",\"windowShownMs\":").append(jsonDeltaMs(b, windowShown.get()))
                 append(",\"firstFrameMs\":").append(jsonDeltaMs(b, firstFrame.get()))
                 append(",\"persistRequested\":").append(persistRequested)

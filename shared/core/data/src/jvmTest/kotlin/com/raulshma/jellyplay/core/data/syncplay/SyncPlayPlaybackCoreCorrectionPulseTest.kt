@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayPlaybackCommand
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,7 +84,7 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
         // ±500ms no-op-echo decision.
         timeSyncManager.remoteNow()
         timeSyncManager.toLocal(0L)
-        core = SyncPlayPlaybackCore(timeSyncManager, controller, castStore)
+        core = SyncPlayPlaybackCore(timeSyncManager, controller, castStore, CoroutineScope(SupervisorJob() + Dispatchers.Main))
     }
 
     @AfterTest

@@ -146,12 +146,12 @@ class RequestsViewModelEnrichMergeTest {
         // state — the second must not clobber the first's map entry.
         movieGates.getValue(22).complete(Unit)
         runCurrent()
-        assertEquals("Dune 22", viewModel.state.value.mediaInfo.getValue(22).title)
+        assertEquals("Dune 22", viewModel.mediaInfo.value.getValue(22).title)
         movieGates.getValue(11).complete(Unit)
         advanceUntilIdle() // also runs the debounce-echo load
 
-        assertEquals("Dune 11", viewModel.state.value.mediaInfo.getValue(11).title)
-        assertEquals("Dune 22", viewModel.state.value.mediaInfo.getValue(22).title)
+        assertEquals("Dune 11", viewModel.mediaInfo.value.getValue(11).title)
+        assertEquals("Dune 22", viewModel.mediaInfo.value.getValue(22).title)
         // The echo's re-enrichment found both ids cached — no re-fetches.
         assertEquals(listOf(11, 22), movieCalls)
     }
@@ -169,7 +169,7 @@ class RequestsViewModelEnrichMergeTest {
         advanceUntilIdle()
 
         assertEquals(listOf(10, 20), movieCalls)
-        assertEquals(setOf(10, 20), viewModel.state.value.mediaInfo.keys)
+        assertEquals(setOf(10, 20), viewModel.mediaInfo.value.keys)
     }
 
     @Test
@@ -196,7 +196,7 @@ class RequestsViewModelEnrichMergeTest {
         assertEquals(listOf(7), tvCalls)
         // mediaInfo is tmdbId-keyed (the read side's shape): the later
         // completion owns the entry — the inherited write-side conflation.
-        assertEquals("Tv 7", viewModel.state.value.mediaInfo.getValue(7).title)
+        assertEquals("Tv 7", viewModel.mediaInfo.value.getValue(7).title)
     }
 
     @Test
@@ -210,8 +210,8 @@ class RequestsViewModelEnrichMergeTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        assertNull(viewModel.state.value.mediaInfo[11])
-        assertEquals("Show 22", viewModel.state.value.mediaInfo.getValue(22).title)
+        assertNull(viewModel.mediaInfo.value[11])
+        assertEquals("Show 22", viewModel.mediaInfo.value.getValue(22).title)
         assertNull(viewModel.state.value.error)
         assertFalse(viewModel.state.value.isLoading)
     }
@@ -232,13 +232,13 @@ class RequestsViewModelEnrichMergeTest {
 
         q22.complete(queueItem(tmdbId = 22, progress = 0.4f))
         runCurrent()
-        assertEquals(40, viewModel.state.value.downloadProgress.getValue(22).percent)
+        assertEquals(40, viewModel.downloadProgress.value.getValue(22).percent)
         q11.complete(queueItem(tmdbId = 11, progress = 0.9f))
         advanceUntilIdle()
 
         // Both completions landed in BOTH maps — the two-key fold dropped none.
-        assertEquals(setOf(11, 22), viewModel.state.value.downloadProgress.keys)
-        assertEquals(setOf(11, 22), viewModel.state.value.queueItems.keys)
-        assertNotNull(viewModel.state.value.queueItems.getValue(11))
+        assertEquals(setOf(11, 22), viewModel.downloadProgress.value.keys)
+        assertEquals(setOf(11, 22), viewModel.queueItems.value.keys)
+        assertNotNull(viewModel.queueItems.value.getValue(11))
     }
 }

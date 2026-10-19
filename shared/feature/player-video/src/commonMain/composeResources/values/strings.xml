@@ -12,6 +12,7 @@
 
     <string name="track_badge_forced">Forced</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">Default</string>
 
     <!-- Companion dashboard -->
@@ -169,7 +170,17 @@
     <string name="player_video_subtitle_hub_section_delay">Delay</string>
     <!-- Shown when a subtitle was downloaded and saved on-device but the server upload failed (offline). -->
     <string name="player_video_subtitle_downloaded_device_only">Saved to device only (offline)</string>
+    <string name="player_video_subtitle_save_to_server">Save to server</string>
     <string name="player_video_chapters">Chapters</string>
+    <string name="player_video_scrub_slow">slow</string>
+    <string name="player_video_queue_title">Up next queue</string>
+    <string name="player_video_queue_subtitle">%1$d in queue</string>
+    <string name="player_video_queue_clear">Clear queue</string>
+    <string name="player_video_queue_up_next">Up next</string>
+    <string name="player_video_queue_move_up">Move up</string>
+    <string name="player_video_queue_move_down">Move down</string>
+    <string name="player_video_queue_remove">Remove from queue</string>
+    <string name="player_video_queue_open">Up next queue (%1$d)</string>
     <string name="player_video_episodes">Episodes</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">Aspect Ratio</string>
@@ -180,6 +191,11 @@
     <string name="player_video_dialogue_boost">Dialogue Boost</string>
     <string name="player_video_dialogue_boost_on">Dialogue Boost \u00B7 %1$s</string>
     <string name="player_video_night_mode">Night Mode</string>
+    <string name="player_video_spatial_audio">Spatial Audio</string>
+    <string name="player_video_spatial_audio_on">Spatial audio on — platform spatializer engaged</string>
+    <string name="player_video_spatial_audio_unavailable">Not spatializable on this output</string>
+    <string name="player_video_stats_spatial">Spatial state</string>
+    <string name="player_video_stats_spatial_superseded">(virtualizer superseded)</string>
     <string name="player_video_night_mode_on">Night Mode \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">Audio Normalization</string>
     <string name="player_video_normalization_on">Normalization \u00B7 %1$s</string>
@@ -280,10 +296,9 @@
     <string name="player_video_no_episodes_found">No episodes found for this season</string>
     <string name="player_video_poster">Poster</string>
     <string name="player_video_selected">Selected</string>
-    <string name="player_video_volume">Volume</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">Duration</string>
+    <string name="player_video_volume">Volume</string>    <string name="player_video_duration">Duration</string>
     <string name="player_video_remember_audio_language">Remember audio language for this series</string>
+    <string name="player_video_remember_audio_description">Prefer audio description for this series</string>
     <string name="player_video_remember_subtitle_language">Remember subtitle language for this series</string>
     <string name="player_video_remember_subtitles_off">Keep subtitles off for this series</string>
     <string name="player_video_error_offline_file_missing">Error: offline file missing</string>
@@ -312,6 +327,7 @@
     <string name="player_video_stats_clock">Clock</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR output active</string>
+    <string name="player_video_stats_display_hdr">Display HDR</string>
     <string name="player_video_stats_color_range">Color Range</string>
     <string name="player_video_stats_color_depth">Color Depth</string>
     <string name="player_video_stats_sample_rate">Sample Rate</string>

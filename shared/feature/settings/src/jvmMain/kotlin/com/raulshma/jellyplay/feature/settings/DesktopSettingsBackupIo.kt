@@ -7,17 +7,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Desktop actual of the [SettingsBackupIo] seam: the picker seam
- * now delivers native `file:` URI strings (see [rememberBackupFilePicker]),
- * so the payload read/write map the URI back to a [File] and run plain JDK
- * file IO on [Dispatchers.IO] — the same IO-dispatch + open-stream contract
- * the Android actual gives its SAF URIs. A bad URI or an unopenable file
- * throws from the stream constructor, which the ViewModel's existing
- * runCatching surfaces as "Export/Import failed: …" exactly like a failing
- * contentResolver stream on Android. The seam narrowing (raw streams
- * → text-level payload) moved the former caller-side
+ * Desktop actual of the [SettingsBackupIo] seam: the picker seam delivers
+ * native `file:` URI strings (see [rememberBackupFilePicker]), so the payload
+ * read/write map the URI back to a [File] and run plain JDK file IO on
+ * [Dispatchers.IO] — the same IO-dispatch + open-stream contract the Android
+ * actual gives its SAF URIs. A bad URI or an unopenable file throws from the
+ * stream constructor, which the ViewModel's existing runCatching surfaces as
+ * "Export/Import failed: …" exactly like a failing contentResolver stream on
+ * Android. Payloads cross the seam as text, so the
  * `stream.writer().use { it.write(json) }` / `stream.reader().readText()`
- * bodies here — same streams, same bytes, same failure mapping.
+ * bodies live here — same streams, same bytes, same failure mapping.
  *
  * The cache estimate walks the desktop's one persistent cache
  * root — `<configDir>/http-cache`, the OkHttp response cache — mirroring the

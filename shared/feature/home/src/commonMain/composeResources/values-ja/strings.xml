@@ -109,6 +109,27 @@
     <string name="next_up_hidden_restore_all_message">非表示の %1$d 件のシリーズが「次のエピソード」行に再び表示されます。</string>
     <string name="next_up_hidden_restore_cd">%1$sを「次のエピソード」に戻す</string>
     <string name="next_up_hidden_unknown">不明なシリーズ</string>
+    <string name="my_media_hidden_title">非表示のライブラリ</string>
+    <string name="my_media_hidden_empty">非表示なし</string>
+    <string name="my_media_hidden_empty_subtitle">マイメディア行から隠したライブラリがここに表示され、復元できます。</string>
+    <string name="my_media_hidden_restore_all">すべて復元</string>
+    <string name="my_media_hidden_restore_all_cd">非表示のライブラリをすべてマイメディアに戻す</string>
+    <string name="my_media_hidden_restore_all_title">すべてのライブラリを復元しますか?</string>
+    <string name="my_media_hidden_restore_all_message">非表示の%1$d個のライブラリがマイメディア行に再び表示されます。</string>
+    <string name="my_media_hidden_restore_cd">%1$sをマイメディアに戻す</string>
+    <string name="my_media_hidden_unknown">不明なライブラリ</string>
     <string name="a11y_mode_video">動画モード</string>
     <string name="a11y_mode_music">音楽モード</string>
+
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">今週のライブラリ</string>
+    <string name="home_stats_card_counts">視聴済み %1$d · 未視聴 %2$d</string>
+    <string name="home_stats_card_watch_approx">視聴時間 約%1$s時間</string>
+    <string name="home_stats_card_watch_exact">視聴時間 %1$s時間</string>
+    <string name="home_stats_card_streak">%1$d日連続視聴</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">ホームの新着: %1$s</string>
+    <string name="home_new_sections_customize">カスタマイズ</string>
 </resources>

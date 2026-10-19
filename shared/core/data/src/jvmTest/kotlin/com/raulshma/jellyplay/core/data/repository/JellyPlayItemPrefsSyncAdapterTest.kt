@@ -33,7 +33,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Adapter tests for the `itemprefs` namespace (the settings-backup wave): a
+ * Adapter tests for the `itemprefs` namespace (the settings-backup cluster): a
  * real in-memory Room for the `item_playback_preferences` store plus a
  * temp-file DataStore mirror — the `"{scope}/{key}"` keying with full payload
  * values, the mirror-based dirty/deleted detection, both delete directions,
@@ -103,6 +103,7 @@ class JellyPlayItemPrefsSyncAdapterTest {
         put("subtitleDisabled", entity.subtitleDisabled)
         put("subtitleForced", entity.subtitleForced)
         put("subtitleHearingImpaired", entity.subtitleHearingImpaired)
+        put("preferAudioDescription", entity.preferAudioDescription)
         put("dialogueBoostStrength", entity.dialogueBoostStrength)
         put("rememberedAudioLabel", entity.rememberedAudioLabel)
         put("rememberedAudioLanguage", entity.rememberedAudioLanguage)
@@ -174,18 +175,18 @@ class JellyPlayItemPrefsSyncAdapterTest {
             seed(key = "item-$i", updatedAt = i.toLong())
         }
         adapter.markSynced(adapter.snapshot())
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
 
         // One newer write pushes the oldest row (updatedAt = 1) out of the
         // window: it reads as a local delete and roams a tombstone.
         seed(key = "item-new", updatedAt = 10_000L)
 
-        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys())
+        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys(adapter.snapshot()))
 
         // The engine's confirmation clears the mirror: nothing re-reads
         // dirty or deleted afterwards.
         adapter.deleteRemote(setOf("ITEM/item-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertNull(
             mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey(NAMESPACE, "ITEM/item-1"))],
         )
@@ -225,10 +226,10 @@ class JellyPlayItemPrefsSyncAdapterTest {
 
         database.itemPlaybackPreferenceDao().deleteByKey("ITEM", "item-1")
 
-        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys())
+        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys(adapter.snapshot()))
 
         adapter.deleteRemote(setOf("ITEM/item-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertNull(rows("ITEM", "item-1"))
         assertNull(
@@ -246,7 +247,7 @@ class JellyPlayItemPrefsSyncAdapterTest {
 
         assertNull(rows("ITEM", "item-1"))
         assertEquals("deu", rows("ITEM", "item-2")?.audioLanguage)
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
     }
 
     @Test
@@ -274,6 +275,10 @@ class JellyPlayItemPrefsSyncAdapterTest {
                     put("audioLanguage", "jpn")
                     put("subtitleLanguage", "eng")
                     put("subtitleForced", true)
+                    put("subtitleHearingImpaired", false)
+                    // The pin's FALSE arm rides the adopt verbatim too (an
+                    // explicit non-AD preference, not "unset").
+                    put("preferAudioDescription", false)
                     put("dialogueBoostStrength", "HIGH")
                     put("rememberedAudioLabel", "English · 5.1")
                     put("rememberedAudioLanguage", "eng")
@@ -290,6 +295,8 @@ class JellyPlayItemPrefsSyncAdapterTest {
         assertEquals("jpn", row.audioLanguage)
         assertEquals("eng", row.subtitleLanguage)
         assertEquals(true, row.subtitleForced)
+        assertEquals(false, row.subtitleHearingImpaired)
+        assertEquals(false, row.preferAudioDescription)
         assertEquals("HIGH", row.dialogueBoostStrength)
         assertEquals("English · 5.1", row.rememberedAudioLabel)
         assertEquals(2, row.rememberedAudioIndex)

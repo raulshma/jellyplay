@@ -155,7 +155,7 @@ class PlayerSessionManagerTest {
         )
     }
 
-    // ── Offline gate (#146) ───────────────────────────────────────────
+    // ── Offline gate ───────────────────────────────────────────
 
     @Test
     fun loadMedia_offlineMode_blocksOnlineResolutionInsteadOfDeadAir() = runTest(testDispatcher) {

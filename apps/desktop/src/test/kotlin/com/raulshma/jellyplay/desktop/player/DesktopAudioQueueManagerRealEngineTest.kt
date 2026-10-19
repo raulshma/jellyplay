@@ -10,7 +10,13 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.core.testfixtures.pollUntil
+import com.raulshma.jellyplay.core.testfixtures.FakeImages
+import com.raulshma.jellyplay.core.testfixtures.FakeLyricsRepository
+import com.raulshma.jellyplay.core.testfixtures.FakePlaybackRepository
+import com.raulshma.jellyplay.core.testfixtures.FakeResolver
+import com.raulshma.jellyplay.core.testfixtures.InMemoryQueueDao
+import com.raulshma.jellyplay.core.testfixtures.TestTimeSource
+import com.raulshma.jellyplay.core.testfixtures.resolvedTrack
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
 import com.sun.jna.Pointer
 import java.io.File

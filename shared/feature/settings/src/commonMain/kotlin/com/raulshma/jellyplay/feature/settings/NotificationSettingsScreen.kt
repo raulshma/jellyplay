@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_hours_start
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_start
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_respect_system_dnd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_series_notifications_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sound
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system_notification_settings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_vibrate
@@ -81,6 +82,8 @@ sealed class NotificationSettingsDialog {
     object QuietStartPicker : NotificationSettingsDialog()
     object QuietEndPicker : NotificationSettingsDialog()
     object LibrariesPicker : NotificationSettingsDialog()
+    /** The per-series new-episode notification management sheet. */
+    object SeriesNotifications : NotificationSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -272,10 +275,9 @@ fun NotificationSettingsScreen(
                         )
                         if (showAdvanced) {
                             val maxPerCheckTitle = rowTitle(NotificationRows.MaxPerCheck)
-                            // Pre-substituted with 0 like the legacy screen — the
-                            // picker rows therefore all show this one label
-                            // (legacy-identical; common stdlib has no
-                            // String.format to re-format per count).
+                            // Pre-substituted with 0: the picker rows all show
+                            // this one label (common stdlib has no String.format
+                            // to re-format per count).
                             val countFormat = stringResource(Res.string.settings_items_count, 0)
                             SettingListItem(
                                 icon = Tabler.Outline.LetterCase,
@@ -307,6 +309,21 @@ fun NotificationSettingsScreen(
                                 highlighted = highlightSettingId == NotificationRows.NotificationLibraries.id,
                                 onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
                             )
+                            // The per-series counterpart of the libraries
+                            // list — same link pattern (dialog state → sheet),
+                            // placed directly beside it.
+                            if (SettingsScreenGroups.notifications.rowAdmitted(NotificationRows.NotificationSeries.id, rowFlags)) {
+                                SettingListItem(
+                                    icon = rowIcon(NotificationRows.NotificationSeries),
+                                    title = rowTitle(NotificationRows.NotificationSeries),
+                                    subtitle = stringResource(
+                                        Res.string.settings_series_notifications_subtitle,
+                                        notifPrefs.seriesConfigs.size,
+                                    ),
+                                    highlighted = highlightSettingId == NotificationRows.NotificationSeries.id,
+                                    onClick = { activeDialog = NotificationSettingsDialog.SeriesNotifications },
+                                )
+                            }
                         }
                     }
                     }
@@ -316,7 +333,13 @@ fun NotificationSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        hiddenCount = if (notifPrefs.enabled) 4 else 0,
+                        // Derived from the fused declarations (hiddenRowsFor):
+                        // the group's enable+advanced-gated rows (quiet-hours
+                        // pair included while quiet hours is on, the
+                        // system-settings row where its capability holds). The
+                        // disabled → 0 case falls out of the All(WhenOn) gates
+                        // for the advanced block.
+                        hiddenCount = hiddenRowsFor(listOf(SettingsScreenGroups.notifications), rowFlags),
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }
@@ -406,6 +429,13 @@ fun NotificationSettingsScreen(
                 ) { Text(stringResource(Res.string.settings_done)) }
             }
         }
+    }
+
+    if (activeDialog is NotificationSettingsDialog.SeriesNotifications) {
+        SeriesNotificationsSheet(
+            onDismiss = { activeDialog = NotificationSettingsDialog.None },
+            viewModel = viewModel,
+        )
     }
 
 }

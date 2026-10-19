@@ -115,6 +115,9 @@
     <string name="settings_cinema_mode">Cinema Mode</string>
     <string name="settings_cinema_mode_on">Play intros/trailers before main feature</string>
     <string name="settings_cinema_mode_off">Skip pre-roll intros</string>
+    <string name="settings_play_trailer_before_movie">Play Trailer Before Movie</string>
+    <string name="settings_play_trailer_before_movie_on">Seeds the movie queue with a trailer</string>
+    <string name="settings_play_trailer_before_movie_off">Start the movie directly</string>
     <string name="settings_tv_zoom_mode">TV Zoom Mode</string>
     <string name="settings_tv_zoom_mode_subtitle">Crop/zoom video to fill screen (0% = off)</string>
     <string name="settings_tv_zoom_none">No zoom (original aspect ratio)</string>
@@ -162,6 +165,12 @@
     <string name="settings_passthrough_codec_off">Software-decoded</string>
     <string name="settings_max_audio_channels">Max Audio Channels</string>
     <string name="settings_downmix_boost">Stereo Downmix Boost</string>
+    <string name="settings_spatial_audio">Spatial Audio</string>
+    <string name="settings_spatial_audio_on">Lets the system spatializer render multichannel audio when active</string>
+    <string name="settings_spatial_audio_off">Default playback processing</string>
+    <string name="settings_spatial_audio_only_headphones">Headphones Only</string>
+    <string name="settings_spatial_audio_only_headphones_on">Hold the downmix out of the way only on headphone outputs</string>
+    <string name="settings_spatial_audio_only_headphones_off">Apply on every output</string>
     <string name="settings_refresh_rate_match">Refresh Rate Match</string>
     <string name="settings_refresh_rate_matching">Refresh Rate Matching</string>
     <string name="settings_refresh_rate_off">Off</string>
@@ -192,6 +201,7 @@
     <string name="settings_interpolation_off">No frame interpolation</string>
     <string name="settings_shader_pack">Shader Pack</string>
     <string name="settings_tone_mapping">Tone Mapping</string>
+    <string name="settings_exo_hdr_tone_mapping">HDR Tone Mapping</string>
     <string name="settings_render_quality">Quality Profile</string>
     <string name="settings_interpolation_tscale">Interpolation Filter (tscale)</string>
     <string name="settings_buffer_size">Buffer Size</string>
@@ -230,6 +240,9 @@
     <string name="settings_media_segments_summary">%1$d auto-skip, %2$d show button</string>
     <string name="settings_skip_segments_on_seek">Skip Segments on Seek</string>
     <string name="settings_skip_segments_on_seek_on">Forward seeks past auto-skip segments</string>
+    <string name="settings_segment_skip_delay">Auto-skip delay</string>
+    <string name="settings_segment_skip_delay_off">Off</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">Off</string>
     <string name="settings_syncplay_join_summary">Join behavior: %1$s</string>
     <string name="settings_join_behavior">Join Behavior</string>

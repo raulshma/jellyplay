@@ -13,13 +13,13 @@ import kotlinx.serialization.serializer
 
 /**
  * The rail renders the shared [NavDestination] registry — label, icon and
- * group come from the one destination-facts table in core/ui (the former
- * per-shell `DesktopRailDescriptor` list is gone). Only the rail's OWN
- * display order stays here; it is per-shell policy, not a destination fact.
+ * group come from the one destination-facts table in core/ui. Only the rail's
+ * OWN display order stays here; it is per-shell policy, not a destination
+ * fact.
  *
  * Every listed route MUST have a registry row: resolution below fails loudly
- * at class-init. The former silent `mapNotNull` drop let a route that lost
- * its row just vanish off the rail with no failure anywhere.
+ * at class-init. A silent `mapNotNull` drop would let a route that lost
+ * its row vanish off the rail with no failure anywhere.
  * DesktopRailRegistryContractTest pins this (internal visibility exists for
  * that test — nothing else in the module may depend on the rail internals).
  */

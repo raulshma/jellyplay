@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 
 /**
@@ -18,4 +19,6 @@ internal class DetailStores constructor(
     val homeDiscoveryStore: HomeDiscoveryStore,
     val experimentalStore: ExperimentalStore,
     val engineStore: PlayerEngineStore,
+    /** The per-series new-episode notification opt-ins (read + toggle). */
+    val notificationStore: NotificationStore,
 )

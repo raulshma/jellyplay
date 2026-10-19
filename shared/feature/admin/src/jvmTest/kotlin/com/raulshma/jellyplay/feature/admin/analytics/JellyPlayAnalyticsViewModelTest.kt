@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.analytics
 
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
@@ -39,7 +40,7 @@ import kotlin.test.assertTrue
  *
  *  - gating — the screen only touches the plugin routes when the real
  *    [JellyPlayPluginStatusStore] reports AVAILABLE **and** the capabilities
- *    carry the `analytics` feature key (ADR 0010: the capability registry is
+ *    carry the `analytics` feature key (the capability registry is
  *    the only gate; no fetches while gated off — the transcodes monitor's
  *    discipline over the analytics surface);
  *  - mapping — the overview payload resolves into humanized durations
@@ -177,7 +178,7 @@ class JellyPlayAnalyticsViewModelTest {
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertEquals(AnalyticsGate.Unavailable, viewModel.uiState.value.gate)
+        assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
         assertFalse(viewModel.uiState.value.isLoading)
         coVerify(exactly = 0) { pluginApi.getAnalyticsOverview(any()) }
         coVerify(exactly = 0) { pluginApi.getAnalyticsSessions(any(), any(), any()) }
@@ -190,7 +191,7 @@ class JellyPlayAnalyticsViewModelTest {
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertEquals(AnalyticsGate.Unavailable, viewModel.uiState.value.gate)
+        assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
         coVerify(exactly = 0) { pluginApi.getAnalyticsOverview(any()) }
         coVerify(exactly = 0) { pluginApi.getAnalyticsSessions(any(), any(), any()) }
     }
@@ -200,7 +201,7 @@ class JellyPlayAnalyticsViewModelTest {
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore = null)
         advanceUntilIdle()
 
-        assertEquals(AnalyticsGate.Unavailable, viewModel.uiState.value.gate)
+        assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
         assertFalse(viewModel.uiState.value.isLoading)
         coVerify(exactly = 0) { capabilitiesApi.getCapabilities() }
         coVerify(exactly = 0) { pluginApi.getAnalyticsOverview(any()) }
@@ -214,7 +215,7 @@ class JellyPlayAnalyticsViewModelTest {
             val viewModel = loadedViewModel()
 
             val state = viewModel.uiState.value
-            assertEquals(AnalyticsGate.Available, state.gate)
+            assertEquals(JellyPlayCapabilityState.Available, state.gate)
             assertFalse(state.isLoading)
             assertNull(state.error)
             assertFalse(state.overviewDegraded)

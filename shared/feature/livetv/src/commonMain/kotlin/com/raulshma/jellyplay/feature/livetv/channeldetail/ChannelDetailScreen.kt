@@ -54,6 +54,10 @@ fun ChannelDetailScreen(
         viewModel.loadChannel(channelId, channelName)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // The ViewModel's injected-clock snapshot (the LiveTvTimeFormat.nowInstant
+    // seam — no direct clock read in composition), threaded into the content
+    // like EpgScreen threads its `now` State.
+    val now by viewModel.now.collectAsStateWithLifecycle()
     val backgroundColorState = rememberScreenBackgroundColorState()
 
     // One-shot record/cancel feedback (screen-forward seam): resolve the texts
@@ -137,6 +141,7 @@ fun ChannelDetailScreen(
             else -> {
                 ChannelDetailContent(
                     state = state,
+                    now = now,
                     onPlayChannel = onPlayChannel,
                     onRecord = { program -> viewModel.recordProgram(program) },
                     onRecordSeries = { program -> viewModel.recordSeries(program) },

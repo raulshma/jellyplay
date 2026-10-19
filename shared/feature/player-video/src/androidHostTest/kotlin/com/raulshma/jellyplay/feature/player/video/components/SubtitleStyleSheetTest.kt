@@ -458,7 +458,7 @@ class SubtitleStyleSheetTest {
         assertEquals("Mine", saved)
     }
 
-    // ─── custom mpv config ownership notice (issue #165, UI half) ───────────
+    // ─── custom mpv config ownership notice (UI half) ───────────
     // The card spells out every custom-config/sub-style interaction case;
     // these pin each case's visibility so an edit can't silently no-op.
 

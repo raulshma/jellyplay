@@ -20,10 +20,8 @@ import kotlinx.coroutines.flow.stateIn
  * The lockout state survives process death because it is persisted in
  * DataStore. Successful verification clears the counters (via [resetPinLockout]).
  *
- * Extracted from `UserPreferencesStore` so the escalation state machine lives
- * in one module — previously the policy was welded into the god store while
- * its single consumer (`MainActivity`) reached through three different store
- * methods to drive it.
+ * The escalation state machine lives in this one module — its single consumer
+ * (`MainActivity`) drives the whole policy through the three functions below.
  *
  * **Storage**: reuses the same `"user_prefs"` DataStore file as
  * `UserPreferencesStore` (same key strings). The DataStore singleton is keyed
@@ -40,8 +38,8 @@ class PinRateLimiter constructor(
 ) {
     // Eagerly-maintained snapshot of the persisted lockout keys, so the
     // synchronous [getPinLockoutState] can read the latest value without
-    // suspending. Mirrors how `UserPreferencesStore.getPinLockoutState` read
-    // `preferences.value` before the extraction.
+    // suspending — the same shape as `UserPreferencesStore.getPinLockoutState`
+    // reading `preferences.value`.
     private val snapshot: StateFlow<Preferences> =
         dataStore.data
             .stateIn(externalScope, SharingStarted.Eagerly, emptyPreferences())

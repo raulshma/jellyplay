@@ -82,8 +82,8 @@ class AudioEffectsProcessorSettersTest {
 
     @Test
     fun `out-of-range equalizer band is dropped instead of throwing`() {
-        // The processor used to construct the core UNGUARDED, preserving the
-        // pre-extraction unguarded list write (IndexOutOfBoundsException); it
+        // The processor used to construct the core UNGUARDED (the raw list
+        // write threw IndexOutOfBoundsException); it
         // now constructs guarded like desktop — a bad index is a full no-op
         // (no state flip, no preset bump, no DSP hook).
         processor.setEqualizerBand(-1, 600)

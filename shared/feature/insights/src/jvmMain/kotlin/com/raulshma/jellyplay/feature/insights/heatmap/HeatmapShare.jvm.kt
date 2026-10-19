@@ -18,9 +18,9 @@ import kotlinx.coroutines.withContext
  * the same `toImageBitmap()` the Android actual uses — so the desktop body
  * only swaps the handoff: desktop has no ACTION_SEND chooser, so the PNG lands
  * under `java.io.tmpdir` and is opened in the system image viewer via AWT
- * [Desktop.open] (StatisticsExport desktop precedent; runCatching-guarded so
+ * [Desktop.open] (StatisticsExport desktop pattern; runCatching-guarded so
  * a headless/minimal host degrades to "file written, nothing opened"). A
- * capture or write failure is swallowed exactly like the Android body — the
+ * capture or write failure is swallowed like the Android body — the
  * share silently does nothing, never crashes.
  *
  * [chooserTitle] is unused here: there is no chooser to title on desktop.
@@ -47,8 +47,8 @@ internal class DesktopHeatmapShare(
 
 /**
  * Encodes the captured heatmap as PNG under [directory] and returns the file.
- * Extracted (and directory-injectable) so jvmTest can verify the bytes land
- * on disk headlessly. The timestamped name keeps consecutive shares from
+ * Directory-injectable so jvmTest can verify the bytes land on disk
+ * headlessly. The timestamped name keeps consecutive shares from
  * colliding and stops an already-open viewer from serving a stale cache.
  */
 internal fun writeHeatmapPng(

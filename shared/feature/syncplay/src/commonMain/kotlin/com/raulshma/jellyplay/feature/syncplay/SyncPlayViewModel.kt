@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.RefreshCycle
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
@@ -70,6 +72,39 @@ class SyncPlayViewModel(
 
     private var commandJob: Job? = null
     private var autoJoinGroupId: String? = null
+
+    /**
+     * The 5s→30s group-list backoff poll, registered once — the loop lived IN
+     * the screen composable (`LaunchedEffect(isInGroup)`) before the refresh
+     * cycle module; the VM owns it now and the screen binds it to visibility.
+     * Polling runs only while NOT in a group: the screen keys its
+     * LifecycleStartEffect on membership, so joining stops the cycle and
+     * leaving re-arms it from the base 5s gap (the composable loop's exact
+     * restart semantics). A failed poll surfaces on the tab's error field
+     * ([refreshGroups]' fold) and the backoff carries on.
+     */
+    private val groupRefreshCycle = RefreshCycle(
+        scope = scope,
+        poll = PollSpec(
+            intervalMs = GROUP_POLL_INTERVAL_MS,
+            backoffFactor = GROUP_POLL_BACKOFF_FACTOR,
+            maxIntervalMs = GROUP_POLL_MAX_INTERVAL_MS,
+        ),
+        fetch = { refreshGroups() },
+    )
+
+    /**
+     * Starts the group-list backoff poll — the screen's LifecycleStartEffect
+     * binding calls this on STARTED while the user is not in a group.
+     */
+    fun startGroupAutoRefresh() {
+        groupRefreshCycle.start()
+    }
+
+    /** Stops the group-list poll started by [startGroupAutoRefresh]. */
+    fun stopGroupAutoRefresh() {
+        groupRefreshCycle.stop()
+    }
 
     init {
         // Seed membership from the session's live truth BEFORE the first group
@@ -389,5 +424,14 @@ class SyncPlayViewModel(
          * treated as a transient server hiccup rather than an ejection.
          */
         private const val RECONNECT_GRACE_MS = 5_000L
+
+        /** The group-list poll's base gap (the composable loop's 5s start). */
+        private const val GROUP_POLL_INTERVAL_MS = 5_000L
+
+        /** Per-round multiplicative growth of the group-list poll's gap. */
+        private const val GROUP_POLL_BACKOFF_FACTOR = 1.5
+
+        /** The group-list poll's gap cap (the composable loop's 30s ceiling). */
+        private const val GROUP_POLL_MAX_INTERVAL_MS = 30_000L
     }
 }

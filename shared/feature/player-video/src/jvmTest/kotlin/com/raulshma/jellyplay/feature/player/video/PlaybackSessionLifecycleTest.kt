@@ -14,7 +14,6 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
-import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -64,7 +63,7 @@ import kotlinx.coroutines.test.runTest
  * scope is unconfined on the test scheduler (synchronous launches + a virtual
  * clock for the 500 ms seek coalescing), repositories are relaxed mocks,
  * VM-facing seams are recording fakes. The whole construction graph comes
- * from [PlaybackSessionTestGraph] (the C6 collapse made the session its own
+ * from [PlaybackSessionTestGraph] (the session is its own
  * composition root): the session's release scope is built internally
  * ([PlaybackSession.releaseScope]) — the per-test teardown cancels it via
  * that instance, the owner's cancel-after-release ordering.
@@ -830,9 +829,9 @@ class PlaybackSessionLifecycleTest {
         }
     }
 
-    // [FakePositionStore] is the shared recording double
-    // (com.raulshma.jellyplay.core.testfixtures.FakePositionStore) since the
-    // fixtures hoist — this file's former private variant (records persists,
-    // serves settable saved values) IS its behavior; the tests below set only
-    // the saved*Value fields the resume path reads.
+    // [FakePositionStore] is the recording double (player-video jvmTest, the
+    // the test-placement rule move out of test-fixtures — its only consumers were
+    // this module's suites) — this file's former private variant (records
+    // persists, serves settable saved values) IS its behavior; the tests
+    // below set only the saved*Value fields the resume path reads.
 }

@@ -320,10 +320,12 @@ fun SettingsScreen(
     // provider seam): debounced, distinct-until-changed, matched off the main
     // thread against the platform-filtered, locale-resolved catalog — and
     // short-circuited on blank queries, so an empty search bar never pays the
-    // 258-item resolve.
+    // 258-item resolve. Deliberately UN-keyed: the pipeline resolves its
+    // catalog once per collection and its internal debounce owns the cadence,
+    // so re-keying the producer on the query would tear down that resolved
+    // snapshot (a full re-resolve) on every keystroke instead of saving work.
     val filteredItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),
-        searchPanel.searchQuery,
     ) {
         settingsSearchResults(snapshotFlow { searchPanel.searchQuery }, SettingsSearchCatalog)
             .collect { value = it }

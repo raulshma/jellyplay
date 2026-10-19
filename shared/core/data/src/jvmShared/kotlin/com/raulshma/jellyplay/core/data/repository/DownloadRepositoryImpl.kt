@@ -48,10 +48,13 @@ import java.io.File
 // method bodies are byte-identical except where a seam call replaces a direct
 // platform call (documented inline):
 //  - `@ApplicationContext context` dropped; its three uses became constructor
-//    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator], the
-//    notification group summary → [DownloadProgressNotifier], Coil preloading
-//    → [OfflineImagePreloader] (the preloader rode with the offline-metadata
-//    cluster to [OfflineDownloadWriterCore] at the D6 extraction).
+//    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator] and Coil
+//    preloading → [OfflineImagePreloader] (now on [OfflineDownloadWriterCore]
+//    with the offline-metadata cluster). The third — the notification group summary →
+//    [DownloadProgressNotifier] — has since left entirely: the summary surface
+//    (DownloadSummarySurface) observes the in-flight count flow and posts on
+//    transitions, so this repository's state changes reach the shade through
+//    its own DAO writes and the seam dep is gone.
 //  - concrete `DownloadStorageLayout` → the [DownloadStorageLayoutContract]
 //    interface (Android impl keeps its Context/StatFs logic verbatim) — the
 //    contract is now a dependency of the writer core only.
@@ -60,7 +63,7 @@ import java.io.File
 //    series-seeding in the writer core); startDownload never touches it, so
 //    desktop single-item downloads work with a throwing provider.
 //  - `dagger.Lazy<DownloadDelegate>` → kotlin `Lazy<DownloadDelegate>` and
-//    now (D6) a plain [DownloadDelegate]: the artifact-write half moved to
+//    now a plain [DownloadDelegate]: the artifact-write half moved to
 //    [OfflineDownloadWriterCore] — a standalone single over the same DAOs and
 //    seams with NO back-reference to this repository — so the former
 //    construction cycle `DownloadRepositoryImpl → DownloadDelegate →
@@ -81,9 +84,9 @@ class DownloadRepositoryImpl(
     private val mediaRepository: MediaRepositoryAccess,
     /**
      * The consolidated series seasons/episodes snapshot. [downloadSeries] uses
-     * it in place of the former `mediaRepository.getSeasons` + per-season
-     * `getEpisodes` fan-out — one load per series. Online-only path, so
-     * `offline` defaults to `false`.
+     * it in place of the retired per-series seasons + per-season episodes
+     * repository reads — one load per series. Online-only path, so `offline`
+     * defaults to `false`.
      */
     private val episodeCatalogue: EpisodeCatalogue,
     /** Series poster/backdrop URLs persisted with the offline metadata rows. */
@@ -91,7 +94,6 @@ class DownloadRepositoryImpl(
     private val downloadsStore: DownloadsStore,
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
-    private val progressNotifier: DownloadProgressNotifier,
     /**
      * The one injected clock (the sibling repositories' seam): the retention
      * sweep computes its keep-days cutoff from it instead of reading the
@@ -102,7 +104,7 @@ class DownloadRepositoryImpl(
      * The extracted artifact-write cluster ([OfflineDownloadWriterCore]): row
      * creation, offline metadata + baseline seeding, parent hierarchy seeding,
      * worker enqueue, and the sidecar/artifact surface — over its own DAO and
-     * seam dependencies, with no reference back to this repository (D6). The
+     * seam dependencies, with no reference back to this repository. The
      * inherited [OfflineDownloadWriter] members (and the local manifest /
      * segments / inventory reads) forward to it one-to-one; [downloadSeries]
      * reuses its metadata + series-artwork helpers.
@@ -110,8 +112,8 @@ class DownloadRepositoryImpl(
     private val writer: OfflineDownloadWriterCore,
     /**
      * The per-item download recipe (prepare + execute + artifact bundle).
-     * Resolved eagerly: the cycle it used to participate in is dissolved by
-     * the writer-core extraction, so the former `Lazy` deferral is gone.
+     * Resolved eagerly: no construction cycle remains, so the former
+     * `Lazy` deferral is gone.
      */
     private val downloadDelegate: DownloadDelegate,
 ) : DownloadRepository,
@@ -225,7 +227,6 @@ class DownloadRepositoryImpl(
         // the row is gone.
         downloadEnqueuer.cancelWork(id)
         cleanupDownloadFiles(entity)
-        refreshDownloadSummary()
     }
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
@@ -242,9 +243,21 @@ class DownloadRepositoryImpl(
                 id, entity.downloadedBytes, DownloadStatus.PAUSED.name, DownloadPauseReason.USER.persistedValue,
             )
         }
-        refreshDownloadSummary()
     }
 
+    // The resume/retry verbs are COMPOSITES (mark PENDING, then enqueue — see
+    // the interface KDoc): the enqueue follow-up lives here, inside the one
+    // implementation both control surfaces share, so the DownloadsViewModel and
+    // DownloadActionReceiver dispatch a single verb instead of each hand-pairing
+    // the same two calls. Deliberately enqueue-inside rather than a new
+    // composite member on [DownloadQueue]: it changes no interface size (the
+    // surface ratchet forbids growth), and every production caller already
+    // paired the two calls unconditionally — the fold is behavior-identical on
+    // every success path where the row exists (the enqueue of a missing row
+    // was, and stays, a worker no-op). The only divergence is the failure
+    // path, where the old per-caller pairing enqueued even when the status
+    // flip threw; the folded order adopts resumeInterruptedDownloads' invariant
+    // instead — a row is only enqueued once its status flip succeeded.
     override suspend fun resumeDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         if (DownloadStates.isPausedOrFailed(entity.status)) {
@@ -252,34 +265,25 @@ class DownloadRepositoryImpl(
             // auto-retry budget — the user has taken ownership of this row.
             downloadDao.markPendingForManualResume(id, entity.downloadedBytes)
         }
-        refreshDownloadSummary()
+        enqueueDownload(id)
     }
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         downloadEnqueuer.cancelWork(id)
         cleanupDownloadFiles(entity)
-        refreshDownloadSummary()
     }
 
-    /**
-     * Keeps the download summary surface in sync when this repository changes a
-     * row's state (pause/cancel/resume/retry/delete) — e.g. in-app controls
-     * that never cross a notification action receiver. Best-effort: a Room/
-     * notification hiccup must not fail the state change. The platform surface
-     * itself lives behind the [DownloadProgressNotifier] seam.
-     */
-    private suspend fun refreshDownloadSummary() {
-        runCatchingRethrowingCancellation {
-            progressNotifier.refreshSummary(downloadDao.getInFlightDownloadCount())
-        }
-    }
+    // The mutation sites never re-issue a COUNT query: the summary surface
+    // observes the in-flight count as a flow, so the DAO writes above ARE
+    // the summary trigger.
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         // A manual retry starts fresh — reset the bytes, clear the auto-retry
         // budget and reason, all in one UPDATE.
         downloadDao.markPendingForManualResume(id, 0L)
-        refreshDownloadSummary()
+        // Composite verb: the enqueue follow-up rides inside (see resumeDownload).
+        enqueueDownload(id)
     }
 
     override suspend fun resumeInterruptedDownloads() {
@@ -346,7 +350,6 @@ class DownloadRepositoryImpl(
                 Log.w(TAG, "Failed to resume interrupted download $id", e)
             }
         }
-        refreshDownloadSummary()
     }
 
     override suspend fun getTotalDownloadedBytes(): Long =

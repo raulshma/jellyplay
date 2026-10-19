@@ -41,10 +41,11 @@ import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
-import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
+import com.raulshma.jellyplay.core.model.seerr.kind
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
 import com.raulshma.jellyplay.core.ui.components.downloads.QueueDeleteConfirmActions
@@ -60,14 +61,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_acti
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_remove_search
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_retry_request
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_view_media_details
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_completed
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_downloading
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_failed
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_imported
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_paused
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_queued
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_unknown
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_arr_status_warning
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_download
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_quality_profile
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_detail_row_request_id
@@ -83,7 +76,6 @@ import com.raulshma.jellyplay.feature.requests.generated.resources.requests_down
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_fallback_title
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_radarr
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_service_sonarr
-import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -169,7 +161,7 @@ fun RequestDetailBottomSheet(
                         )
                     } else {
                         Text(
-                            text = if (request.type.equals("movie", ignoreCase = true)) "🎬" else "📺",
+                            text = if (request.kind == SeerrMediaKind.MOVIE) "🎬" else "📺",
                             style = MaterialTheme.typography.titleMedium,
                         )
                     }
@@ -246,7 +238,7 @@ fun RequestDetailBottomSheet(
                 }
                 if (downloadProgress != null) {
                     // Direct *arr: show live percent + time-left.
-                    val arrStatusText = stringResource(arrStatusRes(downloadProgress.status))
+                    val arrStatusText = stringResource(arrStatusPresentation(downloadProgress.status))
                     val text = buildString {
                         append(arrStatusText)
                         append(" · ")
@@ -306,64 +298,67 @@ fun RequestDetailBottomSheet(
 
             if (isAdmin) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    when {
-                        requestStatus == SeerrRequestStatus.FAILED -> {
+                    // The action ladder comes from the shared table (the same
+                    // one the compact list row reads); placement/styling stay
+                    // this surface's own — the sheet offers a FAILED request
+                    // BOTH its retry and delete legs.
+                    val actions = requestActionsFor(requestStatus, isAdmin)
+                    if (RequestAction.RETRY in actions) {
+                        Button(
+                            onClick = onRetry,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusIndicator(),
+                            shape = ShapeCache.smooth12,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = StatusColors.info,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ),
+                        ) {
+                            Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(Res.string.requests_action_retry_request), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    if (RequestAction.APPROVE in actions) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
                             Button(
-                                onClick = onRetry,
+                                onClick = onApprove,
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .weight(1f)
                                     .focusIndicator(),
                                 shape = ShapeCache.smooth12,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = StatusColors.info,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    containerColor = StatusColors.available,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
                                 ),
                             ) {
-                                Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Tabler.Outline.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text(stringResource(Res.string.requests_action_retry_request), style = MaterialTheme.typography.labelLarge)
+                                Text(stringResource(Res.string.requests_action_approve), style = MaterialTheme.typography.labelLarge)
                             }
-                        }
-                        requestStatus == SeerrRequestStatus.PENDING -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            Button(
+                                onClick = onDecline,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusIndicator(),
+                                shape = ShapeCache.smooth12,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = StatusColors.error,
+                                    contentColor = MaterialTheme.colorScheme.onError,
+                                ),
                             ) {
-                                Button(
-                                    onClick = onApprove,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .focusIndicator(),
-                                    shape = ShapeCache.smooth12,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = StatusColors.available,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    ),
-                                ) {
-                                    Icon(Tabler.Outline.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(Res.string.requests_action_approve), style = MaterialTheme.typography.labelLarge)
-                                }
-                                Button(
-                                    onClick = onDecline,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .focusIndicator(),
-                                    shape = ShapeCache.smooth12,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = StatusColors.error,
-                                        contentColor = MaterialTheme.colorScheme.onError,
-                                    ),
-                                ) {
-                                    Icon(Tabler.Outline.X, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(Res.string.requests_action_decline), style = MaterialTheme.typography.labelLarge)
-                                }
+                                Icon(Tabler.Outline.X, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(Res.string.requests_action_decline), style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
 
-                    if (requestStatus != SeerrRequestStatus.PENDING) {
+                    if (RequestAction.DELETE in actions) {
                         OutlinedButton(
                             onClick = {
                                 if (deleteConfirm.isConfirming) deleteConfirm.confirm(onDelete)
@@ -394,7 +389,7 @@ fun RequestDetailBottomSheet(
                     // download files even while a request is still pending.
                     if (request.canRemove) {
                         val serviceLabel = stringResource(
-                            if (request.type.equals("movie", ignoreCase = true)) Res.string.requests_service_radarr
+                            if (request.kind == SeerrMediaKind.MOVIE) Res.string.requests_service_radarr
                             else Res.string.requests_service_sonarr
                         )
                         OutlinedButton(
@@ -449,20 +444,4 @@ private fun DetailRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
-}
-
-/**
- * String resource for an [ArrDownloadStatus], surfaced in the Download
- * row of [RequestDetailBottomSheet] when direct *arr progress is available.
- */
-@androidx.compose.runtime.Composable
-private fun arrStatusRes(status: ArrDownloadStatus): StringResource = when (status) {
-    ArrDownloadStatus.QUEUED -> Res.string.requests_arr_status_queued
-    ArrDownloadStatus.DOWNLOADING -> Res.string.requests_arr_status_downloading
-    ArrDownloadStatus.PAUSED -> Res.string.requests_arr_status_paused
-    ArrDownloadStatus.COMPLETED -> Res.string.requests_arr_status_completed
-    ArrDownloadStatus.FAILED -> Res.string.requests_arr_status_failed
-    ArrDownloadStatus.WARNING -> Res.string.requests_arr_status_warning
-    ArrDownloadStatus.IMPORTED -> Res.string.requests_arr_status_imported
-    ArrDownloadStatus.UNKNOWN -> Res.string.requests_arr_status_unknown
 }

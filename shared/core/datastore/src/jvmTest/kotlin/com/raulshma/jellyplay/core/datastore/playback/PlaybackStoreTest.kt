@@ -34,8 +34,7 @@ import kotlin.test.Test
 
 /**
  * Exercises the media-delivery preference store, focusing on the cross-key
- * invariants and legacy migrations that previously lived inline in the
- * `UserPreferencesStore` god object with **no** unit coverage.
+ * invariants and legacy migrations.
  */
 class PlaybackStoreTest {
 
@@ -87,7 +86,7 @@ class PlaybackStoreTest {
         assertFalse(slice.audioPassthrough)
         assertTrue(slice.keepScreenOnDuringVideo)
         assertEquals(OfflinePlaybackPreference.PREFER_DOWNLOADED, slice.offlinePlaybackPreference)
-        // Issue #167's toggle defaults ON — the historical auto-PiP behaviour.
+        // The toggle defaults ON — the historical auto-PiP behaviour.
         assertTrue(slice.autoEnterPip)
     }
 

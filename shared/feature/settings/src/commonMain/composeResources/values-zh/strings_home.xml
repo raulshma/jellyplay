@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">标题栏保持可见</string>
     <string name="settings_next_up_hidden">已从“接下来播放”中隐藏</string>
     <string name="settings_next_up_hidden_brief">查看并恢复从“接下来播放”栏移除的剧集</string>
+    <string name="settings_hidden_libraries">已隐藏的媒体库</string>
+    <string name="settings_hidden_libraries_brief">查看并恢复从“我的媒体”行中隐藏的媒体库</string>
 </resources>

@@ -2,10 +2,9 @@ package com.raulshma.jellyplay.feature.settings
 
 /**
  * Platform seam behind the storage screen's filesystem-derived numbers and
- * destructive cache actions (AudioCacheClearer pattern): the legacy ViewModel
- * bodies walked `Context.cacheDir` / `externalCacheDir` / `filesDir` /
- * `getExternalFilesDir` directly, which is Android-only surface. The Android
- * actual (platform/AndroidStorageAreas) keeps those bodies verbatim; the
+ * destructive cache actions: the Android actual
+ * (platform/AndroidStorageAreas) walks `Context.cacheDir` /
+ * `externalCacheDir` / `filesDir` / `getExternalFilesDir` directly; the
  * desktop actual walks the roots the desktop data seams own
  * (platform/DesktopStorageAreas: `<dataDir>/downloads` +
  * `<configDir>/http-cache`, image cache through a shell-injected handle).
@@ -18,8 +17,8 @@ interface StorageAreas {
     /**
      * Size estimates for the storage-breakdown bar. [downloadStorageLocation]
      * is the current `downloadStorageLocation` preference — the Android actual
-     * resolves the downloads dir the same way the legacy VM did
-     * (`"EXTERNAL"` → app-private external root, else `filesDir`).
+     * resolves the downloads dir (`"EXTERNAL"` → app-private external root,
+     * else `filesDir`).
      */
     suspend fun sizeEstimateBytes(downloadStorageLocation: String): StorageSizeEstimate
 
@@ -43,9 +42,9 @@ data class StorageSizeEstimate(
 )
 
 /**
- * Platform seam for the auto-download work-manager sync the legacy VM reached
- * through `AutoDownloadScheduler.sync()` (Android WorkManager enqueue/cancel;
- * non-suspend, fire-and-forget). Desktop has no scheduler yet — the desktop module
+ * Platform seam for the auto-download work-manager sync
+ * (`AutoDownloadScheduler.sync()`: Android WorkManager enqueue/cancel;
+ * non-suspend, fire-and-forget). Desktop has no scheduler — the desktop module
  * registers a no-op at the Koin edge.
  */
 fun interface AutoDownloadSync {
@@ -74,10 +73,10 @@ fun interface AutoDownloadCleanup {
 
 /**
  * Platform seam enumerating the download destinations the user can pick.
- * The Android actual (platform/AndroidStorageMountsProvider) inlines the pure
- * framework body of the legacy `DownloadStorageLayout.availableMounts()`
- * (filesDir + `getExternalFilesDirs` + StatFs — no legacy core:data types), so
- * no app-side Koin override is needed; desktop reports its single volume.
+ * The Android actual (platform/AndroidStorageMountsProvider) enumerates mounts
+ * with pure framework calls (filesDir + `getExternalFilesDirs` + StatFs — no
+ * core:data types), so no app-side Koin override is needed; desktop reports
+ * its single volume.
  */
 fun interface StorageMountsProvider {
     suspend fun availableMounts(): List<StorageMount>
@@ -85,8 +84,8 @@ fun interface StorageMountsProvider {
 
 /**
  * One selectable download destination surfaced by
- * [StorageMountsProvider.availableMounts] (module-local copy of the legacy
- * core:data `StorageMount` — that type is not visible from this module).
+ * [StorageMountsProvider.availableMounts] (module-local counterpart of
+ * core:data's `StorageMount`, which is not visible from this module).
  *
  * @property prefValue the value to persist as `downloadStorageLocation`
  *   ("INTERNAL" / "EXTERNAL" / "EXTERNAL_N").

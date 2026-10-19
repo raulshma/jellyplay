@@ -70,11 +70,16 @@ import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_on_today
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_channel_watch_live
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_record_once
-import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * The channel detail content: header + Watch Live, now-playing hero (with live
  * progress bar), and the "On Today" timeline of upcoming programs.
+ *
+ * [now] is the ViewModel's injected-clock snapshot ([ChannelDetailViewModel.now],
+ * the LiveTvTimeFormat.nowInstant seam) — the live progress math reads it
+ * instead of a direct `Clock.System.now()` in composition, and re-parses the
+ * program timestamps only when the program or the snapshot changes.
  *
  * Record / Record Series actions live on each program timeline row (per-program
  * semantics, matching the jellyfin official client) — not on the channel
@@ -83,6 +88,7 @@ import kotlin.time.Clock
 @Composable
 internal fun ChannelDetailContent(
     state: ChannelDetailUiState,
+    now: Instant,
     onPlayChannel: () -> Unit,
     onRecord: (LiveTvProgram) -> Unit,
     onRecordSeries: (LiveTvProgram) -> Unit,
@@ -117,7 +123,7 @@ internal fun ChannelDetailContent(
         val current = state.currentProgram
         if (current != null) {
             item(key = "hero_${current.id}") {
-                NowPlayingHero(program = current)
+                NowPlayingHero(program = current, now = now)
             }
         }
 
@@ -144,6 +150,7 @@ internal fun ChannelDetailContent(
                 ProgramTimelineRow(
                     program = program,
                     isAiring = program.id == airingId,
+                    now = now,
                     onRecord = onRecord,
                     onRecordSeries = onRecordSeries,
                     onCancelTimer = onCancelTimer,
@@ -302,8 +309,8 @@ private fun RecordSplitButton(
 }
 
 @Composable
-private fun NowPlayingHero(program: LiveTvProgram) {
-    val progress = rememberLiveProgress(program)
+private fun NowPlayingHero(program: LiveTvProgram, now: Instant) {
+    val progress = rememberLiveProgress(program, now)
     val reducedMotion = LocalReducedMotion.current
     val infinite = rememberInfiniteTransition(label = "liveDot")
     val dotAlpha by if (reducedMotion) {
@@ -384,12 +391,13 @@ private fun NowPlayingHero(program: LiveTvProgram) {
 private fun ProgramTimelineRow(
     program: LiveTvProgram,
     isAiring: Boolean,
+    now: Instant,
     onRecord: (LiveTvProgram) -> Unit,
     onRecordSeries: (LiveTvProgram) -> Unit,
     onCancelTimer: (LiveTvProgram) -> Unit,
     onCancelSeries: (LiveTvProgram) -> Unit,
 ) {
-    val airingProgress = if (isAiring) rememberLiveProgress(program) else 0f
+    val airingProgress = if (isAiring) rememberLiveProgress(program, now) else 0f
     val time = formatLiveTvTime(program.startDate) ?: "--"
     Row(
         modifier = Modifier
@@ -457,10 +465,13 @@ private fun ProgramTimelineRow(
 /**
  * Live progress fraction (0..1) of a program, derived from its start/end ISO
  * strings through the shared [liveProgressFraction] fold (which parses
- * offset-less timestamps leniently — the C10 unification). Computed once per
- * composition (no periodic tick — refresh on open only per the design
- * decision); unparseable/non-positive spans render as 0f.
+ * offset-less timestamps leniently — the C10 unification) against [now], the
+ * ViewModel's injected-clock snapshot (the LiveTvTimeFormat.nowInstant seam —
+ * never a direct clock read here). [remember]-keyed on program + snapshot, so
+ * the ISO parse runs once per program per refresh, not per composition; no
+ * periodic tick — refresh on open/action per the design decision;
+ * unparseable/non-positive spans render as 0f.
  */
 @Composable
-private fun rememberLiveProgress(program: LiveTvProgram): Float =
-    liveProgressFraction(program, Clock.System.now()) ?: 0f
+private fun rememberLiveProgress(program: LiveTvProgram, now: Instant): Float =
+    remember(program, now) { liveProgressFraction(program, now) ?: 0f }

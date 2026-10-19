@@ -25,7 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Direct pin for the extracted download writer (D6): the happy-path
+ * Direct pin for the extracted download writer: the happy-path
  * [OfflineDownloadWriterCore.startDownload] creates the PENDING `downloads`
  * row — storage cap consulted, path resolved through the layout contract,
  * episode series/season linkage carried onto the row verbatim (the linkage

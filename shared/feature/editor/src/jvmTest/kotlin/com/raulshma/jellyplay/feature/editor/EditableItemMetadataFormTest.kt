@@ -13,19 +13,16 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * The drift-class pins the editor's former flat-field shape could not express.
- * The old UiState/load-map/save-map/dirty-hash quartet had no enumeration
- * asserting that every field appears in EVERY site — a missed save-map entry
- * silently dropped an edit; a missed hash entry killed the dirty flag. These
- * tests enumerate [EditableItemMetadataForm]'s OWN properties so a NEW field
- * is auto-covered: adding one fails them until it is round-tripped and
- * dirty-tracked.
+ * Drift-class pins for [EditableItemMetadataForm]: with one form whose
+ * properties are the single field declaration, there is no save-map/
+ * load-map/dirty-hash quartet that can miss an entry. These tests enumerate
+ * the form's OWN properties so a NEW field is auto-covered: adding one fails
+ * them until it is round-tripped and dirty-tracked.
  *
- * Reflection here is Java reflection only (the `ResetCoverageGuard`
- * precedent — no kotlin-reflect dependency), and reads the data-class
- * machinery itself (property getters for names, `componentN()` + the primary
- * constructor for values), so the enumeration cannot drift from the
- * declaration.
+ * Reflection here is Java reflection only (the `ResetCoverageGuard` pattern —
+ * no kotlin-reflect dependency), and reads the data-class machinery itself
+ * (property getters for names, `componentN()` + the primary constructor for
+ * values), so the enumeration cannot drift from the declaration.
  */
 class EditableItemMetadataFormTest {
 

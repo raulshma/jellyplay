@@ -69,7 +69,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trac
 
 /**
  * The maximum number of advanced [LanguageRule]s the editor accepts — the cap
- * keeps the JSON blob and the restore-time rule scan bounded (plan: "~10").
+ * keeps the JSON blob and the restore-time rule scan bounded.
  */
 internal const val TRACK_RULES_MAX = 10
 

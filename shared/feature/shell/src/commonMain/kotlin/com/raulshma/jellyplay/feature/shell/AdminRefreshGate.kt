@@ -4,12 +4,11 @@ package com.raulshma.jellyplay.feature.shell
  * Admin-status refresh dedupe policy — the 30 s window + in-flight guard both
  * shells hand [com.raulshma.jellyplay.feature.admin.navigation.AdminRouteContainer]
  * (Android: `MainViewModel.refreshAdminStatus`; desktop: the inlined
- * DesktopNavScaffold lambda, formerly with its own copy of the 30_000L
- * constant). Platform-free: the gate owns ONLY the timing/guard decision and
- * is constructed over the inputs each shell already has — its own in-flight
- * state owner (read through [isRefreshInFlight]) and a wall-clock lambda
- * ([nowMs]). The state the shells render stays per-shell, as recorded:
- * the gate never owns or mutates it.
+ * DesktopNavScaffold lambda). Platform-free: the gate owns ONLY the
+ * timing/guard decision and is constructed over the inputs each shell
+ * already has — its own in-flight state owner (read through
+ * [isRefreshInFlight]) and a wall-clock lambda ([nowMs]). The state the
+ * shells render stays per-shell: the gate never owns or mutates it.
  *
  * Call [shouldStart] synchronously before launching the refresh work (the
  * same-frame two-entries-composing guard), then [onRefreshCompleted] — and

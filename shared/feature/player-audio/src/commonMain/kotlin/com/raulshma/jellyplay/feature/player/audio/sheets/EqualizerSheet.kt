@@ -22,6 +22,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,6 +53,13 @@ internal fun EqualizerSheet(
     onReset: () -> Unit,
     onPresetChange: (EqualizerPreset) -> Unit,
     onDismiss: () -> Unit,
+    /**
+     * The band sliders' live drag leg: apply-only per frame, while
+     * [onBandChange] is the settle leg (apply + the one persist), fired from
+     * `onValueChangeFinished`. Defaults to [onBandChange] so an unwired
+     * caller keeps the old per-frame full command.
+     */
+    onBandChangeLive: (Int, Int) -> Unit = onBandChange,
 ) {
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -111,6 +122,12 @@ internal fun EqualizerSheet(
                         .verticalScroll(rememberScrollState()),
                 ) {
                     frequencies.forEachIndexed { index, freq ->
+                        // The settle callback carries no value — track the
+                        // last drag level locally so release commits exactly
+                        // what the finger left behind.
+                        var dragLevel by remember(index) {
+                            mutableIntStateOf(bandLevels.getOrElse(index) { 0 })
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -122,7 +139,11 @@ internal fun EqualizerSheet(
                             )
                             Slider(
                                 value = bandLevels.getOrElse(index) { 0 }.toFloat(),
-                                onValueChange = { onBandChange(index, it.toInt()) },
+                                onValueChange = { v ->
+                                    dragLevel = v.toInt()
+                                    onBandChangeLive(index, dragLevel)
+                                },
+                                onValueChangeFinished = { onBandChange(index, dragLevel) },
                                 valueRange = -1500f..1500f,
                                 steps = 30,
                                 modifier = Modifier.weight(1f),

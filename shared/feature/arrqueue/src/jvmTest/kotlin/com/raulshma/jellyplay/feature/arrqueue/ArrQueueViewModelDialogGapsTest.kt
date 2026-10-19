@@ -53,8 +53,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelDialogGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (ArrQueueViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (ArrQueueViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var arrRepository: ArrRepository

@@ -36,6 +36,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             subtitleLanguage == null &&
             subtitleForced == null &&
             subtitleHearingImpaired == null &&
+            preferAudioDescription == null &&
             subtitleDisabled == null &&
             dialogueBoostStrength == null &&
             rememberedAudioLabel == null &&
@@ -277,6 +278,35 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
         )
     }
 
+    override suspend fun setPreferAudioDescription(scope: PlaybackPrefScope, key: String, value: Boolean?) {
+        val existing = dao.getByKey(scope.name, key)
+        if (value == null) {
+            // "Follow global": clear the pin; drop the row when nothing
+            // else is remembered on it.
+            val row = existing ?: return
+            val cleared = row.copy(preferAudioDescription = null, updatedAt = timeSource.nowEpochMillis())
+            if (cleared.hasNoPreferences()) {
+                dao.deleteByKey(scope.name, key)
+            } else {
+                dao.upsert(cleared)
+            }
+            return
+        }
+        val base = existing ?: ItemPlaybackPreferenceEntity(
+            scope = scope.name,
+            key = key,
+            audioLanguage = null,
+            subtitleLanguage = null,
+            updatedAt = timeSource.nowEpochMillis(),
+        )
+        dao.upsert(
+            base.copy(
+                preferAudioDescription = value,
+                updatedAt = timeSource.nowEpochMillis(),
+            )
+        )
+    }
+
     override suspend fun setPreferredMediaSource(
         scope: PlaybackPrefScope,
         key: String,
@@ -323,6 +353,7 @@ class ItemPlaybackPreferenceRepositoryImpl constructor(
             subtitleDisabled = subtitleDisabled,
             subtitleForced = subtitleForced,
             subtitleHearingImpaired = subtitleHearingImpaired,
+            preferAudioDescription = preferAudioDescription,
             dialogueBoostStrength = dialogueBoostStrength.toEnumOrNull(),
             rememberedAudioTrack = rememberedAudioLabel?.let {
                 RememberedTrack(

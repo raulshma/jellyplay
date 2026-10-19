@@ -9,13 +9,13 @@ import androidx.compose.runtime.setValue
  * The search SESSION half of the home search bar: who owns "is the search
  * surface open" and the teardown choreography when it closes.
  *
- * The data half (query, results, history, undo) already lives in the VM's
- * [HomeSearchStateHolder]; what was missing was an owner for the expanded
- * flag and the close ORDERING — collapse the surface → clear the query →
- * drop keyboard focus. That triple used to be hand-duplicated at seven call
- * sites (the BackHandler, three result-click lambdas, the dock's clear and
- * back paths), and a new site that skipped a step stranded the keyboard.
- * Here it is one method whose sequence is pinned by [HomeSearchSessionTest].
+ * The data half (query, results, history, undo) lives in the VM's
+ * [HomeSearchStateHolder]; this owns the expanded flag and the close ORDERING
+ * — collapse the surface → clear the query → drop keyboard focus. Those
+ * three steps duplicated at seven call sites (the BackHandler, three
+ * result-click lambdas, the dock's clear and back paths) strand the keyboard
+ * when a site skips a step. Here it is one method whose sequence is pinned by
+ * [HomeSearchSessionTest].
  *
  * [close] takes the focus-clearing as a parameter (rather than holding a
  * FocusManager) so the composable read of [LocalFocusManager][androidx.compose.ui.platform.LocalFocusManager]

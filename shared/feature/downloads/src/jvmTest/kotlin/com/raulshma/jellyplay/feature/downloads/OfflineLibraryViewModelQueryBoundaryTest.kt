@@ -36,8 +36,8 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class OfflineLibraryViewModelQueryBoundaryTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (OfflineLibraryViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (OfflineLibraryViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var offlineRepository: OfflineRepository

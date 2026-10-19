@@ -38,7 +38,7 @@ import java.io.File
 /**
  * Pins the non-destructive contract of the offline subtitle bundle —
  * [DownloadRepositoryImpl.downloadExternalSubtitles] and now its host
- * [OfflineDownloadWriterCore] (D6 extracted the write cluster; the repository
+ * [OfflineDownloadWriterCore] (the repository
  * forwards the writer surface to it one-to-one):
  *
  * - a genuine server-side removal (no deliverable subtitle streams) mirrors to
@@ -114,7 +114,6 @@ class DownloadRepositoryImplSubtitlesTest {
         downloadsStore = preferencesStore,
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),
-        progressNotifier = mockk(relaxed = true),
         timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
         writer = writerCore(testClient),
         downloadDelegate = downloadDelegate,

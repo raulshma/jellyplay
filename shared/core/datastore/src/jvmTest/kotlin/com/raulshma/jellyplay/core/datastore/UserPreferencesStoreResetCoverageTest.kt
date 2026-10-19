@@ -22,12 +22,16 @@ class UserPreferencesStoreResetCoverageTest {
     fun `every preference key is covered by reset or exclusion`() {
         val dataStore = TestDataStoreProvider.get()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val store = createUserPreferencesStore(scope, dataStore)
+        try {
+            val store = createUserPreferencesStore(scope, dataStore)
 
-        val uncovered = store.uncoveredResetKeys()
+            val uncovered = store.uncoveredResetKeys()
 
-        assertTrue(uncovered.isEmpty(), "Uncovered preference keys (add to a resetCategory list or resetExcludedKeys): " +
-                uncovered.joinToString(", ") { keyForDebug(it) })
+            assertTrue(uncovered.isEmpty(), "Uncovered preference keys (add to a resetCategory list or resetExcludedKeys): " +
+                    uncovered.joinToString(", ") { keyForDebug(it) })
+        } finally {
+            cancelGraphInitCollectors(scope)
+        }
     }
 
     /** Best-effort name for a Preferences.Key — its public `name` field. */

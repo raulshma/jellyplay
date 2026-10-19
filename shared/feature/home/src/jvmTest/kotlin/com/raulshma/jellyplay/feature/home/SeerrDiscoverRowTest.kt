@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * Asserts the PRODUCTION partition/normalization functions — previously the
- * tests reimplemented the pattern constants, the chunking loop and the media
- * type rule locally and asserted against those local copies. Also pins the
+ * Asserts the PRODUCTION partition/normalization functions — the tests assert
+ * these directly rather than local copies of the pattern constants, the
+ * chunking loop and the media type rule. Also pins the
  * discover pattern selection ([discoverPatternFor]) and card-width arithmetic
  * ([discoverItemWidth]) shared by the discover rows and the *arr row.
  */

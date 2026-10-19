@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
 import com.raulshma.jellyplay.feature.home.HomeCallbacks
 import com.raulshma.jellyplay.feature.home.HomeScreen
+import com.raulshma.jellyplay.feature.home.MyMediaHiddenScreen
 import com.raulshma.jellyplay.feature.home.NextUpExcludedScreen
 
 fun EntryProviderScope<NavKey>.homeSection(
@@ -45,7 +46,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                         // instead of opening the local video player. Mirrors
                         // jellyfin-web's "remote is current player" routing.
                         // (Probe + fling live behind the HomePlayOnRedirect
-                        // seam — see its KDoc for the legacy-shape rationale.)
+                        // seam — see its KDoc.)
                     } else if (mediaType == MediaType.CHANNEL || mediaType == MediaType.LIVE_TV) {
                         // Live channels must go through the live TV player (tuner
                         // playback), not the generic video player. Mirrors the
@@ -71,9 +72,15 @@ fun EntryProviderScope<NavKey>.homeSection(
                     navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))
                 },
                 onSettingsSearchItemClick = { route -> navigator.navigate(route) },
+                // In-feature routing (stats card → admin user detail,
+                // genre chips → filtered library section) — one generic
+                // Route-carrier beside the settings-search carrier above.
+                onOpenRoute = { route -> navigator.navigate(route) },
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
                 onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
                 onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
+                // The announcement snackbar's Customize — Home Settings root.
+                onCustomizeHome = { navigator.navigate(Route.HomeSettings()) },
                 onSeeAllClick = { _, libraryId, collectionType, title ->
                     // Per-library "Latest X" sorts by DateLastContentAdded so a
                     // compound item that just gained a child (a TV series with a
@@ -109,5 +116,9 @@ fun EntryProviderScope<NavKey>.homeSection(
 
     entry<Route.NextUpExcluded> {
         NextUpExcludedScreen(onBack = { navigator.goBack() })
+    }
+
+    entry<Route.MyMediaHidden> {
+        MyMediaHiddenScreen(onBack = { navigator.goBack() })
     }
 }

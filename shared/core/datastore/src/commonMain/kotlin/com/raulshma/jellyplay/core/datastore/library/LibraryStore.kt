@@ -55,6 +55,19 @@ class LibraryStore constructor(
         val PREFER_LOGOS = booleanPreferencesKey("prefer_logos")
         val LIBRARY_GROUP_BY = stringPreferencesKey("library_group_by")
         val CONFIRM_LIBRARY_RESET = booleanPreferencesKey("confirm_library_reset")
+        val SHOW_EXTERNAL_LINKS = booleanPreferencesKey("show_external_links")
+        val SHOW_TAGLINE = booleanPreferencesKey("show_tagline")
+        val PREFER_LOCAL_TRAILERS = booleanPreferencesKey("prefer_local_trailers")
+        val SHOW_MORE_IN_COLLECTION = booleanPreferencesKey("show_more_in_collection")
+        val SHOW_UPCOMING_STRIP = booleanPreferencesKey("show_upcoming_strip")
+        val PLAY_THEME_MUSIC = booleanPreferencesKey("play_theme_music")
+        val SHOW_REVIEWS = booleanPreferencesKey("show_reviews")
+        val SHOW_EPISODE_STREAM_BADGES = booleanPreferencesKey("show_episode_stream_badges")
+        val SHOW_FILMOGRAPHY_ROLES = booleanPreferencesKey("show_filmography_roles")
+        val SHOW_FREQUENT_COSTARS = booleanPreferencesKey("show_frequent_costars")
+        val TRAILER_PREVIEW_ON_FOCUS = booleanPreferencesKey("trailer_preview_on_focus")
+        val SHOW_PROMOTED_ACTIONS_LANDSCAPE = booleanPreferencesKey("show_promoted_actions_landscape")
+        val SHOW_DOWNLOAD_PROGRESS = booleanPreferencesKey("show_download_progress")
     }
 
     private var cachedDefaultLibrarySortOrders = ParsedCache<Map<String, String>>(null, emptyMap())
@@ -79,6 +92,19 @@ class LibraryStore constructor(
         preferLogos = PreferenceCodec.readBool(prefs, Keys.PREFER_LOGOS, "prefer_logos", false),
         libraryGroupBy = readGroupBy(prefs),
         confirmLibraryReset = readConfirmLibraryReset(prefs),
+        showExternalLinks = PreferenceCodec.readBool(prefs, Keys.SHOW_EXTERNAL_LINKS, "show_external_links", true),
+        showTagline = PreferenceCodec.readBool(prefs, Keys.SHOW_TAGLINE, "show_tagline", true),
+        preferLocalTrailers = PreferenceCodec.readBool(prefs, Keys.PREFER_LOCAL_TRAILERS, "prefer_local_trailers", false),
+        showMoreInCollection = PreferenceCodec.readBool(prefs, Keys.SHOW_MORE_IN_COLLECTION, "show_more_in_collection", true),
+        showUpcomingStrip = PreferenceCodec.readBool(prefs, Keys.SHOW_UPCOMING_STRIP, "show_upcoming_strip", true),
+        playThemeMusic = PreferenceCodec.readBool(prefs, Keys.PLAY_THEME_MUSIC, "play_theme_music", true),
+        showReviews = PreferenceCodec.readBool(prefs, Keys.SHOW_REVIEWS, "show_reviews", true),
+        showEpisodeStreamBadges = PreferenceCodec.readBool(prefs, Keys.SHOW_EPISODE_STREAM_BADGES, "show_episode_stream_badges", true),
+        showFilmographyRoles = PreferenceCodec.readBool(prefs, Keys.SHOW_FILMOGRAPHY_ROLES, "show_filmography_roles", true),
+        showFrequentCostars = PreferenceCodec.readBool(prefs, Keys.SHOW_FREQUENT_COSTARS, "show_frequent_costars", true),
+        trailerPreviewOnFocus = PreferenceCodec.readBool(prefs, Keys.TRAILER_PREVIEW_ON_FOCUS, "trailer_preview_on_focus", true),
+        showPromotedActionsLandscape = PreferenceCodec.readBool(prefs, Keys.SHOW_PROMOTED_ACTIONS_LANDSCAPE, "show_promoted_actions_landscape", true),
+        showDownloadProgress = PreferenceCodec.readBool(prefs, Keys.SHOW_DOWNLOAD_PROGRESS, "show_download_progress", true),
     )
 
     private fun readConfirmLibraryReset(prefs: Preferences): Boolean = prefs[Keys.CONFIRM_LIBRARY_RESET] ?: true
@@ -192,6 +218,58 @@ class LibraryStore constructor(
         dataStore.edit { it[Keys.PREFER_LOGOS] = enabled }
     }
 
+    suspend fun setShowExternalLinks(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_EXTERNAL_LINKS] = enabled }
+    }
+
+    suspend fun setShowTagline(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_TAGLINE] = enabled }
+    }
+
+    suspend fun setPreferLocalTrailers(enabled: Boolean) {
+        dataStore.edit { it[Keys.PREFER_LOCAL_TRAILERS] = enabled }
+    }
+
+    suspend fun setShowMoreInCollection(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_MORE_IN_COLLECTION] = enabled }
+    }
+
+    suspend fun setShowUpcomingStrip(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_UPCOMING_STRIP] = enabled }
+    }
+
+    suspend fun setPlayThemeMusic(enabled: Boolean) {
+        dataStore.edit { it[Keys.PLAY_THEME_MUSIC] = enabled }
+    }
+
+    suspend fun setShowReviews(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_REVIEWS] = enabled }
+    }
+
+    suspend fun setShowEpisodeStreamBadges(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_EPISODE_STREAM_BADGES] = enabled }
+    }
+
+    suspend fun setShowFilmographyRoles(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_FILMOGRAPHY_ROLES] = enabled }
+    }
+
+    suspend fun setShowFrequentCostars(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_FREQUENT_COSTARS] = enabled }
+    }
+
+    suspend fun setTrailerPreviewOnFocus(enabled: Boolean) {
+        dataStore.edit { it[Keys.TRAILER_PREVIEW_ON_FOCUS] = enabled }
+    }
+
+    suspend fun setShowPromotedActionsLandscape(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_PROMOTED_ACTIONS_LANDSCAPE] = enabled }
+    }
+
+    suspend fun setShowDownloadProgress(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_DOWNLOAD_PROGRESS] = enabled }
+    }
+
     suspend fun setLibraryGroupBy(groupBy: GroupBy) {
         dataStore.edit { it[Keys.LIBRARY_GROUP_BY] = groupBy.name }
     }
@@ -225,6 +303,11 @@ class LibraryStore constructor(
             Keys.SHOW_MISSING_EPISODES,
             Keys.LIBRARY_POSTER_SIZE, Keys.PREFER_LOGOS, Keys.LIBRARY_GROUP_BY,
             Keys.CONFIRM_LIBRARY_RESET,
+            Keys.SHOW_EXTERNAL_LINKS, Keys.SHOW_TAGLINE, Keys.PREFER_LOCAL_TRAILERS,
+            Keys.SHOW_MORE_IN_COLLECTION, Keys.SHOW_UPCOMING_STRIP, Keys.PLAY_THEME_MUSIC,
+            Keys.SHOW_REVIEWS, Keys.SHOW_EPISODE_STREAM_BADGES, Keys.SHOW_FILMOGRAPHY_ROLES,
+            Keys.SHOW_FREQUENT_COSTARS, Keys.TRAILER_PREVIEW_ON_FOCUS,
+            Keys.SHOW_PROMOTED_ACTIONS_LANDSCAPE, Keys.SHOW_DOWNLOAD_PROGRESS,
         )
         else -> emptyList()
     }
@@ -250,6 +333,19 @@ class LibraryStore constructor(
             it[Keys.PREFER_LOGOS] = slice.preferLogos
             it[Keys.LIBRARY_GROUP_BY] = slice.libraryGroupBy.name
             it[Keys.CONFIRM_LIBRARY_RESET] = slice.confirmLibraryReset
+            it[Keys.SHOW_EXTERNAL_LINKS] = slice.showExternalLinks
+            it[Keys.SHOW_TAGLINE] = slice.showTagline
+            it[Keys.PREFER_LOCAL_TRAILERS] = slice.preferLocalTrailers
+            it[Keys.SHOW_MORE_IN_COLLECTION] = slice.showMoreInCollection
+            it[Keys.SHOW_UPCOMING_STRIP] = slice.showUpcomingStrip
+            it[Keys.PLAY_THEME_MUSIC] = slice.playThemeMusic
+            it[Keys.SHOW_REVIEWS] = slice.showReviews
+            it[Keys.SHOW_EPISODE_STREAM_BADGES] = slice.showEpisodeStreamBadges
+            it[Keys.SHOW_FILMOGRAPHY_ROLES] = slice.showFilmographyRoles
+            it[Keys.SHOW_FREQUENT_COSTARS] = slice.showFrequentCostars
+            it[Keys.TRAILER_PREVIEW_ON_FOCUS] = slice.trailerPreviewOnFocus
+            it[Keys.SHOW_PROMOTED_ACTIONS_LANDSCAPE] = slice.showPromotedActionsLandscape
+            it[Keys.SHOW_DOWNLOAD_PROGRESS] = slice.showDownloadProgress
         }
     }
 }
@@ -286,4 +382,34 @@ data class LibrarySlice(
     val preferLogos: Boolean = false,
     val libraryGroupBy: GroupBy = GroupBy.NONE,
     val confirmLibraryReset: Boolean = true,
+    /** Show provider external-link buttons (TMDb / IMDb / server `externalUrls`) on the detail header. */
+    val showExternalLinks: Boolean = true,
+    /** Show the item's first tagline under the detail title. */
+    val showTagline: Boolean = true,
+    /** Prefer server-hosted local trailers over remote (YouTube) entries in the trailer list. */
+    val preferLocalTrailers: Boolean = false,
+    /** Show the "More in this collection" franchise row on movie/series detail. */
+    val showMoreInCollection: Boolean = true,
+    /** Show the "Airing next" strip on series detail. */
+    val showUpcomingStrip: Boolean = true,
+    /** Play a series' ambient theme music on detail open. */
+    val playThemeMusic: Boolean = true,
+    /** Show the reviews preview + ratings block on the detail screen. */
+    val showReviews: Boolean = true,
+    /** Show subtitle / audio layout stream badges on season episode rows. */
+    val showEpisodeStreamBadges: Boolean = true,
+    /** Show role names + role grouping on the person screen's filmography. */
+    val showFilmographyRoles: Boolean = true,
+    /** Show the "frequently appears with" co-star row on the person screen. */
+    val showFrequentCostars: Boolean = true,
+    /**
+     * TV focus-gated trailer preview: mount the muted detail-hero embed only
+     * while a Play/Trailer action holds focus (TV-only semantics; requires the
+     * player's `trailerAutoplay`).
+     */
+    val trailerPreviewOnFocus: Boolean = true,
+    /** Promote the ⋮ options' fixed promoted set into the landscape/TV detail rail. */
+    val showPromotedActionsLandscape: Boolean = true,
+    /** Show live download progress on season episode rows. */
+    val showDownloadProgress: Boolean = true,
 )

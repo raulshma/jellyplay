@@ -19,9 +19,8 @@ import kotlin.test.Test
 
 /**
  * Exercises the audio-cache policy preference store. These keys were never
- * string-typed in the legacy store, so the round-trips here cover the plain
- * `prefs[key] ?: default` read path that previously lived inline in the
- * `UserPreferencesStore` god object with **no** unit coverage.
+ * string-typed, so the round-trips here cover the plain
+ * `prefs[key] ?: default` read path.
  */
 class AudioCacheStoreTest {
 

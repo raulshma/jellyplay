@@ -10,7 +10,7 @@ composeMaterial3 = "1.5.0-alpha25"
 composeMaterial3Adaptive = "1.3.0-rc01"
 # material3-adaptive-navigation-suite lives in the androidx.compose.material3
 # group (NOT .adaptive) and tracks the material3 release line, not the adaptive
-# one. Previously keyed off composeMaterial3Adaptive — only worked by accident.
+# one.
 composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
 # JetBrains Compose Multiplatform distribution — the ONLY publisher of real
 # JVM compose binaries (androidx publishes Android AARs + IDE stubs only,
@@ -18,9 +18,13 @@ composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
 # Android target these redirect to the androidx artifacts.
 composeMultiplatform = "1.11.1"
 # JB material3 rides its own train; the 1.11.x line never stabilised past
-# alpha (latest release overall is 1.9.0), so pin the newest of the matching
-# 1.11 line to keep expressive APIs available on desktop.
-composeMultiplatformMaterial3 = "1.11.0-alpha07"
+# alpha (latest release overall is 1.9.0). Pin the 1.12 line: coil 3.6.3
+# already raises JB foundation to 1.12.0, and 1.11.0-alpha07 was compiled
+# against foundation 1.11.0-beta03 (its CustomStyle SAM descriptor predates
+# the applyStyle(CustomStyleScope) shape), which surfaces as an
+# AbstractMethodError in Compose UI host tests. 1.12.0-alpha03 targets
+# foundation 1.12.0-beta01 and stays binary-compatible with 1.12.0.
+composeMultiplatformMaterial3 = "1.12.0-alpha03"
 # Koin: shared-module DI. Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles.
 koin = "4.2.2"
@@ -32,18 +36,21 @@ navigation3 = "1.1.5"
 jbNavigation3Ui = "1.1.1"
 lifecycleViewmodelNav3 = "2.11.0"
 jellyfinSdk = "1.8.12"
-media3 = "1.10.1"
+media3 = "1.11.1"
+# Fork pin (NOT the google artifact): the latest fork published on Maven
+# Central is 1.9.0+1 — no 1.10.x/1.11.x exists. It loads reflectively and its
+# bytecode was verified free of the media3 APIs removed by 1.11.x; a device
+# smoke test for software DTS/TrueHD decode is still pending.
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
-# Coil 3.4.0 for the shared JVM targets (historical pin, kept to avoid
-# churn; JVM class files are version-tolerant here).
-coil = "3.4.0"
-# Coil for the ANDROID app only: release/v0.10.6 shipped 3.5.0, and the
-# artwork pipeline (rememberDominantColor / rememberArtworkColors → Palette)
-# is version-sensitive through decode defaults. The app resolves 3.5.0 via
-# this BOM to keep its bitmap→swatch behavior byte-identical to the release
-# build while shared JVM targets stay on 3.4.0.
-coilAndroid = "3.5.0"
+# Coil for ALL targets: both pins are 3.6.3 (Aug-Oct 2026 line, carries
+# decode-pipeline fixes; artwork/dominant-color is the hottest image path in
+# the app); the artwork tests (ArtworkColorsTest / ArtworkColorExtractorTest
+# swatch expectations + the visual smoke of home/detail rows) pin the decode
+# behavior that keeps v0.10.6's bitmap→swatch output stable. If a future bump
+# needs a split again, keep the android pin >= the shared pin.
+coil = "3.6.3"
+coilAndroid = "3.6.3"
 multiplatformMarkdownRenderer = "0.41.0"
 # Room 3 (spike/room3): androidx.room3 package, KSP-only, coroutine DB ops.
 # 3.0.3 is the latest stable (2026-09-09). Its POM pins androidx.sqlite 2.7.1
@@ -61,6 +68,11 @@ pagingCompose = "3.5.0"
 workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
+# kotlinx.collections.immutable — the persistent collections behind the
+# @Immutable state bags' list fields (skippability without unstable List
+# params). 0.4.0 is the line the Compose runtime already resolves into the
+# graph transitively, so no new artifact family enters.
+kotlinxCollectionsImmutable = "0.4.0"
 # kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
 # repo's Kotlin 2.3.21 pin: its Gradle module metadata, fetched 2026-08-27,
 # declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
@@ -80,8 +92,8 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 mockk = "1.14.11"
 # org.json for the jvmShared websocket-event path (android resolves the same
-# classes from android.jar). Moved off the 2024 pin (audit BIN-10) — 2026 line
-# carries two years of parser fixes; both consumers get it via this ref.
+# classes from android.jar). The 2026 line carries two years of parser fixes;
+# both consumers get it via this ref.
 orgJson = "20260814"
 coroutinesTest = "1.11.0"
 robolectric = "4.16.1"
@@ -91,7 +103,7 @@ playServicesCast = "22.3.1"
 mediarouter = "1.9.0-alpha01"
 slf4j = "2.0.18"
 libmpv = "0.1.12"
-# JNA for the desktop libmpv binding (Phase V2 MpvDesktopEngine)
+# JNA for the desktop libmpv binding (MpvDesktopEngine)
 jna = "5.17.0"
 libvlc = "3.7.5"
 assMedia = "0.5.0"
@@ -125,8 +137,8 @@ aboutLibraries = "15.0.4"
 # LeakCanary — debug-only memory leak detection for the Android app.
 # 2.14 is the latest stable (3.0 still alpha as of 2026-09).
 leakcanary = "2.14"
-# UnifiedPush android connector — the client half of the jellyplay plugin's
-# push wave: registers against the user's chosen UnifiedPush distributor app
+# UnifiedPush android connector — the client half of the jellyplay plugin:
+# registers against the user's chosen UnifiedPush distributor app
 # (e.g. ntfy) and delivers NEW_ENDPOINT/MESSAGE/UNREGISTERED events. 3.3.5 is
 # the latest stable (2026-08-22). Android-only: the connector ships no
 # JVM/desktop artifacts, so only core:data's androidMain consumes it.
@@ -209,6 +221,10 @@ media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "
 media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 media3-datasource-okhttp = { group = "androidx.media3", name = "media3-datasource-okhttp", version.ref = "media3" }
 media3-database = { group = "androidx.media3", name = "media3-database", version.ref = "media3" }
+# GL video-graph path for HDR→SDR tone mapping during playback
+# (ExoPlayerEngine engages it via setVideoEffects; ExoPlayerImpl's
+# reflection check requires SingleInputVideoGraph$Factory on the classpath).
+media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
 # Prebuilt FFmpeg audio decoder (native .so included) for codecs MediaCodec
 # lacks on most devices (DTS, MLP, TrueHD, etc.). Auto-loaded by
 # DefaultRenderersFactory via reflection when EXTENSION_RENDERER_MODE is ON.
@@ -254,6 +270,7 @@ palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = 
 
 # Kotlinx Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-collections-immutable = { group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }
@@ -306,7 +323,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 # Test-only: HandshakeCertificates/HeldCertificate for the self-signed-trust
-# TLS integration tests (mockwebserver 5.x no longer pulls okhttp-tls in
+# TLS integration tests (mockwebserver 5.x does not pull okhttp-tls in
 # transitively). Same version.ref as the OkHttp 5.4 pin.
 okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }

@@ -8,11 +8,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Pins for [DesktopAccelerators] — the one accelerator table the two former
- * hand-copies (Main.kt's window onPreviewKeyEvent chain, DesktopTitleBar's
- * menu shortcut literals) now both fold through. Rows are matched exactly as
- * the old if/else-if chain matched: Ctrl rows need `isCtrlPressed`, and the
- * F11 row IGNORES modifiers (the original arm never checked Ctrl — Ctrl+F11
+ * Pins for [DesktopAccelerators] — the one accelerator table both
+ * key surfaces (Main.kt's window onPreviewKeyEvent chain and DesktopTitleBar's
+ * menu shortcut literals) fold through. Rows match exactly: Ctrl rows need
+ * `isCtrlPressed`, and the
+ * F11 row IGNORES modifiers (Ctrl+F11
  * still toggles fullscreen). The paste row (Ctrl+Shift+V, the
  * clipboard-open accelerator) additionally gates on Shift: the preview
  * handler runs BEFORE the Compose focus chain, so a shift-less Ctrl+V must

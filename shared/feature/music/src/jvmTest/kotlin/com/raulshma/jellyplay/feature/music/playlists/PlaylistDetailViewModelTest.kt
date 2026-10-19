@@ -287,9 +287,9 @@ class PlaylistDetailViewModelTest {
         assertEquals(freshItems, viewModel.items)
     }
 
-    // The no-stack/skip-re-arm choreography pair the album suite used to
-    // re-pin is module behaviour now — DeferredFetchCoordinatorTest owns that
-    // table; this suite pins the host adapter's own surfaces.
+    // The no-stack/skip-re-arm choreography pair is module behaviour —
+    // DeferredFetchCoordinatorTest owns that table; this suite pins the host
+    // adapter's own surfaces.
 
     // ── Remove-from-playlist + undo ──────────────────────────────────────────
 

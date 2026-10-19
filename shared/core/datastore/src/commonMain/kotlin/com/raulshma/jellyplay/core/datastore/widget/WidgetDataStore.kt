@@ -29,12 +29,12 @@ import kotlinx.serialization.json.Json
  * These flows are not "preferences" — they are an I/O buffer between the
  * widget refresh workers (producers) and the AppWidget providers (consumers).
  * Persisting them in DataStore lets widgets render the last-known payload
- * across process death and cold start. Extracted from `UserPreferencesStore`
- * (where they accreted) so the god store no longer carries widget-I/O concerns.
+ * across process death and cold start. A separate store owns them so
+ * `UserPreferencesStore` carries no widget-I/O concerns.
  *
  * **Storage**: injects the shared `"user_prefs"` DataStore (Koin definition
- * in `di.DatastoreKoinModules` / platform `di.AndroidDatastoreModule` since
- * ) — same file as `UserPreferencesStore` and the other extracted
+ * in `di.DatastoreKoinModules` / platform `di.AndroidDatastoreModule`) — same
+ * file as `UserPreferencesStore` and the other
  * stores, never a second DataStore instance (AndroidX forbids that).
  */
 class WidgetDataStore constructor(
@@ -253,7 +253,25 @@ class WidgetDataStore constructor(
         }
     }
 
-    private companion object {
+    companion object {
+        /**
+         * Key names that must never leave the device through settings sync —
+         * these keys are the widget refresh workers' I/O buffer (the derived
+         * payload is rewritten on every home refresh, so a synced-set leak
+         * would push the whole buffer each cycle) and per-device widget
+         * configuration (an AppWidget id is this device's own). The same
+         * owning-store-export idiom as [com.raulshma.jellyplay.core.datastore.security.SecurityStore.SyncExcludedKeys]:
+         * referenced by the sync adapter's registration (core/data DI), never
+         * by sync logic itself.
+         */
+        val SyncExcludedKeys: Set<String> = setOf(
+            Keys.CONTINUE_WATCHING,
+            Keys.WIDGET_CONFIG,
+            Keys.WIDGET_CONFIGS,
+            Keys.LIBRARY_WIDGET_ITEMS,
+            Keys.SEERR_WIDGET_ITEMS,
+        ).map { it.name }.toSet()
+
         /** Cap on the one-time cold-process disk read behind the *Snapshot() accessors. */
         private const val SNAPSHOT_WARMUP_TIMEOUT_MS = 1_000L
     }

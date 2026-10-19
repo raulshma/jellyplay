@@ -11,7 +11,7 @@ package com.raulshma.jellyplay.core.model
  * (~4 Hz, many rows) and per-seek MPV command strings. It is also the only
  * way to put a float into a compose string resource: `stringResource` only
  * substitutes positional `%n$s`/`%n$d` placeholders, so a `%f` resource leaks
- * the raw specifier into the UI (issue #158) — pre-format here, pass the
+ * the raw specifier into the UI — pre-format here, pass the
  * string.
  *
  * Rounding is HALF_UP (round-half-towards-positive-infinity), matching

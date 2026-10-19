@@ -6,10 +6,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 
 /**
- * Android actual of the [BackupFilePicker] seam: the two SAF launchers moved
- * verbatim from the pre-migration BackupSettingsScreen. androidx.activity.compose
- * rides navigation3-ui's transitive edge (AndroidVoiceSearch / BackHandler-seam
- * precedent), so androidMain needs no new dependency.
+ * Android actual of the [BackupFilePicker] seam: the two SAF launchers.
+ * androidx.activity.compose rides navigation3-ui's transitive edge
+ * (AndroidVoiceSearch / BackHandler-seam precedent), so androidMain needs no
+ * new dependency.
  */
 @Composable
 internal actual fun rememberBackupFilePicker(

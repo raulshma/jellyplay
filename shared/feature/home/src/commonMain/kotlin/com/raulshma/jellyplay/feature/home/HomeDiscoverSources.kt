@@ -20,16 +20,16 @@ import kotlinx.datetime.plus
 
 /**
  * Deep module extracted from [HomeRefresher]: the WHAT of the discover-shaped
- * side fetches — the legacy Seerr discover-grid fan-out (up to five
+ * side fetches — the Seerr discover-grid fan-out (up to five
  * [SeerrRepository] round-trips behind the discover TTL gate) and the direct
- * *arr "Recently Grabbed" calendar fetch. Previously both bodies sat inline on
- * the refresher, so every new discover/arr-shaped side effect widened the
- * refresher (and both construction surfaces) with its repositories; now the
+ * *arr "Recently Grabbed" calendar fetch. Both bodies live here so the
  * refresher's constructor takes THIS collaborator and a new side-effect
- * dependency lands here alone.
+ * dependency lands here alone; otherwise every new discover/arr-shaped side
+ * effect widens the refresher (and both construction surfaces) with its
+ * repositories.
  *
- * Division of labour with [HomeRefresher] (the DiscoverRowsCoordinator split,
- * repeated): the refresher keeps WHEN — the concurrent fetch-group schedule in
+ * Division of labour with [HomeRefresher] (the DiscoverRowsCoordinator split):
+ * the refresher keeps WHEN — the concurrent fetch-group schedule in
  * [HomeRefresher.fetchOnce] (both calls ride its `async` groups and are
  * awaited at the same points), the tracked standalone [RefreshTrigger.DiscoverEnabled]
  * job, and the cache invalidation in the manual-refresh preamble
@@ -57,7 +57,7 @@ internal class HomeDiscoverSources(
      * [fetchDiscoverSections]). The CUSTOM Seerr discover rows need no gate
      * here: they ride the home-sections fetch itself (network-layer TTL +
      * last-known-good — see HomeSectionsFetcher.fetchSeerrDiscoverRows); this
-     * gate covers the legacy fixed grid.
+     * gate covers the fixed grid.
      */
     private val discoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
 
@@ -66,7 +66,7 @@ internal class HomeDiscoverSources(
      * actually hits the network. Called by the refresher on user-initiated
      * refresh — the custom Seerr rows ride the forced home-sections fetch
      * instead (the network layer's force acts as their invalidation), and the
-     * legacy fixed grid is what this gate still covers.
+     * fixed grid is what this gate covers.
      */
     fun invalidate() {
         discoverCache.invalidate()

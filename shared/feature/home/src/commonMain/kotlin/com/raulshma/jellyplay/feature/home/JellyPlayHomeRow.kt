@@ -124,10 +124,16 @@ internal fun JellyPlayHomeRow(
                 val progressPercent = remember(local.id, local.playbackPositionTicks, local.runTimeTicks) {
                     local.progressFraction() ?: 0f
                 }
+                // The art URLs are up to 3 composed strings + a fallback list
+                // per card — remembered per item like the click lambdas above
+                // so row recompositions (entrance-animation frames included)
+                // stop re-composing them.
+                val imageUrl = remember(local.id) { imageUrlBuilder(local) }
+                val fallbackUrls = remember(local.id) { fallbackImageUrlBuilder(local) }
                 PosterCard(
                     item = local,
-                    imageUrl = imageUrlBuilder(local),
-                    fallbackUrls = fallbackImageUrlBuilder(local),
+                    imageUrl = imageUrl,
+                    fallbackUrls = fallbackUrls,
                     onClick = memoizedClick,
                     modifier = mod.width(metrics.cardWidth),
                     showProgress = local.hasPlaybackPosition,

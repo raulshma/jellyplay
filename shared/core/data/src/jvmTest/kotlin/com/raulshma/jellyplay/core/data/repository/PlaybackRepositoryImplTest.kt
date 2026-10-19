@@ -50,7 +50,7 @@ class PlaybackRepositoryImplTest {
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataAnnouncer: UserDataAnnouncer = mockk(relaxed = true)
 
     private lateinit var repository: PlaybackRepositoryImpl
 
@@ -78,7 +78,7 @@ class PlaybackRepositoryImplTest {
             apiClient, apiClient, apiClient, apiClient,
             outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
-            mediaRepository = lazy { mediaRepository },
+            userDataAnnouncer = userDataAnnouncer,
         )
     }
 
@@ -167,7 +167,7 @@ class PlaybackRepositoryImplTest {
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf("item-1")) }
     }
 
     @Test
@@ -177,7 +177,7 @@ class PlaybackRepositoryImplTest {
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
-        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
+        verify(exactly = 0) { userDataAnnouncer.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -196,7 +196,7 @@ class PlaybackRepositoryImplTest {
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
-        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
+        verify(exactly = 0) { userDataAnnouncer.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -370,7 +370,7 @@ class PlaybackRepositoryImplTest {
             apiClient, apiClient, apiClient, apiClient,
             outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
-            mediaRepository = lazy { mediaRepository },
+            userDataAnnouncer = userDataAnnouncer,
         )
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
 

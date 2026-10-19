@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreference
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
+import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
@@ -24,19 +26,17 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * The fused-conversion ratchet for the WHOLE settings module — the enforcement
- * teeth of the single-homing wave, generalized from the appearance-domain
- * template it started as. Every domain but the experimental screen converted:
- * its visible behavior must stay derivable from the fused rows alone, and the
- * retired three-home machinery must stay retired:
+ * The fused-rows guard for the WHOLE settings module: every domain but the
+ * experimental screen declares its rows as fused [SettingsRow] lists, so its
+ * visible behavior must stay derivable from those declarations alone.
  *
- *  1. ZERO retired declarations in production source: no `SettingsSearchBinding`
+ *  1. ZERO second-home declarations in production source: no `SettingsSearchBinding`
  *     table, no `SettingsRowRecord` list, no `*Ids` holder, no separate
  *     admissions map — outside the ONE documented exception (the experimental
  *     screen's spec-direct binding derivation and its holder). A resurrected
  *     table or holder is a second home by definition; compilation cannot catch
- *     it (the retired types that remain — the binding data class, the
- *     experimental holder — are live), so this is a source scan.
+ *     it (the binding data class and the experimental holder are live), so
+ *     this is a source scan.
  *  2. The ordered row lists ARE the spine: every screen group carries exactly
  *     its row list's ids in order, the vocabulary is exactly their union
  *     (duplicate-free), and every id resolves to exactly one catalog item.
@@ -50,10 +50,10 @@ import kotlin.test.fail
  *     desktop-only mpv rows) survive the projection.
  *  5. The entrance single-homing: every converted domain's
  *     [SettingsEntranceSectionRow] is the list entry (spliced once, at the
- *     pinned render position) and its (phone, tv) steps stay the retired
- *     literals — the emission faces read the one declaration.
+ *     pinned render position) and its (phone, tv) steps match the pinned
+ *     entrance order — the emission faces read the one declaration.
  *
- * Behavior byte-identity (search results, catalog order, totals, gates under
+ * Behavior identity (search results, catalog order, totals, gates under
  * every flag permutation) is pinned where it is strongest: the absolute
  * number pins in `SettingsCatalogScreenContractTest` read the derived
  * admissions through [rowTotalFor], and `SpecDerivedSearchItemsTest` /
@@ -61,7 +61,7 @@ import kotlin.test.fail
  */
 class FusedRowsRatchetTest {
 
-    // ── 1. Zero retired declarations in production source ───────────────
+    // ── 1. Zero second-home declarations in production source ──────────
 
     private fun repoRoot(): File {
         var dir: File? = File(System.getProperty("user.dir")).absoluteFile
@@ -88,7 +88,7 @@ class FusedRowsRatchetTest {
     }
 
     /**
-     * The documented exceptions to the zero-retired-machinery scan: the
+     * The documented exceptions to the zero-second-home scan: the
      * experimental screen's spec-direct binding derivation (its per-row
      * search categories differ, so its five rows cannot fold into a
      * single-category fused row list) and its ids holder.
@@ -125,10 +125,9 @@ class FusedRowsRatchetTest {
 
     @Test
     fun `the retired per-domain ids holders are gone from production sources`() {
-        // The holders' deletion is the wave's identity single-homing; a name
-        // reappearing in PRODUCTION code means a second identity home came
-        // back. The experimental holder is the documented exception (its
-        // binding derivation names its own ids).
+        // A holder name reappearing in PRODUCTION code means a second
+        // identity home came back. The experimental holder is the documented
+        // exception (its binding derivation names its own ids).
         val retiredHolders = listOf(
             "AppearanceSettingsIds", "PlaybackSettingsIds", "HomeSettingsIds", "AudioSettingsIds",
             "StorageSettingsIds", "LanguageSettingsIds", "TrackSelectionIds", "NotificationSettingsIds",
@@ -190,9 +189,9 @@ class FusedRowsRatchetTest {
         "system.idleAmbient" to SystemIdleAmbientRows,
         "system.discordPresence" to SystemDiscordPresenceRows,
         "system.hooks" to SystemHooksRows,
-        // jellyplay companion-plugin sync (ADR 0010)
+        // jellyplay companion-plugin sync
         "jellyplay.sync" to JellyPlaySyncRows.all,
-        // jellyplay companion-plugin per-feature switches (ADR 0010)
+        // jellyplay companion-plugin per-feature switches
         "jellyplay.features" to JellyPlayFeatureRows.all,
         // account / activity-insights
         "account" to AccountRowsList,
@@ -332,8 +331,7 @@ class FusedRowsRatchetTest {
     @Test
     fun `androidOnly projections stay android-only and desktop rows stay desktop-only`() {
         // The Vlc/Exo engine branches and notifications: items tagged
-        // ANDROID-only (the retired list-level androidOnly preserved through
-        // the projection as the rows' platform tags); the desktop mpv
+        // ANDROID-only (the rows' platform tags); the desktop mpv
         // render/audio-device rows keep their per-row DESKTOP tag.
         listOf(VlcEngineSearchItems, ExoPlayerEngineSearchItems, NotificationSettingsSearchItems).forEach { items ->
             assertTrue(items.all { it.platforms == setOf(PlatformKind.ANDROID) })
@@ -348,8 +346,8 @@ class FusedRowsRatchetTest {
 
     /**
      * Every converted domain's entrance: the section spliced exactly once, at
-     * the pinned render position (the retired literal numbering — the same
-     * pairs `SettingsEntranceStepsTest` pins for the whole list).
+     * the pinned render position (the same pairs `SettingsEntranceStepsTest`
+     * pin for the whole list).
      */
     @Test
     fun `every converted domain's entrance section is the one declaration driving emission and step index`() {
@@ -400,6 +398,7 @@ class FusedRowsRatchetTest {
         val specIds = (
             VideoPlayerPreferenceSpecs.searchEntries +
                 PlaybackPreferenceSpecs.searchEntries +
+                SubtitlePreferenceSpecs.searchEntries +
                 HomeDiscoveryPreferenceSpecs.searchEntries +
                 AppearancePreferenceSpecs.searchEntries +
                 ScreensaverPreferenceSpecs.searchEntries +
@@ -410,5 +409,138 @@ class FusedRowsRatchetTest {
         assertEquals(emptySet(), unclaimed, "spec entries no fused row claims — they never surface in search")
         // …and no spec id is double-declared across the domain stores.
         assertEquals(specIds.size, specIds.toSet().size, "a spec id is declared twice across the stores")
+    }
+
+    // ── 6. The hidden-settings hints derive from the declarations ───────
+
+    /**
+     * The five screens' HiddenSettingsHint counts, derived through
+     * [hiddenRowsFor] from the same declarations the emission `if`s read —
+     * the derived values below are the declarations' truth. Playback's
+     * 9 is the documented FROZEN exception (engine-/platform-dependent; the
+     * flags vocabulary cannot express it) and is deliberately NOT pinned
+     * here. Capabilities are passed explicitly so the pins are hermetic —
+     * the hints' runtime values ride the same flags the screens build.
+     */
+    @Test
+    fun `the hidden-settings hint counts derive from the row declarations`() {
+        // Appearance: the theme group's nine advanced rows (the NotTv-forked
+        // layout row included off-TV) + 2 performance + 2 eye-care +
+        // 3 newsletter; on TV the fork drops one.
+        val appearanceGroups = listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearanceNavigation,
+            SettingsScreenGroups.appearanceLibrary,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+            SettingsScreenGroups.appearanceNewsletter,
+        )
+        assertEquals(
+            16,
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            "appearance phone hint drifted",
+        )
+        assertEquals(
+            15,
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            "appearance tv hint drifted",
+        )
+
+        // Audio: 17 plain-advanced rows at the default preferences (every
+        // effect parent off — the All(Advanced, WhenOn) strength rows count
+        // nothing until their parent toggles on), plus the cache group's
+        // three advanced rows where that group composes.
+        val audioFlags = audioRowAdmissionFlags(showAdvanced = false, AudioPreferences())
+        assertEquals(
+            17,
+            hiddenRowsFor(listOf(SettingsScreenGroups.audio), audioFlags),
+            "audio hint (no cache group) drifted",
+        )
+        assertEquals(
+            20,
+            hiddenRowsFor(listOf(SettingsScreenGroups.audio, SettingsScreenGroups.audioCache), audioFlags),
+            "audio hint (with cache group) drifted",
+        )
+
+        // Language: the subtitles group's seven Advanced style rows, plus
+        // the HDR font-size row while the HDR-style parent is on.
+        val languageGroups = listOf(
+            SettingsScreenGroups.languageGeneral,
+            SettingsScreenGroups.languageSubtitles,
+        )
+        assertEquals(
+            7,
+            hiddenRowsFor(
+                languageGroups,
+                RowAdmissionFlags(showAdvanced = false, supportsAppLocaleOverride = false),
+            ),
+            "language hint drifted",
+        )
+        assertEquals(
+            8,
+            hiddenRowsFor(
+                languageGroups,
+                RowAdmissionFlags(
+                    showAdvanced = false,
+                    supportsAppLocaleOverride = false,
+                    parentsOn = rowParentsOn(LanguageRows.HdrSubtitleStyle.id to true),
+                ),
+            ),
+            "language hint (HDR parent on) drifted",
+        )
+
+        // Notifications: the enable+advanced block — 0 while notifications
+        // are disabled (the All(WhenOn) gates collapse, no special case),
+        // 6 enabled with the system-settings capability, 5 without it,
+        // 8 with quiet hours on.
+        val notifications = listOf(SettingsScreenGroups.notifications)
+        fun notificationFlags(enable: Boolean, quiet: Boolean, sysSettings: Boolean) =
+            RowAdmissionFlags(
+                showAdvanced = false,
+                supportsSystemNotificationSettings = sysSettings,
+                parentsOn = rowParentsOn(
+                    NotificationRows.NotificationsEnable.id to enable,
+                    NotificationRows.QuietHours.id to quiet,
+                ),
+            )
+        assertEquals(0, hiddenRowsFor(notifications, notificationFlags(enable = false, quiet = false, sysSettings = true)), "notifications hint (disabled) drifted")
+        assertEquals(6, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = false, sysSettings = true)), "notifications hint (enabled) drifted")
+        assertEquals(5, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = false, sysSettings = false)), "notifications hint (no system-settings row) drifted")
+        assertEquals(8, hiddenRowsFor(notifications, notificationFlags(enable = true, quiet = true, sysSettings = true)), "notifications hint (quiet hours on) drifted")
+
+        // Storage: the cache group's five advanced tuning rows; network and
+        // downloads carry no advanced gates (the WhenOn rows count nothing —
+        // hidden under both evaluations).
+        assertEquals(
+            5,
+            hiddenRowsFor(
+                listOf(
+                    SettingsScreenGroups.storageCache,
+                    SettingsScreenGroups.storageNetwork,
+                    SettingsScreenGroups.storageDownloads,
+                ),
+                RowAdmissionFlags(showAdvanced = false),
+            ),
+            "storage hint drifted",
+        )
+
+        // Security: the auto-lock timer's All(AppLock, Advanced) gate — 1
+        // where the app-lock stack exists, 0 without it.
+        assertEquals(
+            1,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.security),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false),
+            ),
+            "security hint (app-lock platform) drifted",
+        )
+        assertEquals(
+            0,
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.security),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLock = false, supportsBiometric = false),
+            ),
+            "security hint (no app-lock stack) drifted",
+        )
     }
 }

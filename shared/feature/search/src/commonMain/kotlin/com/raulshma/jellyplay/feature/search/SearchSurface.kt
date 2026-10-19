@@ -4,10 +4,10 @@ import com.raulshma.jellyplay.core.ui.components.PagedRefreshPhase
 
 /**
  * WHICH surface the search screen's library-content slot renders, folded ONCE
- * by [computeSearchSurface] — the pure successor of the compound branch
- * conditions that used to open the slot's render `when` (the six-term
- * no-results predicate plus the refresh-state ladder that followed the grid).
- * The `HomeSurface` precedent: the screen's `when` is exhaustive over the
+ * by [computeSearchSurface] — the compound branch conditions that open the
+ * slot's render `when` (the six-term no-results predicate plus the refresh-
+ * state ladder that follows the grid), made pure and assertable. The
+ * `HomeSurface` precedent: the screen's `when` is exhaustive over the
  * result and owns rendering only, so the whole branch policy is assertable
  * JVM-side ([SearchSurfaceTest]) without any Compose stack.
  *
@@ -19,8 +19,7 @@ import com.raulshma.jellyplay.core.ui.components.PagedRefreshPhase
  * Precedence is fixed: NoResults → Initial → Content. Note the load-bearing
  * corner the fold preserves: a settled-at-zero refresh ERROR with query text
  * is [NoResults], not [SearchSurface.Content.refresh] ERROR — the empty state
- * wins over the error overlay exactly as the pre-fold first-branch-wins
- * ordering did.
+ * wins over the error overlay (first branch wins).
  */
 internal sealed interface SearchSurface {
 
@@ -44,7 +43,7 @@ internal sealed interface SearchSurface {
      * (the grid itself is empty then; the panes render above). Carries the
      * pager's refresh phase for the overlay ladder — the core:ui chassis's
      * [PagedRefreshPhase], the same vocabulary every paged collection screen
-     * renders through (this fold's former private LOADING/ERROR/IDLE enum).
+     * renders through.
      */
     data class Content(val refresh: PagedRefreshPhase) : SearchSurface
 }
@@ -52,8 +51,7 @@ internal sealed interface SearchSurface {
 /**
  * THE fold — pure over the slot's inputs, no Compose types. `itemCount` and
  * `refreshPhase` derive from the collected `LazyPagingItems` (the phase via
- * the chassis's `LoadState.toPagedRefreshPhase()` — the sealed mapping the
- * former inline loading/error booleans encoded); the pane flags are the
+ * the chassis's `LoadState.toPagedRefreshPhase()`); the pane flags are the
  * screen's derived visibilities.
  */
 internal fun computeSearchSurface(

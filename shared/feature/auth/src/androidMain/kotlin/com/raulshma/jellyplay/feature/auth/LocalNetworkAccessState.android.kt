@@ -12,11 +12,11 @@ import com.raulshma.jellyplay.core.ui.util.LocalNetworkAccess
 
 /**
  * Android actual of the add-server screen's local-network seam: bridges the
- * legacy :core:ui LocalNetworkAccess object (single source of truth for the
+ * :core:ui LocalNetworkAccess object (single source of truth for the
  * Android 17 permission logic) and owns the runtime re-request launcher that
  * commonMain cannot see. The grant state is a Compose state read inside the
  * composable body, so a grant/deny through the launcher recomposes the
- * screen exactly like the legacy inline `localNetworkGranted` var did.
+ * screen.
  */
 @Composable
 internal actual fun rememberLocalNetworkAccess(): LocalNetworkAccessState {

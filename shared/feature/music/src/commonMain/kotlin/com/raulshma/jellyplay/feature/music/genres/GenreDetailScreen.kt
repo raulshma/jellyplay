@@ -49,11 +49,9 @@ fun GenreDetailScreen(
         // The music module's one paged ladder (list variant): refresh
         // loading/error/empty decisions, the append footer and the TV
         // focus-on-launch grab (first row takes D-pad focus once data
-        // arrives) — previously hand-rolled here even inside music. No
-        // pull-to-refresh on this route, matching the old wiring. Declared
-        // delta: the chassis's content-wins precedence keeps the stale page
-        // visible during a deferred refresh where the hand-rolled ladder
-        // blanked to a full-screen spinner.
+        // arrives). No pull-to-refresh on this route. The chassis's
+        // content-wins precedence keeps the stale page visible during a
+        // deferred refresh instead of blanking to a full-screen spinner.
         PagedCollectionList(
             items = tracks,
             itemKey = { it.id },

@@ -30,7 +30,7 @@ import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
  * construction-seam precedent).
  *
  * Member names mirror the [PreferenceSliceSnapshot] slice names on purpose:
- * the snapshot reader maps each store to its slice 1:1.
+ * the snapshot reader maps each store to its slice one-to-one.
  *
  * Public because [PreferenceProjections] itself is public — a private-val
  * constructor parameter cannot expose a non-public type.

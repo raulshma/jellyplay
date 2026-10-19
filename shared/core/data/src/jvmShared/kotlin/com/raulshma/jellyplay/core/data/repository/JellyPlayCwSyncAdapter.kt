@@ -45,11 +45,9 @@ import kotlinx.serialization.json.JsonPrimitive
 class JellyPlayCwSyncAdapter(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore, tombstonesRoam = true) {
 
     // ------------------------------------------------------------------
     // key <-> itemId: `"hidden/{itemId}"`. Item ids are Jellyfin guids (no
@@ -68,11 +66,6 @@ class JellyPlayCwSyncAdapter(
 
     override suspend fun snapshot(): Map<String, JsonElement> =
         hiddenItemIds().associate { keyOf(it) to HIDDEN_VALUE }
-
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
-    override suspend fun deletedKeys(): Set<String> = mirror.deletedKeys(snapshot())
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         if (entries.isEmpty()) return
@@ -95,18 +88,12 @@ class JellyPlayCwSyncAdapter(
         homeDiscoveryStore.setHiddenCwItemIds(hiddenItemIds() - unhides.toSet() + hides.toSet())
     }
 
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
+    override suspend fun deleteLocally(keys: Set<String>) {
         val removals = keys.mapNotNull(::parseKey).toSet()
         if (removals.isNotEmpty()) {
             homeDiscoveryStore.setHiddenCwItemIds(hiddenItemIds() - removals)
         }
-        // The mirror entries go REGARDLESS of key shape: an unparseable key
-        // must not wedge in the mirror forever re-reading as deleted.
-        mirror.clear(keys)
     }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     private companion object {
         const val NAMESPACE = "cw"

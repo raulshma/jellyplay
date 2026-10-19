@@ -167,6 +167,15 @@
     <string name="settings_max_per_check_subtitle">Maximum items per notification batch</string>
     <string name="settings_libraries">Libraries</string>
     <string name="settings_libraries_subtitle">%1$d of %2$d libraries monitored</string>
+    <!-- D12: the per-series new-episode notification management sheet (opened
+         from the notification settings screen next to the per-library list). -->
+    <string name="settings_series_notifications">Series notifications</string>
+    <string name="settings_series_notifications_subtitle">%1$d series opted in</string>
+    <string name="settings_series_notifications_title">Series notifications</string>
+    <string name="settings_series_notifications_empty">No series opted in yet. Turn on notifications from a series\' options menu or its upcoming-episode bell.</string>
+    <string name="settings_series_notifications_remove_cd">Stop notifying for %1$s</string>
+    <string name="settings_series_notifications_restore_all">Restore all</string>
+    <string name="settings_series_notifications_restore_all_message">Remove all %1$d series from new-episode notifications?</string>
     <string name="settings_quiet_hours_start">Quiet Hours Start</string>
     <string name="settings_quiet_hours_end">Quiet Hours End</string>
     <string name="settings_items_count">%1$d items</string>
@@ -788,7 +797,6 @@
     <string name="settings_sync_never">Never synced</string>
     <string name="ss_jellyplay_sync_enabled_title">Sync settings across devices</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">Settings, layouts and preferences follow your Jellyfin account via the JellyPlay plugin</string>
-    <string name="ss_jellyplay_sync_now_title">Sync now</string>
     <string name="ss_jellyplay_sync_now_subtitle">Push and pull synced settings immediately</string>
 
     <!-- JellyPlay companion-plugin settings-sync screen (ADR 0010). The whole

@@ -6,19 +6,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the desktop remote-navigation declarations that remain after the
- * `DesktopRemoteNavCollector` wrapper folded into [DesktopShellServices]:
- * the class was eight forwarded constructor params around shared/feature
- * shell's `RemoteNavigationDispatcher` plus one string constant and a
- * collect() one-liner, so its ladder-coverage rows here duplicated
+ * Pins the desktop remote-navigation declarations:
+ * [DesktopShellServices] forwards to shared/feature
+ * shell's `RemoteNavigationDispatcher`; its ladder coverage lives in
  * `RemoteNavigationDispatcherTest` (which pins every NavigationTarget
  * case's sink, the GoToTopLevel select-not-pop fork, ClosePlayer's
- * multi-stack pop and the context-menu fallback) — those rows collapsed
- * into references to the shared test. What is genuinely desktop-owned
- * stays pinned HERE:
+ * multi-stack pop and the context-menu fallback). What is genuinely
+ * desktop-owned stays pinned HERE:
  *
  *  - [composeFocusDirection], the four-branch remote→Compose focus mapping
- *    extracted from the scaffold's moveFocus adapter (plain constant
+ *    the scaffold's moveFocus adapter uses (plain constant
  *    objects — no focus tree needed);
  *  - [DESKTOP_CONTEXT_MENU_UNAVAILABLE], the context-menu fallback wording
  *    the desktop seam passes the shared ladder (the desktop shell has no

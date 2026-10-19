@@ -35,7 +35,7 @@ import kotlinx.serialization.Serializable
  * keys, setters (including the bounds coercions below), read projection, legacy
  * migration, and reset-key list end-to-end.
  *
- * **Stage B spec derivation** (the [PlaybackStore] precedent): every key this
+ * **Spec derivation:** every key this
  * store owns is declared exactly once as a row in [VideoPlayerPreferenceSpecs]
  * (wire name, default, reset category, read/write encoding) and the machinery
  * below is derived from those rows — each [Keys] member rebuilds its row's
@@ -44,7 +44,7 @@ import kotlinx.serialization.Serializable
  * derived writes, and [resetKeysFor] filters the rows by reset category. The
  * migration semantics (the `video_gestures_enabled` → [GestureMode] fallback,
  * the segment-behaviour four-boolean fallback, the legacy string-key reads)
- * live in the rows' encodings now, next to the key they apply to.
+ * live in the rows' encodings, next to the key they apply to.
  *
  * **Cross-key invariants owned here (hand-written by decision — an invariant
  * or a bounds policy spanning more than a row encoding cannot be derived):**
@@ -97,6 +97,7 @@ class VideoPlayerStore constructor(
         val STILL_WATCHING_EPISODE_THRESHOLD = intPreferencesKey(VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.keyName)
         val TRAILER_AUTOPLAY = booleanPreferencesKey(VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.keyName)
         val CINEMA_MODE_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.keyName)
+        val PLAY_TRAILER_BEFORE_MOVIE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.keyName)
         val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.keyName)
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.keyName)
         val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.keyName)
@@ -117,6 +118,7 @@ class VideoPlayerStore constructor(
         val INCOGNITO_MODE_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.keyName)
 
         val SEGMENT_BEHAVIORS = stringPreferencesKey(VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.keyName)
+        val SEGMENT_SKIP_DELAYS_MS = stringPreferencesKey(VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.keyName)
         val SKIP_INTRO_ENABLED = stringPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_INTRO_ENABLED.keyName)
         val SKIP_OUTRO_ENABLED = stringPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_OUTRO_ENABLED.keyName)
         val AUTO_SKIP_INTRO = stringPreferencesKey(VideoPlayerPreferenceSpecs.AUTO_SKIP_INTRO.keyName)
@@ -159,6 +161,7 @@ class VideoPlayerStore constructor(
         stillWatchingEpisodeThreshold = VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.readFrom(prefs),
         trailerAutoplay = VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.readFrom(prefs),
         cinemaModeEnabled = VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.readFrom(prefs),
+        playTrailerBeforeMovie = VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.readFrom(prefs),
         videoSwipeSeekMaxMs = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.readFrom(prefs),
         videoRememberBrightness = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.readFrom(prefs),
         videoBrightnessLevel = VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.readFrom(prefs),
@@ -178,6 +181,7 @@ class VideoPlayerStore constructor(
         tvZoomModePercent = VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.readFrom(prefs),
         incognitoModeEnabled = VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.readFrom(prefs),
         segmentBehaviors = VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.readFrom(prefs),
+        segmentSkipDelaysMs = VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.readFrom(prefs),
         skipSegmentsOnSeek = VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.readFrom(prefs),
     )
 
@@ -317,6 +321,11 @@ class VideoPlayerStore constructor(
         dataStore.edit { VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.writeTo(it, enabled) }
     }
 
+    /** Trailer-then-feature: seed the movie session queue with a trailer when one is available. */
+    suspend fun setPlayTrailerBeforeMovie(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.writeTo(it, enabled) }
+    }
+
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.writeTo(it, ms) }
     }
@@ -419,6 +428,23 @@ class VideoPlayerStore constructor(
         }
     }
 
+    suspend fun setSegmentSkipDelays(delays: Map<MediaSegmentType, Long>) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.writeTo(it, delays) }
+    }
+
+    /**
+     * Updates a single segment type's auto-skip delay, read-modify-writing the
+     * stored map (merged over the all-zero defaults) so callers don't have to
+     * reconstruct the whole map — the [setSegmentBehavior] precedent.
+     */
+    suspend fun setSegmentSkipDelay(type: MediaSegmentType, delayMs: Long) {
+        dataStore.edit { prefs ->
+            val current = VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.readFrom(prefs).toMutableMap()
+            current[type] = delayMs
+            VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.writeTo(prefs, current)
+        }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
@@ -470,6 +496,7 @@ class VideoPlayerStore constructor(
             VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.writeTo(prefs, slice.stillWatchingEpisodeThreshold)
             VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.writeTo(prefs, slice.trailerAutoplay)
             VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.writeTo(prefs, slice.cinemaModeEnabled)
+            VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.writeTo(prefs, slice.playTrailerBeforeMovie)
             VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.writeTo(prefs, slice.videoSwipeSeekMaxMs)
             VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.writeTo(prefs, slice.videoRememberBrightness)
             VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.writeTo(prefs, slice.videoBrightnessLevel)
@@ -481,6 +508,7 @@ class VideoPlayerStore constructor(
             VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.writeTo(prefs, slice.trickplayEnabled)
             VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.writeTo(prefs, slice.trickplayOnSeekGesture)
             VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.writeTo(prefs, slice.segmentBehaviors)
+            VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.writeTo(prefs, slice.segmentSkipDelaysMs)
             VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.writeTo(prefs, slice.videoEpisodeBrowserEnabled)
             VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.writeTo(prefs, slice.videoShowPlaybackMetadata)
             VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.writeTo(prefs, slice.videoPreloadBufferSize)
@@ -496,80 +524,87 @@ class VideoPlayerStore constructor(
 
 /**
  * The in-player video preference slice. Plain data class (Compose-free) so the
- * datastore module stays framework-light. Defaults mirror the projection
- * defaults in [VideoPlayerStore.read] (declared on the
- * [VideoPlayerPreferenceSpecs] rows).
+ * datastore module stays framework-light. Every default IS its
+ * [VideoPlayerPreferenceSpecs] row's declared default — read off the row via a
+ * plain accessor, so a preference's default is stated exactly once, in its
+ * spec, and cannot drift between the spec (what an absent key reads) and the
+ * slice (what a fresh in-memory instance serves). The legacy-only rows
+ * (`video_gestures_enabled`, the four string-keyed skip booleans) have no
+ * slice property by design. The spec-default equality is pinned field-for-field
+ * by `VideoPlayerSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class VideoPlayerSlice(
-    val videoSeekDurationMs: Long = 10_000L,
-    val videoControlsTimeoutMs: Long = 5_000L,
+    val videoSeekDurationMs: Long = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.default,
+    val videoControlsTimeoutMs: Long = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.default,
     /**
-     * (jellyfin-androidtv #3924): pausing must not summon the control
+     * Pausing must not summon the control
      * overlay. Default **off** — today's show-on-pause behavior; on, only the
      * SUMMONS is suppressed (an already-visible overlay keeps its auto-hide).
      */
-    val videoHideOsdOnPause: Boolean = false,
+    val videoHideOsdOnPause: Boolean = VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.default,
     /**
      * Resume when headphones reconnect after the becoming-noisy
      * auto-pause. Default **off** — opt-in; the decision (paused-by-the-event
      * marker + freshness window) lives in core:data's `HeadsetResumePolicy`.
      */
-    val videoResumeOnHeadsetPlug: Boolean = false,
-    val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
-    val videoDefaultAspectRatio: String = "AUTO",
-    val videoGestureMode: GestureMode = GestureMode.ALL,
+    val videoResumeOnHeadsetPlug: Boolean = VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.default,
+    val videoDefaultOrientation: OrientationMode = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.default,
+    val videoDefaultAspectRatio: String = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.default,
+    val videoGestureMode: GestureMode = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.default,
     /**
      * double-tap-and-hold continuous seek in the seek zones.
      * Default ON; off restores long-press = hold-speed everywhere.
      */
-    val videoDoubleTapHoldSeekEnabled: Boolean = true,
+    val videoDoubleTapHoldSeekEnabled: Boolean = VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.default,
     /**
      * The whole player input mapping (touch / wheel / keyboard / D-pad rows).
      * Default = the factory mapping gated by the legacy gesture config —
      * absent blob reads derive it, so this default only serves fresh
      * in-memory slices (and the factory default is the ALL-mode mapping).
      */
-    val videoInputBindings: PlayerInputMap = PlayerInputDefaults.defaultMap(),
-    val videoPassOutProtectionHours: Int = 0,
-    val videoSkipBackOnResumeMs: Long = 0L,
-    val videoHoldSpeedEnabled: Boolean = true,
-    val videoHoldSpeedMultiplier: Float = 2.0f,
-    val videoDefaultSpeed: Float = 1.0f,
-    val videoAutoplayNext: Boolean = true,
+    val videoInputBindings: PlayerInputMap = VideoPlayerPreferenceSpecs.VIDEO_INPUT_BINDINGS.default,
+    val videoPassOutProtectionHours: Int = VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.default,
+    val videoSkipBackOnResumeMs: Long = VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.default,
+    val videoHoldSpeedEnabled: Boolean = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.default,
+    val videoHoldSpeedMultiplier: Float = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_MULTIPLIER.default,
+    val videoDefaultSpeed: Float = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_SPEED.default,
+    val videoAutoplayNext: Boolean = VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_NEXT.default,
     /**
      * "Still watching?" trigger arms. Default **off**: the confirm prompt is
      * a behavior change the user must opt into (see [StillWatchingMode]).
      */
-    val stillWatchingMode: StillWatchingMode = StillWatchingMode.OFF,
+    val stillWatchingMode: StillWatchingMode = VideoPlayerPreferenceSpecs.STILL_WATCHING_MODE.default,
     /** Episode arm's threshold — consecutive auto-plays before the prompt; 0 = off. */
-    val stillWatchingEpisodeThreshold: Int = 0,
-    val trailerAutoplay: Boolean = true,
-    val cinemaModeEnabled: Boolean = false,
-    val videoSwipeSeekMaxMs: Long = 120_000L,
-    val videoRememberBrightness: Boolean = true,
-    val videoBrightnessLevel: Float = 0.5f,
-    val videoAutoSkipIntro: Boolean = false,
-    val videoAutoSkipOutro: Boolean = false,
-    val videoRememberMuted: Boolean = true,
-    val videoMuted: Boolean = false,
-    val videoGestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
-    val trickplayEnabled: Boolean = true,
-    val trickplayOnSeekGesture: Boolean = true,
-    val videoEpisodeBrowserEnabled: Boolean = true,
-    val videoShowPlaybackMetadata: Boolean = true,
-    val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
+    val stillWatchingEpisodeThreshold: Int = VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.default,
+    val trailerAutoplay: Boolean = VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.default,
+    val cinemaModeEnabled: Boolean = VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.default,
+    val playTrailerBeforeMovie: Boolean = VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.default,
+    val videoSwipeSeekMaxMs: Long = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.default,
+    val videoRememberBrightness: Boolean = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.default,
+    val videoBrightnessLevel: Float = VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.default,
+    val videoAutoSkipIntro: Boolean = VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_INTRO.default,
+    val videoAutoSkipOutro: Boolean = VideoPlayerPreferenceSpecs.VIDEO_AUTO_SKIP_OUTRO.default,
+    val videoRememberMuted: Boolean = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_MUTED.default,
+    val videoMuted: Boolean = VideoPlayerPreferenceSpecs.VIDEO_MUTED.default,
+    val videoGestureIndicatorSide: GestureIndicatorSide = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_INDICATOR_SIDE.default,
+    val trickplayEnabled: Boolean = VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.default,
+    val trickplayOnSeekGesture: Boolean = VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.default,
+    val videoEpisodeBrowserEnabled: Boolean = VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.default,
+    val videoShowPlaybackMetadata: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.default,
+    val videoPreloadBufferSize: PreloadBufferSize = VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.default,
     /** Direct-play byte-cache cap in MB (see [Keys.VIDEO_CACHE_SIZE_MB]). */
-    val videoCacheSizeMb: Int = 1024,
-    val showClockInPlayer: Boolean = false,
-    val showTimeRemaining: Boolean = false,
-    val tvZoomModePercent: Float = 0f,
-    val incognitoModeEnabled: Boolean = false,
-    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    val videoCacheSizeMb: Int = VideoPlayerPreferenceSpecs.VIDEO_CACHE_SIZE_MB.default,
+    val showClockInPlayer: Boolean = VideoPlayerPreferenceSpecs.SHOW_CLOCK_IN_PLAYER.default,
+    val showTimeRemaining: Boolean = VideoPlayerPreferenceSpecs.SHOW_TIME_REMAINING.default,
+    val tvZoomModePercent: Float = VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.default,
+    val incognitoModeEnabled: Boolean = VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.default,
+    val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.default,
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.default,
     /**
      * Skip-on-forward-seek. Default **off**: opt-in, because silently
      * remapping a user's seek target is a behavior change they must ask for.
      */
-    val skipSegmentsOnSeek: Boolean = false,
+    val skipSegmentsOnSeek: Boolean = VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.default,
 )

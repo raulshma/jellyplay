@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">Forcés</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">Par défaut</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">Obtenir</string>
     <string name="player_video_subtitle_hub_section_delay">Décalage</string>
     <string name="player_video_subtitle_downloaded_device_only">Enregistré sur l'appareil uniquement (hors ligne)</string>
+    <string name="player_video_subtitle_save_to_server">Enregistrer sur le serveur</string>
     <string name="player_video_chapters">Chapitres</string>
+    <string name="player_video_scrub_slow">lent</string>
+    <string name="player_video_queue_title">File d'attente</string>
+    <string name="player_video_queue_subtitle">%1$d dans la file</string>
+    <string name="player_video_queue_clear">Vider la file</string>
+    <string name="player_video_queue_up_next">À suivre</string>
+    <string name="player_video_queue_move_up">Monter</string>
+    <string name="player_video_queue_move_down">Descendre</string>
+    <string name="player_video_queue_remove">Retirer de la file</string>
+    <string name="player_video_queue_open">File d'attente (%1$d)</string>
     <string name="player_video_episodes">Épisodes</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">Format d'image</string>
@@ -163,6 +174,11 @@
     <string name="player_video_dialogue_boost">Ampli des voix</string>
     <string name="player_video_dialogue_boost_on">Ampli des voix \u00B7 %1$s</string>
     <string name="player_video_night_mode">Mode nuit</string>
+    <string name="player_video_spatial_audio">Audio spatial</string>
+    <string name="player_video_spatial_audio_on">Audio spatial actif — spatialiseur système engagé</string>
+    <string name="player_video_spatial_audio_unavailable">Non spatialisable sur cette sortie</string>
+    <string name="player_video_stats_spatial">État spatial</string>
+    <string name="player_video_stats_spatial_superseded">(virtualiseur remplacé)</string>
     <string name="player_video_night_mode_on">Mode nuit \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">Normalisation audio</string>
     <string name="player_video_normalization_on">Normalisation \u00B7 %1$s</string>
@@ -261,10 +277,9 @@
     <string name="player_video_no_episodes_found">Aucun épisode trouvé pour cette saison</string>
     <string name="player_video_poster">Affiche</string>
     <string name="player_video_selected">Sélectionné</string>
-    <string name="player_video_volume">Volume</string>
-    <string name="player_video_hdr_label">HDR : %1$s</string>
-    <string name="player_video_duration">Durée</string>
+    <string name="player_video_volume">Volume</string>    <string name="player_video_duration">Durée</string>
     <string name="player_video_remember_audio_language">Mémoriser la langue audio pour cette série</string>
+    <string name="player_video_remember_audio_description">Préférer l'audiodescription pour cette série</string>
     <string name="player_video_remember_subtitle_language">Mémoriser la langue des sous-titres pour cette série</string>
     <string name="player_video_remember_subtitles_off">Garder les sous-titres désactivés pour cette série</string>
     <string name="player_video_error_offline_file_missing">Erreur : fichier hors ligne manquant</string>
@@ -293,6 +308,7 @@
     <string name="player_video_stats_clock">Horloge</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">Sortie HDR active</string>
+    <string name="player_video_stats_display_hdr">HDR d'écran</string>
     <string name="player_video_stats_color_range">Plage de couleurs</string>
     <string name="player_video_stats_color_depth">Profondeur de couleur</string>
     <string name="player_video_stats_sample_rate">Taux d echantillonnage</string>

@@ -29,11 +29,12 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
+import com.raulshma.jellyplay.feature.admin.tasks.TaskStatePresentation
+import com.raulshma.jellyplay.feature.admin.tasks.toColor
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_view_all
 
@@ -154,11 +155,11 @@ private fun TaskItem(
 
 @Composable
 private fun TaskStateBadge(state: TaskState) {
-    val color: Color = when (state) {
-        TaskState.RUNNING -> MaterialTheme.colorScheme.primary
-        TaskState.CANCELLING -> StatusColors.warning
-        TaskState.IDLE -> MaterialTheme.colorScheme.outline
-    }
+    // The shared tasks state table's tint ladder; the MUTED (idle) arm keeps
+    // this surface's former `outline` resolution via the map's parameter.
+    val color: Color = TaskStatePresentation[state]
+        .colorRole
+        .toColor(muted = MaterialTheme.colorScheme.outline)
     Box(
         modifier = Modifier
             .size(8.dp)

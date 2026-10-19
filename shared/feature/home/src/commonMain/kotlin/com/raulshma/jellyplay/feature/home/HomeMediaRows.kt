@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,6 +28,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
@@ -45,6 +48,8 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -63,12 +69,15 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.isNewForHome
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
 import com.raulshma.jellyplay.core.ui.components.mouseScroll
+import com.raulshma.jellyplay.core.ui.components.localDateFromIsoTimestamp
+import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -84,15 +93,20 @@ import com.raulshma.jellyplay.core.ui.components.WideMediaCard
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.CalendarTime
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Dice
+import com.composables.icons.tabler.outline.Folders
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.datetime.LocalDate
+import com.raulshma.jellyplay.feature.home.generated.resources.home_airs_date_format
 import com.raulshma.jellyplay.feature.home.generated.resources.home_see_all
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 
@@ -107,7 +121,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.Res
  * Home row for the offline-derived poster-card sections: the same chrome as
  * [HomeMediaRow] — title, card width, spacing, TV/mobile scroller, focus
  * wiring — but cards render via [OfflineMediaCard] so artwork resolves from
- * local files and no server image URL is ever built (issue #147: the offline
+ * local files and no server image URL is ever built (the offline
  * home is the normal home, populated from downloads). Rows are either generic
  * ([HomeSectionType.DOWNLOADED]) or cached-layout mirror rows typed as their
  * online counterparts; the latter pass [onSectionLongClick] so the section
@@ -127,7 +141,7 @@ internal fun OfflineHomeMediaRow(
     clippingEnabled: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
     // "See All" pill for the section types that get one online (mirrored rows
-    // keep the affordance — same visual row as the online layout, #147).
+    // keep the affordance — same visual row as the online layout).
     onSeeAllClick: (() -> Unit)? = null,
     // Play overlay on the card, mirroring HomeMediaRow's onPlayClick.
     onPlayClick: ((OfflineMediaItem) -> Unit)? = null,
@@ -143,7 +157,7 @@ internal fun OfflineHomeMediaRow(
     val cardPrefs = LocalCardDisplayPreferences.current
     val metrics = homeRowMetrics()
     // Same hide-watched row filter as HomeMediaRow, so mirrored rows behave
-    // identically to their online counterparts (#147).
+    // identically to their online counterparts.
     val effectiveItems = remember(items, cardPrefs.hideWatchedItems) {
         hideWatchedFilter(items, cardPrefs.hideWatchedItems) { it.toMediaItem().isPlayed }
     }
@@ -203,7 +217,7 @@ internal fun OfflineHomeMediaRow(
 /**
  * Shared poster-row chrome — the pieces [OfflineHomeMediaRow] mirrors from
  * [HomeMediaRow] so offline rows behave identically to their online
- * counterparts (#147). Extracted so the two rows cannot drift apart.
+ * counterparts. Extracted so the two rows cannot drift apart.
  */
 
 /** Drops watched items when the pref is on, so the whole card slot disappears. */
@@ -263,10 +277,10 @@ internal fun homeRowMetrics(widthScale: Float? = null): HomeRowMetrics {
 /**
  * The home rows' TV/touch chassis — the ONE implementation of the
  * [TvFocusableItemRow] (TV) / [HorizontalMediaScroller] (touch) branch that
- * every home row previously duplicated, with the card as a slot. The slot
+ * every home row shares, with the card as a slot. The slot
  * receives the focus modifier on TV and an empty one on touch; append
- * [cardWidth] to it so both branches size identically. Fixing card-rendering
- * or scroller behavior now lands once per row instead of twice.
+ * [cardWidth] to it so both branches size identically. Card-rendering
+ * or scroller behavior lands in one place.
  */
 @Composable
 internal fun <T> HomeItemRow(
@@ -463,18 +477,29 @@ internal fun <T> ContinueWatchingRow(
             onFocusedItemChange = { item -> onFocusedItemChange?.invoke(toMediaItem(item)) },
             edgeRefresh = edgeRefresh,
         ) { item, mod ->
+            val mediaItem = toMediaItem(item)
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+            // The slot tracks its own TV focus for the trickplay peek.
+            // The loader's gate (pref ∧ TV ∧ ¬performance ∧ projected
+            // Trickplay ∧ resume position) keeps it inert everywhere else, so
+            // touch and suppressed cards render exactly as before.
+            val peekFocused = remember { mutableStateOf(false) }
+            val trickplayPeek = rememberWideCardTrickplayPeek(
+                item = mediaItem,
+                isFocused = { peekFocused.value },
+            )
             WideMediaCard(
-                item = toMediaItem(item),
+                item = mediaItem,
                 imageUrl = imageUrl(item),
                 backdropUrl = backdropUrl(item),
                 onClick = memoizedClick,
                 onPlayClick = memoizedPlayClick,
                 cardWidth = cardWidth,
                 surfaceScrimBrush = surfaceScrimBrush,
-                modifier = mod,
+                modifier = mod.onFocusChanged { peekFocused.value = it.hasFocus },
                 clipToShape = clippingEnabled,
+                trickplayPeek = trickplayPeek,
             )
         }
     }
@@ -495,6 +520,23 @@ internal fun HomeMediaRow(
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
+    /**
+     * NEW-badge seam: only the arrival rows (LATEST_MEDIA /
+     * RECENTLY_ADDED — UPCOMING joins here when its row lands) pass true;
+     * [homeLastVisitEpochMs] carries the PREVIOUS visit's stamp (the
+     * session's own stamp must not clear the badges it just showed).
+     * Together with the card prefs' global `showNewBadges` toggle and the
+     * per-item predicate this decides each card's [NewBadge].
+     */
+    showNewBadges: Boolean = false,
+    homeLastVisitEpochMs: Long = 0L,
+    /**
+     * Renders each card's air-date chip ([HomeAirsDateChip], the details
+     * screen's "Airs <date>" vocabulary) in the poster's top-start
+     * corner. The Upcoming row is the only caller — its items are unaired
+     * episodes whose [MediaItem.premiereDate] is the point of the row.
+     */
+    showAirDateChips: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
     /**
@@ -579,6 +621,14 @@ internal fun HomeMediaRow(
         ) { item, mod ->
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
+            // The per-card NEW decision — the row's section flag ∧ the
+            // card prefs' global toggle ∧ the item's arrival-vs-previous-visit
+            // predicate. Resolved here (not in the card) so the card stays a
+            // pure renderer and the remember slots stay in the row.
+            val isNewArrival = remember(item.id, item.dateCreatedEpochMs, homeLastVisitEpochMs) {
+                item.isNewForHome(homeLastVisitEpochMs)
+            }
+            val showNewBadge = showNewBadges && cardPrefs.showNewBadges && isNewArrival
             // Memoize progress so per-card arithmetic runs only when ticks change,
             // not on every scroll/animation-frame recompose (matches WideMediaCard).
             // The override path skips the memo: a map lookup, cheaper than the
@@ -606,6 +656,11 @@ internal fun HomeMediaRow(
                 seriesBackdropResolver = seriesBackdropResolver,
                 showEpisodeSeriesBadge = showEpisodeSeriesBadge,
             )
+            // Upcoming air-date badge — rendered in the poster's top-left
+            // overlay stack via [PosterCard.topStartBadge].
+            val airDate = if (showAirDateChips) {
+                remember(item.id, item.premiereDate) { upcomingAirDate(item.premiereDate) }
+            } else null
             PosterCard(
                 item = item,
                 imageUrl = cardImage.imageUrl,
@@ -626,6 +681,194 @@ internal fun HomeMediaRow(
                 clipToShape = clippingEnabled,
                 showEpisodeSeriesBadge = cardImage.showSeriesBadge,
                 gradientBrush = posterScrimBrush,
+                showNewBadge = showNewBadge,
+                topStartBadge = if (airDate != null) {
+                    { HomeAirsDateChip(date = airDate) }
+                } else null,
+            )
+        }
+    }
+}
+
+/**
+ * The My Media tiles row — home's only non-poster shape. One landscape
+ * tile per Jellyfin library ([HomeLibraryTile]): the library's Primary image
+ * over a legibility scrim, the library name, and — when a payload ever
+ * carries one — the item count. Everything else mirrors [HomeMediaRow]
+ * exactly: the [HomeItemRow] chassis (TV focus / touch scroller), the shared
+ * row metrics (wide-card scale — the tiles are landscape), the
+ * [HomeRowTitle] with the section long-press. The items are the assembler's
+ * FOLDER-typed library tiles; there is no edge refresh (the row assembles the
+ * batch's shared folders read — a single-row refetch would re-run what the
+ * batch just fetched) and no offline arm (library art is a server artifact;
+ * the offline mirror drops the row).
+ *
+ * @param onTileClick routes into the library screen (the dock drawer's
+ *   construction — id + name — through the `Route.LibrarySection` carrier).
+ * @param onTileLongClick the tile-level curation affordance, mirroring the
+ *   row long-press pattern: opens the inline section-config sheet for
+ *   My Media scoped to the long-pressed library.
+ */
+@Composable
+internal fun HomeLibraryTilesRow(
+    title: String,
+    items: List<MediaItem>,
+    imageUrlFor: (MediaItem) -> String,
+    onTileClick: (MediaItem) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onRowFocused: (() -> Unit)? = null,
+    clippingEnabled: Boolean = false,
+    onTileLongClick: ((MediaItem) -> Unit)? = null,
+    onSectionLongClick: (() -> Unit)? = null,
+    // TV-only: reports the D-pad-focused tile so the screen's Menu key can
+    // open its quick actions.
+    onFocusedItemChange: ((MediaItem) -> Unit)? = null,
+) {
+    val metrics = homeRowMetrics(widthScale = 1.6f)
+    if (items.isEmpty()) return
+    Column(modifier = modifier) {
+        HomeRowTitle(
+            title = title,
+            contentPad = metrics.contentPad,
+            onLongClick = onSectionLongClick,
+        )
+        HomeItemRow(
+            items = items,
+            key = { it.id },
+            cardWidth = metrics.cardWidth,
+            spacing = metrics.spacing,
+            contentPad = metrics.contentPad,
+            clippingEnabled = clippingEnabled,
+            focusRequester = focusRequester,
+            onRowFocused = onRowFocused,
+            onFocusedItemChange = { item -> onFocusedItemChange?.invoke(item) },
+        ) { item, mod ->
+            val memoizedClick = remember(item, onTileClick) { { onTileClick(item) } }
+            val memoizedLongClick = onTileLongClick?.let { click ->
+                remember(item, click) { { click(item) } }
+            }
+            HomeLibraryTile(
+                item = item,
+                imageUrl = remember(item) { imageUrlFor(item) },
+                onClick = memoizedClick,
+                onLongClick = memoizedLongClick,
+                modifier = mod.width(metrics.cardWidth),
+            )
+        }
+    }
+}
+
+/**
+ * One library tile: the library's Primary image (the same id-based resolver
+ * every server card uses) filling a 16:9 smooth-corner slot, a bottom scrim
+ * for legibility, the library name bottom-start, and the item count
+ * bottom-end when the payload carries one (the folders read doesn't today —
+ * the slot stays reserved for when it does). `combinedClickable` gives both
+ * form factors their gesture: tap routes into the library, long-press opens
+ * the tile's curation sheet.
+ */
+@Composable
+private fun HomeLibraryTile(
+    item: MediaItem,
+    imageUrl: String,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .aspectRatio(16f / 9f)
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        MediaImage(
+            url = imageUrl,
+            contentDescription = item.name,
+            modifier = Modifier.fillMaxSize(),
+            placeholderIcon = Tabler.Outline.Folders,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                    ),
+                ),
+        )
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+        )
+        // Item count — rendered only when a payload carries one; the current
+        // folders read projects no counts, so tiles render name-only.
+        val itemCount = item.recursiveItemCount ?: item.childCount
+        if (itemCount != null && itemCount > 0) {
+            Text(
+                text = itemCount.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 10.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The air-date chip's pure input: the Upcoming card's premiere stamp
+ * parsed to a [LocalDate], or null (absent / unparseable) — the chip simply
+ * doesn't render, never lies. Shares the core-ui date decoders the details
+ * screen's MissingEpisodeBadge.Airs uses, so both surfaces agree on what a
+ * premiere stamp means. Pinned by [HomeMediaRowsTest].
+ */
+internal fun upcomingAirDate(premiereDate: String?): LocalDate? =
+    premiereDate?.let(::localDateFromIsoTimestamp)
+
+/**
+ * The "Airs <date>" chip on an Upcoming card — a replica of the details
+ * screen's `MissingEpisodeBadge.Airs` tag (the same dark-scrim Surface, the
+ * same labelSmall bold label) so the two surfaces read as one vocabulary;
+ * the details module is not imported (home replicates the look, it does not
+ * depend on it). Overlay-only: rendered in the poster's top-start corner,
+ * never inline with the card text.
+ */
+@Composable
+internal fun HomeAirsDateChip(
+    date: LocalDate,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = Color.Black.copy(alpha = 0.55f),
+        contentColor = Color.White.copy(alpha = 0.9f),
+        shape = ShapeCache.smooth12,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.CalendarTime,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = stringResource(Res.string.home_airs_date_format, shortMonthDayYear(date)),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
             )
         }
     }

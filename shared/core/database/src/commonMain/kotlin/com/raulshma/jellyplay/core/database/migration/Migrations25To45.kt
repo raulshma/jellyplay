@@ -93,7 +93,7 @@ val MIGRATION_31_32 = object : Migration(31, 32) {
 
 // Add a non-unique index on `offline_media.name`. The OfflineMediaDao.search
 // query orders by `name COLLATE NOCASE` and a `CASE WHEN name LIKE 'q%'` prefix
-// branch; previously a full table scan ran for every keystroke on the widest
+// branch; without it a full table scan runs for every keystroke on the widest
 // table (33 columns). The leading-`%` substring LIKE branch cannot be served
 // by a B-tree index, but the prefix/order-by branches now benefit. Behavior
 // is unchanged; this is purely a query-planner improvement.
@@ -111,10 +111,10 @@ val MIGRATION_33_34 = object : Migration(33, 34) {
 
 // Persist the Jellyfin `enableContentDeletion` user policy flag so the
 // Stale Media / Watched Media admin screens can gate the Delete button on a
-// value that survives an app restart. Previously the flag lived only in the
-// in-memory UserInfo and was dropped by persistSession/restoreSession because
-// the users table had no column for it — so every restart reset it to false
-// and the admin screens wrongly told admins they lacked permission.
+// value that survives an app restart. Without this column the flag would
+// live only in the in-memory UserInfo and be dropped by
+// persistSession/restoreSession — every restart would reset it to false and
+// the admin screens would wrongly tell admins they lacked permission.
 val MIGRATION_34_35 = object : Migration(34, 35) {
     override suspend fun migrate(db: SQLiteConnection) {
         db.execSQL("ALTER TABLE users ADD COLUMN canDeleteContent INTEGER NOT NULL DEFAULT 0")

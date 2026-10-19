@@ -5,6 +5,9 @@ import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,7 +23,7 @@ class TimeSyncManagerTest {
     @BeforeTest
     fun setUp() {
         apiClient = mockk(relaxed = true)
-        manager = TimeSyncManager(apiClient)
+        manager = TimeSyncManager(apiClient, CoroutineScope(SupervisorJob() + Dispatchers.IO))
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -153,8 +154,10 @@ class DiscoverRowsViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
+    private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     /** The library client's uncached reads (the editor preview's fresh row
-     *  fetch, the People picker + tag facets — all off the union). */
+     *  fetch + the People picker — off the union; the tag facets ride the
+     *  repository's cached getTags). */
     private val libraryApiClient: LibraryApiClient,
 ) : JellyPlayViewModel() {
 
@@ -180,7 +183,7 @@ class DiscoverRowsViewModel(
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
         getGenres = { force -> mediaRepository.getGenres(force = force) },
-        getTags = { libraryApiClient.getTags() },
+        getTags = { mediaCatalogueEnrichments.getTags(null) },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
     val tags: StateFlow<List<String>> = filterDimensions.tags
@@ -205,9 +208,9 @@ class DiscoverRowsViewModel(
             mediaRepository.getLibraryFolders().onSuccess { _libraryFolders.value = it }
             mediaRepository.getStudios().onSuccess { _studios.value = it }
         }
-        // Genres/tags ride the shared holder (independent coroutines + retry),
-        // instead of the former sequential no-retry reads inside the launch
-        // above — same end state, one retry on transient failures.
+        // Genres/tags ride the shared holder (independent coroutines + retry)
+        // instead of sequential reads inside the launch above — same end
+        // state, one retry on transient failures.
         filterDimensions.load()
     }
 

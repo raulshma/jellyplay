@@ -43,6 +43,14 @@ class VideoEffectsControllerTest {
         audioEffectsStore = audioEffectsStore,
         playbackStore = playbackStore,
         syncConfig = { syncCalls++ },
+        // Live drag legs count on the same counter the settle legs do (the
+        // old null default fell back to syncConfig; same observable shape).
+        syncConfigDebounced = { syncCalls++ },
+        // No playback item in this harness, so the per-item persist gate
+        // stays closed — the same effective behavior the old defaults had,
+        // now explicit at the (required) wiring site.
+        persistEffectsGate = { null },
+        persistVideoEffectsForItem = { _, _ -> },
     )
 
     private lateinit var c: VideoEffectsController
@@ -275,6 +283,9 @@ class VideoEffectsControllerTest {
             audioEffectsStore = audioEffectsStore,
             playbackStore = playbackStore,
             syncConfig = { seen += c0.state.value },
+            syncConfigDebounced = {},
+            persistEffectsGate = { null },
+            persistVideoEffectsForItem = { _, _ -> },
         )
 
         c0.toggleNightMode()
@@ -349,6 +360,8 @@ class VideoEffectsControllerTest {
             audioNormalizationEnabled = true,
             channelMixMode = ChannelMixMode.SURROUND_UPMIX,
             channelMixEnabled = true,
+            spatialAudioEnabled = true,
+            spatialAudioOnlyHeadphones = false,
         )
 
         val s = it.state.value
@@ -361,8 +374,24 @@ class VideoEffectsControllerTest {
         assertTrue(s.audioNormalizationEnabled)
         assertEquals(ChannelMixMode.SURROUND_UPMIX, s.channelMixMode)
         assertTrue(s.channelMixEnabled)
+        assertTrue(s.spatialAudioEnabled)
+        assertFalse(s.spatialAudioOnlyHeadphones)
         // Never seeded by the engine collector — live values survive.
         assertTrue(s.bassBoostEnabled)
         assertEquals(ReverbPreset.LARGE_HALL, s.reverbPreset)
+    }
+
+    /** The ADVISORY spatial toggle: state flip + playback-store persistence. */
+    @Test
+    fun setSpatialAudioEnabled_persistsThroughPlaybackStore() = withController {
+        it.setSpatialAudioEnabled(true)
+
+        assertTrue(it.state.value.spatialAudioEnabled)
+        coVerify { playbackStore.setSpatialAudioEnabled(true) }
+
+        it.setSpatialAudioOnlyHeadphones(false)
+
+        assertFalse(it.state.value.spatialAudioOnlyHeadphones)
+        coVerify { playbackStore.setSpatialAudioOnlyHeadphones(false) }
     }
 }

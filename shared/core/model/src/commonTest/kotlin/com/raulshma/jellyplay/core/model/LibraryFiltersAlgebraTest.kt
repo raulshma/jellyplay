@@ -7,10 +7,10 @@ import kotlin.test.Test
 /**
  * Pins [LibraryFilters]' write algebra and the canonical [LibraryFilters.hasActiveFilters]
  * fold — the behaviour the library and search screens' filter toggles/clears route
- * through (same pattern as [HomeSectionPrefs]). Previously these were hand-rolled
- * at each call site and the two screens' active-filter predicates had drifted:
- * library's copy omitted years/tags/minRating/sort, so its badge and BackHandler
- * guard under-reported the active set.
+ * through (same pattern as [HomeSectionPrefs]). Hand-rolled at each call site, the
+ * two screens' active-filter predicates drift: library's copy omits
+ * years/tags/minRating/sort, so its badge and BackHandler guard under-report the
+ * active set.
  */
 class LibraryFiltersAlgebraTest {
 

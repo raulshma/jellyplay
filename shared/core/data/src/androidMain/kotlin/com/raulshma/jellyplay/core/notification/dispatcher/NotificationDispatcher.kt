@@ -13,10 +13,10 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
-import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
+import com.raulshma.jellyplay.core.push.PushMessageIntake
 
 class NotificationDispatcher(
     private val context: Context,
@@ -76,14 +76,13 @@ class NotificationDispatcher(
         channelManager.ensureSummaryChannel()
 
         val notificationId = pluginNotificationIdFor(event.itemId)
-        // Same explicit-intent convention as buildItemNotification (CodeQL):
-        // setters chained on the Intent expression itself.
+        // The one media deep-link builder (CodeQL's explicit-intent
+        // convention — setters chained on the Intent expression — lives
+        // inside [mediaDeepLinkIntent] now).
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(event.itemId)))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .setPackage(context.packageName),
+            mediaDeepLinkIntent(context, event.itemId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -106,7 +105,7 @@ class NotificationDispatcher(
     }
 
     /**
-     * The companion-plugin's UnifiedPush payload (the push wave) — the same
+     * The companion-plugin's UnifiedPush payload (push support) — the same
      * tray surface as [dispatchPluginNewMedia], fed by the push receiver.
      * The generic payload contract is
      * `{"title": …, "body": …, "kind": "new-media"|"broadcast"|"message", "itemId": …?}`:
@@ -153,24 +152,14 @@ class NotificationDispatcher(
     }
 
     /**
-     * Whether [payloadJson] is the SILENT `sync-nudge` kind. The generic
-     * UnifiedPush body carries `kind` at the top level; a relayed ntfy JSON
-     * publish body carries it in the per-message `headers` map under
-     * `X-JellyPlay-Kind` — both spellings answer true (data-only either way).
-     * Malformed JSON is simply not a nudge.
+     * Whether [payloadJson] is the SILENT `sync-nudge` kind. A delegate to
+     * [PushMessageIntake.isSyncNudge] — the GLOSSARY "Receiver intake fold"
+     * moved the check (and the `sync-nudge` / `X-JellyPlay-Kind` constants)
+     * beside the push receiver as pure Kotlin; the member stays so this
+     * tray-side guard and the existing call shape don't move.
      */
-    internal fun isSyncNudgePayload(payloadJson: String): Boolean {
-        val payload = runCatching { json.parseToJsonElement(payloadJson) }
-            .getOrNull() as? kotlinx.serialization.json.JsonObject ?: return false
-
-        fun text(element: kotlinx.serialization.json.JsonElement?, key: String): String? =
-            (element as? kotlinx.serialization.json.JsonObject)
-                ?.let { it[key] as? kotlinx.serialization.json.JsonPrimitive }
-                ?.content
-
-        if (text(payload, "kind") == KIND_SYNC_NUDGE) return true
-        return text(payload["headers"], NTFY_KIND_HEADER) == KIND_SYNC_NUDGE
-    }
+    internal fun isSyncNudgePayload(payloadJson: String): Boolean =
+        PushMessageIntake.isSyncNudge(payloadJson)
 
     /**
      * One generic push text (broadcast/message kind): title + body on the
@@ -202,6 +191,64 @@ class NotificationDispatcher(
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .build()
+        notificationManager.notify(notificationId, notification)
+    }
+
+    /**
+     * One opted-in series' new-episode announcement — posted to the
+     * shared [NotificationChannelManager.CHANNEL_NEW_EPISODES] channel (the
+     * per-series path reuses that fixed channel so the channel count stays
+     * bounded), with the same series/season/episode framing the library
+     * path's episode-routed notifications use ([episodeFramingTitle]).
+     *
+     * Guards mirror [dispatch]: notifications must be enabled system-wide and
+     * the system DND respected. No mark-seen action — the seen-media store is
+     * library-keyed and the series path has no library context; the Open
+     * action + the deep-link content intent carry the episode id.
+     */
+    fun dispatchSeriesNewEpisode(
+        seriesId: String,
+        episode: MediaItem,
+        prefs: NotificationPreferences,
+    ) {
+        if (!notificationManager.areNotificationsEnabled()) return
+        if (prefs.respectSystemDnd && isSystemDndEnabled()) return
+        channelManager.ensureNewEpisodesChannel()
+
+        val notificationId = seriesEpisodeNotificationIdFor(seriesId, episode.id)
+        // The one media deep-link builder (CodeQL's explicit-intent
+        // convention lives inside [mediaDeepLinkIntent]).
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            mediaDeepLinkIntent(context, episode.id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val openIntent = Intent()
+            .setClassName(context.packageName, NotificationActionReceiver::class.java.name)
+            .setAction(NotificationActionReceiver.ACTION_OPEN_DETAIL)
+            .putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, episode.id)
+        val openPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId + OPEN_ACTION_REQUEST_CODE_OFFSET,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_NEW_EPISODES)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
+            .setContentTitle(episodeFramingTitle(episode))
+            .setContentText(episode.name)
+            .setContentIntent(contentIntent)
+            .addAction(
+                com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
+                context.getString(R.string.notification_action_open),
+                openPendingIntent,
+            )
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setDefaults(0)
@@ -387,17 +434,15 @@ class NotificationDispatcher(
 
         // The content intent is explicit: ACTION_VIEW scoped to our own package so
         // the PendingIntent cannot be hijacked by another app claiming the scheme.
-        // `setPackage` is hoisted out of an `Intent(...).apply { ... }` block on
-        // purpose — CodeQL's implicit-PendingIntent recognition only treats a setter
-        // call as making the intent explicit when its receiver is the Intent
-        // expression itself; inside `.apply {}` the receiver is the lambda's `this`
-        // and the analysis cannot link it to the value handed to PendingIntent.
+        // The builder IS that convention ([mediaDeepLinkIntent]): setters chained
+        // directly on the Intent expression — never inside an
+        // `Intent(...).apply { ... }` block — because CodeQL's implicit-PendingIntent
+        // recognition only treats a setter call as making the intent explicit when
+        // its receiver is the Intent expression itself.
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(item.id)))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .setPackage(context.packageName),
+            mediaDeepLinkIntent(context, item.id),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -497,11 +542,6 @@ class NotificationDispatcher(
     companion object {
         private const val GROUP_GLOBAL = "new_media_global"
 
-        /** The silent push kind (registry v7) — data-only, never a tray notification. */
-        internal const val KIND_SYNC_NUDGE = "sync-nudge"
-
-        /** The ntfy per-message header the kind rides in the ntfy JSON publish body. */
-        internal const val NTFY_KIND_HEADER = "X-JellyPlay-Kind"
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
 
@@ -549,7 +589,7 @@ class NotificationDispatcher(
             PLUGIN_NOTIFICATION_ID_BASE +
                 ((itemId.hashCode().toLong() and 0xFFFFFFFFL).toInt() % PLUGIN_NOTIFICATION_ID_SLOTS)
 
-        // UnifiedPush message pushes (the push wave) sit one slot-family above
+        // UnifiedPush message pushes (push support) sit one slot-family above
         // the new-media family so a hashed itemId and a hashed (title, body)
         // pair can never collide.
         private const val PLUGIN_PUSH_MESSAGE_ID_BASE =
@@ -559,6 +599,21 @@ class NotificationDispatcher(
         internal fun pluginPushMessageNotificationIdFor(title: String, body: String): Int =
             PLUGIN_PUSH_MESSAGE_ID_BASE +
                 (((31 * title.hashCode()) + body.hashCode()).toLong() and 0xFFFFFFFFL)
+                    .toInt() % PLUGIN_NOTIFICATION_ID_SLOTS
+
+        // The series-episode family sits one slot-family above the push
+        // message family so a hashed (series, episode) pair can never collide
+        // with a push text id.
+        private const val SERIES_EPISODE_NOTIFICATION_ID_BASE =
+            PLUGIN_PUSH_MESSAGE_ID_BASE + PLUGIN_NOTIFICATION_ID_SLOTS
+
+        /**
+         * Stable per-(series, episode) id for a series notification —
+         * re-delivery of the same episode coalesces instead of stacking.
+         */
+        internal fun seriesEpisodeNotificationIdFor(seriesId: String, episodeId: String): Int =
+            SERIES_EPISODE_NOTIFICATION_ID_BASE +
+                (((31 * seriesId.hashCode()) + episodeId.hashCode()).toLong() and 0xFFFFFFFFL)
                     .toInt() % PLUGIN_NOTIFICATION_ID_SLOTS
     }
 }

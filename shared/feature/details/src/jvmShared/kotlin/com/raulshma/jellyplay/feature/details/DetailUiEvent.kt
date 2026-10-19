@@ -30,6 +30,9 @@ sealed interface DetailUiEvent {
     /** Pull-to-refresh: re-resolves the current item, keeping the loaded content visible. */
     data object ForceRefresh : DetailUiEvent
 
+    /** The top-bar mute chip — mute/unmute the playing theme + write the per-series memory. */
+    data class SetThemeMusicMuted(val muted: Boolean) : DetailUiEvent
+
     /** On-demand fetch of one not-yet-fetched season's episodes (provider-side merge). */
     data class LoadEpisodesForSeason(val seriesId: String, val seasonId: String) : DetailUiEvent
 
@@ -114,4 +117,19 @@ sealed interface DetailUiEvent {
 
     /** Toggles the detail screen's own Up Next section (the ⋮ menu pair). */
     data class SetShowDetailUpNext(val enabled: Boolean) : DetailUiEvent
+
+    /**
+     * Inline eye-hide: hides one "More in this collection" franchise row
+     * for the CURRENT item. Session memory (survives navigation and
+     * refresh, not a process restart — see [DetailUiState.hiddenFranchiseCollections]).
+     */
+    data class HideFranchiseRow(val collectionId: String) : DetailUiEvent
+
+    /**
+     * Toggles the CURRENT series' new-episode notification opt-in
+     * (NotificationStore's per-series config; an episode resolves to its
+     * parent series). The ⋮ menu entry and the upcoming rows' bell both dispatch
+     * it; the Android permission prompt fires at the screen seam, not here.
+     */
+    data class SetSeriesNotifications(val enabled: Boolean) : DetailUiEvent
 }

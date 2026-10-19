@@ -32,9 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
+import com.raulshma.jellyplay.core.model.seerr.kind
 import com.raulshma.jellyplay.core.ui.components.DotLabel
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -150,7 +152,7 @@ fun RequestListItem(
                     )
                 } else {
                     Text(
-                        text = if (request.type.equals("movie", ignoreCase = true)) "🎬" else "📺",
+                        text = if (request.kind == SeerrMediaKind.MOVIE) "🎬" else "📺",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant,
                     )
@@ -244,8 +246,14 @@ fun RequestListItem(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.End,
                 ) {
+                    // The action ladder comes from the shared table; the compact
+                    // row keeps ONE button, so a FAILED request's delete leg is
+                    // dropped here (the bottom sheet offers both).
+                    val rowActions = requestActionsFor(requestStatus, isAdmin).let { actions ->
+                        if (actions.size > 1) actions - RequestAction.DELETE else actions
+                    }
                     when {
-                        requestStatus == SeerrRequestStatus.FAILED -> {
+                        RequestAction.RETRY in rowActions -> {
                             FilledTonalButton(
                                 onClick = onRetry,
                                 enabled = !actionInProgress,
@@ -257,7 +265,7 @@ fun RequestListItem(
                                 Text(stringResource(Res.string.requests_action_retry), style = MaterialTheme.typography.labelSmall)
                             }
                         }
-                        requestStatus == SeerrRequestStatus.PENDING -> {
+                        RequestAction.APPROVE in rowActions -> {
                             FilledTonalButton(
                                 onClick = { pendingApproval = SeerrRequestStatus.APPROVED },
                                 enabled = !actionInProgress,
@@ -283,7 +291,7 @@ fun RequestListItem(
                                 Text(stringResource(Res.string.requests_action_decline), style = MaterialTheme.typography.labelSmall)
                             }
                         }
-                        else -> {
+                        RequestAction.DELETE in rowActions -> {
                             FilledTonalButton(
                                 onClick = {
                                     if (deleteConfirm.isConfirming) deleteConfirm.confirm(onDelete)

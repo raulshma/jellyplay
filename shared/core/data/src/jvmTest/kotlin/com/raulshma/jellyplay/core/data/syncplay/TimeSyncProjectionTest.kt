@@ -4,6 +4,9 @@ import com.raulshma.jellyplay.core.model.UtcTimeResponse
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.time.Instant
@@ -38,7 +41,7 @@ class TimeSyncProjectionTest {
     @BeforeTest
     fun setUp() {
         apiClient = mockk()
-        manager = TimeSyncManager(apiClient)
+        manager = TimeSyncManager(apiClient, CoroutineScope(SupervisorJob() + Dispatchers.IO))
     }
 
     // ── projection math ─────────────────────────────────────────────────

@@ -18,12 +18,11 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 
 /**
- * Pins the UserMessageHost source assembly extracted from DesktopNavScaffold
+ * Pins the UserMessageHost source assembly
  * ([desktopUserMessageSources] + [desktopMusicMessages] +
- * [desktopDisplayMessages] — the seams that made the shared
+ * [desktopDisplayMessages] — the seams that route the shared
  * [UserMessageBus]'s messages and the receiver's server-pushed
- * DisplayMessages reach the desktop snackbar instead of being silently
- * dropped):
+ * DisplayMessages to the desktop snackbar):
  *
  *  - the desktop [MusicMessageBus] actual (the buffering relay) maps every
  *    relayed string onto a [UserMessage.Error] carrying [UiText.Raw] — the

@@ -26,7 +26,7 @@ internal val dataAdminModule: Module = module {
     // AdminRepositoryImpl + AdminStatisticsRepositoryImpl moved from the
     // legacy :core:data shim (Hilt @Binds -> koin().get() bridges there, the
     // app's Hilt interop singles deleted). Every ctor dep resolves natively
-    // here: the family API clients (admin/user/live-tv/library — the D5 ctor
+    // here: the family API clients (admin/user/live-tv/library — the ctor
     // narrowing; the JellyfinApiClient union is a pure delegation over these
     // same networkJvmModule singles) + engine + the two realtime channels,
     // the DAOs from databaseDaosModule, Json from networkJvmModule, the

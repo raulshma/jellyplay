@@ -42,7 +42,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The JellyPlay companion-plugin's "My ratings" screen (ADR 0010) — the
+ * The JellyPlay companion-plugin's "My ratings" screen — the
  * user's synced likes / dislikes / ratings, one fetch per filter tab, tapping
  * a row opens the item's detail. Deliberately minimal: the existing
  * [SettingListItem] rows carry title / indicator / play facts, and the filter

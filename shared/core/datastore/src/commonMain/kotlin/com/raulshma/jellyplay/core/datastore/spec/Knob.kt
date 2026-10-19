@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.map
  *
  * Knobs are additive typed access for spec consumers; the store's slice
  * projection and setters remain the machinery the knobs are built from,
- * unchanged. (Stores that declare their keys as Stage B encoded rows — see
+ * unchanged. (Stores that declare their keys as encoded rows — see
  * [PreferenceEncoding] — additionally DERIVE that machinery from the same
  * specs; the knob binding shape is identical either way.)
  */

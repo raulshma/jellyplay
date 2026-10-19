@@ -73,6 +73,9 @@ data class RememberedTrack(
  * @param subtitleHearingImpaired whether the preferred subtitle should be an SDH /
  *   hearing-impaired track, or null to not care. Pairs with [subtitleLanguage]
  *   so a series can pin "English SDH" and have it carried episode to episode.
+ * @param preferAudioDescription the audio-description pin (three-state): TRUE
+ *   prefers AD narration tracks, FALSE explicitly prefers non-AD, null follows
+ *   the global setting. Added in migration 60→61.
  * @param dialogueBoostStrength per-item dialogue-boost strength, or null to use the
  *   effective default ([EffectStrength.NONE]).
  * @param rememberedAudioTrack the last-selected audio track to carry to the next
@@ -95,6 +98,7 @@ data class ItemPlaybackPreference(
     val subtitleDisabled: Boolean? = null,
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
+    val preferAudioDescription: Boolean? = null,
     val dialogueBoostStrength: EffectStrength? = null,
     val rememberedAudioTrack: RememberedTrack? = null,
     val rememberedSubtitleTrack: RememberedTrack? = null,

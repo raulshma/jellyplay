@@ -29,19 +29,18 @@ import kotlin.test.assertTrue
  * [NewsletterViewModelTest] / [NewsletterViewModelEventGapsTest]:
  *
  * 1. A load failure whose exception carries NO message falls back to the
- *    "Failed to load newsletter" literal (byte-identical to the legacy
- *    `e.message ?: "Failed to load newsletter"` pair — the message-present
- *    branch is covered in the main suite).
+ *    "Failed to load newsletter" literal (the message-present branch is
+ *    covered in the main suite).
  * 2. The pull-to-refresh in-flight window: [NewsletterUiState.isRefreshing]
  *    is up (and [NewsletterUiState.isLoading] stays down) WHILE the load is
- *    suspended — the existing suite could only observe the settled state.
+ *    suspended — the main suite can only observe the settled state.
  * 3. A successful reload clears a previously surfaced load error.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NewsletterViewModelErrorFallbackTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (NewsletterViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (NewsletterViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: NewsletterApiClient

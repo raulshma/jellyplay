@@ -35,7 +35,7 @@ interface PlaybackOutboxDao {
      * pending OR dead-lettered. Dead-lettered rows are included on purpose:
      * the intent never reached the server, so callers reconciling
      * "server unplayed vs local played" must not treat the server's state as
-     * newer knowledge (#153).
+     * newer knowledge.
      *
      * Known limitation: the row is keyed by itemId only — the whole offline
      * mirror (`playback_state`, `offline_media`) is single-user-per-database,
@@ -56,7 +56,7 @@ interface PlaybackOutboxDao {
      * dead-lettered) once a push has delivered the latest local intent to the
      * server. Without this, a dead-lettered flip that is later re-pushed by
      * reconciliation would be re-pushed on every reconcile — forever
-     * overriding newer state set on other devices (#153).
+     * overriding newer state set on other devices.
      */
     @Query(
         """

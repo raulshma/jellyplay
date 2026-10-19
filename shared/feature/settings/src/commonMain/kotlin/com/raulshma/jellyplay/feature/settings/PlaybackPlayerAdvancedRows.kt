@@ -24,6 +24,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_epis
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_trailer_before_movie_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_trailer_before_movie_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trickplay_preview_on
@@ -138,6 +140,14 @@ internal fun PlaybackPlayerAdvancedRows(
                             checked = preferences.cinemaModeEnabled,
                             highlighted = highlightSettingId == PlaybackRows.CinemaMode.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setCinemaModeEnabled(it) } },
+                        )
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.PlayTrailerBeforeMovie),
+                            title = rowTitle(PlaybackRows.PlayTrailerBeforeMovie),
+                            subtitle = if (preferences.playTrailerBeforeMovie) stringResource(Res.string.settings_play_trailer_before_movie_on) else stringResource(Res.string.settings_play_trailer_before_movie_off),
+                            checked = preferences.playTrailerBeforeMovie,
+                            highlighted = highlightSettingId == PlaybackRows.PlayTrailerBeforeMovie.id,
+                            onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setPlayTrailerBeforeMovie(it) } },
                         )
                         if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.AndroidTvWatchNext.id, rowFlags)) {
                             SettingToggleItem(
@@ -296,7 +306,7 @@ internal fun PlaybackPlayerAdvancedRows(
                             highlighted = highlightSettingId == PlaybackRows.BackgroundAudio.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.playback.setBackgroundVideoAudioEnabled(it) } },
                         )
-                        // Auto-PiP on Home/recents (issue #167) — Android-only;
+                        // Auto-PiP on Home/recents — Android-only;
                         // the declared Platform(Pip) admission hides the row on
                         // desktop. Off makes leaving the app background it
                         // normally instead of entering picture-in-picture; the

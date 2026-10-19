@@ -13,7 +13,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -68,7 +70,7 @@ internal fun DetailContent(
     callbacks: DetailContentCallbacks,
     availableStorageProvider: suspend (isAudio: Boolean) -> Long,
 ) {
-    val item = state.detail?.item
+    val item = state.core.detail?.item
     val listState = rememberLazyListState()
     val isAudio = item?.mediaType?.isAudioType == true
     val isAlbum = item?.mediaType == MediaType.ALBUM
@@ -77,7 +79,7 @@ internal fun DetailContent(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
-    val contentVisible = state.detail != null && item != null
+    val contentVisible = state.core.detail != null && item != null
 
     val scrollState = rememberDetailScrollState(listState, contentVisible)
 
@@ -114,43 +116,81 @@ internal fun DetailContent(
         chooserTitle = stringResource(Res.string.detail_share_via),
     )
 
+    // The TV focus-gated trailer preview's port — the single holder
+    // instance the Play button (deep in the body) writes and DetailBackdrop
+    // reads; provided below so the button's writes reach it on both the
+    // touch and TV branches.
+    val trailerFocusPreview = remember { TrailerFocusPreviewState() }
+
+    // Manual up-next queue (the player drains it queue-first). The controller
+    // is process-wide, so "play next" here feeds the player's queue sheet even
+    // before the player opens. koinInject — the book feature's desktop-host
+    // precedent for a process-wide core:data single a screen consumes directly.
+    val videoQueue = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.VideoQueueController>()
+    val imageUrlProvider = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>()
+    fun enqueueInQueue(item: com.raulshma.jellyplay.core.model.MediaItem?, next: Boolean) {
+        if (item == null) return
+        val queueItem = com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
+            itemId = item.id,
+            title = item.name,
+            subtitle = item.seriesName ?: item.year?.toString(),
+            imageUrl = imageUrlProvider.getImageUrl(item.id, maxWidth = 300),
+            runTimeTicks = item.runTimeTicks,
+        )
+        if (next) videoQueue.enqueueNext(queueItem) else videoQueue.enqueueLast(queueItem)
+    }
+
+    // "Play (with pre-rolls)": the SyncPlay veto is host-level (the
+    // process-wide SyncPlayManager, the videoQueue koinInject precedent) — a
+    // group session owns the playback order, so the per-invocation intro
+    // override is meaningless there. The media-type + offline gates live
+    // with the menu entry ([MediaOptionsMenu.offersPlayWithPrerolls]).
+    val syncPlayManager = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager>()
+
     val mediaOptions = rememberMediaOptions(
+        onPlayNextInQueue = {
+            enqueueInQueue(item, next = true)
+        },
+        onPlayLastInQueue = {
+            enqueueInQueue(item, next = false)
+        },
+        canPlayWithPrerolls = !isSeries && !syncPlayManager.isInSyncPlaySession,
+        onPlayWithPrerolls = callbacks.playback.onPlayWithPrerolls,
         item = item,
-        detail = state.detail,
+        detail = state.core.detail,
         itemId = state.itemId,
         isAudio = isAudio,
         isSeries = isSeries,
-        seasons = state.seasons,
+        seasons = state.core.seasons,
         preferences = state.preferences,
-        activeDownload = state.activeDownload,
-        isDownloading = state.isDownloading,
-        isDownloadingSeries = state.isDownloadingSeries,
+        isDownloading = state.downloads.isDownloading,
+        isDownloadingSeries = state.downloads.isDownloadingSeries,
         canManageSeries = state.canManageSeries,
-        canDeleteDownloadedSeries = state.origin?.isLocal == true &&
+        canDeleteDownloadedSeries = state.core.origin?.isLocal == true &&
             isSeries &&
-            (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
-        canEditMetadata = state.capabilities.remoteDiscovery,
-        canRefreshMetadata = state.canManageMetadata && state.capabilities.remoteDiscovery,
-        canIdentify = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            (state.core.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
+        canEditMetadata = state.core.capabilities.remoteDiscovery,
+        canRefreshMetadata = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery,
+        canIdentify = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery &&
             (item?.mediaType == MediaType.SERIES || item?.mediaType == MediaType.MOVIE),
-        canPickVersion = !isAudio && !isSeries && (state.detail?.mediaSources?.size ?: 0) > 1,
+        canPickVersion = !isAudio && !isSeries && (state.core.detail?.mediaSources?.size ?: 0) > 1,
         onVersionPicker = callbacks.playback.onOpenVersionPicker,
         // The Merge/Split endpoints are Movies-only server-side
         // (/Videos/MergeVersions, /Videos/{id}/AlternateSources) and
         // admin-gated (RequiresElevation) — the same gate the refresh/identify
         // entries resolve. Split only applies to an already-merged item.
-        canMergeVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+        canMergeVersions = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery &&
             item?.mediaType == MediaType.MOVIE,
         onMergeVersions = callbacks.metadata.onOpenMergeVersions,
-        canSplitVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
-            item?.mediaType == MediaType.MOVIE && (state.detail?.mediaSources?.size ?: 0) > 1,
+        canSplitVersions = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery &&
+            item?.mediaType == MediaType.MOVIE && (state.core.detail?.mediaSources?.size ?: 0) > 1,
         onSplitVersions = callbacks.metadata.onSplitVersions,
-        canAddToPlaylist = state.capabilities.remoteDiscovery,
-        canAddToCollection = state.capabilities.remoteDiscovery,
-        canInstantMix = isAudio && state.capabilities.remoteDiscovery,
-        canStartRadio = isAudio && state.capabilities.remoteDiscovery,
-        canStartWatchParty = state.capabilities.remoteWorkAllowed,
-        isOffline = state.origin?.isLocal == true,
+        canAddToPlaylist = state.core.capabilities.remoteDiscovery,
+        canAddToCollection = state.core.capabilities.remoteDiscovery,
+        canInstantMix = isAudio && state.core.capabilities.remoteDiscovery,
+        canStartRadio = isAudio && state.core.capabilities.remoteDiscovery,
+        canStartWatchParty = state.core.capabilities.remoteWorkAllowed,
+        isOffline = state.core.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.navigation.onEditClick,
         onShare = shareMedia,
@@ -164,6 +204,11 @@ internal fun DetailContent(
         onShowFromContinueWatching = callbacks.userData.onShowFromContinueWatching,
         onHideDetailUpNext = callbacks.userData.onHideDetailUpNext,
         onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
+        // The per-series notify entry rides the platform seam — desktop
+        // (no notification stack) never sees it.
+        seriesNotificationsEnabled = state.core.seriesNotificationsEnabled,
+        platformSupportsNotifications = platformHasNotificationStack,
+        onToggleSeriesNotifications = callbacks.userData.onToggleSeriesNotifications,
         onManageSeries = callbacks.navigation.onManageSeries,
         onRefreshMetadata = callbacks.metadata.onRefreshMetadata,
         onIdentify = callbacks.metadata.onIdentify,
@@ -174,6 +219,21 @@ internal fun DetailContent(
         onStartRadio = callbacks.playback.onStartRadio,
         onStartWatchParty = callbacks.playback.onStartWatchParty,
     )
+
+    // ── promoted rail resolution ─────────────────────────────────────
+    // The fixed promoted subset of [mediaOptions] lifts into the landscape
+    // rail; the ⋮ menu suppresses exactly those ids while the rail shows them
+    // (no dupes). Effective only where the rail exists — the landscape body —
+    // and gated on the display preference; both off → the ⋮ list passes
+    // through unchanged.
+    val showsLandscapeRail = isExpanded && adaptiveInfo.isLandscape
+    val promotedOptionIds = if (showsLandscapeRail && state.preferences.showPromotedActionsLandscape) {
+        PromotedMediaOptionIds.toSet()
+    } else {
+        emptySet()
+    }
+    val overflowOptions = remember(mediaOptions, promotedOptionIds) { mediaOptions.excludingIds(promotedOptionIds) }
+    val promotedActions = remember(mediaOptions, promotedOptionIds) { mediaOptions.promotedOptions(promotedOptionIds) }
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundColorState = scrollState.backgroundColorState
@@ -205,7 +265,7 @@ internal fun DetailContent(
         // On TV the loading surface must be focusable (LoadingScreen grabs focus) so the
         // D-pad isn't orphaned until data arrives; on touch a delayed spinner keeps fast
         // loads from flickering.
-        when (val loadState = state.loadState) {
+        when (val loadState = state.core.loadState) {
             is DetailUiLoadState.Loading -> {
                 if (!contentVisible) {
                     if (isTv) {
@@ -245,23 +305,46 @@ internal fun DetailContent(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
             getBackdropUrl = if (isBook) callbacks.artwork.getImageUrl else callbacks.artwork.getBackdropUrl,
-            relatedVideos = state.relatedVideos,
+            trailers = state.core.trailers,
             preferences = state.preferences,
             scrollState = scrollState,
-            localBackdropPath = if (isBook) state.assets.posterPath else state.assets.backdropPath,
+            localBackdropPath = if (isBook) state.core.assets.posterPath else state.core.assets.backdropPath,
             coverHero = coverHero,
+            themeVideoStreamUrl = state.core.themeVideoStreamUrl,
+            trailerFocusPreview = trailerFocusPreview,
         )
 
-        // Pull-to-refresh lets the user force a fresh fetch (invalidating the
-        // in-memory caches) by pulling the content down. Disabled on TV — the
-        // D-pad has no drag gesture, and the LazyColumn's tvFocusRestorer stays
-        // the outermost modifier there.
-        if (!isTv) {
-            PullToRefreshBox(
-                isRefreshing = state.loadState is DetailUiLoadState.Refreshing,
-                onRefresh = callbacks.screen.onRefresh,
-                modifier = Modifier.fillMaxSize(),
-            ) {
+        // The port reaches the Play button through the composition
+        // local (the holder itself travels to the backdrop as a parameter
+        // above) — the local scopes exactly the body subtrees that render
+        // the button.
+        CompositionLocalProvider(LocalTrailerFocusPreview provides trailerFocusPreview) {
+            // Pull-to-refresh lets the user force a fresh fetch (invalidating the
+            // in-memory caches) by pulling the content down. Disabled on TV — the
+            // D-pad has no drag gesture, and the LazyColumn's tvFocusRestorer stays
+            // the outermost modifier there.
+            if (!isTv) {
+                PullToRefreshBox(
+                    isRefreshing = state.core.loadState is DetailUiLoadState.Refreshing,
+                    onRefresh = callbacks.screen.onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    DetailScrollContent(
+                        state = state,
+                        callbacks = callbacks,
+                        listState = listState,
+                        scrollState = scrollState,
+                        contentVisible = contentVisible,
+                        contentFocusRequester = contentFocusRequester,
+                        isExpanded = isExpanded,
+                        isTv = isTv,
+                        item = item,
+                        isAudio = isAudio,
+                        isAlbum = isAlbum,
+                        promotedActions = promotedActions,
+                    )
+                }
+            } else {
                 DetailScrollContent(
                     state = state,
                     callbacks = callbacks,
@@ -274,36 +357,31 @@ internal fun DetailContent(
                     item = item,
                     isAudio = isAudio,
                     isAlbum = isAlbum,
+                    promotedActions = promotedActions,
                 )
             }
-        } else {
-            DetailScrollContent(
-                state = state,
-                callbacks = callbacks,
-                listState = listState,
-                scrollState = scrollState,
-                contentVisible = contentVisible,
-                contentFocusRequester = contentFocusRequester,
-                isExpanded = isExpanded,
-                isTv = isTv,
-                item = item,
-                isAudio = isAudio,
-                isAlbum = isAlbum,
-            )
         }
 
         DetailTopBar(
             itemName = item?.name ?: "",
             scrollState = scrollState,
             onBack = callbacks.navigation.onBack,
-            mediaOptions = mediaOptions,
+            mediaOptions = overflowOptions,
             contentFocusRequester = contentFocusRequester,
             scrollBehavior = scrollBehavior,
+            // The mute chip exists only while theme audio is actually
+            // audible; its icon reflects the per-series memory (the same
+            // theme-source keying the VM's enrichment gate uses).
+            themeMusicVisible = state.core.themeMusicPlaying,
+            themeMusicMuted = state.preferences.isThemeMusicMutedFor(
+                item?.seriesId ?: state.itemId,
+            ),
+            onToggleThemeMusicMuted = callbacks.screen.onToggleThemeMusicMuted,
         )
     }
 
-    if (state.downloadPicker.visible) {
-        val source = state.detail?.mediaSources?.firstOrNull()
+    if (state.downloads.downloadPicker.visible) {
+        val source = state.core.detail?.mediaSources?.firstOrNull()
         // External/deliverable subtitle streams eligible for offline bundling.
         // Shares MediaStream.isBundleableSubtitle with the download writer + sync
         // comparator so the multi-select shows exactly the subtitles that save.
@@ -317,8 +395,8 @@ internal fun DetailContent(
             isAudio = isAudio,
             availableStorageProvider = availableStorageProvider,
             subtitleStreams = subtitleStreams,
-            pendingQuality = state.downloadPicker.quality,
-            pendingSubtitleSelection = state.downloadPicker.subtitleSelection,
+            pendingQuality = state.downloads.downloadPicker.quality,
+            pendingSubtitleSelection = state.downloads.downloadPicker.subtitleSelection,
             onPendingQualityChange = callbacks.download.onPendingQualityChange,
             onPendingSubtitleSelectionChange = callbacks.download.onPendingSubtitleSelectionChange,
             onConfirm = { callbacks.download.onDownloadClick() },
@@ -345,6 +423,8 @@ private fun DetailScrollContent(
     item: com.raulshma.jellyplay.core.model.MediaItem?,
     isAudio: Boolean,
     isAlbum: Boolean,
+    /** The ⋮ options' promoted subset for the landscape rail (empty = none). */
+    promotedActions: List<MediaOption>,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
 
@@ -358,12 +438,17 @@ private fun DetailScrollContent(
 
         item {
             val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
-            val fadeBrush = remember(scrollState.backgroundColor, gradientEndPx) {
+            // Read the colour here (the item's own scope) so colour-animation
+            // frames rebuild the brush without recomposing anything above, and
+            // scroll-offset frames — which don't touch the colour — rebuild
+            // nothing at all.
+            val fadeColor by scrollState.backgroundColorState
+            val fadeBrush = remember(fadeColor, gradientEndPx) {
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        scrollState.backgroundColor.copy(alpha = 0.9f),
-                        scrollState.backgroundColor,
+                        fadeColor.copy(alpha = 0.9f),
+                        fadeColor,
                     ),
                     startY = 0f,
                     endY = gradientEndPx,
@@ -385,6 +470,7 @@ private fun DetailScrollContent(
                         isAlbum = isAlbum,
                         isExpanded = isExpanded,
                         item = item,
+                        promotedActions = promotedActions,
                     )
                 } else {
                     DetailBodyPortrait(

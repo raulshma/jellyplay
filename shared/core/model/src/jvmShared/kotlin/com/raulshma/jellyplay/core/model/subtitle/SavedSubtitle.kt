@@ -35,7 +35,7 @@ data class SavedSubtitle(
      * The server `MediaStream.index` the upload of this subtitle produced, when
      * known. Recorded after a successful upload so a server-side delete (the
      * metadata editor's delete-by-index) can purge exactly this local copy, and
-     * playback load can skip entries whose stream no longer exists. Null for
+     * playback load can skip entries whose stream is gone. Null for
      * legacy manifests and device-only downloads (upload failed) — those must
      * keep side-loading regardless of server state.
      */

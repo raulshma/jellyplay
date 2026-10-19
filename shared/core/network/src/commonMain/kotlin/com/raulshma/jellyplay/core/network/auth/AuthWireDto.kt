@@ -18,8 +18,8 @@ import kotlinx.serialization.json.JsonElement
  * `AuthApiClientImpl.toUserInfo` / `probeServerInfo` and
  * `JellyfinApiEngine.cachedCapabilities` constructions.
  *
- * DTO subset grows on demand (plan: scripted generation from openapi.json
- * later); every field is optional-tolerant because the shared Json instance
+ * DTO subset grows on demand (scripted generation from openapi.json is a
+ * possible later step); every field is optional-tolerant because the shared Json instance
  * runs with `ignoreUnknownKeys = true` + `isLenient = true` to mirror the
  * SDK's leniency.
  */

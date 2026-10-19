@@ -50,7 +50,7 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 /**
  * Proves the SHARED engine-event policy core (player-contract's
  * [com.raulshma.jellyplay.feature.player.video.engine.EngineEventCoordinator],
- * consumed by this VM since candidate C4) drives live's behavior end to end —
+ * consumed by this VM) drives live's behavior end to end —
  * raw engine flows in through the VM's [com.raulshma.jellyplay.feature.player.video.engine.EngineEventSource],
  * [com.raulshma.jellyplay.feature.player.video.engine.EngineDecision]s out
  * through the VM's execution:

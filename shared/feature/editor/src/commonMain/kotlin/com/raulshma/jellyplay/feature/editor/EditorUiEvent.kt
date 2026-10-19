@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 
 /**
  * Every user intent the editor screen can express. [EditorViewModel.onEvent]
- * is the single command funnel (the HomeUiEvent precedent): the VM exposes no
+ * is the single command funnel (the HomeUiEvent pattern): the VM exposes no
  * per-action command methods beyond it and the sync image-URL getters, so new
  * intents are added here (and routed once in the `when`) rather than as new
  * public members on the VM.

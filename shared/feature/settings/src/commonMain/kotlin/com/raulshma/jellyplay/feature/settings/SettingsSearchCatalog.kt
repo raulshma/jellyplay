@@ -63,7 +63,7 @@ object SettingsSearchCatalog : SettingsSearchProvider {
     /**
      * The real-locale resolve every default seam shares (a val so the
      * [SettingsSearchProvider.resolved] override below reuses it instead of
-     * spelling a second `.resolve()` — the resolve-guard ratchet counts
+     * spelling a second `.resolve()` — the resolve-guard test counts
      * those occurrences).
      */
     private val defaultResolve: suspend (List<SettingsSearchItem>) -> List<ResolvedSettingsItem> =

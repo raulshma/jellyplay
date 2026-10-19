@@ -4,17 +4,27 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import com.raulshma.jellyplay.core.concurrency.Settlement
+import com.raulshma.jellyplay.core.concurrency.settleDebounce
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.AmbientColorBackdrop
 import com.raulshma.jellyplay.core.ui.image.BlurHashBackdrop
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * Which visual treatment the home backdrop is currently showing. Used as the
@@ -63,6 +73,109 @@ internal fun shouldRenderBackdrop(state: HomeBackdropState): Boolean =
  */
 internal fun resolveBackdropLayer(state: HomeBackdropState): BackdropLayer =
     if (!state.blurHash.isNullOrBlank()) BackdropLayer.BLUR_HASH else BackdropLayer.AMBIENT
+
+/**
+ * The settle window: D-pad focus must rest on a card this long before the
+ * cost-carrying half of the reaction (the backdrop-URL fetch, the trickplay
+ * tile fetch) runs. Arrival-time reactions (the in-memory BlurHash paint) do
+ * NOT wait it out — see [com.raulshma.jellyplay.core.concurrency.settleDebounce].
+ * The card-level peek reuses the same cadence so the two focus reactions
+ * move in lockstep.
+ */
+internal const val HOME_FOCUS_SETTLE_MS = 400L
+
+/**
+ * The focus-driven backdrop inputs: what the currently-focused TV card
+ * contributes to the ambient backdrop. [blurHash] arrives at focus arrival
+ * (zero-cost — the string is already in memory); [backdropUrl] only at
+ * settlement (it feeds the ambient palette extractor, which decodes a full
+ * image), and stays null until then.
+ */
+@Stable
+internal data class FocusBackdrop(
+    val blurHash: String?,
+    val backdropUrl: String?,
+) {
+    val hasContent: Boolean get() = !blurHash.isNullOrBlank() || !backdropUrl.isNullOrBlank()
+}
+
+/**
+ * Overlays the focus-driven inputs onto the hero-driven [HomeBackdropState].
+ * A focus with content replaces the hero's artwork pair wholesale — the
+ * backdrop must read as THE focused card's, not a blend; a focus without
+ * content (arrival on a card with no backdrop BlurHash, before the URL
+ * settles, or the focus-exit reset) is the throttle fallback: the hero-driven
+ * state passes through untouched so the backdrop never flashes to a default
+ * palette mid-sweep. Pure so it can be unit-tested without a composition.
+ */
+internal fun HomeBackdropState.withFocusBackdrop(focus: FocusBackdrop?): HomeBackdropState {
+    if (focus == null || !focus.hasContent) return this
+    return copy(blurHash = focus.blurHash, backdropUrl = focus.backdropUrl)
+}
+
+/**
+ * The focus → backdrop choreography: watches the screen's focused-card
+ * stream through the shared settle debounce and produces the [FocusBackdrop]
+ * the backdrop region applies via [withFocusBackdrop]. Per settlement phase:
+ *  - **Arrival** — the focused card's in-memory BlurHash paints immediately
+ *    (the crossfade the blurhash layer already gets); nothing is fetched.
+ *  - **Settled** — the card's backdrop URL resolves and feeds the ambient
+ *    palette (the cost-carrying half). A refocus mid-flight cancels the
+ *    pending settlement *and* any settle-phase work via `collectLatest`.
+ *  - **Focus exit** (`null`) — the inputs reset and the hero-driven state
+ *    takes over again.
+ *
+ * Disabled (non-TV or the `home_focus_backdrop` pref off) the inputs stay
+ * null — the hero-driven behavior applies unchanged.
+ *
+ * @param focusedItem state-reading provider for the currently focused card
+ *  (null when no card holds focus); read inside [snapshotFlow] so changes
+ *  re-emit.
+ * @param backdropUrlFor the server backdrop-URL builder for a card (the same
+ *  builder the wide rows use).
+ */
+@Composable
+internal fun rememberFocusBackdropState(
+    focusedItem: () -> MediaItem?,
+    enabled: Boolean,
+    backdropUrlFor: (MediaItem) -> String,
+): FocusBackdrop? {
+    var inputs by remember { mutableStateOf<FocusBackdrop?>(null) }
+    val currentUrlFor by rememberUpdatedState(backdropUrlFor)
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            inputs = null
+            return@LaunchedEffect
+        }
+        snapshotFlow(focusedItem)
+            .settleDebounce(settleMillis = HOME_FOCUS_SETTLE_MS)
+            .collectLatest { settlement ->
+                when (settlement) {
+                    is Settlement.Arrived -> {
+                        // Zero-cost half: the hash is already in memory. A null
+                        // item (focus exit) lands here as the empty inputs,
+                        // which [withFocusBackdrop] folds back to the hero.
+                        inputs = settlement.value?.let { item ->
+                            FocusBackdrop(blurHash = item.blurHashes.backdrop, backdropUrl = null)
+                        }
+                    }
+                    is Settlement.Settled -> {
+                        // Cost-carrying half: resolve the backdrop URL (the
+                        // ambient palette's source). The blank filter keeps a
+                        // failed/unresolvable URL from clearing the arrival
+                        // blurhash that is already showing.
+                        inputs = settlement.value?.let { item ->
+                            FocusBackdrop(
+                                blurHash = item.blurHashes.backdrop,
+                                backdropUrl = currentUrlFor(item).takeIf { url -> url.isNotBlank() },
+                            )
+                        }
+                    }
+                }
+            }
+    }
+    return inputs
+}
 
 /**
  * The home screen's ambient backdrop.

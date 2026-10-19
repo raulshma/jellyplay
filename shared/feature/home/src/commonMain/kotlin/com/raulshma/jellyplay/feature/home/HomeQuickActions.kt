@@ -7,9 +7,9 @@ import com.raulshma.jellyplay.core.ui.components.QuickAction
 /**
  * What executing a home card quick action MEANS, as data: the routing table
  * (series vs movie vs other) decided in one pure function
- * ([homeQuickActionEffect]) so it is assertable — the same `when` used to
- * live inline in a remembered composable lambda where no test could reach
- * it. The screen's execute lambda reduces to a mechanical effect dispatch.
+ * ([homeQuickActionEffect]) so it is assertable; inline in a remembered
+ * composable lambda, the `when` is unreachable from tests. The screen's
+ * execute lambda reduces to a mechanical effect dispatch.
  */
 internal sealed interface HomeQuickActionEffect {
     /** Hand the item to the shared play funnel (series go through smart-play). */

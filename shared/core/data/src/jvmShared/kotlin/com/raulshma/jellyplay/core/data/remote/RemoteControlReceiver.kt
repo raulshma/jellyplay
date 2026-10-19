@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.remote
 
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
@@ -61,10 +61,26 @@ class RemoteControlReceiver(
     private val activePlayerController: ActivePlayerController,
     private val securityStore: SecurityStore,
     private val remoteNavigationBridge: RemoteNavigationBridge,
-    private val audioQueueManager: AudioQueueManager,
+    /**
+     * The "is anything playing" read for the DisplayContent idle gate —
+     * the former hand restatement (`engine == null &&
+     * audioQueueManager.currentPlayingItemId.value == null`) is the
+     * verdict's [NowPlayingVerdict.isIdle], byte-identical. The registry
+     * stays a direct dep: TakeScreenshot's engine nullity + request route
+     * is registry business, not a fold.
+     */
+    private val nowPlayingVerdict: NowPlayingVerdict,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * receiver's Default-dispatcher scope hangs off as a SupervisorJob child —
+     * [stop] still cancels only the collection job, while the scope itself now
+     * dies with an app-level teardown instead of outliving it.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
     private var collectionJob: Job? = null
 
     /**
@@ -99,6 +115,9 @@ class RemoteControlReceiver(
             // the file read lands.
             val enabled = try {
                 securityStore.firstPersistedSecurity().remoteControlEnabled
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                // Never swallow cancellation — breaks structured concurrency.
+                throw ce
             } catch (_: Exception) {
                 true
             }
@@ -126,6 +145,9 @@ class RemoteControlReceiver(
     private suspend fun isAuthenticatedSync(): Boolean {
         return try {
             authRepository.isAuthenticated.first()
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
             false
         }
@@ -323,6 +345,9 @@ class RemoteControlReceiver(
         // DataStore emission lands (the store's own documented race).
         val enabled = try {
             securityStore.firstPersistedSecurity().remoteDisplayContentEnabled
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
             false
         }
@@ -340,9 +365,13 @@ class RemoteControlReceiver(
         remoteNavigationBridge.request(NavigationTarget.OpenMediaDetail(command.itemId))
     }
 
-    /** Idle = no bound video engine and nothing playing in the audio queue. */
-    private fun isIdleForDisplayContent(): Boolean =
-        activePlayerController.engine == null && audioQueueManager.currentPlayingItemId.value == null
+    /**
+     * Idle = no bound video engine and nothing playing in the audio queue —
+     * the [NowPlayingVerdict.isIdle] face, kept exact (it is deliberately
+     * NOT the verdict's `hasActiveSession` inverse: a bound-but-idle engine
+     * must still count as not-idle, the player screen is up).
+     */
+    private fun isIdleForDisplayContent(): Boolean = nowPlayingVerdict.isIdle
 
     /**
      * Remote "TakeScreenshot": forwarded to the mounted player screen

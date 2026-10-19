@@ -3,14 +3,13 @@ package com.raulshma.jellyplay.core.model
 import java.util.Collections
 
 /**
- * JVM actuals for the [TtlCache] seam (android + desktop). The constructions
- * below are byte-identical to the pre-15B jvmShared body of [TtlCache]:
+ * JVM actuals for the [TtlCache] seam (android + desktop):
  *  - [ttlBackingMap]: `Collections.synchronizedMap` over the access-order
- *    [lruMapOf]. The wrapper's monitor is the wrapper itself, which is the
- *    exact lock the inline `synchronized(map)` blocks used to take.
+ *    [lruMapOf]. The wrapper's monitor is the wrapper itself, the exact lock
+ *    the inline `synchronized(map)` blocks take.
  *  - [withMapMonitor]: `synchronized` on that wrapper — same monitor, so the
- *    compound sections are mutually exclusive exactly as before.
- *  - [lruMapOf]: the historical `LinkedHashMap(16, 0.75f, accessOrder = true)`
+ *    compound sections are mutually exclusive.
+ *  - [lruMapOf]: the `LinkedHashMap(16, 0.75f, accessOrder = true)`
  *    + `removeEldestEntry` idiom, verbatim.
  */
 internal actual fun <V> ttlBackingMap(maxSize: Int): MutableMap<String, TtlEntry<V>> =

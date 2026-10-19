@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
-import com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
+import com.raulshma.jellyplay.core.ui.tv.defaultGridCacheWindow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 
@@ -88,7 +88,7 @@ fun <T : Any> PagedCollectionGrid(
     contentPadding: PaddingValues = PaddingValues(16.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(12.dp),
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(12.dp),
-    state: LazyGridState = rememberLazyGridState(cacheWindow = TvGridCacheWindow),
+    state: LazyGridState = rememberLazyGridState(cacheWindow = defaultGridCacheWindow()),
     onFocusedIndexChange: (Int) -> Unit = {},
     pullToRefresh: Boolean = true,
     /** Passed through to [PullToRefreshBox] — e.g. false on TV. */

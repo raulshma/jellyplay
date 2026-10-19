@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
- * The audio-device slice of the desktop engine-config parity groundwork: the
+ * The audio-device slice of the desktop engine-config parity: the
  * structured [MpvEngineConfig] audio trio actually reaches the live mpv
  * context on `updateConfig` — `audio-device` / `audio-exclusive` /
  * `audio-spdif` read back with the mapped values, including the flip back to
@@ -90,7 +90,7 @@ class MpvDesktopEngineAudioConfigTest {
                 MpvLib.getPropertyString(checkNotNull(engine.liveMpvHandle()), "audio-spdif"),
             )
 
-            // AUTO + the legacy boolean: the legacy list, byte-identical.
+            // AUTO + the legacy boolean: the legacy list.
             engine.updateConfig(
                 EngineConfig(
                     audioPassthrough = true,

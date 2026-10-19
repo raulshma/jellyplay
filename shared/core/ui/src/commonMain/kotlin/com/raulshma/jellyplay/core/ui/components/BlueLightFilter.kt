@@ -26,11 +26,23 @@ fun Modifier.blueLightFilter(
 ): Modifier {
     if (!enabled || strength <= 0f) return this
     val effective = strength.coerceIn(0f, 1f)
-    val matrix = blueLightSuppressionMatrix(effective)
+    // Memoized on strength: the factory re-runs per recomposition
+    // of its caller, and the 20-float matrix blend + ColorFilter wrap are
+    // identical for a given strength — only a slider drag changes it.
+    val filter = if (effective == cachedFilterStrength) cachedFilter else {
+        blueLightSuppressionMatrix(effective).let(ColorFilter::colorMatrix).also {
+            cachedFilterStrength = effective
+            cachedFilter = it
+        }
+    }
     return this.graphicsLayer {
-        colorFilter = ColorFilter.colorMatrix(matrix)
+        colorFilter = filter
     }
 }
+
+/** Single-slot memo — the filter is UI-thread-only and keyed on one float. */
+private var cachedFilterStrength = Float.NaN
+private var cachedFilter: ColorFilter? = null
 
 /**
  * Builds a color matrix that reduces the blue channel and shifts hue toward

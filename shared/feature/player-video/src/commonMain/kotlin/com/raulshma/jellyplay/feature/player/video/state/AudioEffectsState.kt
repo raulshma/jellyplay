@@ -35,4 +35,13 @@ data class AudioEffectsState(
     val virtualizerStrength: Int = 500,
     val reverbPreset: ReverbPreset = ReverbPreset.NONE,
     val audioDelayMs: Long = 0L,
+    /**
+     * The ADVISORY "allow spatial audio" preference (Android/ExoPlayer only) —
+     * see AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+     * rationale. Mirrors the persisted `playback.spatialAudioEnabled` pref;
+     * the settings-screen row reaches this state through the engine-bind seed.
+     */
+    val spatialAudioEnabled: Boolean = false,
+    /** Qualifies [spatialAudioEnabled] to headphone-class outputs only. */
+    val spatialAudioOnlyHeadphones: Boolean = true,
 )

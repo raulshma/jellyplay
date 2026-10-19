@@ -8,17 +8,21 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.cancelGraphInitCollectors
 import com.raulshma.jellyplay.core.datastore.createUserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -71,10 +75,7 @@ class HomeDiscoveryStoreTest {
 
     @AfterTest
     fun tearDown() {
-        // Stop this instance's Eagerly sharing + migration collectors so they
-        // do not keep reacting to later tests' user switches on the shared
-        // DataStore singleton.
-        scope.cancel()
+        cancelGraphInitCollectors(scope)
     }
 
     /** Switches the active user through the production seam (`active_user_id`). */
@@ -98,6 +99,26 @@ class HomeDiscoveryStoreTest {
         assertEquals(ContinueWatchingClickBehavior.DETAILS, slice.continueWatchingClickBehavior)
         // Default off — current pinned behaviour until the user opts in.
         assertEquals(false, slice.hideTopHeaderOnScroll)
+        // The home feature toggles: opt-ins default off …
+        assertEquals(false, slice.excludeActiveSessions)
+        assertEquals(false, slice.homeHeroVideoEnabled)
+        assertEquals(false, slice.homeHeroVideoTvEnabled)
+        assertEquals(false, slice.homeFocusBackdrop)
+        assertEquals(false, slice.homeStatsCard)
+        assertEquals(false, slice.homeGenreRail)
+        assertEquals(false, slice.homePresenceChips)
+        assertEquals(false, slice.homeLayoutAutopush)
+        assertEquals(false, slice.antiSpoilerHome)
+        // … the enhancement toggles default on …
+        assertEquals(true, slice.homeNewSectionAnnouncements)
+        assertEquals(true, slice.showQualityBadges)
+        assertEquals(true, slice.showNewBadges)
+        assertEquals(true, slice.homeTrickplayPreview)
+        // … and the internal stamps / slices start empty.
+        assertEquals(0L, slice.homeLastVisitEpochMs)
+        assertEquals(0, slice.homeAnnouncedVersion)
+        assertTrue(slice.myMediaHiddenLibraryIds.isEmpty())
+        assertTrue(slice.themeMusicMutedSeriesIds.isEmpty())
     }
 
     @Test
@@ -107,6 +128,87 @@ class HomeDiscoveryStoreTest {
         assertEquals(true, slice().hideTopHeaderOnScroll)
         store.setHideTopHeaderOnScroll(false)
         assertEquals(false, slice().hideTopHeaderOnScroll)
+    }
+
+    @Test
+    fun `home-wave toggles round-trip`() = runTest {
+        activate("userA")
+        // Every new user-facing toggle, on then back off — the spec-backed
+        // setters write through the rows' namespaced keys and the read
+        // projection picks them up.
+        store.setExcludeActiveSessions(true)
+        store.setHeroVideoEnabled(true)
+        store.setHeroVideoTvEnabled(true)
+        store.setFocusBackdrop(true)
+        store.setStatsCard(true)
+        store.setGenreRail(true)
+        store.setPresenceChips(true)
+        store.setNewSectionAnnouncements(false) // default-on knob: flip OFF
+        store.setLayoutAutopush(true)
+        store.setShowQualityBadges(false) // default-on knob: flip OFF
+        store.setShowNewBadges(false) // default-on knob: flip OFF
+        store.setTrickplayPreview(false) // default-on knob: flip OFF
+        store.setAntiSpoilerHome(true)
+        val on = slice()
+        assertEquals(true, on.excludeActiveSessions)
+        assertEquals(true, on.homeHeroVideoEnabled)
+        assertEquals(true, on.homeHeroVideoTvEnabled)
+        assertEquals(true, on.homeFocusBackdrop)
+        assertEquals(true, on.homeStatsCard)
+        assertEquals(true, on.homeGenreRail)
+        assertEquals(true, on.homePresenceChips)
+        assertEquals(false, on.homeNewSectionAnnouncements)
+        assertEquals(true, on.homeLayoutAutopush)
+        assertEquals(false, on.showQualityBadges)
+        assertEquals(false, on.showNewBadges)
+        assertEquals(false, on.homeTrickplayPreview)
+        assertEquals(true, on.antiSpoilerHome)
+
+        store.setExcludeActiveSessions(false)
+        store.setHeroVideoEnabled(false)
+        store.setHeroVideoTvEnabled(false)
+        store.setFocusBackdrop(false)
+        store.setStatsCard(false)
+        store.setGenreRail(false)
+        store.setPresenceChips(false)
+        store.setNewSectionAnnouncements(true)
+        store.setLayoutAutopush(false)
+        store.setShowQualityBadges(true)
+        store.setShowNewBadges(true)
+        store.setTrickplayPreview(true)
+        store.setAntiSpoilerHome(false)
+        val off = slice()
+        assertEquals(false, off.excludeActiveSessions)
+        assertEquals(false, off.homeHeroVideoEnabled)
+        assertEquals(false, off.homeHeroVideoTvEnabled)
+        assertEquals(false, off.homeFocusBackdrop)
+        assertEquals(false, off.homeStatsCard)
+        assertEquals(false, off.homeGenreRail)
+        assertEquals(false, off.homePresenceChips)
+        assertEquals(true, off.homeNewSectionAnnouncements)
+        assertEquals(false, off.homeLayoutAutopush)
+        assertEquals(true, off.showQualityBadges)
+        assertEquals(true, off.showNewBadges)
+        assertEquals(true, off.homeTrickplayPreview)
+        assertEquals(false, off.antiSpoilerHome)
+    }
+
+    @Test
+    fun `internal home stamps round-trip and never surface as rows`() = runTest {
+        activate("userA")
+        store.setHomeLastVisitEpochMs(1_700_000_000_000)
+        store.setHomeAnnouncedVersion(3)
+        assertEquals(1_700_000_000_000, slice().homeLastVisitEpochMs)
+        assertEquals(3, slice().homeAnnouncedVersion)
+        // Restamping overwrites (the announce-once gate re-arms per version bump).
+        store.setHomeAnnouncedVersion(2)
+        assertEquals(2, slice().homeAnnouncedVersion)
+        // Internal bookkeeping: declared rows, but no settings-search entry.
+        assertTrue(
+            HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.search == null &&
+                HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.search == null,
+            "internal stamps must carry no search entry",
+        )
     }
 
     @Test
@@ -150,6 +252,64 @@ class HomeDiscoveryStoreTest {
         assertEquals(HomeSectionType.CONFIGURABLE.toSet(), slice().enabledHomeSectionTypes)
     }
 
+    // ── inline-curation JSON slices (My Media + theme music) ──────────
+
+    @Test
+    fun `my media hidden libraries hide show and clear round-trip`() = runTest {
+        activate("userA")
+        // Per-library hide/show through the read-modify-write pair + the
+        // membership helper the inline long-press reads.
+        store.hideLibraryFromMyMedia("libA")
+        store.hideLibraryFromMyMedia("libB")
+        store.hideLibraryFromMyMedia("libA") // idempotent add
+        assertEquals(setOf("libA", "libB"), slice().myMediaHiddenLibraryIds)
+        assertEquals(true, slice().isLibraryHiddenFromMyMedia("libA"))
+        assertEquals(false, slice().isLibraryHiddenFromMyMedia("libC"))
+        store.showLibraryInMyMedia("libA")
+        assertEquals(setOf("libB"), slice().myMediaHiddenLibraryIds)
+        // Wholesale replace (the config sheet's future "restore all").
+        store.setMyMediaHiddenLibraryIds(setOf("libX"))
+        assertEquals(setOf("libX"), slice().myMediaHiddenLibraryIds)
+        // Bulk restore removes the key outright — the read falls back to the
+        // empty default.
+        store.clearMyMediaHiddenLibraries()
+        assertTrue(slice().myMediaHiddenLibraryIds.isEmpty())
+        assertNull(raw()[stringPreferencesKey("u_userA::my_media_hidden_library_ids")])
+    }
+
+    @Test
+    fun `my media hidden libraries persist as JSON and stay per-user`() = runTest {
+        activate("userA")
+        store.hideLibraryFromMyMedia("libA")
+        // The persisted form is the JSON string-set (the nextUpExcludedSeries
+        // wire shape), readable by a fresh decoder under the user namespace.
+        val decoded = PreferenceCodec.json.decodeFromString<Set<String>>(
+            dataStore.data.first()[stringPreferencesKey("u_userA::my_media_hidden_library_ids")]!!,
+        )
+        assertEquals(setOf("libA"), decoded)
+        // A second user starts clean and never inherits the hide.
+        activate("userB")
+        assertTrue(slice().myMediaHiddenLibraryIds.isEmpty())
+        activate("userA")
+        assertEquals(setOf("libA"), slice().myMediaHiddenLibraryIds)
+    }
+
+    @Test
+    fun `theme music muted series mute unmute and membership round-trip`() = runTest {
+        activate("userA")
+        store.muteThemeMusicForSeries("seriesA")
+        store.muteThemeMusicForSeries("seriesB")
+        store.muteThemeMusicForSeries("seriesA") // idempotent add
+        assertEquals(setOf("seriesA", "seriesB"), slice().themeMusicMutedSeriesIds)
+        assertEquals(true, slice().isThemeMusicMutedFor("seriesA"))
+        assertEquals(false, slice().isThemeMusicMutedFor("seriesC"))
+        store.unmuteThemeMusicForSeries("seriesA")
+        assertEquals(setOf("seriesB"), slice().themeMusicMutedSeriesIds)
+        // Wholesale replace (backup restore).
+        store.setThemeMusicMutedSeriesIds(emptySet())
+        assertTrue(slice().themeMusicMutedSeriesIds.isEmpty())
+    }
+
     @Test
     fun `a pre-Continue-Reading persisted order inserts CR at its default slot, not the tail`() = runTest {
         activate("userA")
@@ -157,7 +317,9 @@ class HomeDiscoveryStoreTest {
         // must join its DEFAULT neighbourhood (slot 2, between Continue
         // Watching and Next Up) — the order twin of the enabled-set version
         // union. Appending at the tail would also bake the tail position in
-        // on the user's next reorder (moveSection's read-modify-write).
+        // on the user's next reorder (moveSection's read-modify-write). The
+        // v3 pair slots by the same rule: UPCOMING after NEXT_UP, MY_MEDIA
+        // after UPCOMING.
         dataStore.edit {
             it[stringPreferencesKey("u_userA::home_section_order")] =
                 """["CONTINUE_WATCHING","NEXT_UP","LATEST_MEDIA","RECENTLY_ADDED","RECOMMENDATIONS"]"""
@@ -167,6 +329,8 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
+                HomeSectionType.UPCOMING,
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
@@ -192,6 +356,8 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
+                HomeSectionType.UPCOMING,
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.DISCOVER,
@@ -208,7 +374,9 @@ class HomeDiscoveryStoreTest {
         // A set persisted before the section shipped (no version stamp): the
         // union must surface the new row, and the untouched types must not be
         // re-enabled if the user had disabled them. DISCOVER ships at v2 and
-        // unions in for the same reason.
+        // unions in for the same reason. The v3 pair (UPCOMING, MY_MEDIA) has
+        // no shipped-at entry — upgrading installs meet them through the v3
+        // upgrade baseline instead, so a persisted set never gains them here.
         dataStore.edit {
             it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
                 """["CONTINUE_WATCHING","LATEST_MEDIA","RECOMMENDATIONS"]"""
@@ -239,6 +407,95 @@ class HomeDiscoveryStoreTest {
         )
     }
 
+    // ── The version-union read exposes what the union contributed ───────────
+
+    @Test
+    fun `a pre-version set reports every shipped section as added by the union`() = runTest {
+        activate("userA")
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","LATEST_MEDIA"]"""
+        }
+        val s = slice()
+        // Absent version stamp = predates versioning itself: the union folds
+        // in ALL shipped sections (v1–v2), and the read reports exactly those
+        // as the union's contribution (the announcement must not name
+        // sections the persisted set already carried).
+        assertEquals(0, s.enabledHomeSectionTypesVersion)
+        assertEquals(
+            setOf(
+                HomeSectionType.CONTINUE_READING,
+                HomeSectionType.DISCOVER,
+            ),
+            s.sectionsAddedByUnion,
+        )
+        assertTrue(
+            HomeSectionType.CONTINUE_READING in s.enabledHomeSectionTypes &&
+                HomeSectionType.DISCOVER in s.enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `an older stored version contributes only the sections shipped after it`() = runTest {
+        activate("userA")
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING"]"""
+            // Stamped v1: CONTINUE_READING (shipped@1) is already covered by
+            // the stamp; DISCOVER (shipped@2) unions in.
+            it[intPreferencesKey("u_userA::home_enabled_section_types_version")] = 1
+        }
+        val s = slice()
+        assertEquals(1, s.enabledHomeSectionTypesVersion)
+        assertEquals(
+            setOf(HomeSectionType.DISCOVER),
+            s.sectionsAddedByUnion,
+        )
+    }
+
+    @Test
+    fun `a v2-stamped set unions nothing and keeps the v3 pair disabled`() = runTest {
+        activate("userA")
+        // A set written after DISCOVER shipped but before UPCOMING/My Media:
+        // v3 has no shipped-at entries — the pair must NOT union in (they
+        // reach upgrading installs through the v3 upgrade baseline, never
+        // through the read), so absence stays the effective disabled choice
+        // until the baseline or the user writes them.
+        dataStore.edit {
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","DISCOVER"]"""
+            it[intPreferencesKey("u_userA::home_enabled_section_types_version")] = 2
+        }
+        val s = slice()
+        assertEquals(2, s.enabledHomeSectionTypesVersion)
+        assertTrue(s.sectionsAddedByUnion.isEmpty())
+        assertEquals(
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.DISCOVER),
+            s.enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `a current-version set contributes nothing to the union`() = runTest {
+        activate("userA")
+        store.setEnabledHomeSectionTypes(setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP))
+        val s = slice()
+        // The write stamped CURRENT: nothing the union contributes, so no
+        // announcement may ever fire for this read.
+        assertEquals(HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION, s.enabledHomeSectionTypesVersion)
+        assertTrue(s.sectionsAddedByUnion.isEmpty())
+    }
+
+    @Test
+    fun `the untouched default read contributes nothing to the union`() = runTest {
+        activate("userA")
+        // No persisted set at all: the read serves the spec default (which is
+        // already current) — nothing new to announce.
+        val s = slice()
+        assertEquals(HomeSectionType.CONFIGURABLE.toSet(), s.enabledHomeSectionTypes)
+        assertTrue(s.sectionsAddedByUnion.isEmpty())
+    }
+
     @Test
     fun `setSectionVisible stamps the version so a later disable stays disabled`() = runTest {
         activate("userA")
@@ -263,9 +520,10 @@ class HomeDiscoveryStoreTest {
             slice().enabledHomeSectionTypes,
         )
         store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
-        // DISCOVER survives the rewrite: the pre-version read unioned it in
-        // (shipped@2) and the read-modify-write only drops the member being
-        // disabled — same carry-through CONTINUE_READING documented above.
+        // DISCOVER survives the rewrite (the pre-version read unioned it in,
+        // shipped@2) — same carry-through CONTINUE_READING documented above —
+        // the read-modify-write only drops the member being disabled. The v3
+        // pair carries nothing: they were never unioned into this set.
         assertEquals(
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
@@ -401,6 +659,87 @@ class HomeDiscoveryStoreTest {
     }
 
     // ------------------------------------------------------------------
+    // v3 upgrade baseline: Upcoming + My Media default visible on fresh
+    // installs, baselined OFF on installs updating from v0.11.4.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a fresh install's baseline classifies as fresh and never writes a set`() = runTest {
+        activate("userA")
+        // No migration marker, no legacy flat keys: a fresh install. The
+        // fold claims itself (one-shot) but writes nothing, so the absent
+        // set keeps serving the spec default with the v3 pair visible.
+        store.ensureV3UpgradeBaseline("userA")
+        assertNull(raw()[stringPreferencesKey("u_userA::home_enabled_section_types")])
+        assertEquals(HomeSectionType.CONFIGURABLE.toSet(), slice().enabledHomeSectionTypes)
+        assertEquals(true, raw()[booleanPreferencesKey("home_v3_upgrade_baseline_done")])
+    }
+
+    @Test
+    fun `a namespacing-era install baselines the v3 pair off for the first active user`() = runTest {
+        // HOME_NS_MIGRATED = true: the install ran a pre-v0.11.5 version.
+        // The user never persisted a set, so the fold materializes the
+        // default minus the v3 pair, stamped current — home keeps exactly
+        // the rows it had.
+        dataStore.edit { it[booleanPreferencesKey("home_ns_migrated")] = true }
+        activate("userA")
+        store.ensureV3UpgradeBaseline("userA")
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() -
+                setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA),
+            slice().enabledHomeSectionTypes,
+        )
+        assertEquals(
+            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION,
+            slice().enabledHomeSectionTypesVersion,
+        )
+        // The baselined set is a real persisted set: a later toggle is
+        // verbatim and never resurrects the pair.
+        store.setSectionVisible(HomeSectionType.LATEST_MEDIA, visible = false)
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() -
+                setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA, HomeSectionType.LATEST_MEDIA),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `the v3 baseline leaves an already-persisted set verbatim`() = runTest {
+        // A user who DID touch section config pre-v0.11.5: their set (which
+        // lacks the pair) is respected as-is — the fold must not overwrite
+        // it, and the read must not union the pair in either.
+        dataStore.edit {
+            it[booleanPreferencesKey("home_ns_migrated")] = true
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","DISCOVER"]"""
+            it[intPreferencesKey("u_userA::home_enabled_section_types_version")] = 2
+        }
+        activate("userA")
+        store.ensureV3UpgradeBaseline("userA")
+        assertEquals(
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.DISCOVER),
+            slice().enabledHomeSectionTypes,
+        )
+        // The stamp is untouched — still the v2 write the fold found.
+        assertEquals(2, slice().enabledHomeSectionTypesVersion)
+    }
+
+    @Test
+    fun `a pre-namespacing install is classified by its legacy flat keys`() = runTest {
+        // An older install whose marker was never set but whose legacy flat
+        // keys are still on disk (the copy fold never deletes them) — the
+        // key presence must classify it as updating too.
+        dataStore.edit { it[booleanPreferencesKey("home_hero_enabled")] = false }
+        activate("userA")
+        store.ensureV3UpgradeBaseline("userA")
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() -
+                setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    // ------------------------------------------------------------------
     // Per-user keying
     // ------------------------------------------------------------------
 
@@ -487,6 +826,8 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
+                HomeSectionType.UPCOMING,
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
@@ -630,10 +971,21 @@ class HomeDiscoveryStoreTest {
         activate("userA")
         // A backup carries canonical (user-portable) values; restoring it
         // writes into whoever is active — userA here.
-        store.restore(HomeDiscoverySlice(homeMode = HomeMode.MUSIC, nextUpExcludedSeriesIds = setOf("fromBackup")))
+        store.restore(
+            HomeDiscoverySlice(
+                homeMode = HomeMode.MUSIC,
+                nextUpExcludedSeriesIds = setOf("fromBackup"),
+                antiSpoilerHome = true,
+                myMediaHiddenLibraryIds = setOf("hiddenLib"),
+                homeAnnouncedVersion = 2,
+            ),
+        )
         val restored = slice()
         assertEquals(HomeMode.MUSIC, restored.homeMode)
         assertEquals(setOf("fromBackup"), restored.nextUpExcludedSeriesIds)
+        assertEquals(true, restored.antiSpoilerHome)
+        assertEquals(setOf("hiddenLib"), restored.myMediaHiddenLibraryIds)
+        assertEquals(2, restored.homeAnnouncedVersion)
         assertEquals(HomeMode.MUSIC.name, raw()[stringPreferencesKey("u_userA::home_mode")])
 
         // Another user stays untouched by the restore.
@@ -642,5 +994,112 @@ class HomeDiscoveryStoreTest {
         assertEquals(HomeMode.VIDEO, bSlice.homeMode)
         assertTrue(bSlice.nextUpExcludedSeriesIds.isEmpty())
         assertNull(raw()[stringPreferencesKey("u_userB::home_mode")])
+    }
+
+    // ------------------------------------------------------------------
+    // The layoutRevision dirty signal + the applyLayout restore helper
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `layoutRevision bumps on layout commands only`() = runTest {
+        activate("userA")
+        assertEquals(0, store.layoutRevision.value)
+
+        // Every command writing a HomeLayoutConfig payload domain bumps once.
+        store.setEnabledHomeSectionTypes(setOf(HomeSectionType.NEXT_UP))
+        assertEquals(1, store.layoutRevision.value)
+        store.moveSection(HomeSectionType.NEXT_UP, up = true)
+        assertEquals(2, store.layoutRevision.value)
+        store.setSectionVisible(HomeSectionType.RECENTLY_ADDED, visible = false)
+        assertEquals(3, store.layoutRevision.value)
+        store.setPinnedHomeSections(emptyList())
+        assertEquals(4, store.layoutRevision.value)
+        store.setDiscoverRows(emptyList())
+        assertEquals(5, store.layoutRevision.value)
+        store.setLibraryHomeSectionOverrides(emptyMap())
+        assertEquals(6, store.layoutRevision.value)
+        store.setMergeContinueWatchingAndNextUp(true)
+        assertEquals(7, store.layoutRevision.value)
+        store.setNextUpMaxDays(14)
+        assertEquals(8, store.layoutRevision.value)
+        store.setNextUpRewatching(true)
+        assertEquals(9, store.layoutRevision.value)
+        store.setHomeHeroEnabled(false)
+        assertEquals(10, store.layoutRevision.value)
+        store.setContinueWatchingClickBehavior(ContinueWatchingClickBehavior.PLAY)
+        assertEquals(11, store.layoutRevision.value)
+        store.addPinnedHomeSection(PinnedHomeSection(PinnedSectionType.COLLECTION, "col1", "Movies"))
+        assertEquals(12, store.layoutRevision.value)
+        store.removePinnedHomeSection("COLLECTION_col1")
+        assertEquals(13, store.layoutRevision.value)
+        store.upsertDiscoverRow(DiscoverRowConfig(id = "dr1", title = "Space"))
+        assertEquals(14, store.layoutRevision.value)
+        store.setDiscoverRowEnabled("dr1", enabled = false)
+        assertEquals(15, store.layoutRevision.value)
+        store.moveDiscoverRow("dr1", up = true)
+        assertEquals(16, store.layoutRevision.value)
+        store.removeDiscoverRow("dr1")
+        assertEquals(17, store.layoutRevision.value)
+
+        // Non-layout commands (behavioral knobs outside the payload) never bump.
+        store.setHomeMode(HomeMode.MUSIC)
+        store.setHideWatchedItems(true)
+        store.setNextUpExcludedSeriesIds(setOf("s1"))
+        store.setLayoutAutopush(true)
+        assertEquals(17, store.layoutRevision.value)
+
+        // The full-slice backup restore touches layout domains — one bump.
+        store.restore(HomeDiscoverySlice(homeMode = HomeMode.MUSIC))
+        assertEquals(18, store.layoutRevision.value)
+    }
+
+    @Test
+    fun `layoutRevision never bumps on skipped pre-login writes`() = runTest {
+        // No active user: the edit is skipped, so no namespace was written and
+        // the dirty signal must stay quiet (the controller would otherwise
+        // debounce-push a phantom change on the next sign-in).
+        store.setEnabledHomeSectionTypes(setOf(HomeSectionType.NEXT_UP))
+        assertEquals(0, store.layoutRevision.value)
+    }
+
+    @Test
+    fun `applyLayout routes every payload domain through the store commands`() = runTest {
+        activate("userA")
+        // Seed the opposite values first so every apply is observable.
+        store.setMergeContinueWatchingAndNextUp(true)
+        store.setNextUpRewatching(true)
+
+        val config = HomeLayoutConfig(
+            enabledHomeSectionTypes = setOf(HomeSectionType.NEXT_UP, HomeSectionType.RECENTLY_ADDED),
+            homeSectionOrder = listOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.NEXT_UP),
+            libraryHomeSectionOverrides = mapOf("lib1" to setOf(HomeSectionType.LATEST_MEDIA)),
+            mergeContinueWatchingAndNextUp = false,
+            nextUpMaxDays = 30,
+            nextUpRewatching = false,
+            pinnedHomeSections = listOf(PinnedHomeSection(PinnedSectionType.COLLECTION, "col1", "Movies")),
+            discoverRows = listOf(DiscoverRowConfig(id = "dr1", title = "Space")),
+            homeHeroEnabled = false,
+            continueWatchingClickBehavior = ContinueWatchingClickBehavior.PLAY,
+        )
+        val before = store.layoutRevision.value
+        store.applyLayout(config)
+        // One bump per routed setter — the same dirty signal a hand-tuned
+        // layout produces, so the autopush treats a restore like any edit.
+        assertEquals(before + 10, store.layoutRevision.value)
+
+        val applied = slice()
+        assertEquals(setOf(HomeSectionType.NEXT_UP, HomeSectionType.RECENTLY_ADDED), applied.enabledHomeSectionTypes)
+        // The order setter normalizes (missing configurables append), so the
+        // two configured sections lead and the configurable set is complete.
+        assertEquals(listOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.NEXT_UP), applied.homeSectionOrder.take(2))
+        assertEquals(HomeSectionType.CONFIGURABLE.toSet(), applied.homeSectionOrder.toSet())
+        assertEquals(mapOf("lib1" to setOf(HomeSectionType.LATEST_MEDIA)), applied.libraryHomeSectionOverrides)
+        assertEquals(false, applied.mergeContinueWatchingAndNextUp)
+        assertEquals(30, applied.nextUpMaxDays)
+        assertEquals(false, applied.nextUpRewatching)
+        assertEquals(listOf(PinnedHomeSection(PinnedSectionType.COLLECTION, "col1", "Movies")), applied.pinnedHomeSections)
+        assertEquals(listOf(DiscoverRowConfig(id = "dr1", title = "Space")), applied.discoverRows)
+        assertEquals(false, applied.homeHeroEnabled)
+        assertEquals(ContinueWatchingClickBehavior.PLAY, applied.continueWatchingClickBehavior)
     }
 }

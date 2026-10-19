@@ -12,19 +12,19 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * The mood/smart generated-playlist snapshot holder. Owns what both routes
- * used to hand-roll — the generate pipeline (loading/error/selection/result
- * lifecycle around the suspend fetch), the `"custom-" + UUID` id convention
- * with its delete guard, [clearGenerated], [playAll] — so
- * `MoodPlaylistsViewModel` and `SmartPlaylistsViewModel` stop hand-syncing
- * loose compose fields through every generate call.
+ * The mood/smart generated-playlist snapshot holder. Owns the generate
+ * pipeline both routes share — the loading/error/selection/result lifecycle
+ * around the suspend fetch, the `"custom-" + UUID` id convention with its
+ * delete guard, [clearGenerated], [playAll] — so `MoodPlaylistsViewModel`
+ * and `SmartPlaylistsViewModel` keep no loose compose fields to hand-sync
+ * through every generate call.
  *
  * Per-kind differences stay pure adapters passed to [generate]: the route's
  * [fetch] decides the server query (mood's random 300-item pull vs smart's
  * favorites shortcut / criteria filters), and the route's [process] runs the
  * client pipeline (mood's keyword/exclusion/rating filter + sort + take vs
  * smart's unplayed/criteria filter + client sort + take) on
- * [Dispatchers.Default] — the exact bodies the old ladders ran.
+ * [Dispatchers.Default].
  *
  * State is Compose snapshot state ([MutableComposeState]), deliberately not
  * `StateFlow`: the screens read the ViewModels' plain getters inside

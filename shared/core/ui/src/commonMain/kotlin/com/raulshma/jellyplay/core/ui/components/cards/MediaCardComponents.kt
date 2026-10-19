@@ -283,6 +283,17 @@ fun PosterCard(
      * for paged books.
      */
     bookProgressFractionOverride: Float? = null,
+    /**
+     * Render the [NewBadge] arrival chip (the row resolved the flag —
+     * section type + visit-stamp predicate + the composition local's
+     * [CardDisplayPreferences.showNewBadges]; the card stays a pure renderer).
+     */
+    showNewBadge: Boolean = false,
+    /**
+     * Optional badge rendered in the poster's top-left overlay stack above
+     * ratings and quality chips (e.g. the air-date badge on Upcoming cards).
+     */
+    topStartBadge: (@Composable () -> Unit)? = null,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -291,6 +302,15 @@ fun PosterCard(
     // Books get a reading affordance instead of the play triangle — the tap
     // still opens the reader, the glyph just shouldn't claim "play".
     val isBook = item.mediaType == MediaType.BOOK
+    // Anti-spoiler: the one decision fold the overlays and the footer
+    // both consume (see [spoilerSafeCardState]).
+    val spoilerSafe = remember(cardPrefs) { spoilerSafeCardState(cardPrefs) }
+    // Quality chips: gated on the card prefs AND suppressed in
+    // performance mode — the same gate the dominant-color extraction uses
+    // (no per-card extra work while the user asked for a lean render). Null
+    // badges (an unprojected fetch) render nothing inside the row itself.
+    val performanceMode = LocalPerformanceMode.current
+    val qualityBadges = if (!performanceMode && cardPrefs.showQualityBadges) item.qualityBadges else null
 
     // For episode cards in Latest Media rows, show the series name as the title
     // (the episode title alone doesn't identify the show); the season/episode
@@ -380,38 +400,55 @@ fun PosterCard(
         showProgress = showProgress,
         progressFraction = progressPercent,
         overlays = {
-            if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
-                WatchedBadge(
-                    accentTint = dominantColor,
-                    iconColor = remember(dominantColor) {
-                        if (isLightColor(dominantColor)) Color.Black else Color.White
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                )
-            } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
-                val unplayedCount = item.unplayedItemCount
-                // Unwatched-count badge for series/seasons/collections. Only
-                // rendered when the user has enabled the unwatched badge
-                // and the underlying MediaItem exposes a non-zero count.
-                if (unplayedCount != null && unplayedCount > 0) {
-                    UnwatchedCountBadge(
-                        count = unplayedCount,
+            // Watched/unwatched corner: the anti-spoiler mode force-hides
+            // both regardless of their individual prefs; the checkmark /
+            // badge / row-filtering semantics are otherwise unchanged.
+            if (spoilerSafe.showWatchedBadges) {
+                if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
+                    WatchedBadge(
+                        accentTint = dominantColor,
+                        iconColor = remember(dominantColor) {
+                            if (isLightColor(dominantColor)) Color.Black else Color.White
+                        },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp),
                     )
+                } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
+                    val unplayedCount = item.unplayedItemCount
+                    // Unwatched-count badge for series/seasons/collections. Only
+                    // rendered when the user has enabled the unwatched badge
+                    // and the underlying MediaItem exposes a non-zero count.
+                    if (unplayedCount != null && unplayedCount > 0) {
+                        UnwatchedCountBadge(
+                            count = unplayedCount,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp),
+                        )
+                    }
                 }
             }
 
-            if (item.communityRating != null) {
-                RatingBadge(
-                    rating = item.communityRating,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp),
-                )
+            // Top-left info stack: optional top-start badge (e.g. air date),
+            // the NEW arrival chip above the rating and the quality chips,
+            // in one column so the corner's badges coexist (a lone child renders
+            // exactly where the former standalone rating badge sat). Rating
+            // badges are never spoilers — they render in anti-spoiler mode too.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+            ) {
+                topStartBadge?.invoke()
+                if (showNewBadge) {
+                    NewBadge()
+                }
+                if (item.communityRating != null) {
+                    RatingBadge(rating = item.communityRating)
+                }
+                QualityBadgeRow(badges = qualityBadges)
             }
 
             // Bottom-left season/episode chip for episode cards surfaced in
@@ -468,9 +505,14 @@ fun PosterCard(
                 }
                 // The whole book-vs-time meta decision is [mediaCardFooterMeta]'s
                 // (see MediaCardFooters.kt); this shell only renders it — always
-                // with the "•" divider and the poster footer's text style.
-                val footerMeta = remember(item, bookProgressFractionOverride) {
-                    mediaCardFooterMeta(item, bookProgressFractionOverride)
+                // with the "•" divider and the poster footer's text style. The
+                // Anti-spoiler mode drops the "Xm left" segment.
+                val footerMeta = remember(item, bookProgressFractionOverride, spoilerSafe) {
+                    mediaCardFooterMeta(
+                        item,
+                        bookProgressFractionOverride,
+                        showTimeLeft = spoilerSafe.showTimeLeft,
+                    )
                 }
                 if (footerMeta != null) {
                     MediaCardFooterMetaRow(

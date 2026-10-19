@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.state
 import com.raulshma.jellyplay.core.model.PlayerInputMap
 
 /**
- * The in-player input-binding quick toggle (issue #171), extracted from the
+ * The in-player input-binding quick toggle, extracted from the
  * ViewModel per the [ControllerOwnershipTest] line-ceiling rule: reads the
  * live mapping, flips one binding's enabled flag, pushes the uiState write
  * (the detectors resolve through it — the gate moves immediately) and hands

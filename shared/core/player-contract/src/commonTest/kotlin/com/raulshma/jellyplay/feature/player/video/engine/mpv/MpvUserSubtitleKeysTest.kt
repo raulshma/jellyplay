@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Unit tests for the per-key mpv.conf subtitle ownership helper (issue #165):
+ * Unit tests for the per-key mpv.conf subtitle ownership helper:
  * which `sub-*` keys the user claims from mpv.conf / extra config, and how
  * app-side style entry lists are filtered against that set.
  */

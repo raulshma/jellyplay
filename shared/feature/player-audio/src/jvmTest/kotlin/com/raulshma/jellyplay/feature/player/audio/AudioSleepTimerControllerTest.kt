@@ -110,7 +110,7 @@ class AudioSleepTimerControllerTest {
 
         verify { sleepCountdown.cancelSleepTimer() }
         // Cancel clears active/endOfEpisode but PRESERVES the last-used
-        // duration (the picker keeps offering it) — the pre-extraction
+        // duration (the picker keeps offering it) — the original
         // behaviour, now pinned.
         assertEquals(
             SleepTimerState(active = false, endOfEpisode = false, lastUsedDurationMs = 1_000L),

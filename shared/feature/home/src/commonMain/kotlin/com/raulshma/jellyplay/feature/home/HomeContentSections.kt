@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_because_you_watched
@@ -62,6 +63,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
 import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -69,6 +71,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.bookProgressFraction
 import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.model.home.HomeRowModules
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
@@ -81,6 +84,7 @@ import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * WHAT the content list renders, decided once at the construction site from
@@ -91,7 +95,7 @@ import kotlinx.coroutines.flow.Flow
  * disagree (silently empty rows); here each branch's constructor IS the mask,
  * and the banner fields simply do not exist on the offline feed.
  */
-internal sealed interface HomeFeed {
+internal sealed interface HomeRenderFeed {
 
     /** The rendered section list — server sections online, derived offline. */
     val sections: List<HomeSection>
@@ -104,46 +108,77 @@ internal sealed interface HomeFeed {
      * online-only surfaces — offline rendering short-circuits them by
      * construction, not by boolean masks at the read sites.
      */
+    @Immutable
     data class Online(
         override val sections: List<HomeSection>,
         override val isLoading: Boolean,
         val partialLoadError: Boolean,
         val newsletterBannerVisible: Boolean,
-    ) : HomeFeed
+    ) : HomeRenderFeed
 
     /**
      * The offline feed: the whole [OfflineHomeContent] render model.
      * [isLoading] covers the FallbackPending window after the gate opens but
      * before the first library emission (downloads may yet exist).
      */
+    @Immutable
     data class Offline(
         val content: OfflineHomeContent,
         override val isLoading: Boolean = false,
-    ) : HomeFeed {
+    ) : HomeRenderFeed {
         override val sections: List<HomeSection> get() = content.sections
     }
 }
 
 /**
- * Bundles the (previously 38) flat parameters of the home content list into a
+ * Bundles the home content list's flat parameters into a
  * single `@Immutable` value so the composable is skippable without relying on
  * every caller `remember`-ing dozens of unstable lambdas. Lambdas that must
  * remain stable across recompositions (image/url builders, click handlers) are
  * grouped into [HomeContentCallbacks].
+ *
+ * ## Shape: core + screen-resolved extras
+ *
+ * [core] is the tightest sub-bag of [HomeUiState] the content list actually
+ * reads, embedded as one value (the DetailContentState precedent): readers
+ * qualify through `state.core.X` — there are NO passthrough properties
+ * restating core fields. The sub-bag is deliberately NOT the whole
+ * [HomeUiState]: the screen orchestrator already recomposes on every uiState
+ * emission, and carrying all ~45 fields would re-validate this list (and
+ * every row) on churn the list never reads — spinner flips, sheet states,
+ * search-active. The extras beside [core] are exactly the values the
+ * ViewModel does NOT own — the screen's own resolutions:
+ *
+ *  - [feed]: the [homeSurface] fold's verdict carried whole — the online or
+ *    offline feed with the offline-only masks (spinner, banners) and the
+ *    FallbackPending loading window already applied,
+ *  - [featuredItem]: the hero controller's featured pick,
+ *  - [curatedHeroOverlay]: the curated billboard copy keyed by item id,
+ *    merged screen-side ahead of the local hero candidates,
+ *  - [backgroundColor] / [contentPad] / [headerHeight]: the screen's layout
+ *    resolutions,
+ *  - [bookProgressFractions]: whichever CR-fractions map belongs to the
+ *    carried feed (the surface fold's pick — the refresher's decodes online,
+ *    the offline gate's offline, FallbackPending included),
+ *  - [discoverRows] / [allDiscoverItems] / [randomDiscoverRowIds]: the
+ *    discover-grid derivations (rows, flattened items, the RANDOM-sorted ids),
+ *  - [statusBanner]: the implicit-offline notice the screen folds.
  */
 @Immutable
 internal data class HomeContentState(
-    val feed: HomeFeed,
-    val homeHeroEnabled: Boolean,
-    val homeBackdropEnabled: Boolean,
-    val discoverEnabled: Boolean,
-    val experimentalCardClippingEnabled: Boolean,
+    /** The [HomeUiState] fields the content list reads — see [Core]. */
+    val core: Core,
+    val feed: HomeRenderFeed,
     val featuredItem: MediaItem?,
+    /**
+     * The plugin-curated billboard copy keyed by item id — the hero looks
+     * its featured item up here; a hit's headline/subhead override the item's
+     * own title/kicker slots, a miss renders item metadata as today.
+     */
+    val curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry> = emptyMap(),
     val backgroundColor: Color,
     val contentPad: Dp,
     val headerHeight: Dp,
-    val isLightTheme: Boolean,
-    val continueWatchingClickBehavior: ContinueWatchingClickBehavior,
     /**
      * Continue Reading reading-progress bars keyed by item id —
      * [com.raulshma.jellyplay.core.model.bookProgressFraction] decodes with
@@ -153,7 +188,6 @@ internal data class HomeContentState(
     val bookProgressFractions: Map<String, Float> = emptyMap(),
     val discoverRows: List<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>>,
     val allDiscoverItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
-    val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>,
     /**
      * Row ids of the RANDOM-sorted custom discover rows — the only rows that
      * render the dice affordance in their header (a non-random sort re-fetch
@@ -161,28 +195,52 @@ internal data class HomeContentState(
      */
     val randomDiscoverRowIds: Set<String> = emptySet(),
     /**
-     * Row ids with a dice roll in flight — the matching dice icon tumbles
-     * while the re-fetch runs (the refresher's rolling mirror, see
-     * [HomeRefreshState.rollingDiscoverRowIds]).
-     */
-    val rollingDiscoverRowIds: Set<String> = emptySet(),
-    /**
-     * Section ids with an edge-pull refresh in flight — the matching online
-     * row's edge spinner spins while its single-row refetch runs (the
-     * refresher's mirror, see [HomeRefreshState.refreshingSectionIds]).
-     */
-    val refreshingSectionIds: Set<String> = emptySet(),
-    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
     val statusBanner: String? = null,
 ) {
+    /**
+     * The [HomeUiState] slice the content list reads — one embedded value so
+     * the fold at the construction site stays a one-line copy per field and
+     * every reader qualifies through [HomeContentState.core]. The former shape
+     * interleaved these eleven fields among the screen-derived extras; the
+     * core/extras split is what keeps "which surface facts come from the VM"
+     * answerable by looking at one type.
+     */
+    @Immutable
+    data class Core(
+        val homeHeroEnabled: Boolean,
+        val homeBackdropEnabled: Boolean,
+        val discoverEnabled: Boolean,
+        val experimentalCardClippingEnabled: Boolean,
+        val continueWatchingClickBehavior: ContinueWatchingClickBehavior,
+        /** Direct *arr "Recently Grabbed / Coming Soon" calendar row. */
+        val recentlyGrabbed: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem> =
+            emptyList(),
+        /**
+         * Visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
+         * never). Read once per home session before the dwell timer stamps the
+         * new one, so this session's own stamp can never clear the badges it
+         * just showed. Feeds the arrival rows' NEW-badge predicate
+         * ([HomeMediaRow.showNewBadges]); 0 (the default) badges nothing.
+         */
+        val homeLastVisitEpochMs: Long = 0L,
+        /** Personal stats card data — null hides the card. */
+        val statsCard: HomeStatsCardData? = null,
+        /** The `home_stats_card` pref mirror — the card's render gate. */
+        val statsCardEnabled: Boolean = false,
+        /** Genre quick-access rail chips (server-ordered, top ~24). */
+        val genreChips: List<Genre> = emptyList(),
+        /** The `home_genre_rail` pref mirror — the rail's render gate. */
+        val genreRailEnabled: Boolean = false,
+    )
+
     /** The online feed, null while the offline branch renders. */
-    val online: HomeFeed.Online? get() = feed as? HomeFeed.Online
+    val online: HomeRenderFeed.Online? get() = feed as? HomeRenderFeed.Online
 
     /** The offline render model, null while the online branch renders. */
-    val offlineContent: OfflineHomeContent? get() = (feed as? HomeFeed.Offline)?.content
+    val offlineContent: OfflineHomeContent? get() = (feed as? HomeRenderFeed.Offline)?.content
 }
 
 /**
@@ -225,6 +283,11 @@ internal data class HomeContentCallbacks(
     val onRollDiscoverRow: (String) -> Unit = {},
     /** Edge-pull refresh of ONE section row (section id) — see [HomeRefresher.refreshSectionRow]. */
     val onRefreshSection: (String) -> Unit = {},
+    val onPresenceChipClick: (HomePresenceChip) -> Unit = {},
+    val onPresenceJoinClick: (HomePresenceChip) -> Unit = {},
+    val onPresenceDismiss: (HomePresenceChip) -> Unit = {},
+    val onStatsCardClick: (() -> Unit)? = null,
+    val onGenreClick: (String) -> Unit = {},
 )
 
 /**
@@ -236,6 +299,24 @@ private fun offlineSectionItems(
     section: HomeSection,
     byId: Map<String, OfflineMediaItem>,
 ): List<OfflineMediaItem> = section.items.mapNotNull { byId[it.id] }
+
+/**
+ * A cheap, order-sensitive Int fingerprint over a section list's item
+ * ids (sizes folded in) — the only thing the downloaded-row dedupe consumes.
+ * Remembered off the coarse list, so the hashing runs once per new list
+ * instance while the remember key comparing it is a single Int per body
+ * recomposition.
+ */
+private fun sectionItemIdFingerprint(sections: List<HomeSection>): Int {
+    var hash = sections.size
+    for (section in sections) {
+        hash = hash * 31 + section.items.size
+        for (item in section.items) {
+            hash = hash * 31 + item.id.hashCode()
+        }
+    }
+    return hash
+}
 
 /**
  * The home LazyColumn: hero, partial-load / newsletter banners, media rows,
@@ -255,10 +336,19 @@ internal fun HomeContentList(
     renderInputs: HomeRenderInputs,
     listState: LazyListState,
     density: Density,
+    /**
+     * Watch-party presence chips — the VM's dedicated flow (NOT a
+     * [HomeContentState] field, the search-query precedent): the poll loop
+     * writes it on the home refresh cadence, so collecting it HERE (the row
+     * is this composable's only reader) keeps the per-tick write off the
+     * whole-[HomeUiState] object.
+     */
+    presenceChips: StateFlow<List<HomePresenceChip>>,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val sections = state.feed.sections
+    val presenceChipList by presenceChips.collectAsStateWithLifecycle()
 
     // Discover-row dimensions computed once at the composable scope (not inside
     // the LazyColumn's LazyListScope, where the window-info read isn't typed).
@@ -276,8 +366,8 @@ internal fun HomeContentList(
         rowHorizontalPadding = state.contentPad,
         spacing = discoverSpacing,
         backgroundColor = state.backgroundColor,
-        homeBackdropEnabled = state.homeBackdropEnabled,
-        clippingEnabled = state.experimentalCardClippingEnabled,
+        homeBackdropEnabled = state.core.homeBackdropEnabled,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
         seerrCardLoadingState = renderInputs.seerrCardLoadingState,
         seerrPrefetch = renderInputs.seerrPrefetch,
         onSeerrItemClick = callbacks.onSeerrItemClick,
@@ -336,7 +426,13 @@ internal fun HomeContentList(
         // isn't shown twice. Reads the aggregate's (already mode-filtered)
         // library slice.
         val offlineContent = state.offlineContent
-        val dedupedOfflineLibrary = remember(offlineContent, sections) {
+        // The dedupe consumes only the online sections' item ids, and the
+        // sections list identity churns per refresher emission — so the
+        // remember keys on a cheap ids fingerprint instead of the list, and
+        // the fold below re-runs only when the online id set actually changes
+        // (same idiom as the screen layer's offline fingerprints).
+        val onlineSectionIdsFingerprint = remember(sections) { sectionItemIdFingerprint(sections) }
+        val dedupedOfflineLibrary = remember(offlineContent, onlineSectionIdsFingerprint) {
             val library = offlineContent?.library.orEmpty()
             if (library.isEmpty()) library
             else {
@@ -369,7 +465,7 @@ internal fun HomeContentList(
         // Standalone headers (discover / *arr) keep their flat fill when the
         // ambient backdrop is off — the behavior of the former private
         // SectionHeader.
-        val headerModifier = if (state.homeBackdropEnabled) Modifier else Modifier.background(state.backgroundColor)
+        val headerModifier = if (state.core.homeBackdropEnabled) Modifier else Modifier.background(state.backgroundColor)
 
         // One shared-scalar reveal for the whole feed on first data arrival
         // (this branch only composes once sections exist). Cells composed
@@ -390,21 +486,27 @@ internal fun HomeContentList(
                 .mouseScroll(listState, Orientation.Vertical),
             contentPadding = PaddingValues(bottom = adaptiveInfo.bottomPadding(isTv)),
         ) {
-            if (state.featuredItem != null && state.homeHeroEnabled) {
+            if (state.featuredItem != null && state.core.homeHeroEnabled) {
                 item(key = "hero") {
                     val featured = state.featuredItem
+                    // The curated billboard copy for whichever candidate is
+                    // featured — absent/null fields render the item's own
+                    // metadata exactly as the local hero always has.
+                    val curated = state.curatedHeroOverlay[featured.id]
                     // Online and offline heroes alike open the unified detail
                     // tree — it renders remote and downloaded items alike, so
                     // the id is all the routing needs.
                     AnimatedHeroHeader(
                         featuredItem = featured,
+                        headline = curated?.headline,
+                        subhead = curated?.subhead,
                         getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
                             { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
                         },
                         height = state.headerHeight,
                         backgroundColor = state.backgroundColor,
                         contentPadding = state.contentPad,
-                        homeBackdropEnabled = state.homeBackdropEnabled,
+                        homeBackdropEnabled = state.core.homeBackdropEnabled,
                         listState = listState,
                         onItemClick = callbacks.onItemClick,
                         onDetailsClick = callbacks.onItemClick,
@@ -417,15 +519,57 @@ internal fun HomeContentList(
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
+            // ── presence chips ("Alex is watching Dune — join") ──────
+            val showPresenceChips = state.online != null && presenceChipList.isNotEmpty()
+            if (showPresenceChips) {
+                item(key = "presence_chips") {
+                    HomePresenceChipRow(
+                        chips = presenceChipList,
+                        onChipClick = callbacks.onPresenceChipClick,
+                        onJoinClick = callbacks.onPresenceJoinClick,
+                        onDismiss = callbacks.onPresenceDismiss,
+                        contentPad = state.contentPad,
+                        isPhone = isPhoneLayout(isTv, adaptiveInfo.windowSizeClass),
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                }
+            }
+
+            // ── stats card ("Your library week") ─────────────────────
+            val showStatsCard = state.online != null && state.core.statsCardEnabled && state.core.statsCard != null
+            if (showStatsCard) {
+                item(key = "stats_card") {
+                    HomeStatsCard(
+                        data = state.core.statsCard,
+                        onClick = callbacks.onStatsCardClick,
+                    )
+                }
+            }
+
+            // ── genre rail ──────────────────────────────────────────
+            val showGenreRail = state.online != null && state.core.genreRailEnabled && state.core.genreChips.isNotEmpty()
+            if (showGenreRail) {
+                item(key = "genre_rail") {
+                    HomeGenreRail(
+                        genres = state.core.genreChips,
+                        onGenreClick = callbacks.onGenreClick,
+                        contentPad = state.contentPad,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
+            }
+
             // Non-blocking informational banner (implicit-offline fallback notice).
-            if (state.statusBanner != null) {
+            val showStatusBanner = state.statusBanner != null
+            if (showStatusBanner) {
                 item(key = "status_banner") {
                     HomeStatusBannerRow(text = state.statusBanner, contentPad = state.contentPad)
                 }
             }
 
             // Non-blocking notice when some home sections failed to load.
-            if (state.online?.partialLoadError == true) {
+            val showPartialLoadBanner = state.online?.partialLoadError == true
+            if (showPartialLoadBanner) {
                 item(key = "partial_load_banner") {
                     HomeStatusBannerRow(
                         text = stringResource(Res.string.home_sections_load_failed),
@@ -435,7 +579,8 @@ internal fun HomeContentList(
                 }
             }
 
-            if (state.online?.newsletterBannerVisible == true) {
+            val showNewsletterBanner = state.online?.newsletterBannerVisible == true
+            if (showNewsletterBanner) {
                 item(key = "newsletter_banner") {
                     NewsletterBanner(
                         onClick = callbacks.onNewsletterClick,
@@ -444,24 +589,20 @@ internal fun HomeContentList(
                 }
             }
 
+            // The hero-merge treatment (background gradient + zero top padding)
+            // applies to the first section only when it directly follows the
+            // hero — i.e. nothing above renders between the two. Derived from
+            // the same admission booleans so the two can't drift apart.
+            val firstSectionFollowsHero = state.featuredItem != null && state.core.homeHeroEnabled &&
+                !showPresenceChips && !showStatsCard && !showGenreRail &&
+                !showStatusBanner && !showPartialLoadBanner && !showNewsletterBanner
+
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
-                val isFirstAfterHero = index == 0 && state.featuredItem != null && state.homeHeroEnabled
-                val sectionIndexInList = index + (if (state.featuredItem != null && state.homeHeroEnabled) 1 else 0)
-                // Per-item visibility: a single shared IntRange derivedStateOf
-                // invalidated every composed section item on every boundary
-                // crossing (the range value changed even for items whose own
-                // visibility didn't). Reading each item's own visibility as a
-                // Boolean means only the item that entered/left recomposes.
-                //
-                // Keyed on sectionIndexInList: if the hero presence toggles
-                // (featuredItem becomes null, or homeHeroEnabled flips), every
-                // item's offset shifts by 1 and the captured index would
-                // otherwise track the wrong item's visibility. The key discards
-                // the stale derivedStateOf and rebuilds it for the new offset.
-                val isCurrentlyVisible by remember(sectionIndexInList) {
+                val isFirstAfterHero = index == 0 && firstSectionFollowsHero
+                val isCurrentlyVisible by remember(section.id) {
                     derivedStateOf {
-                        listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
+                        listState.layoutInfo.visibleItemsInfo.any { it.key == section.id }
                     }
                 }
 
@@ -489,7 +630,7 @@ internal fun HomeContentList(
                             // With the ambient backdrop on, sections stay transparent so the
                             // backdrop shows through between cards; the hero itself fades to
                             // transparent so no merge gradient is needed here.
-                            state.homeBackdropEnabled -> Modifier
+                            state.core.homeBackdropEnabled -> Modifier
                             isFirstAfterHero -> Modifier.background(heroTransitionBrush)
                             else -> Modifier.background(state.backgroundColor)
                         }
@@ -501,7 +642,7 @@ internal fun HomeContentList(
                     }
 
                 val seedItem = section.seedItem
-                val sectionTitle = if (section.type == HomeSectionType.RECOMMENDATIONS && seedItem != null) {
+                val sectionTitle = if (HomeRowModules[section.type].titleCarriesSeed && seedItem != null) {
                     stringResource(Res.string.home_because_you_watched, seedItem.name)
                 } else {
                     section.title
@@ -517,7 +658,7 @@ internal fun HomeContentList(
                 }
 
                 // "See All" pill for the poster rows: both the offline-mirrored
-                // and the online branch render it (#147), so the gate + click
+                // and the online branch render it, so the gate + click
                 // lambda is built once above the chassis dispatch and handed to
                 // whichever poster row runs.
                 val seeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
@@ -525,6 +666,14 @@ internal fun HomeContentList(
                         { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
                     } else null
                 }
+
+                // The per-row spinner mirrors, leaf-collected at row scope
+                // (the `pendingSyncEntries` pattern): a single-row refresh's
+                // spin-up/data/spin-down emissions invalidate only THIS
+                // item's recompose scope, never the orchestrator above.
+                // Derivation is set membership on the small mirror sets
+                // (see [HomeRefreshSpinnerState]).
+                val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
 
                 // Edge-pull refresh wiring: online rows of the refreshable
                 // types only ([isEdgeRefreshableSection] — the same gate the
@@ -534,7 +683,7 @@ internal fun HomeContentList(
                 val edgeRefreshCtx = if (offlineContent == null && isEdgeRefreshableSection(section)) {
                     EdgeRefreshContext(
                         sectionId = section.id,
-                        inProgress = section.id in state.refreshingSectionIds,
+                        inProgress = section.id in spinners.refreshingSectionIds,
                         onRefresh = { callbacks.onRefreshSection(section.id) },
                     )
                 } else {
@@ -542,10 +691,10 @@ internal fun HomeContentList(
                 }
 
                 // Which row renders is the chassis dispatch's decision (see
-                // homeRowChassis): the offline-mirror rule (#147) and the
+                // homeRowChassis): the offline-mirror rule and the
                 // wide-row source split live in one pure, pinned place, so
-                // this `when` is exhaustive and decides nothing. The branches
-                // render exactly what the former if/else chain rendered.
+                // this `when` is exhaustive and decides nothing. Each branch
+                // renders one row shape.
                 //
                 // Seerr-sourced custom discover rows bypass the chassis
                 // entirely — they carry TMDB cards with request actions, not
@@ -575,10 +724,11 @@ internal fun HomeContentList(
                     is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                     is HomeRowChassis.OnlineWide -> HomeSectionOnlineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                     is HomeRowChassis.OnlinePoster -> HomeSectionOnlinePosterRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                    is HomeRowChassis.OnlineTiles -> HomeSectionOnlineTilesRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                 }
             }
 
-            if (state.discoverEnabled && state.allDiscoverItems.isNotEmpty()) {
+            if (state.core.discoverEnabled && state.allDiscoverItems.isNotEmpty()) {
                 item(key = "seerr_discover_header") {
                     HomeRowTitle(
                         title = stringResource(Res.string.home_discover),
@@ -590,7 +740,12 @@ internal fun HomeContentList(
 
                 items(
                     count = state.discoverRows.size,
-                    key = { rowIndex -> "seerr_row_${state.discoverRows[rowIndex].firstOrNull()?.id ?: 0}" },
+                    // Row content is positional (a reroll reorders items within
+                    // the rows), so the key is the stable slot index — keying
+                    // on the row's first item id re-keyed EVERY row the moment
+                    // a roll reordered its items, forcing a full re-layout
+                    // mid-repaint.
+                    key = { rowIndex -> "seerr_row_$rowIndex" },
                     contentType = { "seerrRow" },
                 ) { rowIndex ->
                     DiscoverRowSlot(
@@ -606,7 +761,7 @@ internal fun HomeContentList(
             // Reuses SeerrMediaCard (TMDB-keyed) so no new card UI is needed.
             // Empty (and thus hidden) when the DIRECT_ARR_INTEGRATION flag is
             // off, no *arr is configured, or the calendar window is empty.
-            if (state.recentlyGrabbed.isNotEmpty()) {
+            if (state.core.recentlyGrabbed.isNotEmpty()) {
                 item(key = "arr_recently_grabbed_header") {
                     HomeRowTitle(
                         title = stringResource(Res.string.home_coming_soon),
@@ -617,7 +772,7 @@ internal fun HomeContentList(
                 }
                 item(key = "arr_recently_grabbed_row") {
                     DiscoverRowSlot(
-                        items = state.recentlyGrabbed,
+                        items = state.core.recentlyGrabbed,
                         targetSize = discoverPattern[0],
                         rowWidth = discoverRowWidth,
                         args = discoverSlotArgs,
@@ -712,8 +867,8 @@ private fun HomeSectionSeerrRow(
             rowHorizontalPadding = state.contentPad,
             spacing = ctx.discoverSpacing,
             backgroundColor = state.backgroundColor,
-            homeBackdropEnabled = state.homeBackdropEnabled,
-            clippingEnabled = state.experimentalCardClippingEnabled,
+            homeBackdropEnabled = state.core.homeBackdropEnabled,
+            clippingEnabled = state.core.experimentalCardClippingEnabled,
             seerrCardLoadingState = ctx.seerrCardLoadingState,
             seerrPrefetch = renderInputs.seerrPrefetch,
             onSeerrItemClick = callbacks.onSeerrItemClick,
@@ -739,11 +894,11 @@ private fun HomeSectionJellyPlayRow(
     renderInputs: HomeRenderInputs,
 ) {
     val rowItemClick: (MediaItem) -> Unit = remember(
-        ctx.section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
+        ctx.section.type, state.core.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
     ) {
         posterRowClick(
             sectionType = ctx.section.type,
-            behavior = state.continueWatchingClickBehavior,
+            behavior = state.core.continueWatchingClickBehavior,
             toMediaItem = { it },
             sinks = ctx.resumeSinks,
             onPlainClick = renderInputs.mediaOnItemClick,
@@ -759,10 +914,51 @@ private fun HomeSectionJellyPlayRow(
         modifier = ctx.modifier,
         focusRequester = ctx.focusRequester,
         onRowFocused = ctx.onRowFocused,
-        clippingEnabled = state.experimentalCardClippingEnabled,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
         onSectionLongClick = ctx.onSectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         edgeRefresh = ctx.edgeRefresh,
+    )
+}
+
+/**
+ * The My Media tiles row over the server feed — the chassis's
+ * [HomeRowChassis.OnlineTiles] arm. The section's items are the assembler's
+ * FOLDER-typed library tiles; a tile tap routes into the library screen
+ * through the existing "See All" carrier ([HomeContentCallbacks.onSeeAllClick],
+ * the one wired `Route.LibrarySection` construction — id + name, the dock
+ * drawer's identity fields), and the tile long-press opens the inline
+ * section-config sheet scoped to that library ([onConfigureSection], the
+ * rows' existing long-press pattern — the same affordance the section title
+ * carries, per-library here). No offline arm: the offline mirror drops the
+ * row (library art is a server artifact).
+ */
+@Composable
+private fun HomeSectionOnlineTilesRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
+) {
+    val section = ctx.section
+    val tileClick: (MediaItem) -> Unit = remember(callbacks, section.type) {
+        { tile -> callbacks.onSeeAllClick(section.type, tile.id, null, tile.name) }
+    }
+    val tileLongClick: (MediaItem) -> Unit = remember(callbacks, section.type) {
+        { tile -> callbacks.onConfigureSection(section.type, tile.id) }
+    }
+    HomeLibraryTilesRow(
+        title = ctx.title,
+        items = section.items,
+        imageUrlFor = renderInputs.mediaImageUrlBuilder,
+        onTileClick = tileClick,
+        modifier = ctx.modifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
+        onTileLongClick = tileLongClick,
+        onSectionLongClick = ctx.onSectionLongClick,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
     )
 }
 
@@ -806,11 +1002,11 @@ private fun HomeSectionOfflinePosterRow(
     // posterRowClick so the online poster row cannot
     // drift from it.
     val rowItemClick: (OfflineMediaItem) -> Unit = remember(
-        section.type, state.continueWatchingClickBehavior, callbacks,
+        section.type, state.core.continueWatchingClickBehavior, callbacks,
     ) {
         posterRowClick(
             sectionType = section.type,
-            behavior = state.continueWatchingClickBehavior,
+            behavior = state.core.continueWatchingClickBehavior,
             toMediaItem = { it.toMediaItem() },
             sinks = ctx.resumeSinks,
             onPlainClick = { item -> callbacks.onItemClick(item.id) },
@@ -823,13 +1019,13 @@ private fun HomeSectionOfflinePosterRow(
         modifier = sectionModifier,
         focusRequester = ctx.focusRequester,
         onRowFocused = ctx.onRowFocused,
-        clippingEnabled = state.experimentalCardClippingEnabled,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
         // Mirrored rows keep their online counterparts'
         // long-press configure affordance (configurable types
         // only — same gate as the online branch).
         onSectionLongClick = sectionLongClick,
         // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
-        // online "See All" pill and play overlay (#147).
+        // online "See All" pill and play overlay.
         onSeeAllClick = seeAllClick,
         onPlayClick = remember(renderInputs.mediaOnPlayClick) {
             { item -> renderInputs.mediaOnPlayClick(item.toMediaItem()) }
@@ -877,11 +1073,11 @@ private fun HomeSectionOfflineWideRow(
     val byId = ctx.currentOfflineById
     val offlineItems = remember(section, byId) { offlineSectionItems(section, byId) }
     val rowItemClick: (OfflineMediaItem) -> Unit = remember(
-        section.type, state.continueWatchingClickBehavior, callbacks,
+        section.type, state.core.continueWatchingClickBehavior, callbacks,
     ) {
         resumeRowClick(
             sectionType = section.type,
-            behavior = state.continueWatchingClickBehavior,
+            behavior = state.core.continueWatchingClickBehavior,
             toMediaItem = { it.toMediaItem() },
             sinks = ctx.resumeSinks,
         )
@@ -900,7 +1096,7 @@ private fun HomeSectionOfflineWideRow(
         modifier = sectionModifier,
         focusRequester = ctx.focusRequester,
         onRowFocused = ctx.onRowFocused,
-        clippingEnabled = state.experimentalCardClippingEnabled,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
         onSectionLongClick = sectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
     )
@@ -919,11 +1115,11 @@ private fun HomeSectionOnlineWideRow(
     val sectionModifier = ctx.modifier
     val sectionLongClick = ctx.onSectionLongClick
     val rowItemClick: (MediaItem) -> Unit = remember(
-        section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick, renderInputs.mediaOnPlayClick,
+        section.type, state.core.continueWatchingClickBehavior, renderInputs.mediaOnItemClick, renderInputs.mediaOnPlayClick,
     ) {
         resumeRowClick(
             sectionType = section.type,
-            behavior = state.continueWatchingClickBehavior,
+            behavior = state.core.continueWatchingClickBehavior,
             toMediaItem = { it },
             sinks = ctx.resumeSinks,
         )
@@ -939,7 +1135,7 @@ private fun HomeSectionOnlineWideRow(
         modifier = sectionModifier,
         focusRequester = ctx.focusRequester,
         onRowFocused = ctx.onRowFocused,
-        clippingEnabled = state.experimentalCardClippingEnabled,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
         onSectionLongClick = sectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         edgeRefresh = ctx.edgeRefresh,
@@ -968,16 +1164,21 @@ private fun HomeSectionOnlinePosterRow(
     // (Same remember-key shape as the offline poster
     // branch: whole-bundle keys are stable.)
     val rowItemClick: (MediaItem) -> Unit = remember(
-        section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
+        section.type, state.core.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
     ) {
         posterRowClick(
             sectionType = section.type,
-            behavior = state.continueWatchingClickBehavior,
+            behavior = state.core.continueWatchingClickBehavior,
             toMediaItem = { it },
             sinks = ctx.resumeSinks,
             onPlainClick = renderInputs.mediaOnItemClick,
         )
     }
+    // The dice-roll in-flight mirror, leaf-collected at row scope (the
+    // `pendingSyncEntries` pattern — see the content list's edge-pull
+    // note): only the rolling row's arm recomposes when a roll spins up
+    // or down, never the content list above it.
+    val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
     // Dice affordance: RANDOM-sorted custom discover rows only
     // (the descriptor resolves the row id back out of the
     // `discover_<rowId>` section id). Resolved once here so
@@ -1003,14 +1204,23 @@ private fun HomeSectionOnlinePosterRow(
         photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
         focusRequester = ctx.focusRequester,
         onRowFocused = ctx.onRowFocused,
-        clippingEnabled = state.experimentalCardClippingEnabled,
+        clippingEnabled = state.core.experimentalCardClippingEnabled,
         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
+        // NEW badges: the arrival rows only (the Upcoming row's items
+        // are also library arrivals — episodes added for airing shows).
+        showNewBadges = section.type == HomeSectionType.LATEST_MEDIA ||
+            section.type == HomeSectionType.RECENTLY_ADDED ||
+            section.type == HomeSectionType.UPCOMING,
+        homeLastVisitEpochMs = state.core.homeLastVisitEpochMs,
+        // The air-date chip rides the Upcoming row's cards — its items
+        // are unaired episodes, the premiere date being the point of the row.
+        showAirDateChips = section.type == HomeSectionType.UPCOMING,
         onSectionLongClick = sectionLongClick,
         onSeeAllClick = seeAllClick,
         onRollClick = if (diceRowId != null) {
             { rollDiscoverRow(diceRowId) }
         } else null,
-        rollInProgress = diceRowId != null && diceRowId in state.rollingDiscoverRowIds,
+        rollInProgress = diceRowId != null && diceRowId in spinners.rollingDiscoverRowIds,
         rollAccessibilityLabel = diceRowAccessibilityLabel,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         // Book progress bars: exact page fractions from the
@@ -1056,8 +1266,8 @@ private fun HomeAskContinueDialog(
 }
 
 /**
- * The content list's ONE non-blocking notice row (the implicit-offline
- * banner and the partial-load banner used to duplicate this block verbatim).
+ * The content list's ONE non-blocking notice row, shared by the
+ * implicit-offline banner and the partial-load banner.
  * [onRetry] optional: the partial-load variant carries a Retry button.
  */
 @Composable

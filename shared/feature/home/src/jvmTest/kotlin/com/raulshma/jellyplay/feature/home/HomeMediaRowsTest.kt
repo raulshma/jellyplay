@@ -5,15 +5,18 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NameGuidPair
+import com.raulshma.jellyplay.core.model.isNewForHome
 import com.raulshma.jellyplay.core.model.progressFraction
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
  * Asserts the PRODUCTION pure helpers the card rows read —
  * [MediaItem.progressFraction], [fallbackImageUrls],
- * [photoFolderPrefetchTargets] — previously these were re-declared inline at
- * their (untested) call sites and asserted against the copy.
+ * [photoFolderPrefetchTargets] — asserted directly rather than through copies
+ * declared at their call sites.
  */
 class HomeMediaRowsTest {
 
@@ -161,5 +164,66 @@ class HomeMediaRowsTest {
         )
 
         assertEquals(emptyList(), targets)
+    }
+
+    // ── isNewForHome (NEW-badge predicate) ──
+
+    private fun itemAddedAt(epochMs: Long?) = MediaItem(
+        id = "i1",
+        name = "Item",
+        mediaType = MediaType.MOVIE,
+        dateCreatedEpochMs = epochMs,
+    )
+
+    @Test
+    fun isNewForHome_itemAddedAfterTheStamp_isTrue() {
+        assertTrue(itemAddedAt(2_000L).isNewForHome(lastVisitEpochMs = 1_000L))
+        // Strictly after: an item added exactly AT the visit stamp predates it.
+        assertFalse(itemAddedAt(1_000L).isNewForHome(lastVisitEpochMs = 1_000L))
+    }
+
+    @Test
+    fun isNewForHome_beforeTheStamp_isFalse() {
+        assertFalse(itemAddedAt(500L).isNewForHome(lastVisitEpochMs = 1_000L))
+    }
+
+    @Test
+    fun isNewForHome_withoutADateCreatedProjection_isFalse() {
+        // The fetch didn't project DateCreated — never eligible, whatever the stamp.
+        assertFalse(itemAddedAt(null).isNewForHome(lastVisitEpochMs = 1_000L))
+    }
+
+    @Test
+    fun isNewForHome_withANeverStampedVisit_isFalse() {
+        // Zero stamp = first visit / never stamped: nothing in the library can
+        // postdate it, and the first session must not badge everything.
+        assertFalse(itemAddedAt(2_000L).isNewForHome(lastVisitEpochMs = 0L))
+        assertFalse(itemAddedAt(2_000L).isNewForHome(lastVisitEpochMs = -1L))
+    }
+
+    @Test
+    fun isNewForHome_rawPredicate_matchesTheItemExtension() {
+        assertTrue(isNewForHome(dateCreatedEpochMs = 2_000L, lastVisitEpochMs = 1_000L))
+        assertFalse(isNewForHome(dateCreatedEpochMs = null, lastVisitEpochMs = 1_000L))
+        assertFalse(isNewForHome(dateCreatedEpochMs = 2_000L, lastVisitEpochMs = 0L))
+    }
+
+    // ── upcomingAirDate (air-date chip input) ──
+
+    @Test
+    fun upcomingAirDate_parsesAnIsoPremiereStamp() {
+        val date = upcomingAirDate("2026-11-05T00:00:00Z")
+        assertEquals(2026, date?.year)
+        assertEquals(11, date?.monthNumber)
+        assertEquals(5, date?.dayOfMonth)
+    }
+
+    @Test
+    fun upcomingAirDate_nullOrUnparseable_isNull() {
+        // The chip's degrade contract: no premiere stamp (or one the shared
+        // decoder rejects) renders NO chip, never a wrong date.
+        assertEquals(null, upcomingAirDate(null))
+        assertEquals(null, upcomingAirDate(""))
+        assertEquals(null, upcomingAirDate("not-a-date"))
     }
 }

@@ -66,9 +66,10 @@ class WatchHistoryRepositoryImpl constructor(
      */
     private val statusStore: PlaybackReportingStatusStore,
     /**
-     * Clock seam for the heatmap's calendar reads (`LocalDate.now()` before
-     * D3): the current-year day count and the malformed-date year fallback
-     * below — same reads, through the seam, so jvmTest pins a fixed today.
+     * Clock seam for the heatmap's calendar reads (formerly
+     * `LocalDate.now()`): the current-year day count and the malformed-date
+     * year fallback below — same reads, through the seam, so jvmTest pins a
+     * fixed today.
      */
     private val timeSource: TimeSource,
 ) : WatchHistoryRepository {

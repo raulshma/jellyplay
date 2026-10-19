@@ -17,6 +17,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -68,6 +69,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
+import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 
@@ -83,6 +85,92 @@ internal enum class SubtitleHubTab {
     GET,
     DELAY,
 }
+
+/**
+ * The hub's per-tab input bundles (the [PlayerControls] carrier precedent):
+ * each tab's values + action lambdas ride one `@Immutable` data class, so the
+ * composable's signature is the four tab inputs instead of a 41-parameter
+ * wall sectioned by comments. [com.raulshma.jellyplay.feature.player.video.SubtitleHubSheetModule]
+ * builds them at the router branch (its slices collected sheet-locally, the
+ * placement rule); the hub only re-slots them into its tab sections.
+ */
+
+/** The Tracks tab: the active-track picker ([TrackPickerSection]) plus the per-series preference footer. */
+@Immutable
+internal data class SubtitleHubTracksTab(
+    val subtitleTracks: List<TrackOption>,
+    val onSelectSubtitleTrack: (TrackOption) -> Unit,
+    val onResetSubtitleTrack: (() -> Unit)?,
+    val tracksFooter: @Composable (() -> Unit)? = null,
+)
+
+/**
+ * The Style tab: the manual style controls, the named presets row, the engine
+ * capability gates, and the custom-mpv-config ownership snapshot (notice card
+ * in [SubtitleStyleControls]: which sub-* keys the engine yields to Advanced
+ * MPV Configuration / mpv.conf this session).
+ */
+@Immutable
+internal data class SubtitleHubStyleTab(
+    val subtitleStyle: SubtitleStyle,
+    val capabilities: EngineCapabilities,
+    val subtitleOwnership: MpvSubtitleOwnership = MpvSubtitleOwnership.NONE,
+    /** Named presets (built-ins are code; user presets ride the subtitle slice via the host). */
+    val userStylePresets: List<SubtitleStylePreset> = emptyList(),
+    val onStyleChange: (SubtitleStyle) -> Unit,
+    /** The per-item delay setter — an in-player delay edit must not clobber the global default. */
+    val onSubtitleDelayChange: (Long) -> Unit,
+    val onPickFont: () -> Unit,
+    val onOpenTester: () -> Unit,
+    val onSaveStylePreset: (String) -> Unit = {},
+    val onDeleteStylePreset: (String) -> Unit = {},
+)
+
+/** The Get tab: the download / search / upload workflow ([SubtitleManagerSection]). */
+@Immutable
+internal data class SubtitleHubGetTab(
+    val downloadSubtitles: List<RemoteSubtitleInfo>,
+    val isDownloading: Boolean,
+    val remoteSubtitlesError: String?,
+    val onDownload: (RemoteSubtitleInfo) -> Unit,
+    val onLoadLocalFile: () -> Unit,
+    val searchResults: List<RemoteSubtitleInfo>,
+    val isSearching: Boolean,
+    val hasSearched: Boolean,
+    val searchError: String?,
+    val cultures: List<CultureInfo>,
+    val defaultLanguage: String,
+    val onSearch: (String) -> Unit,
+    val onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
+    val providerSearchResults: List<SubtitleSearchResult>,
+    val providerSearchErrors: Map<SubtitleProviderKind, String>,
+    val configuredProviders: Set<SubtitleProviderKind>,
+    val onSearchAllProviders: (String) -> Unit,
+    val onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
+    /** Re-attempts the server upload for a device-only provider download row. */
+    val onSaveSubtitleToServer: (String) -> Unit = {},
+    val downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    /**
+     * Activates the downloaded subtitle identified by row key. Returns true
+     * when the track is now selected (the hub navigates to Tracks); false
+     * when the side-load is still in flight (the host retries automatically).
+     */
+    val onUseSubtitle: (String) -> Boolean,
+    val isUploading: Boolean,
+    /**
+     * KMP seam: the picked SAF document travels as its string form
+     * (android.net.Uri died with the commonMain move); the Android host
+     * re-parses it at the call site.
+     */
+    val onUpload: (String, String, String?, Boolean, Boolean) -> Unit,
+)
+
+/** The Delay tab: the offset readout plus the button that opens the transparent overlay. */
+@Immutable
+internal data class SubtitleHubDelayTab(
+    val currentDelayMs: Long,
+    val onOpenDelayOverlay: () -> Unit,
+)
 
 /**
  * The unified subtitle hub — a single bottom sheet that consolidates the four
@@ -101,76 +189,34 @@ internal enum class SubtitleHubTab {
  * primary Subtitles button and the overflow "Subtitles" entry open Tracks,
  * while the metadata row's mpv-config chip opens Style (the full ownership
  * notice lives there).
+ *
+ * The 41-parameter wall is collapsed into the four per-tab input bundles
+ * ([SubtitleHubTracksTab] / [SubtitleHubStyleTab] / [SubtitleHubGetTab] /
+ * [SubtitleHubDelayTab]), built by the sheet's module
+ * ([com.raulshma.jellyplay.feature.player.video.SubtitleHubSheetModule]) —
+ * the wave-2 sheet-module migration; each bundle's KDoc carries its tab's
+ * value/lambda documentation.
  */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SubtitleHubSheet(
     initialTab: SubtitleHubTab = SubtitleHubTab.TRACKS,
     onDismiss: () -> Unit,
-    // Tracks tab
-    subtitleTracks: List<com.raulshma.jellyplay.feature.player.video.TrackOption>,
-    onSelectSubtitleTrack: (com.raulshma.jellyplay.feature.player.video.TrackOption) -> Unit,
-    onResetSubtitleTrack: (() -> Unit)?,
-    tracksFooter: @Composable (() -> Unit)? = null,
-    // Style tab
-    subtitleStyle: SubtitleStyle,
-    onStyleChange: (SubtitleStyle) -> Unit,
-    onSubtitleDelayChange: (Long) -> Unit,
-    onPickFont: () -> Unit,
-    onOpenTester: () -> Unit,
-    capabilities: EngineCapabilities,
-    // Custom-mpv-config ownership snapshot (notice card in SubtitleStyleControls):
-    // which sub-* keys the engine yields to the user's config this session.
-    subtitleOwnership: MpvSubtitleOwnership = MpvSubtitleOwnership.NONE,
-    // Style tab — named presets (built-ins are code; user presets ride the
-    // subtitle slice via the host).
-    userStylePresets: List<SubtitleStylePreset> = emptyList(),
-    onSaveStylePreset: (String) -> Unit = {},
-    onDeleteStylePreset: (String) -> Unit = {},
-    // Get tab
-    downloadSubtitles: List<RemoteSubtitleInfo>,
-    isDownloading: Boolean,
-    remoteSubtitlesError: String?,
-    onDownload: (RemoteSubtitleInfo) -> Unit,
-    onLoadLocalFile: () -> Unit,
-    searchResults: List<RemoteSubtitleInfo>,
-    isSearching: Boolean,
-    hasSearched: Boolean,
-    searchError: String?,
-    cultures: List<CultureInfo>,
-    defaultLanguage: String,
-    onSearch: (String) -> Unit,
-    onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
-    providerSearchResults: List<SubtitleSearchResult>,
-    providerSearchErrors: Map<SubtitleProviderKind, String>,
-    configuredProviders: Set<SubtitleProviderKind>,
-    onSearchAllProviders: (String) -> Unit,
-    onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
-    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    /**
-     * Activates the downloaded subtitle identified by [rowKey]. Returns true
-     * when the track is now selected (callers may navigate to Tracks); false
-     * when the side-load is still in flight (the host retries automatically).
-     */
-    onUseSubtitle: (String) -> Boolean,
-    isUploading: Boolean,
-    // KMP seam: the picked SAF document travels as its string form
-    // (android.net.Uri died with the commonMain move); the Android host
-    // re-parses it at the call site.
-    onUpload: (String, String, String?, Boolean, Boolean) -> Unit,
-    // Delay tab — opens the transparent overlay (no in-sheet cue preview).
-    currentSubtitleDelayMs: Long,
-    onOpenDelayOverlay: () -> Unit,
+    tracks: SubtitleHubTracksTab,
+    style: SubtitleHubStyleTab,
+    get: SubtitleHubGetTab,
+    delay: SubtitleHubDelayTab,
 ) {
     val isTv = LocalTvMode.current
 
-    // Build the visible-tab list from capabilities. Tracks + Get are always
-    // shown; Style/Delay depend on engine support.
+    // Build the visible-tab list from capabilities (the Style tab bundle
+    // carries the engine's EngineCapabilities — Style/Delay hide on engines
+    // without the support). Tracks + Get are always shown.
     val visibleTabs: List<SubtitleHubTab> = buildList {
         add(SubtitleHubTab.TRACKS)
-        if (capabilities.supportsSubtitleStyle) add(SubtitleHubTab.STYLE)
+        if (style.capabilities.supportsSubtitleStyle) add(SubtitleHubTab.STYLE)
         add(SubtitleHubTab.GET)
-        if (capabilities.supportsSubtitleDelay) add(SubtitleHubTab.DELAY)
+        if (style.capabilities.supportsSubtitleDelay) add(SubtitleHubTab.DELAY)
     }
     // Tab index is saveable so a config change (rotation) while the hub is open
     // restores the active tab. Clamped to the visible list.
@@ -240,13 +286,13 @@ internal fun SubtitleHubSheet(
             when (activeTab) {
                 SubtitleHubTab.TRACKS -> TrackPickerSection(
                     title = stringResource(Res.string.player_subtitles),
-                    tracks = subtitleTracks,
-                    onSelect = onSelectSubtitleTrack,
-                    onReset = onResetSubtitleTrack,
+                    tracks = tracks.subtitleTracks,
+                    onSelect = tracks.onSelectSubtitleTrack,
+                    onReset = tracks.onResetSubtitleTrack,
                     // Tracks selection keeps the hub open so the user can adjust
                     // other subtitle settings without re-opening it.
                     onPickDismiss = {},
-                    footer = tracksFooter,
+                    footer = tracks.tracksFooter,
                     focusRequester = tracksFocus,
                     modifier = Modifier.weight(1f, fill = false),
                 )
@@ -260,7 +306,7 @@ internal fun SubtitleHubSheet(
                         title = stringResource(Res.string.player_video_subtitle_settings),
                         icon = Tabler.Outline.Subtitles,
                         trailing = {
-                            TextButton(onClick = onOpenTester) {
+                            TextButton(onClick = style.onOpenTester) {
                                 Text(stringResource(Res.string.player_video_open_tester))
                             }
                         },
@@ -271,52 +317,53 @@ internal fun SubtitleHubSheet(
                     // (look forced authoritative, per-item delay carried) and
                     // then the same onStyleChange path a manual edit takes.
                     SubtitleStylePresetsRow(
-                        userPresets = userStylePresets,
+                        userPresets = style.userStylePresets,
                         onApplyPreset = { preset ->
-                            onStyleChange(
+                            style.onStyleChange(
                                 com.raulshma.jellyplay.feature.player.video.SubtitleStylePresetPolicy
-                                    .appliedStyle(preset, subtitleStyle)
+                                    .appliedStyle(preset, style.subtitleStyle)
                             )
                         },
-                        onSavePreset = onSaveStylePreset,
-                        onDeletePreset = onDeleteStylePreset,
+                        onSavePreset = style.onSaveStylePreset,
+                        onDeletePreset = style.onDeleteStylePreset,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                     Spacer(Modifier.height(12.dp))
                     SubtitleStyleControls(
-                        currentStyle = subtitleStyle,
-                        onStyleChange = onStyleChange,
-                        capabilities = capabilities,
-                        subtitleOwnership = subtitleOwnership,
-                        onPickFont = onPickFont,
+                        currentStyle = style.subtitleStyle,
+                        onStyleChange = style.onStyleChange,
+                        capabilities = style.capabilities,
+                        subtitleOwnership = style.subtitleOwnership,
+                        onPickFont = style.onPickFont,
                         showOverrideToggle = true,
-                        onReset = { onStyleChange(SubtitleStyle(applyCustomStyle = true)) },
+                        onReset = { style.onStyleChange(SubtitleStyle(applyCustomStyle = true)) },
                         // Route the offset slider to the per-item delay setter so
                         // an in-player delay edit doesn't clobber the global default.
-                        onSubtitleDelayChange = onSubtitleDelayChange,
+                        onSubtitleDelayChange = style.onSubtitleDelayChange,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 SubtitleHubTab.GET -> SubtitleManagerSection(
-                    downloadSubtitles = downloadSubtitles,
-                    isDownloading = isDownloading,
-                    remoteSubtitlesError = remoteSubtitlesError,
-                    onDownload = onDownload,
-                    onLoadLocalFile = onLoadLocalFile,
-                    searchResults = searchResults,
-                    isSearching = isSearching,
-                    hasSearched = hasSearched,
-                    searchError = searchError,
-                    cultures = cultures,
-                    defaultLanguage = defaultLanguage,
-                    onSearch = onSearch,
-                    onDownloadSearched = onDownloadSearched,
-                    providerSearchResults = providerSearchResults,
-                    providerSearchErrors = providerSearchErrors,
-                    configuredProviders = configuredProviders,
-                    onSearchAllProviders = onSearchAllProviders,
-                    onDownloadProviderSubtitle = onDownloadProviderSubtitle,
-                    downloadingSubtitles = downloadingSubtitles,
+                    downloadSubtitles = get.downloadSubtitles,
+                    isDownloading = get.isDownloading,
+                    remoteSubtitlesError = get.remoteSubtitlesError,
+                    onDownload = get.onDownload,
+                    onLoadLocalFile = get.onLoadLocalFile,
+                    searchResults = get.searchResults,
+                    isSearching = get.isSearching,
+                    hasSearched = get.hasSearched,
+                    searchError = get.searchError,
+                    cultures = get.cultures,
+                    defaultLanguage = get.defaultLanguage,
+                    onSearch = get.onSearch,
+                    onDownloadSearched = get.onDownloadSearched,
+                    providerSearchResults = get.providerSearchResults,
+                    providerSearchErrors = get.providerSearchErrors,
+                    configuredProviders = get.configuredProviders,
+                    onSearchAllProviders = get.onSearchAllProviders,
+                    onDownloadProviderSubtitle = get.onDownloadProviderSubtitle,
+                    onSaveSubtitleToServer = get.onSaveSubtitleToServer,
+                    downloadingSubtitles = get.downloadingSubtitles,
                     // "Use" activates the downloaded subtitle as the current
                     // track (host callback) and jumps to the Tracks tab so the
                     // user sees the applied selection. When the side-load has
@@ -324,14 +371,14 @@ internal fun SubtitleHubSheet(
                     // stay on the Get tab then — jumping to an unselected track
                     // list is exactly the confusion this guard avoids.
                     onUseSubtitle = { rowKey ->
-                        val activated = onUseSubtitle(rowKey)
+                        val activated = get.onUseSubtitle(rowKey)
                         if (activated) {
                             selectedTabIndex = visibleTabs.indexOf(SubtitleHubTab.TRACKS)
                                 .takeIf { it >= 0 } ?: 0
                         }
                     },
-                    isUploading = isUploading,
-                    onUpload = onUpload,
+                    isUploading = get.isUploading,
+                    onUpload = get.onUpload,
                     isTv = isTv,
                     selectedTab = getTabIndex,
                     onTabChange = { getTabIndex = it },
@@ -341,8 +388,8 @@ internal fun SubtitleHubSheet(
                     loadBtnFocus = loadBtnFocus,
                 )
                 SubtitleHubTab.DELAY -> SubtitleDelayLauncherSection(
-                    currentDelayMs = currentSubtitleDelayMs,
-                    onOpenDelayOverlay = onOpenDelayOverlay,
+                    currentDelayMs = delay.currentDelayMs,
+                    onOpenDelayOverlay = delay.onOpenDelayOverlay,
                     isTv = isTv,
                 )
             }

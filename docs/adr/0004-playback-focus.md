@@ -10,7 +10,10 @@
   and the enforcement leg — an OS loss on the holder commands its surface
   pause (displaced claimants still pause by observation). Music has no open
   slice; video remains outside the closed world)
-- **Scope:** `shared/core/data`, `shared/feature/player-book`, `shared/core/data/androidMain`
+- **Scope:** `shared/core/data`, `shared/feature/player-book`,
+  `shared/core/data/androidMain`; `shared/feature/player-video` and
+  `shared/feature/player-live` since the slice-2 VIDEO migration (2026-10-01
+  VOD and live both ride the matrix — see the landed addendum at the file end)
 - **Supersedes:** nothing (the policy previously did not exist as code)
 
 ## Context

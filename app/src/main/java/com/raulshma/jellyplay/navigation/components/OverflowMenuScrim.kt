@@ -11,7 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
 /**
- * Full-scrim dismiss layer behind the overflow menu items (#115). A tap anywhere
+ * Full-scrim dismiss layer behind the overflow menu items. A tap anywhere
  * outside the items collapses the menu. Transparent — the menu is meant to feel
  * lightweight — but intercepts pointer input so taps don't fall through to the
  * screen beneath while open.

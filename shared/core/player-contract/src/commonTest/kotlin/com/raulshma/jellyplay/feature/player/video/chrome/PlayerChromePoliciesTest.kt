@@ -357,7 +357,7 @@ class ControlsAutoHidePolicyTest {
 }
 
 /**
- * The summons gate's pins (jellyfin-androidtv #3924: pausing should not
+ * The summons gate's pins (pausing should not
  * summon the control overlay). The VOD screen gates BOTH pause-summons arms
  * (the keyboard media-key toggle and the TV D-pad space) through this one
  * policy; the live screen has no pause-summons arm at all, so it cites the

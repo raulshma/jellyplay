@@ -277,7 +277,7 @@ internal fun pickedLocalFile(uri: String): File? =
  * unknown.
  */
 internal class DesktopVideoPlayerPlatform(
-    // The video focus slice (ADR-0004): the desktop graph's DefaultPlaybackFocus
+    // The video focus slice: the desktop graph's DefaultPlaybackFocus
     // (DesktopPlayerModule) reaches the wiring through the platform seam; no
     // video surface is registered in the desktop executor's surface list, so
     // the displaced-holder self-pause rides the wiring's claimState observer.

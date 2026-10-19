@@ -37,7 +37,7 @@ class PlaylistRepositoryImpl internal constructor(
         playlistApiClient.getPlaylistItems(playlistId, startIndex, limit)
 
     /**
-     * The edits' shared invalidation suffix (Plan 08): playlist edits
+     * The edits' shared invalidation suffix: playlist edits
      * self-invalidate the playlist's ONE cached projection — its detail
      * entry — through [MediaRepositoryInternals.detailCaches], the Koin
      * single shared with [MediaRepositoryImpl] (one instance, not two

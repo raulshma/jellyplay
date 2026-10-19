@@ -11,19 +11,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.IntState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.FocusState
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 
@@ -34,6 +24,27 @@ import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 val TvGridCacheWindow = LazyLayoutCacheWindow(aheadFraction = 2f, behindFraction = 0.5f)
+
+/**
+ * The touch-side default: 1× viewport ahead. The TV window's 2×
+ * ahead is justified by D-pad flick scrolling — on a touch fling it composes
+ * roughly triple the set and triples the resident-bitmap count for prefetch
+ * the finger-driven scroll doesn't need. Same behind-fraction as the TV
+ * window so backwards revisits stay covered.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+val TouchGridCacheWindow = LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 0.5f)
+
+/**
+ * Device-class default cache window for the shared grids: the TV window on
+ * TV, the 1×-ahead window on touch. Default-parameter friendly (it is a
+ * composable), so every grid default sites one call instead of duplicating
+ * the branch.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun defaultGridCacheWindow(): LazyLayoutCacheWindow =
+    if (LocalTvMode.current) TvGridCacheWindow else TouchGridCacheWindow
 
 /**
  * Paging-friendly TV focus grid. Drives an initial focus grab once data arrives (the contract that
@@ -57,7 +68,7 @@ fun TvFocusableGrid(
     refreshGeneration: Int = 0,
     state: LazyGridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = initialIndex,
-        cacheWindow = TvGridCacheWindow,
+        cacheWindow = defaultGridCacheWindow(),
     ),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),
@@ -68,48 +79,19 @@ fun TvFocusableGrid(
     itemContent: @Composable (index: Int, modifier: Modifier) -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
-    val focusedIndexState = rememberInt(initialIndex)
-    var focusedIndex by focusedIndexState
-    var initialFocusRequested by remember { mutableStateOf(false) }
-
-    LaunchedEffect(itemCount) {
-        if (itemCount > 0) {
-            focusedIndex = focusedIndex.coerceIn(0, itemCount - 1)
-        }
-    }
-
-    // focusRestorer(fallback) and focusProperties { onEnter } only react to focus *entering* the
-    // group from outside; neither proactively grabs focus. So when a grid's data arrives after first
-    // composition, grab focus on the focused cell once.
-    // The scroll-to-item before the grab ensures the saved cell is actually composed — without it,
-    // returning from a full-screen route (e.g. PhotoViewer) can leave the saved index off-screen,
-    // the fallbackFocusRequester attached to nothing, and the grab silently no-ops.
-    LaunchedEffect(itemCount > 0) {
-        if (isTv && requestInitialFocus && itemCount > 0 && !initialFocusRequested) {
-            initialFocusRequested = true
-            val targetIndex = focusedIndex.coerceIn(0, itemCount - 1)
-            state.scrollToItem(targetIndex)
-            fallbackFocusRequester.tryRequestFocus("tv_grid_init")
-        }
-    }
-
-    // A completed refresh (filter/folder change) replaces the data under the old cursor: the caller
-    // scrolls to 0, so the saved index no longer matches what's composed. Reset the cursor and
-    // re-grab — without this, focus falls out of the grid during the reload and the drawer rail
-    // captures it. The retry loop covers the frame where the recycled cell hasn't re-attached the
-    // fallback requester yet.
-    LaunchedEffect(refreshGeneration) {
-        if (isTv && refreshGeneration > 0 && itemCount > 0) {
-            focusedIndex = 0
-            state.scrollToItem(0)
-            for (attempt in 1..3) {
-                withFrameNanos { }
-                if (fallbackFocusRequester.tryRequestFocus("tv_grid_refresh")) break
-            }
-        }
-    }
+    // The shared focus cursor (fallback leaf + clamp/initial-grab/refresh-regrab
+    // ladder + tags) — TvFocusCursor.kt owns the whole contract.
+    val cursor = rememberTvFocusCursor(
+        layout = TvFocusLayout.Grid,
+        initialIndex = initialIndex,
+        isTv = isTv,
+        requestInitialFocus = requestInitialFocus,
+        itemCount = itemCount,
+        refreshGeneration = refreshGeneration,
+        scrollToItem = { state.scrollToItem(it) },
+    )
+    val fallbackFocusRequester = cursor.fallback
 
     LazyVerticalGrid(
         columns = columns,
@@ -144,12 +126,11 @@ fun TvFocusableGrid(
             val placementSpec = lazyItemPlacementSpec()
             if (isTv) {
                 TvItemFocusFallback(
-                    focusedIndexState = focusedIndexState,
+                    cursor = cursor,
                     itemCount = itemCount,
                     index = index,
-                    fallbackFocusRequester = fallbackFocusRequester,
                     onFocused = {
-                        focusedIndex = index
+                        cursor.focusedIndex = index
                         currentOnFocusedIndexChange(index)
                     },
                     animatedModifier = Modifier.animateItem(placementSpec = placementSpec),
@@ -162,36 +143,6 @@ fun TvFocusableGrid(
         }
         extraContent()
     }
-}
-
-/**
- * Renders [content] with [fallbackFocusRequester] attached to the item at [index] only while the
- * tracked focus cursor points at [index]. The [focusedIndexState] read must stay inside this leaf —
- * reading it in the container body recomposes every composed item on each focus move.
- */
-@Composable
-private fun TvItemFocusFallback(
-    focusedIndexState: IntState,
-    itemCount: Int,
-    index: Int,
-    fallbackFocusRequester: FocusRequester,
-    onFocused: () -> Unit,
-    animatedModifier: Modifier,
-    content: @Composable (Modifier) -> Unit,
-) {
-    val currentFocusedIndex = focusedIndexState.intValue.coerceIn(0, itemCount - 1)
-    val itemModifier = (if (currentFocusedIndex == index) {
-        Modifier.focusRequester(fallbackFocusRequester)
-    } else {
-        Modifier
-    })
-        .onFocusChanged {
-            if (it.isFocused || it.hasFocus) {
-                onFocused()
-            }
-        }
-        .then(animatedModifier)
-    content(itemModifier)
 }
 
 /**
@@ -211,7 +162,7 @@ fun <T> TvFocusableGrid(
     refreshGeneration: Int = 0,
     state: LazyGridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = initialIndex,
-        cacheWindow = TvGridCacheWindow,
+        cacheWindow = defaultGridCacheWindow(),
     ),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),

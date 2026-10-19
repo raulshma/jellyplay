@@ -109,6 +109,27 @@
     <string name="next_up_hidden_restore_all_message">Tutte le %1$d serie nascoste ricompariranno nella riga Prossimi contenuti.</string>
     <string name="next_up_hidden_restore_cd">Ripristina %1$s in Prossimi contenuti</string>
     <string name="next_up_hidden_unknown">Serie sconosciuta</string>
+    <string name="my_media_hidden_title">Librerie nascoste</string>
+    <string name="my_media_hidden_empty">Niente di nascosto</string>
+    <string name="my_media_hidden_empty_subtitle">Le librerie nascoste dalla riga Le mie librerie appaiono qui per il ripristino.</string>
+    <string name="my_media_hidden_restore_all">Ripristina tutto</string>
+    <string name="my_media_hidden_restore_all_cd">Ripristina tutte le librerie nascoste in Le mie librerie</string>
+    <string name="my_media_hidden_restore_all_title">Ripristinare tutte le librerie?</string>
+    <string name="my_media_hidden_restore_all_message">Tutte le %1$d librerie nascoste riappariranno nella riga Le mie librerie.</string>
+    <string name="my_media_hidden_restore_cd">Ripristina %1$s in Le mie librerie</string>
+    <string name="my_media_hidden_unknown">Libreria sconosciuta</string>
     <string name="a11y_mode_video">Modalità video</string>
     <string name="a11y_mode_music">Modalità musica</string>
+
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">La tua settimana in libreria</string>
+    <string name="home_stats_card_counts">%1$d visti · %2$d da vedere</string>
+    <string name="home_stats_card_watch_approx">~%1$s h viste</string>
+    <string name="home_stats_card_watch_exact">%1$s h viste</string>
+    <string name="home_stats_card_streak">serie di %1$d giorni</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">Novità in Home: %1$s</string>
+    <string name="home_new_sections_customize">Personalizza</string>
 </resources>

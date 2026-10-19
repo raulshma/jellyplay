@@ -23,11 +23,26 @@ sealed class PlayerSheet {
     data object AVSync : PlayerSheet() { override val key = "AVSync" }
     data object Decoder : PlayerSheet() { override val key = "Decoder" }
     data object Episodes : PlayerSheet() { override val key = "Episodes" }
+
+    /**
+     * The manual up-next queue (the details screen's "play next/last" list):
+     * reorder, remove, play-now. Hidden while a SyncPlay group session owns
+     * the order.
+     */
+    data object Queue : PlayerSheet() { override val key = "Queue" }
     data object SyncPlay : PlayerSheet() { override val key = "SyncPlay" }
     data object Quality : PlayerSheet() { override val key = "Quality" }
     data object PlaybackMode : PlayerSheet() { override val key = "PlaybackMode" }
     data object SleepTimer : PlayerSheet() { override val key = "SleepTimer" }
     data object VideoFilter : PlayerSheet() { override val key = "VideoFilter" }
+
+    /**
+     * HDR output options (opened from the HDR chip in the playback-metadata
+     * row): the live output facts (content family / active output / display
+     * capability) plus the engine's HDR-specific config — mpv passthrough
+     * (toggle) or ExoPlayer tone mapping (picker).
+     */
+    data object Hdr : PlayerSheet() { override val key = "Hdr" }
 
     /**
      * shader pack / tone mapping / quality profile (mpv engines). The
@@ -49,31 +64,11 @@ sealed class PlayerSheet {
  * Allows the currently-open sheet to survive configuration changes (locale
  * switch, rotation outside the player's locked orientation) via
  * `rememberSaveable(stateSaver = PlayerSheetSaver)`. Restores by matching
- * each sheet's [PlayerSheet.key]; unknown values fall back to `None`.
+ * each sheet's [PlayerSheet.key] against the sheet registry's explicit
+ * enumeration ([PlayerSheetRegistry.all]); unknown values fall back to
+ * `None`.
  */
 val PlayerSheetSaver: Saver<PlayerSheet, String> = Saver(
     save = { it.key },
-    restore = { name -> ALL_SHEETS.firstOrNull { it.key == name } ?: PlayerSheet.None },
-)
-
-// Explicit list avoids kotlin-reflect (sealedSubclasses), which is not on
-// the runtime classpath and crashes PlayerSheetKt's <clinit> on launch.
-private val ALL_SHEETS: List<PlayerSheet> = listOf(
-    PlayerSheet.None,
-    PlayerSheet.Speed,
-    PlayerSheet.Audio,
-    PlayerSheet.Chapter,
-    PlayerSheet.PlaybackInfo,
-    PlayerSheet.AspectRatio,
-    PlayerSheet.SubtitleHub,
-    PlayerSheet.AVSync,
-    PlayerSheet.Decoder,
-    PlayerSheet.Episodes,
-    PlayerSheet.SyncPlay,
-    PlayerSheet.Quality,
-    PlayerSheet.PlaybackMode,
-    PlayerSheet.SleepTimer,
-    PlayerSheet.VideoFilter,
-    PlayerSheet.Render,
-    PlayerSheet.Version,
+    restore = { name -> PlayerSheetRegistry.all.firstOrNull { it.key == name } ?: PlayerSheet.None },
 )

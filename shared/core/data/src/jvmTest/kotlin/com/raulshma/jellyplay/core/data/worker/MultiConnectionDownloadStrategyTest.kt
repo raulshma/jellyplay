@@ -43,7 +43,11 @@ import kotlin.time.Duration.Companion.seconds
  * The cancel/pause and ticker tests rely on the strategy's real 2 s
  * `PROGRESS_UPDATE_INTERVAL_MS` cadence over real dispatchers
  * (`Dispatchers.IO`/`Default` are hardcoded in the strategy), so they wait
- * ~2 s of wall time; `runTest`'s timeout is raised accordingly.
+ * ~2 s of wall time; `runTest`'s timeout is raised accordingly. The ticker's
+ * Room persist is additionally gated (>= `DB_PERSIST_INTERVAL_MS` = 5 s and
+ * >= 1% byte delta since the last persist — pause/cancel/completion/error
+ * persist immediately), so the aggregation test waits ~6 s for the first
+ * persist instead of the first 2 s tick.
  */
 class MultiConnectionDownloadStrategyTest {
 
@@ -253,7 +257,8 @@ class MultiConnectionDownloadStrategyTest {
     fun `progress ticker aggregates chunk bytes into updateProgressWithSpeed`() = runTest(timeout = 60.seconds) {
         // Chunk 0 completes; chunk 1 delivers its bytes then parks on the gate,
         // so a chunk is guaranteed in flight when the ticker's first 2 s tick
-        // fires. The gate opens only after the tick's DOWNLOADING write lands.
+        // fires. The gated persist lands on the first tick past the 5 s persist
+        // floor (~6 s in); the gate opens only after that write is observed.
         val gate = AtomicBoolean(false)
         val downloadWriteObserved = CountDownLatch(1)
         coEvery { dao.updateProgressWithSpeed(any(), any(), DownloadStatus.DOWNLOADING.name, any()) } answers {
@@ -277,7 +282,7 @@ class MultiConnectionDownloadStrategyTest {
 
         assertTrue(
             downloadWriteObserved.await(30, TimeUnit.SECONDS),
-            "the 2 s ticker never aggregated chunk bytes into updateProgressWithSpeed",
+            "the gated ticker persist never aggregated chunk bytes into updateProgressWithSpeed",
         )
         gate.set(true)
 

@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_discover_rer
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_started
 import com.raulshma.jellyplay.feature.home.generated.resources.home_download_start_failed
 import com.raulshma.jellyplay.feature.home.generated.resources.home_series_download_queued
+import com.raulshma.jellyplay.feature.home.generated.resources.home_watch_party_join_failed
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -41,6 +42,8 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.HomeFreshness
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -48,18 +51,36 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import com.raulshma.jellyplay.core.ui.settingssearch.settingsSearchResults
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
+
+/**
+ * The dwell threshold: how long the user must sit on a rendered home
+ * before the visit counts and [com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore.setHomeLastVisitEpochMs]
+ * stamps it. Internal so the VM test pins the duration and the virtual-time
+ * advance.
+ */
+internal const val HOME_VISIT_STAMP_DWELL_MS = 10_000L
 
 internal class HomeViewModel(
     private val episodeCatalogue: EpisodeCatalogue,
@@ -80,6 +101,12 @@ internal class HomeViewModel(
     private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: HomeNewsletterGate,
+    /**
+     * The home feature's clock seam — the dwell timer's time read (the
+     * refresher's throttle/TTL clock is the same bean; this VM now owns its
+     * own read for the visit stamp, like it owns [offlineModeManager]).
+     */
+    private val clock: HomeClock,
     /** The five datastore stores bundled at construction — see [HomeStores]. */
     private val prefs: HomeStores,
     private val preferencesEditor: PreferencesEditor,
@@ -103,24 +130,58 @@ internal class HomeViewModel(
     /**
      * The construction seams for the two big sub-modules below: each factory
      * owns its module's pure-DI collaborators so they never surface on this
-     * VM's constructor (a new refresher or sync-holder dependency used to
-     * widen THIS interface by one parameter, and the test harness with it).
+     * VM's constructor (otherwise a new refresher or sync-holder dependency
+     * widens THIS interface by one parameter, and the test harness with it).
      */
     private val homeRefresherFactory: HomeRefresherFactory,
     private val syncStatusStateHolderFactory: HomeSyncStatusFactory,
     /**
      * The two series sheets' construction seam (see [HomeSheetsFactory]): the
      * holders' pure-DI collaborators land there instead of widening this
-     * constructor — [SeriesEpisodeDownloads] was the first param this move
-     * retired; the shared beans ([episodeCatalogue], [downloadIntake],
-     * [userMessageBus], [offlineRepository]) stay because this VM's body
-     * consumes them too.
+     * constructor — [SeriesEpisodeDownloads] lives there; the shared beans
+     * ([episodeCatalogue], [downloadIntake], [userMessageBus],
+     * [offlineRepository]) stay because this VM's body consumes them too.
      */
     private val homeSheetsFactory: HomeSheetsFactory,
+    /**
+     * The fetch+fold (see [HomeStatsCardLoader]): the non-admin-safe
+     * played/unplayed/capped-runtime reads plus the admin+plugin upgrade.
+     * Loaded only while the `home_stats_card` pref is on; a null return
+     * hides the card silently.
+     */
+    private val statsCardLoader: HomeStatsCardLoader,
+    /**
+     * The TTL-cached genre read (see [HomeGenreRailCache]) — the VM-scoped
+     * cache backing the genre rail's TTL mirror.
+     */
+    private val genreRailCache: HomeGenreRailCache,
+    /**
+     * The probe-gated presence read (see [HomePresenceChipsController]) —
+     * the VM-scoped controller owning the probe-once verdict, the session
+     * filter and the per-chip dismiss memory. VM-scoped like
+     * [genreRailCache] so the memory dies with the home session.
+     */
+    private val presenceChipsController: HomePresenceChipsController,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
+
+    /**
+     * Watch-party presence chips — deliberately OUT of [HomeUiState], the
+     * search-query precedent (see [searchQuery]): the controller's poll
+     * ([HomePresenceChipsController.poll]) writes this flow on the home
+     * refresh cadence, and a whole-state write per tick would copy the
+     * ~45-field [HomeUiState] — interleaving with the refresher's emissions
+     * on the same StateFlow — for a value one row reads. The chip row
+     * collects this flow at its own scope, so a tick that changes nothing
+     * (the common case: [MutableStateFlow] dedupes on equality) recomposes
+     * nothing and [HomeUiState] emits for real changes only.
+     */
+    private val _presenceChips = stateFlow<List<HomePresenceChip>>(emptyList())
+
+    /** The presence chips' source of truth — collected at the chip row (see the KDoc for why this is not [HomeUiState]). */
+    val presenceChips: StateFlow<List<HomePresenceChip>> get() = _presenceChips.flow
 
     /**
      * Ids whose quick actions must flip to "Remove download" — completed
@@ -217,6 +278,34 @@ internal class HomeViewModel(
     )
 
     /**
+     * The refresher's per-row spinner mirrors — the edge-pull
+     * ([HomeRefreshState.refreshingSectionIds]) and dice-roll
+     * ([HomeRefreshState.rollingDiscoverRowIds]) in-flight sets — narrowed
+     * to one small value ([HomeRefreshSpinnerState]) for ROW-SCOPE leaf
+     * collection (the `pendingSyncEntries` pattern): the read sites live in
+     * the content rows, not the orchestrator, so a single-row refresh's
+     * spin-up/data/spin-down emissions recompose only the matching row
+     * instead of re-executing the ~510-line MainHomeContent body three
+     * times. These two mirrors deliberately stay off the
+     * [HomeUiState] fold — its whole-object copy made every spinner flip an
+     * orchestrator-wide invalidation. Shared WhileSubscribed(5_000) (the
+     * base-class default): the only consumers leaf-collect per row (the
+     * spinner read in HomeContentSections), so the mapping needs to run only
+     * while rows are composed — not on every refresher emission while home
+     * is backgrounded or disposed.
+     */
+    val refreshSpinners: StateFlow<HomeRefreshSpinnerState> = stateIn(
+        initial = HomeRefreshSpinnerState(),
+        started = SharingStarted.WhileSubscribed(5_000),
+        flow = refresher.state.map {
+            HomeRefreshSpinnerState(
+                refreshingSectionIds = it.refreshingSectionIds,
+                rollingDiscoverRowIds = it.rollingDiscoverRowIds,
+            )
+        },
+    )
+
+    /**
      * The offline collection gate — when the home renders downloads — as one
      * module (see [OfflineHomeGate]): the gate flow, both gated collectors
      * and the render-source fold, behind a single [OfflineHomeGate.state]
@@ -228,7 +317,7 @@ internal class HomeViewModel(
         offlineMode = offlineModeManager.offlineMode,
         offlineRepository = offlineRepository,
         fetchFailed = refresher.state.map { it.fetchFailed },
-        // The offline home's layout mirror (#147): the cached online sections
+        // The offline home's layout mirror: the cached online sections
         // the offline home reproduces filtered to downloads.
         // runCatchingRethrowingCancellation so a corrupt blob degrades to the
         // generic offline rows instead of crashing the gate collector, while a
@@ -269,12 +358,69 @@ internal class HomeViewModel(
     val undoActions get() = searchStateHolder.undoActions
 
     /**
+     * The one-shot new-section announcement — a STRUCTURAL event (the
+     * union-added sections + the stamp closure), not display text: the VM has
+     * no resource access, so the screen resolves the localized message and
+     * action label when it maps this onto the undo channel's UndoableAction
+     * shape. Emitted at most once per VM lifetime by the prefs collector's
+     * announce-once gate ([maybeAnnounceNewSections]); the screen merges it
+     * onto the same `UndoSnackbarOverlay` host as [undoActions]. The stamp
+     * closures ride the event itself (button tap OR dismissal), so a session
+     * that never renders the snackbar never stamps.
+     */
+    private val _sectionAnnouncements = Channel<HomeSectionAnnouncement>(Channel.BUFFERED)
+    val sectionAnnouncements: Flow<HomeSectionAnnouncement> get() = _sectionAnnouncements.receiveAsFlow()
+
+    /**
+     * The enabled-set version this VM already announced — the in-memory
+     * half of announce-once: the persisted [HomeDiscoverySlice.homeAnnouncedVersion]
+     * stamp is the durable half, written by the snackbar's terminal callbacks.
+     * Between emit and stamp the prefs flow can re-emit the same gate state
+     * (any home pref change re-derives the slice); this guard keeps that burst
+     * to ONE snackbar.
+     */
+    private var announcedSectionVersion: Int? = null
+
+    /**
+     * The announce-once gate, run on every home-prefs emission: announce
+     * the version bump's union-added sections exactly when the user wants
+     * announcements, the read's union actually contributed something, and the
+     * persisted stamp hasn't caught up with the stored version yet. Emitting is
+     * deliberately NOT stamping — the stamp happens when the snackbar's
+     * lifecycle ends (button tapped or dismissed), so a headless session (the
+     * snackbar never shown) leaves the gate armed.
+     */
+    private fun maybeAnnounceNewSections(home: HomeDiscoverySlice) {
+        val storedVersion = home.enabledHomeSectionTypesVersion
+        if (!home.homeNewSectionAnnouncements) return
+        if (home.sectionsAddedByUnion.isEmpty()) return
+        if (storedVersion <= home.homeAnnouncedVersion) return
+        if (announcedSectionVersion == storedVersion) return
+        announcedSectionVersion = storedVersion
+        // Names in enum order — the descriptor table's displayNames are
+        // joined by the SCREEN (which owns the localized template).
+        val addedSections = HomeSectionType.entries.filter { it in home.sectionsAddedByUnion }
+        val stampAnnounced: () -> Unit = {
+            scope.launch { prefs.homeDiscovery.setHomeAnnouncedVersion(storedVersion) }
+        }
+        _sectionAnnouncements.trySend(
+            HomeSectionAnnouncement(
+                addedSections = addedSections,
+                stampAnnounced = stampAnnounced,
+            ),
+        )
+    }
+
+    /**
      * Local settings search for the header search bar, delegated to the core/ui
      * pipeline with the injected [SettingsSearchProvider] (the feature/settings
      * catalog). Kept as a VM-exposed function — not a direct call from the
      * screen — so the provider seam is injected in exactly one place and JVM
-     * tests can swap in a fake catalog. The Appearance-level "settings in home
-     * search" gate stays with the caller: it simply doesn't collect when off.
+     * tests can swap in a fake catalog. The pipeline resolves the catalog once
+     * per collected subscription (the screen must not re-key its collector on
+     * the query) and the internal debounce owns the cadence. The
+     * Appearance-level "settings in home search" gate stays with the caller:
+     * it simply doesn't collect when off.
      */
     fun settingsSearchResults(
         queries: Flow<String>,
@@ -339,26 +485,40 @@ internal class HomeViewModel(
     private val seerrRequestStateHolder = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
     /**
+     * Process-foreground mirror for the presence-chip poll: combined
+     * into the poll gate so the /Sessions + SyncPlay cadence stops while the
+     * app is backgrounded, and the gate re-emission on re-entry restarts the
+     * loop with an immediate poll before the cadence resumes. Defaults to
+     * true — the lifecycle seam never fires where the platform has no
+     * process lifecycle (JVM tests, desktop), so the poll runs ungated there,
+     * exactly as before.
+     */
+    private val _homeForeground = stateFlow(true)
+
+    /**
      * Removal handle for the process-lifecycle registration below, or null
      * where the platform has no process lifecycle — see
-     * [registerHomeProcessLifecycle] (the seam that replaced the legacy
-     * inline ProcessLifecycleOwner observer this VM used to implement).
+     * [registerHomeProcessLifecycle] (the seam owning the
+     * ProcessLifecycleOwner observer).
      */
     private var processLifecycleRemoval: (() -> Unit)? = null
 
     init {
         // App foreground/background → refresher start/stop. The seam
         // registers against the platform process lifecycle where one exists
-        // and silently no-ops otherwise (e.g. JVM unit tests) — the same
-        // best-effort contract the legacy runCatching-guarded registration
-        // had, so construction never crashes.
+        // and silently no-ops otherwise (e.g. JVM unit tests) — best-effort
+        // like the runCatching guard, so construction never crashes.
         processLifecycleRemoval = registerHomeProcessLifecycle(
             onStart = {
+                _homeForeground.set(true)
                 // Order matters inside start(): network check → stale fetch → loop
                 // start → deferred user-data flush. See HomeRefresher.start.
                 refresher.start()
             },
-            onStop = { refresher.stop() },
+            onStop = {
+                _homeForeground.set(false)
+                refresher.stop()
+            },
         )
 
         launch {
@@ -369,9 +529,38 @@ internal class HomeViewModel(
             }
         }
 
+        // ── Visit memory ─────────────────────────────────────────────
+        // The badge predicate compares arrivals against the PREVIOUS visit,
+        // so the pre-stamp value is read exactly once per home session —
+        // first() over the store flow, BEFORE the dwell timer below can
+        // write its own stamp. A live flow would let this session's stamp
+        // (~10s after content-ready) clear every NEW badge it just showed.
         launch {
-            // Identity-change routing, now owned by HomeSession (the single
-            // detector — previously this VM's own previousUserId mirror over
+            val lastVisit = prefs.homeDiscovery.homeDiscovery
+                .map { it.homeLastVisitEpochMs }
+                .first()
+            _uiState.update { it.copy(homeLastVisitEpochMs = lastVisit) }
+        }
+
+        // The dwell timer: once home content is actually rendered (sections
+        // present, loader down), sit for [HOME_VISIT_STAMP_DWELL_MS], then
+        // stamp "visited now". At most once per home session (the collector
+        // completes after the stamp); a fresh entry to home is a fresh VM and
+        // re-arms it. Leaving home before the dwell elapses cancels the
+        // delay — a glance is not a visit, and nothing is stamped.
+        launch {
+            _uiState.flow
+                .map { it.sections.isNotEmpty() && !it.isLoading }
+                .distinctUntilChanged()
+                .filter { it }
+                .first()
+            delay(HOME_VISIT_STAMP_DWELL_MS)
+            prefs.homeDiscovery.setHomeLastVisitEpochMs(clock.nowEpochMillis())
+        }
+
+        launch {
+            // Identity-change routing is owned by HomeSession (the single
+            // detector; this VM keeps no previousUserId mirror over
             // currentUser).
             //
             // `transitions` replays its latest emission, so a sign-in that
@@ -464,6 +653,13 @@ internal class HomeViewModel(
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
+                    // Stats + genre render gates — the same snapshot the fetch collectors below read.
+                    statsCardEnabled = prefs.home.homeStatsCard,
+                    genreRailEnabled = prefs.home.homeGenreRail,
+                    // Focus render gates — the TV focus-backdrop and the
+                    // wide-card trickplay peek, same snapshot posture.
+                    focusBackdropEnabled = prefs.home.homeFocusBackdrop,
+                    trickplayPreviewEnabled = prefs.home.homeTrickplayPreview,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
                     directArrEnabled = prefs.experimental.directArrEnabled(),
                     // The section-config sheet's mirrors, likewise one slice.
@@ -487,6 +683,11 @@ internal class HomeViewModel(
                         nextUpMaxDays = prefs.home.nextUpMaxDays,
                     ),
                 ) }
+
+                // Run the announce-once gate against the freshly loaded
+                // home prefs (after the state fold, so the announcement never
+                // races the first render).
+                maybeAnnounceNewSections(prefs.home)
 
                 if (homeSectionPrefsChanged) {
                     refresher.request(RefreshTrigger.PrefsChanged)
@@ -530,6 +731,97 @@ internal class HomeViewModel(
             newsletterTriggerManager.shouldShowBanner().collect { showBanner ->
                 _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
             }
+        }
+
+        // ── Personal stats card ──────────────────────────────────────
+        // Loaded ONLY while the `home_stats_card` pref is on and a user is
+        // signed in (the identity flow re-runs the load on user switches —
+        // the user-scoped clients swap underneath). A failed load resolves
+        // to null inside the loader: the card hides silently, never errors.
+        // The gate spine ([HomeFeatureGate]) owns the dedupe + the
+        // cancel-and-restart collector; this site owns only the combine and
+        // the load→bag-write effect.
+        HomeFeatureGate(
+            scope,
+            combine(
+                prefs.homeDiscovery.homeDiscovery
+                    .map { it.homeStatsCard }
+                    .distinctUntilChanged(),
+                authRepository.currentUser.distinctUntilChanged(),
+            ) { enabled, user -> StatsCardTrigger(enabled, user) },
+        ) { trigger ->
+            val data = if (trigger.enabled && trigger.user != null) {
+                statsCardLoader.load(userId = trigger.user.id, isAdmin = trigger.user.isAdmin)
+            } else {
+                null
+            }
+            _uiState.update { it.copy(statsCard = data) }
+        }
+
+        // ── Genre quick-access rail ──────────────────────────────────
+        // Online-only suppression, the home feed's own posture: the chips
+        // load only for an online mode with rendered sections, and an
+        // offline emission CLEARS them (the online-feed mount gate is the
+        // second belt; this keeps the state honest for any reader). The TTL
+        // cache answers repeat triggers without refetching; the user id is
+        // part of the trigger AND the cache key, so a user switch reloads
+        // (the signed-in client bean swaps underneath — the identity-aware
+        // TtlCache contract).
+        HomeFeatureGate(
+            scope,
+            combine(
+                prefs.homeDiscovery.homeDiscovery
+                    .map { it.homeGenreRail }
+                    .distinctUntilChanged(),
+                _uiState.flow.map { it.sections.isNotEmpty() }.distinctUntilChanged(),
+                offlineModeManager.offlineMode
+                    .map { it == OfflineMode.ONLINE }
+                    .distinctUntilChanged(),
+                authRepository.currentUser.map { it?.id }.distinctUntilChanged(),
+            ) { enabled, hasSections, online, userId ->
+                GenreRailTrigger(enabled, hasSections, online, userId)
+            },
+        ) { trigger ->
+            val chips = if (
+                trigger.enabled && trigger.hasSections && trigger.online && trigger.userId != null
+            ) {
+                genreRailCache.genres(trigger.userId)
+            } else {
+                emptyList()
+            }
+            _uiState.update { it.copy(genreChips = chips) }
+        }
+
+        // ── Watch-party presence chips ───────────────────────────────
+        // The gate flows fold into [PresenceGate] here; the poll itself —
+        // the cadence loop AND the probe-once/session-filter/dismiss memory
+        // it serves — lives on the controller ([HomePresenceChipsController.poll]),
+        // so the split-brain (cadence in the VM, policy in the controller)
+        // is closed. The websocket `Sessions` push was rejected because the
+        // shared socket is connect-on-demand infrastructure (SyncPlay joins,
+        // admin dashboard, cast) and is NOT connected while home shows — the
+        // controller's KDoc records the decision. The FIRST poll of a
+        // session is also the /Sessions capability probe (probe-once,
+        // hide-forever — inside the controller). The default-off pref means
+        // the loop never runs (and never probes) until the user opts in.
+        presenceChipsController.poll(
+            scope,
+            combine(
+                prefs.homeDiscovery.homeDiscovery
+                    .map { it.homePresenceChips }
+                    .distinctUntilChanged(),
+                authRepository.currentUser.map { it?.id }.distinctUntilChanged(),
+                offlineModeManager.offlineMode
+                    .map { it == OfflineMode.ONLINE }
+                    .distinctUntilChanged(),
+                _homeForeground.flow,
+            ) { enabled, userId, online, foreground ->
+                PresenceGate(enabled, userId, online, foreground)
+            },
+        ) { chips ->
+            // The chips' own flow (see [presenceChips]) — never a
+            // whole-[HomeUiState] write per cadence tick.
+            _presenceChips.set(chips)
         }
 
         // Fold the search holder's one UI-shaped slice into HomeUiState (same
@@ -581,15 +873,37 @@ internal class HomeViewModel(
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
         // observes a single state object. The refresher is the SOLE writer of
-        // these eight fields — including `sections` (in-place item patches go
+        // these fields — including `sections` (in-place item patches go
         // through HomeRefresher.patchItems, never a direct _uiState write),
         // the full-screen loader, and the offline-mode mirror with its
-        // transition policy. The VM only folds emissions.
+        // transition policy. The VM only folds emissions; the per-row
+        // spinner mirrors are NOT among them — they leaf-collect off
+        // [refreshSpinners] at row scope (a single-row refresh's
+        // spin-up/data/spin-down emissions must not re-execute this fold,
+        // and with it the ~510-line MainHomeContent body, three times).
         launch {
+            // `sections` is the one fold field needing a conversion — the
+            // refresher holds a plain List ([HomeRefreshState.sections]), rebuilt
+            // only when its sections actually change. Refresher emissions that
+            // touch spinner/error/partial flags reuse the SAME list instance, so
+            // identity-guard the conversion: only a genuinely new list is
+            // re-wrapped into the persistent ImmutableList. Converting
+            // unconditionally deep-copied the entire home item set on every
+            // emission (4-6× per fetch) only to structurally re-equal it inside
+            // MutableStateFlow. The guard changes no emission count — equal
+            // sections conflate exactly as before.
+            var lastFoldedSections: List<HomeSection> = emptyList()
             refresher.state.collect { refresh ->
+                val sections = if (refresh.sections !== lastFoldedSections) {
+                    lastFoldedSections = refresh.sections
+                    refresh.sections.toImmutableList()
+                } else {
+                    null
+                }
                 _uiState.update {
                     it.copy(
-                        sections = refresh.sections,
+                        sections = sections ?: it.sections,
+                        curatedHero = refresh.curatedHero,
                         bookProgressFractions = refresh.bookProgressFractions,
                         isLoading = refresh.isLoading,
                         isRefreshing = refresh.isRefreshing,
@@ -597,9 +911,8 @@ internal class HomeViewModel(
                         partialLoadError = refresh.partialLoadError,
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
-                        rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
-                        refreshingSectionIds = refresh.refreshingSectionIds,
                         offlineMode = refresh.offlineMode,
+                        imageReloadEpoch = refresh.imageReloadEpoch,
                     )
                 }
             }
@@ -624,6 +937,31 @@ internal class HomeViewModel(
         val experimental: ExperimentalSlice,
         val playback: PlaybackSlice,
     )
+
+    /**
+     * The stats-card trigger pair — the `home_stats_card` pref mirror and
+     * the signed-in user (the loader's identity + admin gate). One value so
+     * the gate spine's distinctUntilChanged compares both atomically.
+     */
+    private data class StatsCardTrigger(
+        val enabled: Boolean,
+        val user: UserInfo?,
+    )
+
+    /**
+     * The genre-rail trigger quad — pref on, rendered sections, online
+     * mode, and the signed-in user (the cache's identity key). One value so
+     * the combine's distinctUntilChanged compares all four atomically.
+     */
+    private data class GenreRailTrigger(
+        val enabled: Boolean,
+        val hasSections: Boolean,
+        val online: Boolean,
+        val userId: String?,
+    )
+
+    // The presence gate ([PresenceGate]) lives beside
+    // [HomePresenceChipsController] — its poll loop, not this VM, consumes it.
 
     /**
      * The VM's single command surface: every user intent arrives here as a
@@ -675,6 +1013,8 @@ internal class HomeViewModel(
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
             is HomeUiEvent.DownloadItem -> downloadItem(event)
+            is HomeUiEvent.DismissPresenceChip -> dismissPresenceChip(event)
+            is HomeUiEvent.JoinPresenceWatchParty -> joinPresenceWatchParty(event)
         }
     }
 
@@ -738,8 +1078,8 @@ internal class HomeViewModel(
      * rather than server content: explicit offline mode, or the implicit one —
      * the online fetch failed leaving only downloads to show. Reads the same
      * [HomeUiState.renderSource] the screen branches on (one fold — see
-     * [computeHomeRenderSource]); previously this re-derived the predicate
-     * with subtly different terms from the screen's copy. The known-empty
+     * [computeHomeRenderSource]), so it cannot re-derive the predicate with
+     * subtly different terms from the screen's copy. The known-empty
      * corner (fetch failed, downloads confirmed absent →
      * [HomeRenderSource.Online], hard-error screen) is deliberately excluded:
      * no series card can fire this while the error screen shows.
@@ -825,7 +1165,7 @@ internal class HomeViewModel(
      * write (the same seam the detail ⋮ menu's toggle uses). The prefs
      * collector above re-filters the rows off the changed snapshot — the
      * card leaves the row without an explicit refresh — and the hidden set
-     * roams via the `cw` sync namespace (ADR 0011).
+     * roams via the `cw` sync namespace.
      */
     private fun setHiddenFromContinueWatching(itemId: String, hidden: Boolean) {
         launch {
@@ -958,6 +1298,40 @@ internal class HomeViewModel(
     }
 
     /**
+     * inline dismiss of one presence chip: the session id lands in the
+     * controller's session-scoped memory (the next poll re-filters with it)
+     * and the row folds the chip out immediately — no waiting for the poll
+     * to confirm what the tap already decided.
+     */
+    private fun dismissPresenceChip(event: HomeUiEvent.DismissPresenceChip) {
+        presenceChipsController.dismiss(event.sessionId)
+        // The immediate fold-out rides the chips' own flow (see
+        // [presenceChips]) — no whole-state write for one row's contents.
+        _presenceChips.update { chips ->
+            chips.filterNot { chip -> chip.sessionId == event.sessionId }
+        }
+    }
+
+    /**
+     * presence chip's "Join": the controller's SyncPlay seam joins the
+     * visible group playing the chip's item; a failure surfaces on the
+     * message bus (the tap is never silently dead) and never navigates, a
+     * success fires [HomeUiEvent.JoinPresenceWatchParty.onJoined] once with
+     * the joined group's position ticks — the caller opens the player, whose
+     * SyncPlay bridge attaches to the now-active session (the detail
+     * screen's create→open-player shape).
+     */
+    private fun joinPresenceWatchParty(event: HomeUiEvent.JoinPresenceWatchParty) {
+        launch {
+            presenceChipsController.join(event.chip.itemId)
+                .onSuccess { group -> event.onJoined(group.positionTicks ?: 0L) }
+                .onFailure {
+                    userMessageBus.error(UiText.Resource(Res.string.home_watch_party_join_failed))
+                }
+        }
+    }
+
+    /**
      * The dice affordance: re-rolls one RANDOM-sorted discover row via the
      * refresher's in-place patch (the repository's rerollDiscoverRow owns the
      * cache choreography; the refresher swaps the row's items in place — no
@@ -988,3 +1362,14 @@ internal class HomeViewModel(
         refresher.stop()
     }
 }
+
+/**
+ * The new-section announcement payload (see
+ * [HomeViewModel.sectionAnnouncements]): the union-added sections in enum
+ * order plus the announce-once stamp closure. Display text is the screen's
+ * job — it owns the localized template and action label.
+ */
+data class HomeSectionAnnouncement(
+    val addedSections: List<HomeSectionType>,
+    val stampAnnounced: () -> Unit,
+)

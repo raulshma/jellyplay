@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.data.catalogue.NextEpisode
+import com.raulshma.jellyplay.core.data.catalogue.NextUpKind
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 
 /**
@@ -12,11 +15,16 @@ import com.raulshma.jellyplay.feature.details.generated.resources.Res
  * resource lookups, and `launch(Dispatchers.Default)` dispatching. The decision
  * rules (resume > next-unplayed > replay-first) were therefore untestable
  * except through the VM's async surface — which is exactly why the test needs a
- * polling helper. Extracting the pure decision here gives the rules a home and
+ * polling helper. Extracting the pure decision here gave the rules a home and
  * a direct (synchronous, reflection-free) test surface.
  *
- * The resolver returns a [LabelKind] rather than a pre-formatted string so it
- * stays pure; the ViewModel maps the kind to the localized resource.
+ * The series-level rules' single owner is `core:data`'s
+ * [NextEpisode.forSorted] (shared with the catalogue and the player);
+ * [SmartPlayResolver.resolveSeries] delegates to it and only maps the
+ * catalogue's [NextUpKind] to this file's [LabelKind] — the two enums mirror
+ * one another one-for-one. The resolver returns a [LabelKind] rather than a
+ * pre-formatted string so it stays pure; the ViewModel maps the kind to the
+ * localized resource.
  */
 internal data class SmartPlayResult(
     val episode: MediaItem,
@@ -36,48 +44,19 @@ internal object SmartPlayResolver {
      * Series-level decision: given the playback-sorted episode list, pick the
      * target. Returns null when there are no episodes to play.
      *
-     * Resolution order:
-     *   1. First episode with resume progress (>0 ticks, not finished).
-     *   2. First unplayed episode — "Next up" if something before it was
-     *      watched/started, else plain "Play".
-     *   3. All played → replay the first episode from 0.
-     *
-     * Virtual (missing/unaired) episodes are never candidates — they have no
-     * file behind them, so "play all" must not land on one (findroid's
-     * PlaylistManager.getInitialItem filters `!it.missing` for the same
-     * reason). The list itself keeps them; only this scan skips them.
+     * Delegates to [NextEpisode.forSorted] — the rule's single owner
+     * (resolution order there: 1. first episode with resume progress; 2. first
+     * unplayed episode, NEXT_UP when something before it was watched/started
+     * else PLAY; 3. all played → REPLAY the first; virtual episodes never
+     * candidates) — and maps the [NextUpKind] verdict onto [LabelKind].
      */
     fun resolveSeries(sortedEpisodes: List<MediaItem>): SmartPlayResult? {
-        val playable = sortedEpisodes.filterNot { it.isVirtual }
-        if (playable.isEmpty()) return null
-
-        val resumeEpisode = playable.firstOrNull { it.hasResumeProgress() }
-        if (resumeEpisode != null) {
-            return SmartPlayResult(
-                episode = resumeEpisode,
-                label = LabelKind.RESUME_EPISODE,
-                startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0L,
-            )
-        }
-
-        val nextEpisode = playable.firstOrNull { !it.isPlayed }
-        if (nextEpisode != null) {
-            val hasWatchedBefore = playable
-                .takeWhile { it.id != nextEpisode.id }
-                .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
-            return SmartPlayResult(
-                episode = nextEpisode,
-                label = if (hasWatchedBefore) LabelKind.NEXT_UP_EPISODE else LabelKind.PLAY_EPISODE,
-                startPositionTicks = 0L,
-            )
-        }
-
-        // All episodes played — replay the first.
-        val first = playable.first()
+        val decision = NextEpisode.forSorted(sortedEpisodes)
+        val episode = decision.episode ?: return null
         return SmartPlayResult(
-            episode = first,
-            label = LabelKind.REPLAY_EPISODE,
-            startPositionTicks = 0L,
+            episode = episode,
+            label = decision.kind.toLabelKind(),
+            startPositionTicks = decision.startPositionTicks,
         )
     }
 
@@ -88,7 +67,7 @@ internal object SmartPlayResolver {
     fun resolveEpisode(currentEpisode: MediaItem): SmartPlayResult =
         SmartPlayResult(
             episode = currentEpisode,
-            label = if (currentEpisode.hasResumeProgress()) LabelKind.RESUME_EPISODE else LabelKind.PLAY_EPISODE,
+            label = if (currentEpisode.hasWatchProgress) LabelKind.RESUME_EPISODE else LabelKind.PLAY_EPISODE,
             startPositionTicks = currentEpisode.playbackPositionTicks ?: 0L,
         )
 
@@ -103,13 +82,14 @@ internal object SmartPlayResolver {
      */
     fun resolveSeason(seasonId: String, sortedEpisodes: List<MediaItem>): SmartPlayResult? =
         resolveSeries(sortedEpisodes.filter { it.seasonId == seasonId })
-}
 
-/**
- * The single definition of "this episode is mid-playback": a positive resume
- * position on an episode not yet fully watched. Shared by [SmartPlayResolver]
- * and [SeasonStartResolver] so the smart-play and season-tab decisions can't
- * drift apart on what counts as a resume.
- */
-internal fun MediaItem.hasResumeProgress(): Boolean =
-    (playbackPositionTicks ?: 0L) > 0L && !isPlayed
+    /** The catalogue verdict → the UI label (the two enums' one-for-one mirror, in one table). */
+    private fun NextUpKind.toLabelKind(): LabelKind = when (this) {
+        NextUpKind.RESUME -> LabelKind.RESUME_EPISODE
+        NextUpKind.NEXT_UP -> LabelKind.NEXT_UP_EPISODE
+        NextUpKind.PLAY -> LabelKind.PLAY_EPISODE
+        NextUpKind.REPLAY -> LabelKind.REPLAY_EPISODE
+        // Unreachable: NONE always travels with a null episode (resolved above).
+        NextUpKind.NONE -> LabelKind.PLAY_EPISODE
+    }
+}

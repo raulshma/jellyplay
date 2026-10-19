@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrCardLoadingState
@@ -29,8 +30,8 @@ import com.raulshma.jellyplay.core.ui.components.mouseScroll
 /**
  * A single display-only (non-user-scrollable) horizontal row of [SeerrMediaCard]s.
  *
- * This unifies the previously duplicated rendering for the Seerr "Discover"
- * grid rows and the *arr "Recently Grabbed / Coming Soon" row, which were
+ * This unifies the rendering for the Seerr "Discover"
+ * grid rows and the *arr "Recently Grabbed / Coming Soon" row, which are
  * near-identical: same `LazyRow` + `CompositionLocalProvider` + `SeerrMediaCard`
  * + onClick `when(mediaType)` block. The card onClick / request lambdas are
  * memoized once per row so they are not reallocated per-item per-recomposition.
@@ -63,8 +64,8 @@ internal fun SeerrDiscoverRow(
     onSeerrItemClick: (Int, String) -> Unit,
     onSeerrRequest: (SeerrSearchItem) -> Unit,
 ) {
-    // Memoize the per-card lambdas once per row. Previously these were allocated
-    // inside the `items {}` block, so every card got a fresh lambda (with the
+    // Memoize the per-card lambdas once per row. Allocating them
+    // inside the `items {}` block would give every card a fresh lambda (with the
     // `when(mediaType)` block) on every recomposition.
     val onCardClick = remember(seerrCardLoadingState, seerrPrefetch, onSeerrItemClick) {
         { item: SeerrSearchItem ->
@@ -114,13 +115,21 @@ internal fun SeerrDiscoverRow(
                 contentType = { "seerrCard" },
             ) { idx ->
                 val seerrItem = items[idx]
+                // Per-card bindings, remembered on the item instance: the
+                // row-level closures above stay stable across recompositions,
+                // and these thin wrappers do not reallocate per card per
+                // recomposition (the loading-state flip invalidates this slot
+                // on every request star). Keyed on the instance so a reroll
+                // that replaces the item never keeps a stale capture.
+                val onClick = remember(seerrItem) { { onCardClick(seerrItem) } }
+                val onRequestClick = remember(seerrItem) { { onCardRequestClick(seerrItem) } }
                 SeerrMediaCard(
                     item = seerrItem,
                     imageUrl = seerrItem.posterUrl,
                     isLoading = seerrCardLoadingState.isLoading(seerrItem.id),
                     clipToShape = clippingEnabled,
-                    onClick = { onCardClick(seerrItem) },
-                    onRequestClick = { onCardRequestClick(seerrItem) },
+                    onClick = onClick,
+                    onRequestClick = onRequestClick,
                     modifier = Modifier.animateItem(placementSpec = lazyItemPlacementSpec()).width(itemWidth),
                 )
             }
@@ -130,11 +139,12 @@ internal fun SeerrDiscoverRow(
 
 /**
  * Normalizes an *arr media type for the detail routes: case-folded `movie` /
- * `tv`, everything else passed through. Internal so the test asserts THIS
- * function instead of a local copy of the rule.
+ * `tv`, everything else passed through. The parse rides the model's
+ * [SeerrMediaKind.fromWire] (the one ignoreCase parse); internal so the test
+ * asserts THIS function instead of a local copy of the rule.
  */
-internal fun normalizeSeerrMediaType(raw: String): String = when {
-    raw.equals("movie", ignoreCase = true) -> "movie"
-    raw.equals("tv", ignoreCase = true) -> "tv"
-    else -> raw
+internal fun normalizeSeerrMediaType(raw: String): String = when (SeerrMediaKind.fromWire(raw)) {
+    SeerrMediaKind.MOVIE -> "movie"
+    SeerrMediaKind.TV -> "tv"
+    SeerrMediaKind.UNKNOWN -> raw
 }

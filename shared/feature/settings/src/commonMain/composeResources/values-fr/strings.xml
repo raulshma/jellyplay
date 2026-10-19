@@ -763,7 +763,6 @@
     <string name="settings_sync_never">Jamais synchronisé</string>
     <string name="ss_jellyplay_sync_enabled_title">Synchroniser les paramètres entre les appareils</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">Paramètres, dispositions et préférences suivent votre compte Jellyfin via le plugin JellyPlay</string>
-    <string name="ss_jellyplay_sync_now_title">Synchroniser maintenant</string>
     <string name="ss_jellyplay_sync_now_subtitle">Envoyer et récupérer immédiatement les paramètres synchronisés</string>
     <string name="settings_jellyplay_sync_last_sync">Dernière synchro %1$s</string>
     <string name="settings_jellyplay_sync_in_flight">Synchronisation…</string>

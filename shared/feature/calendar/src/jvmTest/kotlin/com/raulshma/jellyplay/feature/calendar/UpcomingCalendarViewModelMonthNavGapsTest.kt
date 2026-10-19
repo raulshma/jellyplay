@@ -51,8 +51,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpcomingCalendarViewModelMonthNavGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (UpcomingCalendarViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (UpcomingCalendarViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var arr: ArrRepository
@@ -101,7 +101,7 @@ class UpcomingCalendarViewModelMonthNavGapsTest {
         arrRepository = arr,
         seerrRepository = seerr,
         // Gate on the test Main dispatcher: cold `false` seed during VM init's
-        // synchronous refresh(), warmed by advanceUntilIdle (HEAD timing —
+        // synchronous refresh(), warmed by advanceUntilIdle (init timing —
         // see ExperimentalFeatureGate's KDoc).
         experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )

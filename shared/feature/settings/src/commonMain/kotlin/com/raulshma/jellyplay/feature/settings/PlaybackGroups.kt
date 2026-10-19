@@ -22,6 +22,9 @@ import kotlinx.coroutines.CoroutineScope
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_media_segments
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_media_segments_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segment_skip_delay
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segment_skip_delay_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segment_skip_delay_seconds
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_syncplay
@@ -113,6 +116,41 @@ internal fun PlaybackMediaSegmentsGroup(
                                 )
                             },
                         )
+                        // The delay row only means something when the type
+                        // auto-skips — hide it otherwise so the fold stays tight.
+                        if (behavior == com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP) {
+                            val delayChoices = listOf(0L, 2_000L, 5_000L, 10_000L)
+                            val delayMs = preferences.segmentSkipDelaysMs[type] ?: 0L
+                            val delayTitle = stringResource(Res.string.settings_segment_skip_delay)
+                            val delayOffLabel = stringResource(Res.string.settings_segment_skip_delay_off)
+                            val delayLabels = delayChoices.associateWith { choice ->
+                                if (choice == 0L) {
+                                    delayOffLabel
+                                } else {
+                                    stringResource(Res.string.settings_segment_skip_delay_seconds, (choice / 1000).toInt())
+                                }
+                            }
+                            // The store clamps wider (0..60 s) than the picker
+                            // choices, so a synced value can miss the map.
+                            val currentDelayLabel = delayLabels[delayMs]
+                                ?: stringResource(Res.string.settings_segment_skip_delay_seconds, (delayMs / 1000).toInt())
+                            SettingListItem(
+                                icon = Tabler.Outline.Clock,
+                                title = delayTitle,
+                                subtitle = typeTitle,
+                                trailingText = currentDelayLabel,
+                                index = index, count = totalTypes,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = delayTitle,
+                                        items = delayChoices,
+                                        label = { delayLabels.getValue(it) },
+                                        isSelected = { it == delayMs },
+                                        onSelect = { viewModel.edit { scope -> scope.videoPlayer.setSegmentSkipDelay(type, it) } },
+                                    )
+                                },
+                            )
+                        }
                     }
                 }
 }

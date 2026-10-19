@@ -13,9 +13,8 @@ import java.io.File
 
 /**
  * Android actual of the [StorageAreas] seam: the cache/downloads/image-cache
- * size walks and the two cache-clear bodies moved verbatim from the legacy
- * StorageSettingsViewModel (which read `Context` directly). The walks keep the
- * concurrent single-IO-context-switch shape the VM used to own.
+ * size walks and the two cache-clear bodies, reading `Context` directly. The
+ * walks keep the concurrent single-IO-context-switch shape.
  */
 internal class AndroidStorageAreas(
     private val context: Context,

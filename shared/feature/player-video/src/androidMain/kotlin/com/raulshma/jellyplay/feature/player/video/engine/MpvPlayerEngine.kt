@@ -21,7 +21,6 @@ import com.raulshma.jellyplay.core.model.MpvFrameDrop
 import com.raulshma.jellyplay.core.model.MpvHwdec
 import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
-import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
@@ -46,9 +45,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvCore
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEndFileError
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeHost
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvLoadOptionsPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvProperties
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallRecoveryAction
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStyleApplier
@@ -107,6 +108,21 @@ class MpvPlayerEngine(
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
+
+    // ── time-pos dispatch dedupe (see the postInitOptions observe KDoc) ─────
+    // The observer events and the reset sites below all run on the main
+    // looper, so the stateful dedupe needs no synchronization.
+    private val timePosDedupe = TimePosDedupe()
+
+    // ── Stall watchdog (the mpv recovery choreography) ──────────────────────
+    // The wedged-session rescues live on [MpvCore] now (the ratified term's
+    // wiring home): the per-load decision state, the mpv log evidence that
+    // the zero-copy hwdec path is implicated, the session-sticky hwdec
+    // override and the precedence ladder it tops. This engine keeps only the
+    // wiring call sites (initOptions ladder, per-load reset via beginLoad,
+    // onConfigChanged retirement, the ticker tick, the log-detector feed)
+    // and the platform residue the core's Hosts callbacks carry — the
+    // throwing `hwdec` write and the shipped Log.w/Log.e recovery lines.
 
     // Android audio session id generated via AudioManager and pushed into
     // mpv's audiotrack/aaudio outputs so Android AudioEffects (dialogue
@@ -290,6 +306,50 @@ class MpvPlayerEngine(
         override fun fallbackFontFamily(): String? = fontProvider.bundledFallbackFamilyName()
 
         override fun subStartSeconds(): Double? = core.cachedSubStartSec.takeIf { it >= 0 }
+
+        // ── mpv recovery choreography residue (the shared wiring is the core's;
+        // these are this engine's shipped transports + log lines, verbatim). ──
+
+        override fun writeStallHwdec(value: String) {
+            // The THROWING raw write (not the absorbing binding): a failed
+            // switch must abort the recovery — the shipped single-try body
+            // skipped the kick when the hwdec write failed.
+            mpvView?.mpv?.setPropertyString(MpvProperties.HWDEC, value)
+        }
+
+        override fun onStallRecoveryIssued(
+            action: MpvStallRecoveryAction,
+            appliedHwdecValue: String?,
+            frozenPositionMs: Long,
+        ) {
+            if (appliedHwdecValue != null) {
+                Log.w(
+                    TAG,
+                    "Stall watchdog: zero-copy hwdec implicated — switching hwdec to " +
+                        "$appliedHwdecValue and kicking the play loop"
+                )
+            } else {
+                Log.w(
+                    TAG,
+                    "Stall watchdog: play loop wedged at ${frozenPositionMs}ms " +
+                        "(position frozen while playing) — kicking with a seek restart"
+                )
+            }
+        }
+
+        override fun onStallRecoveryFailed(action: MpvStallRecoveryAction, error: Throwable) {
+            Log.e(TAG, "Stall watchdog recovery failed", error)
+        }
+
+        override fun writeTargetColorspaceHint(value: String) {
+            // The local-handle write with the shipped silent-absorb contract:
+            // a throw (an older bundled libmpv without the property) reaches
+            // the core's catch, which leaves the change-cache unset so the
+            // write retries — the probe then reports SDR and the tone-mapping
+            // preset stands. `mpvView` null is a no-op write that still
+            // caches (the shipped shape).
+            mpvView?.mpv?.setPropertyString(MpvProperties.TARGET_COLORSPACE_HINT, value)
+        }
     }
 
     /**
@@ -373,6 +433,10 @@ class MpvPlayerEngine(
                 core.onPropertyChange(property, MpvIntakeValue.Whole(value))
             }
             override fun eventProperty(property: String, value: Double) {
+                // The per-frame time-pos stream is deduped at dispatch — see
+                // the observe-site KDoc in postInitOptions for the SyncPlay
+                // constraint that pins the 50 ms window.
+                if (property == MpvProperties.TIME_POS && !timePosDedupe.accept(value)) return
                 core.onPropertyChange(property, MpvIntakeValue.Decimal(value))
             }
             override fun eventProperty(property: String, value: Boolean) {
@@ -393,16 +457,26 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: String) {
                 if (property == MpvProperties.SID || property == MpvProperties.AID) {
                     Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
+                    // A track change is one of the dedupe-resetting state
+                    // changes — the next time-pos must land unthrottled.
+                    timePosDedupe.reset()
                 }
                 core.onPropertyChange(property, MpvIntakeValue.Text(value))
             }
             override fun eventProperty(property: String, value: MPVNode) {
                 when (property) {
                     // the range-level buffered surface. Node arrives parsed;
-                    // flattening + clamping is the shared pure derivation
-                    // (see MpvCore.decodeBufferedRanges).
+                    // only the three keys the shared decode reads are
+                    // extracted (see [asBufferedRangesPayload]) — mpv emits
+                    // this property several times per second on the main
+                    // looper, and a whole-tree flatten deep-copied every
+                    // range/cache subtree per event for keys nothing reads.
                     MpvProperties.DEMUXER_CACHE_STATE ->
-                        core.onPropertyChange(property, MpvIntakeValue.Node, nodePayload = value.asPlainValue())
+                        core.onPropertyChange(
+                            property,
+                            MpvIntakeValue.Node,
+                            nodePayload = value.asBufferedRangesPayload(),
+                        )
                     else -> core.onPropertyChange(property, MpvIntakeValue.Node)
                 }
             }
@@ -468,7 +542,17 @@ class MpvPlayerEngine(
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
-            val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(currentConfig.decoderMode)
+            // The watchdog's stall override wins: once the zero-copy path has
+            // wedged on this engine instance, every fresh handle starts on the
+            // copy path (the sticky value survives release-as-reset re-inits
+            // precisely so the next item doesn't re-wedge for another confirm
+            // window). The ladder (override > user config) is the core's
+            // [MpvCore.stallAwareHwdecValue]; user config below is the
+            // default when no override is armed.
+            val hwdecValue = core.stallAwareHwdecValue(
+                mpvCfg.hwdecOverride?.key
+                    ?: decoderModeToHwdec(currentConfig.decoderMode),
+            )
             mpv.setOptionString(MpvProperties.HWDEC, hwdecValue)
             mpv.setOptionString(MpvProperties.HWDEC_CODECS, "all")
 
@@ -634,6 +718,15 @@ class MpvPlayerEngine(
             // updates per frame, giving ms precision. (The DECISION for
             // each observed property lives in the shared MpvPropertyIntake
             // table; only the observe formats live here.)
+            //
+            // The per-frame DOUBLE stream is deduped at DISPATCH (the
+            // observer's [TimePosDedupe]): a value is handed to the core only
+            // when it moved >= 50 ms since the last ACCEPTED one, and the
+            // first observation after a seek/pause/play/track change lands
+            // unthrottled. 50 ms keeps 2x headroom under SyncPlay's 100 ms
+            // correction threshold (SYNC_CORRECTION_THRESHOLD_MS): the cached
+            // position lags the demuxer by at most the dedupe window plus one
+            // frame — never enough for the correction loop to read as drift.
             mpv.observeProperty(MpvProperties.PAUSE, MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty(MpvProperties.SPEED, MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty(MpvProperties.PAUSED_FOR_CACHE, MPV.mpvFormat.MPV_FORMAT_FLAG)
@@ -714,12 +807,17 @@ class MpvPlayerEngine(
         // Engine may have been release()d and is being reused — beginLoad
         // clears the teardown guard + per-item state (pending batch, fold
         // latches, side-load registry, server duration rung, cue flows) so
-        // observer callbacks are honoured again with fresh fold state.
+        // observer callbacks are honoured again with fresh fold state. The
+        // per-file watchdog state (window, budget, log-detector flag) rides
+        // the same reset (the sticky hwdec override survives — once this
+        // instance has proven the zero-copy path wedges, later items start
+        // directly on the copy path).
         core.beginLoad(request)
         // Reset the observer-cached playback scalars for the new item; the
         // first time-pos / duration observations repopulate them as the
         // demuxer resolves. The playhead seeds from the request's start.
         core.resetPlaybackCaches(positionMs = request.startPositionMs)
+        timePosDedupe.reset()
         pendingRequest = request
         Log.d(
             TAG,
@@ -767,6 +865,9 @@ class MpvPlayerEngine(
         dialogueBoost.detach()
         equalizerHelper.detach()
         nightMode.detach()
+        // Stop the display-event refreshes: the probe's listener is held
+        // strongly by DisplayManager, so it must not outlive the engine.
+        displayHdrProbe.release()
         engineScope.cancel()
         val view = mpvView
         mpvView = null
@@ -783,7 +884,7 @@ class MpvPlayerEngine(
                 try { it.destroy() } catch (e: Exception) { Log.w(TAG, "destroy", e) }
             }
         }
-        // Published-flow resets live in BasePlayerEngine (C5); mpv's residue
+        // Published-flow resets live in BasePlayerEngine; mpv's residue
         // (live-subtitle mirror + cached position/duration/buffer reads) goes
         // through the hook that reset fires.
         resetPublishedEngineState()
@@ -802,29 +903,39 @@ class MpvPlayerEngine(
     }
 
     /**
-     * The mpv residue cleared alongside the base published-state reset (C5):
+     * The mpv residue cleared alongside the base published-state reset:
      * the live-subtitle-text mirror (the one engine that publishes it) and
      * the cached native position/duration/buffer reads the ticker seeds from.
      */
     override fun onResetItemScopedState() {
         _liveSubtitleCue.value = null
         core.resetPlaybackCaches()
+        resetStatsGuard()
+        // The change-guard's sample dies with the item too — the new item's
+        // first stats tick must never be suppressed by the previous one
+        // (the [StatsPublishGuard] contract's reset-on-item-switch arm, the
+        // Exo adapter's site mirrored).
+        statsGuard.reset()
     }
 
     override fun play() {
         core.play()
+        timePosDedupe.reset()
     }
 
     override fun pause() {
         core.pause()
+        timePosDedupe.reset()
     }
 
     override fun stop() {
         core.commandStop()
+        timePosDedupe.reset()
     }
 
     override fun seekTo(positionMs: Long) {
         core.seekTo(positionMs)
+        timePosDedupe.reset()
     }
 
     override fun setPlaybackSpeed(speed: Float) {
@@ -848,7 +959,7 @@ class MpvPlayerEngine(
      * unsalvageable-key report. Refreshed at surface-create (before
      * initOptions runs, since init writes must already respect conf
      * ownership) and on every config change; every subtitle-style write site
-     * consults it so the user's value wins for the whole session (issue #165).
+     * consults it so the user's value wins for the whole session.
      */
     private fun refreshUserOwnedSubtitleKeys() {
         val confFile = java.io.File(mpvConfigDir, "mpv.conf")
@@ -859,20 +970,35 @@ class MpvPlayerEngine(
         core.refreshUserOwnedSubtitleKeys(confText, mpvCfg.mpvExtraConfig)
     }
 
-    /**
-     * The shared config-delta dispatcher (player-contract, the
-     * [MpvFoldApplier] family): it owns the arm ORDER (ownership refresh →
-     * audio-delay → sub-delay → hwdec → shared pairs → subtitle style →
-     * audio → video — the ladder this engine's hand-mirrored body ran) and
-     * the genuinely-shared arms; this engine contributes only its native
-     * surfaces — the `hwdecOverride`-aware hwdec value, the `ao` chain +
-     * AudioEffect-session arms inside the audio hook, and the low-RAM demuxer
-     * extra. The runtime diff cache (`lastAppliedConfigProps`, seeded by
-     * `initOptions`) lives on the applier.
-     */
+    // ── Platform display-HDR probe (the Exo engine's identical helper) ──
+    // The mpv OUTPUT verdict stays per-target (video-target-params — its
+    // per-file probe CACHE is the core's HDR probe machine now; the stats
+    // tick below delivers reads and derives the published fields), but the
+    // DISPLAY capability fact — "this display accepts HDR10, HLG" — is the
+    // same Android display-managed fact Exo reads, so the stats share it for
+    // the HDR sheet's elaborate diagnosis rows
+    // (EngineVideoStats.displayHdrTypes). Owned for the engine's lifetime
+    // (the probe's own KDoc covers the listener discipline); reads are
+    // main-thread, matching the stats tick.
+
+    private val displayHdrProbe = DisplayHdrCapabilitiesProbe(context)
+
     private val configApplier = MpvConfigApplier(
         surface = { if (binding.isAlive()) binding else null },
-        extras = { MpvConfigApplier.Extras(lowRamDevice = isLowRamDevice) },
+        extras = {
+            MpvConfigApplier.Extras(
+                lowRamDevice = isLowRamDevice,
+                // While HDR passthrough is ACTIVE (setting on + HDR item + HDR
+                // display target) `tone-mapping` falls to mpv's `auto` default
+                // — HDR→HDR, the colorspace-hint path owns the output. Before
+                // the target probe lands the gate is open (the preset is
+                // written): the safe fallback for SDR displays. The intent
+                // fold + the target verdict live on the shared core (the
+                // former desktop-twin duplication).
+                toneMappingSuppressed =
+                    MpvCore.hdrPassthroughRequested(currentConfig) && core.hdrTargetIsHdr,
+            )
+        },
         refreshOwnedKeys = ::refreshUserOwnedSubtitleKeys,
         hwdecValue = { cfg ->
             (cfg.engineSpecific as? MpvEngineConfig)?.hwdecOverride?.key
@@ -884,7 +1010,24 @@ class MpvPlayerEngine(
     )
 
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        // A user-authored hwdec move retires the watchdog's stall override —
+        // their explicit choice governs (and if that choice wedges again, the
+        // log detector re-implicates it and the watchdog re-arms). When the
+        // configured value EQUALS the sticky one (the watchdog already moved
+        // it here, or the user picked copy themselves) the sticky survives —
+        // identical value, nothing to decide. The retirement rule is the
+        // core's ([MpvCore.onHwdecConfigured]); the configured-value
+        // derivation is this engine's dialect (unchanged).
+        core.onHwdecConfigured(
+            (newConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride?.key
+                ?: decoderModeToHwdec(newConfig.decoderMode),
+        )
         configApplier.applyDelta(oldConfig, newConfig)
+        // Engine-side HDR arm: a passthrough/vo/hdrSource flip re-evaluates the
+        // colorspace hint (the shared applier has no native arm for it — the
+        // desktop carries it in its factory instead). The derivation +
+        // change-cached write are the core's.
+        core.applyTargetColorspaceHint(MpvCore.targetColorspaceHintRequested(newConfig))
     }
 
     /**
@@ -1014,7 +1157,7 @@ class MpvPlayerEngine(
             ((mpvView?.mpv?.getPropertyDouble(MpvProperties.VOLUME) ?: 100.0) / 100.0).toFloat().coerceIn(0f, 1f)
         } catch (_: Exception) { 1f }
 
-    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // ── Volume / mute seams ────────────────────────────────────────────
     // The four command bodies are final templates in ReloadablePlayerEngine;
     // mpv contributes the percent-scaled property write/read, its real mute
     // flag, and the LEAVE_UNCHANGED vocabulary (the flag silences; the native
@@ -1090,7 +1233,13 @@ class MpvPlayerEngine(
             refreshUserOwnedSubtitleKeys()
             view.initialize(configDir.absolutePath, context.cacheDir.absolutePath)
             view.setVo(mpvCfg.videoOutput.key)
-            core.applySubtitleStyleRuntime(currentConfig.subtitleStyle)
+            // No style apply here: initialize()'s initOptions ran the INIT
+            // phase for the pre-load window, and EVERY playFile goes through
+            // configureMpvForRequest (the pendingRequest arm below, or a later
+            // load()), whose RUNTIME pass writes the full style table straight
+            // before the file starts. The former surface-create runtime apply
+            // re-wrote that table and fired a sub-reload against a handle with
+            // no file loaded.
         } catch (e: Exception) {
             Log.e(TAG, "MPV initialize failed", e)
             return view
@@ -1098,6 +1247,10 @@ class MpvPlayerEngine(
         // Publish only after initialize() succeeded — otherwise every later
         // op on the engine throws repeatedly against a half-initialized view.
         mpvView = view
+        // The fresh mpv handle starts with mpv's option defaults — the
+        // change-cache of applyTargetColorspaceHint must not believe the old
+        // handle's value carried over.
+        core.clearTargetColorspaceHintCache()
         // postInitOptions has now allocated the audio session on the concrete
         // MPV handle. Bind the Android effects before the first file starts so
         // persisted dialogue boost/night mode settings are audible immediately.
@@ -1176,6 +1329,13 @@ class MpvPlayerEngine(
         } else {
             _bufferedPositionMs.value = core.cachedBufferedPositionMs
         }
+        // The stall watchdog runs OUTSIDE the stats gate — it must fire with
+        // the stats sheet closed (the wedged session's only observable is the
+        // frozen position on these very ticks). The decision state + the
+        // recovery hand are the core's ([MpvCore.onStallWatchdogTick] reads
+        // the same fold state + cached playhead the former inline call
+        // passed); this host supplies its monotonic clock.
+        core.onStallWatchdogTick(nowMs = android.os.SystemClock.elapsedRealtime())
         if (_videoStatsEnabled.value) {
             // Stats require ~12 property reads. Run them on the MAIN thread (the
             // ticker's onActive already runs on engineScope = Dispatchers.Main) to
@@ -1184,16 +1344,24 @@ class MpvPlayerEngine(
         }
     }
 
-    /** ElapsedRealtime of the last unguarded (full) stats read — see updateVideoStatsOnly. */
-    private var lastFullStatsReadMs = 0L
+    // The shared stats change-guard ([StatsPublishGuard], player-contract —
+    // the Exo/mpv hand copies unified), armed with this host's cadence: the
+    // scalar set can freeze while paused (frame counters stop, bitrates drop
+    // to 0), so the full property re-read — the only path that picks up
+    // fields the guard never sees move (hwdec switches, avsync, vo-delayed,
+    // track changes) — is forced at least every FULL_STATS_REREAD_MS anyway.
+    private val statsGuard = StatsPublishGuard(
+        fullRereadCadenceMs = FULL_STATS_REREAD_MS,
+        nowMs = android.os.SystemClock::elapsedRealtime,
+    )
 
     private fun updateVideoStatsOnly(posMs: Long) {
         val m = mpvView?.mpv ?: return
         try {
             // The shared property-name table + sanitize fold lives in
             // [MpvStatsProjection] (player-contract, desktop parity); this
-            // adapter owns only the reads seam, the change-guard and its
-            // FULL_STATS_REREAD cadence.
+            // adapter owns only the reads seam — the change-guard and its
+            // cadence are the shared guard's now.
             val reads = MpvStatsReadSource(m)
             val scalars = MpvStatsProjection.readGuardScalars(reads)
             val bufferedPositionMs = _bufferedPositionMs.value
@@ -1201,29 +1369,57 @@ class MpvPlayerEngine(
             // Cheap-scalar change guard first (mirrors the Exo adapter): the
             // ~10 string/track reads further down are worth paying only once a
             // scalar actually moved. publishStatsIfChanged stays the final emit
-            // guard. The scalar set can freeze while paused (frame counters
-            // stop, bitrates drop to 0), so a periodic full re-read is forced
-            // anyway to pick up fields the guard never sees move (hwdec
-            // switches, avsync, vo-delayed, track changes).
-            val nowMs = android.os.SystemClock.elapsedRealtime()
-            val last = lastVideoStats
-            if (last != null && last.videoBitrate == scalars.videoBitrateBps &&
-                last.audioBitrate == scalars.audioBitrateBps &&
-                last.bufferedPositionMs == bufferedPositionMs &&
-                last.droppedFrames == scalars.droppedFrames &&
-                last.totalVideoFrames == scalars.totalVideoFrames &&
-                nowMs - lastFullStatsReadMs < FULL_STATS_REREAD_MS
+            // guard; the cadence arm forces the periodic full re-read described
+            // on [statsGuard] above. The sample is scalar-only BY DECLARATION:
+            // the HDR fold below needs JNI reads, so it rides AFTER the guard
+            // and lets the cadence catch its flips (the Exo adapter computes
+            // its fold BEFORE the guard instead — same guard, declared
+            // per-host sample).
+            if (!statsGuard.admit(
+                    scalars.videoBitrateBps,
+                    scalars.audioBitrateBps,
+                    bufferedPositionMs,
+                    scalars.droppedFrames,
+                    scalars.totalVideoFrames,
+                )
             ) {
                 return
             }
-            lastFullStatsReadMs = nowMs
 
+            // The per-file display-target probe (the desktop's probeHdrTarget
+            // twin): read `video-target-params/gamma` once per file, at the
+            // first stats tick where it resolves after FILE_LOADED. pq/HLG
+            // means the output actually switched to HDR (the colorspace hint
+            // worked / the display chose HDR); anything else stays SDR. The
+            // probe CACHE is the core's ([MpvCore.observeHdrTargetGamma]);
+            // this engine delivers only the read.
+            if (core.hdrProbePending) {
+                core.observeHdrTargetGamma(reads.readString(MpvProperties.VIDEO_TARGET_PARAMS_GAMMA))
+            }
+
+            val hdrDecision = resolveMpvHdrOutput(
+                content = currentConfig.hdrContent,
+                passthroughRequested = MpvCore.hdrPassthroughRequested(currentConfig),
+                targetIsHdr = core.hdrTargetIsHdr,
+            )
             publishStatsIfChanged(
                 MpvStatsProjection.project(
                     reads = reads,
                     scalars = scalars,
                     positionMs = posMs,
                     bufferedPositionMs = bufferedPositionMs,
+                    // The desktop HDR badge fields — always derived on the
+                    // Android host now that the target probe rides the stats
+                    // read seam (the contract KDoc's old "Android always
+                    // false" note is obsolete).
+                ).copy(
+                    hdrOutputActive = hdrDecision.hdrOutputExpected,
+                    hdrOutputNotice = hdrDecision.notice,
+                    // The display capability fact — the same platform probe
+                    // Exo reads. Null while the probe has no answer
+                    // (UNKNOWN, not SDR), letting the sheet/stats fall back
+                    // to the output spot-check.
+                    displayHdrTypes = displayHdrProbe.support.value?.displayHdrTypesSummary(),
                 ),
             )
         } catch (e: Exception) {
@@ -1273,56 +1469,58 @@ class MpvPlayerEngine(
     }
 
     private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
-        // mTLS: the tls-* options are file-path options that
-        // PERSIST on the view's mpv handle across loads — write the reset
-        // trio when no certificate is active (same discipline as
-        // http-header-fields below) so the previous item's credentials are
-        // never inherited.
-        MpvTlsOptions.from(request.requestSpecific?.tls).forEach { (option, value) ->
+        // Per-file HDR state: re-arm the target probe (the next stats tick
+        // re-reads video-target-params for THIS file) and re-evaluate the
+        // colorspace hint for the fresh item's hdrSource (a stale "yes" from a
+        // previous HDR item must not leak onto an SDR one). Both halves are
+        // the core's HDR probe machine; the hint's requested derivation is
+        // the shared companion helper.
+        core.rearmHdrTargetProbe()
+        core.applyTargetColorspaceHint(MpvCore.targetColorspaceHintRequested(currentConfig))
+        // The per-request option ladder is the shared [MpvLoadOptionsPlan]
+        // (player-video commonMain, desktop parity): the plan owns the
+        // DECISIONS (TLS reset trio, the UA extraction out of the headers,
+        // language normalization + blank-skip, the header persistence
+        // discipline, the start/readahead compositions); this adapter owns
+        // only the transport — property writes on the live handle. All of it
+        // runs on an initialized handle, where an option write IS a property
+        // write, so every row lands through setPropertyString except the
+        // language rows, which keep their setOptionString call shape.
+        // Android has never written demuxer-readahead-secs per request —
+        // `maxBufferMs` stays unconsumed here (null), a declared host
+        // divergence, not drift.
+        val plan = MpvLoadOptionsPlan.plan(
+            MpvLoadOptionsPlan.Request(
+                headers = request.headers,
+                preferredAudioLanguage = request.preferredAudioLanguage,
+                preferredSubtitleLanguage = request.preferredSubtitleLanguage,
+                startPositionMs = request.startPositionMs,
+                tls = request.requestSpecific?.tls,
+                maxBufferMs = null,
+            ),
+            headerFields = MpvLoadOptionsPlan.HeaderFieldsSpelling.REPLACE_LIST,
+        )
+
+        fun applyWrite(option: String, value: String) {
             try {
-                view.mpv.setOptionString(option, value)
-                view.mpv.setPropertyString(option, value)
+                when (option) {
+                    MpvProperties.ALANG, MpvProperties.SLANG -> view.mpv.setOptionString(option, value)
+                    else -> view.mpv.setPropertyString(option, value)
+                }
             } catch (_: Exception) {}
         }
-
-        if (request.startPositionMs > 0) {
-            val startVal = "+${request.startPositionMs / 1000.0}"
-            try { view.mpv.setOptionString(MpvProperties.START, startVal) } catch (_: Exception) {}
-            try { view.mpv.setPropertyString(MpvProperties.START, startVal) } catch (_: Exception) {}
-        }
-
-        view.mpv.setOptionString(MpvProperties.SUB_VISIBILITY, "yes")
-        view.mpv.setPropertyBoolean(MpvProperties.SUB_VISIBILITY, true)
-        request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
-            view.mpv.setOptionString(MpvProperties.ALANG, normalizeLanguageList(language))
-        }
-        request.preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
-            view.mpv.setOptionString(MpvProperties.SLANG, normalizeLanguageList(language))
-        }
-
+        plan.optionWrites.forEach { (option, value) -> applyWrite(option, value) }
         if (request.headers.isNotEmpty()) {
-            // mpv handles User-Agent as its own property (it drives the default
-            // UA for all requests, including the one mpv sends for stream
-            // probing). Pull it out so it lands in `user-agent` rather than
-            // being buried in http-header-fields, which some servers parse
-            // inconsistently. Remaining headers stay in http-header-fields,
-            // comma-joined per mpv's documented format.
-            val userAgent = request.headers.entries
-                .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
-                ?.value
-            if (!userAgent.isNullOrBlank()) {
-                try { view.mpv.setOptionString(MpvProperties.USER_AGENT, userAgent) } catch (_: Exception) {}
-                try { view.mpv.setPropertyString(MpvProperties.USER_AGENT, userAgent) } catch (_: Exception) {}
-            }
-            val headerStr = request.headers.entries
-                .filter { !it.key.equals("User-Agent", ignoreCase = true) }
-                .joinToString(",") { "${it.key}: ${it.value}" }
-            if (headerStr.isNotBlank()) {
-                try { view.mpv.setOptionString(MpvProperties.HTTP_HEADER_FIELDS, headerStr) } catch (_: Exception) {}
-                try { view.mpv.setPropertyString(MpvProperties.HTTP_HEADER_FIELDS, headerStr) } catch (_: Exception) {}
-            }
             Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
         }
+        // The start value rides the `start` property on this host (the
+        // desktop's twin passes it in loadfile's options slot instead — the
+        // plan composes the value, the host maps it to its transport).
+        plan.start?.let { start ->
+            try { view.mpv.setPropertyString(MpvProperties.START, start) } catch (_: Exception) {}
+        }
+
+        view.mpv.setPropertyBoolean(MpvProperties.SUB_VISIBILITY, true)
 
         try {
             // Runtime choreography via the shared applier (no sub-reload /
@@ -1358,11 +1556,9 @@ class MpvPlayerEngine(
         core.addExternalSubtitle(source)
     }
 
-    private fun normalizeLanguageList(language: String): String =
-        language.split(',', ';')
-            .map { it.trim().replace('_', '-') }
-            .filter { it.isNotBlank() }
-            .joinToString(",")
+    // normalizeLanguageList (the `de; en_US` → `de,en-US` mpv language-list
+    // composition) moved to the shared [MpvLoadOptionsPlan] with the rest of
+    // the per-request ladder decisions.
 
     /**
      * The one Android-side node-transport seam of the shared parses (the
@@ -1380,6 +1576,32 @@ class MpvPlayerEngine(
         asArray()?.let { array -> return array.map { it.asPlainValue() } }
         return asString() ?: asInt() ?: asDouble() ?: asBoolean()
     }
+
+    /**
+     * The `demuxer-cache-state` slice [MpvCore.decodeBufferedRanges] reads —
+     * `seekable-ranges` (each entry's `start`/`end`) plus the two scalars —
+     * extracted directly from the node tree in the shape the decode expects
+     * (plain maps/`Number`s). A non-map node keeps the full flatten so the
+     * decode's map-cast reject behaves exactly as before.
+     */
+    private fun MPVNode.asBufferedRangesPayload(): Any? {
+        val map = asMap() ?: return asPlainValue()
+        val payload = HashMap<String, Any?>(4)
+        map["seekable-ranges"]?.asArray()?.let { ranges ->
+            payload["seekable-ranges"] = ranges.mapNotNull { range ->
+                val entry = range.asMap() ?: return@mapNotNull null
+                val start = entry["start"]?.asNumber() ?: return@mapNotNull null
+                val end = entry["end"]?.asNumber() ?: return@mapNotNull null
+                mapOf("start" to start, "end" to end)
+            }
+        }
+        map["demuxer-start-time"]?.let { payload["demuxer-start-time"] = it.asNumber() }
+        map["cache-end"]?.let { payload["cache-end"] = it.asNumber() }
+        return payload
+    }
+
+    /** The numeric payload the shared decode coerces through `Number` (Int/Double nodes). */
+    private fun MPVNode.asNumber(): Number? = asInt() ?: asDouble()
 
     /**
      * The Android [MpvBinding] over the `is.xyz.mpv` wrapper: the platform
@@ -1523,6 +1745,12 @@ class MpvPlayerEngine(
     }
 
     private fun logMpvMessage(prefix: String, level: Int, text: String) {
+        // The stall watchdog's log evidence — checked BEFORE any level filter
+        // so the detection never depends on the build's msg-level (the WARN
+        // "Waiting for frame timed out!" and ERROR "acquireLatestImage
+        // failed" lines pass this filter anyway, but the guarantee belongs to
+        // the detector, not the logger). The flag itself is the core's.
+        core.onMpvLogLine(prefix, text)
         if (!debugBuild && level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN) return
         val cleanText = redactSensitive(text.trim()).takeIf { it.isNotBlank() } ?: return
         if (level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN && !MPV_SUBTITLE_LOG_PATTERN.containsMatchIn("$prefix $cleanText")) {
@@ -1567,7 +1795,7 @@ class MpvPlayerEngine(
         }
     }
 
-    // Ownership-gated variant (issue #165): a no-op when the key is user-owned
+    // Ownership-gated variant: a no-op when the key is user-owned
     // via mpv.conf / extra config, so no scalar write site can forget the
     // check the pair lists get from MpvUserSubtitleKeys.filterOwned. Keys the
     // app functionally drives at runtime (sub-visibility, sub-delay) never

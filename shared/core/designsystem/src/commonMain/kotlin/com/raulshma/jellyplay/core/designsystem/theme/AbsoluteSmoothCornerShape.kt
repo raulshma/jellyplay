@@ -1,5 +1,5 @@
 /*
- * Ported verbatim (Apache-2.0) from
+ * Vendored (Apache-2.0) from
  * github.com/racra/smooth-corner-rect-android-compose so the shape renders
  * identically on every KMP target; upstream publishes Android-only artifacts.
  */

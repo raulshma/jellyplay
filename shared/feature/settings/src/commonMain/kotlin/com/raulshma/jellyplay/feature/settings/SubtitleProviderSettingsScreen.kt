@@ -269,9 +269,7 @@ private fun ProviderSection(
             ) {
                 Text(stringResource(Res.string.settings_subtitles_test))
             }
-            // Shared probe affordance (Inline: pip + label); the unified
-            // amber pip + "Connecting…" label replaces the former per-card
-            // spinner.
+            // Shared probe affordance (Inline: pip + label).
             ConnectionProbeStatusIndicator(status, style = ConnectionProbeIndicatorStyle.Inline)
         }
     }

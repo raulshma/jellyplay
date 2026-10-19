@@ -11,9 +11,7 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the shared remote-navigation routing folds both shell collectors
- * dispatch through (the former Android `RemoteNavigationRoutingTest` and
- * desktop `DesktopRemoteNavigationTest` fold halves merged into the one
- * shared home): every [NavigationTarget] case's route mapping, and the
+ * dispatch through: every [NavigationTarget] case's route mapping, and the
  * `ClosePlayer` pop semantics — player routes removed from the top of EVERY
  * back stack, non-player routes untouched (including players buried below a
  * non-player top), empty stacks tolerated.

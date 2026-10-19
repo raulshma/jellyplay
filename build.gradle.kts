@@ -4,14 +4,14 @@ plugins {
     alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.kotlin.serialization) apply false
-    // Kotlin Multiplatform (shared/ tree, docs/kmp-migration-plan.md).
+    // Kotlin Multiplatform (shared/ tree).
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
     alias(libs.plugins.ksp) apply false
-    // `apply false` (instead of the previous plain alias) so Kover is only put
-    // on the build's plugin classpath — with its version from this catalog —
-    // but never applied to the root project by default. Application itself is
-    // gated on -PenableCoverage below.
+    // `apply false` so Kover is only put on the build's plugin classpath —
+    // with its version from this catalog — but never applied to the root
+    // project by default. Application itself is gated on -PenableCoverage
+    // below.
     alias(libs.plugins.kover) apply false
     // CI-only flake absorption for the shared-tree test suites (see the
     // subprojects gate below for the rationale).
@@ -34,9 +34,7 @@ if (enableCoverage.get()) {
 
 // Kover instrumentation is meaningless for the macrobenchmark producer.
 // Single source for both the plugin gate above and the aggregation wiring
-// below. (The former "website" and "testing" entries died with those
-// modules — the legacy-cutover dissolved :core:testing and the docs site
-// is no longer a Gradle module.)
+// below.
 val koverExcludedModules = setOf("baselineprofile")
 
 subprojects {
@@ -48,11 +46,14 @@ subprojects {
     // Centralized Compose compiler configuration. Every module that applies the
     // Kotlin Compose plugin gets the same stability config (immutable JDK value
     // types like java.time.Instant) and, when opted in via -PenableComposeMetrics,
-    // the same reports/metrics destinations. This replaces a copy of the same
-    // block that was previously duplicated across ~25 per-module build files.
+    // the same reports/metrics destinations.
     pluginManager.withPlugin("org.jetbrains.kotlin.plugin.compose") {
         extensions.configure<org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension>("composeCompiler") {
             stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+            // Strong skipping: default-on in this toolchain (compiler 2.0.20+),
+            // so the toolchain default IS the declaration and there is
+            // deliberately no `strongSkipping` toggle to pin. The metrics
+            // gate below is the check that skipping behavior stays as expected.
             // hasProperty() would be true for the gradle.properties default
             // "enableComposeMetrics=false" — parse the value instead.
             if (providers.gradleProperty("enableComposeMetrics").map(String::toBoolean).getOrElse(false)) {
@@ -82,14 +83,11 @@ subprojects {
     }
 }
 
-// Test-retry: the shared/ suites run under real CI load for the first time
-// since the kmp-build folded-scalar fix (before it, gradle silently built a
-// truncated task list), and each lane showed exactly-one-per-run failures in
-// DIFFERENT tests (DataStore stateIn lag on slow disks, a ViewModel NPE under
-// load) — classic load flakes, not deterministic regressions. Retry those on
-// CI only (local runs keep failing loudly so flakes stay visible). The
-// deterministic bugs found on the way (SelfSigned reverse-DNS URLs, macOS
-// zero-major app-version, Kotlin daemon OOM) were fixed for real, not retried.
+// Test-retry: the shared/ suites are load-flake-prone under real CI load —
+// DataStore stateIn lag on slow disks, a ViewModel NPE under load — classic
+// load flakes, not deterministic regressions. Retry those on CI only (local
+// runs keep failing loudly so flakes stay visible). Deterministic bugs are
+// fixed for real, never retried.
 val ciRun = providers.environmentVariable("CI").map { it == "true" }.getOrElse(false)
 
 subprojects {
@@ -136,8 +134,8 @@ subprojects {
 // Aggregation wiring: each subproject is added to the root's "kover" dependency
 // configuration so its data feeds the merged report tasks. That configuration
 // only exists when the plugin was applied above, hence the same gate. "kover"
-// is referenced by name because the type-safe accessor is generated only when
-// Kover is applied via the plugins block (it no longer is).
+// is referenced by name because the plugins-block alias carries apply false,
+// so no type-safe accessor is generated.
 if (enableCoverage.get()) {
     dependencies {
         subprojects.forEach {

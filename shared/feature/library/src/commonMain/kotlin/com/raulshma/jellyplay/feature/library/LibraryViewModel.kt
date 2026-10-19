@@ -5,9 +5,10 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -67,8 +68,7 @@ private data class PagedQueryKey(
 
 internal class LibraryViewModel(
     private val mediaRepository: MediaRepository,
-    /** The browse-facet seam (the filter row's tag list — off the union). */
-    private val libraryApiClient: LibraryApiClient,
+    private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     private val offlineRepository: OfflineRepository,
     private val quickDownloadActions: QuickDownloadActions,
     private val offlineModeManager: OfflineModeManager,
@@ -81,9 +81,9 @@ internal class LibraryViewModel(
 
     // ---- Browser state: one value type owning {folder, filters, viewMode, ----
     // ---- groupBy, posterSize, sectionContext, title} as a consistent unit. --
-    // Previously this was a swarm of 8+ separate StateFlows whose invariants
-    // (view-mode precedence, "don't persist synthetic section folders") were
-    // enforced by hand-scattered guards. The reducer is now the single source.
+    // The value type owns the invariants (view-mode precedence, "don't
+    // persist synthetic section folders"); the reducer is the single source
+    // rather than hand-scattered guards.
     private val _browserState = stateFlow(LibraryBrowserState())
     val browserState = _browserState.flow
 
@@ -102,7 +102,7 @@ internal class LibraryViewModel(
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
         getGenres = { force -> mediaRepository.getGenres(force = force) },
-        getTags = { libraryApiClient.getTags() },
+        getTags = { mediaCatalogueEnrichments.getTags(null) },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
     val tags: StateFlow<List<String>> = filterDimensions.tags
@@ -255,6 +255,21 @@ internal class LibraryViewModel(
     }
 
     /**
+     * The six quick-action seams, wired once by the shared core:data factory
+     * ([pagedGridQuickActions]) — the repository's change feed, the silent
+     * mutator, and the shared quick actions with this host's message sink
+     * pre-bound. Spread into the [pagedGrid] host verbatim; this VM keeps
+     * only its paged source and its per-screen deltas (`seriesOpensSheet`
+     * routing, the sink).
+     */
+    private val quickActions = pagedGridQuickActions(
+        mediaRepository = mediaRepository,
+        userDataMutator = userDataMutator,
+        quickDownloadActions = quickDownloadActions,
+        messenger = downloadOutcomeSink,
+    )
+
+    /**
      * The item grid, wired through the shared [PagedMediaGridHost]: the host
      * owns the deferred-refresh generation counter + refresher pairing, the
      * cachedIn sharing and the quick-action forwarding; this source splices
@@ -265,14 +280,12 @@ internal class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val pagedGrid = PagedMediaGridHost(
         scope = scope,
-        userDataChanges = mediaRepository.userDataChanges,
-        downloadedIds = quickDownloadActions.downloadedIds,
-        downloadSupported = quickDownloadActions.isSupported,
-        setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
-        requestDownload = { item, onOpenDetail, seriesOpensSheet ->
-            quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet, downloadOutcomeSink)
-        },
-        removeDownloadItem = quickDownloadActions::removeDownload,
+        userDataChanges = quickActions.userDataChanges,
+        downloadedIds = quickActions.downloadedIds,
+        downloadSupported = quickActions.downloadSupported,
+        setPlayedSilently = quickActions.setPlayedSilently,
+        requestDownload = quickActions.requestDownload,
+        removeDownloadItem = quickActions.removeDownloadItem,
         source = { trigger ->
             combine(
                 _browserState.flow,
@@ -283,7 +296,7 @@ internal class LibraryViewModel(
             }.distinctUntilChanged().flatMapLatest { (folder, filters, servingOffline) ->
                 if (filters.isDownloaded == true || servingOffline) {
                     // "Downloaded" filter — or offline mode, which pins it on
-                    // automatically (#147): serve the grid from the local offline
+                    // automatically: serve the grid from the local offline
                     // store — instant, no server paging, and the same projection
                     // offline playback uses. Folder membership matches the offline
                     // row's parentId; with no folder selected ("All") the whole
@@ -311,10 +324,9 @@ internal class LibraryViewModel(
                         filters = filters,
                         // Section mode ("See All" from a home Latest row) shows the same
                         // top-level items as the default library tab — series for a TV library,
-                        // movies for a movie library — just sorted by latest. (Previously this
-                        // returned leaf episodes for a TV library, which stacked flat episode
-                        // blocks; issue #113.) Filtering to a specific leaf type is still
-                        // possible via the Media Type filter.
+                        // movies for a movie library — just sorted by latest. Leaf episodes
+                        // would stack flat episode blocks. Filtering to a specific leaf type
+                        // is still possible via the Media Type filter.
                         kindFilter = ItemKindFilter.TOP_LEVEL,
                     )
                 }
@@ -336,7 +348,7 @@ internal class LibraryViewModel(
 
     /**
      * True while the app is offline (manual toggle or auto network loss): the
-     * grid auto-switches to the downloaded-only local source (#147) and the
+     * grid auto-switches to the downloaded-only local source and the
      * Downloaded chip renders pinned on — the library's share of the "auto
      * filter for downloaded stuff" the offline home already applies. The
      * user's real filters are never mutated, so going back online restores
@@ -461,7 +473,7 @@ internal class LibraryViewModel(
                     _error.set(null)
                 }
                 .onFailure { error ->
-                    // Don't blank the whole library: keep any previously-loaded
+                    // Don't blank the whole library: keep any already-loaded
                     // folders so the user can still browse, and surface the error
                     // as a non-blocking status (the screen shows ErrorScreen only
                     // when there are also zero items). This stops a single failed

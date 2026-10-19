@@ -39,7 +39,8 @@ engine in JellyPlay and the best choice for most users.
 **Cons**
 
 - ❌ Less flexible than mpv for shader-based post-processing
-- ❌ No user style override on ASS/SSA subtitles (only SRT/VTT)
+- ❌ ASS/SSA style override applies when the subtitle track loads
+  (mpv restyles live)
 - ❌ No audio passthrough, no audio delay tweak
 - ❌ Some niche codecs (RV40, VP6) are not supported
 
@@ -164,27 +165,83 @@ setting simply won't appear in the player UI).
 | Subtitle style (SRT/VTT) | ✅ | ✅ | ✅ | ✗ |
 | Subtitle vertical position | ✅ | ✅ | ✅ | ✗ |
 | ASS/SSA *rendering* | ✅ | ✅ | ✗ | ✗ |
-| ASS/SSA *user style override* | ✗ | ✅ | ✗ | ✗ |
+| ASS/SSA *user style override* | ✅ | ✅ | ✗ | ✗ |
 | Image subtitles (PGS/VobSub sidecars) | ✗ | ✅ | ✗ | ✗ |
 | Font family | ✅ | ✅ | ✅ | ✗ |
-| Free-form subtitle colors | ✗ | ✅ | ✗ | ✗ |
+| Free-form subtitle colors | ✅ | ✅ | ✗ | ✗ |
 | Border styles | ✅ | ✅ | ✗ | ✗ |
 | Dialogue boost | ✅ | ✅ | ✗ | ✗ |
 | Night mode | ✅ | ✅ | ✗ | ✗ |
 | Audio normalization | ✅ | ✅ | ✗ | ✗ |
 | Channel mixing | ✅ | ✅ | ✗ | ✗ |
 | Video filters (brightness/contrast/etc.) | ✗ | ✅ | ✅ | ✗ |
+| Spatial audio (platform spatializer)¹ | ✅ | ✗ | ✗ | ✗ |
+| HDR passthrough (prefer HDR output)² | ✗ | ✅ | ✗ | ✗ |
+| HDR → SDR tone mapping² | ✅ | (default) | ✗ | ✗ |
 | Live quality switch (ABR) | ✅ | ✗ | ✗ | ✗ |
 | Bandwidth estimate | ✅ | ✗ | ✗ | ✗ |
 
-**Subtitle nuance.** ExoPlayer and mpv both *render* ASS/SSA subtitles.
-Only **mpv** also applies *your* style overrides (colors, borders,
-Force) on top of ASS/SSA tracks (`--ass-override=force`). ExoPlayer
-renders ASS as-authored — your style overrides take effect on SRT/VTT
-only. LibVLC does not render ASS at all. For the same reason, the
-free-form (hex) color picker is offered on **libmpv only**: it requires
-ASS user style override so the picked color also holds on ASS tracks,
-not just SRT/VTT.
+¹ ExoPlayer only (API 32+ devices that expose a spatializer), and declared
+rather than guaranteed: Android's spatializer has **no app-side enable** — it
+engages when the *system* spatial-audio setting is on, the output qualifies
+(headphones), and the stream reaches the `AudioTrack` multichannel. JellyPlay's
+spatial toggle therefore gates what *we* do: while spatial audio is effective
+the engine holds its own 5.1→2.0 downmix, speaker cap, downmix loudness boost
+and the Virtualizer effect off (spatial and the Virtualizer are mutually
+exclusive) so the platform has a multichannel stream to spatialize. The
+headphones-only route qualification is a separate setting
+(`spatial_audio_only_headphones`, on by default). The spec's "auto-disable
+when passthrough or ≥5.1 output is active" case is covered structurally
+rather than by a dedicated rule: ExoPlayer cannot passthrough
+(`supportsAudioPassthrough = false` — it always decodes to PCM), and ≥5.1
+speaker/receiver routes are declined by the platform's own route rules
+(`Spatializer.canBeSpatialized` answers for the route the stream actually
+uses — the app-side headphone check counts any connected headphone-class
+output, so a mixed BT-headphones + HDMI session rests on that platform
+answer, not on the app gate).
+
+² **HDR playback.** The three engines handle HDR (HDR10 / HDR10+ / HLG /
+Dolby Vision) very differently:
+
+- **ExoPlayer** decodes and renders natively: on a display that supports the
+  content's HDR family you get real HDR output. On a display that does not,
+  the raw HDR signal would look *washed out* — so the engine's **HDR Tone
+  Mapping** setting (default **Auto**) routes video through Media3's GL
+  pipeline whenever the item is HDR and the display probe reports no matching
+  HDR type, letting Media3 tone map HDR → SDR. SDR content never pays the GL
+  pass, and **Off** restores the native path entirely. Two honest caveats:
+  Media3 1.11 has no *forced* tone-map lever (the display's EGL capability
+  makes the final call at render time), and Dolby Vision profile 5 on a
+  non-DV display can decode to uncorrectable colors on some devices — the
+  stats overlay says so, and libmpv is the better engine there.
+- **libmpv** tone maps HDR → SDR *by default* (its `tone-mapping` preset,
+  configurable on desktop), and with **HDR Passthrough** enabled it asks an
+  HDR display to switch to its HDR mode instead (`target-colorspace-hint` on
+  `vo=gpu-next`) — on both desktop and Android. The stats overlay reports
+  whether the output actually switched (mpv's `video-target-params` probe)
+  or the tone mapping took over.
+- **LibVLC** has no HDR handling surface: content renders through whatever
+  the device's display pipeline does with it.
+
+The "HDR output active" and "HDR" rows in the player's stats overlay show
+which posture is live for the current session.
+
+**Subtitle nuance.** ExoPlayer and mpv both *render* ASS/SSA subtitles and
+both apply *your* style overrides (colors, borders, Force) on top of
+ASS/SSA tracks. mpv (`--ass-override=force`) restyles live; ExoPlayer
+rewrites the subtitle's embedded `Default` style when the track is
+parsed, so Force changes land the next time the subtitle track loads
+(new media item or engine rebuild) rather than mid-playback. LibVLC does
+not render ASS at all. Free-form (hex) color picking requires ASS user
+style override, so the picker is offered on ExoPlayer and libmpv; on
+ExoPlayer the picked colors hold on ASS tracks in Force mode. Scope of
+the ExoPlayer override (the spec's "font/color/position" ask): it covers
+font, colors, borders, and (PlayRes-scaled) font size — NOT authored ASS
+positioning (alignment/margins): rewriting those would break
+signage/karaoke event positioning, and the user's vertical position keeps
+applying via the overlay host as before. Only the `Style: Default` line
+is rewritten (first style line as fallback); authored sign/song styles
+keep their design.
 
 Image subtitles delivered as files (bitmap PGS `.sup`, VobSub) play on
 mpv only, via its libav decoders — this gates offline side-loading:
@@ -222,11 +279,11 @@ everyone; reach for these only if a particular file misbehaves.
 
 - **ExoPlayer** — video scaling mode, frame-rate strategy, preferred
   video MIME types, skip-silence, audio offload mode, back-buffer
-  duration, decoder fallback.
+  duration, decoder fallback, HDR tone mapping.
 - **libmpv** — video output (`gpu-next` default), scaler (bilinear
   default),
   hardware-decode override, audio output, demuxer max bytes, frame drop,
-  skip-loop-filter, interpolation, deband.
+  skip-loop-filter, interpolation, deband, HDR passthrough.
 - **LibVLC** — audio output, video output, network caching,
   time-stretch, skip-loop-filter, decoder threads, drop-late-frames.
 
@@ -269,7 +326,7 @@ try switching to software decoding.
 | -------- | ------ | ------- | ----- |
 | **Streaming services-style content (HLS/DASH)** | ExoPlayer | Hardware | Best perf, lowest battery |
 | **Anime fansubs with .ass subtitles** | libmpv | Hardware | Best ASS rendering + style override |
-| **Local 4K HDR remuxes** | ExoPlayer | Hardware | Direct play, frame-rate matching |
+| **Local 4K HDR remuxes** | ExoPlayer | Hardware | Direct play, frame-rate matching, HDR output on HDR displays, tone-mapped on SDR |
 | **Low-end TV box (ONN, generic)** | libmpv | Hardware | Often more stable than ExoPlayer |
 | **Exotic MKV with audio in AC-3** | LibVLC | Hardware | Best fallback |
 | **Slow WiFi, stutter issues** | ExoPlayer | Hardware | Adaptive bitrate (HLS/DASH) |

@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">Kopfzeile bleibt sichtbar</string>
     <string name="settings_next_up_hidden">Aus „Als Nächstes“ ausgeblendet</string>
     <string name="settings_next_up_hidden_brief">Aus der „Als Nächstes“-Reihe entfernte Serien ansehen und wiederherstellen</string>
+    <string name="settings_hidden_libraries">Ausgeblendete Bibliotheken</string>
+    <string name="settings_hidden_libraries_brief">Aus der Mediathek-Reihe ausgeblendete Bibliotheken ansehen und wiederherstellen</string>
 </resources>

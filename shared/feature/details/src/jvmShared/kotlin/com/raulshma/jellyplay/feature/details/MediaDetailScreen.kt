@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.outline.Trash
@@ -108,11 +109,25 @@ fun MediaDetailScreen(
      * long-press Download on a series). Consumed once the item loads. */
     openDownloadSheetOnEntry: Boolean = false,
     onBack: () -> Unit,
+    /**
+     * The process-wide playback seams the play funnels read — ONE
+     * constructor bundle instead of four mid-body `koinInject` pulls (the
+     * constructor convention this screen already follows with [viewModel]):
+     * the default resolves the same Koin singles the pulls did, so the
+     * navigation wiring is unchanged, and a direct construction hands fakes.
+     */
+    seams: MediaDetailPlaybackSeams = rememberMediaDetailPlaybackSeams(),
     viewModel: DetailViewModel = koinViewModel(),
 ) {
     // Declared before the load-item effect below so the trailer-dismiss reset
     // can be merged into it (was previously a separate LaunchedEffect(itemId)).
     var activeTrailerKey by remember { mutableStateOf<String?>(null) }
+
+    // The POST_NOTIFICATIONS runtime-flow seam (Android actual fires the
+    // Android 13+ system dialog when not granted; desktop is a no-op). The
+    // per-series notify toggle's first enable invokes it beside the config
+    // write — the MainActivity cold-start prompt pattern, mirrored.
+    val requestSeriesNotificationPermission = rememberSeriesNotificationPermissionRequest()
 
     LaunchedEffect(itemId) {
         viewModel.onEvent(DetailUiEvent.LoadItem(itemId))
@@ -122,11 +137,14 @@ fun MediaDetailScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // Download-lifecycle slice: collected ONCE here because the always-composed
-    // content tree needs the button spinner + picker + downloaded-ids fields
-    // (they flow into DetailContentState below); the sheets read the same
-    // value with no per-sheet subscription.
-    val downloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+    // Download-lifecycle slice, slim projection: the always-composed
+    // root needs only the button spinner + picker + downloaded-ids +
+    // cellular-warning fields (they flow into DetailContentState below), so
+    // collecting the slim rootState keeps a ~2 s transfer tick — which only
+    // moves episodeDownloadProgress — from recomposing this root scope and
+    // re-running the ~60-field bag construction. The per-tick map and the
+    // sheets read the full state in their own narrow scopes below.
+    val downloads by viewModel.downloads.rootState.collectAsStateWithLifecycle()
     // Resync slice: same story — the always-composed freshness banner reads it
     // through the bag; the resync sheet reads the same value.
     val resyncState by viewModel.resync.state.collectAsStateWithLifecycle()
@@ -420,9 +438,6 @@ fun MediaDetailScreen(
             colorStyle = preferences.theme.colorStyle,
             accentColorSwatch = preferences.theme.accentColorSwatch,
         ) {
-            val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
-            val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
-
             // Seerr integration state (the data holder's single snapshot,
             // folded into uiState as-is) plus the dialog holder's frozen-at-open
             // item — the render gate for the request dialog below.
@@ -461,55 +476,23 @@ fun MediaDetailScreen(
                 // key-comparison cost and silently drifted whenever a new uiState
                 // field was added without updating the key list.
                 val state = DetailContentState(
+                    core = uiState,
                     itemId = itemId,
-                    detail = detail,
-                    seasons = uiState.seasons,
-                    episodes = uiState.episodes,
-                    fetchedSeasonIds = uiState.fetchedSeasonIds,
-                    smartPlayTarget = uiState.smartPlayTarget,
                     // Resolve the user's last-pinned season for this series from
                     // the projected preferences. An active resume still wins
                     // (decided in SeasonStartResolver); null when nothing is
                     // pinned → prior behaviour.
                     persistedSeasonId = preferences.lastViewedSeasonBySeries[seriesIdForSeasons],
-                    selectedSubtitleIndex = uiState.selectedSubtitleIndex,
-                    selectedAudioIndex = uiState.selectedAudioIndex,
                     selectedVersionId = selectedVersionId,
-                    isDownloading = downloads.isDownloading,
-                    isDownloadingSeries = downloads.isDownloadingSeries,
-                    activeDownload = activeDownload,
-                    loadState = uiState.loadState,
-                    albumTracks = uiState.albumTracks,
-                    collectionItems = uiState.collectionItems,
-                    relatedItems = uiState.relatedItems,
-                    specialFeatures = uiState.specialFeatures,
-                    localRelatedItems = uiState.localRelatedItems,
-                    hasIntroSegment = uiState.hasIntroSegment,
-                    hasCreditSegment = uiState.hasCreditSegment,
-                    relatedVideos = uiState.relatedVideos,
-                    tmdbReviews = uiState.tmdbReviews,
-                    seerrRecommendations = uiState.seerrRecommendations,
-                    seerrSimilar = uiState.seerrSimilar,
-                    isSeerrConnected = uiState.isSeerrConnected,
-                    isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
-                    preferences = preferences,
                     canManageSeries = canManageSeries,
-                    canManageMetadata = uiState.canManageMetadata,
-                    origin = uiState.origin,
-                    detailContext = uiState.detailContext,
-                    capabilities = uiState.capabilities,
-                    assets = uiState.assets,
-                    localSubtitles = uiState.localSubtitles,
-                    selectedLocalSubtitleIndex = uiState.selectedLocalSubtitleIndex,
+                    preferences = preferences,
                     resyncState = resyncState,
-                    downloadedEpisodeIds = downloads.downloadedEpisodeIds,
-                    downloadPicker = downloads.downloadPicker,
-                    book = uiState.book,
-                    pluginRatings = uiState.pluginRatings,
-                    pluginSimilarItems = uiState.pluginSimilarItems,
-                    pluginSimilarSuppressesStock = uiState.pluginSimilarSuppressesStock,
-                    animeMarkers = uiState.animeMarkers,
-                    seasonRatings = uiState.seasonRatings,
+                    downloads = DetailContentState.DownloadsExtras(
+                        isDownloading = downloads.isDownloading,
+                        isDownloadingSeries = downloads.isDownloadingSeries,
+                        downloadedEpisodeIds = downloads.downloadedEpisodeIds,
+                        downloadPicker = downloads.downloadPicker,
+                    ),
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -541,25 +524,47 @@ fun MediaDetailScreen(
                     )
                 }
 
-                val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, onReadClick, itemId) {
+                // The process-wide playback seams arrive as ONE constructor
+                // bundle ([MediaDetailPlaybackSeams]) — the former mid-body
+                // koinInject pulls, hoisted to the screen's signature.
+                val playbackCallbacks = remember(viewModel, seams, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
-                            // Stream selection (local-origin subtitle index when offline)
-                            // is the shared [DetailPlayPolicies.resolveDetailPlayDispatch]
-                            // fold; this lambda only dispatches.
-                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
-                                origin = uiState.origin,
-                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
-                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
-                                audioStreamIndex = viewModel.selectedAudioIndex,
-                            )
-                            onPlayClick(
-                                playItemId,
-                                sourceId,
-                                start,
-                                dispatch.subtitleStreamIndex,
-                                dispatch.audioStreamIndex,
-                            )
+                            // The play click's whole decision is the pure
+                            // [DetailPlaySequencer] fold — the stream
+                            // selection ([DetailPlayPolicies.resolveDetailPlayDispatch])
+                            // plus the trailer-then-feature sequencing
+                            // (with the queue-seeding order its KDoc
+                            // documents); this lambda only executes the
+                            // returned effects in order.
+                            DetailPlaySequencer.sequence(
+                                DetailPlaySequencer.DetailPlayContext(
+                                    requestedItemId = playItemId,
+                                    requestedMediaSourceId = sourceId,
+                                    requestedStartPositionTicks = start,
+                                    currentItem = uiState.detail?.item,
+                                    origin = uiState.origin,
+                                    localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                    remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                    audioStreamIndex = viewModel.selectedAudioIndex,
+                                    trailers = uiState.trailers,
+                                    currentItemPosterUrl = viewModel.getImageUrl(itemId),
+                                    playTrailerBeforeMovie = seams.videoPlayerStore.videoPlayer.value.playTrailerBeforeMovie,
+                                    isSyncPlayActive = seams.syncPlayManager.isInSyncPlaySession,
+                                ),
+                            ).forEach { effect ->
+                                when (effect) {
+                                    is DetailPlaySequencer.DetailPlayEffect.EnqueueNext ->
+                                        seams.videoQueue.enqueueNext(effect.item)
+                                    is DetailPlaySequencer.DetailPlayEffect.PlaySession -> onPlayClick(
+                                        effect.itemId,
+                                        effect.mediaSourceId,
+                                        effect.startPositionTicks,
+                                        effect.subtitleStreamIndex,
+                                        effect.audioStreamIndex,
+                                    )
+                                }
+                            }
                         },
                         onPlayChapter = { start ->
                             // Resume the current item at a chapter position. Reuses the
@@ -598,7 +603,59 @@ fun MediaDetailScreen(
                         onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
                         onStartRadio = { viewModel.onEvent(DetailUiEvent.StartRadio) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
+                        // "Play (with pre-rolls)": arm the one-shot Cinema
+                        // Mode override, then dispatch the current item from
+                        // the start through the normal play path — the
+                        // session's user-open funnel consumes the override
+                        // into LoadRequest.forceCinemaMode and the pipeline's
+                        // cinema gate ORs it over the global pref (remaining
+                        // vetoes still apply). The stream selection is the
+                        // same policy fold, forced via the override record.
+                        onPlayWithPrerolls = {
+                            seams.cinemaModeOverride.arm()
+                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
+                                origin = uiState.origin,
+                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                audioStreamIndex = viewModel.selectedAudioIndex,
+                                forceCinemaMode = true,
+                            )
+                            onPlayClick(
+                                itemId,
+                                null,
+                                0L,
+                                dispatch.subtitleStreamIndex,
+                                dispatch.audioStreamIndex,
+                            )
+                        },
                         onOpenVersionPicker = { dialogSession.openVersionPicker() },
+                        // "Play collection in order": start at the FIRST
+                        // UNWATCHED member (franchisePlayOrder — plain in-order
+                        // when every member is watched or user data is absent)
+                        // and append the members AFTER it to the manual queue
+                        // (VideoQueueController.enqueueLast, queue-first
+                        // semantics; suppressed under SyncPlay by the player's
+                        // advance routing — VideoQueueController's own contract).
+                        // The start rides the raw onPlayClick path (not the
+                        // detail-dispatch wrapper): the target is another item,
+                        // so the current item's stream selections must not
+                        // carry over (the onPlayExtra precedent).
+                        onPlayCollectionInOrder = { collection ->
+                            franchisePlayOrder(collection.members)?.let { order ->
+                                order.queuedTail.forEach { member ->
+                                    seams.videoQueue.enqueueLast(
+                                        com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
+                                            itemId = member.id,
+                                            title = member.name,
+                                            subtitle = member.seriesName ?: member.year?.toString(),
+                                            imageUrl = viewModel.getImageUrl(member.id),
+                                            runTimeTicks = member.runTimeTicks,
+                                        ),
+                                    )
+                                }
+                                onPlayClick(order.start.id, null, 0L, null, null)
+                            }
+                        },
                     )
                 }
 
@@ -676,6 +733,18 @@ fun MediaDetailScreen(
                         onShowFromContinueWatching = { viewModel.onEvent(DetailUiEvent.ShowFromContinueWatching) },
                         onShowDetailUpNext = { viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(enabled = true)) },
                         onHideDetailUpNext = { viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(enabled = false)) },
+                        onHideFranchiseRow = { collectionId ->
+                            viewModel.onEvent(DetailUiEvent.HideFranchiseRow(collectionId))
+                        },
+                        // The config write routes through the VM; the
+                        // POST_NOTIFICATIONS runtime prompt (first enable on
+                        // Android 13+, the MainActivity cold-start pattern)
+                        // fires beside it via the platform seam. Desktop —
+                        // where the surfaces are hidden — never reaches this.
+                        onToggleSeriesNotifications = { enabled ->
+                            viewModel.onEvent(DetailUiEvent.SetSeriesNotifications(enabled))
+                            if (enabled) requestSeriesNotificationPermission()
+                        },
                     )
                 }
 
@@ -719,6 +788,9 @@ fun MediaDetailScreen(
                         onRefresh = { viewModel.onEvent(DetailUiEvent.ForceRefresh) },
                         onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
                         onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
+                        onToggleThemeMusicMuted = { muted ->
+                            viewModel.onEvent(DetailUiEvent.SetThemeMusicMuted(muted))
+                        },
                     )
                 }
 
@@ -762,14 +834,29 @@ fun MediaDetailScreen(
                     provider
                 }
 
-                CompositionLocalProvider(
-                    LocalMediaQuickActionController provides quickActionIntake.controller,
-                ) {
-                    DetailContent(
-                        state = state,
-                        callbacks = callbacks,
-                        availableStorageProvider = availableStorageProvider,
-                    )
+                // The per-tick episodeDownloadProgress map is collected in
+                // the narrow provider scope below — the only root-scope reader
+                // of the full download state — so a ~2 s transfer tick
+                // recomposes the provider plus the local's read-tracked rows,
+                // never this scope's DetailContentState construction.
+                EpisodeDownloadProgressProvider(viewModel.downloads.state) {
+                    CompositionLocalProvider(
+                        LocalMediaQuickActionController provides quickActionIntake.controller,
+                        // The current item's live download row rides the flow
+                        // local (not DetailContentState — see the local's KDoc):
+                        // providing the flow object is stable, and only the leaf
+                        // that reads the value (the ⋮ options-menu builder)
+                        // collects it, so a ~2 s transfer tick never re-executes
+                        // the DetailContentState construction above.
+                        LocalActiveDownloadFlow provides
+                            remember(itemId) { viewModel.downloads.downloadFlow(itemId) },
+                    ) {
+                        DetailContent(
+                            state = state,
+                            callbacks = callbacks,
+                            availableStorageProvider = availableStorageProvider,
+                        )
+                    }
                 }
 
                 // Seerr request dialog — the dialog holder owns the open
@@ -853,19 +940,23 @@ fun MediaDetailScreen(
         val detailItem = detail?.item
         if (dialogSession.showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
             val downloadSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            // Sheet-scoped full-state collect — these fields ride the
+            // sheet cache, not the slim root projection; this subscription
+            // lives only while the sheet is composed.
+            val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
             TvSafeSheet(
                 onDismissRequest = { dialogSession.dismissSeriesDownloadSheet() },
                 sheetState = downloadSheetState,
             ) {
                 SeriesDownloadSheet(
                     seasons = uiState.seasons,
-                    episodes = downloads.downloadSheetEpisodes,
-                    loadingSeasons = downloads.downloadSheetLoadingSeasons,
-                    downloadedEpisodeIds = downloads.downloadedEpisodeIds,
+                    episodes = sheetDownloads.downloadSheetEpisodes,
+                    loadingSeasons = sheetDownloads.downloadSheetLoadingSeasons,
+                    downloadedEpisodeIds = sheetDownloads.downloadedEpisodeIds,
                     onLoadEpisodes = { seasonId ->
                         viewModel.downloads.loadDownloadSheetEpisodes(seasonId)
                     },
-                    isDownloading = downloads.isDownloadingSeries,
+                    isDownloading = sheetDownloads.isDownloadingSeries,
                     onDownload = { selectedEpisodes ->
                         val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
                         dialogSession.seriesDownloadConfirmed {
@@ -1143,6 +1234,9 @@ fun MediaDetailScreen(
         // item so a mid-open clearance simply dismisses it. ──
         val detailsItem = detail?.item
         if (dialogSession.showDownloadDetailsSheet && detailsItem != null) {
+            // Sheet-scoped full-state collect (inventory fields aren't on
+            // the slim root projection); lives only while the sheet is composed.
+            val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
             val sheetBackdropUrl = uiState.assets.backdropPath
                 ?: viewModel.getBackdropUrl(detailsItem.seriesId ?: detailsItem.id)
 
@@ -1153,8 +1247,8 @@ fun MediaDetailScreen(
                 download = uiState.detailContext?.download,
                 item = detailsItem,
                 mediaSources = detail.mediaSources,
-                inventory = downloads.downloadFileInventory,
-                isLoadingInventory = downloads.isLoadingDownloadFiles,
+                inventory = sheetDownloads.downloadFileInventory,
+                isLoadingInventory = sheetDownloads.isLoadingDownloadFiles,
                 backdropUrl = sheetBackdropUrl,
                 posterUrl = sheetPosterUrl,
                 onDismiss = { dialogSession.dismissDownloadDetailsSheet() },
@@ -1203,3 +1297,61 @@ private data class MarkPlayedConfirmRequest(
         data class Season(val seasonId: String) : Scope
     }
 }
+
+/**
+ * The one place the always-composed content tree reads the FULL download
+ * state — the per-tick [DownloadLifecycleState.episodeDownloadProgress] map
+ * for the seasons section's bars. Collecting here (not at the screen root)
+ * keeps a ~2 s transfer tick's invalidation inside this provider scope plus
+ * [LocalEpisodeDownloadProgress]'s read-tracked rows (`compositionLocalOf` —
+ * see the local's KDoc); the root scope's slim [DownloadRootState] collect
+ * and the ~60-field DetailContentState construction never see a tick.
+ */
+@Composable
+private fun EpisodeDownloadProgressProvider(
+    state: StateFlow<DownloadLifecycleState>,
+    content: @Composable () -> Unit,
+) {
+    val downloads by state.collectAsStateWithLifecycle()
+    CompositionLocalProvider(
+        LocalEpisodeDownloadProgress provides downloads.episodeDownloadProgress,
+        content = content,
+    )
+}
+
+/**
+ * The process-wide playback seams the media-detail screen's play funnels
+ * read — ONE constructor-shaped bundle instead of four mid-body `koinInject`
+ * pulls (the screen's constructor convention, same as its `viewModel`
+ * parameter). All four are process-wide core:data / datastore /
+ * player-contract singles:
+ *
+ *  - [videoQueue]: the manual up-next queue (DetailContent's koinInject
+ *    precedent) — the franchise row's "play collection in order" tail and
+ *    the the preroll's feature seed append to it around the start dispatch;
+ *  - [cinemaModeOverride]: the one-shot Cinema Mode override ("Play with
+ *    pre-rolls" arms it);
+ *  - [syncPlayManager]: the SyncPlay flag the trailer pre-roll sequencing
+ *    vetoes on;
+ *  - [videoPlayerStore]: the playback-prefs slice the trailer-then-feature
+ *    toggle reads at dispatch time.
+ *
+ * [rememberMediaDetailPlaybackSeams] resolves the same Koin singles the
+ * former pulls did, so the navigation wiring is unchanged; a direct
+ * construction (tests) hands fakes.
+ */
+data class MediaDetailPlaybackSeams(
+    val videoQueue: com.raulshma.jellyplay.core.data.playback.VideoQueueController,
+    val cinemaModeOverride: com.raulshma.jellyplay.core.data.playback.CinemaModeOverride,
+    val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
+    val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
+)
+
+/** The bundle's composition-time default: the four Koin singles, one seam. */
+@Composable
+fun rememberMediaDetailPlaybackSeams(): MediaDetailPlaybackSeams = MediaDetailPlaybackSeams(
+    videoQueue = org.koin.compose.koinInject(),
+    cinemaModeOverride = org.koin.compose.koinInject(),
+    syncPlayManager = org.koin.compose.koinInject(),
+    videoPlayerStore = org.koin.compose.koinInject(),
+)

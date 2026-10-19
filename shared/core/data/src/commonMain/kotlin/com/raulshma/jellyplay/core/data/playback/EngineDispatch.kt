@@ -7,7 +7,7 @@ package com.raulshma.jellyplay.core.data.playback
  * implements it over its nullable audio-only `MediaEngine`, so every
  * command keeps its historical engine-null tolerance (`engine?.…`):
  * a dispatch against no live engine is a no-op, exactly like the
- * pre-extraction inlined calls.
+ * former inlined calls.
  *
  * The port is deliberately narrower than `MediaEngine`: the chassis needs
  * load, transport, seek and speed writes ONLY. Everything else an engine

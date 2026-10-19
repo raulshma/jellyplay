@@ -43,6 +43,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -73,6 +75,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
@@ -94,7 +97,6 @@ import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.seerr.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -359,14 +361,15 @@ private fun SeerrDetailContent(
     // Behaviour is identical; consolidating removes ~40 lines of duplicated
     // scroll math and keeps the two detail surfaces from drifting apart.
     val detailScrollState = rememberDetailScrollState(listState, hasContent)
+    // Rare-change geometry stays as plain composition reads; the per-frame
+    // values are captured as State refs and read inside the draw/layer lambdas
+    // (and the isolated top bar) below, so scroll frames stop recomposing the
+    // screen body.
     val backdropHeight = detailScrollState.backdropHeight
     val baseBackdropHeight = detailScrollState.baseBackdropHeight
-    val scrollOffset = detailScrollState.scrollOffset
-    val scrollFraction = detailScrollState.scrollFraction
-    val backgroundColor = detailScrollState.backgroundColor
-    // Local alias for the media-detail "scrollCollapsed" value; SeerrDetail
-    // historically named this appBarColor.
-    val appBarColor = detailScrollState.scrollCollapsed
+    val scrollOffsetState = detailScrollState.scrollOffsetState
+    val scrollFractionState = detailScrollState.scrollFractionState
+    val backgroundColorState = detailScrollState.backgroundColorState
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
@@ -387,7 +390,10 @@ private fun SeerrDetailContent(
     val backgroundModifier = if (variantBrush != null) {
         Modifier.background(variantBrush)
     } else {
-        Modifier.background(backgroundColor)
+        // Read the snapshot state inside drawBehind so the animated background
+        // colour re-draws without recomposing the screen body (mirrors
+        // DetailContent's backgroundModifier).
+        Modifier.drawBehind { drawRect(backgroundColorState.value) }
     }
 
     Box(
@@ -406,15 +412,15 @@ private fun SeerrDetailContent(
                 .fillMaxWidth()
                 .height(backdropHeight)
                 .graphicsLayer {
-                    translationY = -scrollOffset * 0.5f
-                    alpha = 1f - (scrollFraction * 0.8f)
+                    translationY = -scrollOffsetState.value * 0.5f
+                    alpha = 1f - (scrollFractionState.value * 0.8f)
                 }
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        val scale = 1f + (scrollOffset * 0.001f).coerceAtLeast(0f)
+                        val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
                         scaleX = scale
                         scaleY = scale
                     }
@@ -443,18 +449,22 @@ private fun SeerrDetailContent(
                 }
             }
 
+            // Read the colour in this scope so colour-animation frames rebuild
+            // the brush without recomposing anything above; scroll-offset
+            // frames — which don't touch the colour — rebuild nothing at all.
             // Rebuilt only when the theme colour / backdrop geometry change, not
             // on every scroll frame (mirrors DetailContent's fadeBrush).
             // Bottom-anchored fade on every window size class — landscape
             // tablets previously got a full-height 0.5→1.0 wash instead, which
             // read as a dimmed backdrop rather than a fade.
-            val scrimBrush = remember(backgroundColor, backdropHeight, baseBackdropHeight, density) {
+            val scrimColor by backgroundColorState
+            val scrimBrush = remember(scrimColor, backdropHeight, baseBackdropHeight, density) {
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        backgroundColor.copy(alpha = 0.4f),
-                        backgroundColor.copy(alpha = 0.9f),
-                        backgroundColor,
+                        scrimColor.copy(alpha = 0.4f),
+                        scrimColor.copy(alpha = 0.9f),
+                        scrimColor,
                     ),
                     startY = with(density) { (baseBackdropHeight - 200.dp).toPx() },
                     endY = with(density) { backdropHeight.toPx() }
@@ -476,14 +486,17 @@ private fun SeerrDetailContent(
             item { Spacer(modifier = Modifier.height(baseBackdropHeight - 150.dp)) }
 
             item {
+                // Same colour read as the scrimBrush above: only colour-animation
+                // frames rebuild this brush, never scroll frames.
                 // Rebuilt only when the theme colour / density change, not on every
                 // scroll frame (mirrors the backdrop scrimBrush above).
-                val headerFadeBrush = remember(backgroundColor, density) {
+                val headerFadeColor by backgroundColorState
+                val headerFadeBrush = remember(headerFadeColor, density) {
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            backgroundColor.copy(alpha = 0.9f),
-                            backgroundColor,
+                            headerFadeColor.copy(alpha = 0.9f),
+                            headerFadeColor,
                         ),
                         startY = 0f,
                         endY = with(density) { 150.dp.toPx() }
@@ -570,12 +583,28 @@ private fun SeerrDetailContent(
 
                                 Spacer(Modifier.height(24.dp))
 
-                                ExternalLinksRow(
-                                    tmdbId = movieDetail?.id ?: tvDetail?.id ?: 0,
-                                    imdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId,
-                                    tvdbId = tvDetail?.externalIds?.tvdbId,
-                                    mediaType = if (movieDetail != null) "movie" else "tv"
-                                )
+                                // The former private ExternalLinksRow, generalized into the
+                                // shared DetailExternalLinksRow — same three brand chips,
+                                // same id sources and url construction, plain links now.
+                                val seerrMediaType = if (movieDetail != null) "movie" else "tv"
+                                val seerrTmdbId = movieDetail?.id ?: tvDetail?.id ?: 0
+                                val seerrImdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId
+                                val seerrTvdbId = tvDetail?.externalIds?.tvdbId
+                                val tmdbLabel = stringResource(Res.string.detail_link_tmdb)
+                                val imdbLabel = stringResource(Res.string.detail_link_imdb)
+                                val tvdbLabel = stringResource(Res.string.detail_link_tvdb)
+                                // Memoized on exactly the id inputs the builder
+                                // reads (the media-detail externalLinks idiom)
+                                // so the list is not re-allocated per
+                                // recomposition of the rail.
+                                val externalLinks = remember(seerrMediaType, seerrTmdbId, seerrImdbId, seerrTvdbId) {
+                                    buildList {
+                                        add(ExternalUrl(name = tmdbLabel, url = "https://www.themoviedb.org/$seerrMediaType/$seerrTmdbId"))
+                                        seerrImdbId?.let { add(ExternalUrl(name = imdbLabel, url = "https://www.imdb.com/title/$it")) }
+                                        seerrTvdbId?.let { add(ExternalUrl(name = tvdbLabel, url = "https://thetvdb.com/dereferrer/series/$seerrTvdbId")) }
+                                    }
+                                }
+                                DetailExternalLinksRow(links = externalLinks)
                             }
 
                             detailBody(Modifier.weight(1f))
@@ -675,43 +704,72 @@ private fun SeerrDetailContent(
         }
 
         // Top Bar
-        val animatedContainerColor = lerp(
-            Color.Transparent,
-            backgroundColor.copy(alpha = 0.95f),
-            appBarColor,
-        )
-
-        MediumTopAppBar(
-            title = {
-                AnimatedVisibility(
-                    visible = scrollFraction > 0.7f,
-                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 },
-                    exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideOutVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 }
-                ) {
-                    Text(
-                        text = title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-            },
-            navigationIcon = {
-                CircleBgBackButton(
-                    onClick = onBack,
-                    scrollCollapsed = appBarColor,
-                )
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = animatedContainerColor,
-                scrolledContainerColor = animatedContainerColor,
-                navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                titleContentColor = MaterialTheme.colorScheme.onSurface
-            ),
+        SeerrDetailTopBar(
+            title = title,
+            scrollState = detailScrollState,
+            onBack = onBack,
             scrollBehavior = scrollBehavior,
         )
     }
+}
+
+/**
+ * The Seerr detail's collapsing top bar. The M3 `colors` API takes plain
+ * Colors, so the animated container colour and collapse progress are read in
+ * this bar's own scope: their ticks recompose only the bar, never the screen
+ * body. Values are unchanged from the former inline composition.
+ */
+@Composable
+private fun SeerrDetailTopBar(
+    title: String,
+    scrollState: DetailScrollState,
+    onBack: () -> Unit,
+    scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
+) {
+    // SeerrDetail historically named the media-detail "scrollCollapsed" value
+    // appBarColor.
+    val scrollCollapsed by scrollState.scrollCollapsedState
+    val animatedContainerColor = lerp(
+        Color.Transparent,
+        scrollState.backgroundColorState.value.copy(alpha = 0.95f),
+        scrollCollapsed,
+    )
+    // Title visibility flips once at the collapse threshold instead of
+    // re-evaluating the fraction per scroll frame.
+    val titleVisible by remember(scrollState.scrollFractionState) {
+        derivedStateOf { scrollState.scrollFractionState.value > 0.7f }
+    }
+
+    MediumTopAppBar(
+        title = {
+            AnimatedVisibility(
+                visible = titleVisible,
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 },
+                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideOutVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { it / 2 }
+            ) {
+                Text(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        },
+        navigationIcon = {
+            CircleBgBackButton(
+                onClick = onBack,
+                scrollCollapsed = scrollCollapsed,
+            )
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = animatedContainerColor,
+            scrolledContainerColor = animatedContainerColor,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        scrollBehavior = scrollBehavior,
+    )
 }
 
 @Composable
@@ -1049,60 +1107,6 @@ private fun SeerrHorizontalSection(
                 modifier = Modifier.width(
                     LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
                 )
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExternalLinksRow(
-    tmdbId: Int,
-    imdbId: String?,
-    tvdbId: Int?,
-    mediaType: String,
-) {
-    val uriHandler = LocalUriHandler.current
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // TMDB
-        SuggestionChip(
-            onClick = { uriHandler.openUri("https://www.themoviedb.org/$mediaType/$tmdbId") },
-            label = { Text(stringResource(Res.string.detail_link_tmdb), fontWeight = FontWeight.Bold) },
-            modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
-            colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = BrandColors.tmdb.copy(alpha = 0.2f),
-                labelColor = BrandColors.tmdb
-            ),
-            border = null
-        )
-
-        if (imdbId != null) {
-            SuggestionChip(
-                onClick = { uriHandler.openUri("https://www.imdb.com/title/$imdbId") },
-                label = { Text(stringResource(Res.string.detail_link_imdb), fontWeight = FontWeight.Bold) },
-                modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = BrandColors.imdb.copy(alpha = 0.2f),
-                labelColor = BrandColors.imdb
-                ),
-                border = null
-            )
-        }
-
-        if (tvdbId != null) {
-            SuggestionChip(
-                onClick = { uriHandler.openUri("https://thetvdb.com/dereferrer/series/$tvdbId") },
-                label = { Text(stringResource(Res.string.detail_link_tvdb), fontWeight = FontWeight.Bold) },
-                modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = BrandColors.tvdb.copy(alpha = 0.2f),
-                labelColor = BrandColors.tvdb
-                ),
-                border = null
             )
         }
     }

@@ -57,7 +57,17 @@ object EngineCapabilityMatrix {
         supportsLiveQualitySwitch = true,
         supportsBandwidthEstimate = true,
         supportsAssOverride = true,
-        supportsAssStyleOverride = false,
+        // FORCE override rides the ASS header rewrite (AssStyleOverrideParserFactory
+        // rewrites `Style: Default` before libass parses the track — ass-media
+        // 0.5.0 binds no style-override JNI). Apply-at-load: the rewritten header
+        // takes effect when the subtitle track next parses, not live like mpv.
+        // Scope ("font/color/position" ask): covers
+        // font/colors/border/size but NOT authored ASS positioning
+        // (alignment/margins — rewriting them would break signage/karaoke
+        // event positioning; the user's vertical position keeps applying via
+        // the overlay host), and only the `Style: Default` line (first style
+        // line as fallback; sign/song styles keep their design).
+        supportsAssStyleOverride = true,
         supportsFontFamily = true,
         supportsFreeFormColors = true,
         supportsBorderStyles = true,
@@ -69,6 +79,18 @@ object EngineCapabilityMatrix {
         // Media3 has no deinterlace surface; interlaced content relies on the
         // decoder/render defaults.
         supportsDeinterlace = false,
+        // The only engine whose sink delivers AudioTrack-qualifying multichannel
+        // PCM the platform spatializer (API 32+) can engage. Runtime-gated: see
+        // [EngineCapabilities.supportsSpatialAudio].
+        supportsSpatialAudio = true,
+        // No HDR passthrough switch — Media3 outputs whatever the display
+        // pipeline accepts. Its HDR surface is the GL tone-mapping path.
+        supportsHdrPassthrough = false,
+        // HDR→SDR tone mapping via the Media3 GL video-graph path
+        // (`resolveExoHdrOutput` decides engagement; the SDR-output branch of
+        // DefaultVideoFrameProcessor applies the map). Not offered for DRM
+        // sessions (`setVideoEffects` limitation).
+        supportsHdrToneMapping = true,
         // Zoom-safe subtitle strategy is declared per-engine via
         // [MediaEngine.zoomSafeSubtitleStrategy] (ExoPlayer = NATIVE_PINNED),
         // not as a capability flag here.
@@ -107,6 +129,17 @@ object EngineCapabilityMatrix {
         // mpv's zoom-safe subtitle strategy (COMPOSE_CUE, via
         // [MediaEngine.zoomSafeSubtitleStrategy]) is declared on the engine, not
         // as a capability flag here.
+        // mpv renders through its own audio output (ao); no observable platform
+        // Spatializer surface and its own passthrough path.
+        supportsSpatialAudio = false,
+        // HDR passthrough on BOTH hosts now: the desktop's HWND-embed
+        // `target-colorspace-hint` path and Android's SurfaceView `vo=gpu-next`
+        // twin (evaluated against the shared `video-target-params` probe).
+        supportsHdrPassthrough = true,
+        // No in-engine HDR→SDR dial beyond `MpvEngineConfig.toneMapping` — mpv
+        // tone maps by default whenever the target is SDR, so the ExoPlayer
+        // engagement flag has no analogue to advertise.
+        supportsHdrToneMapping = false,
     )
 
     /** libVLC backend. */
@@ -142,6 +175,13 @@ object EngineCapabilityMatrix {
         // callback, so no zoom-safe path is available (strategy = DISABLED on
         // the engine). Only unblocked by a libvlc 4.x aar, a JNI fork, or
         // app-side subtitle demux — all out of scope.
+        // No spatializer surface: libVLC owns its AudioTrack directly with no
+        // observable android.media.Spatializer hook.
+        supportsSpatialAudio = false,
+        // No HDR switch and no tone-mapping surface: libVLC 3.7.x renders HDR
+        // content through whatever the display pipeline does with it.
+        supportsHdrPassthrough = false,
+        supportsHdrToneMapping = false,
     )
 
     /**
@@ -172,6 +212,9 @@ object EngineCapabilityMatrix {
         // Never decodes anything.
         supportsImageSubtitles = false,
         supportsDeinterlace = false,
+        supportsSpatialAudio = false,
+        supportsHdrPassthrough = false,
+        supportsHdrToneMapping = false,
     )
 
     /** All declared matrices, keyed by [PlayerType]. Asserted total in tests. */

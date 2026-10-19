@@ -54,7 +54,7 @@ internal class PlaylistPickerStateHolder(
      * there is no current item — the picker only ever adds the playing
      * track. Failure keeps the picker open at an empty list (the sheet
      * renders its "no playlists" branch); a dismissal mid-load is not
-     * fenced, matching the pre-extraction behaviour.
+     * fenced, matching the original behaviour.
      */
     fun open() {
         if (currentItemId() == null) return

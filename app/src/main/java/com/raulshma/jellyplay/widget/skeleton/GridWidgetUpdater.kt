@@ -48,11 +48,11 @@ internal data class GridWidgetUi(
 
 /**
  * The `updateAppWidget` template the Library and Seerr recommendation grids
- * used to repeat byte-for-byte (differing only in the [GridWidgetUi]
+ * share byte-for-byte (differing only in the [GridWidgetUi]
  * parameterization): subtitle text, the 130/180dp header ladder, the
  * Seerr-only empty-state text via [bindExtraContent], open-app/refresh/
  * template PendingIntents, and the remote-adapter + empty-view wiring.
- * Call order matches the originals exactly.
+ * Call order is part of the contract.
  *
  * @param subtitleText     the current source label for the header subtitle
  *                         (evaluated by the caller, which may read the store

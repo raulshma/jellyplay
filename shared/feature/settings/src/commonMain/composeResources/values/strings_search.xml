@@ -10,9 +10,7 @@
     <string name="ss_server_management_subtitle">Switch servers or add new connections</string>
     <string name="ss_user_management_title">User Management</string>
     <string name="ss_user_management_subtitle">Manage server users and profiles</string>
-    <string name="ss_seerr_settings_title">Seerr Integration</string>
     <string name="ss_seerr_settings_subtitle">Configure Seerr/Jellyseerr requests and options</string>
-    <string name="ss_integrations_title">Integrations</string>
     <string name="ss_integrations_subtitle">Seerr, Radarr &amp; Sonarr</string>
     <string name="ss_favorites_title">Browse Favorites</string>
     <string name="ss_favorites_subtitle">View your favourited movies, shows, and music</string>
@@ -22,7 +20,6 @@
     <string name="ss_activity_queue_subtitle">View download and import queue from Radarr/Sonarr</string>
     <string name="ss_upcoming_title">Upcoming</string>
     <string name="ss_upcoming_subtitle">Calendar of upcoming and recently aired episodes</string>
-    <string name="ss_requests_title">Requests</string>
     <string name="ss_requests_subtitle">Review Seerr/Jellyseerr movie and show requests</string>
     <string name="ss_admin_dashboard_title">Admin Dashboard</string>
     <string name="ss_admin_dashboard_subtitle">Server admin tools and session management</string>
@@ -50,7 +47,6 @@
     <string name="ss_theme_scheduler_subtitle">Automatically switch between light and dark theme by time of day</string>
     <string name="ss_theme_mode_title">Theme Mode</string>
     <string name="ss_theme_mode_subtitle">Follow system setting, light mode, or dark mode</string>
-    <string name="ss_theme_style_title">Theme Style</string>
     <string name="ss_theme_style_subtitle">Pick a themed look: Standard, Synthwave, Soothing, Monochrome, Vivid, Aurora, Sakura, or Vector Pop</string>
     <string name="ss_style_accent_title">Theme Style Accent</string>
     <string name="ss_style_accent_subtitle">Accent color for the active theme style</string>
@@ -62,9 +58,7 @@
     <string name="ss_contrast_subtitle">Adjust system contrast: standard, medium, or high</string>
     <string name="ss_library_view_mode_title">Library View Mode</string>
     <string name="ss_library_view_mode_subtitle">Display library items in grid or list layouts</string>
-    <string name="ss_layout_mode_title">Layout</string>
     <string name="ss_layout_mode_subtitle">Force the phone or tablet layout instead of following the window size</string>
-    <string name="ss_screen_fit_title">Screen fit</string>
     <string name="ss_screen_fit_subtitle">TV overscan safe-area padding (Off / 5% / 10%)</string>
     <string name="ss_home_mode_title">Home Mode</string>
     <string name="ss_home_mode_subtitle">Set default home screen layout: video or music</string>
@@ -80,6 +74,8 @@
     <string name="ss_unhide_cw_subtitle">Show all hidden items in the Continue Watching row</string>
     <string name="ss_next_up_hidden_title">Hidden from Next Up</string>
     <string name="ss_next_up_hidden_subtitle">View and restore series excluded from the Next Up row</string>
+    <string name="ss_hidden_libraries_title">Hidden libraries</string>
+    <string name="ss_hidden_libraries_subtitle">View and restore libraries excluded from the My Media row</string>
     <string name="ss_merge_continue_next_up_title">Merge Continue &amp; Next Up</string>
     <string name="ss_merge_continue_next_up_subtitle">Combine Next Up items into the Continue Watching row</string>
     <string name="ss_next_up_max_days_title">Next Up Time Window</string>
@@ -102,9 +98,6 @@
     <string name="ss_hide_episode_thumbnails_subtitle">Hide episode preview images to avoid spoilers</string>
     <string name="ss_skip_specials_title">Skip Special Episodes</string>
     <string name="ss_skip_specials_subtitle">Exclude specials/bonus episodes from episode lists</string>
-    <string name="ss_show_missing_episodes_title">Show Missing Episodes</string>
-    <string name="ss_show_missing_episodes_subtitle">Include missing/unaired episode placeholders in season lists</string>
-    <string name="ss_prefer_logos_title">Prefer Logo Images</string>
     <string name="ss_prefer_logos_subtitle">Use the clear-logo artwork as the details-page title when the server has one</string>
     <string name="ss_haptics_enabled_title">Haptic Feedback</string>
     <string name="ss_haptics_enabled_subtitle">Enable vibration feedback for UI interactions</string>
@@ -132,7 +125,6 @@
     <string name="ss_newsletter_delivery_day_subtitle">Day of the week to receive the newsletter</string>
     <string name="ss_player_engine_title">Player Engine</string>
     <string name="ss_player_engine_subtitle">Select default media playback engine: MPV, ExoPlayer, LibVLC</string>
-    <string name="ss_external_player_app_title">Preferred External App</string>
     <string name="ss_external_player_app_subtitle">Pick which external player app opens playback</string>
     <string name="ss_seek_duration_title">Seek Duration</string>
     <string name="ss_seek_duration_subtitle">Double-tap seek step duration in player</string>
@@ -142,7 +134,6 @@
     <string name="ss_gestures_subtitle">Choose tap and swipe gestures for brightness, volume, and seeking</string>
     <string name="ss_gesture_indicator_side_title">Gesture Indicator Side</string>
     <string name="ss_gesture_indicator_side_subtitle">Show brightness/volume bar opposite or same side as the gesture</string>
-    <string name="ss_double_tap_hold_seek_title">Double-Tap and Hold Seek</string>
     <string name="ss_double_tap_hold_seek_subtitle">Repeat the seek while holding after a double-tap</string>
     <string name="ss_default_speed_title">Default Playback Speed</string>
     <string name="ss_default_speed_subtitle">Default initial playback speed for videos</string>
@@ -152,13 +143,10 @@
     <string name="ss_video_autoplay_next_subtitle">Automatically start next episode in sequence</string>
     <string name="ss_autoplay_countdown_title">Auto-Play Countdown</string>
     <string name="ss_autoplay_countdown_subtitle">Countdown duration before auto-playing next episode</string>
-    <string name="ss_still_watching_mode_title">Still Watching Prompt</string>
     <string name="ss_still_watching_mode_subtitle">Confirm before continuing after several episodes or hours</string>
-    <string name="ss_still_watching_episodes_title">Episodes Before Prompt</string>
     <string name="ss_still_watching_episodes_subtitle">Consecutive auto-played episodes before the Still Watching prompt appears</string>
     <string name="ss_controls_timeout_title">Controls Timeout</string>
     <string name="ss_controls_timeout_subtitle">Auto-hide on-screen player controls after delay</string>
-    <string name="ss_hide_osd_on_pause_title">Hide OSD on Pause</string>
     <string name="ss_hide_osd_on_pause_subtitle">Don't show the control overlay when pausing</string>
     <string name="ss_skip_back_on_resume_title">Skip Back on Resume</string>
     <string name="ss_skip_back_on_resume_subtitle">Jump back a few seconds when un-pausing playback</string>
@@ -172,6 +160,8 @@
     <string name="ss_autoplay_trailers_subtitle">Automatically play media trailers on details pages</string>
     <string name="ss_cinema_mode_title">Cinema Mode</string>
     <string name="ss_cinema_mode_subtitle">Play pre-roll intros before the main feature</string>
+    <string name="ss_play_trailer_before_movie_title">Play Trailer Before Movie</string>
+    <string name="ss_play_trailer_before_movie_subtitle">Queue a trailer ahead of the feature when one is available</string>
     <string name="ss_episode_browser_title">In-Player Episode Browser</string>
     <string name="ss_episode_browser_subtitle">Show inline list of episodes during playback</string>
     <string name="ss_playback_metadata_title">Show Playback Metadata</string>
@@ -182,15 +172,12 @@
     <string name="ss_remember_brightness_subtitle">Persist custom brightness level across playback sessions</string>
     <string name="ss_remember_volume_title">Remember Volume per Content Type</string>
     <string name="ss_remember_volume_subtitle">Store one volume level each for video, music and audiobooks</string>
-    <string name="ss_remote_display_content_title">Show Remote Content</string>
-    <string name="ss_remote_display_content_subtitle">While nothing is playing, let another session open an item's details here</string>
     <string name="ss_trickplay_preview_title">Trickplay Thumbnails Preview</string>
     <string name="ss_trickplay_preview_subtitle">Show tile previews when scrubbing seek bar</string>
     <string name="ss_preload_buffer_title">Playback Preload Buffer</string>
     <string name="ss_preload_buffer_subtitle">Buffer size limit ahead of current video track</string>
     <string name="ss_background_audio_title">Background Video Audio</string>
     <string name="ss_background_audio_subtitle">Keep video audio playing when app is put to background</string>
-    <string name="ss_auto_pip_title">Auto Picture-in-Picture</string>
     <string name="ss_auto_pip_subtitle">Minimize video into a floating window when leaving the app during playback</string>
     <string name="ss_keep_screen_on_title">Keep Screen On</string>
     <string name="ss_keep_screen_on_subtitle">Prevent device screen from turning off during video playback</string>
@@ -205,6 +192,8 @@
     <string name="ss_passthrough_codec_subtitle">Choose which audio codecs may be bitstreamed raw to the receiver (rides the master toggle)</string>
     <string name="ss_max_audio_channels_subtitle">Cap the output speaker layout — wider sources are downmixed or transcoded</string>
     <string name="ss_downmix_boost_subtitle">Loudness compensation applied when surround audio is downmixed to stereo (0–12 dB)</string>
+    <string name="ss_spatial_audio_subtitle">Advisory: keeps the engine's downmix and speaker cap out of the way so Android's spatial audio can engage (ExoPlayer, Android 12L+)</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">Restrict the spatial-audio behavior to headphone-class outputs</string>
     <string name="ss_frame_rate_matching_title">Frame Rate Match</string>
     <string name="ss_frame_rate_matching_subtitle">Synchronize display refresh rate to video frames (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Streaming Quality</string>
@@ -228,7 +217,6 @@
     <string name="ss_show_time_remaining_subtitle">Display remaining time instead of elapsed time</string>
     <string name="ss_pause_on_focus_loss_title">Pause on Focus Loss</string>
     <string name="ss_pause_on_focus_loss_subtitle">Pause playback when system reports audio focus loss</string>
-    <string name="ss_resume_headset_plug_title">Resume When Headphones Reconnect</string>
     <string name="ss_resume_headset_plug_subtitle">Resume when headphones are plugged back in after the unplug auto-pause</string>
     <string name="ss_mpv_video_output_title">MPV Video Output</string>
     <string name="ss_mpv_video_output_subtitle">MPV video output driver</string>
@@ -255,7 +243,9 @@
     <string name="ss_mpv_render_quality_title">MPV Render Quality</string>
     <string name="ss_mpv_render_quality_subtitle">Performance / balanced / high-quality scaler profile (desktop)</string>
     <string name="ss_mpv_hdr_passthrough_title">MPV HDR Passthrough</string>
-    <string name="ss_mpv_hdr_passthrough_subtitle">Output HDR to HDR-capable displays via gpu-next (desktop, next playback)</string>
+    <string name="ss_mpv_hdr_passthrough_subtitle">Output HDR to HDR-capable displays via gpu-next (next playback)</string>
+    <string name="ss_exo_hdr_tone_mapping_title">HDR Tone Mapping</string>
+    <string name="ss_exo_hdr_tone_mapping_subtitle">Tone map HDR to SDR on displays without HDR output (Auto) or keep native output (Off)</string>
     <string name="ss_mpv_tscale_title">MPV Interpolation Filter</string>
     <string name="ss_mpv_tscale_subtitle">Temporal filter for motion interpolation (desktop)</string>
     <string name="ss_mpv_buffer_size_title">MPV Buffer Size</string>
@@ -356,7 +346,6 @@
     <string name="ss_audio_caching_enabled_subtitle">Buffer upcoming tracks for instant playback</string>
     <string name="ss_audio_cache_size_title">Audio Cache Size</string>
     <string name="ss_audio_cache_size_subtitle">Maximum disk space for cached audio</string>
-    <string name="ss_video_cache_size_subtitle">Maximum disk space for cached video</string>
     <string name="ss_audio_prefetch_lookahead_title">Audio Prefetch Look-ahead</string>
     <string name="ss_audio_prefetch_lookahead_subtitle">Number of upcoming tracks to buffer ahead</string>
     <string name="ss_audio_cache_network_policy_title">Audio Cache Network Policy</string>
@@ -443,6 +432,10 @@
     <string name="ss_max_per_check_subtitle">Maximum items per notification batch</string>
     <string name="ss_notification_libraries_title">Notification Libraries</string>
     <string name="ss_notification_libraries_subtitle">Choose which libraries trigger notifications</string>
+    <!-- D12: the per-series new-episode notification management entry (fused
+         notification row + the sheet it opens). -->
+    <string name="ss_series_notifications_title">Series Notifications</string>
+    <string name="ss_series_notifications_subtitle">Manage the series you get new-episode alerts for</string>
     <string name="ss_clear_cache_title">Clear Cache</string>
     <string name="ss_clear_cache_subtitle">Delete temporary image and network buffers to free space</string>
     <string name="ss_clear_image_cache_title">Clear Image Cache</string>
@@ -534,25 +527,7 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Download-queue progress and a coming-soon calendar from your Radarr/Sonarr</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr Servers</string>
     <string name="ss_arr_settings_subtitle">Configure direct Radarr/Sonarr server connections</string>
-    <string name="ss_sign_out_from_server_title">Sign Out from Server</string>
-    <string name="ss_sign_out_from_server_subtitle">Revoke this device's session on the server</string>
-    <string name="ss_screensaver_show_title_title">Show Title</string>
-    <string name="ss_screensaver_show_title_subtitle">Display media title</string>
-    <string name="ss_screensaver_categories_title">Categories</string>
-    <string name="ss_screensaver_categories_subtitle">Choose which library types appear</string>
-    <string name="ss_screensaver_slideshow_interval_title">Slideshow Interval</string>
-    <string name="ss_screensaver_slideshow_interval_subtitle">Time between image changes</string>
-    <string name="ss_screensaver_ken_burns_title">Ken Burns Effect</string>
-    <string name="ss_screensaver_ken_burns_subtitle">Pan and zoom animation</string>
-    <string name="ss_screensaver_transition_style_title">Transition Style</string>
     <string name="ss_screensaver_transition_style_subtitle">How the screensaver switches between images</string>
-    <string name="ss_screensaver_max_parental_rating_subtitle">Keep titles above this rating off the screensaver</string>
-    <string name="ss_screensaver_dim_after_subtitle">Fade the screensaver darker after this long</string>
-    <string name="ss_screensaver_dim_percent_subtitle">How dark the dimmed screensaver gets</string>
-    <string name="ss_idle_ambient_enabled_title">Show When Idle</string>
-    <string name="ss_idle_ambient_enabled_subtitle">Display the ambient "Ready to play" screen after a period of inactivity</string>
-    <string name="ss_idle_ambient_timeout_title">Idle Timeout</string>
-    <string name="ss_idle_ambient_timeout_subtitle">How long to wait before the idle screen appears</string>
     <string name="ss_discord_presence_enabled_subtitle">Show the playing title as your Discord activity, with a SyncPlay join button</string>
     <string name="ss_hooks_enabled_subtitle">Run a shell command on playback events (hooks run commands you configure locally)</string>
     <string name="ss_hooks_play_cmd_subtitle">Command to run when playback starts</string>
@@ -562,26 +537,10 @@
     <string name="ss_hooks_idle_ended_cmd_subtitle">Command to run when the app leaves idle</string>
     <string name="ss_home_backdrop_title">Home Backdrop</string>
     <string name="ss_home_backdrop_subtitle">Blur the hero artwork as an ambient background</string>
-    <string name="ss_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
     <string name="ss_nav_bar_customization_title">Navigation Bar</string>
     <string name="ss_nav_bar_customization_subtitle">Show, hide, and reorder navigation bar items</string>
-    <string name="ss_nav_hide_on_scroll_title">Hide on Scroll</string>
-    <string name="ss_nav_hide_on_scroll_subtitle">Bar hides when scrolling down</string>
-    <string name="ss_newsletter_sections_title">Newsletter Layout &amp; Config</string>
     <string name="ss_newsletter_sections_subtitle">Choose which sections appear in the newsletter</string>
-    <string name="ss_dialogue_boost_strength_title">Dialogue Boost Strength</string>
     <string name="ss_dialogue_boost_strength_subtitle">Level of dialogue amplification</string>
-    <string name="ss_mpv_extra_config_subtitle">Raw mpv options (mpv.conf style)</string>
     <string name="ss_reset_engine_defaults_subtitle">Restore MPV, LibVLC, or ExoPlayer settings</string>
-    <string name="ss_audio_prefetch_backfill_title">Back-fill Count</string>
-    <string name="ss_audio_prefetch_backfill_subtitle">Recent tracks kept cached for replay</string>
-    <string name="ss_audio_cache_clear_subtitle">Delete all cached audio bytes</string>
-    <string name="ss_subtitle_tester_title">Subtitle style tester</string>
-    <string name="ss_subtitle_tester_subtitle">Preview styles across engines</string>
-    <string name="ss_subtitle_provider_settings_title">Subtitle Providers</string>
-    <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
     <string name="ss_MEDIA_CARD_PEEK_title">Press-and-Hold Preview</string>
-    <string name="ss_MEDIA_CARD_PEEK_subtitle">Long-press a media card to peek a blurred detail preview; release to dismiss</string>
-    <string name="ss_input_bindings_title">Customize controls</string>
-    <string name="ss_input_bindings_subtitle">Actions for gestures, mouse, keyboard, and remote</string>
 </resources>

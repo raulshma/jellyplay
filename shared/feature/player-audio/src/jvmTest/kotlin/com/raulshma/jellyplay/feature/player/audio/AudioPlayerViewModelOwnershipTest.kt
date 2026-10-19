@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Ratchet against the ViewModel regrowing into a god object (the reader
+ * Guard against the ViewModel regrowing into a god object (the reader
  * module's BookReaderViewModelOwnershipTest pattern): the count of
  * AudioPlayerViewModel's public + internal members (properties and functions,
  * primary-constructor parameters and private members excluded) must never
@@ -64,7 +64,7 @@ class AudioPlayerViewModelOwnershipTest {
     }
 
     /**
-     * Removes line and block comments so the ratchet checks *code*, not KDoc
+     * Removes line and block comments so the guard checks *code*, not KDoc
      * prose (the ViewModel legitimately mentions its members in
      * documentation), while leaving string literals intact.
      */

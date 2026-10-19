@@ -93,11 +93,11 @@ class BackupParserTest {
     }
 
     // ------------------------------------------------------------------
-    // Wave 2 — the additive external slices parse as ordinary v2 slices
+    // The additive external slices parse as ordinary v2 slices
     // ------------------------------------------------------------------
 
     @Test
-    fun `v2 backup containing the wave-2 slice keys parses and keeps them`() {
+    fun `v2 backup containing the slice keys parses and keeps them`() {
         val json = v2BackupJson(
             slices = mapOf(
                 BackupSliceKey.PLAYBACK to buildJsonObject { put("preferredPlayer", "MPV") },

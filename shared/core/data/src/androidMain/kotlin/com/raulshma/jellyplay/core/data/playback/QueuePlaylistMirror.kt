@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.core.data.playback
 
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -77,6 +77,11 @@ internal class QueuePlaylistMirror(
         // Queue pre-warm lookahead: queue rows mirrored ahead of the cursor
         // (the window shape it feeds is the class KDoc's invariant).
         internal const val PREWARM_LOOKAHEAD_ITEMS = 12
+
+        // The TaskBundle keys for the two build slots (the plain-var
+        // `Job?` pair this replaced): the play-path build and the window slide.
+        private const val LOADING = "QueuePlaylistMirror.loading"
+        private const val WINDOW = "QueuePlaylistMirror.window"
     }
 
     /** Window end for [cursor] over a queue of [size] rows — the one formula. */
@@ -87,13 +92,12 @@ internal class QueuePlaylistMirror(
     private val mediaItemCache = android.util.LruCache<String, MediaItem>(25)
 
     /**
-     * The play-path build's guard: queue mutations that would race an
-     * in-flight mirror — [AudioPlaybackManager] reads [isLoading] before
-     * removeFromQueue / the skips / undo / playFromQueue — park until the
-     * build's Main write lands.
+     * The two cancel-and-replace build slots — the play-path build ([LOADING])
+     * and the window slide ([WINDOW]) — as one [TaskBundle] over [scope].
+     * Cancellations happen on the manager's caller thread, the slots' own
+     * `forget` on Main.
      */
-    private var loadingJob: Job? = null
-    private var windowJob: Job? = null
+    private val tasks = TaskBundle(scope)
 
     /**
      * Set around a remove-of-the-current-row [AudioPlaybackManager.removeFromQueue]:
@@ -104,8 +108,13 @@ internal class QueuePlaylistMirror(
      */
     var removingCurrentRow: Boolean = false
 
-    /** True while a play-path mirror build is in flight (its guard, above). */
-    val isLoading: Boolean get() = loadingJob != null
+    /**
+     * True while a play-path mirror build is in flight — the build's guard:
+     * queue mutations that would race an in-flight mirror —
+     * [AudioPlaybackManager] reads this before removeFromQueue / the skips /
+     * undo / playFromQueue — park until the build's Main write lands.
+     */
+    val isLoading: Boolean get() = tasks[LOADING] != null
 
     /**
      * True while the player's playlist is an index-aligned prefix of the
@@ -161,26 +170,28 @@ internal class QueuePlaylistMirror(
         val queueItems = queueProvider()
         val playIndex = cursorProvider()
 
-        loadingJob?.cancel()
-        windowJob?.cancel()
+        tasks.cancel(LOADING)
+        tasks.cancel(WINDOW)
         mediaItemCache.resize(queueItems.size.coerceAtLeast(25))
-        loadingJob = scope.launch(Dispatchers.IO) {
-            val (mediaItemsAfter, mediaItemsBefore) = buildWindow(playIndex, queueItems)
+        tasks.replace(LOADING) {
+            scope.launch(Dispatchers.IO) {
+                val (mediaItemsAfter, mediaItemsBefore) = buildWindow(playIndex, queueItems)
 
-            launch(Dispatchers.Main) {
-                if (playerProvider() == player) {
-                    if (mediaItemsAfter.isNotEmpty()) {
-                        player.addMediaItems(mediaItemsAfter)
+                launch(Dispatchers.Main) {
+                    if (playerProvider() == player) {
+                        if (mediaItemsAfter.isNotEmpty()) {
+                            player.addMediaItems(mediaItemsAfter)
+                        }
+                        if (mediaItemsBefore.isNotEmpty()) {
+                            player.addMediaItems(0, mediaItemsBefore)
+                            // The prepend reconciliation: the chassis cursor is
+                            // re-published so player index keeps equaling queue
+                            // index under the shifted-in rows.
+                            writeCursor(playIndex)
+                        }
                     }
-                    if (mediaItemsBefore.isNotEmpty()) {
-                        player.addMediaItems(0, mediaItemsBefore)
-                        // The prepend reconciliation: the chassis cursor is
-                        // re-published so player index keeps equaling queue
-                        // index under the shifted-in rows.
-                        writeCursor(playIndex)
-                    }
+                    tasks.forget(LOADING)
                 }
-                loadingJob = null
             }
         }
     }
@@ -240,14 +251,15 @@ internal class QueuePlaylistMirror(
         // produced a fatal StackOverflowError on the first track-skip in
         // device testing. If the SingleFlight retry is not fixed first,
         // consider coalescing these restarts instead of cancelling in-flight builds.
-        windowJob?.cancel()
-        windowJob = scope.launch(Dispatchers.IO) {
-            val mediaItems = buildMediaItemsFor(pending)
-            launch(Dispatchers.Main) {
-                if (playerProvider() == player && queueProvider() === queueItems && player.mediaItemCount == frontier) {
-                    player.addMediaItems(mediaItems)
+        tasks.replace(WINDOW) {
+            scope.launch(Dispatchers.IO) {
+                val mediaItems = buildMediaItemsFor(pending)
+                launch(Dispatchers.Main) {
+                    if (playerProvider() == player && queueProvider() === queueItems && player.mediaItemCount == frontier) {
+                        player.addMediaItems(mediaItems)
+                    }
+                    tasks.forget(WINDOW)
                 }
-                windowJob = null
             }
         }
     }

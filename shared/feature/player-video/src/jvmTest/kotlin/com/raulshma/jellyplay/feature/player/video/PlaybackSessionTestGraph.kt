@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
-import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
@@ -28,7 +27,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 /**
  * The shared construction harness for the [PlaybackSession] behavioral suites
  * ([PlaybackSessionLifecycleTest] / [PlaybackSessionReportingTest]) after the
- * C6 wiring collapse made the session its own composition root: the session
+ * wiring collapse made the session its own composition root: the session
  * builds its whole collaborator graph internally, so the harness supplies the
  * constructor dependencies the same way the production
  * [VideoPlayerViewModelTestHarness] does — relaxed mocks at every
@@ -226,12 +225,7 @@ internal class PlaybackSessionTestGraph private constructor(
     val uiState get() = handles.uiState
 
     private val host = SessionHostLambdas(
-        seekTo = { _, _ -> },
-        seekByStep = { _ -> },
-        routedPlay = { _ -> },
-        resumePlayback = {},
-        applyResumeSkip = {},
-        autoSkipSegment = {},
+        autoSkipSegment = { _ -> },
         onEndedWithNoNext = {},
         handlePlaybackEnded = {},
     )

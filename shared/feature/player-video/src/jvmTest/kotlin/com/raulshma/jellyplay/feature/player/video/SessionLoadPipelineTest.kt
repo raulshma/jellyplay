@@ -39,7 +39,7 @@ import org.junit.Test
  * Ported from the legacy Android test of the same name (the migration dropped
  * it; the class under test is commonMain-pure so the file is verbatim JVM).
  * Includes upstream v0.10.6 additions: the `isReady`-gate staging and the
- * `loadMediaFailure_stopsAfterLoadMedia_withoutOutcome` pin (#146).
+ * `loadMediaFailure_stopsAfterLoadMedia_withoutOutcome` pin.
  *
  * The first written record of the session-load ordering
  * constraints that used to live unwritten inside `initializeInternal`'s inlined
@@ -406,6 +406,60 @@ class SessionLoadPipelineTest {
         assertFalse("an external player vetoes the pre-roll", "beginCinemaMode" in stages)
     }
 
+    // ── "Play (with pre-rolls)": the per-invocation force flag ────────
+
+    @Test
+    fun cinemaGate_forceCinemaMode_bypassesTheGlobalPref_butKeepsTheOtherVetoes() = runTest {
+        val intro = MediaItem(id = "intro-1", name = "Intro", mediaType = MediaType.MOVIE)
+        val hooks = recordingHooks(stages)
+
+        // The force flag fires the pre-roll with the global pref OFF.
+        pipeline(
+            stages = stages, hooks = hooks, intros = listOf(intro),
+            aggregate = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = false)),
+        ).start(this, request().copy(forceCinemaMode = true)).join()
+        runCurrent()
+        assertTrue("the force flag bypasses the pref-off veto", "beginCinemaMode" in stages)
+
+        // …but it is NOT a blanket bypass: the remaining vetoes hold. A
+        // resume position still vetoes.
+        stages.clear()
+        pipeline(
+            stages = stages, hooks = hooks, intros = listOf(intro),
+            aggregate = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = false)),
+        ).start(this, request().copy(forceCinemaMode = true, startPositionTicks = 1L)).join()
+        runCurrent()
+        assertFalse("a resume position still vetoes under the force flag", "beginCinemaMode" in stages)
+
+        // …and an external player still vetoes.
+        stages.clear()
+        val armed = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = false))
+        pipeline(
+            stages = stages, hooks = hooks, intros = listOf(intro),
+            aggregate = armed.copy(playback = armed.playback.copy(preferredPlayer = PlayerType.EXTERNAL)),
+        ).start(this, request().copy(forceCinemaMode = true)).join()
+        runCurrent()
+        assertFalse("an external player still vetoes under the force flag", "beginCinemaMode" in stages)
+    }
+
+    @Test
+    fun cinemaGate_prefOn_withoutForce_stillFires_normally() = runTest {
+        // The defaulted field keeps every legacy request construction intact:
+        // pref on + no force = the historical behavior.
+        val intro = MediaItem(id = "intro-1", name = "Intro", mediaType = MediaType.MOVIE)
+        val pipeline = pipeline(
+            stages = stages,
+            hooks = recordingHooks(stages),
+            intros = listOf(intro),
+            aggregate = VideoPlayerAggregate(videoPlayer = VideoPlayerSlice(cinemaModeEnabled = true)),
+        )
+
+        pipeline.start(this, request()).join()
+        runCurrent()
+
+        assertTrue("pref-on fires without the force flag", "beginCinemaMode" in stages)
+    }
+
     // ── fetchMediaSegments: offline-first precedence (ported from the deleted
     //    VideoSessionHostTest when the fetch became a pipeline member) ───────
 
@@ -530,7 +584,7 @@ class SessionLoadPipelineTest {
      * A loadMedia that reports its own failure (offline gate, detail-fetch
      * miss, vanished offline file) leaves `isReady = false`. The spine must
      * stop there — no media session, no playback-START report, no tracking —
-     * instead of ghosting a session for an item that never started (#146).
+     * instead of ghosting a session for an item that never started.
      */
     @Test
     fun loadMediaFailure_stopsAfterLoadMedia_withoutOutcome() = runTest {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -26,6 +27,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 /**
@@ -47,6 +49,7 @@ class NotificationSettingsViewModelTest {
     private lateinit var editor: PreferencesEditor
     private lateinit var mediaRepository: MediaRepository
     private lateinit var notificationSync: NotificationSync
+    private lateinit var imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider
     private lateinit var editScope: PreferencesEditScope
     private lateinit var notificationStore: NotificationStore
 
@@ -58,6 +61,7 @@ class NotificationSettingsViewModelTest {
         editor = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         notificationSync = mockk(relaxed = true)
+        imageUrlProvider = mockk(relaxed = true)
         editScope = mockk(relaxed = true)
         notificationStore = mockk(relaxed = true)
         every { projections.notificationPreferences } returns MutableStateFlow(NotificationPreferences())
@@ -73,6 +77,7 @@ class NotificationSettingsViewModelTest {
 
     private fun viewModel() = NotificationSettingsViewModel(
         projections, AdvancedSettingsGate(appearanceStore, editor), editor, mediaRepository, notificationSync,
+        imageUrlProvider = imageUrlProvider,
     )
 
     @Test
@@ -119,5 +124,35 @@ class NotificationSettingsViewModelTest {
         assertEquals(true, transform.captured(NotificationPreferences()).enabled)
         // Rescheduling rides the same edit block: prefs and worker stay in sync.
         coVerify(exactly = 1) { notificationSync.scheduleOrUpdate() }
+    }
+
+    @Test
+    fun `removeSeriesNotifications routes through the store RMW command`() = runTest {
+        val viewModel = viewModel()
+        val edit = slot<suspend PreferencesEditScope.() -> Unit>()
+        every { editor.edit(capture(edit)) } returns mockk<Job>()
+
+        viewModel.removeSeriesNotifications("series-1")
+        advanceUntilIdle()
+        edit.captured.invoke(editScope)
+
+        coVerify(exactly = 1) { notificationStore.setSeriesNotificationEnabled("series-1", false) }
+    }
+
+    @Test
+    fun `construction survives the synchronous first store emission (DEF-1)`() = runTest {
+        // Android's viewModelScope runs on Dispatchers.Main.immediate, so the
+        // preferences StateFlow's first emission was delivered synchronously
+        // DURING construction — an init block declared before the state
+        // fields reached reconcileSeries with a still-null resolvedSeriesItems
+        // (the device-side Map.keySet() NPE crash loop). Unconfined reproduces
+        // that delivery timing; the class dispatcher above deliberately does
+        // not.
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), viewModel.seriesNotifications.value.series)
+        assertFalse(viewModel.seriesNotifications.value.loading)
     }
 }

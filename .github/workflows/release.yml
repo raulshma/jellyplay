@@ -169,18 +169,13 @@ jobs:
       # as a missing one; a partial write, e.g. only startup-prof.txt
       # surviving, is just as profile-less as an empty directory).
       #
-      # SOFT GATE (deliberate): the generated profiles have never been
-      # committed, so a hard fail here breaks EVERY release until someone
-      # lands them — the gate cannot be satisfied on a fresh checkout. Until
-      # then a missing/empty artifact set is a loud ::warning below and the
-      # release ships profile-less, exactly as every release so far has.
-      # FOLLOW-UP to restore the hard gate: run the
-      # generate-baseline-profiles lane (or
-      # :app:generatePhoneReleaseBaselineProfile on a GMD-capable machine),
-      # COMMIT app/src/phoneRelease/generated/baselineProfiles/
-      # {baseline-prof.txt,startup-prof.txt}, then change the warning branch
-      # below back to `exit 1`.
-      - name: Verify Baseline Profile Artifacts (soft gate)
+      # HARD GATE (restored per the original follow-up): the profile set IS
+      # committed now (generate-baseline-profiles lane, run 38994928241 — note
+      # that lane needs -PbuildUniversal=true for the x86_64 GMD to find an
+      # APK), so a missing/empty set here means the committed tree was
+      # deleted or the refresh regressed — a profile-less release APK must
+      # fail the release, not ship with a warning.
+      - name: Verify Baseline Profile Artifacts
         if: matrix.flavor == 'phone'
         run: |
           profile_dir="app/src/phoneRelease/generated/baselineProfiles"
@@ -189,9 +184,8 @@ jobs:
             [ -s "$f" ] || missing+=("$f")
           done
           if [ ${#missing[@]} -ne 0 ]; then
-            echo "::warning::Baseline profile artifacts missing: ${missing[*]} — shipping a profile-less release APK. SOFT GATE until the profiles are first committed (see step comment for the restore-the-hard-gate follow-up)."
-            ls -laR app/src/phoneRelease 2>/dev/null || true
-            exit 0
+            echo "::error::Baseline profile artifacts missing: ${missing[*]} — refusing to ship a profile-less release APK. Re-run the generate-baseline-profiles lane and commit app/src/phoneRelease/generated/baselineProfiles/."
+            exit 1
           fi
           echo "Baseline profile artifacts present:"
           ls -la "$profile_dir"

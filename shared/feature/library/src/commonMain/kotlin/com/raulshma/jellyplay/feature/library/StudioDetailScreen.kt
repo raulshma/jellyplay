@@ -80,7 +80,7 @@ internal fun StudioDetailScreen(
 
     // Long-press / TV-Menu quick actions for studio cards, on the shared
     // intake (core/ui — see QuickActionIntake). Download / Remove download
-    // ride the same intake as the library grid (#147).
+    // ride the same intake as the library grid.
     val quickActionIntake = rememberQuickActionIntake(
         scope = MediaQuickActionScope.LIBRARY,
         includeDownload = viewModel.downloadSupported,

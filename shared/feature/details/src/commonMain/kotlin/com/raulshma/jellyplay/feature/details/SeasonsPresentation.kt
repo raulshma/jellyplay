@@ -40,6 +40,10 @@ internal data class SeasonsPresentation(
     val episodesDescending: Boolean,
     /** Compact vertical episode list (offered only on compact-width, non-TV form factors). */
     val compactEpisodeList: Boolean,
+    /** Render the CC / audio-layout / language-count chips on episode rows. */
+    val showStreamBadges: Boolean = true,
+    /** Render the in-flight download bar + percent chip on episode rows. */
+    val showDownloadProgress: Boolean = true,
     /**
      * Downloaded episode ids — gates the per-episode delete badge. Null hides
      * the affordance entirely (a plain remote series with no downloads).
@@ -79,28 +83,31 @@ internal data class SeasonsPresentation(
                     // the page IS the entry season: render only its tab so the
                     // tree matches the header ("Season 5" shows Season 5's
                     // episodes, not every sibling season's).
-                    state.seasons.filter { it.id == item.id }
+                    state.core.seasons.filter { it.id == item.id }
                 } else {
-                    state.seasons
+                    state.core.seasons
                 },
                 episodes = if (effectiveSkipSpecials) {
-                    state.episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
+                    state.core.episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
                 } else {
-                    state.episodes
+                    state.core.episodes
                 },
                 hideEpisodeThumbnails = effectiveHideThumbnails,
                 episodesDescending = state.preferences.episodesDescending,
                 compactEpisodeList = state.preferences.compactEpisodeList,
+                showStreamBadges = state.preferences.showEpisodeStreamBadges,
+                showDownloadProgress = state.preferences.showDownloadProgress,
                 // Downloaded-episode set: for a LOCAL origin every episode is
                 // downloaded; for a REMOTE series we surface the loaded
-                // downloadedEpisodeIds (populated when the download sheet
-                // opened) so the trash badge matches the on-disk truth.
+                // downloadedEpisodeIds (populated at screen-open, and
+                // re-read on sheet open) so the trash badge matches the
+                // on-disk truth.
                 downloadedEpisodeIds = when {
-                    isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
-                    state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
+                    isLocalOrigin -> state.core.episodes.values.flatten().map { it.id }.toSet()
+                    state.downloads.downloadedEpisodeIds.isNotEmpty() -> state.downloads.downloadedEpisodeIds
                     else -> null
                 },
-                episodeLocalImagePaths = state.assets.episodeImages,
+                episodeLocalImagePaths = state.core.assets.episodeImages,
                 currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
                 currentSeasonId = when (item.mediaType) {
                     MediaType.EPISODE -> item.seasonId

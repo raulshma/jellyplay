@@ -4,8 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the alphabet rail's letter→index fold ([jumpIndexByLetter]) — extracted
- * verbatim from the library screen's inline `derivedStateOf`. Pure JVM over
+ * Pins the alphabet rail's letter→index fold ([jumpIndexByLetter]) — the same
+ * rule the library screen's `derivedStateOf` applies. Pure JVM over
  * plain items + a name selector, the [AlphabetRailGeometryTest] pattern: the
  * first-index-per-leading-letter rule, the `#` bucket, case normalization,
  * insertion-ordered keys, and the empty-input degenerate.

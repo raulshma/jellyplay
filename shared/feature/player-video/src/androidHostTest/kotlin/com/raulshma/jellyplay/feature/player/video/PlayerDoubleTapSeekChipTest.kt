@@ -22,8 +22,8 @@ import com.raulshma.jellyplay.core.ui.tv.input.DpadSeekAcceleration
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.GestureSwipeGates
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
-import com.raulshma.jellyplay.feature.player.video.state.PlayerInputPolicy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
@@ -113,6 +113,9 @@ class PlayerDoubleTapSeekChipTest {
             }
 
             val map: PlayerInputMap = PlayerInputDefaults.defaultMap()
+            val dispatcher = remember(map) {
+                PlayerInputDispatcher(getMap = { map }, executeAction = { true })
+            }
             Box(
                 modifier = Modifier
                     .size(400.dp)
@@ -120,8 +123,7 @@ class PlayerDoubleTapSeekChipTest {
                         gates = PlayerInputGates.of(map),
                         isScreenLocked = false,
                         doubleTapHoldSeekEnabled = true,
-                        resolveAction = { PlayerInputPolicy.resolveAction(map, it) },
-                        executePlayerAction = { true },
+                        dispatcher = { dispatcher },
                         holdRepeatScope = scope,
                         onUserInteraction = {},
                         isHoldSpeedActive = { false },

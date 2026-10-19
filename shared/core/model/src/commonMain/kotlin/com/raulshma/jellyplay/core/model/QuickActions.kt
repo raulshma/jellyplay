@@ -42,8 +42,8 @@ private fun MediaQuickActionScope.actionableTypes(): Set<MediaType> = when (this
  * Resolves the ordered quick actions available for this [MediaItem] in the given
  * [scope]. Returns an empty list for types outside the scope (e.g. photos).
  *
- * Centralizes the per-screen `when (item.mediaType)` predicate logic that was
- * previously duplicated across library/favorites/search/studio/home/detail/
+ * Centralizes the per-screen `when (item.mediaType)` predicate logic otherwise
+ * duplicated across library/favorites/search/studio/home/detail/
  * collection/person screens. Execution of each action (navigation, viewModel
  * calls) stays at the call site via [com.raulshma.jellyplay.core.ui.components.MediaQuickActionController].
  *

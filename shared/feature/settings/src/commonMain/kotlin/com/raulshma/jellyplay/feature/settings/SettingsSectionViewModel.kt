@@ -26,8 +26,8 @@ abstract class SettingsEditorViewModel(
 }
 
 /**
- * [SettingsEditorViewModel] plus the two per-screen shells the section
- * ViewModels used to hand-copy: the advanced-settings gate re-exposure
+ * [SettingsEditorViewModel] plus the two per-screen shells: the
+ * advanced-settings gate re-exposure
  * ([showAdvancedSettings] + [setShowAdvancedSettings]) and the category
  * reset ([resetCategory], forwarded by the resettable screens).
  */

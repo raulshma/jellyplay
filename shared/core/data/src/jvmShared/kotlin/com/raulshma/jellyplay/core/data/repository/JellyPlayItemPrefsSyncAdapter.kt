@@ -18,7 +18,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 /**
  * The [ProfileSyncAdapter] that backs the per-item/per-series playback
  * preferences up onto the general settings-sync protocol (the settings-backup
- * wave's `itemprefs` namespace): one key per row — `"{scope}/{key}"` (the
+ * cluster's `itemprefs` namespace): one key per row — `"{scope}/{key}"` (the
  * [com.raulshma.jellyplay.core.model.PlaybackPrefScope] name + the item or
  * series id) — and a value carrying the row's full [ItemPlaybackPreferencePayload]
  * (an opaque JSON object to the server; install-local Room ids omitted).
@@ -62,15 +62,9 @@ import kotlinx.serialization.json.encodeToJsonElement
 class JellyPlayItemPrefsSyncAdapter(
     private val dao: ItemPlaybackPreferenceDao,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    // encodeDefaults: the payload always carries every column, so a receiving
-    // device sees explicit nulls (not merely absent fields) — the codec stance
-    // lives in [SliceJson], shared with the backup slice source.
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore, tombstonesRoam = true) {
 
     // ------------------------------------------------------------------
     // key <-> (scope, key): `"{scope}/{key}"`. The scope is the enum name
@@ -82,17 +76,15 @@ class JellyPlayItemPrefsSyncAdapter(
 
     private fun keyOf(entity: ItemPlaybackPreferenceEntity) = "${entity.scope}/${entity.key}"
 
+    // encodeDefaults: the payload always carries every column, so a receiving
+    // device sees explicit nulls (not merely absent fields) — the codec stance
+    // lives in [SliceJson], shared with the backup slice source.
     private fun valueOf(entity: ItemPlaybackPreferenceEntity): JsonElement =
         SliceJson.encodeToJsonElement(entity.toPayload())
 
     override suspend fun snapshot(): Map<String, JsonElement> =
         // getAll is newest-write first: the head of the list IS the roam cap.
         dao.getAll().take(ItemPlaybackPreferenceRoamCap.CAP).associate { keyOf(it) to valueOf(it) }
-
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
-    override suspend fun deletedKeys(): Set<String> = mirror.deletedKeys(snapshot())
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         for ((key, value) in entries) {
@@ -136,17 +128,11 @@ class JellyPlayItemPrefsSyncAdapter(
         return true
     }
 
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
+    override suspend fun deleteLocally(keys: Set<String>) {
         for (key in keys) {
             parseSlashKey(key)?.let { (scope, rowKey) -> dao.deleteByKey(scope, rowKey) }
         }
-        // The mirror entries go REGARDLESS of key shape: an unparseable key
-        // must not wedge in the mirror forever re-reading as deleted.
-        mirror.clear(keys)
     }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     private companion object {
         const val NAMESPACE = "itemprefs"

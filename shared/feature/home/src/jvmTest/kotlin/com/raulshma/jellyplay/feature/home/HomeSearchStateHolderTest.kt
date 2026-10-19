@@ -33,8 +33,8 @@ import kotlinx.coroutines.Dispatchers
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeSearchStateHolderTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
+    // MainDispatcherRule (:core:testing), inlined — jvmTest
+    // has no access to that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     /** Inline-search kernel — targeted fake instead of five collaborators. */

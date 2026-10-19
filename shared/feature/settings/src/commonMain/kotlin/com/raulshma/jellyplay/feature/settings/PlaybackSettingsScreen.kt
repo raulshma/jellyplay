@@ -16,42 +16,24 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rese
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_message
 
 /**
- * The declared screen groups in LazyColumn order — the derivation source the
+ * The declared screen sections in LazyColumn order — the derivation source the
  * deep-link scroll resolver consumes (see HighlightScroll.kt): passing the
  * same declaration the rows are built from means the scroll target can never
  * drift from the UI. Index 0 is the always-visible player group; indices 1-3
  * (advanced video, engine config, media segments) only compose when advanced
- * settings are shown; 4-6 (SyncPlay, casting, DVR) always render.
+ * settings are shown (their [SettingsScreenSection] carries
+ * `advancedOnly = true`); 4-6 (SyncPlay, casting, DVR) always render. The
+ * advanced shape folds into the scroll adjust via [deriveAdjustForAdvanced].
  */
-private val playbackScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.playbackPlayer.itemIdSet,
-    SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
-    SettingsScreenGroups.playbackEngine.itemIdSet,
-    SettingsScreenGroups.playbackMediaSegments.itemIdSet,
-    SettingsScreenGroups.playbackSyncPlay.itemIdSet,
-    SettingsScreenGroups.playbackCasting.itemIdSet,
-    SettingsScreenGroups.playbackDvr.itemIdSet,
+private val playbackScreenSections: List<SettingsScreenSection> = listOf(
+    SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.playbackAdvancedVideo.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.playbackEngine.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.playbackMediaSegments.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.playbackSyncPlay.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.playbackCasting.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.playbackDvr.itemIdSet),
 )
-
-/**
- * [resolveHighlightScrollIndex]'s [rememberHighlightScrollIndex adjustForAdvanced]
- * for this screen's LazyColumn: with advanced hidden the three advanced-only
- * groups don't compose — their rows cannot take a highlight (`-1`) — while the
- * three always-visible trailing groups shift up by exactly those three slots.
- * Pure (and internal) so the contract test can pin the drift fixes against it.
- */
-internal fun playbackAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
-    if (showAdvanced) {
-        { it }
-    } else {
-        { raw ->
-            when {
-                raw == 0 -> 0
-                raw <= 3 -> -1
-                else -> raw - 3
-            }
-        }
-    }
 
 /**
  * The playback screen's admission flags — the declared row admissions both
@@ -72,6 +54,7 @@ internal fun playbackRowAdmissionFlags(
         PlaybackRows.DialogueBoost.id to preferences.dialogueBoostEnabled,
         PlaybackRows.VideoAutoplayNext.id to preferences.videoAutoplayNext,
         PlaybackRows.AudioPassthrough.id to preferences.audioPassthrough,
+        PlaybackRows.SpatialAudio.id to preferences.spatialAudioEnabled,
     ),
 )
 
@@ -97,8 +80,8 @@ fun PlaybackSettingsScreen(
         onBack = onBack,
         focusTag = "playback_init",
         highlightSettingId = highlightSettingId,
-        highlightGroups = playbackScreenGroups,
-        adjustForAdvanced = playbackAdjustForAdvanced(showAdvanced),
+        highlightGroups = playbackScreenSections.map { it.idSet },
+        adjustForAdvanced = deriveAdjustForAdvanced(playbackScreenSections, showAdvanced),
         advancedToggle = PreferenceAdvancedToggle(
             showAdvanced = showAdvanced,
             onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
@@ -125,8 +108,9 @@ fun PlaybackSettingsScreen(
             }
 
             // The three advanced-only groups (declared indices 1-3 in
-            // playbackScreenGroups) compose behind the advanced toggle,
-            // the same gate playbackAdjustForAdvanced's drift fix reads.
+            // playbackScreenSections, advancedOnly = true) compose behind the
+            // advanced toggle, the same gate deriveAdjustForAdvanced's drift
+            // fix reads.
             if (showAdvanced) {
                 item {
                 PlaybackAdvancedVideoGroup(
@@ -192,13 +176,15 @@ fun PlaybackSettingsScreen(
             if (!showAdvanced) {
                 item {
                     HiddenSettingsHint(
-                        // A frozen hand approximation, kept verbatim: the real hidden-
-                        // row count varies by platform, engine and the dialogue-boost
-                        // toggle (the three advanced-only groups alone hide anywhere
-                        // from 7 to 19+ rows), so no derivation via rowTotalFor
-                        // reproduces 9 across the (isTv, engine) combos. Its source
-                        // rows are the advanced-only blocks: the player group's
-                        // advanced rows, the advanced-video group, the engine group
+                        // FROZEN hand approximation — the one hiddenCount the
+                        // hiddenRowsFor derivation does not own: the real
+                        // hidden-row count varies by platform, engine and the
+                        // dialogue-boost toggle (the three advanced-only
+                        // groups alone hide anywhere from 7 to 19+ rows), so
+                        // no derivation via rowTotalFor reproduces 9 across
+                        // the (isTv, engine) combos. Its source rows are the
+                        // advanced-only blocks: the player group's advanced
+                        // rows, the advanced-video group, the engine group
                         // and the media-segments group.
                         hiddenCount = 9,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },

@@ -118,7 +118,7 @@ class JellyPlayLiveResyncConnector(
                 // backoff period instead, and the re-probe still lights a
                 // mid-session plugin install up. The registry's `settings-sync`
                 // key gates alongside the probe (the ONE gating mechanism,
-                // ADR 0010 §6) — an admin-disabled sync wave closes the gate.
+                // ADR 0010 §6) — an admin-disabled sync feature closes the gate.
                 if (!statusStore.ensureAvailable() ||
                     !statusStore.hasFeature(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SettingsSync)
                 ) {

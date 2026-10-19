@@ -170,7 +170,7 @@ class CollectionDetailViewModelTest {
     }
 
     /**
-     * The one container-adapter test (plan 03): a successful optimistic
+     * The one container-adapter test: a successful optimistic
      * mutation flips ONLY the matching item — resume zeroed by the resolved
      * patch — and leaves non-matching items referentially equal.
      */

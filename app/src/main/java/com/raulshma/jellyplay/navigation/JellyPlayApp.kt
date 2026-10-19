@@ -16,14 +16,15 @@ import com.raulshma.jellyplay.shell.ShellInfra
 
 /**
  * The Android app shell's root dispatcher. One `when` over the session state
- * (ADR 0001 — the session policy lives HERE, per shell, never in shared):
+ * (the shell-session contract — the session policy lives HERE, per shell, never
+ * in shared):
  * restoring / onboarding gate / authenticated [MainContent] / signed-out
  * [SignedOutAuthHost], with the update sheet overlaid above every branch.
  * The `viewModel` parameter is the [ShellGateModel] slice — the gate's view
  * of the activity-scoped ViewModel; the layout subtree receives the
  * [MainShellModel] slice through [MainContent].
  *
- * The former 1.6k-line single file is split per concern, same package:
+ * Split per concern, same package:
  * [MainContent] (MainContent.kt), the request-dispatch holder
  * (NavRequestController.kt), the external-player launch pair
  * (ExternalPlayerLauncherHost.kt), the bottom-nav scroll state
@@ -43,8 +44,7 @@ internal fun JellyPlayApp(
     // The shell coordinators ride the infra bundle — the composition's ONE
     // resolution site for them (MainActivity builds the bundle; MainViewModel
     // keeps its constructor injection only to START the same Koin singles on
-    // its scope). Resolved here (first composition) exactly where the former
-    // threading parameters arrived.
+    // its scope). Resolved here on first composition.
     val session = infra.sessionCoordinatorLazy.value
     val isRestoring by session.isRestoring.collectAsStateWithLifecycle()
     val isAuthenticated by session.isAuthenticated.collectAsStateWithLifecycle()
@@ -60,11 +60,9 @@ internal fun JellyPlayApp(
     }
 
     // The app-wide UserMessageBus (commonMain core:ui message) — the ONE
-    // bus every poster (migrated ViewModels, screens, seam adapters) posts
-    // through since the legacy androidMain feedback bus was deleted.
+    // bus every poster (ViewModels, screens, seam adapters) posts through.
     // Resolved through the infra bundle (same resolution path as every
-    // other shell service; the former inline KoinPlatform.getKoin()
-    // service-locator here is gone — see ShellInfra's KDoc).
+    // other shell service — see ShellInfra's KDoc).
     val sharedUserMessageBus = remember { infra.userMessageBusLazy.value }
 
     CompositionLocalProvider(
@@ -107,7 +105,7 @@ internal fun JellyPlayApp(
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
-                    // ADR 0001: the revoke/plain fork dispatches through
+                    // The revoke/plain fork dispatches through
                     // the shared ShellSessionController, whose sign-out
                     // action lands in SessionCoordinator (remote-control
                     // stop + sign-out) — the same fork desktop runs

@@ -125,16 +125,14 @@ class ArtistDetailViewModel(
      * deferred silent regeneration keeps the last pair on failure
      * (serve-stale-while-revalidate, same philosophy as the album host).
      *
-     * Behavior call (the ladder fold): the old ladder published a half on a
-     * half-failure — the artist name without albums — but the screen never
-     * rendered a partial state beside an error: its `when` collapses to
-     * Loading / ErrorScreen / content, and only the detail half's failure set
-     * an error (a failed albums half stayed silently empty — an artist that
-     * looked to have no albums, with no retry path). All-or-nothing keeps the
-     * error screen as the one failure surface and makes the albums failure
-     * retryable; the detail half's error wins when both fail (the half whose
-     * failure the screen used to surface). `getArtistAlbums` has no force
-     * flag, so [force] reaches the detail read only, exactly as before.
+     * All-or-nothing: the fetch publishes both halves or neither. The
+     * screen's `when` collapses to Loading / ErrorScreen / content, so a
+     * half-failure would render an artist that looks to have no albums, with
+     * no retry path. Publishing the error instead keeps the error screen as
+     * the one failure surface and makes the albums failure retryable; the
+     * detail half's error wins when both fail (the half whose failure the
+     * screen renders). `getArtistAlbums` has no force flag, so [force]
+     * reaches the detail read only.
      */
     private suspend fun fetchArtistData(artistId: String, force: Boolean): ArtistContent {
         return coroutineScope {
@@ -144,7 +142,7 @@ class ArtistDetailViewModel(
             val albumsResult = albumsDeferred.await()
 
             // The artist-name error wins when both halves fail (the half
-            // whose failure the screen used to surface).
+            // whose failure the screen renders).
             (detailResult.exceptionOrNull() ?: albumsResult.exceptionOrNull())?.let { throw it }
             ArtistContent(
                 name = detailResult.getOrThrow().item.name,

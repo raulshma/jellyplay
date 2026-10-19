@@ -18,10 +18,9 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_stat
 import org.jetbrains.compose.resources.StringResource
 
 /**
- * Compose-free presentation tables for [ArrQueueScreen] (the
- * `ShortcutListPolicy` precedent): the status→color and kind→label/service
- * folds the queue screen renders — written once and pinned by
- * [ArrQueuePresentationTest], with the screen's composables keeping only
+ * Compose-free presentation tables for [ArrQueueScreen]: the status→color and
+ * kind→label/service folds the queue screen renders — written once and pinned
+ * by [ArrQueuePresentationTest], with the screen's composables keeping only
  * the drawing. Labels are unresolved [StringResource]s so localization
  * stays a render-time concern.
  *

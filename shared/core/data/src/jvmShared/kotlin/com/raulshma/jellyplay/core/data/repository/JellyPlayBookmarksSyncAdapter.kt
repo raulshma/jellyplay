@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.raulshma.jellyplay.core.database.dao.BookBookmarkDao
+import com.raulshma.jellyplay.core.database.dao.BookBookmarkJoinKey
 import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -43,15 +44,9 @@ import kotlinx.serialization.json.put
 class JellyPlayBookmarksSyncAdapter(
     private val bookmarkDao: BookBookmarkDao,
     /** The mirror's persistence home — the SAME user-prefs store the prefs adapter mirrors, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    // `jpsync.mirror.books.` — the reserved mirror prefix this namespace's
-    // entries live under: every key here is reserved in BOTH adapters (never
-    // synced, never adopted) while the two mirrors never see each other's
-    // entries.
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore, tombstonesRoam = true) {
 
     // ------------------------------------------------------------------
     // key <-> (itemId, positionTicks) — the join key. Item ids are Jellyfin
@@ -79,42 +74,39 @@ class JellyPlayBookmarksSyncAdapter(
     override suspend fun snapshot(): Map<String, JsonObject> =
         bookmarkDao.getAll().associate { keyOf(it) to valueOf(it) }
 
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
-    override suspend fun deletedKeys(): Set<String> = mirror.deletedKeys(snapshot())
-
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         if (entries.isEmpty()) return
+        val deletes = mutableListOf<BookBookmarkJoinKey>()
+        val upserts = mutableListOf<BookBookmarkEntity>()
         for ((key, value) in entries) {
             val location = parseKey(key) ?: continue
             if (value is JsonNull) {
                 // Defensive: the engine routes tombstones through
                 // [deleteRemote]; a null here is treated identically.
-                bookmarkDao.deleteAtPosition(location.first, location.second)
+                deletes += BookBookmarkJoinKey(location.first, location.second)
                 continue
             }
             val entity = value.toEntityOrNull(location) ?: continue
             // The join key IS the row identity in the sync model (the reader's
-            // own toggle-match rule): every local twin at this position goes,
-            // the pulled row replaces them — adoption never accumulates
-            // duplicates.
-            bookmarkDao.deleteAtPosition(location.first, location.second)
-            bookmarkDao.upsert(entity)
+            // own toggle-match rule): every local twin at this position goes
+            // (the batch's delete phase), the pulled row replaces them —
+            // adoption never accumulates duplicates.
+            deletes += BookBookmarkJoinKey(location.first, location.second)
+            upserts += entity
         }
+        if (deletes.isEmpty() && upserts.isEmpty()) return
+        // ONE transaction for the whole pulled batch (the per-key
+        // delete/upsert pairs were one transaction each). Deletes run before
+        // upserts and keys are disjoint per join key, so the batch lands
+        // exactly as the per-row loop did.
+        bookmarkDao.adoptBookmarks(deletes, upserts)
     }
 
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
+    override suspend fun deleteLocally(keys: Set<String>) {
         for (key in keys) {
             parseKey(key)?.let { (itemId, ticks) -> bookmarkDao.deleteAtPosition(itemId, ticks) }
         }
-        // The mirror entries go REGARDLESS of key shape: an unparseable key
-        // must not wedge in the mirror forever re-reading as deleted.
-        mirror.clear(keys)
     }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     /**
      * Decodes a remote value into the row it describes, or null when the

@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -24,19 +23,22 @@ import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 
 /**
- * Pins [DownloadActionReceiver]'s intent contract, invoked the way the system
- * delivers it: one `onReceive` per crafted action intent.
+ * Pins [DownloadActionReceiver]'s dispatch, invoked the way the system
+ * delivers it: one `onReceive` per crafted action intent. The verb/id decode
+ * itself moved to the pure [downloadEntry] fold (GLOSSARY "Receiver intake
+ * fold") and is pinned by [DownloadEntryFoldTest] without Robolectric — this
+ * suite stays as the thin end-to-end over the shared scope window.
  *
  * Invariants:
  * - `ACTION_PAUSE` pauses via the repository and, when a download name is
  *   resolvable, keeps a paused shade handle alive (a posted notification); a
  *   failed name lookup posts nothing.
- * - `ACTION_RESUME` marks the row resumable and re-enqueues it; the paused
- *   shade handle goes away.
+ * - `ACTION_RESUME` dispatches the composite resume verb (mark resumable +
+ *   enqueue inside the repository); the paused shade handle goes away.
  * - `ACTION_CANCEL` cancels via the repository and dismisses both shade
  *   handles.
- * - A missing `download_id` extra or an unknown action is a silent no-op —
- *   the repository is never touched.
+ * - The shared [runWithBroadcastScope] window is transparent here: the work
+ *   lands even though it runs on a broadcast-scoped coroutine.
  *
  * The repository is resolved from a test-local Koin container (the app
  * composition root owns it in production); the receiver is constructed fresh
@@ -61,7 +63,6 @@ class DownloadActionReceiverTest {
         coEvery { downloadRepository.pauseDownload(any()) } returns Result.success(Unit)
         coEvery { downloadRepository.resumeDownload(any()) } returns Result.success(Unit)
         coEvery { downloadRepository.cancelDownload(any()) } returns Result.success(Unit)
-        every { downloadRepository.enqueueDownload(any()) } returns Unit
         coEvery { downloadRepository.getDownloadName(any()) } returns "Movie"
     }
 
@@ -104,11 +105,14 @@ class DownloadActionReceiverTest {
     }
 
     @Test
-    fun `resume marks resumable and re-enqueues the download`() {
+    fun `resume dispatches the composite resume verb`() {
         DownloadActionReceiver().onReceive(context, intent(DownloadActionReceiver.ACTION_RESUME))
 
+        // The composite verb (mark PENDING + enqueue) lives inside
+        // DownloadRepositoryImpl.resumeDownload — the receiver dispatches it
+        // alone, never a receiver-local resume+enqueue pair.
         coVerify(timeout = 5000, exactly = 1) { downloadRepository.resumeDownload("dl-1") }
-        coVerify(timeout = 5000, exactly = 1) { downloadRepository.enqueueDownload("dl-1") }
+        coVerify(timeout = 5000, exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     @Test
@@ -118,27 +122,6 @@ class DownloadActionReceiverTest {
         coVerify(timeout = 5000, exactly = 1) { downloadRepository.cancelDownload("dl-1") }
         // dismissNotification(progress id) + dismissPausedNotification — the
         // notification manager ends with nothing posted for this download.
-        assertEquals(0, postedNotificationCount())
-    }
-
-    @Test
-    fun `a missing download id extra writes nothing`() {
-        DownloadActionReceiver().onReceive(context, intent(DownloadActionReceiver.ACTION_PAUSE, downloadId = null))
-
-        Thread.sleep(200)
-        coVerify(exactly = 0) { downloadRepository.pauseDownload(any()) }
-        coVerify(exactly = 0) { downloadRepository.resumeDownload(any()) }
-        coVerify(exactly = 0) { downloadRepository.cancelDownload(any()) }
-    }
-
-    @Test
-    fun `an unknown action is a silent no-op`() {
-        DownloadActionReceiver().onReceive(context, intent("com.example.NOT_OUR_ACTION"))
-
-        Thread.sleep(200)
-        coVerify(exactly = 0) { downloadRepository.pauseDownload(any()) }
-        coVerify(exactly = 0) { downloadRepository.resumeDownload(any()) }
-        coVerify(exactly = 0) { downloadRepository.cancelDownload(any()) }
         assertEquals(0, postedNotificationCount())
     }
 }

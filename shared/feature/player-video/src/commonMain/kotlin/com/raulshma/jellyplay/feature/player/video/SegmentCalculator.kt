@@ -126,7 +126,6 @@ object SegmentCalculator {
         if (input.autoplayCancelled) return false
         if (input.isInSyncPlaySession) return false
         if (!input.hasNextEpisode) return false
-        if (input.seriesId == null) return false
         if (isOutroNearEnd(input, activeSegment())) return true
         if (input.durationMs > 0 && positionMs >= (input.durationMs - UP_NEXT_PRE_ROLL_MS)) return true
         return false

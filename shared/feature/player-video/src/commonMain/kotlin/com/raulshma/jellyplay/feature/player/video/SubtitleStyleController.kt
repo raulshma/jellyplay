@@ -34,7 +34,7 @@ internal const val SUBTITLE_DELAY_APPLY_DEBOUNCE_MS = 500L
  * Step 1 of the recorded two-step design (the `SubtitlePreviewController`
  * shape): the state stays in the VM's uiState mirrors — every write flows
  * through the narrow constructor lambdas below, NOT a raw uiState handle
- * (the god-count ratchet stays at its baseline; this class never references
+ * (the god-count guard stays at its baseline; this class never references
  * [VideoPlayerUiState]). Step 2 (moving the slice into an owned flow) lands
  * later, if ever — the mirrors are what the engine-config builder and the
  * screen read today.

@@ -9,11 +9,10 @@ class HomeSectionDescriptorTest {
 
     @Test
     fun staticTypes_carryNetworkRowIdentity() {
-        // The ids/titles the network impl previously hardcoded at every
-        // construction site — pinned here so the descriptor can never silently
+        // Pins the ids/titles the descriptor owns so it can never silently
         // change a persisted/cache-keyed id or a rendered row header (the
-        // header is the displayName; the old separate `title` field once
-        // drifted to "NextUp" while every other surface showed "Next Up").
+        // header is the displayName; a separate `title` field once drifted to
+        // "NextUp" while every other surface showed "Next Up").
         assertEquals("continue_watching" to "Continue Watching", staticIdentity(HomeSectionType.CONTINUE_WATCHING))
         assertEquals("continue_reading" to "Continue Reading", staticIdentity(HomeSectionType.CONTINUE_READING))
         assertEquals("next_up" to "Next Up", staticIdentity(HomeSectionType.NEXT_UP))
@@ -60,7 +59,7 @@ descriptor.idFor("COLLECTION_7"),
 
     @Test
     fun pluginRow_resolvesInstanceIdsUnderTheJellyplayPrefix_andIsNotConfigurable() {
-        // The plugin rows (companion server plugin, ADR 0010) are gated by
+        // The plugin rows (companion server plugin) are gated by
         // the capability registry, never the layout config — pinned here so
         // PLUGIN_ROW can never silently become user-configurable (which
         // would add it to the persisted default order).
@@ -107,6 +106,9 @@ descriptor.idFor("COLLECTION_7"),
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
+                // The v3 pair: Upcoming directly after Next Up, My Media after it.
+                HomeSectionType.UPCOMING,
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
@@ -114,6 +116,12 @@ descriptor.idFor("COLLECTION_7"),
             ),
             HomeSectionType.CONFIGURABLE,
         )
+    }
+
+    @Test
+    fun v3Types_carryNetworkRowIdentity() {
+        assertEquals("upcoming" to "Upcoming", staticIdentity(HomeSectionType.UPCOMING))
+        assertEquals("my_media" to "My Media", staticIdentity(HomeSectionType.MY_MEDIA))
     }
 
     private fun staticIdentity(type: HomeSectionType): Pair<String, String> {

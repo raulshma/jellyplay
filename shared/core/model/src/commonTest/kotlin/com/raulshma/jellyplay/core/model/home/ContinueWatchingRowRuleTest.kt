@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
  * fetch path, the single-row refresh, the ordering use case, and the offline
  * home mirror:
  *
- *  - the #157 played-row exclusion, in both halves ([filterResumable] drops
+ *  - the played-row exclusion, in both halves ([filterResumable] drops
  *    played rows and books; [filterReadingResumable] keeps only unplayed
  *    books — the two partition every row without overlap);
  *  - the hidden-item drop (`hiddenCwItemIds`);
@@ -39,7 +39,7 @@ class ContinueWatchingRowRuleTest {
         seriesId = seriesId,
     )
 
-    // ── #157 played-row exclusion — the video half ──────────────────────────
+    // ── played-row exclusion — the video half ──────────────────────────
 
     @Test
     fun `filterResumable drops played rows even with a stale resume position`() {
@@ -61,7 +61,7 @@ class ContinueWatchingRowRuleTest {
         assertEquals(emptyList(), ContinueWatchingRowRule.filterResumable(emptyList()))
     }
 
-    // ── #157 played-row exclusion — the books half ──────────────────────────
+    // ── played-row exclusion — the books half ──────────────────────────
 
     @Test
     fun `filterReadingResumable keeps only unplayed books`() {

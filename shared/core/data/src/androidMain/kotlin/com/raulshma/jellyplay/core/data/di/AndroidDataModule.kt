@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.di
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.network.AndroidNetworkMonitor
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.AndroidOfflineModeManager
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -39,7 +40,7 @@ fun androidDataModule(context: Context): Module {
         (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     return module {
-        single<NetworkMonitor> { AndroidNetworkMonitor(context) }
+        single<NetworkMonitor> { AndroidNetworkMonitor(context, applicationScope = get(DatastoreQualifiers.applicationScope)) }
 
         single<OfflineModeManager> {
             AndroidOfflineModeManager(

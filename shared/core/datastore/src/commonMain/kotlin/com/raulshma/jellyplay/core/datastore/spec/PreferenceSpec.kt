@@ -19,11 +19,11 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
  * interprets the slot. Specs whose value is encoded by their owning store
  * (JSON blobs, enum-by-name strings, set-membership toggles) ride [STRING]
  * storage and supply their codec at the knob site via [PreferenceSpec.custom]
- * (Stage A) or as a [PreferenceEncoding] row (Stage B); the Stage B plain
- * rows ([PreferenceSpec.plainBoolean] / [PreferenceSpec.plainInt] /
- * [PreferenceSpec.plainFloat] / [PreferenceSpec.plainLong]) declare BOOLEAN /
- * INT / FLOAT / LONG storage so their typed slot — and its legacy string-key
- * fallback — can be rebuilt too.
+ * (a plain declaration) or as a [PreferenceEncoding] row (a derived
+ * encoding); the encoded plain rows ([PreferenceSpec.plainBoolean] /
+ * [PreferenceSpec.plainInt] / [PreferenceSpec.plainFloat] /
+ * [PreferenceSpec.plainLong]) declare BOOLEAN / INT / FLOAT / LONG storage so
+ * their typed slot — and its legacy string-key fallback — can be rebuilt too.
  */
 internal enum class PreferenceStorage { BOOLEAN, STRING, INT, FLOAT, LONG }
 
@@ -99,22 +99,22 @@ data class PreferenceSearchSpec(
  * One preference knob's single declaration, owned by the store that persists
  * it: the canonical persisted key name, the value type, the default value, the
  * reset category, the knob's optional settings-search metadata, and — for rows
- * declared with a Stage B encoding ([plainBoolean] / [plainInt] /
+ * declared with a derived encoding ([plainBoolean] / [plainInt] /
  * [plainFloat] / [enumRow] / [derived]) — the read and its inverse write as
- * plain data ([PreferenceEncoding]). Stage B landed: a store that declares its
+ * plain data ([PreferenceEncoding]). A store that declares its
  * keys as encoded rows derives its Keys members, its read-projection rows, its
  * single-key setters, its restore() rows and its resetKeysFor lists from the
  * declarations instead of maintaining six hand-written sites per preference —
  * and the persisted wire name is declared exactly once (the legacy string-key
- * fallback consults [keyName] itself, so the typed key and the pre-typed-era
+ * fallback consults [keyName] itself, so the typed key and the string-key
  * fallback can never drift apart).
  *
  * A spec remains a declaration, not an accessor: the owning store binds it to
  * its persistence ([Knob.of] for typed access, or [readFrom] / [writeTo] for
- * the Stage B encodings), which guarantees the spec can never drift storage
+ * the derived encodings), which guarantees the spec can never drift storage
  * (same key names, same encoding, same file layout).
  *
- * **Accepted Stage B residuals (the no-reflection rule):** the projection
+ * **Accepted residuals of the derived encoding (the no-reflection rule):** the projection
  * bundle copy and the per-field slice-category merges stay hand-written plain
  * accessors (`PreferenceProjections.kt` / `SliceCategoryMergers.kt`,
  * R8-safe), and adding a new preference still means one write-through test
@@ -124,8 +124,8 @@ data class PreferenceSearchSpec(
 class PreferenceSpec<T> internal constructor(
     internal val storage: PreferenceStorage,
     /**
-     * The Stage B encoding (read + optional derived write), or null for a
-     * Stage A declaration — [boolean] / [string] / [custom] rows keep their
+     * The derived encoding (read + optional derived write), or null for a
+     * plain declaration — [boolean] / [string] / [custom] rows keep their
      * generic [readStored] (or knob-supplied) read and have no derived write.
      */
     internal val encoding: PreferenceEncoding<T>?,
@@ -209,9 +209,9 @@ class PreferenceSpec<T> internal constructor(
     }
 
     /**
-     * Stage B derived read: the encoding's read of this row from a raw
-     * snapshot. Only rows declared with a Stage B encoding support this —
-     * Stage A declarations keep their generic [readStored] (or
+     * Derived read: the encoding's read of this row from a raw
+     * snapshot. Only rows declared with an encoding support this —
+     * plain declarations keep their generic [readStored] (or
      * knob-supplied) read.
      */
     internal fun readFrom(prefs: Preferences): T =
@@ -220,7 +220,7 @@ class PreferenceSpec<T> internal constructor(
         }.read(prefs)
 
     /**
-     * Stage B derived write: the encoding's inverse write of [value] into the
+     * Derived write: the encoding's inverse write of [value] into the
      * row's slot (restore rows / single-key setters). A [Custom] encoding opts
      * out by omitting its `encode` lambda — the owning store keeps its
      * hand-written line there.
@@ -267,17 +267,17 @@ class PreferenceSpec<T> internal constructor(
             PreferenceSpec(PreferenceStorage.STRING, null, keyName, default, resetCategory, search)
 
         // ------------------------------------------------------------------
-        // Stage B rows: the declaration carries the read and its inverse
+        // Encoded rows: the declaration carries the read and its inverse
         // write, so the owning store derives its read projection, restore,
         // single-key setters and reset lists from the rows.
         // ------------------------------------------------------------------
 
         /**
          * Typed boolean slot read through the shared legacy-string fallback
-         * ([PreferenceCodec.readBool]): the pre-typed-era wire name IS
-         * [keyName], so the name the fallback consults and the name the typed
-         * key is built from are declared exactly once. The derived write is
-         * the plain typed slot write.
+         * ([PreferenceCodec.readBool]): the legacy string row is keyed by
+         * [keyName] itself, so the name the fallback consults and the name the
+         * typed key is built from are declared exactly once. The derived write
+         * is the plain typed slot write.
          */
         internal fun plainBoolean(
             keyName: String,
@@ -427,8 +427,8 @@ class PreferenceSpec<T> internal constructor(
          * string is stored to the same slot — restore rows / single-key
          * setters); leaving it null keeps the owning store's hand-written
          * line, the documented opt-out for slots whose write carries extra
-         * semantics. Stage A's [custom] is the declaration-only variant of
-         * this row (knob-supplied read, no derived write).
+         * semantics. The declaration-only [custom] row is the variant with a
+         * knob-supplied read and no derived write.
          */
         internal fun <T> derived(
             keyName: String,

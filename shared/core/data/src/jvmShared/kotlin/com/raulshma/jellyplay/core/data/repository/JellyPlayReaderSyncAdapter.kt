@@ -56,11 +56,9 @@ import kotlinx.serialization.json.put
 class JellyPlayReaderSyncAdapter(
     private val annotationDao: BookAnnotationDao,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore, tombstonesRoam = true) {
 
     // ------------------------------------------------------------------
     // key <-> itemId: `"ann/{itemId}"`. Item ids are Jellyfin guids (no
@@ -81,38 +79,33 @@ class JellyPlayReaderSyncAdapter(
             .mapKeys { (itemId, _) -> keyOf(itemId) }
             .mapValues { (_, rows) -> rows.toJsonArray() }
 
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
-    override suspend fun deletedKeys(): Set<String> = mirror.deletedKeys(snapshot())
-
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
+        val deletes = mutableSetOf<String>()
+        val upserts = mutableListOf<BookAnnotationEntity>()
         for ((key, value) in entries) {
             val itemId = parseKey(key) ?: continue
             if (value is JsonNull) {
                 // Defensive: the engine routes tombstones through
                 // [deleteRemote]; a null here is treated identically.
-                annotationDao.deleteByItemId(itemId)
+                deletes += itemId
                 continue
             }
             val rows = value.toRowsOrNull(itemId) ?: continue
             // The pulled list replaces the book's whole local set.
-            annotationDao.deleteByItemId(itemId)
-            rows.forEach { annotationDao.upsert(it) }
+            deletes += itemId
+            upserts += rows
         }
+        if (deletes.isEmpty() && upserts.isEmpty()) return
+        // ONE transaction for the whole pulled batch (the per-key
+        // delete/upsert pairs were one transaction each). Keys are one per
+        // book, so the batch lands exactly as the per-row loop did.
+        annotationDao.adoptAnnotations(deletes, upserts)
     }
 
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
-        for (key in keys) {
-            parseKey(key)?.let { annotationDao.deleteByItemId(it) }
-        }
-        // The mirror entries go REGARDLESS of key shape: an unparseable key
-        // must not wedge in the mirror forever re-reading as deleted.
-        mirror.clear(keys)
+    override suspend fun deleteLocally(keys: Set<String>) {
+        val itemIds = keys.mapNotNull(::parseKey)
+        if (itemIds.isNotEmpty()) annotationDao.deleteByItemIds(itemIds)
     }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     // ------------------------------------------------------------------
     // value <-> rows: the export DTO's shape (install-local ids omitted);

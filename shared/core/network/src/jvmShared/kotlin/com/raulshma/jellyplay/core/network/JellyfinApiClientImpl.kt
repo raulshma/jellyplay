@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.CollectionApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
@@ -18,6 +19,7 @@ import com.raulshma.jellyplay.core.network.api.MetadataApiClientImpl
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClientImpl
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
+import com.raulshma.jellyplay.core.network.api.PlaylistApiClientImpl
 import com.raulshma.jellyplay.core.network.api.PluginApiClient
 import com.raulshma.jellyplay.core.network.api.PluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
@@ -28,6 +30,8 @@ import com.raulshma.jellyplay.core.network.api.UserApiClientImpl
 class JellyfinApiClientImpl(
     private val authClient: AuthApiClientImpl,
     private val libraryClient: LibraryApiClientImpl,
+    private val playlistClient: PlaylistApiClientImpl,
+    private val collectionClient: CollectionApiClientImpl,
     private val playbackClient: PlaybackApiClientImpl,
     private val syncPlayClient: SyncPlayApiClientImpl,
     private val liveTvClient: LiveTvApiClientImpl,
@@ -49,7 +53,9 @@ class JellyfinApiClientImpl(
     JellyPlayPluginApiClient by jellyPlayPluginClient,
     PluginApiClient by pluginClient,
     UserApiClient by userClient,
-    // The two library family seams ride the SAME library impl single (the
-    // one-impl-many-seams idiom — LibraryApiClientImpl implements all three).
-    PlaylistApiClient by libraryClient,
-    CollectionApiClient by libraryClient
+    // The two library family seams are their own adapter singles now (the
+    // families moved off LibraryApiClientImpl): each delegating member rides
+    // its family impl over the SAME engine single, so the union carries the
+    // seams beside the wide client exactly as before — same wire, one stack.
+    PlaylistApiClient by playlistClient,
+    CollectionApiClient by collectionClient

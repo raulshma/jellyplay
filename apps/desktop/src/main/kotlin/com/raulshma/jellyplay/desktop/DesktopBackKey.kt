@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.desktop
 import androidx.compose.ui.input.key.Key
 
 /**
- * The one desktop back-key decision, folded out of the two handlers that
- * used to hand-copy it — DesktopAppRoot's scaffold Row (the signed-in shell)
+ * The one desktop back-key decision, shared by both handlers —
+ * DesktopAppRoot's scaffold Row (the signed-in shell)
  * and the signed-out shell's shared SignedOutAuthHost frame:
  * **Esc**, or **Alt+Left**, pops the current
  * back stack, but only when there is anything to pop. Every stack is seeded

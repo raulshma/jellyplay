@@ -17,13 +17,12 @@ internal data class HeatmapCell(
 )
 
 /**
- * Compose-free geometry and policy core for the watch-progress heatmap,
- * extracted verbatim from [WatchProgressHeatmapScreen]: grid construction
- * (week-column layout + quartile level policy), the TV focus cursor's
- * clamped movement, month-label placement, and the viewport scroll-target
- * coercion. The screen keeps only dp/px conversion, Canvas drawing, and the
- * effect shells that call this model — `today` is a parameter so the whole
- * object is deterministically testable.
+ * Compose-free geometry and policy core for the watch-progress heatmap:
+ * grid construction (week-column layout + quartile level policy), the TV
+ * focus cursor's clamped movement, month-label placement, and the viewport
+ * scroll-target coercion. The screen keeps only dp/px conversion, Canvas
+ * drawing, and the effect shells that call this model — `today` is a
+ * parameter so the whole object is deterministically testable.
  */
 internal object HeatmapGridModel {
 
@@ -185,8 +184,8 @@ internal object HeatmapGridModel {
 
     /**
      * Whether a pointer position lands inside the `numWeeks × 7` cell grid —
-     * the bounds gate of [WatchProgressHeatmapScreen]'s former inline
-     * `pointerInput` body, extracted verbatim. The px→cell conversion is
+     * the bounds gate behind [WatchProgressHeatmapScreen]'s `pointerInput`
+     * handler. The px→cell conversion is
      * `(px / cellStridePx).roundToInt()`: it rounds to the nearest stride
      * multiple (exact half-stride boundaries round up), so a position is
      * outside only when it is half a stride or more past the last row/column.
@@ -204,17 +203,16 @@ internal object HeatmapGridModel {
     }
 
     /**
-     * The day under a pointer position, or null when there is none — the
-     * exact former inline hit-resolution body of
-     * [WatchProgressHeatmapScreen]'s `pointerInput` handler, re-homed
-     * unchanged (`weekIdx = (tapX / (cellSizePx + cellGapPx)).roundToInt()`,
+     * The day under a pointer position, or null when there is none — the hit
+     * resolution behind [WatchProgressHeatmapScreen]'s `pointerInput` handler
+     * (`weekIdx = (tapX / (cellSizePx + cellGapPx)).roundToInt()`,
      * `dayIdx = (tapY / (cellSizePx + cellGapPx)).roundToInt()`, behind the
      * `weekIdx in 0 until numWeeks && dayIdx in 0 until 7` gate, then
-     * `grid.getOrNull(weekIdx * 7 + dayIdx)?.date`). Null mirrors the inline
-     * body's null date: out-of-grid positions (the screen drops these taps
-     * without dispatching — gate with [isInsideGrid]) and in-grid positions
-     * on unpopulated cells (days before the activity start or after `today`),
-     * which the screen dispatches as a null day. All inputs are pixels.
+     * `grid.getOrNull(weekIdx * 7 + dayIdx)?.date`). Null covers out-of-grid
+     * positions (the screen drops these taps without dispatching — gate with
+     * [isInsideGrid]) and in-grid positions on unpopulated cells (days before
+     * the activity start or after `today`), which the screen dispatches as a
+     * null day. All inputs are pixels.
      */
     fun dayAt(
         x: Float,

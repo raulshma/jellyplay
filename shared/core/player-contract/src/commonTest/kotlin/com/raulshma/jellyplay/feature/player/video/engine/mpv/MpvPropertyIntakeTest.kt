@@ -256,7 +256,7 @@ class MpvPropertyIntakeTest {
         assertNull(intake(MpvIntakeHost.ANDROID, "track-list", MpvIntakeValue.Text("[]")))
     }
 
-    // ─── Observed-set ratchets: no observed property loses its intake ────────
+    // ─── Observed-set guards: no observed property loses its intake ────────
 
     /** Android's `postInitOptions` observe list with representative payloads. */
     @Test

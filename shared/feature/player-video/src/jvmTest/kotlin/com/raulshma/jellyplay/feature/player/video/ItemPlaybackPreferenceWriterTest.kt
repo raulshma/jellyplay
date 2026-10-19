@@ -41,6 +41,11 @@ class ItemPlaybackPreferenceWriterTest {
         data class ClearAudioLanguage(val scope: PlaybackPrefScope, val key: String) : RepoCall
         data class ClearSubtitleLanguage(val scope: PlaybackPrefScope, val key: String) : RepoCall
         data class SetSubtitleDisabled(val scope: PlaybackPrefScope, val key: String, val disabled: Boolean) : RepoCall
+        data class SetPreferAudioDescription(
+            val scope: PlaybackPrefScope,
+            val key: String,
+            val value: Boolean?,
+        ) : RepoCall
         data class ClearDialogueBoost(val scope: PlaybackPrefScope, val key: String) : RepoCall
         data class SaveRememberedTrack(
             val scope: PlaybackPrefScope,
@@ -89,6 +94,10 @@ class ItemPlaybackPreferenceWriterTest {
 
         override suspend fun setSubtitleDisabled(scope: PlaybackPrefScope, key: String, disabled: Boolean) {
             calls += RepoCall.SetSubtitleDisabled(scope, key, disabled)
+        }
+
+        override suspend fun setPreferAudioDescription(scope: PlaybackPrefScope, key: String, value: Boolean?) {
+            calls += RepoCall.SetPreferAudioDescription(scope, key, value)
         }
 
         override suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String) {
@@ -295,7 +304,34 @@ class ItemPlaybackPreferenceWriterTest {
         assertEquals(1, refreshCount)
     }
 
-    // ─── Remembered track (G5) — SERIES-only persistence ──────────────────────
+    @Test
+    fun setSeriesPreferAudioDescription_pinAndForget() = testScope.runTest {
+        seriesId = "series1"
+
+        writer.setSeriesPreferAudioDescription(true)
+        writer.setSeriesPreferAudioDescription(null)
+
+        assertEquals(
+            listOf<RepoCall>(
+                RepoCall.SetPreferAudioDescription(PlaybackPrefScope.SERIES, "series1", true),
+                RepoCall.SetPreferAudioDescription(PlaybackPrefScope.SERIES, "series1", null),
+            ),
+            repository.calls,
+        )
+        assertEquals(2, refreshCount)
+    }
+
+    @Test
+    fun setSeriesPreferAudioDescription_noopWithoutASeries() = testScope.runTest {
+        itemId = "item1"
+
+        writer.setSeriesPreferAudioDescription(true)
+
+        assertTrue(repository.calls.isEmpty())
+        assertEquals(0, refreshCount)
+    }
+
+    // ─── Remembered track — SERIES-only persistence ──────────────────────
 
     @Test
     fun rememberTrack_savesSeriesScopeAndRefreshes() = testScope.runTest {

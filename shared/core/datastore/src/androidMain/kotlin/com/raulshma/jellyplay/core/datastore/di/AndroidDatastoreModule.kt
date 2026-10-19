@@ -8,11 +8,11 @@ import okio.Path.Companion.toPath
 import org.koin.core.module.Module
 
 /**
- * Android platform Koin module (docs/kmp-migration-plan.md): the shared
- * [datastorePlatformModule] over this shell's two actuals — the legacy
+ * Android platform Koin module: the shared
+ * [datastorePlatformModule] over this shell's two actuals — the
  * `filesDir/datastore` preference root and the
  * EncryptedSharedPreferences-backed [AndroidSecureKeyValueStorage]. Paths and
- * file names are byte-for-byte the legacy Hilt wiring so existing installs
+ * file names are byte-for-byte what existing installs already use, so they
  * keep their data: `filesDir/datastore/<name>.preferences_pb` and the same
  * secure pref files.
  */

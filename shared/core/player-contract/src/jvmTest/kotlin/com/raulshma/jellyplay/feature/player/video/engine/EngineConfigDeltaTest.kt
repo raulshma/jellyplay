@@ -9,8 +9,8 @@ import kotlin.test.assertEquals
 
 /**
  * Table-tests the total [EngineConfigDelta.of] diff — no change, each slice
- * alone, and the shared-pairs group — so both mpv hosts switching on the
- * delta cannot silently re-shape their `onConfigChanged` reconfiguration
+ * alone, and the shared-pairs group — so the hosts switching on the delta
+ * cannot silently re-shape their `onConfigChanged` reconfiguration
  * gates.
  */
 class EngineConfigDeltaTest {
@@ -26,6 +26,7 @@ class EngineConfigDeltaTest {
         subtitleDelay: Boolean = false,
         decoderMode: Boolean = false,
         subtitleStyle: Boolean = false,
+        subtitleStyleExcludingDelay: Boolean = false,
         engineSpecific: Boolean = false,
         sharedPairs: Boolean = false,
         audioEffects: Boolean = false,
@@ -38,6 +39,11 @@ class EngineConfigDeltaTest {
         assertEquals(subtitleDelay, actual.subtitleDelayChanged, "subtitleDelayChanged")
         assertEquals(decoderMode, actual.decoderModeChanged, "decoderModeChanged")
         assertEquals(subtitleStyle, actual.subtitleStyleChanged, "subtitleStyleChanged")
+        assertEquals(
+            subtitleStyleExcludingDelay,
+            actual.subtitleStyleChangedExcludingDelay,
+            "subtitleStyleChangedExcludingDelay",
+        )
         assertEquals(engineSpecific, actual.engineSpecificChanged, "engineSpecificChanged")
         assertEquals(sharedPairs, actual.sharedPairsChanged, "sharedPairsChanged")
         assertEquals(audioEffects, actual.audioEffectsChanged, "audioEffectsChanged")
@@ -76,6 +82,79 @@ class EngineConfigDeltaTest {
         assertFlags(
             changed { copy(subtitleStyle = SubtitleStyle(applyCustomStyle = true)) },
             subtitleStyle = true,
+            subtitleStyleExcludingDelay = true,
+        )
+    }
+
+    // ── subtitleStyleChangedExcludingDelay: the offset-normalised style diff ──
+
+    @Test
+    fun of_styleAndDelayMovedTogether_stillExcludesDelay() {
+        // A joint style+delay move must still fire the style path — deriving
+        // `subtitleStyleChanged && !subtitleDelayChanged` would wrongly report
+        // false here (in Exo the delay lives INSIDE subtitleStyle.offsetMs).
+        assertFlags(
+            changed {
+                copy(
+                    subtitleStyle = subtitleStyle.copy(fontSize = 36, offsetMs = 250),
+                    subtitleDelayMs = 250,
+                )
+            },
+            subtitleDelay = true,
+            subtitleStyle = true,
+            subtitleStyleExcludingDelay = true,
+        )
+    }
+
+    @Test
+    fun of_styleMovedWithoutDelay_excludesDelay() {
+        assertFlags(
+            changed { copy(subtitleStyle = subtitleStyle.copy(fontSize = 36)) },
+            subtitleStyle = true,
+            subtitleStyleExcludingDelay = true,
+        )
+    }
+
+    @Test
+    fun of_delayOnlyMove_reportsTheStyleSliceButNotExcludingDelay() {
+        // The builder-mirrored delay-only adjustment (EngineConfigBuilder writes
+        // subtitleDelayMs = subtitleStyle.offsetMs): the structural style diff
+        // fires, the offset-normalised one must not.
+        assertFlags(
+            changed {
+                copy(
+                    subtitleStyle = subtitleStyle.copy(offsetMs = 250),
+                    subtitleDelayMs = 250,
+                )
+            },
+            subtitleDelay = true,
+            subtitleStyle = true,
+            subtitleStyleExcludingDelay = false,
+        )
+    }
+
+    @Test
+    fun of_offsetOnlyStyleMove_reportsTheStyleSliceButNotExcludingDelay() {
+        // The anti-derivation pin: subtitleStyle changed ONLY in offsetMs while
+        // the raw subtitleDelayMs field did not move — `subtitleStyleChanged &&
+        // !subtitleDelayChanged` would be true, the flag must be false.
+        assertFlags(
+            changed { copy(subtitleStyle = subtitleStyle.copy(offsetMs = 250)) },
+            subtitleStyle = true,
+            subtitleStyleExcludingDelay = false,
+        )
+    }
+
+    @Test
+    fun of_rawSubtitleDelayAlone_neitherStyleFlagFires() {
+        // A raw subtitleDelayMs move without a matching SubtitleStyle move
+        // (only reachable by direct config authorship, not the builder) —
+        // neither style flag may fire.
+        assertFlags(
+            changed { copy(subtitleDelayMs = 250) },
+            subtitleDelay = true,
+            subtitleStyle = false,
+            subtitleStyleExcludingDelay = false,
         )
     }
 
@@ -187,6 +266,7 @@ class EngineConfigDeltaTest {
             subtitleDelay = true,
             decoderMode = true,
             subtitleStyle = true,
+            subtitleStyleExcludingDelay = true,
             engineSpecific = true,
             sharedPairs = true,
             audioEffects = true,

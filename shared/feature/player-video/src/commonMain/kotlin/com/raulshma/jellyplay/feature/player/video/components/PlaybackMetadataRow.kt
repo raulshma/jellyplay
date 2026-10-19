@@ -16,6 +16,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Subtitles
@@ -42,9 +45,14 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.video.TrackOption
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.HdrContentInfo
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
+import com.raulshma.jellyplay.feature.player.video.engine.hdrFamilyOf
+import com.raulshma.jellyplay.feature.player.video.engine.hdrLabelFor
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_chip
+import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -55,8 +63,9 @@ import org.jetbrains.compose.resources.stringResource
  * Each metadata item is rendered as a refined glassmorphic pill chip with a
  * category-tuned translucent backdrop, delicate hairline border, and crisp
  * typography. The play-method chip is clickable (when [onPlayMethodClick] is
- * provided) and opens the playback-mode picker; the subtitle delay chip is
- * clickable and triggers the subtitle delay overlay.
+ * provided) and opens the playback-mode picker; the HDR chip is clickable
+ * (when [onHdrClick] is provided) and opens the HDR options sheet; the
+ * subtitle delay chip is clickable and triggers the subtitle delay overlay.
  *
  * When [mpvConfigNoticeActive] (the engine's custom-mpv-config subtitle
  * ownership snapshot reports user-owned `sub-*` keys), a warning-tinted chip
@@ -73,36 +82,57 @@ internal fun PlaybackMetadataRow(
     isDirectPlayForced: Boolean,
     hdrType: String?,
     mediaStreams: List<MediaStream>,
-    videoStats: PlaybackMetadataSnapshot,
+    videoStatsFlow: StateFlow<EngineVideoStats>,
     audioTracks: List<TrackOption>,
     isConnectionMetered: Boolean = false,
     subtitleDelayMs: Long = 0L,
     onSubtitleDelayClick: () -> Unit = {},
     onPlayMethodClick: (() -> Unit)? = null,
+    onHdrClick: (() -> Unit)? = null,
     mpvConfigNoticeActive: Boolean = false,
     onMpvConfigNoticeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    // Leaf collection (the currentPositionFlow pass-down rule): the stats
+    // flow is subscribed HERE, not in PlayerControls' root — while "stats for
+    // nerds" is on, every deduped publication used to re-execute the whole
+    // ~1000-line controls body just to feed this row. The projection below
+    // keeps the row's own recomposition confined to the low-churn
+    // codec/HDR/channels slice it actually renders; the high-churn tick fields
+    // (droppedFrames, bufferedPositionMs, bitrates) never reach composition.
+    val videoStatsFull by videoStatsFlow.collectAsStateWithLifecycle()
+    val videoStats = remember {
+        derivedStateOf {
+            PlaybackMetadataSnapshot(
+                videoCodec = videoStatsFull.videoCodec,
+                videoResolution = videoStatsFull.videoResolution,
+                videoHdrType = videoStatsFull.videoHdrType,
+                audioCodec = videoStatsFull.audioCodec,
+                audioChannels = videoStatsFull.audioChannels,
+            )
+        }
+    }.value
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
     val resolutionLabel = deriveResolutionLabel(videoStream, videoStats.videoResolution)
     val videoCodec = formatVideoCodec(videoStream?.codec ?: videoStats.videoCodec)
 
-    val isDolbyVision = hdrType?.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi") ||
-        (videoStream?.videoDoViTitle?.isNotBlank() == true) ||
-        (videoStream?.videoRangeType?.lowercase()?.contains("dovi") == true) ||
-        (videoStream?.videoRange?.lowercase()?.contains("dovi") == true) ||
-        (videoStats.videoHdrType?.lowercase()?.contains("dolby") == true) ||
-        (videoStats.videoHdrType?.lowercase()?.contains("dovi") == true)
+    // The HDR chip folds through the engine policy's ONE family parser
+    // (hdrFamilyOf) — the same vocabulary the HDR sheet and the config
+    // builder's hdrContentFromStreams consume; the row keeps only the
+    // presentation choices: the DV badge (the DoVi title alone also arms
+    // it) and the label fallback chain (claim label → raw stats text).
+    val hdrFamily = hdrFamilyOf(
+        hdrType,
+        videoStats.videoHdrType,
+        videoStream?.videoRange,
+        videoStream?.videoRangeType,
+    )
+    val isDolbyVision = hdrFamily == HdrContentInfo.DOLBY_VISION ||
+        (videoStream?.videoDoViTitle?.isNotBlank() == true)
 
     val hdrLabel = when {
-        isDolbyVision -> "Dolby Vision"
-        hdrType != null -> when (hdrType.lowercase()) {
-            "hdr10" -> "HDR10"
-            "hdr10plus", "hdr10_plus" -> "HDR10+"
-            "hlg" -> "HLG"
-            "hdr" -> "HDR"
-            else -> hdrType.uppercase()
-        }
+        isDolbyVision -> HdrContentInfo.DOLBY_VISION.displayName
+        hdrType != null -> hdrLabelFor(hdrType) ?: hdrType.uppercase()
         videoStats.videoHdrType != null -> videoStats.videoHdrType
         else -> null
     }
@@ -188,6 +218,7 @@ internal fun PlaybackMetadataRow(
         isConnectionMetered,
         subtitleDelayMs,
         onPlayMethodClick,
+        onHdrClick,
         onSubtitleDelayClick,
         mpvConfigNoticeActive,
         mpvConfigChipLabel,
@@ -226,6 +257,7 @@ internal fun PlaybackMetadataRow(
                         textColor = dolbyVisionGold,
                         containerColor = dolbyVisionGold.copy(alpha = 0.12f),
                         borderColor = hdrGold.copy(alpha = 0.50f),
+                        onClick = onHdrClick,
                     )
                 } else {
                     MetadataItem(
@@ -233,6 +265,7 @@ internal fun PlaybackMetadataRow(
                         textColor = hdrGold,
                         containerColor = hdrGold.copy(alpha = 0.12f),
                         borderColor = hdrGold.copy(alpha = 0.40f),
+                        onClick = onHdrClick,
                     )
                 }
             },

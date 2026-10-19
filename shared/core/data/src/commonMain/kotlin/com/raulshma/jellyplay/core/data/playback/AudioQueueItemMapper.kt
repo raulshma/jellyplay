@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
 
 /**
- * Queue-item mapping is facade-internal (plan 04 step 7): after the
+ * Queue-item mapping is facade-internal: after the
  * AudioQueueFacade migration no code outside core/data builds queue items,
  * and the `internal` visibility keeps it that way.
  */

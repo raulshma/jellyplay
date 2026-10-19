@@ -136,7 +136,7 @@ class StudioDetailViewModelTest {
         collector.cancel()
     }
 
-    /** Delegation one-liner (plan 03): silent grid mutations route through the mutator. */
+    /** Delegation one-liner: silent grid mutations route through the mutator. */
     @Test
     fun `markItemPlayed delegates to the mutator silently`() = runTest {
         val viewModel = createViewModel()

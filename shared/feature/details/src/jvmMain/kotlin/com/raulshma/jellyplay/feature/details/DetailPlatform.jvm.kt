@@ -8,6 +8,8 @@ import java.io.File
 import java.nio.file.Path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -28,6 +30,8 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
 private object NoopDetailThemeMusic : DetailThemeMusic {
     override fun playThemeFor(itemId: String) = Unit
     override fun stop() = Unit
+    override fun setMuted(muted: Boolean) = Unit
+    override val isPlaying: StateFlow<Boolean> = MutableStateFlow(false)
 }
 
 /**
@@ -66,6 +70,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
+            mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             collectionApiClient = get(),
             userDataMutator = get(),
@@ -90,6 +95,9 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             pluginRecommendationsApi = get(),
             pluginMarkersApi = get(),
             jellyPlayFeatureGate = get(),
+            // The direct-TMDB details fallback behind the externalRatings
+            // enrichment (core:network single, NetworkKoinModules).
+            tmdbApiClient = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure
@@ -110,6 +118,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             userDataMutator = get(),
             imageUrlProvider = get(),
             mediaDownloadActions = get(),
+            projections = get(),
         )
     }
 }
@@ -133,3 +142,31 @@ internal actual fun InlineTrailerPlayerHost(
 ) {
     LaunchedEffect(videoKey) { onEmbedFailed() }
 }
+
+/**
+ * Desktop actual of the ambient-clip seam: no ambient video on
+ * desktop — the hero stays the backdrop image (the static-hero parity the
+ * plan pins; the YouTube embed path degrades through its own actual above).
+ */
+@Suppress("UNUSED_PARAMETER")
+@Composable
+internal actual fun AmbientThemeVideoSurface(url: String, modifier: Modifier) {
+    // Static backdrop: intentionally empty.
+}
+
+/**
+ * Desktop has no notification stack — the ⋮ menu's notify entry and
+ * the upcoming rows' bell are hidden outright (the store-side config writes are
+ * reachable only through the hidden surfaces, so nothing is ever
+ * configured for a platform that cannot deliver).
+ */
+internal actual val platformHasNotificationStack: Boolean = false
+
+/**
+ * Desktop permission seam — no POST_NOTIFICATIONS runtime flow exists
+ * off Android; the lambda is a no-op (the surfaces that would invoke it are
+ * hidden by [platformHasNotificationStack] anyway).
+ */
+@Composable
+internal actual fun rememberSeriesNotificationPermissionRequest(): () -> Unit =
+    remember { { /* no notifications to permit on desktop */ } }

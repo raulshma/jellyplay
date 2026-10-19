@@ -18,11 +18,19 @@ import java.util.concurrent.atomic.AtomicLong
 class TimeSyncManager constructor(
     // getServerTime lives on the playback family client (the PlaybackRepositoryImpl
     // ctor precedent: family seam, not the JellyfinApiClient union).
-    private val playbackApiClient: PlaybackApiClient
+    private val playbackApiClient: PlaybackApiClient,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * sync loop's IO scope hangs off as a SupervisorJob child — [stop] still
+     * cancels only the individual jobs, while the scope itself now dies with
+     * an app-level teardown instead of outliving it.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
     private val offsetMs = AtomicLong(0)
     private val lastPingMs = AtomicLong(0)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.IO)
     private val isSyncing = java.util.concurrent.atomic.AtomicBoolean(false)
     private var syncJob: Job? = null
     private var forceUpdateJob: Job? = null

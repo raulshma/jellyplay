@@ -11,8 +11,8 @@ import kotlin.test.Test
 /**
  * Pins the one-pass offline render model ([buildOfflineHomeContent]): one
  * aggregate feeding sections, the id→item lookup and the filtered lists the
- * rest of the home reads — previously each consumer re-derived its own slice
- * and the lookup was built twice per tree.
+ * rest of the home reads — so each consumer reads its slice and the lookup
+ * builds once per tree.
  */
 class OfflineHomeContentTest {
 

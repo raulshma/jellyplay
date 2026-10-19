@@ -134,7 +134,7 @@ object DownloadFailurePolicy {
      * Classifies a non-2xx HTTP [responseCode] (other than 416, which the
      * transfer runner handles as a recovery action) into an [Outcome].
      *
-     * Parity with the pre-extraction inline branches in
+     * Parity with the former inline branches in
      * `DownloadWorker.performSingleConnectionDownload`:
      *
      * | code | inline behaviour | outcome |

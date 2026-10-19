@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
+import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SeerrRowFilters
 import com.raulshma.jellyplay.core.model.SeerrRowMedia
@@ -27,6 +28,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -37,8 +39,9 @@ import kotlin.test.assertTrue
  * section gating (zero port calls), the deliberate serialization of the
  * recommendations chain behind Continue Watching / Next Up (its seeds), the
  * seed-fallback wart, the music-filtered folder-order latest fan-out, the
- * suggestions pre-fetch condition (same predicate the assembler's fallback
- * branch renders on — the cross-module agreement), the partial-failure vs
+ * suggestions pre-fetch condition (the shared [suggestionsFallbackApplies]
+ * predicate — the assembler's fallback branch renders on the same function),
+ * the partial-failure vs
  * throw-when-nothing-rendered error policy, always-fetched pinned rows, and
  * the identity-keyed TTL sub-call cache semantics (hit / force-bypass /
  * memoise / identity-switch miss).
@@ -78,6 +81,7 @@ class HomeSectionsFetcherTest {
         val continueWatchingResults = ArrayDeque<Result<List<MediaItem>>>()
         val continueReadingResults = ArrayDeque<Result<List<MediaItem>>>()
         val nextUpResults = ArrayDeque<Result<List<MediaItem>>>()
+        val upcomingResults = ArrayDeque<Result<List<MediaItem>>>()
         val foldersResults = ArrayDeque<Result<List<LibraryFolder>>>()
         val latestResults = ArrayDeque<Result<List<MediaItem>>>()
         val similarResults = ArrayDeque<Result<List<MediaItem>>>()
@@ -95,14 +99,17 @@ class HomeSectionsFetcherTest {
             return scripted
         }
 
-        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>> =
-            resolve(continueWatchingResults, "cw:$limit:$classicRows") { emptyList() }
+        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>> =
+            resolve(continueWatchingResults, "cw:$limit:$classicRows:$excludeActiveSessions") { emptyList() }
 
         override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> =
             resolve(continueReadingResults, "cr:$limit") { emptyList() }
 
         override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> =
             resolve(nextUpResults, "nu:$limit:$enableRewatching:$maxDays") { emptyList() }
+
+        override suspend fun getUpcoming(userId: String?, parentId: String?, limit: Int): Result<List<MediaItem>> =
+            resolve(upcomingResults, "upcoming:$userId:$parentId:$limit") { emptyList() }
 
         override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
             resolve(foldersResults, "folders") { emptyList() }
@@ -243,7 +250,7 @@ class HomeSectionsFetcherTest {
         fake.similarResults += Result.success(listOf(item("recB")))
         // Close the Continue Watching gate (keyed like the recorded call):
         // the whole seed chain stalls behind it.
-        val cwGate = fake.gate("cw:20:false")
+        val cwGate = fake.gate("cw:20:false:false")
 
         var fetched: HomeSectionsResult? = null
         val job = launch {
@@ -261,7 +268,7 @@ class HomeSectionsFetcherTest {
 
         // CW + Next Up were issued, but the recommendations chain has NOT run
         // yet (deliberate serialization — do not "improve" it).
-        assertTrue("cw:20:false" in fake.calls)
+        assertTrue("cw:20:false:false" in fake.calls)
         assertTrue("nu:20:false:0" in fake.calls)
         assertTrue(fake.calls.none { it.startsWith("similar:") }, "similar fan-out must wait for the seeds")
 
@@ -305,7 +312,7 @@ class HomeSectionsFetcherTest {
             HomeSectionQuery(enabledSections = setOf(HomeSectionType.RECOMMENDATIONS)),
         )
 
-        assertTrue("cw:5:false" in fake.calls, "wart verbatim: own getContinueWatching(limit = 5)")
+        assertTrue("cw:5:false:false" in fake.calls, "wart verbatim: own getContinueWatching(limit = 5)")
         assertTrue("nu:5:false:0" in fake.calls, "wart verbatim: own getNextUp(5, rewatching false, maxDays 0)")
         // 2 seeds → per-seed limit = 20/2 + 2 = 12.
         assertEquals(
@@ -372,13 +379,26 @@ class HomeSectionsFetcherTest {
         )
 
         // Recs succeeded (empty seeds → empty result) and ONLY THEN was the
-        // suggestions pre-fetch issued — the same predicate the assembler's
-        // fallback branch (~162) renders on; this pair is the cross-module pin.
+        // suggestions pre-fetch issued.
         assertTrue("suggestions:20" in fake.calls)
         val recSection = fetched.sections.single()
         assertEquals(HomeSectionType.RECOMMENDATIONS, recSection.type)
         assertEquals(listOf("s1", "s2"), recSection.items.map { it.id })
         assertEquals(null, recSection.seedItem)
+    }
+
+    @Test
+    fun `the shared suggestions-fallback predicate is the production pin`() = runTest {
+        // The fetch/render agreement used to be two hand-synced copies pinned
+        // together by the round-trip test above; both sites now consult the
+        // ONE production predicate (suggestionsFallbackApplies, beside the
+        // assembler). Pin its truth table directly: applies to a
+        // successful-but-empty payload only — never to items, a failure, or
+        // a disabled recommendations section (null).
+        assertTrue(suggestionsFallbackApplies(Result.success(RecommendationResult(emptyList(), null))))
+        assertFalse(suggestionsFallbackApplies(Result.success(RecommendationResult(listOf(item("rec1")), null))))
+        assertFalse(suggestionsFallbackApplies(Result.failure(RuntimeException("recs down"))))
+        assertFalse(suggestionsFallbackApplies(null))
     }
 
     @Test
@@ -583,7 +603,7 @@ class HomeSectionsFetcherTest {
         // calls fetch the raw-Episode grouping pool for TV (16 × the pre-12
         // server's own 5× overfetch) and stay unconstrained for movies and
         // mixed folders — both server generations resolve those identically.
-        assertTrue("cw:20:true" in fake.calls)
+        assertTrue("cw:20:true:false" in fake.calls)
         assertTrue("latest:tv1:16:80" in fake.calls)
         assertTrue("latest:mov1:16:null" in fake.calls)
         assertTrue("latest:mixed1:16:null" in fake.calls)
@@ -603,7 +623,7 @@ class HomeSectionsFetcherTest {
 
         // Default (modern): the server decides what the rows contain — the
         // 12.x Series/Season resume rollups and mixed latest rows flow through.
-        assertTrue("cw:20:false" in fake.calls)
+        assertTrue("cw:20:false:false" in fake.calls)
         assertTrue("latest:tv1:16:null" in fake.calls)
     }
 
@@ -623,7 +643,37 @@ class HomeSectionsFetcherTest {
             ),
         )
 
-        assertTrue("cw:5:true" in fake.calls)
+        assertTrue("cw:5:true:false" in fake.calls)
+    }
+
+    @Test
+    fun `the excludeActiveSessions flag reaches every resume read`() = runTest {
+        val fake = FakeHomeSectionSources()
+        // RECOMMENDATIONS rides the batch CW result as its seed pool; scripting
+        // both resume reads empty keeps the chain alive to the suggestions
+        // fallback (success-empty, no crash) so both call keys are observable.
+        fake.continueWatchingResults += Result.success(emptyList())
+        fake.nextUpResults += Result.success(emptyList())
+        fake.suggestionsResults += Result.success(SearchResult(emptyList(), 0, 0))
+
+        fetcher(fake).fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.RECOMMENDATIONS),
+                excludeActiveSessions = true,
+            ),
+        )
+
+        // The batch sub-call (20) carries the flag. The recommendations
+        // self-seed read (5) runs ONLY when the source row is *not* enabled
+        // (the staged seed-fallback gate: enabled-but-empty seeds are a
+        // terminal "nothing to recommend from", not a re-fetch trigger) —
+        // CW IS enabled here, so no second call exists and the seeds were
+        // consumed from the batch result. The self-seed forwarding pin
+        // without the gate lives in
+        // `classic rows reach the recommendations self-seed resume call`.
+        assertTrue("cw:20:false:true" in fake.calls)
+        assertFalse("cw:5:false:true" in fake.calls)
+        assertTrue(fake.calls.none { it.startsWith("similar:") }, "no seeds → no similar fan-out")
     }
 
     @Test
@@ -665,7 +715,7 @@ class HomeSectionsFetcherTest {
         // The generation value is the data layer's token passed through — any
         // value works here (the fetch below starts after the seed, so its
         // guard capture already observes it).
-        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")), generation = 1)
+        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")), generation = HomeWriteGeneration.of(1))
         val after = f.fetch(query)
 
         assertEquals(0, fake.calls.count { it.startsWith("discover:") })
@@ -702,8 +752,8 @@ class HomeSectionsFetcherTest {
         val gate = fake.gate("discover:r1:${row.limit}")
         val first = launch { f.fetch(query) }
         runCurrent() // the sub-call is now parked on the gate
-        f.invalidateDiscoverRow("r1", generation = 1)
-        f.seedDiscoverRow(row, listOf(item("rolled-1")), generation = 2)
+        f.invalidateDiscoverRow("r1", generation = HomeWriteGeneration.of(1))
+        f.seedDiscoverRow(row, listOf(item("rolled-1")), generation = HomeWriteGeneration.of(2))
         gate.complete(Unit)
         first.join()
 
@@ -1225,6 +1275,46 @@ class HomeSectionsFetcherTest {
         )
 
         assertTrue(result.isFailure, "Seerr rows ride the batch group gate — never a single-row refetch")
+    }
+
+    @Test
+    fun `refreshSection upcoming refetches verbatim under the static identity`() = runTest {
+        // The single-row refetch is the batch sub-call's twin — same port
+        // read, no eligibility filters (watch-state-blind by definition), the
+        // descriptor's static id/title preserved.
+        val fake = FakeHomeSectionSources()
+        fake.upcomingResults += Result.success(listOf(item("up-new")))
+        val section = HomeSectionType.UPCOMING.descriptor.section(listOf(item("up-old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.UPCOMING)),
+        ).getOrThrow()!!
+
+        assertEquals("upcoming", refreshed.id)
+        assertEquals("Upcoming", refreshed.title)
+        assertEquals(listOf("up-new"), refreshed.items.map { it.id })
+        assertTrue("upcoming:null:null:20" in fake.calls, "one catalog-wide port call, no parent scope")
+    }
+
+    @Test
+    fun `refreshSection my media is not refreshable`() = runTest {
+        // The tiles assemble the batch's shared folders read — a
+        // single-row refetch has nothing of its own to fetch, so the type is
+        // gate-off and an unguarded call fails with the caller-bug error.
+        val fake = FakeHomeSectionSources()
+        val section = HomeSectionType.MY_MEDIA.descriptor.section(listOf(item("tile")))
+
+        val result = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.MY_MEDIA)),
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            "Home section type MY_MEDIA is not refreshable",
+            result.exceptionOrNull()?.message,
+        )
     }
 
     @Test

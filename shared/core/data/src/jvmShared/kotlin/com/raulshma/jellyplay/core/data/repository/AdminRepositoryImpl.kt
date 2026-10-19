@@ -26,7 +26,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 
 /**
- * D5 ctor narrowed to the family singles the members actually call — the
+ * Ctor narrowed to the family singles the members actually call — the
  * injected [JellyfinApiClient] union was a pure delegation over those same
  * singles, so every forward here paid two extra hops
  * (feature → AdminRepository → union → family single) for nothing:

@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
 /**
  * Pins [AudioEffectsController]'s single write choreography (now riding the
  * shared [com.raulshma.jellyplay.core.data.playback.EffectsCommandCore]).
- * The load-bearing case is the toggle hazard the original extraction fixed:
+ * The load-bearing case is the toggle hazard:
  * the persisted value must come from the manager's synchronous
  * `StateFlow.value` (computed by the apply leg), NEVER from the state
  * mirror — the former inline VM setters read the mirror inside a `launch`,

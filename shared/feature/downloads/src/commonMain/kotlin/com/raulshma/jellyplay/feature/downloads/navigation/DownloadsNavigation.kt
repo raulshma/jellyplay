@@ -25,6 +25,14 @@ fun EntryProviderScope<NavKey>.downloadsSection(
                         navigator.navigate(Route.VideoPlayer(itemId))
                 }
             },
+            // Stream-instead: the same route the online Play path uses, with
+            // forceStream so the session resolves PlaybackSource.Online even
+            // though a completed download exists (the downloads row only
+            // offers this while the device is online).
+            onStreamOffline = { itemId ->
+                navigator.navigate(Route.VideoPlayer(itemId, forceStream = true))
+            },
+            onOpenStorageSettings = { navigator.navigate(Route.StorageSettings()) },
             onBack = { navigator.goBack() },
         )
     }

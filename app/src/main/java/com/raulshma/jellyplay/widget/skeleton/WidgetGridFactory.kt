@@ -23,9 +23,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * The lifecycle choreography the three widget factories (Library
- * recommendations, Seerr recommendations, Continue Watching) used to carry
- * as hand copies, now owned once:
+ * The lifecycle choreography shared by the three widget factories (Library
+ * recommendations, Seerr recommendations, Continue Watching), owned once:
  *
  *  - `onDataSetChanged` re-reads the latest snapshot ([snapshotProvider]),
  *    reads the poster cache MEMORY-ONLY ([cachedPosters]) and refreshes the
@@ -197,8 +196,7 @@ abstract class WidgetGridFactory<T>(
     }
 
     /**
-     * The bind tail the two recommendation grids (Library, Seerr) used to
-     * hand-copy: the responsive text-container rule
+     * The bind tail shared by the two recommendation grids (Library, Seerr): the responsive text-container rule
      * (`gridCellTextVisible(widgetDims)`) followed by the poster-or-
      * placeholder image (bitmap from the poster pipeline, else the shared
      * `widget_backdrop_placeholder`). The Continue Watching factory is a
@@ -251,19 +249,19 @@ abstract class WidgetGridFactory<T>(
     final override fun onCreate() = Unit
 
     final override fun onDataSetChanged() {
-        // Memory-first bind. This used to read
-        // the snapshot through the store's *Snapshot() accessors (ONE bounded
-        // ≤1 s BLOCKING disk read on a cold process — WidgetDataStore's
-        // SNAPSHOT_WARMUP_TIMEOUT_MS) and then runBlocking the batch poster
-        // preload (≤2 s more — WidgetImageLoader's deadline), all on the
-        // thread onDataSetChanged is posted to: worst case ~3 s stalling the
-        // main thread while the launcher's binder waits on this factory. The
-        // bind now reads ONLY memory — the store's eagerly-warmed StateFlow
+        // Memory-first bind. Reading the snapshot through the store's
+        // *Snapshot() accessors would cost ONE bounded ≤1 s BLOCKING disk
+        // read on a cold process — WidgetDataStore's
+        // SNAPSHOT_WARMUP_TIMEOUT_MS — and running runBlocking on the batch
+        // poster preload adds ≤2 s more (WidgetImageLoader's deadline), all on
+        // the thread onDataSetChanged is posted to: worst case ~3 s stalling
+        // the main thread while the launcher's binder waits on this factory.
+        // This bind reads ONLY memory — the store's eagerly-warmed StateFlow
         // value and WidgetImageLoader's poster cache — and returns
         // immediately; a cold snapshot renders the existing empty path
         // (getCount 0 → the widget's setEmptyView view), a poster miss the
-        // existing placeholder, both exactly the render shapes a slow
-        // bounded fetch produced before. The async repaint tail below then
+        // existing placeholder, both the render shapes a slow bounded fetch
+        // would produce. The async repaint tail below then
         // warms both off the bind path and repaints via
         // notifyAppWidgetViewDataChanged (the documented platform pattern:
         // empty list + notify after the async load), so the launcher never

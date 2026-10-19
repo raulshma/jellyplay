@@ -34,7 +34,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Adapter tests for the `integrations` namespace (the settings-backup wave):
+ * Adapter tests for the `integrations` namespace (the settings-backup cluster):
  * the three preference stores over a temp-file DataStore plus a temp-file
  * DataStore mirror — the allowlist contract (only the stores' [SeerrPreferencesStore.SyncKeys]-
  * style keys ever snapshot or apply; hostile/stale names are inert), the
@@ -322,11 +322,11 @@ class JellyPlayIntegrationsSyncAdapterTest {
         // A local reset (disconnect rewrites defaults; here: the raw default
         // write) is a VALUE change, never a tombstone...
         seerrStore.setEnabled(false)
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
 
         // ...and so is a key removal (back to defaults, not "deleted everywhere").
         dataStore.edit { it.remove(booleanPreferencesKey("seerr_enabled")) }
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
     }
 
     // ------------------------------------------------------------------
@@ -353,7 +353,7 @@ class JellyPlayIntegrationsSyncAdapterTest {
         assertTrue("seerr_server_url" in pushed)
         assertTrue("seerr_username" in pushed)
         assertTrue("seerr_email" in pushed)
-        assertTrue(adapter.deletedKeys().isEmpty()) // resets are values, not tombstones
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty()) // resets are values, not tombstones
 
         // Engine-style next cycle: the pushed resets are confirmed (the
         // server's rows are now the blanks), then one adopt pass re-applies

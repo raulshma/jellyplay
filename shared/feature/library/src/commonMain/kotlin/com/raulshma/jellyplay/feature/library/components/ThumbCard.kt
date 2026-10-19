@@ -110,6 +110,12 @@ fun ThumbCard(
                     fallbackUrls = fallbackUrls,
                     contentDescription = item.displayTitle(),
                     contentScale = ContentScale.Crop,
+                    // Grid-tile opt-out (PosterCard/WideMediaCard/SeerrMediaCard
+                    // precedent): the blurHash placeholder already provides the
+                    // image-arrival transition, and a crossfade on every tile
+                    // stretches a decode window per card during scroll. Memory-
+                    // cache hits skip the crossfade anyway.
+                    crossfade = false,
                     modifier = Modifier
                         .matchParentSize()
                         .then(rememberSharedElementModifier(sharedElementKey)),

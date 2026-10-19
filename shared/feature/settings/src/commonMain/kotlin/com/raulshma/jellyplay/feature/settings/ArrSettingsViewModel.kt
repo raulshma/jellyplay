@@ -36,10 +36,9 @@ import kotlinx.coroutines.sync.withPermit
  * Server probes ride the shared [ConnectionProbe] board (single-flight
  * restart, cancellation-never-lands-as-Error, localized fallback texts — its
  * KDoc declares the machine policies; this adapter owns the concurrency cap).
- * Behavior changes vs the former hand-rolled sealed map: a probe failure with
- * no server message now localizes "Connection failed" at render time (was a
- * hardcoded literal), and an unexpected probe crash degrades to a declared
- * fallback Error instead of crashing the scope.
+ * A probe failure with no server message localizes "Connection failed" at
+ * render time, and an unexpected probe crash degrades to a declared fallback
+ * Error instead of crashing the scope.
  */
 class ArrSettingsViewModel(
     private val arrRepository: ArrRepository,
@@ -65,8 +64,8 @@ class ArrSettingsViewModel(
 
     /**
      * Per-server reachability status keyed by [ArrServerConfig.id], owned by
-     * the shared [ConnectionProbe] board (the former hand-rolled sealed map).
-     * Populated by [testServer] / [testAllServers]; reset via
+     * the shared [ConnectionProbe] board. Populated by [testServer] /
+     * [testAllServers]; reset via
      * [ConnectionProbe.retain] whenever the server set mutates
      * (add/remove/discovery toggle) so stale entries never linger.
      */
@@ -122,11 +121,11 @@ class ArrSettingsViewModel(
 
     /**
      * Probes every server in [summary] (or the current [_servers] value when
-     * null). Unlike the former batch job, there is no batch-level
-     * cancellation anymore — each probe rides the board's per-key RESTART
-     * policy, so a new batch supersedes a still-running prior batch key by
-     * key instead of cancelling it wholesale (and probes of servers that left
-     * the set are reaped by [ConnectionProbe.retain] in [refreshServers]).
+     * null). There is no batch-level cancellation — each probe rides the
+     * board's per-key RESTART policy, so a new batch supersedes a still-running
+     * prior batch key by key instead of cancelling it wholesale (and probes of
+     * servers that left the set are reaped by [ConnectionProbe.retain] in
+     * [refreshServers]).
      */
     fun testAllServers(summary: ArrServiceSummary? = null) {
         val targets = (summary ?: _servers.value).let { it.radarrServers + it.sonarrServers }

@@ -35,76 +35,63 @@ import org.koin.compose.koinInject
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Desktop nav root ("desktop nav v1"): session-gated shell over the
- * shared feature conveyor. Signed-out users get the shared
- * [SignedOutAuthHost] (the shared auth section; retired the legacy
- * DesktopSignInPane with its cut-list); a live session renders the
- * NavigationRail + NavDisplay scaffold below.
+ * Desktop nav root: session-gated shell over the shared feature modules.
+ * Signed-out users get the shared [SignedOutAuthHost] (the shared auth
+ * section); a live session renders the NavigationRail + NavDisplay scaffold
+ * below.
  *
- * What is deliberately NOT wired yet (each omission dead-ends in the
+ * What is deliberately NOT wired (each omission dead-ends in the
  * registration-ledger guard in [DesktopNavScaffold], so a shared screen
  * pushing the route sees a snackbar instead of crashing NavDisplay with an
  * unregistered entry):
  *  - LiveTvChannelPlayer — the live-TV surface has no desktop engine host;
  *  - SubtitleTester — androidMain-only, no commonMain section at all.
  *
- * The metadata editor went live with the store promotion:
- * StreamingSubtitleStoreImpl moved to jvmShared with a desktop binding in
- * desktopDataModule (appdata-backed), so [editorSection] renders in the
- * scaffold's graph
- * Route.MetadataEditor — the details screen's edit action opens the shared
- * EditorScreen (admin-gated, like Android).
+ * [editorSection] renders in the scaffold's graph: StreamingSubtitleStoreImpl
+ * lives in jvmShared with a desktop binding in desktopDataModule
+ * (appdata-backed), so Route.MetadataEditor — the details screen's edit
+ * action — opens the shared EditorScreen (admin-gated, like Android).
  *
- * VIDEO went live on WINDOWS (SwingPanel/HWND mpv surface) and
- * wherever the mpv software-render surface smoke-passes
- * (DesktopSoftwareVideoPane, no child window); the per-session engine resolves
- * through PlayerEngineFactory (desktopPlayerModule); OSes with neither surface
- * story keep the dead-end guard.
+ * VIDEO renders on WINDOWS (SwingPanel/HWND mpv surface) and wherever the
+ * mpv software-render surface smoke-passes (DesktopSoftwareVideoPane, no
+ * child window); the per-session engine resolves through PlayerEngineFactory
+ * (desktopPlayerModule); OSes with neither surface story keep the dead-end
+ * guard.
  *
- * The AUDIO player went live with the real-audio engine:
  * [audioPlayerSection] registers Route.AudioPlayer + Route.Ambient, so music
  * track clicks (every music screen pushes Route.AudioPlayer(trackId)) open
  * the now-playing screen over the real desktop audio core —
  * DesktopAudioQueueManager in desktopPlayerModule.
  *
- * Home went live with the desktop wiring: the four WorkManager/
+ * [homeSection] renders in the scaffold's rail (Video/Music mode persisted
+ * through HomeDiscoveryStore like the Android shell): the four WorkManager/
  * widget-backed HomeViewModel ctor deps (PlaybackSyncScheduler,
- * TvWatchNextScheduler, ContinueWatchingBroadcaster, LibrarySyncHook) gained
- * honest no-op desktop definitions in desktopDataModule, so [homeSection]
- * renders in the scaffold's rail (Video/Music mode persisted through
- * HomeDiscoveryStore like the Android shell).
+ * TvWatchNextScheduler, ContinueWatchingBroadcaster, LibrarySyncHook) have
+ * honest no-op desktop definitions in desktopDataModule.
  *
- * Details + the auth drill-ins went live with the details/auth conveyor
- * flips: [detailsSection] renders behind every shared screen that pushes a
- * detail route (search results, requests/calendar → SeerrDetail, person/
- * cast/collection drill-ins), and [authSection] backs the settings
- * Server/UserManagement pushes (AddServer/ServerList/Login/QuickConnect/
- * UserSelection). Since the SAME section is the sign-in flow:
- * [SignedOutAuthHost] registers it while signed out, so desktop signs
- * in through the shared screens (Quick Connect, remembered-user picker,
- * add-server discovery included) — here the section only serves signed-in
- * server management.
+ * [detailsSection] renders behind every shared screen that pushes a detail
+ * route (search results, requests/calendar → SeerrDetail, person/cast/
+ * collection drill-ins), and [authSection] backs the settings Server/
+ * UserManagement pushes (AddServer/ServerList/Login/QuickConnect/
+ * UserSelection). The SAME section is the sign-in flow: [SignedOutAuthHost]
+ * registers it while signed out, so desktop signs in through the shared
+ * screens (Quick Connect, remembered-user picker, add-server discovery
+ * included) — here the section only serves signed-in server management.
  *
- * Settings + admin went live with the admin repositories' Koin flip:
- * AdminRepository/AdminStatisticsRepository are Koin singles in
- * dataJvmModule on both platforms, so [settingsSection] and [adminSection]
- * render in the scaffold (the settings drill-ins SeerrSettings/ArrSettings included —
- * their Seerr/Arr/datastore ctor deps are all Koin-native).
+ * [settingsSection] and [adminSection] render in the scaffold (the settings
+ * drill-ins SeerrSettings/ArrSettings included — their Seerr/Arr/datastore
+ * ctor deps are all Koin-native): AdminRepository/AdminStatisticsRepository
+ * are Koin singles in dataJvmModule on both platforms.
  *
- * Music went live next — browse-only at first, and fully playable
- * since: the last unresolved music ctor dep (AudioQueueFacade) binds
- * to the shared DefaultAudioQueueFacade over the desktop
- * DesktopAudioQueueManager (audio-only MpvDesktopEngine behind it), so
  * [musicSection] renders in the scaffold with its full browse/albums/artists/
- * genres/
- * playlists cluster AND play/enqueue/instant-mix actions drive real playback.
- * Track clicks navigate to the live Route.AudioPlayer (registered by
- * [audioPlayerSection] above). Since the music error-feedback seam
- * has a host here too, and since the shared UserMessageHost landed, that host
- * is the seam itself: the shell snackbar serves BOTH the DesktopMusicMessageBus
- * relay and the shared UserMessageBus (whose messages desktop previously
- * dropped) through one collector — one surface shared with the dead-end guard
- * in the scaffold.
+ * genres/playlists cluster AND play/enqueue/instant-mix actions driving real
+ * playback: AudioQueueFacade binds to the shared DefaultAudioQueueFacade over
+ * the desktop DesktopAudioQueueManager (audio-only MpvDesktopEngine behind
+ * it). Track clicks navigate to the live Route.AudioPlayer (registered by
+ * [audioPlayerSection] above). The shell snackbar is the music
+ * error-feedback seam: it serves BOTH the DesktopMusicMessageBus relay and
+ * the shared UserMessageBus through one collector — one surface shared with
+ * the dead-end guard in the scaffold.
  *
  * First-run onboarding gate: once an authenticated session enters
  * [DesktopNavScaffold], a one-shot read of the persisted `onboarding_completed`
@@ -158,12 +145,11 @@ internal fun DesktopAppRoot(
     // Session-restore probe: until it completes we cannot know whether a
     // persisted (server, user) pair exists, so hold on a neutral splash
     // instead of flashing the sign-in pane at every resuming session. The
-    // choreography is the SHARED SessionRestore now (shared/feature/shell) —
-    // restore call → authenticated-mirror wait → bounded timeout → release —
-    // replacing the former bare restore-call-then-done effect; the mirror
-    // wait and the 2.5 s cap are the discipline desktop GAINED (the release
-    // can no longer land while this composition still shows the signed-out
-    // host). The splash rendering below stays this shell's own.
+    // choreography is the SHARED SessionRestore (shared/feature/shell) —
+    // restore call → authenticated-mirror wait → bounded timeout → release.
+    // The mirror wait and the 2.5 s cap keep the release from landing while
+    // this composition still shows the signed-out host. The splash rendering
+    // below stays this shell's own.
     val sessionScope = rememberCoroutineScope()
     val sessionRestore = remember(authRepository) {
         SessionRestore(
@@ -187,15 +173,14 @@ internal fun DesktopAppRoot(
     // (same Koin single — collecting the flow does not re-arm the receiver),
     // while its playEvents stay deliberately uncollected (the decision is
     // documented at the collection seam, desktopUserMessageSources).
-    // The choreography itself is the SHARED RealtimeSessionController now
-    // (shared/feature/shell) — the former DesktopSessionCoordinator held only
-    // this wiring and died with the fold; the per-shell share is the client
-    // name and this `create` call. The restore above may leave this
-    // composition already authenticated, and the controller's auth collector
-    // picks that up off the StateFlow's current value on its first pass.
-    // Same pre-scaffold rule as the authRepository read above — direct Koin
-    // reads per the composition-order contract on rememberDesktopShellServices
-    // (this arm must also survive the sign-in → scaffold swap).
+    // The choreography itself is the SHARED RealtimeSessionController
+    // (shared/feature/shell); the per-shell share is the client name and this
+    // `create` call. The restore above may leave this composition already
+    // authenticated, and the controller's auth collector picks that up off
+    // the StateFlow's current value on its first pass. Same pre-scaffold rule
+    // as the authRepository read above — direct Koin reads per the
+    // composition-order contract on rememberDesktopShellServices (this arm
+    // must also survive the sign-in → scaffold swap).
     val realtimeConnection: RealtimeConnection = koinInject()
     val serverIdentityStore: ServerIdentityStore = koinInject()
     val remoteControlReceiver: RemoteControlReceiver = koinInject()
@@ -223,9 +208,8 @@ internal fun DesktopAppRoot(
 
     when {
         isRestoring -> SessionRestoreSplash()
-        // The signed-out gate is the SHARED SignedOutAuthHost now
-        // (shared/feature/shell) — the former DesktopSignedOutAuthHost
-        // hand-copy is retired with its v1 cut-list. The desktop-only chrome
+        // The signed-out gate is the SHARED SignedOutAuthHost
+        // (shared/feature/shell). The desktop-only chrome
         // rides the shared host's content slot: Esc / Alt+Left pop the
         // stack, refusing to pop below the ServerList root via
         // desktopBackKeyDecision — the same pure fold (back key above the

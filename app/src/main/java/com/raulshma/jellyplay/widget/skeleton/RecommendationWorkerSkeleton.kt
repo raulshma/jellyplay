@@ -7,10 +7,8 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.widget.isPermanentWidgetFailure
 
 /**
- * The refresh chassis the two recommendation workers (Library, Seerr) used to
- * carry as hand copies, now owned once — the recorded deferred "widget refresh
- * chassis" design, whose landing condition ("fold opportunistically", "fold
- * both together") is met by folding the pair together. The chassis is one
+ * The refresh chassis shared by the two recommendation workers (Library,
+ * Seerr), owned once. The chassis is one
  * ordered body:
  *
  *  1. **guard** — [skipFetch] decides whether there is enough session/server
@@ -33,9 +31,9 @@ import com.raulshma.jellyplay.widget.isPermanentWidgetFailure
  *     passes through.
  *
  * Adapters keep only their seams: both concrete workers are thin overrides
- * plus their source-routing fetch helpers, and their constructor signatures
- * are unchanged (AppWidgetWorkerFactory constructs them positionally). The
- * behaviour contract is pinned by the existing worker suites
+ * plus their source-routing fetch helpers, constructed positionally by
+ * AppWidgetWorkerFactory. The behaviour contract is pinned by the existing
+ * worker suites
  * (`LibraryRecommendationsWidgetWorkerTest`,
  * `SeerrRecommendationsWidgetWorkerTest`), which this fold leaves
  * semantically identical.

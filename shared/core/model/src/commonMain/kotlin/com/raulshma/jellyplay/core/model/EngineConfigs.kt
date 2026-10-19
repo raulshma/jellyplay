@@ -190,7 +190,7 @@ enum class DeinterlaceMode(val key: String, val displayName: String) {
  * it (an explicit OFF pack override IS meaningful: "this series looks wrong
  * upscaled").
  *
- * Recorded direction (review candidate A2 TIER 2, descoped): this family
+ * Direction: this family
  * ([MpvShaderPack]/[MpvToneMapping]/[MpvRenderQuality] + this override row)
  * stays deliberately mpv-typed. Generalizing it engine-neutrally — either an
  * AspectRatio-style neutral vocabulary the adapters map, or a
@@ -201,10 +201,9 @@ enum class DeinterlaceMode(val key: String, val displayName: String) {
  * per-item row) and in the contract's `engineSpecific` slot this file's
  * variants already share: a future engine with real render knobs would add
  * its own variant beside [MpvRenderOverrides] and a capability gate on the
- * sheet's menu entry, not a shared enum. Not attempted in the review wave —
- * render profiles + the multi-range seek bar just shipped (59592e350,
- * 636f2dcff) and the rework would churn a fresh, pinned feature for zero
- * current-engine gain.
+ * sheet's menu entry, not a shared enum. Keep the mpv-typed shape: a shared
+ * enum would churn the pinned render-profile and multi-range seek-bar
+ * behavior for no current-engine gain.
  */
 @Immutable
 @Serializable
@@ -221,7 +220,7 @@ data class MpvRenderOverrides(
 @Serializable
 data class MpvEngineConfig(
     // gpu-next is the modern vo with better HDR / 10-bit handling; the legacy
-    // `gpu` vo is the historical default but is no longer recommended.
+    // `gpu` vo is not recommended.
     val videoOutput: MpvVideoOutput = MpvVideoOutput.GPU_NEXT,
     // Bilinear matches mpv's own default and mpvkt's config — the cheapest
     // upscaler. High-order scalers (lanczos, spline*) are a steady per-frame
@@ -434,6 +433,23 @@ enum class ExoAudioOffloadMode(val displayName: String, val key: String, val val
     REQUIRED("Required", "REQUIRED", 2),
 }
 
+/**
+ * The ExoPlayer HDR→SDR tone-mapping posture — when the engine may route
+ * video through Media3's GL video-graph so HDR content tone maps on a display
+ * that cannot output it. There is deliberately no ALWAYS mode: Media3 1.11.1
+ * exposes no force-tone-map lever (`setRequestOpenGlToneMapping` is
+ * instance-level on an unreachable wrapper), so AUTO can only REQUEST the GL
+ * path — Media3's own EGL-capability check decides at render time.
+ */
+@Immutable
+@Serializable
+enum class ExoHdrToneMappingMode(val displayName: String) {
+    /** Tone map only when the item is HDR and the display cannot output that HDR family. */
+    AUTO("Auto (when display is SDR)"),
+    /** Never engage the GL path — native MediaCodec→Surface output, pre-HDR behavior. */
+    OFF("Off (native output)"),
+}
+
 @Immutable
 @Serializable
 data class ExoPlayerEngineConfig(
@@ -444,6 +460,12 @@ data class ExoPlayerEngineConfig(
     val audioOffloadMode: ExoAudioOffloadMode = ExoAudioOffloadMode.DISABLED,
     val backBufferDurationMs: Int = 0,
     val enableDecoderFallback: Boolean = true,
+    /**
+     * HDR→SDR tone-mapping posture (see [ExoHdrToneMappingMode]). [AUTO] only
+     * ever engages when the item's streams are HDR AND the Android display
+     * probe reports no matching HDR type — SDR content never pays the GL pass.
+     */
+    val hdrToneMapping: ExoHdrToneMappingMode = ExoHdrToneMappingMode.AUTO,
 ) : EngineSpecificConfig
 
 /**

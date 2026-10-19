@@ -5,6 +5,15 @@ plugins {
 kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.player.live"
+        // LiveDpadKeyConfigTest (the TV D-pad arm edge guards) — withHostTest
+        // creates the androidUnitTest variant bound to the Kotlin test tree
+        // (AGP-9 KMP library plugin). Flags mirrored verbatim from
+        // shared/feature/player-video; the suite is pure logic (no resources,
+        // no android APIs touched).
+        withHostTest {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
     }
 
     sourceSets {

@@ -76,7 +76,7 @@ class VideoPlayerAggregateStoreTest {
 
     @Test
     fun `aggregate emits the seven drained slice defaults before any write`() = runTest {
-        // The aggregate holds the seven slices verbatim, so its cold value must
+        // The aggregate holds the seven slices as-is, so its cold value must
         // equal the slices the constituent stores emit on an empty DataStore.
         // (PlaybackStore migrates the legacy `force_direct_play` default, so its
         // slice default is FORCE_DIRECT_PLAY, not the PlaybackSlice data-class

@@ -16,9 +16,8 @@ import org.koin.mp.KoinPlatform
 
 /**
  * [WorkerFactory] for the two app-widget recommendation workers
- * (Hilt removal: the former Hilt worker assisted-injection pair became plain
- * CoroutineWorker constructors, so WorkManager's reflection fallback can no
- * longer build them). Registered in JellyPlayApplication's
+ * (the workers take explicit constructors, which WorkManager's reflection
+ * fallback cannot build). Registered in JellyPlayApplication's
  * DelegatingWorkerFactory alongside the core-data and notification factories.
  * Explicit-when on the class name — unknown classes return null
  */

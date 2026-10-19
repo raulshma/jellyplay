@@ -11,8 +11,8 @@ import kotlin.test.Test
 
 /**
  * Tests for the offline-derived home sections — the data behind the offline
- * home, which renders the normal home content list fed with these sections
- * (issue #147), including the downloaded-episode-backed Continue Watching and
+ * home, which renders the normal home content list fed with these sections,
+ * including the downloaded-episode-backed Continue Watching and
  * Next Up rows.
  */
 class OfflineHomeSectionsTest {
@@ -674,7 +674,7 @@ class OfflineHomeSectionsTest {
 
     //endregion
 
-    //region cached-layout mirror (#147: "literally the home layout, filtered for downloaded")
+    //region cached-layout mirror ("literally the home layout, filtered for downloaded")
 
     private fun cachedItem(id: String) = com.raulshma.jellyplay.core.model.MediaItem(
         id = id,
@@ -899,7 +899,7 @@ class OfflineHomeSectionsTest {
         // Latest TV dropped twice over: globally enabled but disabled for its
         // library via the override; Recently Added survives. The "show"
         // download is not surfaced by any mirrored row, so the generic
-        // fallback rows append for it (#147 coverage guarantee) — the movie
+        // fallback rows append for it (coverage guarantee) — the movie
         // is already covered by the mirrored Recently Added row.
         assertEquals(
             listOf("offline_srv_recent", "offline_recently_downloaded", "offline_series"),

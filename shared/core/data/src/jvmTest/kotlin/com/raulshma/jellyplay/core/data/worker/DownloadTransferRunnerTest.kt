@@ -8,14 +8,20 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
+import java.io.InputStream
 import java.net.SocketTimeoutException
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Tests [DownloadTransferRunner] — the extracted single-connection transfer loop
@@ -26,7 +32,7 @@ import kotlin.test.assertTrue
  *
  * Each test scripts the HTTP responses the loop will see and asserts the DAO
  * writes (status, errorMessage, bytes) + [TransferOutcome] that result,
- * pinning the parity with the pre-extraction inline branches.
+ * pinning the parity with the original inline branches.
  *
  * Moved verbatim from the legacy :core:data shim's Robolectric-free suite
  * (same assertions); the ListenableWorker Result assertions became
@@ -303,5 +309,149 @@ class DownloadTransferRunnerTest {
         assertEquals("bytes=1024-", client.requests[0].range)
         // Appended: 1024 existing + 3072 streamed = 4096.
         coVerify { dao.markCompleted("dl-1", 4096L, any()) }
+    }
+
+    // ---- kill mid-transfer → gated persist → resume completes ---------------
+
+    @Test
+    fun `killed process resumes from the gated persist and completes byte-exact`() =
+        runTest(timeout = 60.seconds) {
+            // "Process 1": streams 2 KiB of 4 KiB slowly (the runner only
+            // evaluates its throttle/persist gates between reads), then parks
+            // forever — a process killed mid-transfer leaves exactly this
+            // state: row at the last gated persist count, file holding the
+            // flushed prefix, status still DOWNLOADING (no terminal write).
+            // The gated persist only admits a write past the 5 s floor (the
+            // new cadence), on a ~2 s ticker tick.
+            val prefix = ByteArray(2048) { 0x11 }
+            val persistObserved = CountDownLatch(1)
+            // Capture ONLY the first gated mid-transfer persist — the runner
+            // also writes a final DOWNLOADING progress row on completion
+            // (right before markCompleted), which must not clobber the
+            // snapshot the resume is built from.
+            val firstPersist = java.util.concurrent.atomic.AtomicBoolean(true)
+            var persistedBytes = -1L
+            var fileBytesAtPersist = -1L
+            var persistElapsedMs = Long.MAX_VALUE
+            val startedAt = System.currentTimeMillis()
+            coEvery {
+                dao.updateProgressWithSpeed(any(), any(), DownloadStatus.DOWNLOADING.name, any())
+            } answers {
+                if (firstPersist.compareAndSet(true, false)) {
+                    persistedBytes = secondArg()
+                    // The invariant that lets a resume trust the row count:
+                    // the stream was flushed BEFORE this write, so the on-disk
+                    // prefix is never shorter than the persisted bytes
+                    // (without the explicit flush, the still-buffered bytes
+                    // would be missing here and fileBytesAtPersist would read
+                    // short).
+                    fileBytesAtPersist = tempFile.length()
+                    persistElapsedMs = System.currentTimeMillis() - startedAt
+                    persistObserved.countDown()
+                }
+            }
+            client.replyByRequest { request ->
+                if (request.range == null) {
+                    FakeDownloadTransferClient.Reply.Stream(
+                        code = 206,
+                        stream = SlowPrefixThenParkBody(prefix, bytesPerChunk = 16, chunkDelayMs = 50),
+                        totalSize = 4096L,
+                    )
+                } else {
+                    // "Process 2": the server honours whatever range the
+                    // resume asks for, serving exactly the remainder.
+                    val start = request.range!!.removePrefix("bytes=").substringBefore('-').toLong()
+                    FakeDownloadTransferClient.Reply.Status(
+                        code = 206,
+                        body = ByteArray((4096L - start).toInt()) { 0x22 },
+                        totalSize = 4096L,
+                    )
+                }
+            }
+
+            // The killed process runs detached — it parks forever, so it can
+            // never be joined; the daemon thread dies with the test JVM and
+            // writes nothing after parking (the 1%-delta gate closes its
+            // further persists once the prefix is exhausted).
+            thread(isDaemon = true) {
+                runBlocking {
+                    runner().transfer(
+                        entity(), existingBytes = 0L,
+                        notificationId = 1, accessToken = null, probedTotalSize = 4096L,
+                    )
+                }
+            }
+
+            assertTrue(
+                persistObserved.await(30, TimeUnit.SECONDS),
+                "the gated mid-transfer persist never fired",
+            )
+            // The persist is mid-transfer: past the gate's >= 1% byte floor
+            // (4096 * 1% ⇒ 41), at most the full prefix, and the transfer
+            // has no terminal write (the process is still "running").
+            assertTrue(persistedBytes in 41..2048, "persisted $persistedBytes — not a mid-transfer gated count")
+            assertTrue(
+                fileBytesAtPersist >= persistedBytes,
+                "flush-before-persist broken: file holds $fileBytesAtPersist bytes but the row persisted $persistedBytes",
+            )
+            // The new cadence: no mid-transfer persist before the 5 s floor
+            // (small dispatch skew between the test's clock read and the
+            // runner's gate construction is tolerated).
+            assertTrue(
+                persistElapsedMs >= DownloadTransferRunner.DB_PERSIST_INTERVAL_MS - 200,
+                "a mid-transfer persist fired at ${persistElapsedMs}ms — before the 5 s gate",
+            )
+
+            // "Process 2" resumes from exactly the persisted state.
+            val result = runner().transfer(
+                entity(downloadedBytes = persistedBytes), existingBytes = persistedBytes,
+                notificationId = 1, accessToken = null, probedTotalSize = 4096L,
+            )
+
+            assertEquals(TransferOutcome.Success, result)
+            assertEquals("bytes=$persistedBytes-", client.requests.last().range)
+            coVerify { dao.markCompleted("dl-1", 4096L, any()) }
+            // The resumed file is the exact concatenation: flushed prefix +
+            // streamed tail, no gap, no double-write at the seam.
+            assertTrue(tempFile.length() == 4096L, "final file is ${tempFile.length()} bytes, expected 4096")
+            tempFile.inputStream().use { stream ->
+                val finalBytes = stream.readBytes()
+                assertTrue(finalBytes[0] == 0x11.toByte() && finalBytes[(persistedBytes - 1).toInt()] == 0x11.toByte())
+                assertTrue(finalBytes[persistedBytes.toInt()] == 0x22.toByte() && finalBytes[4095] == 0x22.toByte())
+            }
+        }
+
+    /**
+     * Serves [bytesPerChunk] bytes every [chunkDelayMs] ms until [prefix] is
+     * exhausted, then parks forever (a killed process's socket simply stops
+     * delivering) — the transfer loop blocks in `read()` on the park-poll and
+     * never reaches a terminal status write. The slow drip is what lets the
+     * runner's ~2 s throttle ticks fire while bytes are still flowing, so the
+     * 5 s persist gate opens mid-transfer.
+     */
+    private class SlowPrefixThenParkBody(
+        private val prefix: ByteArray,
+        private val bytesPerChunk: Int,
+        private val chunkDelayMs: Long,
+    ) : InputStream() {
+        private var served = 0
+
+        override fun read(): Int {
+            val next = read(byteArrayOf(), 0, 1)
+            return if (next == -1) -1 else 0x2A
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (served >= prefix.size) park()
+            Thread.sleep(chunkDelayMs)
+            val n = minOf(len, bytesPerChunk, prefix.size - served)
+            System.arraycopy(prefix, served, b, off, n)
+            served += n
+            return n
+        }
+
+        private fun park() {
+            while (true) Thread.sleep(1_000)
+        }
     }
 }

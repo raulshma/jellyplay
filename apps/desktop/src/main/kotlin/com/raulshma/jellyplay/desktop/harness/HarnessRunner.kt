@@ -28,8 +28,7 @@ internal class StepFailure(
 /**
  * The one runner chassis behind all three desktop E2E lanes
  * ([DesktopSessionHarness], [DesktopFlowHarness],
- * [DesktopNativeDialogHarness]; extracted from their byte-identical
- * private Runner twins). Owns the step ledger ([step] + [StepFailure]),
+ * [DesktopNativeDialogHarness]). Owns the step ledger ([step] + [StepFailure]),
  * the [awaitUntil] poller, the auto-exit deadline timer
  * ([armAutoExit], the DesktopStartupPerf pattern — a hung run still
  * leaves a partial report and a defined exit) and the
@@ -77,7 +76,7 @@ internal class HarnessRunner(
     @Volatile
     private var lastOverallPass: Boolean = false
 
-    /** Deadline timer: write whatever exists, exit (perf-harness twin). */
+    /** Deadline timer: write whatever exists, exit. */
     fun armAutoExit() {
         Timer("jellyplay-$logTag", true).schedule(
             object : TimerTask() {
@@ -156,16 +155,15 @@ internal class HarnessRunner(
     /**
      * Poll [poll] until it returns true or [timeoutMs] elapses; one final
      * poll runs after the deadline so a just-ready condition is not missed
-     * (all three lanes' original shape).
+     * (the shape all three lanes rely on).
      *
      * ONE signature serves both poll styles: a plain `() -> Boolean` lambda
      * passes unchanged where `suspend () -> Boolean` is expected (Kotlin
      * adapts it), so the session harness's non-suspend polls and the flows
      * harness's suspending polls (e.g. awaitTarget's intra-poll settle
-     * delay) share this chassis. The old per-lane poll cadence (200 ms
-     * session / 150 ms flows / 100 ms dialog) is preserved per lane via
-     * [pollIntervalMs] — deliberately kept as tuned wall-clock timing, not
-     * unified.
+     * delay) share this chassis. Each lane tunes its cadence via
+     * [pollIntervalMs] (200 ms session / 150 ms flows / 100 ms dialog) —
+     * deliberately kept as tuned wall-clock timing, not unified.
      */
     suspend fun awaitUntil(timeoutMs: Long, poll: suspend () -> Boolean): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0)
@@ -202,9 +200,7 @@ internal class HarnessRunner(
 }
 
 /**
- * The one Robot evidence chassis behind the desktop E2E lanes (extracted
- * from DesktopSessionHarness's private helpers, which are the superset;
- * the flows lane's copies were slimmed-down twins of these). Owns:
+ * The one Robot evidence chassis behind the desktop E2E lanes. Owns:
  * the cached [Robot] ([robotOrNull]), the AWT focus/key diagnostics
  * ([armFocusDiagnostics]), key injection ([injectKey]) and window
  * screenshots — both the session lane's FAIL-the-step flavor ([screenshot])
@@ -214,7 +210,7 @@ internal class HarnessRunner(
  *
  * All `t=+…ms` stamps are taken against the runner's [startedAtMs] so flap
  * cycles correlate against the step timeline and the bringWindowToFront
- * marks (the focus-thief lesson below makes them checkable).
+ * marks (which make the focus-thief case checkable).
  */
 internal class HarnessRobot(
     private val logTag: String,
@@ -234,11 +230,11 @@ internal class HarnessRobot(
     }
 
     /**
-     *  focus diagnostics: log every AWT focus-owner / focused-window
+     * Shared focus diagnostics: log every AWT focus-owner / focused-window
      * change (class + owning-window identity) and every key event's AWT
      * dispatch target, so a failing OVERLAY_SPACE run shows whether the
      * Robot-injected keys landed on the Compose component at all (e.g. the
-     *  mpv SwingPanel Canvas stealing AWT focus) and how the owner
+     * mpv SwingPanel Canvas stealing AWT focus) and how the owner
      * moved between the grab effect's attempts and the injection.
      */
     fun armFocusDiagnostics() {

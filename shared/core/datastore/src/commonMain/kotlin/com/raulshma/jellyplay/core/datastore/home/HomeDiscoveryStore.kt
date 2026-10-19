@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
@@ -17,6 +18,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -28,10 +30,13 @@ import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -63,7 +68,8 @@ import kotlinx.serialization.Serializable
  * rows by reset category, and the namespace migration's per-type copy lists
  * are the rows filtered by declared storage. The read-modify-write commands,
  * the enabled-set version-union decode (whose per-user parse cache a row
- * encoding cannot carry) and the first-user-claims migration stay hand-written
+ * encoding cannot carry), the first-user-claims migration and the v3
+ * upgrade baseline ([ensureV3UpgradeBaseline]) stay hand-written
  * by decision — see the spec KDoc.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file, but every key
@@ -99,6 +105,11 @@ class HomeDiscoveryStore constructor(
         scope.launch {
             identityStore.activeUserId.collect { userId ->
                 val uid = userId?.takeIf { it.isNotBlank() } ?: return@collect
+                // The v3 baseline MUST classify before the namespace migration
+                // runs — after it, HOME_NS_MIGRATED is set on fresh installs
+                // too and every one would misclassify as an upgrader. See
+                // [ensureV3UpgradeBaseline].
+                ensureV3UpgradeBaseline(uid)
                 ensureNamespacedMigration(uid)
             }
         }
@@ -159,7 +170,14 @@ class HomeDiscoveryStore constructor(
     internal object Keys {
         val HOME_MODE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_MODE.keyName)
         val HOME_HERO_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.keyName)
+        val HOME_HERO_VIDEO_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.keyName)
+        val HOME_HERO_VIDEO_TV_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.keyName)
         val HOME_BACKDROP_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.keyName)
+        val HOME_FOCUS_BACKDROP = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.keyName)
+        val HOME_STATS_CARD = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.keyName)
+        val HOME_GENRE_RAIL = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.keyName)
+        val HOME_PRESENCE_CHIPS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.keyName)
+        val HOME_NEW_SECTION_ANNOUNCEMENTS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS.keyName)
         val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.keyName)
         val HOME_ENABLED_SECTION_TYPES_VERSION = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_VERSION.keyName)
         val HOME_SECTION_ORDER = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.keyName)
@@ -169,22 +187,34 @@ class HomeDiscoveryStore constructor(
         val PINNED_HOME_SECTIONS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.keyName)
         val HOME_DISCOVER_ROWS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.keyName)
         val HOME_LAYOUT_PRESETS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.keyName)
+        val HOME_LAYOUT_AUTOPUSH = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.keyName)
         val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.keyName)
         val SHOW_UNWATCHED_BADGE = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.keyName)
         val HIDE_WATCHED_ITEMS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.keyName)
         val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.keyName)
         val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.keyName)
+        val SHOW_QUALITY_BADGES = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.keyName)
+        val SHOW_NEW_BADGES = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.keyName)
+        val HOME_TRICKPLAY_PREVIEW = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.keyName)
+        val ANTI_SPOILER_HOME = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.keyName)
         val MERGE_CONTINUE_WATCHING_NEXT_UP = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.keyName)
         val NEXT_UP_MAX_DAYS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.keyName)
         val NEXT_UP_REWATCHING = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.keyName)
         val CLASSIC_ROWS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.keyName)
+        val EXCLUDE_ACTIVE_SESSIONS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.keyName)
         val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.keyName)
         val HIDDEN_CW_ITEM_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.keyName)
         val LAST_VIEWED_SEASON_BY_SERIES = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.keyName)
+        val MY_MEDIA_HIDDEN_LIBRARY_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.keyName)
+        val THEME_MUSIC_MUTED_SERIES_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.keyName)
+        val HOME_LAST_VISIT_EPOCH_MS = longPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.keyName)
+        val HOME_ANNOUNCED_VERSION = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.keyName)
         val SHOW_CLOCK_ON_HOME = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.keyName)
         val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.keyName)
         val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.keyName)
         val HOME_NS_MIGRATED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NS_MIGRATED.keyName)
+        val HOME_V3_UPGRADE_BASELINE_DONE =
+            booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_V3_UPGRADE_BASELINE_DONE.keyName)
     }
 
     // ------------------------------------------------------------------
@@ -208,6 +238,23 @@ class HomeDiscoveryStore constructor(
     internal val legacyKeys: List<Preferences.Key<*>> = HomeDiscoveryPreferenceSpecs.legacyKeys
 
     /**
+     * Runs a one-time home fold with the module's DataStore failure posture:
+     * a read/edit failure (IO error, corruption) is swallowed and degraded —
+     * the init collector runs in the ApplicationScope, which has no
+     * CoroutineExceptionHandler, so a throw would crash the app and kill the
+     * collector for good — and the fold's marker is only set on success, so
+     * the next user activation retries (silent-swallow is the module
+     * convention — see ArrSecureCredentialsStore.getManualServers).
+     * Cancellation is rethrown, never swallowed: a canceled collector must
+     * die at its suspension point, not dispatch its edit after the fact — a
+     * post-cancel edit would write against whatever state the next
+     * activation has since created.
+     */
+    private suspend fun runOneTimeFold(block: suspend () -> Unit) {
+        runCatching { block() }.onFailure { if (it is CancellationException) throw it }
+    }
+
+    /**
      * ONE-TIME, GLOBAL, FIRST-USER-CLAIMS migration from the legacy flat keys
      * to the active user's `u_<userId>::` namespace.
      *
@@ -226,18 +273,12 @@ class HomeDiscoveryStore constructor(
      * Idempotent and crash-safe: the fast path skips when the marker is set,
      * the copies and the marker (set last) commit in one atomic DataStore edit,
      * and copies only fill absent namespaced keys — a crash at any point
-     * re-runs to the same result.
+     * re-runs to the same result. Runs under [runOneTimeFold]'s
+     * swallow-and-degrade failure posture.
      */
     internal suspend fun ensureNamespacedMigration(userId: String) {
-        // A DataStore read/edit failure (IO error, corruption) must not escape
-        // into the init collector's ApplicationScope coroutine — that scope has
-        // no CoroutineExceptionHandler, so a throw would crash the app and kill
-        // the migration collector for good. Swallow and degrade instead: the
-        // marker is only set on success, so the next user activation retries.
-        // (Silent-swallow is the module convention — see
-        // ArrSecureCredentialsStore.getManualServers.)
-        runCatching {
-            if (dataStore.data.first()[Keys.HOME_NS_MIGRATED] == true) return
+        runOneTimeFold {
+            if (dataStore.data.first()[Keys.HOME_NS_MIGRATED] == true) return@runOneTimeFold
             dataStore.edit { prefs ->
                 if (prefs[Keys.HOME_NS_MIGRATED] == true) return@edit
                 // Fold the legacy hidden-library conversion in first so its
@@ -259,6 +300,66 @@ class HomeDiscoveryStore constructor(
                     copyIntoNamespace(prefs, it.typedKey(), userId, ::stringPreferencesKey) { raw -> raw }
                 }
                 prefs[Keys.HOME_NS_MIGRATED] = true
+            }
+        }
+    }
+
+    /**
+     * ONE-TIME, GLOBAL v3 upgrade baseline. UPCOMING and MY_MEDIA ship as
+     * [HomeSectionType.CONFIGURABLE] default-set members, so an ABSENT
+     * enabled-set serves both — indistinguishably, on a fresh install and on
+     * an install updating from v0.11.4 whose user never touched section
+     * config. The read-side union cannot help (an absent set is not a
+     * persisted one), so this fold decides once per install: classify, and
+     * for an UPGRADING install materialize the default set minus
+     * [HomeDiscoveryPreferenceSpecs.V3_UPGRADE_EXCLUDED_SECTIONS] as the
+     * first active user's persisted set, stamped current — their home keeps
+     * exactly the rows it had, and enabling either section later is an
+     * ordinary verbatim write. A user who already persisted a set is left
+     * untouched (its v3 absence is respected by the union not carrying the
+     * pair); a FRESH install gets no write at all and keeps serving the
+     * default with the pair visible.
+     *
+     * Classification: [Keys.HOME_NS_MIGRATED] already set (any
+     * namespacing-era install), or ANY legacy flat home key still on disk
+     * (pre-namespacing installs — the copy fold never deletes, so the keys
+     * are there whether or not the namespace migration has run). Both
+     * signals must be consulted BEFORE [ensureNamespacedMigration] on the
+     * same activation — the init collector orders them — because the
+     * migration sets the marker on fresh installs too, and a fold that ran
+     * after it would misclassify every fresh install as an upgrader.
+     *
+     * First-user-claims, matching the namespace migration: later users
+     * activating on an updated install have no persisted set and start from
+     * the spec default (pair visible) — the baseline claims for exactly the
+     * user who was active at upgrade time. Idempotent and crash-safe in the
+     * same shape: fast-path skip on the marker, classify + write + marker
+     * (set last) in one atomic edit, a crash re-runs to the same result.
+     * DataStore failures are swallowed (module convention — see
+     * [runOneTimeFold]) — the marker is only set on success, so the next
+     * activation retries.
+     */
+    internal suspend fun ensureV3UpgradeBaseline(userId: String) {
+        runOneTimeFold {
+            if (dataStore.data.first()[Keys.HOME_V3_UPGRADE_BASELINE_DONE] == true) return@runOneTimeFold
+            dataStore.edit { prefs ->
+                if (prefs[Keys.HOME_V3_UPGRADE_BASELINE_DONE] == true) return@edit
+                val wasUpdating = prefs[Keys.HOME_NS_MIGRATED] == true ||
+                    // Name-based across ALL slots: the legacy layer holds
+                    // typed and pre-typed STRING forms under the same names.
+                    prefs.asMap().keys.any { it.name in HomeDiscoveryPreferenceSpecs.legacyRowNames }
+                if (wasUpdating) {
+                    val setKeyName = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.rawUserKey(userId).name
+                    if (prefs.asMap().keys.none { it.name == setKeyName }) {
+                        writeEnabledHomeSectionTypes(
+                            prefs,
+                            userId,
+                            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default -
+                                HomeDiscoveryPreferenceSpecs.V3_UPGRADE_EXCLUDED_SECTIONS,
+                        )
+                    }
+                }
+                prefs[Keys.HOME_V3_UPGRADE_BASELINE_DONE] = true
             }
         }
     }
@@ -357,7 +458,7 @@ class HomeDiscoveryStore constructor(
 
         // Parse caches — per-user by construction: one UserReader per user.
         private var cachedEnabledHomeSectionTypes =
-            ParsedCache<Set<HomeSectionType>>(null, HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default)
+            ParsedCache<EnabledSectionTypesRead>(null, EnabledSectionTypesRead())
         private var cachedHomeSectionOrder =
             ParsedCache<List<HomeSectionType>>(null, HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.default)
         private var cachedLibraryHomeSectionOverrides =
@@ -374,36 +475,65 @@ class HomeDiscoveryStore constructor(
             ParsedCache<Set<String>>(null, HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.default)
         private var cachedLastViewedSeasonBySeries =
             ParsedCache<Map<String, String>>(null, HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.default)
+        private var cachedMyMediaHiddenLibraryIds =
+            ParsedCache<Set<String>>(null, HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.default)
+        private var cachedThemeMusicMutedSeriesIds =
+            ParsedCache<Set<String>>(null, HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.default)
 
-        fun slice(prefs: Preferences): HomeDiscoverySlice = HomeDiscoverySlice(
-            homeMode = HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(prefs, userId),
-            homeHeroEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.readBoolForUser(prefs, userId),
-            homeBackdropEnabled = HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.readBoolForUser(prefs, userId),
-            enabledHomeSectionTypes = readEnabledHomeSectionTypes(prefs),
-            homeSectionOrder = readHomeSectionOrder(prefs),
-            libraryHomeSectionOverrides = readLibraryHomeSectionOverrides(prefs),
-            pinnedHomeSections = readPinnedHomeSections(prefs),
-            discoverRows = readDiscoverRows(prefs),
-            homeLayoutPresets = readHomeLayoutPresets(prefs),
-            continueWatchingClickBehavior = HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR
-                .readEnumForUser(prefs, userId),
-            showUnwatchedBadge = HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.readBoolForUser(prefs, userId),
-            hideWatchedItems = HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.readBoolForUser(prefs, userId),
-            showWatchedCheckmark = HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.readBoolForUser(prefs, userId),
-            showExternalRatings = HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.readBoolForUser(prefs, userId),
-            mergeContinueWatchingAndNextUp = HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP
-                .readBoolForUser(prefs, userId),
-            nextUpMaxDays = HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.readIntForUser(prefs, userId),
-            nextUpRewatching = HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.readBoolForUser(prefs, userId),
-            classicRows = HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.readBoolForUser(prefs, userId),
-            nextUpExcludedSeriesIds = readNextUpExcludedSeriesIds(prefs),
-            hiddenCwItemIds = readHiddenCwItemIds(prefs),
-            lastViewedSeasonBySeries = readLastViewedSeasonBySeries(prefs),
-            showClockOnHome = HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.readBoolForUser(prefs, userId),
-            showSettingsInHomeSearch = HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH
-                .readBoolForUser(prefs, userId),
-            hideTopHeaderOnScroll = HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.readBoolForUser(prefs, userId),
-        )
+        fun slice(prefs: Preferences): HomeDiscoverySlice {
+            val enabledTypes = readEnabledHomeSectionTypes(prefs)
+            return HomeDiscoverySlice(
+                homeMode = HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(prefs, userId),
+                homeHeroEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.readBoolForUser(prefs, userId),
+                homeHeroVideoEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.readBoolForUser(prefs, userId),
+                homeHeroVideoTvEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.readBoolForUser(prefs, userId),
+                homeBackdropEnabled = HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.readBoolForUser(prefs, userId),
+                homeFocusBackdrop = HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.readBoolForUser(prefs, userId),
+                homeStatsCard = HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.readBoolForUser(prefs, userId),
+                homeGenreRail = HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.readBoolForUser(prefs, userId),
+                homePresenceChips = HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.readBoolForUser(prefs, userId),
+                homeNewSectionAnnouncements = HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS
+                    .readBoolForUser(prefs, userId),
+                enabledHomeSectionTypes = enabledTypes.sections,
+                enabledHomeSectionTypesVersion = enabledTypes.storedVersion,
+                sectionsAddedByUnion = enabledTypes.addedByUnion,
+                homeSectionOrder = readHomeSectionOrder(prefs),
+                libraryHomeSectionOverrides = readLibraryHomeSectionOverrides(prefs),
+                pinnedHomeSections = readPinnedHomeSections(prefs),
+                discoverRows = readDiscoverRows(prefs),
+                homeLayoutPresets = readHomeLayoutPresets(prefs),
+                homeLayoutAutopush = HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.readBoolForUser(prefs, userId),
+                continueWatchingClickBehavior = HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR
+                    .readEnumForUser(prefs, userId),
+                showUnwatchedBadge = HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.readBoolForUser(prefs, userId),
+                hideWatchedItems = HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.readBoolForUser(prefs, userId),
+                showWatchedCheckmark = HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.readBoolForUser(prefs, userId),
+                showExternalRatings = HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.readBoolForUser(prefs, userId),
+                showQualityBadges = HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.readBoolForUser(prefs, userId),
+                showNewBadges = HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.readBoolForUser(prefs, userId),
+                homeTrickplayPreview = HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.readBoolForUser(prefs, userId),
+                antiSpoilerHome = HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.readBoolForUser(prefs, userId),
+                mergeContinueWatchingAndNextUp = HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP
+                    .readBoolForUser(prefs, userId),
+                nextUpMaxDays = HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.readIntForUser(prefs, userId),
+                nextUpRewatching = HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.readBoolForUser(prefs, userId),
+                classicRows = HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.readBoolForUser(prefs, userId),
+                excludeActiveSessions = HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.readBoolForUser(prefs, userId),
+                nextUpExcludedSeriesIds = readNextUpExcludedSeriesIds(prefs),
+                hiddenCwItemIds = readHiddenCwItemIds(prefs),
+                lastViewedSeasonBySeries = readLastViewedSeasonBySeries(prefs),
+                myMediaHiddenLibraryIds = readMyMediaHiddenLibraryIds(prefs),
+                themeMusicMutedSeriesIds = readThemeMusicMutedSeriesIds(prefs),
+                homeLastVisitEpochMs = prefs[HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.userKey(userId)]
+                    ?: HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.default,
+                homeAnnouncedVersion = prefs[HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.userKey(userId)]
+                    ?: HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.default,
+                showClockOnHome = HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.readBoolForUser(prefs, userId),
+                showSettingsInHomeSearch = HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH
+                    .readBoolForUser(prefs, userId),
+                hideTopHeaderOnScroll = HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.readBoolForUser(prefs, userId),
+            )
+        }
 
         /**
          * Sections the versioned set shipped after versioning began, each
@@ -413,6 +543,11 @@ class HomeDiscoveryStore constructor(
          * `(shipped-at, section)` entry here and bumps
          * [HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION];
          * existing entries are never edited.
+         *
+         * v3 (UPCOMING + MY_MEDIA) is intentionally absent: those ship as
+         * default-set members for fresh installs only — upgrading installs
+         * are handled by [ensureV3UpgradeBaseline], and nothing must union
+         * the pair into a persisted set.
          */
         private val sectionsShippedByVersion: List<Pair<Int, HomeSectionType>> = listOf(
             // v1: reading-experience 2.0's Continue Reading row
@@ -431,8 +566,15 @@ class HomeDiscoveryStore constructor(
          * one-shot shape matters — every write of the set stamps the current
          * version, so absence from a CURRENT set is the user's disabled
          * choice, not a not-yet-shipped section, and stays respected.
+         *
+         * The read EXPOSES the union's contribution ([EnabledSectionTypesRead.addedByUnion])
+         * alongside the effective set, so the announcement gate can name the
+         * sections a version bump just turned on instead of silently adding
+         * them. Same lenient decode as before — unknown names dropped, a
+         * corrupt blob degrades to the default (which reports no union
+         * addition — garbage never announces).
          */
-        private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> {
+        private fun readEnabledHomeSectionTypes(prefs: Preferences): EnabledSectionTypesRead {
             val raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.rawUserKey(userId)]
             // The union folds in the version stamp, so the parse cache keys on
             // BOTH: a pre-version read caches raw → raw∪{CONTINUE_READING},
@@ -445,14 +587,19 @@ class HomeDiscoveryStore constructor(
                 raw = raw,
                 cacheKey = "v$version:$raw",
                 cache = cachedEnabledHomeSectionTypes,
-                default = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default,
+                default = EnabledSectionTypesRead(),
                 parse = { encoded ->
                     val persisted = json.decodeFromString<Set<String>>(encoded)
                         .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
                         .toSet()
-                    persisted + sectionsShippedByVersion
+                    val unioned = sectionsShippedByVersion
                         .filter { (shippedAt, _) -> version < shippedAt }
                         .map { (_, section) -> section }
+                    EnabledSectionTypesRead(
+                        sections = persisted + unioned,
+                        storedVersion = version,
+                        addedByUnion = unioned.filterNot { it in persisted }.toSet(),
+                    )
                 },
                 cacheRef = { cachedEnabledHomeSectionTypes = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -580,6 +727,26 @@ class HomeDiscoveryStore constructor(
                 cacheRef = { cachedLastViewedSeasonBySeries = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
+
+        private fun readMyMediaHiddenLibraryIds(prefs: Preferences): Set<String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)],
+                cache = cachedMyMediaHiddenLibraryIds,
+                default = HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.default,
+                parse = { json.decodeFromString<Set<String>>(it) },
+                cacheRef = { cachedMyMediaHiddenLibraryIds = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
+
+        private fun readThemeMusicMutedSeriesIds(prefs: Preferences): Set<String> =
+            PreferenceCodec.cachedJson(
+                raw = prefs[HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)],
+                cache = cachedThemeMusicMutedSeriesIds,
+                default = HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.default,
+                parse = { json.decodeFromString<Set<String>>(it) },
+                cacheRef = { cachedThemeMusicMutedSeriesIds = it },
+                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+            )
     }
 
     // ------------------------------------------------------------------
@@ -595,25 +762,94 @@ class HomeDiscoveryStore constructor(
      * edited (via [ServerIdentityStore.activeUserIdIn]) so the write is atomic
      * with respect to concurrent user switches. Pre-login (no active user) the
      * write is skipped: home configuration is unreachable before sign-in, so
-     * there is no namespace to write into.
+     * there is no namespace to write into. Returns the post-edit snapshot —
+     * [editLayoutForUser] reads the active user back out of it so a skipped
+     * pre-login write never bumps the layout revision.
      */
-    private suspend fun editForUser(block: (MutablePreferences, String) -> Unit) {
+    private suspend fun editForUser(block: (MutablePreferences, String) -> Unit): Preferences =
         dataStore.edit { prefs ->
             val userId = identityStore.activeUserIdIn(prefs) ?: return@edit
             block(prefs, userId)
         }
+
+    /**
+     * The layout-writing twin of [editForUser]: after the
+     * edit commits (and only when it actually landed in a user namespace), the
+     * monotonic [layoutRevision] bumps once. Every command that writes a
+     * domain the [HomeLayoutConfig] payload carries routes through HERE, so
+     * the autopush dirty signal can never drift from the write set — a plain
+     * [editForUser] call is by construction not a layout write.
+     */
+    private suspend fun editLayoutForUser(block: (MutablePreferences, String) -> Unit) {
+        val snapshot = editForUser(block)
+        if (identityStore.activeUserIdIn(snapshot) != null) {
+            _layoutRevision.value += 1
+        }
     }
+
+    /**
+     * The layout-dirty signal. Bumped by [editLayoutForUser] after every
+     * layout-writing command's edit commits — the
+     * `HomeLayoutSyncController`'s debounced autopush collects it (armed by
+     * the `home_layout_autopush` pref + sign-in state) and pushes the current
+     * layout to the server's DisplayPreferences store. A monotonic counter,
+     * not a payload: consumers only need "the layout changed again", and the
+     * counter makes every distinct write observable through the StateFlow
+     * conflation.
+     */
+    private val _layoutRevision = MutableStateFlow(0)
+    val layoutRevision: StateFlow<Int> = _layoutRevision.asStateFlow()
 
     suspend fun setHomeMode(mode: HomeMode) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_MODE.rawUserKey(userId)] = mode.name
     }
 
-    suspend fun setHomeHeroEnabled(enabled: Boolean) = editForUser { prefs, userId ->
+    suspend fun setHomeHeroEnabled(enabled: Boolean) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = enabled
     }
 
     suspend fun setHomeBackdropEnabled(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = enabled
+    }
+
+    /** Video hero billboard (touch/default form factors) — default off. */
+    suspend fun setHeroVideoEnabled(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.userKey(userId)] = enabled
+    }
+
+    /** Video hero billboard (TV form factor) — default off. */
+    suspend fun setHeroVideoTvEnabled(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = enabled
+    }
+
+    /** Focus-driven ambient backdrop (Android TV) — default off. */
+    suspend fun setFocusBackdrop(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.userKey(userId)] = enabled
+    }
+
+    /** Personal stats card — default off. */
+    suspend fun setStatsCard(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.userKey(userId)] = enabled
+    }
+
+    /** Genre quick-access rail — default off. */
+    suspend fun setGenreRail(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.userKey(userId)] = enabled
+    }
+
+    /** Watch-party / presence chips — default off (admin-gated surface). */
+    suspend fun setPresenceChips(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.userKey(userId)] = enabled
+    }
+
+    /** New-section announcement toast — default on. */
+    suspend fun setNewSectionAnnouncements(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS.userKey(userId)] = enabled
+    }
+
+    /** Layout DisplayPreferences auto-push — default off (MANUAL sync policy). */
+    suspend fun setLayoutAutopush(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.userKey(userId)] = enabled
     }
 
     /**
@@ -630,11 +866,11 @@ class HomeDiscoveryStore constructor(
             HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION
     }
 
-    suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editForUser { prefs, userId ->
+    suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editLayoutForUser { prefs, userId ->
         writeEnabledHomeSectionTypes(prefs, userId, types)
     }
 
-    suspend fun setHomeSectionOrder(order: List<HomeSectionType>) = editForUser { prefs, userId ->
+    suspend fun setHomeSectionOrder(order: List<HomeSectionType>) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
             json.encodeToString(normalizedSectionOrder(order).map { t -> t.name })
     }
@@ -650,7 +886,7 @@ class HomeDiscoveryStore constructor(
         addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
     }
 
-    suspend fun setLibraryHomeSectionOverrides(overrides: Map<String, Set<HomeSectionType>>) = editForUser { prefs, userId ->
+    suspend fun setLibraryHomeSectionOverrides(overrides: Map<String, Set<HomeSectionType>>) = editLayoutForUser { prefs, userId ->
         // Drop entries with empty disabled-sets so the map stays clean and
         // "fully enabled" libraries simply have no key.
         val cleaned = overrides.filterValues { it.isNotEmpty() }
@@ -665,13 +901,13 @@ class HomeDiscoveryStore constructor(
      * Libraries, the Appearance toggle) routes through these; holding a local
      * toggle/override policy copy is how the two features drifted before.
      */
-    suspend fun setSectionVisible(type: HomeSectionType, visible: Boolean) = editForUser { prefs, userId ->
+    suspend fun setSectionVisible(type: HomeSectionType, visible: Boolean) = editLayoutForUser { prefs, userId ->
         val updated = read(prefs).toSectionPrefs().withSectionVisible(type, visible)
         writeEnabledHomeSectionTypes(prefs, userId, updated.query.enabledSections)
     }
 
-    suspend fun moveSection(type: HomeSectionType, up: Boolean) = editForUser { prefs, userId ->
-        val updated = read(prefs).toSectionPrefs().withSectionMoved(type, up) ?: return@editForUser
+    suspend fun moveSection(type: HomeSectionType, up: Boolean) = editLayoutForUser { prefs, userId ->
+        val updated = read(prefs).toSectionPrefs().withSectionMoved(type, up) ?: return@editLayoutForUser
         prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
             json.encodeToString(normalizedSectionOrder(updated.homeSectionOrder).map { t -> t.name })
     }
@@ -680,7 +916,7 @@ class HomeDiscoveryStore constructor(
         libraryId: String,
         type: HomeSectionType,
         visible: Boolean,
-    ) = editForUser { prefs, userId ->
+    ) = editLayoutForUser { prefs, userId ->
         val updated = read(prefs).toSectionPrefs()
             .withLibrarySectionVisible(libraryId, type, visible)
         // Same empty-set drop as [setLibraryHomeSectionOverrides]: a library
@@ -689,11 +925,11 @@ class HomeDiscoveryStore constructor(
             json.encodeToString(updated.query.libraryHomeSectionOverrides.filterValues { it.isNotEmpty() })
     }
 
-    suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) = editForUser { prefs, userId ->
+    suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)] = json.encodeToString(sections)
     }
 
-    suspend fun addPinnedHomeSection(section: PinnedHomeSection) = editForUser { prefs, userId ->
+    suspend fun addPinnedHomeSection(section: PinnedHomeSection) = editLayoutForUser { prefs, userId ->
         val key = HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)
         val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.default)
         if (current.none { it.id == section.id }) {
@@ -701,7 +937,7 @@ class HomeDiscoveryStore constructor(
         }
     }
 
-    suspend fun removePinnedHomeSection(sectionId: String) = editForUser { prefs, userId ->
+    suspend fun removePinnedHomeSection(sectionId: String) = editLayoutForUser { prefs, userId ->
         val key = HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)
         val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.default)
         prefs[key] = json.encodeToString(current.filterNot { it.id == sectionId })
@@ -710,12 +946,12 @@ class HomeDiscoveryStore constructor(
     // ── Custom Discover rows ────────────────────────────────────────────────
 
     /** Wholesale replace (layout presets, reset). */
-    suspend fun setDiscoverRows(rows: List<DiscoverRowConfig>) = editForUser { prefs, userId ->
+    suspend fun setDiscoverRows(rows: List<DiscoverRowConfig>) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)] = json.encodeToString(rows)
     }
 
     /** Add-or-replace by id — the editor's save. */
-    suspend fun upsertDiscoverRow(row: DiscoverRowConfig) = editForUser { prefs, userId ->
+    suspend fun upsertDiscoverRow(row: DiscoverRowConfig) = editLayoutForUser { prefs, userId ->
         val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
         val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         val next = if (current.any { it.id == row.id }) {
@@ -726,22 +962,22 @@ class HomeDiscoveryStore constructor(
         prefs[key] = json.encodeToString(next)
     }
 
-    suspend fun removeDiscoverRow(rowId: String) = editForUser { prefs, userId ->
+    suspend fun removeDiscoverRow(rowId: String) = editLayoutForUser { prefs, userId ->
         val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
         val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         prefs[key] = json.encodeToString(current.filterNot { it.id == rowId })
     }
 
-    suspend fun setDiscoverRowEnabled(rowId: String, enabled: Boolean) = editForUser { prefs, userId ->
+    suspend fun setDiscoverRowEnabled(rowId: String, enabled: Boolean) = editLayoutForUser { prefs, userId ->
         val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
         val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         prefs[key] = json.encodeToString(current.withDiscoverRowEnabled(rowId, enabled))
     }
 
-    suspend fun moveDiscoverRow(rowId: String, up: Boolean) = editForUser { prefs, userId ->
+    suspend fun moveDiscoverRow(rowId: String, up: Boolean) = editLayoutForUser { prefs, userId ->
         val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
         val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
-        val moved = current.withDiscoverRowMoved(rowId, up) ?: return@editForUser
+        val moved = current.withDiscoverRowMoved(rowId, up) ?: return@editLayoutForUser
         prefs[key] = json.encodeToString(moved)
     }
 
@@ -766,7 +1002,7 @@ class HomeDiscoveryStore constructor(
         prefs[key] = json.encodeToString(current.filterNot { it.id == presetId })
     }
 
-    suspend fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) = editForUser { prefs, userId ->
+    suspend fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.rawUserKey(userId)] = behavior.name
     }
 
@@ -786,20 +1022,45 @@ class HomeDiscoveryStore constructor(
         prefs[HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.userKey(userId)] = enabled
     }
 
-    suspend fun setMergeContinueWatchingAndNextUp(enabled: Boolean) = editForUser { prefs, userId ->
+    /** Quality badges (4K / HDR / DV / Atmos) on cards — default on. */
+    suspend fun setShowQualityBadges(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.userKey(userId)] = enabled
+    }
+
+    /** "NEW" badges with visit memory — default on. */
+    suspend fun setShowNewBadges(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.userKey(userId)] = enabled
+    }
+
+    /** Trickplay preview on wide cards (TV focus) — default on, TV-only behavior. */
+    suspend fun setTrickplayPreview(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.userKey(userId)] = enabled
+    }
+
+    /** Anti-spoiler home master switch — default off. */
+    suspend fun setAntiSpoilerHome(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.userKey(userId)] = enabled
+    }
+
+    suspend fun setMergeContinueWatchingAndNextUp(enabled: Boolean) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.userKey(userId)] = enabled
     }
 
-    suspend fun setNextUpMaxDays(days: Int) = editForUser { prefs, userId ->
+    suspend fun setNextUpMaxDays(days: Int) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.userKey(userId)] = days.coerceAtLeast(0)
     }
 
-    suspend fun setNextUpRewatching(enabled: Boolean) = editForUser { prefs, userId ->
+    suspend fun setNextUpRewatching(enabled: Boolean) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.userKey(userId)] = enabled
     }
 
     suspend fun setClassicRows(enabled: Boolean) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.userKey(userId)] = enabled
+    }
+
+    /** Continue watching must not offer items playing on another device — default off. */
+    suspend fun setExcludeActiveSessions(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.userKey(userId)] = enabled
     }
 
     suspend fun setNextUpExcludedSeriesIds(ids: Set<String>) = editForUser { prefs, userId ->
@@ -821,6 +1082,74 @@ class HomeDiscoveryStore constructor(
     /** Bulk restore — every Next Up exclusion dropped at once (the "Restore all" action). */
     suspend fun clearNextUpExclusions() = editForUser { prefs, userId ->
         prefs.remove(HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId))
+    }
+
+    // ── My Media hidden libraries (inline curation) ──────────────────────
+
+    /**
+     * Wholesale replace of the hidden-from-My-Media library set (the section
+     * config sheet's future "restore all" and backup restore).
+     */
+    suspend fun setMyMediaHiddenLibraryIds(ids: Set<String>) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)] = json.encodeToString(ids)
+    }
+
+    /** Long-press a My Media tile → hide that library. Idempotent add. */
+    suspend fun hideLibraryFromMyMedia(libraryId: String) = editForUser { prefs, userId ->
+        val key = HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.default)
+        prefs[key] = json.encodeToString(current + libraryId)
+    }
+
+    /** Un-hide one library. Idempotent remove. */
+    suspend fun showLibraryInMyMedia(libraryId: String) = editForUser { prefs, userId ->
+        val key = HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.default)
+        prefs[key] = json.encodeToString(current - libraryId)
+    }
+
+    /** Bulk restore — every hidden My Media library shown again. */
+    suspend fun clearMyMediaHiddenLibraries() = editForUser { prefs, userId ->
+        prefs.remove(HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId))
+    }
+
+    // ── Theme-music per-series mute memory ─────────────────────────────
+
+    /** Wholesale replace of the theme-music muted-series set (backup restore). */
+    suspend fun setThemeMusicMutedSeriesIds(ids: Set<String>) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)] = json.encodeToString(ids)
+    }
+
+    /** The detail screen's mute chip wrote a per-series "never" memory. Idempotent add. */
+    suspend fun muteThemeMusicForSeries(seriesId: String) = editForUser { prefs, userId ->
+        val key = HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.default)
+        prefs[key] = json.encodeToString(current + seriesId)
+    }
+
+    /** The detail screen's unmute chip clears the per-series memory. Idempotent remove. */
+    suspend fun unmuteThemeMusicForSeries(seriesId: String) = editForUser { prefs, userId ->
+        val key = HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.default)
+        prefs[key] = json.encodeToString(current - seriesId)
+    }
+
+    // ── Internal home stamps (visit memory / announce-once) ─────────
+
+    /**
+     * Stamps the home visit time (epoch ms) — the home screen's dwell timer
+     * writes it once per visit so items added later render the NEW badge.
+     */
+    suspend fun setHomeLastVisitEpochMs(epochMs: Long) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.userKey(userId)] = epochMs
+    }
+
+    /**
+     * Stamps the enabled-set schema version whose new-section announcement was
+     * shown (or dismissed) — the announce-once gate.
+     */
+    suspend fun setHomeAnnouncedVersion(version: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.userKey(userId)] = version
     }
 
     /**
@@ -922,10 +1251,18 @@ class HomeDiscoveryStore constructor(
      * sets/lists via [json]).
      */
     suspend fun restore(slice: HomeDiscoverySlice) {
-        editForUser { prefs, userId ->
+        editLayoutForUser { prefs, userId ->
             prefs[HomeDiscoveryPreferenceSpecs.HOME_MODE.rawUserKey(userId)] = slice.homeMode.name
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = slice.homeHeroEnabled
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.userKey(userId)] = slice.homeHeroVideoEnabled
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = slice.homeHeroVideoTvEnabled
             prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = slice.homeBackdropEnabled
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.userKey(userId)] = slice.homeFocusBackdrop
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.userKey(userId)] = slice.homeStatsCard
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.userKey(userId)] = slice.homeGenreRail
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.userKey(userId)] = slice.homePresenceChips
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS.userKey(userId)] =
+                slice.homeNewSectionAnnouncements
             writeEnabledHomeSectionTypes(prefs, userId, slice.enabledHomeSectionTypes)
             prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
                 json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
@@ -937,27 +1274,70 @@ class HomeDiscoveryStore constructor(
                 json.encodeToString(slice.discoverRows)
             prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)] =
                 json.encodeToString(slice.homeLayoutPresets)
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.userKey(userId)] = slice.homeLayoutAutopush
             prefs[HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.rawUserKey(userId)] =
                 slice.continueWatchingClickBehavior.name
             prefs[HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.userKey(userId)] = slice.showUnwatchedBadge
             prefs[HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.userKey(userId)] = slice.hideWatchedItems
             prefs[HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.userKey(userId)] = slice.showWatchedCheckmark
             prefs[HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.userKey(userId)] = slice.showExternalRatings
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.userKey(userId)] = slice.showQualityBadges
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.userKey(userId)] = slice.showNewBadges
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.userKey(userId)] = slice.homeTrickplayPreview
+            prefs[HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.userKey(userId)] = slice.antiSpoilerHome
             prefs[HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.userKey(userId)] =
                 slice.mergeContinueWatchingAndNextUp
             prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.userKey(userId)] = slice.nextUpMaxDays
             prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.userKey(userId)] = slice.nextUpRewatching
             prefs[HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.userKey(userId)] = slice.classicRows
+            prefs[HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.userKey(userId)] = slice.excludeActiveSessions
             prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)] =
                 json.encodeToString(slice.nextUpExcludedSeriesIds)
             prefs[HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)] =
                 json.encodeToString(slice.hiddenCwItemIds)
+            prefs[HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)] =
+                json.encodeToString(slice.myMediaHiddenLibraryIds)
+            prefs[HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)] =
+                json.encodeToString(slice.themeMusicMutedSeriesIds)
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.userKey(userId)] = slice.homeLastVisitEpochMs
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.userKey(userId)] = slice.homeAnnouncedVersion
             prefs[HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.userKey(userId)] = slice.showClockOnHome
             prefs[HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.userKey(userId)] = slice.showSettingsInHomeSearch
             prefs[HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = slice.hideTopHeaderOnScroll
             prefs[HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)] =
                 json.encodeToString(slice.lastViewedSeasonBySeries)
         }
+    }
+
+    /**
+     * The restore-apply helper — ONE command that applies a whole
+     * [HomeLayoutConfig] (the layout payload the presets machinery serializes
+     * and the server sync carries) by routing through the SAME store setters
+     * the local preset-restore path has always used. There is deliberately no
+     * parallel raw-key write here: the setters' normalization
+     * ([normalizedSectionOrder]), the enabled-set version stamp
+     * ([writeEnabledHomeSectionTypes]) and the [layoutRevision] bumps all
+     * stay theirs, so a restored layout is indistinguishable from a
+     * hand-tuned one — to the UI projection, to backup, and to the autopush.
+     *
+     * Callers: the presets ViewModel's apply (import / load / reset) and the
+     * Home Settings "Restore layout from server" action (the controller's
+     * lenient decode feeds the config). Sequential edits, matching the
+     * `editor.edit { … }` fan-out the preset path has always run — the
+     * DataStore is the atomicity unit per key, and every intermediate state
+     * is a valid layout.
+     */
+    suspend fun applyLayout(config: HomeLayoutConfig) {
+        setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
+        setHomeSectionOrder(config.homeSectionOrder)
+        setLibraryHomeSectionOverrides(config.libraryHomeSectionOverrides)
+        setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
+        setNextUpMaxDays(config.nextUpMaxDays)
+        setNextUpRewatching(config.nextUpRewatching)
+        setPinnedHomeSections(config.pinnedHomeSections)
+        setDiscoverRows(config.discoverRows)
+        setHomeHeroEnabled(config.homeHeroEnabled)
+        setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
     }
 }
 
@@ -971,27 +1351,62 @@ class HomeDiscoveryStore constructor(
 data class HomeDiscoverySlice(
     val homeMode: HomeMode = HomeMode.VIDEO,
     val homeHeroEnabled: Boolean = true,
+    /** Video hero billboard (touch/default form factors). Default off — static hero. */
+    val homeHeroVideoEnabled: Boolean = false,
+    /** Video hero billboard (TV form factor). Default off. */
+    val homeHeroVideoTvEnabled: Boolean = false,
     val homeBackdropEnabled: Boolean = true,
+    /** Focus-driven ambient backdrop (Android TV). Default off. */
+    val homeFocusBackdrop: Boolean = false,
+    /** Personal stats card ("Your library week"). Default off. */
+    val homeStatsCard: Boolean = false,
+    /** Genre quick-access rail. Default off. */
+    val homeGenreRail: Boolean = false,
+    /** Watch-party / presence chips. Default off (admin-gated surface). */
+    val homePresenceChips: Boolean = false,
+    /** New-section announcement toast. Default on. */
+    val homeNewSectionAnnouncements: Boolean = true,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    /**
+     * The schema version the persisted enabled-set was last written at —
+     * derived by the version-union read, never written back ([restore]
+     * stamps CURRENT through the write fold). The announce-once gate
+     * compares it against [homeAnnouncedVersion].
+     */
+    val enabledHomeSectionTypesVersion: Int = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION,
+    /** The sections the read's version-union contributed — empty once the persisted stamp is current. */
+    val sectionsAddedByUnion: Set<HomeSectionType> = emptySet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
     /** The user's custom Discover rows; empty until the user creates one. */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
+    /** Layout DisplayPreferences auto-push. Default off (MANUAL sync policy). */
+    val homeLayoutAutopush: Boolean = false,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
     val showUnwatchedBadge: Boolean = true,
     val hideWatchedItems: Boolean = false,
     val showWatchedCheckmark: Boolean = true,
     val showExternalRatings: Boolean = true,
+    /** Quality badges (4K / HDR / DV / Atmos) on cards. Default on. */
+    val showQualityBadges: Boolean = true,
+    /** "NEW" badges for items added since the last home visit. Default on. */
+    val showNewBadges: Boolean = true,
+    /** Trickplay preview on wide cards (TV focus). Default on, TV-only behavior. */
+    val homeTrickplayPreview: Boolean = true,
+    /** Anti-spoiler home master switch. Default off. */
+    val antiSpoilerHome: Boolean = false,
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
     /**
-     * Classic (pre-Jellyfin-12) home-row semantics (#168). Default `false` —
+     * Classic (pre-Jellyfin-12) home-row semantics. Default `false` —
      * modern server behavior. Projected into [HomeSectionQuery.classicRows].
      */
     val classicRows: Boolean = false,
+    /** Exclude items with an active playback session from Continue Watching / Next Up. Default off. */
+    val excludeActiveSessions: Boolean = false,
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
     /**
@@ -1002,6 +1417,14 @@ data class HomeDiscoverySlice(
      * (resolved in `SeasonStartResolver`).
      */
     val lastViewedSeasonBySeries: Map<String, String> = emptyMap(),
+    /** Libraries hidden from the My Media tiles row (inline long-press curation). */
+    val myMediaHiddenLibraryIds: Set<String> = emptySet(),
+    /** Series whose ambient theme music stays muted ("never for this series" memory). */
+    val themeMusicMutedSeriesIds: Set<String> = emptySet(),
+    /** When the user last saw home (epoch ms; 0 = never stamped). NEW-badge threshold. */
+    val homeLastVisitEpochMs: Long = 0L,
+    /** The enabled-set schema version whose new-section announcement was last shown. */
+    val homeAnnouncedVersion: Int = 0,
     val showClockOnHome: Boolean = false,
     val showSettingsInHomeSearch: Boolean = true,
     /**
@@ -1011,7 +1434,13 @@ data class HomeDiscoverySlice(
      * `hideBottomNavOnScroll` toggle.
      */
     val hideTopHeaderOnScroll: Boolean = false,
-)
+) {
+    /** Whether [libraryId] is hidden from the My Media tiles row. */
+    fun isLibraryHiddenFromMyMedia(libraryId: String): Boolean = libraryId in myMediaHiddenLibraryIds
+
+    /** Whether [seriesId]'s ambient theme music is muted by the per-series memory. */
+    fun isThemeMusicMutedFor(seriesId: String): Boolean = seriesId in themeMusicMutedSeriesIds
+}
 
 /**
  * The slice as one [HomeSectionPrefs] — the single field mapping, shared by
@@ -1026,11 +1455,31 @@ fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
         nextUpRewatching = nextUpRewatching,
         nextUpMaxDays = nextUpMaxDays,
         classicRows = classicRows,
+        excludeActiveSessions = excludeActiveSessions,
         nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
         hiddenCwItemIds = hiddenCwItemIds,
         pinnedSections = pinnedHomeSections,
         discoverRows = discoverRows,
+        // The tiles row's hidden-library curation rides the fetch query,
+        // so the assembler's filter and the SWR cache key see it together.
+        myMediaHiddenLibraryIds = myMediaHiddenLibraryIds,
     ),
     homeSectionOrder = homeSectionOrder,
     mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+)
+
+/**
+ * The version-union decode's outcome. [sections] is the effective
+ * enabled set (what [HomeDiscoverySlice.enabledHomeSectionTypes] has
+ * always carried); [storedVersion] is the schema stamp the persisted
+ * set was written at; [addedByUnion] is the part of [sections] THE
+ * UNION ITSELF contributed — non-empty exactly when the persisted set
+ * predates a shipped section, which is the announce-once signal
+ * (a section the user already had, or disabled after seeing it, never
+ * appears here).
+ */
+private data class EnabledSectionTypesRead(
+    val sections: Set<HomeSectionType> = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default,
+    val storedVersion: Int = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION,
+    val addedByUnion: Set<HomeSectionType> = emptySet(),
 )

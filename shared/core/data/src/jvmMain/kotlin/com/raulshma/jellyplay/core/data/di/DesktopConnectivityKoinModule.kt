@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.offline.DesktopOfflineModeManager
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 
 /**
  * Connectivity family of the desktopDataModule split: the always-connected
@@ -15,7 +16,7 @@ import org.koin.dsl.module
  * see [desktopDataModule] for the aggregate and the family map.
  */
 internal val desktopConnectivityModule: Module = module {
-    single<NetworkMonitor> { DesktopNetworkMonitor() }
+    single<NetworkMonitor> { DesktopNetworkMonitor(applicationScope = get(DatastoreQualifiers.applicationScope)) }
 
     single<OfflineModeManager> {
         DesktopOfflineModeManager(

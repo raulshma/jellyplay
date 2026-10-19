@@ -7,33 +7,34 @@ import kotlin.test.Test
 import java.io.File
 
 /**
- * Wiring ratchet for the SyncPlay -> cast -> local SEEK precedence: the
- * routing must exist exactly ONCE, in the ViewModel's transport funnel —
- * [VideoPlayerViewModel.routedSeek], the [routedPlay] companion — with the
- * `SeekTo` event arm and `seekByStep` both delegating to it, and the
- * screen's `doSeekTo` a plain event forward. The fold collapsed two copies
- * of the same precedence ladder (the screen's `doSeekTo` remember lambda and
- * `seekByStep`'s when-ladder) into the one VM-side funnel, so the seek bar,
- * gesture commit, D-pad commit, chapter sheet, cast dashboard and PiP SKIP
- * steps can never route differently. [VideoPlayerViewModel] is too heavy to
- * construct in jvmTest (a 30+ dependency constructor), so — the
- * [SeekUserInitiatedWiringTest] precedent — this pins the wiring at the
- * source:
+ * Wiring guard for the SyncPlay -> cast -> local SEEK precedence: the
+ * routing must exist exactly ONCE, in the session-owned router —
+ * [TransportRouter.seek] (the [TransportRouter.play] companion) — with the
+ * VM's `SeekTo` event arm and `seekByStep` both one-line forwards onto it,
+ * and the screen's `doSeekTo` a plain event forward. The fold collapsed two
+ * copies of the same precedence ladder (the screen's `doSeekTo` remember
+ * lambda and `seekByStep`'s when-ladder) into the one funnel — VM-side first,
+ * then moved onto the session's router beside its PiP consumer — so the seek
+ * bar, gesture commit, D-pad commit, chapter sheet, cast dashboard and PiP
+ * SKIP steps can never route differently. The source guards pin the wiring
+ * shape:
  *
- *  1. the `SeekTo` event arm routes through `routedSeek` (never straight to
- *     the local `seekTo`);
- *  2. `routedSeek` carries the full precedence IN ORDER — SyncPlay group
- *     seek while `_uiState`'s session mirror is up, cast seek while the
- *     controller's connection flow is connected, local seek otherwise (the
- *     local arm keeps the user-initiated segment clamp; the SyncPlay/cast
- *     arms bypass it deliberately);
- *  3. `seekByStep` computes its step target and delegates to `routedSeek` —
+ *  1. the VM's `SeekTo` / `TransportPlay` / `SeekByStep` / `RestartPlayback`
+ *     event arms are one-line forwards onto the session's `transport` router
+ *     (never straight to a transport arm);
+ *  2. the router's `step` computes its step target and delegates to `seek` —
  *     no second ladder copy in its body;
- *  4. the screen's `doSeekTo` is a single `onEvent(SeekTo)` forward with no
+ *  3. the screen's `doSeekTo` is a single `onEvent(SeekTo)` forward with no
  *     transport arms left anywhere in the screen file.
  *
- * If a reformat trips a regex here, the assertion message names the contract
- * to restore — never delete an assertion to make a reformat pass.
+ * The ladder itself is asserted behaviorally (recording arms), never by
+ * source text: with recording doubles for the arms, every rung's routing —
+ * SyncPlay group seek while the session mirror is up, cast seek while the
+ * connection flow is connected, local seek otherwise, in that order — and the
+ * local arm's gating (the user-initiated segment clamp; the SyncPlay/cast
+ * arms bypass it deliberately) are pinned by the rig below. If a reformat
+ * trips a regex here, the assertion message names the contract to restore —
+ * never delete an assertion to make a reformat pass.
  */
 class SeekTransportRoutingWiringTest {
 
@@ -53,6 +54,10 @@ class SeekTransportRoutingWiringTest {
         moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/VideoPlayerViewModel.kt")
     }
 
+    private val routerSource: String by lazy {
+        moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/TransportRouter.kt")
+    }
+
     private val screenSource: String by lazy {
         moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/VideoPlayerScreen.kt")
     }
@@ -62,68 +67,66 @@ class SeekTransportRoutingWiringTest {
     }
 
     @Test
-    fun `the SeekTo event arm routes through the transport funnel`() {
+    fun `the VM transport event arms are one-line forwards onto the session router`() {
         assertMatchesIn(
             vmSource,
-            Regex("""is VideoPlayerUiEvent\.SeekTo -> routedSeek\(event\.positionMs\)"""),
-            "the SeekTo event must route through routedSeek (the transport funnel), never " +
-                "straight to the local seekTo — the funnel arm is what keeps the event, the " +
-                "step buttons and the screen on one precedence ladder",
+            Regex("""is VideoPlayerUiEvent\.SeekTo -> playbackSession\.transport\.seek\(event\.positionMs, userInitiated = true\)"""),
+            "the SeekTo event must forward onto the session transport router (the ONE " +
+                "precedence ladder), never straight to a transport arm",
+        )
+        assertMatchesIn(
+            vmSource,
+            Regex("""is VideoPlayerUiEvent\.TransportPlay -> playbackSession\.transport\.play\(event\.play\)"""),
+            "the TransportPlay event must forward onto the session transport router — the " +
+                "play/pause press rides the same ladder as the seek",
+        )
+        assertMatchesIn(
+            vmSource,
+            Regex("""is VideoPlayerUiEvent\.SeekByStep -> playbackSession\.transport\.step\(event\.direction\)"""),
+            "the SeekByStep event must forward onto the session transport router's step funnel",
+        )
+        assertMatchesIn(
+            vmSource,
+            Regex("""is VideoPlayerUiEvent\.RestartPlayback -> playbackSession\.transport\.restart\(\)"""),
+            "the RestartPlayback event must forward onto the session transport router's local restart",
         )
     }
 
     @Test
-    fun `routedSeek carries the full syncPlay cast local precedence in order`() {
-        assertMatchesIn(
-            vmSource,
-            Regex(
-                """private fun routedSeek\(positionMs: Long[^)]*\) \{\s*""" +
-                    """when \{\s*""" +
-                    """_uiState\.value\.isInSyncPlaySession -> (playbackSession\.)?syncPlay\.seekTo\(positionMs\)\s*""" +
-                    """(playbackSession\.)?cast\.isConnectedFlow\.value -> (playbackSession\.)?cast\.castSeekTo\(positionMs\)\s*""" +
-                    """else -> seekTo\(positionMs\)\s*""" +
-                    """\}""",
-            ),
-            "routedSeek must keep the A1 order — SyncPlay group seek (uiState session mirror) " +
-                "first, cast seek (live connection flow) second, local engine seek last — so a " +
-                "seek can never land on a stale transport",
-        )
-    }
-
-    @Test
-    fun `routedSeek is the only transport ladder in the ViewModel`() {
-        // The controllers moved into the session at the C6 collapse, so the
-        // ladder arms read them through the qualified playbackSession handle.
+    fun `the router seek is the only transport ladder`() {
+        // The ladder arms are the injected per-arm effects; they must appear
+        // exactly once — inside seek. A second copy is the divergence this
+        // funnel exists to prevent.
         val ladderArms = listOf(
-            Regex("""isInSyncPlaySession\s*->\s*(playbackSession\.)?syncPlay\.seekTo\("""),
-            Regex("""(playbackSession\.)?cast\.isConnectedFlow\.value\s*->\s*(playbackSession\.)?cast\.castSeekTo\("""),
+            Regex("""isInSyncPlaySession\(\) -> groupSeek\("""),
+            Regex("""isCastConnected\(\) -> castSeek\("""),
         )
         for (arm in ladderArms) {
             assertEquals(
                 1,
-                arm.findAll(vmSource).count(),
-                "the SyncPlay/cast seek arms must appear exactly once — inside routedSeek. " +
+                arm.findAll(routerSource).count(),
+                "the SyncPlay/cast seek arms must appear exactly once — inside the router's seek. " +
                     "A second copy is the divergence this funnel exists to prevent.",
             )
         }
     }
 
     @Test
-    fun `seekByStep delegates to routedSeek without its own ladder copy`() {
-        val body = Regex("""private fun seekByStep\(direction: Int\) \{[\s\S]*?\n    \}""")
-            .find(vmSource)?.value
-        assertTrue(body != null, "seekByStep body not found in the ViewModel")
+    fun `step delegates to seek without its own ladder copy`() {
+        val body = Regex("""fun step\(direction: Int\) \{[\s\S]*?\n    \}""")
+            .find(routerSource)?.value
+        assertTrue(body != null, "step body not found in the router")
         assertTrue(
-            body.contains("routedSeek("),
-            "seekByStep must issue its step target through routedSeek (the ONE ladder)",
+            body.contains("seek("),
+            "step must issue its step target through seek (the ONE ladder)",
         )
         assertTrue(
             body.contains("stepSeekTargetMs("),
-            "seekByStep must keep computing its clamp math (stepSeekTargetMs) before routing",
+            "step must keep computing its clamp math (stepSeekTargetMs) before routing",
         )
         assertFalse(
-            body.contains("syncPlay.seekTo") || body.contains("cast.castSeekTo"),
-            "seekByStep must not carry its own SyncPlay/cast arms — route through routedSeek instead",
+            body.contains("groupSeek(") || body.contains("castSeek("),
+            "step must not carry its own SyncPlay/cast arms — route through seek instead",
         )
     }
 
@@ -135,18 +138,112 @@ class SeekTransportRoutingWiringTest {
                 """val doSeekTo: \(Long\) -> Unit = remember \{[\s\S]*?""" +
                     """viewModel\.onEvent\(VideoPlayerUiEvent\.SeekTo\(ms\)\)[\s\S]*?\}""",
             ),
-            "the screen's doSeekTo must forward the SeekTo event and let the ViewModel's " +
-                "routedSeek own the transport precedence",
+            "the screen's doSeekTo must forward the SeekTo event and let the session's " +
+                "transport router own the transport precedence",
         )
         assertFalse(
             screenSource.contains("castSeekTo"),
             "the screen must not route casts seeks directly — no transport arms may remain " +
-                "outside the ViewModel funnel",
+                "outside the session router",
         )
         assertFalse(
             screenSource.contains("syncPlay.seekTo"),
             "the screen must not route SyncPlay seeks directly — no transport arms may remain " +
-                "outside the ViewModel funnel",
+                "outside the session router",
         )
+    }
+
+    /**
+     * A minimal recording rig: the group/cast arms + the local arm's
+     * persist effect append to [calls], so a single list asserts which
+     * transport a press landed on (and which it never reached). The clamp
+     * reads are inert (no segments, gate off) — the clamp math is pinned by
+     * SegmentSeekClampTest and the source guards above; this rig exercises
+     * the routing and the [TransportRouter.seekLocal] gating.
+     */
+    private fun routerWithCalls(
+        calls: MutableList<String>,
+        isInSyncPlaySession: Boolean = false,
+        isCastConnected: Boolean = false,
+    ) = TransportRouter(
+        isInSyncPlaySession = { isInSyncPlaySession },
+        isCastConnected = { isCastConnected },
+        groupSeek = { calls += "groupSeek" },
+        castSeek = { calls += "castSeek" },
+        groupPlayPause = { calls += "groupPlayPause" },
+        castPlay = { calls += "castPlay" },
+        castPause = { calls += "castPause" },
+        localPause = { calls += "localPause" },
+        getEngine = { null },
+        stepMs = { 10_000L },
+        resumeSkipMs = { 0L },
+        onUserInteraction = { calls += "onUserInteraction" },
+        currentPositionMs = { 0L },
+        durationMs = { 100_000L },
+        segments = { emptyList() },
+        segmentBehaviors = { emptyMap() },
+        seekClampEnabled = { false },
+        onSegmentSkippedNotice = { },
+        persistSeek = { calls += "persistSeek" },
+        writeDisplayedPosition = { },
+    )
+
+    @Test
+    fun `seek while cast-connected never reaches the local engine seek`() {
+        val calls = mutableListOf<String>()
+        val router = routerWithCalls(calls, isCastConnected = true)
+
+        router.seek(42_000L, userInitiated = true)
+
+        assertEquals(listOf("castSeek"), calls, "a cast-connected seek must land on the cast " +
+            "receiver arm ONLY — the local engine seek (its clamp + persist + display write " +
+            "must never run)")
+    }
+
+    @Test
+    fun `seek while in a syncplay session never reaches the local engine seek`() {
+        val calls = mutableListOf<String>()
+        val router = routerWithCalls(calls, isInSyncPlaySession = true)
+
+        router.seek(42_000L, userInitiated = true)
+
+        assertEquals(listOf("groupSeek"), calls, "a SyncPlay seek must land on the group arm " +
+            "ONLY — the group owns the position, so the local clamp/persist/display write must " +
+            "never run")
+    }
+
+    @Test
+    fun `seek with syncplay and cast both up lands on the group arm`() {
+        val calls = mutableListOf<String>()
+        val router = routerWithCalls(calls, isInSyncPlaySession = true, isCastConnected = true)
+
+        router.seek(42_000L, userInitiated = true)
+
+        assertEquals(listOf("groupSeek"), calls, "with both remote transports live the group " +
+            "rung must win — the SyncPlay-before-cast order means a press can never land on a " +
+            "stale transport")
+    }
+
+    @Test
+    fun `seek with no remote transport lands on the local arm`() {
+        val calls = mutableListOf<String>()
+        val router = routerWithCalls(calls)
+
+        router.seek(42_000L, userInitiated = true)
+
+        assertEquals(listOf("onUserInteraction", "persistSeek"), calls, "the local arm resets " +
+            "the interaction clock, then persists + writes the display flow (no engine bound " +
+            "here, so the engine seek no-ops)")
+    }
+
+    @Test
+    fun `app-driven local seek does not reset the interaction clock`() {
+        val calls = mutableListOf<String>()
+        val router = routerWithCalls(calls)
+
+        router.seekLocal(42_000L, userInitiated = false)
+
+        assertEquals(listOf("persistSeek"), calls, "internal seeks (SyncPlay position sync, " +
+            "resume-skip, auto-skip) must not touch the pass-out interaction clock")
     }
 }

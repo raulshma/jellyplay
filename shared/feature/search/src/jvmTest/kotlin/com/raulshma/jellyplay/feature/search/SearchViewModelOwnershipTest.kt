@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Ratchet against the ViewModel regrowing into a god object (the reader
+ * Guard against the ViewModel regrowing into a god object (the reader
  * module's BookReaderViewModelOwnershipTest pattern): the count of
  * SearchViewModel's public + internal members (properties and functions,
  * primary-constructor parameters and private members excluded) must never
@@ -15,19 +15,16 @@ import kotlin.test.assertTrue
  * `SearchUiEvent` fold routed through the single `onEvent` funnel (the
  * HomeViewModel precedent) instead of new per-action command members.
  *
- * Baseline: 20 members (was 37 before the SearchUiEvent intent fold deleted
- * the per-command publics in favour of `onEvent`).
+ * Baseline: 20 members (the SearchUiEvent intent fold routes user intents
+ * through the single `onEvent` funnel rather than per-command publics).
  *
- * 2026-09-27, ceiling 20 → 21 (documented, one-time): the Seerr
- * request-dialog extraction moved the dialog cell OUT of core:data's
- * SeerrRequestStateHolder and core:model's SeerrRequestSnapshot into the
- * feature-facing SeerrRequestDialogHolder — the extracted-module shape this
- * ratchet prescribes. Its VM wiring is one accessor (`seerrDialogItem`),
- * replacing the `dialogItem` field every snapshot consumer previously
- * carried: the net surface across VM + snapshot did not grow, it moved to
- * the layer that owns it. This is a member RELOCATION, not accretion.
- * Lower the ceiling when a slice moves out and deletes members; never raise
- * it to admit new ones.
+ * The Seerr request-dialog cell lives in the feature-facing
+ * SeerrRequestDialogHolder rather than in core:data's SeerrRequestStateHolder
+ * and core:model's SeerrRequestSnapshot — the extracted-module shape this
+ * guard prescribes. Its VM wiring is one accessor (`seerrDialogItem`): the
+ * net surface across VM + snapshot does not grow, it stays with the layer
+ * that owns it. Lower the ceiling when a slice moves out and deletes members;
+ * never raise it to admit new ones.
  */
 class SearchViewModelOwnershipTest {
 
@@ -56,7 +53,7 @@ class SearchViewModelOwnershipTest {
     }
 
     /**
-     * Removes line and block comments so the ratchet checks *code*, not KDoc
+     * Removes line and block comments so the guard checks *code*, not KDoc
      * prose (the ViewModel legitimately mentions its members in
      * documentation), while leaving string literals intact.
      */

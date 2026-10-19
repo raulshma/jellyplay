@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.di
 import android.content.Context
 import com.raulshma.jellyplay.core.data.cache.CacheManager
 import com.raulshma.jellyplay.core.data.playback.AndroidPipController
+import com.raulshma.jellyplay.core.data.playback.AmbientVideoPlayer
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsProcessor
 import com.raulshma.jellyplay.core.data.playback.AudioLibraryBrowser
@@ -13,8 +14,11 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.ExoAmbientVideoPlayer
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -84,6 +88,13 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             jellyfinRemotePlayCastStrategy = get(),
             audioStreamCache = get(),
             audioPrefetchEngine = get(),
+            // The remote-session gate over the verdict's flag cell —
+            // call-time resolution on purpose: the verdict ctor-injects
+            // THIS manager as its audio face, so an eager edge would be a
+            // construction cycle (same shape as the browser's facade
+            // provider above). The gate is only read when the audio
+            // progress loop starts, long after both singles exist.
+            remoteSessionActive = { get<NowPlayingVerdict>().remoteSessionActive.value },
         )
     }
     // Former bindAudioQueueManager / AudioEffectsManager @Binds-style aliases:
@@ -94,6 +105,21 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single<AudioQueueManager> { get<AudioPlaybackManager>() }
     single<AudioEffectsManager> { get<AudioPlaybackManager>() }
     single<AudioPlayerEngine> { get<AudioPlaybackManager>() }
+    // The app shell's narrowed metadata+transport surface (MainContent and
+    // its layout/overlay branches) — same single, one more alias beside the
+    // three above, so shell code resolves the interface and constructs
+    // against a fake on the JVM.
+    single<ShellAudioSurface> { get<AudioPlaybackManager>() }
+    // The Now-playing verdict (GLOSSARY): one fold over the video registry
+    // (commonMain, dataJvmModule) and this module's manager as the audio
+    // face. Consumed by the remote-cast family's reporter + receiver, the
+    // app's widget updater and the QS tile.
+    single {
+        NowPlayingVerdict(
+            videoEngines = get(),
+            audio = get<AudioPlaybackManager>(),
+        )
+    }
 
     single {
         AudioStreamCache(
@@ -120,8 +146,13 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             musicCatalogue = get(),
             playbackRepository = get(),
             appearanceStore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
+    // The ambient hero-clip transport (muted-by-contract, looping) —
+    // one process-wide single so the home hero and the detail hero can never
+    // both drive video (start implicitly stops the previous clip).
+    single<AmbientVideoPlayer> { ExoAmbientVideoPlayer(context = context) }
     // The PiP state owner: concrete single (PlayerActivity injects the class)
     // plus the commonMain PipController port bound to the SAME instance —
     // both players resolve the port key, the Activity the concrete one.

@@ -108,18 +108,24 @@ fun TrickplayOverlay(
                             .background(thumbnailOverlayGradient),
                     )
                 } else {
+                    // Same cached-brush shape as the bitmap branch above: the
+                    // placeholder gradient is remembered per palette color
+                    // instead of allocating a new List<Color> + Brush on every
+                    // scrub-tick recomposition.
+                    val placeholderBase = playerOnScrim()
+                    val placeholderGradient = remember(placeholderBase) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                placeholderBase.copy(alpha = 0.05f),
+                                placeholderBase.copy(alpha = 0.02f),
+                            ),
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(135.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        playerOnScrim().copy(alpha = 0.05f),
-                                        playerOnScrim().copy(alpha = 0.02f),
-                                    ),
-                                ),
-                            ),
+                            .background(placeholderGradient),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

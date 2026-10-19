@@ -42,7 +42,7 @@ fun androidNotificationModule(context: Context): Module = module {
         }
     }
 
-    // The push wave's platform half: the UnifiedPush connector over the user's
+    // The platform half of push support: the UnifiedPush connector over the user's
     // distributor app (ntfy & co). The commonMain push repository resolves
     // this seam getOrNull — desktop registers nothing and parks on
     // NoDistributor; the push receiver routes the connector's broadcasts into

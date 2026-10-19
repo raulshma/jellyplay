@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.model.seerr
 
+import com.raulshma.jellyplay.core.model.MediaType
+
 /**
  * Decision table for Seerr request/media status: the 4K-aware effective-status
  * resolution and the availability predicates both status-rendering features
@@ -64,13 +66,13 @@ val SeerrMediaStatus.isProcessing: Boolean
     get() = this == SeerrMediaStatus.PROCESSING
 
 /**
- * The single action button the Seerr detail screen shows for a media item —
+ * The single action button the Seerr detail screen shows for a media item -
  * the button-PRECEDENCE half of the decision table. The screen's
- * `SeerrActionButtons` previously folded this inline beside the (already
- * extracted) predicates above; core:ui's `seerrStatusBadgePresentation`
- * folds the identical precedence for the search card's corner badge
- * (available > processing > pending > bare requested). Both now read the
- * vocabulary below, so the precedence lives in exactly one place.
+ * `SeerrActionButtons` folds this beside the predicates above; core:ui's
+ * `seerrStatusBadgePresentation` folds the identical precedence for the
+ * search card's corner badge (available > processing > pending > bare
+ * requested). Both read the vocabulary below, so the precedence lives in
+ * exactly one place.
  *
  * Shape (from what the screen actually branches on): a media item is
  * [Available] (the "open in library" affordance), one of three [Requested]
@@ -135,3 +137,81 @@ fun seerrRequestButtonState(mediaInfo: SeerrMediaInfo?): SeerrRequestButtonState
         else -> SeerrRequestButtonState.NotRequested
     }
 }
+
+// ── the movie/TV kind fold ──────────────────────────────────────────────────
+
+/**
+ * The movie/TV discriminator, so Seerr surfaces do not re-parse the wire's
+ * own `type`/`mediaType` string ("movie"/"tv") — thirteen inline
+ * `equals("movie", …)` sites across requests/home/details/core:data/core:ui,
+ * plus the calendar's ArrMediaType-keyed fetch fork. Gathered here beside the
+ * status decisions for the same reason that table exists: one tested home,
+ * effect shells in the features.
+ *
+ * Three arms, derived from what the parse sites actually did with unmatched
+ * values:
+ *
+ *  - The **render** sites (`SeerrMediaCard`'s badge, `HomeSearchOverlay`'s
+ *    subtitle, `SeerrDiscoverRow`'s route normalizer) passed an exotic value
+ *    through verbatim — so unmatched folds to [UNKNOWN] and those sites keep
+ *    their raw-string arm.
+ *  - The **fetch** sites (detail loads, request delegate, ratings, the
+ *    poster/poster enrichment forks) branch `if (movie) … else (tv)` —
+ *    unmatched rode the tv leg. [pick] encodes exactly that fold.
+ *
+ * Declared delta: the core:data forks (`SeerrRequestDelegate`,
+ * `SeerrRepositoryImpl.getRatings`) compared case-SENSITIVELY (`== "movie"`),
+ * so a `"Movie"` payload misrouted to the tv leg; routing through
+ * [fromWire]'s ignoreCase parse fixes them (intentional — the one behavior
+ * change of this fold).
+ */
+enum class SeerrMediaKind {
+    MOVIE,
+    TV,
+
+    /** Anything that is neither wire string — render sites pass the raw value through. */
+    UNKNOWN;
+
+    companion object {
+        /**
+         * The one wire parse, case-insensitive (the render sites already
+         * ignored case; the fetch sites' sensitive compares were the bug).
+         * Null/empty folds to [UNKNOWN].
+         */
+        fun fromWire(raw: String?): SeerrMediaKind = when {
+            raw.equals("movie", ignoreCase = true) -> MOVIE
+            raw.equals("tv", ignoreCase = true) -> TV
+            else -> UNKNOWN
+        }
+    }
+}
+
+/**
+ * The request's kind, parsed once (here) from the wire `type` with
+ * [SeerrMediaKind.fromWire]'s ignoreCase rule — the property the requests
+ * surfaces read instead of re-parsing `type` inline.
+ */
+val SeerrRequestItem.kind: SeerrMediaKind
+    get() = SeerrMediaKind.fromWire(type)
+
+/** The search-row counterpart of [SeerrRequestItem.kind], over `mediaType`. */
+val SeerrSearchItem.kind: SeerrMediaKind
+    get() = SeerrMediaKind.fromWire(mediaType)
+
+/**
+ * The movie/TV fetch fork the detail loads, request delegate, ratings fetch
+ * and both enrichment fans re-derived as `if (isMovie) fetchMovie() else
+ * fetchTv()`: [MOVIE] runs [movie], everything else — [TV] and [UNKNOWN]
+ * alike — runs [tv], byte-identical to the former `else` arm. Rendering sites
+ * that pass unmatched values through instead read [SeerrMediaKind] directly.
+ */
+inline fun <T> SeerrMediaKind.pick(movie: () -> T, tv: () -> T): T =
+    if (this == SeerrMediaKind.MOVIE) movie() else tv()
+
+/**
+ * The kind → [MediaType] mapping written inline as
+ * `if (isMovie) MediaType.MOVIE else MediaType.SERIES`
+ * ([UNKNOWN] rides the SERIES leg, same `else` fold as [pick]).
+ */
+fun SeerrMediaKind.toMediaType(): MediaType =
+    if (this == SeerrMediaKind.MOVIE) MediaType.MOVIE else MediaType.SERIES

@@ -152,6 +152,11 @@ fun UserStatisticsDetailScreen(
             }
         },
     ) { paddingValues ->
+        // Remembered: the drop re-allocated the tail list per
+        // content invocation otherwise.
+        val restTopItems = remember(state.detail.topItems) {
+            state.detail.topItems.drop(5)
+        }
         when {
             state.isLoading -> ScreenLoadingState()
             state.error != null -> ErrorScreen(
@@ -290,7 +295,7 @@ fun UserStatisticsDetailScreen(
                     }
                     if (state.detail.topItems.size > 5) {
                         items(
-                            items = state.detail.topItems.drop(5),
+                            items = restTopItems,
                             key = { it.itemId },
                             contentType = { "topItem" },
                         ) { item ->

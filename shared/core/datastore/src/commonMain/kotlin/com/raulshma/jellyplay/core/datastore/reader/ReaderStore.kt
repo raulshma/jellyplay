@@ -79,7 +79,7 @@ data class PerBookAppearance(
  * map (itemId → [ReadingDirection]), per-book appearance overrides
  * (itemId → [PerBookAppearance]), the per-book exact-resume CFI map
  * (itemId → last `epubcfi(...)`, preferred over the server percent on the
- * same install — docs/adr/0003-local-first-reader-marks.md point 4), plus
+ * same install), plus
  * the global reflowable appearance ([ReaderTheme], font family/size, line
  * height, margins, justify, scroll), display behavior (brightness,
  * volume-key paging, animated page turns) and reading/speech pacing
@@ -367,9 +367,9 @@ class ReaderStore constructor(
         reader.value.lastCfis[itemId]
 
     /**
-     * Records the book's exact resume CFI (docs/adr/0003-local-first-reader-marks.md
-     * point 4: local exact resume preferred over the server percent on the
-     * same install, while the server keeps receiving the ticks protocol).
+     * Records the book's exact resume CFI: local exact resume is preferred
+     * over the server percent on the same install, while the server keeps
+     * receiving the ticks protocol.
      */
     suspend fun setLastCfi(itemId: String, cfi: String) {
         lastCfisPref.edit { it + (itemId to cfi) }

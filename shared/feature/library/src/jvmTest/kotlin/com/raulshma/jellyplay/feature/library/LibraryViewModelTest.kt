@@ -9,7 +9,7 @@ import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -56,12 +56,26 @@ import kotlin.test.assertNull
 
 class LibraryViewModelTest {
 
+    // The browse-catalogue enrichments seam — the filter sheets' tag facet
+    // reads this seam (off the wide repository surface); the fake records the
+    // call count the tests pin.
+    private val catalogueEnrichments = object : MediaCatalogueEnrichments {
+        var tagsResult: Result<List<String>> = Result.success(emptyList())
+        var tagsCalls: Int = 0
+        override suspend fun getTags(parentId: String?): Result<List<String>> {
+            tagsCalls++
+            return tagsResult
+        }
+        override suspend fun getBoxSetsContaining(itemId: String) =
+            Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
+    }
+
+
     // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
-    private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     private lateinit var quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -71,7 +85,7 @@ class LibraryViewModelTest {
     private lateinit var libraryStore: LibraryStore
 
     /** Real flow behind offlineModeManager.offlineMode — tests drive offline
-     *  transitions (#147 auto downloaded filter) by setting its value. */
+     *  transitions by setting its value. */
     private val offlineModeFlow =
         MutableStateFlow(com.raulshma.jellyplay.core.model.OfflineMode.ONLINE)
 
@@ -125,7 +139,7 @@ class LibraryViewModelTest {
         // ClassCasts inside the inline onSuccess/onFailure.
         coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
         coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
-        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        catalogueEnrichments.tagsResult = Result.success(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents
     }
@@ -143,7 +157,7 @@ class LibraryViewModelTest {
             com.raulshma.jellyplay.core.ui.message.UserMessageBus(),
     ): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
-        libraryApiClient = libraryApiClient,
+        mediaCatalogueEnrichments = catalogueEnrichments,
         offlineRepository = offlineRepository,
         quickDownloadActions = quickDownloadActions,
         offlineModeManager = offlineModeManager,
@@ -216,7 +230,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `configureSection for tvshows mirrors the default library view with no mediaType scoping`() = runTest {
-        // Issue #113: "See All" from a home Latest row should mirror the default
+        // "See All" from a home Latest row should mirror the default
         // library tab (top-level series), sorted by latest — NOT scope to flat
         // episodes. mediaTypes stays empty so pagedItems queries TOP_LEVEL items.
         val vm = createViewModel()
@@ -284,7 +298,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `clearSectionMode resets section state so the Library tab shows its default view`() = runTest {
-        // Issue #113: the VM is shared across the Library tab and the section
+        // The VM is shared across the Library tab and the section
         // deep-link. After a "See All" visit, clearing section mode must restore
         // the default browsing view (no synthetic folder, no leftover filters).
         val vm = createViewModel()
@@ -352,8 +366,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `selectFolder decodes saved filters from store`() = runTest {
-        // Persisted-blob shape the store holds — the exact JSON the deleted
-        // SavedLibraryFilters mirror used to emit (enums by .name).
+        // Persisted-blob shape the store holds (enums by .name).
         val savedBlob = """
             {"mediaTypes":["MOVIE"],"genres":[],"years":[],
              "sortBy":"RATING","playedStatus":"UNPLAYED",
@@ -440,7 +453,7 @@ class LibraryViewModelTest {
 
         coVerify { libraryStore.setLibraryPosterSize(1.0f) }
         coVerify { libraryStore.setLibraryGroupBy(GroupBy.NONE) }
-        // The previously selected folder's stale saved filters are overwritten.
+        // The already-selected folder's stale saved filters are overwritten.
         coVerify { libraryStore.setLibraryFilters("lib-1", any()) }
         coVerify { libraryStore.setDefaultLibrarySortOrder("lib-1", SortOption.YEAR_DESC.name) }
     }
@@ -473,7 +486,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `section view-mode mutation does not leak into real library prefs`() = runTest {
-        // Issue #113 regression: enter a section ("See All" deep-link), mutate
+        // Enter a section ("See All" deep-link), mutate
         // the view mode while inside it, leave the section, and assert the real
         // library's per-folder view-mode prefs were never written (the section's
         // synthetic parentId must never be persisted as a library key).
@@ -502,7 +515,7 @@ class LibraryViewModelTest {
         assertNull(vm.state().sectionContext)
     }
 
-    /** Delegation one-liner (plan 03): silent grid mutations route through the mutator. */
+    /** Delegation one-liner: silent grid mutations route through the mutator. */
     @Test
     fun `markItemPlayed delegates to the mutator silently`() = runTest {
         val vm = createViewModel()
@@ -530,7 +543,7 @@ class LibraryViewModelTest {
         }
     }
 
-    // ── Offline auto downloaded filter (#147) ────────────────────────────────
+    // ── Offline auto downloaded filter ───────────────────────────────────────
 
     @Test
     fun `offline static paging settles refresh load state so pull-to-refresh spinner clears`() = runTest {
@@ -624,7 +637,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `online paging queries top-level items scoped to the selected folder`() = runTest {
-        // Issue #113 companion: the server pager must ask for TOP_LEVEL items
+        // The server pager must ask for TOP_LEVEL items
         // (series for TV, movies for movies) so section "See All" and the tab
         // render the same card grid.
         val idleStates = LoadStates(
@@ -935,7 +948,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `loadFolders failure after success keeps the stale folders and stays silent`() = runTest {
-        // A transient 403 mid-session must not blank the library: previously
+        // A transient 403 mid-session must not blank the library: already
         // loaded folders stay browsable and no blocking error is raised.
         coEvery { mediaRepository.getLibraryFolders(any()) } returnsMany listOf(
             Result.success(listOf(LibraryFolder(id = "lib-1", name = "Movies"))),
@@ -986,8 +999,8 @@ class LibraryViewModelTest {
         // Initial load is cached; the manual pull-to-refresh is not.
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(force = true) }
         coVerify(exactly = 1) { mediaRepository.getGenres(force = true) }
-        // Tags are an uncached passthrough: both loads hit them.
-        coVerify(exactly = 2) { libraryApiClient.getTags(any(), any(), any()) }
+        // Both loads run (the tag cache lives beneath the mocked repository).
+        assertEquals(2, catalogueEnrichments.tagsCalls)
     }
 
     // ── Saved sort fallbacks ─────────────────────────────────────────────────

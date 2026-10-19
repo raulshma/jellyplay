@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
+import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 import com.raulshma.jellyplay.core.ui.message.UiMessage
@@ -46,6 +48,15 @@ data class LiveTvPlayerUiState(
     /** Controls auto-hide delay sourced from the user's `videoControlsTimeoutMs`
      *  preference (mirrors the VOD player). Doubled on TV in the screen. */
     val controlsTimeoutMs: Long = 5_000L,
+    /**
+     * The persisted input mapping (the same `videoInputBindings` store the
+     * VOD player projects): the live D-pad surface resolves its arm gates
+     * through it (the GLOSSARY "Input dispatch module" — live riding the
+     * map), so a disabled/NONE D-pad row silences the live arm and a rebound
+     * row routes where live can express it. Defaults to the catalog defaults
+     * — an untouched map keeps live's fixed arm behavior exactly.
+     */
+    val inputMap: PlayerInputMap = PlayerInputDefaults.defaultMap(),
 ) {
     val hasNext: Boolean get() = currentIndex < channels.lastIndex
     val hasPrevious: Boolean get() = currentIndex > 0

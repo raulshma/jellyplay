@@ -64,7 +64,6 @@ class DownloadRepositoryImplSweepTest {
         downloadsStore = preferencesStore,
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),
-        progressNotifier = mockk(relaxed = true),
         timeSource = fakeTimeSource,
         writer = mockk(relaxed = true),
         downloadDelegate = mockk(relaxed = true),

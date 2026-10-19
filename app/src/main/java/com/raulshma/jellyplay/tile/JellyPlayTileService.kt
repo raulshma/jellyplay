@@ -8,6 +8,7 @@ import androidx.annotation.RequiresApi
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,11 +20,25 @@ import org.koin.mp.KoinPlatform
 @RequiresApi(Build.VERSION_CODES.N)
 class JellyPlayTileService : TileService() {
 
-    // Koin single (Hilt removal); lazy defers the playback graph's
-    // construction until the tile is actually bound/listened to.
+    // Koin singles (Hilt removal); lazy defers the playback graph's
+    // construction until the tile is actually bound/listened to. The read
+    // faces (isPlaying / title / hasActiveSession) ride the Now-playing
+    // verdict's audio face — the same by-reference flows + pull the
+    // manager exposed, through the one cross-family interface — while the
+    // transport COMMANDS (pause/resume) stay on the manager: commands are
+    // engine business, not verdict business. The tile's fold is the AUDIO
+    // transport's by design: feeding it the verdict's cross-family faces
+    // would flip the tile ACTIVE on video-only play edges — an observable
+    // change, refused.
+    private val nowPlayingVerdict: NowPlayingVerdict by lazy { KoinPlatform.getKoin()!!.get() }
     private val audioPlaybackManager: AudioPlaybackManager by lazy { KoinPlatform.getKoin()!!.get() }
 
-    private val tileScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // A fresh scope per listening window (created in onStartListening,
+    // cancelled in onStopListening AND onDestroy): the scope lives exactly as
+    // long as the system is listening, so no SupervisorJob + main-dispatcher
+    // association survives a listening cycle, and a re-listen never lands on
+    // a cancelled scope.
+    private var tileScope: CoroutineScope? = null
     private var job: Job? = null
 
     override fun onStartListening() {
@@ -33,10 +48,12 @@ class JellyPlayTileService : TileService() {
         // playing, paused (session loaded but not playing), and inactive (no
         // session). QS tiles are binary (ACTIVE/INACTIVE), so the paused state is
         // surfaced via the label/contentDescription rather than the tile icon.
-        job = tileScope.launch {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        tileScope = scope
+        job = scope.launch {
             kotlinx.coroutines.flow.combine(
-                audioPlaybackManager.isPlaying,
-                audioPlaybackManager.title,
+                nowPlayingVerdict.audio.isPlaying,
+                nowPlayingVerdict.audio.title,
             ) { isPlaying, title -> isPlaying to title }.collect { (isPlaying, title) ->
                 updateTile(isPlaying, title)
             }
@@ -47,25 +64,30 @@ class JellyPlayTileService : TileService() {
         super.onStopListening()
         job?.cancel()
         job = null
+        tileScope?.cancel()
+        tileScope = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
         // TileService instances are created/destroyed by the system (listening
-        // bind/unbind, user pulling the tile); without cancelling tileScope the
-        // SupervisorJob + main-dispatcher association leak per recreate.
-        tileScope.cancel()
+        // bind/unbind, user pulling the tile); onDestroy can land without a
+        // final onStopListening, so the per-listen scope is cancelled here too.
+        job?.cancel()
+        job = null
+        tileScope?.cancel()
+        tileScope = null
     }
 
     override fun onClick() {
         super.onClick()
-        val isPlaying = audioPlaybackManager.isPlaying.value
+        val isPlaying = nowPlayingVerdict.audio.isPlaying.value
         if (isPlaying) {
             audioPlaybackManager.pause()
-            updateTile(false, audioPlaybackManager.title.value)
-        } else if (audioPlaybackManager.hasActiveSession) {
+            updateTile(false, nowPlayingVerdict.audio.title.value)
+        } else if (nowPlayingVerdict.audio.hasActiveSession) {
             audioPlaybackManager.resume()
-            updateTile(true, audioPlaybackManager.title.value)
+            updateTile(true, nowPlayingVerdict.audio.title.value)
         } else {
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -84,7 +106,7 @@ class JellyPlayTileService : TileService() {
     }
 
     private fun updateTile(isPlaying: Boolean = false, title: String = "") {
-        val hasSession = audioPlaybackManager.hasActiveSession
+        val hasSession = nowPlayingVerdict.audio.hasActiveSession
         // The three-state fold lives in TilePlaybackState.policy (pure,
         // truth-table tested); this is only the Android Tile plumbing — state
         // ints + string resources.

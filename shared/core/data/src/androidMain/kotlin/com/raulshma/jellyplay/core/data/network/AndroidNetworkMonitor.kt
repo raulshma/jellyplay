@@ -9,6 +9,7 @@ import android.net.NetworkRequest
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -36,11 +37,18 @@ import kotlinx.coroutines.flow.stateIn
  */
 class AndroidNetworkMonitor(
     private val context: Context,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * two stateIn upstreams hang off as a SupervisorJob child — the monitor
+     * never cancels its own scope, so the child lives exactly as long as the
+     * app scope while keeping the IO dispatcher the stateIn graph hand-rolled.
+     */
+    applicationScope: CoroutineScope,
 ) : NetworkMonitor {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.IO)
 
     /**
      * A [StateFlow] that always reflects the current [NetworkStatus].
@@ -88,7 +96,7 @@ class AndroidNetworkMonitor(
      * ride: emit the current value, register a
      * [NetworkCapabilities.NET_CAPABILITY_INTERNET] callback that re-emits on
      * available/capabilities-changed and re-probes on loss, unregister on
-     * close. Distinct-until-changed + conflated, matching the pre-extraction
+     * close. Distinct-until-changed + conflated, matching the former
      * chains byte-for-byte.
      */
     private fun <T> capabilityFlow(

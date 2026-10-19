@@ -14,9 +14,9 @@ import kotlin.test.assertTrue
 /**
  * Coverage for the editor feature's one load ladder ([loadInto]) — the
  * `isLoading = true, error = null` suspend-guard choreography behind
- * [EditorViewModel]'s editor-data load (the LiveTvLoad precedent, riding the
- * core:ui ladder per the recorded "can ride loadInto unchanged" note). Pins
- * the dispatch contract the folded site relies on: start raises isLoading and
+ * [EditorViewModel]'s editor-data load (the LiveTvLoad pattern, riding the
+ * core:ui ladder). Pins
+ * the dispatch contract the load site relies on: start raises isLoading and
  * clears the error BEFORE the fetch, exactly one arm fires, the success arm
  * publishes the fetched payload and settles the flag, the failure arm
  * preserves the previously-loaded detail while surfacing the error, the

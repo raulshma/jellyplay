@@ -4,8 +4,8 @@ import kotlin.test.assertEquals
 import kotlin.test.Test
 
 /**
- * JVM tests for [LibraryGrouper] — the pure grouping logic lifted out of
- * `GroupedLibraryContent`. Pins the two #113 crash paths: the throw on
+ * JVM tests for [LibraryGrouper] — the pure grouping logic of
+ * `GroupedLibraryContent`. Pins the two crash paths: the throw on
  * [GroupBy.NONE] and the duplicate-lazy-key scatter from an unsorted snapshot.
  */
 class LibraryGrouperTest {
@@ -17,8 +17,8 @@ class LibraryGrouperTest {
 
     @Test
     fun `groupKey NONE returns empty string instead of throwing`() {
-        // Issue #113: persisted GroupBy flows in async and can transiently be NONE
-        // while a grouped view is mounted. Throwing crashed the app on open.
+        // Persisted GroupBy flows in async and can transiently be NONE while a
+        // grouped view is mounted. Throwing crashes the app on open.
         assertEquals(
 LibraryGrouper.groupKey(item("1", "Anything"), GroupBy.NONE),
 "",

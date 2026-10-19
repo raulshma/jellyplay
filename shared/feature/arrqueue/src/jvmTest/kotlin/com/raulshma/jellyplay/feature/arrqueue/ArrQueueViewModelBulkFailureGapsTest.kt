@@ -48,8 +48,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArrQueueViewModelBulkFailureGapsTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (ArrQueueViewModelTest pattern).
+    // MainDispatcherRule (:core:testing) inlined — jvmTest has no access to
+    // that module (ArrQueueViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var arrRepository: ArrRepository
@@ -148,9 +148,9 @@ class ArrQueueViewModelBulkFailureGapsTest {
         viewModel.refresh()
         advanceUntilIdle()
 
-        // HEAD mapping: a null exception message lands `null` in the error
-        // slot (no fallback resource at this call site — only the message-seal
-        // actions carry the unknown-error fallback).
+        // A null exception message lands `null` in the error slot (no
+        // fallback resource at this call site — only the message-seal actions
+        // carry the unknown-error fallback).
         assertNull(viewModel.state.value.error)
         assertFalse(viewModel.state.value.isLoading)
     }

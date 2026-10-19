@@ -6,15 +6,11 @@ import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
 /**
  * The desktop remote-navigation seams — everything this shell adds around
  * shared/feature/shell's [com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher]
- * ladder. The former `DesktopRemoteNavCollector` wrapper (eight forwarded
- * constructor params around the dispatcher plus this constant and a
- * collect() one-liner) is gone: the dispatcher is now constructed directly
- * by [DesktopShellServices], which owns the shell-service wiring; only the
- * two genuinely desktop-owned declarations below remain here.
+ * ladder. The dispatcher is constructed directly by [DesktopShellServices],
+ * which owns the shell-service wiring; only the two genuinely desktop-owned
+ * declarations below live here.
  *
- * Desktop ignored the bridge entirely before the receiver port — remote
- * Play → desktop, SyncPlay auto-open and ClosePlayer all dead-ended. The
- * ladder's target→sink table (including the GoToTopLevel select-not-pop
+ * The ladder's target→sink table (including the GoToTopLevel select-not-pop
  * fork) is shared and pinned by `RemoteNavigationDispatcherTest`; the
  * desktop seams it is constructed over: pushes through the guarded
  * navigator (dead-end routes surface the guard's snackbar), tab switches
@@ -35,8 +31,8 @@ import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
 internal const val DESKTOP_CONTEXT_MENU_UNAVAILABLE = "Context menu not available here"
 
 /**
- * The four-branch remote→Compose focus mapping the scaffold's `moveFocus`
- * adapter used to inline: the receiver's [RemoteFocusDirection] onto
+ * The four-branch remote→Compose focus mapping: the receiver's
+ * [RemoteFocusDirection] onto
  * Compose's [FocusDirection] for `FocusManager.moveFocus`. Total (the wire
  * enum has exactly these four members) and pure — the objects are plain
  * constants, so DesktopRemoteNavigationTest pins all four rows on the JVM

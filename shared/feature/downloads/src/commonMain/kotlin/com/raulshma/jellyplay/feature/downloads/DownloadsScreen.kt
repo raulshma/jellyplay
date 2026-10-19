@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -30,6 +30,7 @@ import androidx.compose.material3.TriStateCheckbox
 import com.raulshma.jellyplay.core.ui.animation.SwipeActionBox
 import com.raulshma.jellyplay.core.ui.components.SelectionActionBar
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.ResyncCategory
 import com.raulshma.jellyplay.core.model.formatBytes
@@ -86,8 +89,6 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_fo
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_chapters
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_chapters_desc
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_backdrop
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_chapters
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_chapters_desc
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_backdrop_desc
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_header
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_data_metadata
@@ -108,9 +109,9 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_fo
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_no_data
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_summary
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_title
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_no_items_in_category
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_pause_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_action
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_checking
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_empty
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_check_all_cd
@@ -119,20 +120,33 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_re
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_resync_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_retry_failed
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_screen_title
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_season_n
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_selected_count
 import com.raulshma.jellyplay.feature.downloads.sheets.DownloadsResyncSheet
 import com.raulshma.jellyplay.feature.downloads.sheets.ForceResyncSheet
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DownloadsScreen(
     onItemClick: (String) -> Unit,
     onPlayOffline: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit,
+    onStreamOffline: (itemId: String) -> Unit,
+    onOpenStorageSettings: () -> Unit,
     onBack: () -> Unit,
     viewModel: DownloadsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val downloads = uiState.downloads
+    // Grouped view model (gh-175): the rendered rows (series/season headers +
+    // items) under the active type filter and sort, plus the expansion state
+    // the headers read. uiState.downloads stays the flat source of truth for
+    // actions; rows only decide what renders and in what order. Null while
+    // the first (off-Main) derivation is still in flight.
+    val currentRows = viewModel.rows.collectAsStateWithLifecycle(initialValue = null).value
+    val listFilter by viewModel.filter.collectAsStateWithLifecycle()
+    val listSort by viewModel.sort.collectAsStateWithLifecycle()
+    val expandedKeys by viewModel.expandedKeys.collectAsStateWithLifecycle()
     // Live per-row progress, collected ONCE into a State whose .value is
     // never read at this level. Collecting here subscribes the upstream
     // (that's intended — it keeps the tick hot); only RECOMPOSITION is
@@ -221,7 +235,7 @@ fun DownloadsScreen(
     val listFocusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
         focusRequester = listFocusRequester,
-        itemCount = downloads.size,
+        itemCount = currentRows?.size ?: 0,
         tag = "downloads_init",
     )
 
@@ -305,23 +319,42 @@ fun DownloadsScreen(
             )
         },
     ) {
-        // "Storage used" rides the live progress tick (bytes accumulate
-        // mid-transfer), so it is collected INSIDE this leaf — the screen
-        // body above is not invalidated per tick, only this one Text. Same
-        // `totalStorageBytes > 0` visibility rule the inline Text had.
+        // "Storage used" (plus the quota bar when a max-download-storage cap
+        // is set) rides the live progress tick (bytes accumulate mid-transfer),
+        // so it is collected INSIDE this leaf — the screen body above is not
+        // invalidated per tick, only this one header. Same `totalStorage > 0`
+        // visibility rule the inline Text had.
         DownloadsStorageUsedText(
             totalStorageBytes = viewModel.totalStorageBytes,
+            maxStorageBytes = viewModel.maxStorageBytes,
             formatBytes = Long::formatBytes,
             horizontalPadding = adaptiveInfo.contentPadding(isTv),
+            onOpenStorageSettings = onOpenStorageSettings,
         )
 
         if (downloads.isEmpty()) {
-            com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+            ScreenEmptyState(
                 icon = Tabler.Outline.Download,
                 title = stringResource(Res.string.downloads_empty_title),
                 description = stringResource(Res.string.downloads_empty_description),
             )
         } else {
+            // Type filter (All / Movies / Series) + sort menu (gh-175), plus
+            // the expand/collapse-all control while the view has series groups.
+            DownloadsFilterBar(
+                selected = listFilter,
+                onSelectFilter = viewModel::setFilter,
+                sort = listSort,
+                onSelectSort = viewModel::setSort,
+                hasGroups = currentRows?.any { it is DownloadListRow.SeriesHeader } == true,
+                anyExpanded = expandedKeys.isNotEmpty(),
+                onToggleExpandAll = {
+                    if (expandedKeys.isEmpty()) viewModel.expandAll() else viewModel.collapseAll()
+                },
+                modifier = Modifier
+                    .padding(horizontal = adaptiveInfo.contentPadding(isTv))
+                    .padding(bottom = 4.dp),
+            )
             // The rows' three formatters are the shared core-model ByteFormatter
             // extensions, passed as static references — identical across rows,
             // no per-row allocation (the list recomposes on every progress
@@ -334,6 +367,22 @@ fun DownloadsScreen(
             // render an "update available" dot without a per-row scan. Computed
             // in composable scope (above the LazyColumn) so `remember` is valid.
             val updateIds = remember(updateRows) { updateRows.map { it.id }.toHashSet() }
+            // Download-id → media-item-id map so group headers can count the
+            // flagged episodes inside them (updateRows are keyed by media item
+            // id; header episodeIds are download ids). Only COMPLETED rows
+            // enter the map — the same gate the row-level dots apply, so a
+            // stale flag on a re-downloading row can't light a header whose
+            // rows show no dot.
+            val mediaItemIdByDownloadId = remember(downloads) {
+                downloads
+                    .filter { it.status == DownloadStatus.COMPLETED }
+                    .associate { it.id to it.mediaItemId }
+            }
+            val headerUpdateCount = remember(updateIds, mediaItemIdByDownloadId) {
+                { episodeIds: List<String> ->
+                    episodeIds.count { id -> mediaItemIdByDownloadId[id]?.let { it in updateIds } == true }
+                }
+            }
             // Shared entrance reveal for the whole list — the same fix as
             // MediaDetailBody's LocalDetailEntrance, via the shared
             // [rememberDetailEntrance] + [detailEntrance] pair. ONE Animatable
@@ -349,99 +398,189 @@ fun DownloadsScreen(
             // composed rows animated before.
             val entrance = rememberDetailEntrance()
             Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .tvFocusRestorer()
-                        .focusRequester(listFocusRequester),
-                    contentPadding = PaddingValues(
-                        start = adaptiveInfo.contentPadding(isTv),
-                        end = adaptiveInfo.contentPadding(isTv),
-                        top = 8.dp,
-                        // Grow bottom padding while selecting so the action bar
-                        // clears the floating nav and doesn't cover the last row.
-                        bottom = if (selectionMode) floatingNavClearanceDp + 72.dp else adaptiveInfo.bottomPadding(isTv),
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                ) {
-                    // Long-press hint: shown only until the user enters selection
-                    // mode for the first time, so the affordance is discoverable
-                    // without lingering on every session.
-                    item(key = "selection_hint", contentType = "selectionHint") {
-                        if (!selectionMode) {
-                            SelectionHintRow()
-                        }
-                    }
-                    itemsIndexed(items = downloads, key = { _, it -> it.id }, contentType = { _, _ -> "downloadItem" }) { index, download ->
-                        // Hot read scoped to the only rows that move: just the
-                        // DOWNLOADING rows' lambdas subscribe to the live
-                        // progress map, so a tick re-executes those item
-                        // lambdas only — never the enclosing screen body.
-                        val liveProgress = if (download.status == DownloadStatus.DOWNLOADING) {
-                            progressById.value[download.id]
-                        } else {
-                            null
-                        }
-                        val row: @Composable (Modifier) -> Unit = { rowModifier ->
-                            DownloadItemRow(
-                                // Deferred draw-phase read of the shared entrance
-                                // progress: alpha + a slide of 1/10 of the row
-                                // height reproduce the old fadeIn +
-                                // slideInVertically(it / 10) entrance with zero
-                                // per-row state, coroutine, or animation node.
-                                modifier = rowModifier,
-                                item = download,
-                                liveProgress = liveProgress,
-                                formatBytes = formatBytes,
-                                formatSpeed = formatSpeed,
-                                formatEta = formatEta,
-                                selected = download.id in selectedIds,
-                                selectionMode = selectionMode,
-                                hasUpdate = download.status == DownloadStatus.COMPLETED &&
-                                    download.mediaItemId in updateIds,
-                                // Completed downloads open their detail page on tap
-                                // (matching the online experience) rather than auto-playing.
-                                // A distinct Play action is still available in the row.
-                                onOpenDetail = {
-                                    if (download.status == DownloadStatus.COMPLETED) {
-                                        onItemClick(download.mediaItemId)
-                                    }
-                                },
-                                onPlay = {
-                                    if (download.status == DownloadStatus.COMPLETED) {
-                                        onPlayOffline(download.mediaItemId, download.mediaType)
-                                    }
-                                },
-                                onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
-                                onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
-                                onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                                onDelete = { viewModel.pendingDelete.show(download) },
-                                onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
-                                onMoveToFront = { viewModel.moveToFront(download) },
-                                onLowerPriority = { viewModel.lowerPriority(download) },
-                                onToggleSelection = { viewModel.toggleSelection(download) },
-                            )
-                        }
-                        // Swipe-to-delete shortcut (touch, outside selection
-                        // mode): reveals the trash background and opens the
-                        // SAME confirm dialog the row's delete action uses —
-                        // the destructive step keeps its confirmation. TV rows
-                        // skip the wrapper (D-pad focus, no touch).
-                        val entranceModifier = Modifier.detailEntrance(
-                            progress = { entrance.value },
-                            slideDivisor = 10f,
+                val rows = currentRows
+                if (rows == null) {
+                    // First (off-Main) rows derivation still in flight. Render
+                    // nothing here: an initial emptyList would flash the
+                    // category-empty state below while downloads exist.
+                } else if (rows.isEmpty()) {
+                    // A filter with nothing matching it (e.g. Series while only
+                    // movies are downloaded) — category-empty, not the blank list.
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.Download,
+                            title = stringResource(Res.string.downloads_no_items_in_category),
                         )
-                        if (!selectionMode && !isTv) {
-                            SwipeActionBox(
-                                onAction = { viewModel.pendingDelete.show(download) },
-                                actionContentDescription = stringResource(Res.string.downloads_delete),
-                                modifier = entranceModifier,
-                                shape = ShapeCache.smooth12,
-                            ) {
-                                row(Modifier)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusRequester(listFocusRequester),
+                        contentPadding = PaddingValues(
+                            start = adaptiveInfo.contentPadding(isTv),
+                            end = adaptiveInfo.contentPadding(isTv),
+                            top = 8.dp,
+                            // Grow bottom padding while selecting so the action bar
+                            // clears the floating nav and doesn't cover the last row.
+                            bottom = if (selectionMode) floatingNavClearanceDp + 72.dp else adaptiveInfo.bottomPadding(isTv),
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                    ) {
+                        // Long-press hint: shown only until the user enters selection
+                        // mode for the first time, so the affordance is discoverable
+                        // without lingering on every session.
+                        item(key = "selection_hint", contentType = "selectionHint") {
+                            if (!selectionMode) {
+                                SelectionHintRow()
                             }
-                        } else {
-                            row(entranceModifier)
+                        }
+                        items(
+                            items = rows,
+                            key = { it.key },
+                            contentType = { row ->
+                                when (row) {
+                                    is DownloadListRow.SeriesHeader -> "seriesHeader"
+                                    is DownloadListRow.SeasonHeader -> "seasonHeader"
+                                    is DownloadListRow.Item -> "downloadItem"
+                                }
+                            },
+                        ) { row ->
+                            // Placement/enter/exit animation for the expand-collapse
+                            // reflow: the header slides to its new slot and disclosed
+                            // episodes fade in (animateItem's defaults) instead of
+                            // snapping. Composition-safe: this runs inside the items
+                            // block's LazyItemScope.
+                            val entranceModifier = Modifier
+                                .animateItem()
+                                .detailEntrance(
+                                    progress = { entrance.value },
+                                    slideDivisor = 10f,
+                                )
+                            when (row) {
+                                is DownloadListRow.SeriesHeader -> DownloadListHeaderRow(
+                                    title = row.name,
+                                    episodeCount = row.episodeCount,
+                                    episodeIds = row.episodeIds,
+                                    completedCount = row.completedCount,
+                                    totalBytes = row.totalBytes,
+                                    updateCount = headerUpdateCount(row.episodeIds),
+                                    expanded = row.key in expandedKeys,
+                                    selectionMode = selectionMode,
+                                    selection = groupSelectionState(row.episodeIds, selectedIds),
+                                    onToggleExpanded = { viewModel.toggleExpanded(row.key) },
+                                    onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
+                                    onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
+                                    onPlayOffline = onPlayOffline,
+                                    modifier = entranceModifier,
+                                )
+                                is DownloadListRow.SeasonHeader -> DownloadListHeaderRow(
+                                    title = row.name?.takeIf(String::isNotBlank)
+                                        ?: row.number?.let { stringResource(Res.string.downloads_season_n, it) },
+                                    episodeCount = row.episodeCount,
+                                    episodeIds = row.episodeIds,
+                                    completedCount = row.completedCount,
+                                    totalBytes = row.totalBytes,
+                                    updateCount = headerUpdateCount(row.episodeIds),
+                                    expanded = row.key in expandedKeys,
+                                    selectionMode = selectionMode,
+                                    selection = groupSelectionState(row.episodeIds, selectedIds),
+                                    onToggleExpanded = { viewModel.toggleExpanded(row.key) },
+                                    onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
+                                    onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
+                                    onPlayOffline = onPlayOffline,
+                                    modifier = entranceModifier.padding(start = 28.dp),
+                                )
+                                is DownloadListRow.Item -> {
+                                    val download = row.download
+                                    // Hot read scoped to the only rows that move: just the
+                                    // DOWNLOADING rows' lambdas subscribe to the live
+                                    // progress map, so a tick re-executes those item
+                                    // lambdas only — never the enclosing screen body.
+                                    val liveProgress = if (download.status == DownloadStatus.DOWNLOADING) {
+                                        progressById.value[download.id]
+                                    } else {
+                                        null
+                                    }
+                                    val itemRow: @Composable (Modifier) -> Unit = { rowModifier ->
+                                        DownloadItemRow(
+                                            // Deferred draw-phase read of the shared entrance
+                                            // progress: alpha + a slide of 1/10 of the row
+                                            // height reproduce the fadeIn +
+                                            // slideInVertically(it / 10) entrance with zero
+                                            // per-row state, coroutine, or animation node.
+                                            modifier = rowModifier,
+                                            item = download,
+                                            liveProgress = liveProgress,
+                                            formatBytes = formatBytes,
+                                            formatSpeed = formatSpeed,
+                                            formatEta = formatEta,
+                                            selected = download.id in selectedIds,
+                                            selectionMode = selectionMode,
+                                            hasUpdate = download.status == DownloadStatus.COMPLETED &&
+                                                download.mediaItemId in updateIds,
+                                            // Completed downloads open their detail page on tap
+                                            // (matching the online experience) rather than auto-playing.
+                                            // A distinct Play action is still available in the row.
+                                            // Both gates read the module's COMPLETED-is-playable
+                                            // fold instead of restating the status check.
+                                            onOpenDetail = {
+                                                if (DownloadActions.isPlayable(download)) {
+                                                    onItemClick(download.mediaItemId)
+                                                }
+                                            },
+                                            onPlay = {
+                                                if (DownloadActions.isPlayable(download)) {
+                                                    onPlayOffline(download.mediaItemId, download.mediaType)
+                                                }
+                                            },
+                                            // Stream-instead: offered for completed downloads
+                                            // while online — plays the server copy when the
+                                            // local file is unwanted (data roaming, a broken
+                                            // transfer, preferring the transcoded ladder). The
+                                            // COMPLETED half is the module's playable fold; the
+                                            // connectivity half stays a call-site (presentation)
+                                            // gate.
+                                            onStream = if (DownloadActions.isPlayable(download) && networkStatus.hasNetwork) {
+                                                { onStreamOffline(download.mediaItemId) }
+                                            } else {
+                                                null
+                                            },
+                                            // One sink per row: the row dispatches a bare action
+                                            // and the screen owns the per-verb policy — DELETE
+                                            // confirms through the same dialog the swipe gesture
+                                            // uses, everything else dispatches at Item scope.
+                                            onAction = { action ->
+                                                when (action) {
+                                                    DownloadBulkAction.DELETE -> viewModel.pendingDelete.show(download)
+                                                    else -> viewModel.applyBulkAction(action, DownloadActionScope.Item(download.id))
+                                                }
+                                            },
+                                            onMoveToFront = { viewModel.moveToFront(download) },
+                                            onLowerPriority = { viewModel.lowerPriority(download) },
+                                            onToggleSelection = { viewModel.toggleSelection(download) },
+                                        )
+                                    }
+                                    // Swipe-to-delete shortcut (touch, outside selection
+                                    // mode): reveals the trash background and opens the
+                                    // SAME confirm dialog the row's delete action uses —
+                                    // the destructive step keeps its confirmation. TV rows
+                                    // skip the wrapper (D-pad focus, no touch).
+                                    if (!selectionMode && !isTv) {
+                                        SwipeActionBox(
+                                            onAction = { viewModel.pendingDelete.show(download) },
+                                            actionContentDescription = stringResource(Res.string.downloads_delete),
+                                            modifier = entranceModifier,
+                                            shape = ShapeCache.smooth12,
+                                        ) {
+                                            itemRow(Modifier)
+                                        }
+                                    } else {
+                                        itemRow(entranceModifier)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -555,4 +694,50 @@ fun DownloadsScreen(
             },
         )
     }
+}
+
+/**
+ * The [DownloadGroupHeader] wiring shared by the series and season header
+ * rows — the branches differ only in title resolution and the season's
+ * leading indent; the selection tri-state, update dot, and group Play are
+ * identical. [onPlayTarget] resolves the header's play target (an offline DB
+ * read) and is launched off the click path.
+ */
+@Composable
+private fun DownloadListHeaderRow(
+    title: String?,
+    episodeCount: Int,
+    episodeIds: List<String>,
+    completedCount: Int,
+    totalBytes: Long,
+    updateCount: Int,
+    expanded: Boolean,
+    selectionMode: Boolean,
+    selection: ToggleableState,
+    onToggleExpanded: () -> Unit,
+    onToggleGroupSelection: () -> Unit,
+    onPlayTarget: suspend () -> DownloadItem?,
+    onPlayOffline: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val groupScope = rememberCoroutineScope()
+    DownloadGroupHeader(
+        title = title,
+        episodeCount = episodeCount,
+        expanded = expanded,
+        selectionMode = selectionMode,
+        selection = selection,
+        onToggleExpanded = onToggleExpanded,
+        onToggleGroupSelection = onToggleGroupSelection,
+        completedCount = completedCount,
+        totalBytes = totalBytes,
+        formatBytes = Long::formatBytes,
+        updateCount = updateCount,
+        onPlay = {
+            groupScope.launch {
+                onPlayTarget()?.let { target -> onPlayOffline(target.mediaItemId, target.mediaType) }
+            }
+        },
+        modifier = modifier,
+    )
 }

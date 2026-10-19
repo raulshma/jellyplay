@@ -27,7 +27,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_impo
 fun BackupSettingsScreen(
     onBack: () -> Unit,
     onFactoryReset: () -> Unit,
-    /** The import row's reroute: the picked file opens the unified restore wizard (Wave 5). */
+    /** The import row's reroute: the picked file opens the unified restore wizard. */
     onRestoreWizard: (String) -> Unit = {},
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = koinViewModel(),
@@ -35,7 +35,7 @@ fun BackupSettingsScreen(
     val bus = LocalUserMessageBus.current
 
     /**
-     * Wave-3 "Export with secrets" staging: clicking the secrets row arms the
+     * "Export with secrets" staging: clicking the secrets row arms the
      * flag, the picker delivers the export uri, and the passphrase dialog
      * opens for that uri; confirming encrypts + writes through
      * [SettingsViewModel.exportSettings], dismissing simply drops it. The

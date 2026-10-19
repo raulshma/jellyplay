@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.HomeMode
+import kotlinx.collections.immutable.toImmutableList
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
@@ -20,6 +21,11 @@ import kotlin.test.Test
  * `HomeRenderSourceTest`; here it licenses driving every case through
  * `renderSource` alone, so the former `offlineMode != ONLINE` branch terms
  * and the render-source terms select the same surface.
+ *
+ * The HardError arm keys on the folded verdict [HomeUiState.isHardError] —
+ * the three-term predicate computed once on the state instead of restated at
+ * the branch (and mirrored by the header chip's [HomeUiState.fetchFailed]
+ * read). The verdict's own corners are pinned at the bottom of this suite.
  */
 class HomeSurfaceTest {
 
@@ -46,7 +52,7 @@ class HomeSurfaceTest {
     ) = HomeUiState(
         renderSource = renderSource,
         error = error,
-        sections = sections,
+        sections = sections.toImmutableList(),
         homeMode = homeMode,
         isGoingOnline = isGoingOnline,
         bookProgressFractions = bookProgressFractions,
@@ -84,8 +90,8 @@ class HomeSurfaceTest {
             emptyOffline,
         )
         val content = surface as HomeSurface.Content
-        assertTrue(content.feed is HomeFeed.Offline)
-        assertTrue((content.feed as HomeFeed.Offline).isLoading)
+        assertTrue(content.feed is HomeRenderFeed.Offline)
+        assertTrue((content.feed as HomeRenderFeed.Offline).isLoading)
         assertEquals(HomeRenderSource.FallbackPending, content.renderSource)
     }
 
@@ -159,7 +165,7 @@ class HomeSurfaceTest {
             populatedOffline,
         )
         val content = surface as HomeSurface.Content
-        assertTrue(content.feed is HomeFeed.Offline)
+        assertTrue(content.feed is HomeRenderFeed.Offline)
         assertEquals(HomeRenderSource.Offline.Explicit, content.renderSource)
     }
 
@@ -170,7 +176,7 @@ class HomeSurfaceTest {
         val sections = listOf(HomeSection(id = "movies", title = "Movies", type = HomeSectionType.LATEST_MEDIA, items = emptyList()))
         val surface = homeSurface(state(sections = sections), emptyOffline)
         val content = surface as HomeSurface.Content
-        val feed = content.feed as HomeFeed.Online
+        val feed = content.feed as HomeRenderFeed.Online
         assertEquals(sections, feed.sections)
         assertFalse(feed.partialLoadError)
         assertEquals(HomeRenderSource.Online, content.renderSource)
@@ -184,7 +190,7 @@ class HomeSurfaceTest {
         )
         val content = surface as HomeSurface.Content
         assertEquals(HomeRenderSource.Offline.Explicit, content.renderSource)
-        assertFalse((content.feed as HomeFeed.Offline).isLoading)
+        assertFalse((content.feed as HomeRenderFeed.Offline).isLoading)
     }
 
     @Test
@@ -234,5 +240,42 @@ class HomeSurfaceTest {
             populatedOffline,
         ) as HomeSurface.Content
         assertEquals(mapOf("b1" to 0.25f), content.bookProgressFractions)
+    }
+
+    // ── Folded verdicts (HomeUiState.isHardError / fetchFailed) ─────────────
+
+    @Test
+    fun `isHardError is the exact three-term HardError verdict`() {
+        // The arm's terms — failed fetch, confirmed-empty feed, online render
+        // source — asserted on the verdict the branch now consumes.
+        assertTrue(state(error = "boom").isHardError)
+        // Sections on screen are a stale snapshot, not a hard error.
+        assertFalse(
+            state(
+                error = "partial",
+                sections = listOf(HomeSection(id = "movies", title = "Movies", type = HomeSectionType.LATEST_MEDIA, items = emptyList())),
+            ).isHardError,
+        )
+        // A failed fetch under an offline render source renders the offline
+        // surfaces, never HardError — the render-source term.
+        assertFalse(state(renderSource = HomeRenderSource.Offline.Explicit, error = "boom").isHardError)
+        assertFalse(state(renderSource = HomeRenderSource.Offline.Implicit, error = "boom").isHardError)
+        assertFalse(state(renderSource = HomeRenderSource.FallbackPending, error = "boom").isHardError)
+        // No error, no verdict — even with an empty feed.
+        assertFalse(state().isHardError)
+    }
+
+    @Test
+    fun `fetchFailed is error alone - the header chip's wider verdict`() {
+        // The header chip reports ANY failed fetch, stale sections included —
+        // a strictly wider verdict than isHardError.
+        assertTrue(state(error = "boom").fetchFailed)
+        assertTrue(
+            state(
+                error = "partial",
+                sections = listOf(HomeSection(id = "movies", title = "Movies", type = HomeSectionType.LATEST_MEDIA, items = emptyList())),
+            ).fetchFailed,
+        )
+        assertFalse(state().fetchFailed)
     }
 }

@@ -43,7 +43,9 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.kind
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -127,8 +129,8 @@ fun HomeSearchResultsOverlay(
             }
         } else {
             // Hoisted out of the per-item lambdas below: these three labels are
-            // constant, but were previously looked up per visible row per
-            // keystroke during search-as-you-type (N×3 string resolutions).
+            // constant, and looking them up per visible row per keystroke
+            // during search-as-you-type costs N×3 string resolutions.
             val movieLabel = stringResource(Res.string.home_movie)
             val seriesLabel = stringResource(Res.string.home_tv_show)
             val musicLabel = stringResource(Res.string.home_music)
@@ -268,12 +270,17 @@ fun HomeSearchResultsOverlay(
                             jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            // Per-row lambdas remembered on the item: a
+                            // recomposition without a new results emission reuses
+                            // them instead of reallocating per row. Keyed on the
+                            // instance so a refreshed result never keeps a stale
+                            // capture.
                             HomeSearchResultRow(
                                 title = item.name,
                                 subtitle = subtitle,
-                                onClick = { onJellyfinClick(item) },
+                                onClick = remember(item) { { onJellyfinClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = { HomeResultTile(getImageUrl(item.id)) },
+                                leading = remember(item.id) { { HomeResultTile(getImageUrl(item.id)) } },
                             )
                         }
                     }
@@ -303,12 +310,14 @@ fun HomeSearchResultsOverlay(
                             seerrResultSubtitle(item, movieLabel, seriesLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            // Per-row lambdas remembered on the item —
+                            // same contract as the library rows above.
                             HomeSearchResultRow(
                                 title = item.displayName,
                                 subtitle = subtitle,
-                                onClick = { onSeerrClick(item) },
+                                onClick = remember(item) { { onSeerrClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = { HomeResultTile(item.posterUrl) },
+                                leading = remember(item) { { HomeResultTile(item.posterUrl) } },
                             )
                         }
                     }
@@ -335,30 +344,36 @@ fun HomeSearchResultsOverlay(
                         val item = settingsResults[index]
                         val placementSpec = lazyItemPlacementSpec()
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            // Per-row lambdas remembered on the item —
+                            // same contract as the library rows above.
                             HomeSearchResultRow(
                                 title = item.title,
                                 subtitle = item.subtitle,
-                                onClick = { onSettingsClick(item) },
+                                onClick = remember(item) { { onSettingsClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                                leading = {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(22.dp),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
+                                leading = remember(item) {
+                                    {
+                                        Icon(
+                                            imageVector = item.icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(22.dp),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                 },
                                 trailing = if (item.isAdvanced) {
-                                    {
-                                        Text(
-                                            text = item.category,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier
-                                                .clip(ShapeCache.smooth8)
-                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                                        )
+                                    remember(item) {
+                                        {
+                                            Text(
+                                                text = item.category,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier
+                                                    .clip(ShapeCache.smooth8)
+                                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                            )
+                                        }
                                     }
                                 } else null,
                             )
@@ -398,8 +413,8 @@ fun HomeSearchResultsOverlay(
 }
 
 /**
- * The result row's ONE lead tile (both result kinds — Jellyfin and Seerr —
- * used to duplicate this block verbatim): the artwork when a URL exists,
+ * The result row's ONE lead tile (shared by both result kinds — Jellyfin and
+ * Seerr): the artwork when a URL exists,
  * else the neutral search-icon placeholder.
  */
 @Composable
@@ -460,10 +475,12 @@ internal fun seerrResultSubtitle(
     seriesLabel: String,
 ): String = buildString {
     item.year?.let { append(it) }
-    val typeLabel = when {
-        item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
-        item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
-        else -> item.mediaType
+    // The kind fold reads the model's SeerrMediaKind (one parse, ignoreCase);
+    // an exotic mediaType keeps the raw passthrough arm.
+    val typeLabel = when (item.kind) {
+        SeerrMediaKind.MOVIE -> movieLabel
+        SeerrMediaKind.TV -> seriesLabel
+        SeerrMediaKind.UNKNOWN -> item.mediaType
     }
     if (item.year != null) append(" · ")
     append(typeLabel)

@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The composition half of the [UserMessageHost] seam — the remember-host +
- * present-adapter + collector-effect choreography both shells used to
- * hand-copy (Android: a host remember keyed on isTv plus two parallel
+ * present-adapter + collector-effect choreography each shell shares
+ * (Android: a host remember keyed on isTv plus two parallel
  * `LaunchedEffect` collectors in MainContent, one per bus; desktop: a host
  * remember plus one collector in DesktopNavScaffold). A shell's whole share
  * is the [present] adapter — the TV-Toast vs phone-Snackbar fork on Android,
@@ -27,12 +27,12 @@ import kotlinx.coroutines.flow.Flow
  * restarts only when a source's identity changes. [present] (and the adapted
  * overload's projections) ride [rememberUpdatedState] instead of effect keys:
  * a fresh lambda per recomposition — MainContent recomposes often — swaps the
- * surface in place WITHOUT restarting collection. (Deliberate delta vs. the
- * hand-copied Android collectors, which keyed on `(bus, isTv)` so a TV/phone
- * flip cancelled and relaunched collection mid-flight, dropping any message
- * in the cancellation window; the flip now only redirects the NEXT message.)
+ * surface in place WITHOUT restarting collection. A TV/phone flip only
+ * redirects the NEXT message — keying on `(bus, isTv)` would cancel and
+ * relaunch collection mid-flight, dropping any message in the cancellation
+ * window.
  *
- * The host is returned for symmetry with the remembers this replaces; no
+ * The host is returned for symmetry with the remembers it wraps; no
  * caller needs it — the effects own it.
  *
  * @param present the shell's rendering adapter: shows the already-resolved
@@ -57,7 +57,7 @@ fun rememberShellUserMessages(
 
 /**
  * The same seam for a shell-OWNED message payload this module cannot name —
- * the Android shell's legacy `:core:ui` feedback bus (desktop-style shells
+ * the Android shell's `:core:ui` feedback bus (desktop-style shells
  * whose sources are already [UserMessage]s use the plain overload). The
  * shell supplies its [severityOf] projection onto the shared severity enum
  * and its [resolveText] (`UiText.resolve(context)` there), keeping Android

@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
  * unlisted leaf can never ride a stale slice object across the switch.
  *
  * Single-writer ordering: this rebuild runs BEFORE
- * [EpisodeContinuationController.resetForItemSwitch] in the item-switch
+ * [UpNextController.resetForItemSwitch] in the item-switch
  * teardown. It wipes the whole state, the episode slice included; the
  * navigator — the episode slice's single writer — then re-derives that slice
  * through its seam from the post-rebuild state. Resetting the episode slice
@@ -48,15 +48,22 @@ internal fun VideoPlayerUiState.keepAcrossItems(): VideoPlayerUiState = VideoPla
         rememberBrightness = gestures.rememberBrightness,
         brightnessLevel = gestures.brightnessLevel,
     ),
-    // segmentState: only the behaviors carry across an item switch —
-    // the per-item segment list resets to default (empty).
+    // segmentState: the behaviors and per-type skip delays carry across an
+    // item switch — the per-item segment list resets to default (empty).
     segmentState = SegmentState(
         segmentBehaviors = segmentState.segmentBehaviors,
+        segmentSkipDelaysMs = segmentState.segmentSkipDelaysMs,
     ),
     // episodes resets through the navigator's seam right after this
     // update: only the browser feature toggle carries across an
     // item switch — adjacency, season/episode lists, season id and
     // the loading flag are per-item and reset to defaults.
+    // hasQueuedNext carries: the manual up-next queue is PROCESS-scoped
+    // (VideoQueueController singleton), so the queue the user built on the
+    // details screen survives the item switch — a rebuild that dropped this
+    // mirror left the Up Next card / autoplay gate blind to the queue for
+    // the rest of the session (the queue flow doesn't re-emit to re-set it).
+    hasQueuedNext = hasQueuedNext,
     // videoFx: only the TV zoom carries across an item switch —
     // the per-item effects and both aspect fields reset to defaults.
     videoFx = VideoFxState(tvZoomModePercent = videoFx.tvZoomModePercent),

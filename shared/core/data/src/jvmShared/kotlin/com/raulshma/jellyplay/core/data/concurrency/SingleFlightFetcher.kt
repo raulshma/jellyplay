@@ -53,14 +53,22 @@ class SingleFlightFetcher<T : Any>(
      * under the stale identity. [fetch] receives the epoch captured at
      * flight start; its result is written to the cache only if no
      * invalidation landed while it ran (and it succeeded).
+     *
+     * [force] is the freshness lever: a forced call skips BOTH cached reads
+     * (fast path and locked re-check) so it always rides a fetch — concurrent
+     * forced callers still share the one flight — while the store legs stay
+     * guarded as ever. The caller owns force's evict-before-fetch nuance
+     * (a failed forced fetch must leave nothing behind): this parameter only
+     * bypasses reads, so evict first when that contract matters.
      */
     suspend fun getOrFetch(
         identity: suspend () -> CacheIdentity,
         key: String,
         flightKey: String = key,
+        force: Boolean = false,
         fetch: suspend (epochAtStart: Long) -> Result<T>,
     ): Result<T> =
-        getOrFetchStorable(identity, key, flightKey) { epochAtStart -> fetch(epochAtStart) to true }
+        getOrFetchStorable(identity, key, flightKey, force) { epochAtStart -> fetch(epochAtStart) to true }
 
     /**
      * [getOrFetch] with a per-flight store decision: [fetch] additionally
@@ -75,13 +83,15 @@ class SingleFlightFetcher<T : Any>(
         identity: suspend () -> CacheIdentity,
         key: String,
         flightKey: String = key,
+        force: Boolean = false,
         fetch: suspend (epochAtStart: Long) -> Pair<Result<T>, Boolean>,
     ): Result<T> {
         // One read seam for the fast path (lock-free TtlCache read) and the
         // locked re-check: the cache entry lives under (identity, key) — the
-        // flight key never shapes the cache, only the flight join.
+        // flight key never shapes the cache, only the flight join. [force]
+        // bypasses it (the freshness lever — see [getOrFetch]).
         fun read(flightId: Pair<CacheIdentity, String>): Result<T>? =
-            cache.get(flightId.first, key)?.let { Result.success(it) }
+            if (force) null else cache.get(flightId.first, key)?.let { Result.success(it) }
 
         return flight.getOrFetch(
             key = { identity() to flightKey },

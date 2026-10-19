@@ -30,7 +30,7 @@ data class StorageBreakdown(
  * would otherwise trigger four directory walks on every process start.
  *
  * The FS walks and cache clears delegate to the [StorageAreas] platform seam
- * (Android keeps the verbatim Context bodies; desktop walks its own
+ * (Android walks the Context cache/files roots; desktop walks its own
  * downloads/http-cache roots), the download-mount enumeration to
  * [StorageMountsProvider], the auto-download scheduler poke to
  * [AutoDownloadSync], and the keep-days "Clean up now" action to

@@ -15,6 +15,7 @@
 
     <!-- Storage / counts -->
     <string name="downloads_storage_used">Belegter Speicher: %1$s</string>
+    <string name="downloads_storage_quota">Belegter Speicher: %1$s von %2$s</string>
     <string name="downloads_on_device">· %1$s auf dem Gerät</string>
     <plurals name="downloads_item_count">
         <item quantity="one">%1$d Element</item>
@@ -36,11 +37,15 @@
     <string name="downloads_action_move_to_front">Nach vorne</string>
     <string name="downloads_action_select_all">Alle auswählen</string>
     <string name="downloads_action_clear_selection">Auswahl aufheben</string>
+    <string name="downloads_action_stream">Stattdessen streamen</string>
+    <string name="downloads_action_more_cd">Weitere Aktionen</string>
     <string name="downloads_pause_all">Alle pausieren</string>
     <string name="downloads_retry_failed">Alle fehlgeschlagenen erneut versuchen</string>
     <string name="downloads_clear_cd">Leeren</string>
     <string name="downloads_search_cd">Suchen</string>
     <string name="downloads_sort_cd">Sortieren</string>
+    <string name="downloads_expand_all_cd">Alle Serien ausklappen</string>
+    <string name="downloads_collapse_all_cd">Alle Serien einklappen</string>
     <string name="downloads_search_downloads_placeholder">Downloads suchen…</string>
     <string name="downloads_selection_hint">Halte einen Download lange gedrückt, um ihn auszuwählen und Massenaktionen anzuwenden</string>
 
@@ -67,6 +72,15 @@
     <string name="downloads_status">Status</string>
 
     <!-- Seasons / episodes -->
+    <string name="downloads_season_n">Staffel %1$d</string>
+    <plurals name="downloads_episode_count">
+        <item quantity="one">%1$d Episode</item>
+        <item quantity="other">%1$d Episoden</item>
+    </plurals>
+    <plurals name="downloads_group_progress">
+        <item quantity="one">%1$d von %2$d heruntergeladen</item>
+        <item quantity="other">%1$d von %2$d heruntergeladen</item>
+    </plurals>
 
     <!-- Library sort / filter -->
     <string name="downloads_sort_recent">Zuletzt</string>
@@ -74,7 +88,8 @@
     <string name="downloads_sort_rating">Bewertung</string>
     <string name="downloads_sort_size">Größe</string>
     <string name="downloads_filter_all">Alle</string>
-    <string name="downloads_filter_videos">Videos</string>
+    <string name="downloads_filter_movies">Filme</string>
+    <string name="downloads_filter_series">Serien</string>
     <string name="downloads_filter_music">Musik</string>
     <string name="downloads_filter_books">Bücher</string>
     <!-- Offline download resync -->

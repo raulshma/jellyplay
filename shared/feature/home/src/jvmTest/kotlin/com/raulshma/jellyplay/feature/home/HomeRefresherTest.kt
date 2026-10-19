@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWritesImpl
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
@@ -68,8 +69,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Direct [HomeRefresher] tests — the suite this extraction exists to enable:
- * refresh cadence, throttle, CW side-effects and user-data-push deferral
+ * Direct [HomeRefresher] tests: refresh cadence, throttle, CW side-effects and user-data-push deferral
  * tested WITHOUT the Android lifecycle stack (no Robolectric, no
  * ProcessLifecycleOwner, no VM construction). Plain JUnit +
  * [MainDispatcherRule] + MockK for the constructor interfaces;
@@ -82,14 +82,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  - every test calls [HomeRefresher.stop] before returning so no loop
  *    survives the body (runTest's teardown advances the shared scheduler
  *    until idle and would otherwise never converge). [stopRefresher] in
- *    @After additionally cancels the scope — the harness leak this ticket
- *    exists to fix must not reappear here.
+ *    @After additionally cancels the scope — keeping the harness leak from
+ *    reappearing here.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeRefresherTest {
 
-    // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
-    // has no access to that module (search/music/livetv conveyor port pattern).
+    // MainDispatcherRule (:core:testing), inlined — jvmTest
+    // has no access to that module.
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var homeFeed: HomeFeed
@@ -102,6 +102,12 @@ class HomeRefresherTest {
     private lateinit var librarySyncHook: LibrarySyncHook
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var fakeTimeSource: FakeTimeSource
+    /**
+     * The real write-log the refresher under test consults, on the fake
+     * clock — the echo-demotion tests record into it before emitting a
+     * user-data change.
+     */
+    private lateinit var localWrites: RecentLocalUserDataWritesImpl
 
     private var refresher: HomeRefresher? = null
     private var refresherScope: CoroutineScope? = null
@@ -198,6 +204,7 @@ class HomeRefresherTest {
     private fun TestScope.buildRefresher(mergeCwAndNextUp: Boolean = false): HomeRefresher {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope
+        localWrites = RecentLocalUserDataWritesImpl(clock = { fakeTimeSource.nowMs })
         // One state store shared by the refresher and its side-fetch
         // collaborator (the factory seam, mirrored here).
         val state = MutableStateFlow(HomeRefreshState())
@@ -213,6 +220,7 @@ class HomeRefresherTest {
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
             stateStore = state,
+            recentLocalWrites = localWrites,
             discoverSources = HomeDiscoverSources(
                 clock = fakeTimeSource,
                 seerrRepository = seerrRepository,
@@ -530,10 +538,10 @@ class HomeRefresherTest {
 
     @Test
     fun goingOnline_fetchTimeout_clearsLoaderInsteadOfHanging() = runTest {
-        // Regression pin: a hung getHomeSections call previously parked the
-        // handshake forever, leaving the full-screen loader stuck on. (The
-        // busy flag no longer depends on this cap — the manager clears it at
-        // the ONLINE emission, before the fetch starts.)
+        // Regression pin: a hung getHomeSections call must not park the
+        // handshake forever and leave the full-screen loader stuck on. (The
+        // busy flag depends on the manager, not this cap: the manager clears
+        // it at the ONLINE emission, before the fetch starts.)
         coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers {
             CompletableDeferred<Result<HomeSectionsResult>>().await() // never completes
         }
@@ -560,10 +568,10 @@ class HomeRefresherTest {
         // Regression pin: an external/auto offline→online flip (the nav ⋮
         // "Go Online" toggles the manager directly from the app shell;
         // auto-detect flips OFFLINE_AUTO→ONLINE on network return) lands in
-        // the observer WITHOUT a GoingOnline request. That transition used to
-        // mirror the field only — after the offline content drop the home sat
-        // on "No content available" until a manual refresh or the next
-        // periodic tick. Every reconnect must run the same drain+fetch
+        // the observer WITHOUT a GoingOnline request. Mirroring the field
+        // alone leaves the home on "No content available" after the offline
+        // content drop, until a manual refresh or the next periodic tick.
+        // Every reconnect must run the same drain+fetch
         // handshake as the user-initiated one.
         coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
@@ -786,11 +794,91 @@ class HomeRefresherTest {
     }
 
     @Test
+    fun userDataChange_echoOfOwnWrites_demotesToNonForcedFetch() = runTest {
+        // The socket echo of THIS device's own write burst is item-id
+        // identical to the write (UserDataChange carries only user + item
+        // ids), so the write-log is what lets the flush tell it apart from an
+        // external push. With every named item recently recorded, the fetch
+        // runs with TTL semantics — still debounced and throttled exactly as
+        // before.
+        coEvery {
+            homeFeed.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        // Prime the refresh clock the way a sign-in fetch would (the fake's
+        // 1_000 becomes lastRefreshTime); this priming fetch is non-forced.
+        refresher.fetchOnce()
+        runCurrent()
+
+        // The device itself just saved state for i1 (the
+        // notifyUserDataChanged record), then its echo lands past the 60s
+        // throttle window.
+        fakeTimeSource.nowMs = 61_000L
+        localWrites.record(listOf("i1"))
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), force = true) }
+        // Priming fetch + the demoted echo — the only two fetches so far.
+        coVerify(exactly = 2) { homeFeed.getHomeSections(any(), force = false) }
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_containingAForeignItemId_staysForced() = runTest {
+        // The demotion is all-or-nothing: one foreign id means the change
+        // could name server-side state this device cannot know, so the
+        // forced path stays.
+        coEvery {
+            homeFeed.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+
+        fakeTimeSource.nowMs = 61_000L
+        localWrites.record(listOf("mine"))
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("mine", "external")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_writeOlderThanEchoWindow_staysForced() = runTest {
+        // A log entry past the echo window does not demote: the write is
+        // old enough that the push may as well be external (and a stale
+        // entry must not pin the TTL path forever).
+        coEvery {
+            homeFeed.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+
+        fakeTimeSource.nowMs = 61_000L
+        localWrites.record(listOf("i1"))
+        fakeTimeSource.nowMs = 61_000L + RecentLocalUserDataWritesImpl.ECHO_WINDOW_MS
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        refresher.stop()
+    }
+
+    @Test
     fun pendingUserDataChange_flushOnStart_bypassesThrottle() = runTest {
         // Return-to-Home promptness: a change armed while backgrounded (or
         // deferred behind the player) must fetch IMMEDIATELY on start — the
         // user is looking at the screen now, so the anti-spam throttle does
-        // not apply. The throttle previously dropped this flush too whenever
+        // not apply. The throttle must not drop this flush when
         // the last refresh was <60s ago.
         coEvery {
             homeFeed.getHomeSections(any(), any())
@@ -1194,6 +1282,94 @@ class HomeRefresherTest {
 
         coVerify(exactly = 0) { homeFeed.refreshHomeSection(any(), any(), any(), any()) }
         assertTrue(r.state.value.refreshingSectionIds.isEmpty())
+    }
+
+    // ── forced-refresh image-reload epoch ───────────────────────────────────
+
+    @Test
+    fun forcedRefresh_bumpsImageReloadEpoch_evenWhenFetchFails() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.success(
+                HomeSectionsResult(
+                    sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw1")))),
+                ),
+            )
+        val refresher = buildRefresher()
+        assertEquals(0L, refresher.state.value.imageReloadEpoch, "no forced refresh yet — epoch untouched")
+
+        refresher.fetchOnce()
+        runCurrent()
+        assertEquals(0L, refresher.state.value.imageReloadEpoch, "a plain (non-forced) fetch does not bump the epoch")
+
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(1L, refresher.state.value.imageReloadEpoch, "pull-to-refresh bumps the epoch")
+
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(2L, refresher.state.value.imageReloadEpoch, "every forced refresh bumps again")
+
+        // The bump precedes the fetch on purpose: a failed fetch must still
+        // leave the epoch advanced, since image recovery must not depend on
+        // the fetch succeeding.
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.failure(RuntimeException("server restarting"))
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(3L, refresher.state.value.imageReloadEpoch, "the failed fetch's epoch bump survives")
+
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_forcedRefresh_bumpsImageReloadEpoch() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        // Prime the refresh clock the way a sign-in fetch would (the fake's
+        // 1_000 becomes lastRefreshTime); a plain fetch leaves the epoch at 0.
+        refresher.fetchOnce()
+        runCurrent()
+        assertEquals(0L, refresher.state.value.imageReloadEpoch)
+
+        // Past the 60s user-data throttle window, so the change refresh runs
+        // flushPendingUserDataChange's forced fetch — the "silent user-data
+        // refresh" of the epoch contract (returning from the player).
+        fakeTimeSource.nowMs = 61_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        assertEquals(1L, refresher.state.value.imageReloadEpoch, "the silent user-data forced fetch bumps the epoch")
+        refresher.stop()
+    }
+
+    @Test
+    fun goingOnline_handshake_bumpsImageReloadEpoch() = runTest {
+        // The going-online reconnect is exactly the "network blip" recovery
+        // the epoch exists for: images that failed while offline re-arm when
+        // the handshake's capped forced fetch fires.
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent() // offline-mode observer subscribes; initial ONLINE emission mirrors only
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped, epoch untouched
+        assertEquals(0L, refresher.state.value.imageReloadEpoch, "going offline must not bump the epoch")
+
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        refresher.request(RefreshTrigger.GoingOnline)
+        runCurrent() // manager toggled → ONLINE emission runs the handshake (drain + capped fetch)
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        assertEquals(1L, refresher.state.value.imageReloadEpoch, "the going-online forced fetch bumps the epoch")
+        refresher.stop()
     }
 
     private fun section(

@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -228,19 +229,35 @@ fun HorizontalEdgePullRefreshBox(
             },
         propagateMinConstraints = true,
     ) {
-        val shift = offset.value
-        val reveal = (abs(shift) / settlePx).coerceIn(0f, 1f)
-        val sideIsStart = if (isRefreshing) refreshSideIsStart else shift >= 0f
-        if (reveal > 0f || isRefreshing) {
+        // Drag frames are draw-only: every per-frame value (the offset, the
+        // raw pull) is read inside the layer/draw lambdas below, and the two
+        // composition-visible booleans here are derivedStateOf gates that
+        // flip only at their edges (chip mounts/unmounts at reveal 0,
+        // chip side at the offset's sign change) — never per drag frame.
+        // The chip is kept behind a compositional gate rather than collapsed
+        // by its own layer while always mounted so the idle row keeps its
+        // exact prior shape: nothing of the chip (layer, offscreen buffer,
+        // ring) exists at rest.
+        val showIndicator by remember(settlePx) {
+            derivedStateOf {
+                (abs(offset.value) / settlePx).coerceIn(0f, 1f) > 0f || isRefreshingState.value
+            }
+        }
+        val sideIsStart by remember {
+            derivedStateOf { if (isRefreshingState.value) refreshSideIsStart else offset.value >= 0f }
+        }
+        if (showIndicator) {
             EdgePullIndicator(
-                reveal = if (isRefreshing) 1f else reveal,
-                progress = (abs(rawPull.floatValue) / thresholdPx).coerceIn(0f, 1f),
+                reveal = {
+                    if (isRefreshing) 1f else (abs(offset.value) / settlePx).coerceIn(0f, 1f)
+                },
+                progress = { (abs(rawPull.floatValue) / thresholdPx).coerceIn(0f, 1f) },
                 refreshing = isRefreshing,
                 modifier = Modifier.align(if (sideIsStart) Alignment.CenterStart else Alignment.CenterEnd),
             )
         }
         Box(
-            modifier = Modifier.graphicsLayer { translationX = shift },
+            modifier = Modifier.graphicsLayer { translationX = offset.value },
             propagateMinConstraints = true,
         ) {
             CompositionLocalProvider(LocalOverscrollFactory provides null) {
@@ -255,11 +272,15 @@ fun HorizontalEdgePullRefreshBox(
  * [reveal], the expressive wavy ring's amplitude tracking the pull
  * ([progress]) while dragging, indeterminate while the section's refetch
  * runs. A hairline border keeps it legible over the cards sliding past it.
+ *
+ * [reveal] and [progress] are value suppliers read inside the layer/draw
+ * lambdas below, so drag frames update the chip through the draw phase
+ * without recomposing it.
  */
 @Composable
 private fun EdgePullIndicator(
-    reveal: Float,
-    progress: Float,
+    reveal: () -> Float,
+    progress: () -> Float,
     refreshing: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -267,9 +288,10 @@ private fun EdgePullIndicator(
         modifier = modifier
             .padding(horizontal = 10.dp)
             .graphicsLayer {
-                scaleX = 0.55f + 0.45f * reveal
-                scaleY = 0.55f + 0.45f * reveal
-                alpha = ((reveal - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                val currentReveal = reveal()
+                scaleX = 0.55f + 0.45f * currentReveal
+                scaleY = 0.55f + 0.45f * currentReveal
+                alpha = ((currentReveal - 0.2f) / 0.8f).coerceIn(0f, 1f)
             }
             .size(36.dp)
             .clip(CircleShape)
@@ -282,7 +304,7 @@ private fun EdgePullIndicator(
             JellyPlayCircularProgressIndicator(modifier = Modifier.size(22.dp))
         } else {
             JellyPlayCircularProgressIndicator(
-                progress = { progress },
+                progress = progress,
                 modifier = Modifier.size(22.dp),
             )
         }

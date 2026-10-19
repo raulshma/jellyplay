@@ -193,7 +193,7 @@ fun FactoryResetScreen(
         }
     }
 
-    // ---- Wave 6: the pre-reset safety capture missed — warn once, never block.
+    // ---- The pre-reset safety capture missed — warn once, never block.
     if (viewModel.safetySnapshotMissed) {
         val warn = stringResource(Res.string.wizard_safety_snapshot_failed)
         LaunchedEffect(Unit) {

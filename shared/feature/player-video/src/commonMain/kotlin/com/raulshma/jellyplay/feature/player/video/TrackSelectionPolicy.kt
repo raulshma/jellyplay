@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 
 /**
  * Side-loaded streaming subtitle id: `"external:{server stream index}"`.
@@ -71,9 +72,9 @@ internal fun streamingSubtitleTrackRowKey(id: String): String? =
  * `TrackSelectionLogicTest` re-implemented the logic with local vars rather than
  * calling real code). Extracting it makes the policy first-class:
  *
- *  - **Subtitle**: G5 scoring pre-pass (when not forced-only) → forced-only
+ *  - **Subtitle**: scoring pre-pass (when not forced-only) → forced-only
  *    stream pick → tiered [SubtitleTrackMatcher] → `null` (caller selects Off).
- *  - **Audio**: G5 scoring pre-pass → audio-description preference →
+ *  - **Audio**: scoring pre-pass → audio-description preference →
  *    language match → `null` (caller selects Default).
  *
  * The side-effecting consequences of a decision — `engine.selectTrack()`,
@@ -88,8 +89,8 @@ internal fun streamingSubtitleTrackRowKey(id: String): String? =
  *  1. **Stored index** (validated) — the per-item `MediaStreamSelection`
  *     stream index, trusted only when it still resolves to a stream matching
  *     the recorded label/language (the helper revalidates).
- *  2. **Language + indexWithinLanguage** — G5 scoring's layout-stability rung.
- *  3. **Language + label** — G5 scoring's confident (≥3) label match.
+ *  2. **Language + indexWithinLanguage** — scoring's layout-stability rung.
+ *  3. **Language + label** — scoring's confident (≥3) label match.
  *  4. **Language + codec** — the rung for label churn: same language,
  *     remembered [RememberedTrack.codec] ([pickByScoring], after 2–3 miss).
  *  5. **Language-first** — [SubtitleTrackMatcher]'s tiered same-language
@@ -110,7 +111,7 @@ internal class TrackSelectionPolicy {
      *
      * Ordering — the explicit ladder that used to live only as a call sequence:
      *
-     *  1. **G5 scoring pre-pass** — *skipped* under [SubtitleResolutionArgs.forcedOnly],
+     *  1. **scoring pre-pass** — *skipped* under [SubtitleResolutionArgs.forcedOnly],
      *    where forced/hearing-impaired rules must win for accessibility. When the
      *    previous episode's subtitle is [remembered], a confident (≥3) match
      *    carries the specific pick (e.g. "English SDH") forward instead of
@@ -122,7 +123,7 @@ internal class TrackSelectionPolicy {
      *  4. `null` → caller selects Off.
      */
     fun resolveSubtitle(args: SubtitleResolutionArgs): TrackOption? {
-        // G5 scoring pre-pass — non-forced only; forced/hearing-impaired rules
+        // scoring pre-pass — non-forced only; forced/hearing-impaired rules
         // take precedence for accessibility.
         val scored = if (!args.forcedOnly) {
             args.remembered?.let { remembered ->
@@ -160,7 +161,7 @@ internal class TrackSelectionPolicy {
      *
      * Ordering:
      *
-     *  1. **G5 scoring pre-pass** — a confident (≥3) match against the
+     *  1. **scoring pre-pass** — a confident (≥3) match against the
      *    [remembered] previous-episode audio track (e.g. "English · 5.1 · DTS")
      *    carries forward; otherwise falls through.
      *  2. **Audio-description preference** — when [preferAudioDescription] is
@@ -283,7 +284,7 @@ internal class TrackSelectionPolicy {
     }
 
     /**
-     * Cross-episode scoring pre-pass (G5). Given the candidate [tracks] for a
+     * Cross-episode scoring pre-pass. Given the candidate [tracks] for a
      * new episode and the previously-selected [remembered] track, returns the
      * best-scoring candidate if one clears the confidence threshold, else null
      * (the caller falls back to the language rule). Used for both audio and
@@ -376,7 +377,7 @@ internal class TrackSelectionPolicy {
                 val targetLabel = targetStream?.displayTitle ?: targetStream?.title
                 val match = selectable.firstOrNull { opt ->
                     opt.label == targetLabel || (targetLabel != null && opt.label.contains(targetLabel, ignoreCase = true))
-                } ?: selectable.firstOrNull { opt -> isAudioDescriptionLabel(opt.label) }
+                } ?: selectable.firstOrNull { opt -> TrackLabelFormatter.isAudioDescriptionTitle(opt.label) }
                 if (match != null) return match
             }
         }
@@ -386,16 +387,7 @@ internal class TrackSelectionPolicy {
     /** Heuristics for detecting audio-description tracks from titles/labels. */
     private fun isAudioDescriptionStream(stream: MediaStream): Boolean {
         val title = stream.displayTitle ?: stream.title ?: return false
-        return isAudioDescriptionLabel(title)
-    }
-
-    private fun isAudioDescriptionLabel(label: String): Boolean {
-        val lower = label.lowercase()
-        return lower.contains("description") ||
-            lower.contains("descriptive") ||
-            lower.contains("narration") ||
-            lower.contains(" dvs") ||
-            lower.endsWith(" ad")
+        return TrackLabelFormatter.isAudioDescriptionTitle(title)
     }
 }
 
@@ -412,7 +404,7 @@ internal class TrackSelectionPolicy {
  *   (also set by a rule resolving to [com.raulshma.jellyplay.core.model.SubtitleTrackMode.FORCED_ONLY]).
  * @param forced per-series forced-narrative pin, or null to not care.
  * @param hearingImpaired per-series SDH pin, or null to not care.
- * @param remembered the previous episode's selected subtitle (G5 memory), or null.
+ * @param remembered the previous episode's selected subtitle (memory), or null.
  * @param preferFullSubtitle rule-engine full-dialogue bias — non-signs
  *   same-language tracks win their tier.
  * @param preferSignsSubtitle rule-engine signs/songs bias — signs
@@ -437,7 +429,7 @@ data class SubtitleResolutionArgs(
  * @param resolvedLang the effective audio language (per-item → per-series →
  *   rule engine → global preferredAudioLanguage) the policy should match against.
  * @param preferAudioDescription global audio-description preference.
- * @param remembered the previous episode's selected audio track (G5 memory), or null.
+ * @param remembered the previous episode's selected audio track (memory), or null.
  */
 @Immutable
 data class AudioResolutionArgs(

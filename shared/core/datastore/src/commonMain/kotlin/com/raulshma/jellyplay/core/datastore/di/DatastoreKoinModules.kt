@@ -47,18 +47,16 @@ import kotlinx.coroutines.SupervisorJob
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for every store in :shared:core:datastore
- * (docs/kmp-migration-plan.md). Construction bodies are copied
- * byte-for-byte from the legacy Android Hilt [SharedStoreModule] providers;
- * the Android shim's @Provides bodies now bridge here.
+ * Koin construction owner for every store in :shared:core:datastore.
+ * Construction bodies are copied byte-for-byte from the Android Hilt
+ * provider module; the Android shim's @Provides bodies bridge here.
  *
- * commonMain (was jvmShared): every def is common-legal — the
+ * commonMain: every def is common-legal — the
  * 41 store classes are commonMain and the applicationScope single constructs
  * CoroutineScope(SupervisorJob() + Dispatchers.Default), identical semantics
- * on android/jvm. At promotion NOTHING stayed behind in
- * jvmShared (its remaining files are the PinHasher/RandomUuidString/
- * BlockingFirstOrNull JVM actuals, which no def here references — their
- * expects are commonMain).
+ * on android/jvm. The remaining jvmShared files are the
+ * PinHasher/RandomUuidString/BlockingFirstOrNull JVM actuals, which no def
+ * here references — their expects are commonMain.
  *
  * Platform-bound definitions (the per-file DataStores and the
  * SecureKeyValueStorage-backed credential stores) live in
@@ -367,7 +365,7 @@ val datastoreCommonModule = module {
             get<ExperimentalStore>(),
             get<VolumeProfileStore>(),
             get<AppRuntimeStateStore>(),
-            // Wave-2 external backup slices (Room-backed config, integration /
+            // External backup slices (Room-backed config, integration /
             // widget settings): their concrete sources live in core:data's
             // dataSettingsBackupSlicesModule, so they are gathered by type —
             // empty in datastore-only graphs (tests, standalone resolution),

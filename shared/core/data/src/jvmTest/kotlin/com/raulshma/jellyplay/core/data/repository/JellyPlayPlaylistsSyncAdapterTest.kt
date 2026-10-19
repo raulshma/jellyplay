@@ -36,7 +36,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Adapter tests for the `playlists` namespace (the settings-backup wave): a
+ * Adapter tests for the `playlists` namespace (the settings-backup cluster): a
  * real in-memory Room for the smart/mood playlist stores plus a temp-file
  * DataStore mirror — the three key families (`smart/{id}`, `mood/{id}`,
  * `moodpref/{playlistId}`), whole-row payload values, the mirror-based
@@ -328,10 +328,10 @@ class JellyPlayPlaylistsSyncAdapterTest {
         database.smartPlaylistDao().deleteById("smart-1")
         database.moodPlaylistDao().deletePreferenceById("mood-1")
 
-        assertEquals(setOf("smart/smart-1", "moodpref/mood-1"), adapter.deletedKeys())
+        assertEquals(setOf("smart/smart-1", "moodpref/mood-1"), adapter.deletedKeys(adapter.snapshot()))
 
         adapter.deleteRemote(setOf("smart/smart-1", "moodpref/mood-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertNull(database.smartPlaylistDao().getById("smart-1"))
         assertNull(database.moodPlaylistDao().getPreference("mood-1"))

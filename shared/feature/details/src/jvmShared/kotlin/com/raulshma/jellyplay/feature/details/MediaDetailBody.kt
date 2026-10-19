@@ -66,13 +66,10 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.formatBytes
-import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
-import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -93,12 +90,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_hide_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_more_like_this_on_device
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_review_rating
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_cast_crew
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_chapters
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_items
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_more_like_this
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_reviews
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_recommendations
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_similar
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_special_features
@@ -109,6 +104,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_fo
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_finished_badge
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_page_progress
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_percent_progress
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_trailer_badge_local
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
@@ -214,7 +210,7 @@ internal fun DetailContentBody(
     showMediaInfo: Boolean = true,
     contentFocusRequester: FocusRequester? = null,
 ) {
-    val detail = state.detail ?: return
+    val detail = state.core.detail ?: return
     val item = detail.item
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -228,9 +224,23 @@ internal fun DetailContentBody(
     // in the body — replaces ~33 per-element LaunchedEffect + animateFloatAsState pairs.
     val entranceProgress = rememberDetailEntranceProgress()
 
-    val admittedSections = DetailSectionAdmission
-        .from(state, detail, showActionButtons, showMediaInfo)
-        .admit()
+    // The body's admission is two disjoint halves merged in [DetailSectionKind]
+    // declaration order (= the emission order): the hand-written fold for the
+    // unmigrated sections, the detail section registry's modules for the
+    // migrated ones (wave 1: PLUGIN_RATINGS, TMDB_REVIEWS). Memoized on exactly
+    // the fold's inputs (detail == state.core.detail) so the Compose-free fold +
+    // registry merge + re-sort is not re-executed per recomposition (the
+    // screen-level entrance animation re-runs this body per frame while it
+    // plays).
+    val admittedSections = remember(state, showActionButtons, showMediaInfo) {
+        DetailSectionRegistry.admittedSections(
+            handFold = DetailSectionAdmission
+                .from(state, detail, showActionButtons, showMediaInfo)
+                .admit(),
+            state = state,
+            detail = detail,
+        )
+    }
 
     CompositionLocalProvider(LocalDetailEntrance provides entranceProgress) {
         Box(
@@ -254,7 +264,7 @@ internal fun DetailContentBody(
                             callbacks = callbacks,
                             detail = detail,
                             item = item,
-                            isLocalOrigin = state.origin?.isLocal == true,
+                            isLocalOrigin = state.core.origin?.isLocal == true,
                             bodyContentPad = bodyContentPad,
                             contentFocusRequester = contentFocusRequester,
                         )
@@ -268,7 +278,11 @@ internal fun DetailContentBody(
 /**
  * Dispatches one admitted section to its family renderer. Pure wiring — the
  * `when` is exhaustive over [DetailSectionKind] so a new admission row cannot
- * silently render nothing.
+ * silently render nothing. The registry's migrated sections (wave 1:
+ * PLUGIN_RATINGS, TMDB_REVIEWS; wave 2: UPCOMING_EPISODES, COLLECTION_ITEMS,
+ * MORE_IN_COLLECTION, SPECIAL_FEATURES) route through their module's
+ * [DetailSectionModule.Content] slot; the hand-written families keep their
+ * per-kind composables.
  */
 @Composable
 internal fun DetailSectionRenderer(
@@ -281,6 +295,17 @@ internal fun DetailSectionRenderer(
     bodyContentPad: Dp,
     contentFocusRequester: FocusRequester?,
 ) {
+    // The module slot's region params — only the migrated branches read it
+    // (the two wave-1 pilots plus the wave-2 collection-family/strip modules).
+    val moduleScope = DetailSectionRenderScope(
+        state = state,
+        callbacks = callbacks,
+        detail = detail,
+        item = item,
+        isLocalOrigin = isLocalOrigin,
+        bodyContentPad = bodyContentPad,
+        contentFocusRequester = contentFocusRequester,
+    )
     when (section) {
         DetailSectionKind.HEADER ->
             DetailHeaderSection(
@@ -322,16 +347,13 @@ internal fun DetailSectionRenderer(
             DetailOverviewSection(
                 delayIndex = section.delayIndex,
                 state = state,
+                detail = detail,
                 item = item,
                 bodyContentPad = bodyContentPad,
             )
 
         DetailSectionKind.PLUGIN_RATINGS ->
-            DetailPluginRatingsSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                bodyContentPad = bodyContentPad,
-            )
+            PluginRatingsSectionModule.Content(moduleScope)
 
         DetailSectionKind.CHAPTERS_OR_TOC ->
             DetailChaptersSection(
@@ -360,6 +382,9 @@ internal fun DetailSectionRenderer(
                 bodyContentPad = bodyContentPad,
             )
 
+        DetailSectionKind.UPCOMING_EPISODES ->
+            UpcomingEpisodesSectionModule.Content(moduleScope)
+
         DetailSectionKind.SEASONS ->
             DetailSeasonsSection(
                 delayIndex = section.delayIndex,
@@ -371,13 +396,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.COLLECTION_ITEMS ->
-            DetailCollectionItemsSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
+            CollectionItemsSectionModule.Content(moduleScope)
 
         DetailSectionKind.CAST ->
             DetailCastSection(
@@ -395,6 +414,9 @@ internal fun DetailSectionRenderer(
                 state = state,
                 callbacks = callbacks,
             )
+
+        DetailSectionKind.MORE_IN_COLLECTION ->
+            MoreInCollectionSectionModule.Content(moduleScope)
 
         DetailSectionKind.MORE_LIKE_THIS ->
             DetailMoreLikeThisSection(
@@ -417,7 +439,7 @@ internal fun DetailSectionRenderer(
             DetailSeerrRowSection(
                 delayIndex = section.delayIndex,
                 titleRes = Res.string.detail_section_seerr_recommendations,
-                items = state.seerrRecommendations,
+                items = state.core.seerrRecommendations,
                 keyPrefix = "seerr_rec",
                 contentType = "seerrRecItem",
                 callbacks = callbacks,
@@ -427,25 +449,17 @@ internal fun DetailSectionRenderer(
             DetailSeerrRowSection(
                 delayIndex = section.delayIndex,
                 titleRes = Res.string.detail_section_seerr_similar,
-                items = state.seerrSimilar,
+                items = state.core.seerrSimilar,
                 keyPrefix = "seerr_sim",
                 contentType = "seerrSimItem",
                 callbacks = callbacks,
             )
 
         DetailSectionKind.SPECIAL_FEATURES ->
-            DetailSpecialFeaturesSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
+            SpecialFeaturesSectionModule.Content(moduleScope)
 
         DetailSectionKind.TMDB_REVIEWS ->
-            DetailReviewsSlotSection(
-                delayIndex = section.delayIndex,
-                state = state,
-            )
+            TmdbReviewsSectionModule.Content(moduleScope)
 
         DetailSectionKind.DOWNLOAD_FOOTER ->
             DetailDownloadFooterSection(
@@ -466,30 +480,20 @@ private fun DetailRelatedVideosSection(
     state: DetailContentState,
     callbacks: DetailContentCallbacks,
 ) {
+    if (state.core.trailers.isEmpty()) return
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        if (state.relatedVideos.isNotEmpty()) {
-            VideosSection(videos = state.relatedVideos, onVideoClick = callbacks.seerr.onVideoClick)
-        }
-    }
-}
-
-// ── TMDB reviews (delayIndex 14) ──────────────────────────────────────────
-
-@Composable
-private fun DetailReviewsSlotSection(
-    delayIndex: Int,
-    state: DetailContentState,
-) {
-    // ── TMDB Reviews ──
-    // Fetched straight from TMDB (see DetailViewModel.loadSeerrData), so the
-    // section renders regardless of Seerr connection state. Rendered as a
-    // vertical card list — review bodies are paragraphs, not glanceable tiles,
-    // so they join the screen scroll instead of a horizontal row.
-    StaggeredDetailSection(
-        visible = state.tmdbReviews.isNotEmpty(),
-        delayIndex = delayIndex,
-    ) {
-        ReviewsSection(reviews = state.tmdbReviews)
+        VideosSection(
+            trailers = state.core.trailers,
+            getImageUrl = callbacks.artwork.getImageUrl,
+            onVideoClick = callbacks.seerr.onVideoClick,
+            onPlayLocal = { trailerId ->
+                // A local (server-hosted) trailer plays through the
+                // full player session — the same route the Play button
+                // takes (the libmpv engine on desktop), never the
+                // WebView embed.
+                callbacks.playback.onPlayClick(trailerId, null, 0L)
+            },
+        )
     }
 }
 
@@ -548,8 +552,10 @@ internal fun SeerrItemsRow(
 
 @Composable
 private fun VideosSection(
-    videos: List<SeerrRelatedVideo>,
+    trailers: List<DetailUiState.TrailerEntry>,
+    getImageUrl: (String) -> String,
     onVideoClick: (SeerrRelatedVideo) -> Unit,
+    onPlayLocal: (String) -> Unit,
 ) {
     val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
     // The video card border depends only on the active theme, not on the per-video
@@ -564,6 +570,9 @@ private fun VideosSection(
     val videoCardBorder = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
         themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
     }
+    // The local-source badge resolved once (the merged row mixes the two
+    // card variants; the badge marks the server-hosted entries).
+    val localBadge = stringResource(Res.string.detail_trailer_badge_local)
     Column {
         FadingItem {
             Text(
@@ -577,126 +586,49 @@ private fun VideosSection(
         }
         Spacer(Modifier.height(16.dp))
         TvFocusableItemRow(
-            items = videos,
-            // Fall back to the video name when its key is null so two null-key
-            // videos don't collide and collapse their composition slots.
-            key = { video -> video.key ?: video.name ?: "video" },
-            contentType = { _, _ -> "video" },
+            items = trailers,
+            // Fall back to the video name/id when its key is null so two
+            // keyless entries don't collide and collapse their composition
+            // slots (the remote rule; locals key on the library item id).
+            key = { entry ->
+                when (entry) {
+                    is DetailUiState.TrailerEntry.Local -> "local_${entry.mediaItem.id}"
+                    is DetailUiState.TrailerEntry.Remote -> entry.video.key ?: entry.video.name ?: "video"
+                }
+            },
+            contentType = { _, entry ->
+                when (entry) {
+                    is DetailUiState.TrailerEntry.Local -> "local_video"
+                    is DetailUiState.TrailerEntry.Remote -> "video"
+                }
+            },
             contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) { _, video, focusModifier ->
-            // The card body is the shared [YouTubeVideoCard] (commonMain
-            // DetailSectionVocabulary) — collapsed with the Seerr family's
-            // identical copy; only the row scaffolding + this border decision
-            // stay family-local.
-            YouTubeVideoCard(
-                video = video,
-                fallbackLabel = "Video",
-                onClick = { onVideoClick(video) },
-                modifier = focusModifier,
-                border = videoCardBorder,
-            )
-        }
-    }
-}
-
-/** TMDB avatar URL for the 40dp review circle (w90 covers it at 2x density). */
-private fun tmdbAvatarUrl(avatarPath: String?): String? =
-    avatarPath?.takeIf { it.isNotBlank() }?.let { path ->
-        // Gravatar-linked accounts ship "/https://…" — the path is already an
-        // absolute URL, so it must not get the image.tmdb.org prefix.
-        if (path.startsWith("/http")) path.drop(1) else "${TmdbImageUrls.BASE}/w90$path"
-    }
-
-/**
- * Vertical list of TMDB review cards. Part of the screen scroll (not a lazy
- * row) — the VM caps the list at 5 entries, and review bodies are paragraphs
- * that want the full content width. Cards are informational only: no click.
- */
-@Composable
-private fun ReviewsSection(
-    reviews: List<TmdbReview>,
-) {
-    val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
-    Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-        FadingItem {
-            Text(
-                text = stringResource(Res.string.detail_section_reviews),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.semantics { heading() },
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            reviews.forEach { review ->
-                FadingItem {
-                    // Display name falls back username-first: TMDB often ships an
-                    // empty author_details.name for casual reviewers.
-                    val authorName = review.authorDetails.name.takeIf { it.isNotBlank() }
-                        ?: review.authorDetails.username.takeIf { it.isNotBlank() }
-                        ?: review.author
-                    val avatarUrl = remember(review.id) { tmdbAvatarUrl(review.authorDetails.avatarPath) }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(ShapeCache.smooth16)
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (avatarUrl != null) {
-                                    MediaImage(
-                                        url = avatarUrl,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                } else {
-                                    Text(
-                                        text = authorName.take(1).uppercase().ifBlank { "?" },
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                            Column {
-                                Text(
-                                    text = authorName,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                review.authorDetails.rating?.let { rating ->
-                                    Text(
-                                        text = stringResource(Res.string.detail_review_rating, formatFixed(rating, 1)),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = review.content,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            maxLines = 6,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+        ) { _, entry, focusModifier ->
+            // The card bodies are the shared [YouTubeVideoCard] /
+            // [LocalTrailerVideoCard] (commonMain DetailSectionVocabulary) —
+            // collapsed with the Seerr family's identical copy; only the row
+            // scaffolding + this border decision stay family-local. The
+            // dispatch is the [resolveTrailerEntryDispatch] policy: locals
+            // play in the full player session, remotes open the YouTube
+            // dialog (embed failure falling back to the external URL).
+            when (val dispatch = resolveTrailerEntryDispatch(entry)) {
+                is TrailerEntryDispatch.PlayerSession -> LocalTrailerVideoCard(
+                    mediaItem = dispatch.mediaItem,
+                    fallbackLabel = "Video",
+                    imageUrl = remember(dispatch.mediaItem.id) { getImageUrl(dispatch.mediaItem.id) },
+                    badgeLabel = localBadge,
+                    onClick = { onPlayLocal(dispatch.mediaItem.id) },
+                    modifier = focusModifier,
+                    border = videoCardBorder,
+                )
+                is TrailerEntryDispatch.YouTubeEmbed -> YouTubeVideoCard(
+                    video = dispatch.video,
+                    fallbackLabel = "Video",
+                    onClick = { onVideoClick(dispatch.video) },
+                    modifier = focusModifier,
+                    border = videoCardBorder,
+                )
             }
         }
     }

@@ -14,11 +14,10 @@ package com.raulshma.jellyplay.core.model
  * `nowEpochMillis`, so they depend on THIS interface — the widest common
  * clock slice.
  *
- * D3 move note: born in `:core:data` commonMain `util` next to its JVM
- * supertype; promoted down to :shared:core:model when core:network
- * (strictly BELOW core:data in the module graph) needed the clock seam for
- * its daysSincePlayed filtering. The old FQIN survives as a deprecated
- * typealias there until the not-yet-migrated imports move per-touch.
+ * Lives in :shared:core:model because core:network (strictly BELOW core:data
+ * in the module graph) needs the clock seam for its daysSincePlayed
+ * filtering. A deprecated typealias in core:data keeps the legacy FQIN
+ * importable until per-touch migration completes.
  *
  * Wiring:
  *  - android/desktop: `SystemTimeSource` implements `TimeSource` which

@@ -22,7 +22,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_activity_q
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_requests_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_requests_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_upcoming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_upcoming_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_watch_progress_heatmap_subtitle
@@ -31,15 +30,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_watch_prog
 /**
  * The activity/insights domain's fused row declarations — the feature-side
  * single home of the main screen's activity-group rows (the [AppearanceRows]
- * template). Each [SettingsRow] replaces the trio the domain used to declare
- * per row: the `SettingsSearchBinding` entry, the `SettingsRowRecord` entry,
- * and the `SettingsScreenIds` holder constant (all retired).
+ * template). Each [SettingsRow] carries the search binding,
+ * the screen face and the row identity in one declaration.
  *
  * HAND-MAINTAINED residuals: navigation facts whose knobs live in stores
  * without spec machinery — they carry their full hand search faces. The
  * projection ([List.toSearchItems]) is the pure hand-projection; search
- * results, catalog order and group membership are byte-identical to the
- * retired declarations.
+ * results, catalog order and group membership derive from these declarations.
  */
 internal object ActivityInsightsRows {
 
@@ -94,14 +91,13 @@ internal object ActivityInsightsRows {
         icon = Tabler.Outline.Inbox,
         titleRes = Res.string.settings_requests,
         subtitleRes = Res.string.settings_requests_subtitle,
-        searchTitleRes = Res.string.ss_requests_title,
         searchSubtitleRes = Res.string.ss_requests_subtitle,
         keywords = listOf("requests", "seerr", "jellyseerr", "pending", "approve"),
         route = Route.Requests,
     )
 
     /**
-     * Every fused activityInsights row — the ratchet's vocabulary. A computed accessor
+     * Every fused activityInsights row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
      * object-to-file-facade initialization order into a cycle.

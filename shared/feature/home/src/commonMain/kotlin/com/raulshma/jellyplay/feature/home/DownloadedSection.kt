@@ -27,10 +27,9 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
  * modules as every other home row ([HomeRowTitle] / [HomeItemRow]) instead of
  * a hand-rolled Text + LazyRow.
  *
- * (The former dedicated offline home that lived in this file was removed for
- * issue #147: while offline the home now renders the normal
- * [HomeContentList] with sections derived from the offline library — see
- * [buildOfflineHomeSections] and [OfflineHomeMediaRow].)
+ * While offline, the home renders the normal [HomeContentList] with sections
+ * derived from the offline library — see [buildOfflineHomeSections] and
+ * [OfflineHomeMediaRow].
  */
 @Composable
 fun DownloadedSection(

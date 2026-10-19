@@ -73,7 +73,7 @@ object WidgetImageLoader {
     /**
      * Process-scoped decoded-poster cache keyed by image URL. RemoteViewsService
      * factories are recreated frequently (new binder, process restart, config
-     * change) and previously re-fetched every poster on each re-bind even when
+     * change) and would otherwise re-fetch every poster on each re-bind even when
      * the URL was unchanged. This LruCache makes repeat binds a map lookup.
      *
      * Sized by bitmap byte count (~250KB per decoded+rounded poster at

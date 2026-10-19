@@ -1,31 +1,29 @@
 package com.raulshma.jellyplay.feature.admin.transcodes
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.RefreshCycle
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityGate
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
-import com.raulshma.jellyplay.core.data.session.isAvailableOrProbe
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
 import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
 import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 
 /**
  * The admin transcodes monitor's gate — plugin AVAILABLE **and** the
  * `transcodes` feature key present **and** the user's per-feature toggle on
- * (ADR 0010: the capability registry is the ONLY gating mechanism; the toggle
- * rides [JellyPlayFeatureGate], the ONE per-feature seam). Admin-ness is
- * enforced upstream by the admin area's AdminRouteContainer — the existing
- * admin gate, deliberately not re-built here.
+ * (the capability registry is the ONLY gating mechanism; the shared
+ * [JellyPlayCapabilityGate] verdict, the toggle riding [JellyPlayFeatureGate],
+ * the ONE per-feature seam). Admin-ness is enforced upstream by the admin
+ * area's AdminRouteContainer — the existing admin gate.
  */
-enum class TranscodesGate { Unknown, Available, Unavailable }
 
 /** UI resolution of a session's `playMethod` wire string. */
 enum class TranscodePlayMethod { DIRECT, TRANSCODE, OTHER }
@@ -57,7 +55,7 @@ data class TranscodesState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    val gate: TranscodesGate = TranscodesGate.Unknown,
+    val gate: JellyPlayCapabilityState = JellyPlayCapabilityState.Unknown,
     val rows: List<TranscodeRow> = emptyList(),
     /** True while a cancel request is in flight — the dialog's confirmLoading + guard. */
     val isCancelling: Boolean = false,
@@ -69,13 +67,13 @@ data class TranscodesState(
  *
  * Gating — admin && plugin AVAILABLE && `transcodes` feature. The admin half
  * is the admin area's existing AdminRouteContainer gate (this screen is only
- * reachable through it); the plugin half flows from [JellyPlayPluginStatusStore]
- * per ADR 0010 ("the capability registry is the ONLY gating mechanism"): no
- * transcode fetch is ever issued while the gate is off, so a stock server's
- * plugin-route 404 is never observed here.
+ * reachable through it); the plugin half is the shared [JellyPlayCapabilityGate]
+ * reading [JellyPlayPluginStatusStore] ("the capability registry
+ * is the ONLY gating mechanism"): no transcode fetch is ever issued while the
+ * gate is off, so a stock server's plugin-route 404 is never observed here.
  *
- * Refresh — a manual refresh plus a 5s auto-refresh loop owned by the screen's
- * visibility (the settings screen's startSessionAutoRefresh/stop pattern):
+ * Refresh — a manual refresh plus a 5s auto-refresh cycle owned by the
+ * screen's visibility (the refresh cycle module's registration):
  * `start()` from the screen's START, `stop()` on stop/dispose. Initial data
  * loads once the gate resolves; loop iterations are silent (a failed poll
  * keeps the stale list, mirroring DevicesViewModel's refresh), only the
@@ -100,6 +98,14 @@ class JellyPlayTranscodesViewModel(
     val uiState: StateFlow<TranscodesState> = _uiState.flow
 
     /**
+     * The shared capability gate (the plugin capability gate module) — the
+     * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
+     * store discipline. Null with the store:
+     * direct construction (tests) without the plugin seam is gated off, final.
+     */
+    private val capabilityGate = statusStore?.let { JellyPlayCapabilityGate(it, scope) }
+
+    /**
      * Cancel-confirmation host (DevicesViewModel's deleteConfirmation shape).
      * Settle arm: clears on BOTH outcomes — the dialog always closes on cancel
      * and the reload stays unconditional. [TranscodesState.isCancelling] is the
@@ -110,40 +116,45 @@ class JellyPlayTranscodesViewModel(
     /** Whether the initial gated load has been kicked off (exactly once per gate-on). */
     private var initialLoadStarted = false
 
-    private var autoRefreshJob: Job? = null
+    /**
+     * The 5s gate-predicated auto-refresh cycle (the refresh cycle module),
+     * registered once. Each iteration fetches only while the gate is on
+     * ([RefreshCycle] gate round): a stock server (or a missing feature key)
+     * never produces a plugin-route request. The screen binds the cycle to
+     * visibility via [start]/[stop].
+     */
+    private val autoRefreshCycle = RefreshCycle(
+        scope = scope,
+        poll = PollSpec(intervalMs = REFRESH_INTERVAL_MS),
+        gate = { _uiState.value.gate == JellyPlayCapabilityState.Available },
+        fetch = { fetchTranscodes() },
+    )
 
     init {
         observeGate()
     }
 
     /**
-     * Starts the 5s auto-refresh loop. Idempotent; safe to call on every entry
-     * into START. Each iteration fetches only while the gate is on — a stock
-     * server (or a missing feature key) never produces a plugin-route request.
+     * Screen-visibility hook: the gate's arm (one capabilities probe while
+     * the store is still UNKNOWN — the identity reset in the store re-arms
+     * the next visit), then the auto-refresh cycle. Safe to call on every
+     * entry into START — a repeated call replaces the running loop
+     * ([RefreshCycle.start]).
      */
     fun start() {
-        refreshPluginStatus()
-        if (autoRefreshJob?.isActive == true) return
-        autoRefreshJob = launch {
-            while (true) {
-                delay(REFRESH_INTERVAL_MS)
-                if (_uiState.value.gate == TranscodesGate.Available) {
-                    fetchTranscodes()
-                }
-            }
-        }
+        capabilityGate?.arm()
+        autoRefreshCycle.start()
     }
 
-    /** Stops the auto-refresh loop started by [start]. */
+    /** Stops the auto-refresh cycle started by [start]. */
     fun stop() {
-        autoRefreshJob?.cancel()
-        autoRefreshJob = null
+        autoRefreshCycle.stop()
     }
 
     /** Manual refresh (scaffold action): silent on failure — the stale list stays; success clears a shown error. */
     fun refresh() {
-        refreshPluginStatus()
-        if (_uiState.value.gate != TranscodesGate.Available) return
+        capabilityGate?.arm()
+        if (_uiState.value.gate != JellyPlayCapabilityState.Available) return
         launch {
             _uiState.update { it.copy(isRefreshing = true) }
             pluginApiClient.getActiveTranscodes()
@@ -159,54 +170,27 @@ class JellyPlayTranscodesViewModel(
     }
 
     /**
-     * One capabilities probe — the store never re-probes on its own
-     * (UNKNOWN → one refresh; AVAILABLE/UNAVAILABLE stay), the identity reset
-     * in the store re-arms the next visit. Same discipline as the settings
-     * screen's sync section.
-     */
-    private fun refreshPluginStatus() {
-        val store = statusStore ?: return
-        launch {
-            if (store.status.value == JellyPlayPluginStatus.UNKNOWN) {
-                store.refresh()
-            }
-        }
-    }
-
-    /**
-     * The gate collector. The first transcode load rides the Available
-     * transition (never before — a gated-off screen must not touch the
-     * plugin route), so the screen opens on data rather than on a wasted 404.
-     *
-     * Availability is the ONE gate seam ([JellyPlayFeatureGate.isAvailable] —
-     * probe AND the user's `transcodes` toggle, so a switch-off tears the
-     * screen down reactively); without the seam the probe-only combine keeps
-     * the pre-toggle behavior.
+     * The gate collector — rides the shared capability gate's verdict. The
+     * first transcode load rides the Available transition (never before — a
+     * gated-off screen must not touch the plugin route), so the screen opens
+     * on data rather than on a wasted 404.
      */
     private fun observeGate() {
-        val store = statusStore
-        if (store == null) {
+        val gateFlow = capabilityGate?.state(JellyPlayPluginFeatures.Transcodes, featureGate)
+        if (gateFlow == null) {
             // Direct-construction without the plugin seam: gated off, final.
-            _uiState.update { it.copy(gate = TranscodesGate.Unavailable, isLoading = false) }
+            _uiState.update { it.copy(gate = JellyPlayCapabilityState.Unavailable, isLoading = false) }
             return
         }
-        val available: kotlinx.coroutines.flow.Flow<Boolean> =
-            featureGate.isAvailableOrProbe(store, JellyPlayPluginFeatures.Transcodes)
         launch {
-            combine(store.status, available) { status, gateOpen ->
-                when {
-                    gateOpen -> TranscodesGate.Available
-                    status == JellyPlayPluginStatus.UNKNOWN -> TranscodesGate.Unknown
-                    else -> TranscodesGate.Unavailable
-                }
-            }.collect { gate ->
+            gateFlow.collect { gate ->
                 _uiState.update {
                     it.copy(
                         gate = gate,
-                        isLoading = if (gate == TranscodesGate.Unknown) it.isLoading else false,
+                        isLoading = if (gate == JellyPlayCapabilityState.Unknown) it.isLoading else false,
                     )
                 }
-                if (gate == TranscodesGate.Available && !initialLoadStarted) {
+                if (gate == JellyPlayCapabilityState.Available && !initialLoadStarted) {
                     initialLoadStarted = true
                     loadTranscodes()
                 }
@@ -271,7 +255,7 @@ class JellyPlayTranscodesViewModel(
             pluginApiClient.cancelTranscode(row.sessionId)
             _uiState.update { it.copy(isCancelling = false) }
             cancelConfirmation.clear()
-            if (_uiState.value.gate == TranscodesGate.Available) {
+            if (_uiState.value.gate == JellyPlayCapabilityState.Available) {
                 fetchTranscodes()
             }
         }

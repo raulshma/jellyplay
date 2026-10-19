@@ -213,7 +213,7 @@ class DeclaredProjectionFieldsTest {
         )
         assertEquals(expected, derived)
 
-        // The bundle-half extraction matches the direct one.
+        // The bundle-half projection matches the direct one.
         assertEquals(
             core,
             AppearanceScreenBundle(appearance, navigation, home, library, ExperimentalSlice()).appearanceCoreValues(),

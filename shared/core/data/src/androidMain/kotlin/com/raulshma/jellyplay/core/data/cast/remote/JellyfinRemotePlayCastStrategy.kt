@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.syncplay.TimeSyncManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -17,8 +18,8 @@ import com.raulshma.jellyplay.core.network.websocket.parseSessionsMessage
 import com.raulshma.jellyplay.core.network.websocket.toSessionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,11 +38,23 @@ class JellyfinRemotePlayCastStrategy(
     private val serverIdentityStore: ServerIdentityStore,
     private val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val imageUrlProvider: ImageUrlProvider,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * Default-dispatcher scope hangs off as a SupervisorJob child — the
+     * strategy never cancels its own scope, so the child now dies with an
+     * app-level teardown.
+     */
+    private val applicationScope: CoroutineScope,
 ) : CastStrategy {
 
     companion object {
         private const val TAG = "JellyfinRemotePlayCastStrategy"
         private const val STRATEGY_NAME = "jellyfin"
+
+        // The TaskBundle keys for the strategy's two cancel-and-replace job
+        // slots (discovery loop, sessions observer).
+        private const val DISCOVERY_LOOP = "JellyfinRemotePlayCastStrategy.discovery"
+        private const val SESSIONS_OBSERVER = "JellyfinRemotePlayCastStrategy.sessionsObserver"
     }
 
     /**
@@ -56,7 +69,15 @@ class JellyfinRemotePlayCastStrategy(
             android.provider.Settings.Secure.ANDROID_ID,
         ) ?: ""
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
+
+    /**
+     * The strategy's two cancel-and-replace job slots — the discovery loop
+     * and the WebSocket sessions observer — as one [TaskBundle] over
+     * [scope]. Access is confined to the strategy's single-threaded call sites.
+     */
+    private val tasks = TaskBundle(scope)
 
     /** Lenient decoder for the WebSocket `Sessions` push payloads. */
     private val sessionsJson = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -113,17 +134,6 @@ class JellyfinRemotePlayCastStrategy(
     @Volatile
     private var connectedSessionId: String? = null
 
-    private var discoveryJob: Job? = null
-    private var statusPollingJob: Job? = null
-
-    /**
-     * Subscribes to the shared [webSocketClient]'s `Sessions` push (server emits
-     * session state changes) and mirrors them onto our transport flows. This is
-     * jellyfin-web's SessionPlayer transport — real-time, no REST polling. Also
-     * auto-disconnects when the connected session disappears from the list.
-     */
-    private var sessionsObserverJob: Job? = null
-
     @Volatile
     private var discoveryActive = false
 
@@ -135,15 +145,14 @@ class JellyfinRemotePlayCastStrategy(
 
     override fun stopDiscovery() {
         discoveryActive = false
-        discoveryJob?.cancel()
-        discoveryJob = null
+        tasks.cancel(DISCOVERY_LOOP)
         _discoveredDevices.value = emptyList()
         _isAvailable.value = false
     }
 
     private fun startDiscoveryLoop() {
-        discoveryJob?.cancel()
-        discoveryJob = scope.launch {
+        tasks.replace(DISCOVERY_LOOP) {
+            scope.launch {
             while (discoveryActive) {
                 try {
                         val ownDeviceId = serverIdentityStore.ensureDeviceId()
@@ -188,6 +197,7 @@ class JellyfinRemotePlayCastStrategy(
                 }
                 delay(5000L)
             }
+            }
         }
     }
 
@@ -212,10 +222,7 @@ class JellyfinRemotePlayCastStrategy(
     }
 
     override fun disconnect(context: Context) {
-        statusPollingJob?.cancel()
-        statusPollingJob = null
-        sessionsObserverJob?.cancel()
-        sessionsObserverJob = null
+        tasks.cancel(SESSIONS_OBSERVER)
         connectedSessionId = null
         _targetName.value = null
         _isConnected.value = false
@@ -237,28 +244,29 @@ class JellyfinRemotePlayCastStrategy(
      * local behaviour).
      */
     private fun startSessionsObserver() {
-        sessionsObserverJob?.cancel()
-        sessionsObserverJob = scope.launch {
-            webSocketClient.events.collect { event ->
-                if (event.type != "Sessions") return@collect
-                val sessionId = connectedSessionId ?: return@collect
-                // `Data` is a PascalCase SessionInfo[] array — decode the raw
-                // envelope text via the WS DTO (the shared SessionInfo model is
-                // camelCase without @SerialName and cannot decode the wire
-                // format directly), then filter to the connected session before
-                // paying for full mapping.
-                try {
-                    val current = parseSessionsMessage(sessionsJson, event.rawText)
-                        .firstOrNull { it.id == sessionId }
-                        ?.toSessionInfo()
-                    if (current != null) {
-                        applySessionState(current)
-                    } else {
-                        // Session gone (other client closed / device offline).
-                        disconnect(appContext)
+        tasks.replace(SESSIONS_OBSERVER) {
+            scope.launch {
+                webSocketClient.events.collect { event ->
+                    if (event.type != "Sessions") return@collect
+                    val sessionId = connectedSessionId ?: return@collect
+                    // `Data` is a PascalCase SessionInfo[] array — decode the raw
+                    // envelope text via the WS DTO (the shared SessionInfo model is
+                    // camelCase without @SerialName and cannot decode the wire
+                    // format directly), then filter to the connected session before
+                    // paying for full mapping.
+                    try {
+                        val current = parseSessionsMessage(sessionsJson, event.rawText)
+                            .firstOrNull { it.id == sessionId }
+                            ?.toSessionInfo()
+                        if (current != null) {
+                            applySessionState(current)
+                        } else {
+                            // Session gone (other client closed / device offline).
+                            disconnect(appContext)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to parse Sessions push", e)
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to parse Sessions push", e)
                 }
             }
         }

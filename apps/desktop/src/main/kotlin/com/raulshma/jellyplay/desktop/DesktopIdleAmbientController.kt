@@ -15,21 +15,18 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 /**
- * The idle "Ready to play" ambient seam (extracted from
- * [DesktopNavScaffold], the same move DesktopUpdateCheckController made for
- * the About row): ONE object owns the three things the scaffold's overlay
- * needs, so the scaffold keeps only the collect, the start/stop
- * [DisposableEffect] and the [DesktopIdleOverlay] call.
+ * The idle "Ready to play" ambient seam: ONE object owns the three things
+ * the scaffold's overlay needs, so the scaffold keeps only the collect, the
+ * start/stop [DisposableEffect] and the [DesktopIdleOverlay] call.
  *
  *  1. the [DesktopIdleMonitor] (idle decision + input resets — see its KDoc
- *     for the pinned ladder), constructed over the same injected probes the
- *     scaffold used to inline;
+ *     for the pinned ladder), constructed over injected probes;
  *  2. the active-remote-session count off the receiver socket's `Sessions`
  *     WS push — the raw envelope text is decoded with the array-aware DTO
  *     ([parseSessionsMessage], one kotlinx pass, no org.json detour), and a
  *     malformed push degrades to 0 rather than crashing the collector. The
- *     collection is idle-GATED exactly as the inlined `LaunchedEffect(isIdle)`
- *     was: the count is only written while the overlay is up, and it STAYS at
+ *     collection is idle-GATED: the count is only written while the overlay
+ *     is up, and it STAYS at
  *     its last value when idle ends (the next idle period refreshes it on the
  *     first `Sessions` push — deliberately not reset on dismissal);
  *  3. the overlay's identity lines ([resolveIdleOverlayIdentity] — the pure
@@ -85,8 +82,8 @@ internal class DesktopIdleAmbientController(
         monitor.start(scope)
         if (countJob?.isActive == true) return
         countJob = scope.launch {
-            // collectLatest == the inlined effect's `LaunchedEffect(isIdle)`
-            // keying: an idle edge cancels the previous collection, and a
+            // collectLatest matches `LaunchedEffect(isIdle)` keying: an idle
+            // edge cancels the previous collection, and a
             // non-idle value collects nothing (events: SharedFlow, no replay,
             // so nothing stale is delivered on re-entry either).
             monitor.isIdle.collectLatest { idle ->
@@ -111,15 +108,15 @@ internal class DesktopIdleAmbientController(
     private companion object {
         const val SESSIONS_MESSAGE_TYPE = "Sessions"
 
-        /** Same decoder config the inlined scaffold effect used. */
+        /** Same decoder config the scaffold uses. */
         val sessionJson = Json { ignoreUnknownKeys = true }
     }
 }
 
 /**
  * The overlay's identity lines, as one pure fold: the current user's server
- * (matched by stored server id OR by address — the legacy two-key match the
- * inlined composition used) and the user's display name; both null when
+ * (matched by stored server id OR by address — the two-key match) and the
+ * user's display name; both null when
  * signed out. Top-level like [shouldEnterIdle] so the test pins it directly.
  */
 internal fun resolveIdleOverlayIdentity(

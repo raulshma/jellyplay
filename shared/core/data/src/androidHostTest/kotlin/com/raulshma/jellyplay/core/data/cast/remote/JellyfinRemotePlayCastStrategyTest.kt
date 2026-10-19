@@ -12,6 +12,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -57,6 +61,7 @@ class JellyfinRemotePlayCastStrategyTest {
         serverIdentityStore = serverIdentityStore,
         webSocketClient = webSocketClient,
         imageUrlProvider = imageUrlProvider,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
 
     private fun remoteSession(

@@ -322,14 +322,14 @@ class LibraryItemsQuerySpecTest {
         val video = buildResumeQuerySpec(limit = 16, kinds = null)
         assertEquals(16, video.limit)
         assertNull(video.includeKinds, "the video resume row sends no kind constraint")
-        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
+        assertEquals(HOME_ROW_PROJECTION_FIELDS, video.fields, "the home rows project the card-overlay reads")
         assertNull(video.parentId)
         assertNull(video.sortBy)
 
         val books = buildResumeQuerySpec(limit = 8, kinds = listOf("Book"))
         assertEquals(8, books.limit)
         assertEquals(listOf("Book"), books.includeKinds, "books narrow server-side via includeItemTypes")
-        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), books.fields)
+        assertEquals(HOME_ROW_PROJECTION_FIELDS, books.fields)
     }
 
     @Test
@@ -343,7 +343,18 @@ class LibraryItemsQuerySpecTest {
 
         assertNull(video.includeKinds)
         assertEquals(20, video.limit)
-        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
+        assertEquals(HOME_ROW_PROJECTION_FIELDS, video.fields)
+    }
+
+    @Test
+    fun `the resume spec defaults excludeActiveSessions off and threads it when asked`() {
+        // Default preserves the legacy wire: the flag rides the request as
+        // the server's own default (false), so batch + refresh arms agree
+        // even when the pref has never been written.
+        assertEquals(false, buildResumeQuerySpec(limit = 20, kinds = null).excludeActiveSessions)
+
+        val excluding = buildResumeQuerySpec(limit = 20, kinds = null, excludeActiveSessions = true)
+        assertEquals(true, excluding.excludeActiveSessions, "the toggle must reach the resume query")
     }
 
     @Test

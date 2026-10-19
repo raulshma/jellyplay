@@ -11,64 +11,33 @@ class PlayerSheetExtendedTest {
 
     @Test
     fun playerSheet_none_isDistinctFromAll() {
-        val allSheets = listOf(
-            PlayerSheet.Speed,
-            PlayerSheet.Audio,
-            PlayerSheet.Chapter,
-            PlayerSheet.PlaybackInfo,
-            PlayerSheet.AspectRatio,
-            PlayerSheet.SubtitleHub,
-            PlayerSheet.AVSync,
-            PlayerSheet.Decoder,
-            PlayerSheet.Episodes,
-            PlayerSheet.SyncPlay,
-            PlayerSheet.Quality,
-            PlayerSheet.SleepTimer,
-            PlayerSheet.VideoFilter,
-        )
-        allSheets.forEach { sheet ->
-            assertNotEquals(PlayerSheet.None, sheet)
-        }
+        // The enumeration rides the registry (the sheet-module pilot's
+        // enumeration, [PlayerSheetRegistry.all]) — the hand lists here drifted
+        // silent the moment a sheet landed without this file noticing
+        // (PlaybackMode, Queue, Version, Hdr, Render all post-date them).
+        PlayerSheetRegistry.all
+            .filter { it != PlayerSheet.None }
+            .forEach { sheet ->
+                assertNotEquals(PlayerSheet.None, sheet)
+            }
     }
 
     @Test
     fun playerSheet_allVariantsArePlayerSheet() {
-        val allSheets = listOf(
-            PlayerSheet.None,
-            PlayerSheet.Speed,
-            PlayerSheet.Audio,
-            PlayerSheet.Chapter,
-            PlayerSheet.PlaybackInfo,
-            PlayerSheet.AspectRatio,
-            PlayerSheet.SubtitleHub,
-            PlayerSheet.AVSync,
-            PlayerSheet.Decoder,
-            PlayerSheet.Episodes,
-            PlayerSheet.SyncPlay,
-            PlayerSheet.Quality,
-            PlayerSheet.SleepTimer,
-            PlayerSheet.VideoFilter,
-        )
-        allSheets.forEach { sheet ->
+        PlayerSheetRegistry.all.forEach { sheet ->
             assertTrue(sheet is PlayerSheet, "$sheet should be PlayerSheet")
         }
     }
 
     @Test
     fun playerSheet_hasExpectedVariantCount() {
-        // 14 variants as of current PlayerSheet.kt (None + 13 functional sheets).
-        // The former Subtitle / SubtitleStyle / SubtitleDownload sheets collapsed
-        // into the unified SubtitleHub.
-        val expected = 14
-        val actual = listOf(
-            PlayerSheet.None, PlayerSheet.Speed, PlayerSheet.Audio,
-            PlayerSheet.Chapter, PlayerSheet.PlaybackInfo,
-            PlayerSheet.AspectRatio, PlayerSheet.SubtitleHub, PlayerSheet.AVSync,
-            PlayerSheet.Decoder, PlayerSheet.Episodes,
-            PlayerSheet.SyncPlay, PlayerSheet.Quality, PlayerSheet.SleepTimer,
-            PlayerSheet.VideoFilter,
-        ).size
-        assertEquals(expected, actual)
+        // The count IS the registry's size: the registry is the one enumeration
+        // per PlayerSheet subtype (pinned to declaration order by
+        // PlayerSheetRegistryTest's exhaustive `when` — a new sheet fails that
+        // compile gate before it can ship unregistered), so this asserts
+        // registry agreement instead of restating a hand list. (The former
+        // 14-entry list predated Queue / PlaybackMode / Hdr / Render / Version.)
+        assertEquals(PlayerSheetRegistry.all.size, PlayerSheetRegistry.all.distinct().size)
     }
 
     @Test

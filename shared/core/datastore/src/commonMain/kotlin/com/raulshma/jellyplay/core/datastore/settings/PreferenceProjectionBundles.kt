@@ -50,6 +50,8 @@ internal data class PlaybackCoreBundle(
         audioPassthroughCodecs = playback.audioPassthroughCodecs,
         maxAudioChannels = playback.maxAudioChannels,
         downmixBoostDb = playback.downmixBoostDb,
+        spatialAudioEnabled = playback.spatialAudioEnabled,
+        spatialAudioOnlyHeadphones = playback.spatialAudioOnlyHeadphones,
         frameRateMatching = playback.frameRateMatching,
         refreshRateMode = playback.refreshRateMode,
         videoSeekDurationMs = video.videoSeekDurationMs,
@@ -60,8 +62,7 @@ internal data class PlaybackCoreBundle(
         videoGestureMode = video.videoGestureMode,
         // The binding editor renders from this projection; omitting the map
         // here read as the factory default on every emission, so every editor
-        // toggle snapped back while the write itself landed in the store
-        // (issue #171: "gesture detailed settings are unresponsive").
+        // toggle snapped back while the write itself landed in the store.
         videoInputBindings = video.videoInputBindings,
         videoDoubleTapHoldSeekEnabled = video.videoDoubleTapHoldSeekEnabled,
         videoHoldSpeedEnabled = video.videoHoldSpeedEnabled,
@@ -73,6 +74,7 @@ internal data class PlaybackCoreBundle(
         stillWatchingEpisodeThreshold = video.stillWatchingEpisodeThreshold,
         trailerAutoplay = video.trailerAutoplay,
         cinemaModeEnabled = video.cinemaModeEnabled,
+        playTrailerBeforeMovie = video.playTrailerBeforeMovie,
         videoSwipeSeekMaxMs = video.videoSwipeSeekMaxMs,
         videoRememberBrightness = video.videoRememberBrightness,
         videoBrightnessLevel = video.videoBrightnessLevel,
@@ -82,6 +84,7 @@ internal data class PlaybackCoreBundle(
         trickplayEnabled = video.trickplayEnabled,
         trickplayOnSeekGesture = video.trickplayOnSeekGesture,
         segmentBehaviors = video.segmentBehaviors,
+        segmentSkipDelaysMs = video.segmentSkipDelaysMs,
         skipSegmentsOnSeek = video.skipSegmentsOnSeek,
         videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
         videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,

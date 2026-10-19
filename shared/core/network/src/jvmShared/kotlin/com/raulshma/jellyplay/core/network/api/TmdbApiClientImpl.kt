@@ -2,14 +2,17 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.model.seerr.TmdbDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.network.RetryPolicy
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -22,6 +25,23 @@ private data class TmdbReviewsResponse(
 /** Parses a TMDB `/reviews` response body. Top-level so parsing is unit-testable. */
 internal fun parseTmdbReviews(json: Json, text: String): List<TmdbReview> =
     json.decodeFromString<TmdbReviewsResponse>(text).results
+
+@Serializable
+private data class TmdbDetailsResponse(
+    val overview: String? = null,
+    @SerialName("vote_average") val voteAverage: Double? = null,
+    @SerialName("vote_count") val voteCount: Int? = null,
+)
+
+/** Parses a TMDB `/3/{movie|tv}/{id}` details body. Top-level so parsing is unit-testable. */
+internal fun parseTmdbDetails(json: Json, text: String): TmdbDetails {
+    val dto = json.decodeFromString<TmdbDetailsResponse>(text)
+    return TmdbDetails(
+        voteAverage = dto.voteAverage,
+        voteCount = dto.voteCount,
+        overview = dto.overview,
+    )
+}
 
 class TmdbApiClientImpl(
     okHttpClient: OkHttpClient,
@@ -81,6 +101,9 @@ class TmdbApiClientImpl(
     override suspend fun getReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> =
         tmdbFetch(tmdbId, mediaType, "reviews") { parseTmdbReviews(json, it) }
 
+    override suspend fun getDetails(tmdbId: Int, mediaType: MediaType): Result<TmdbDetails> =
+        tmdbFetch(tmdbId, mediaType, endpoint = "") { parseTmdbDetails(json, it) }
+
     /**
      * Shared GET `/3/{movie|tv}/{id}/{endpoint}` plumbing: builds the URL and
      * runs ONE retry-wrapped execution on the [HttpExecutor] chassis — the
@@ -89,7 +112,8 @@ class TmdbApiClientImpl(
      * "Empty response from TMDB" arm), then [parse] maps it. Transport
      * failures map onto [ApiException] fromNetwork; parse failures surface
      * as the non-retryable "TMDB parse error" instead of throwing
-     * SerializationException raw.
+     * SerializationException raw. A blank [endpoint] targets the item itself
+     * (`/3/{movie|tv}/{id}`) — the details read.
      */
     private suspend fun <T> tmdbFetch(
         tmdbId: Int,
@@ -98,7 +122,8 @@ class TmdbApiClientImpl(
         parse: (String) -> T,
     ): Result<T> {
         val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
-        val url = "https://api.themoviedb.org/3/$typeStr/$tmdbId/$endpoint?api_key=$apiKey"
+        val endpointSegment = if (endpoint.isBlank()) "" else "/$endpoint"
+        val url = "https://api.themoviedb.org/3/$typeStr/$tmdbId$endpointSegment?api_key=$apiKey"
         val request = Request.Builder()
             .url(url)
             .get()

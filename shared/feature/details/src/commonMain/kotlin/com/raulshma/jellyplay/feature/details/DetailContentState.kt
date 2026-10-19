@@ -1,20 +1,41 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.model.DetailAssets
-import com.raulshma.jellyplay.core.model.DetailCapabilities
-import com.raulshma.jellyplay.core.model.DetailContext
-import com.raulshma.jellyplay.core.model.DetailOrigin
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DetailPreferences
-import com.raulshma.jellyplay.core.model.LocalSubtitleOption
-import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.navigation.Route
+
+/**
+ * Live in-flight download fraction per episode id (0..1), provided by
+ * [MediaDetailScreen] from the download-lifecycle slice and read directly by
+ * the seasons section's episode rows. Rides a composition local — NOT
+ * [DetailContentState] — on purpose: the map moves on every ~2 s transfer
+ * tick, and the seasons section memoizes its [SeasonsPresentation] on inputs
+ * that deliberately exclude per-tick data, so threading the map through the
+ * state bag would freeze the rows' bars at their first value. The local is
+ * `compositionLocalOf` (not static) so reads are tracked: a ~2 s tick
+ * recomposes only the rows whose entry actually changed — a static local
+ * would invalidate the entire provider subtree per tick.
+ */
+internal val LocalEpisodeDownloadProgress = compositionLocalOf<Map<String, Float>> { emptyMap() }
+
+/**
+ * The current item's live download row (`DownloadLifecycleActions.downloadFlow`),
+ * provided by [MediaDetailScreen] as the FLOW — not the value — so the ~2 s
+ * transfer tick invalidates only the leaf that collects it (the ⋮ options-menu
+ * builder, the value's one reader) instead of re-executing the
+ * [DetailContentState] construction and recomposing the content tree per
+ * tick. Companion of [LocalEpisodeDownloadProgress], which is the same
+ * placement rule for the per-episode progress map. Null (the default) when no
+ * provider is wired — reads as "no active download".
+ */
+internal val LocalActiveDownloadFlow = staticCompositionLocalOf<kotlinx.coroutines.flow.Flow<DownloadItem?>?> { null }
 
 /**
  * Pure-data bundle for the media-detail content tree.
@@ -27,15 +48,56 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  *
  * Mirrors the `HomeContentState` pattern introduced in the home-screen
  * decomposition (commit 216e7a7b).
+ *
+ * ## Shape: core + screen-resolved extras
+ *
+ * [core] is the ViewModel's [DetailUiState] content snapshot, embedded
+ * verbatim. The former shape restated the 43 content fields one by one at the
+ * [MediaDetailScreen] construction site — a fold that grew by two lines (bag
+ * field + copy) for every new uiState leaf and drifted whenever one was
+ * missed. The embed deletes that fold; readers qualify through `state.core.X`.
+ *
+ * The extras beside [core] are exactly the values the ViewModel does NOT own —
+ * per-composition resolutions off the route id, the projected preference
+ * store, and the extracted action helpers:
+ *
+ *  - [itemId]: the route id (the load key — [DetailUiState] carries no item
+ *    id),
+ *  - [persistedSeasonId]: resolved off the projected preferences for the
+ *    current series (an active resume still wins, decided in
+ *    SeasonStartResolver),
+ *  - [selectedVersionId]: the screen-local version-picker pick (keyed reset on
+ *    item change — screen-local state, never a VM field),
+ *  - [canManageSeries]: the VM's gate flow, collected at the screen,
+ *  - [preferences]: the projected preference flow's current value (a separate
+ *    StateFlow from the content core),
+ *  - [resyncState]: the resync helper slice (the freshness banner and the
+ *    resync sheet read the same value),
+ *  - [downloads]: the download-lifecycle slice ([DownloadsExtras], one owner:
+ *    [DownloadLifecycleActions] — the screen collects the helper's slim
+ *    root-state projection and folds it here verbatim).
+ *
+ * ## The never-cross list
+ *
+ * Three [DetailUiState] fields must never be re-stated as extras (or as
+ * delegating passthrough properties) on this bag. They ride [core] only
+ * because core IS the live uiState; their consumers read the VM/screen
+ * directly:
+ *
+ *  - `seerrRequest`: the Seerr request dialog's frozen-at-open snapshot — the
+ *    screen reads it once off the collected uiState for the dialog gate;
+ *    folding a copy into the outer bag would re-freeze it at construction
+ *    time instead of reading the holder's live value.
+ *  - `sortedEpisodes`: the ViewModel's smart-play/playlist resolution input
+ *    (the canonical episode order) — no section reads it.
+ *  - `sonarrServersResolved`: the canManageSeries combine's input — consumed
+ *    inside the VM's gate derivation, never rendered.
  */
 @Immutable
 internal data class DetailContentState(
+    /** The ViewModel's live content snapshot — the single content authority. */
+    val core: DetailUiState,
     val itemId: String,
-    val detail: MediaDetail?,
-    val seasons: List<MediaItem>,
-    val episodes: Map<String, List<MediaItem>>,
-    val fetchedSeasonIds: Set<String>,
-    val smartPlayTarget: DetailUiState.SmartPlayTarget?,
     /**
      * Season id the user last pinned for the current series (resolved by
      * `MediaDetailScreen` from `DetailPreferences.lastViewedSeasonBySeries`).
@@ -43,8 +105,6 @@ internal data class DetailContentState(
      * takes precedence. Null when nothing is pinned → prior behaviour.
      */
     val persistedSeasonId: String? = null,
-    val selectedSubtitleIndex: Int?,
-    val selectedAudioIndex: Int?,
     /**
      * The version (media-source id) the user picked in the detail screen's
      * version picker for this item; null = the server's default (first)
@@ -52,84 +112,37 @@ internal data class DetailContentState(
      * `onPlayClick`'s existing id argument, nothing is persisted here.
      */
     val selectedVersionId: String? = null,
-    val isDownloading: Boolean,
-    val isDownloadingSeries: Boolean,
-    val activeDownload: DownloadItem?,
-    val loadState: DetailUiLoadState,
-    val albumTracks: List<MediaItem>,
-    val collectionItems: List<MediaItem>,
-    val relatedItems: List<MediaItem>,
-    val specialFeatures: List<MediaItem> = emptyList(),
-    val localRelatedItems: List<MediaItem> = emptyList(),
-    /** Intro skip available (INTRO segment resolved for the item). Drives the chip. */
-    val hasIntroSegment: Boolean = false,
-    /** Credits skip available (OUTRO segment resolved for the item). Drives the chip. */
-    val hasCreditSegment: Boolean = false,
-    val relatedVideos: List<SeerrRelatedVideo>,
-    /** TMDB-sourced reviews shown in their own section (no Seerr connection needed). */
-    val tmdbReviews: List<TmdbReview> = emptyList(),
-    val seerrRecommendations: List<SeerrSearchItem>,
-    val seerrSimilar: List<SeerrSearchItem>,
-    val isSeerrConnected: Boolean,
-    val isSeerrRecommendationsEnabled: Boolean,
-    val preferences: DetailPreferences,
-    val canManageSeries: Boolean,
-    /**
-     * The signed-in user may run server-side metadata actions (admin). Gates
-     * the ⋮ menu's "Refresh metadata" / "Identify" entries together with
-     * [DetailCapabilities.remoteDiscovery] (resolved in `DetailContent`).
-     */
-    val canManageMetadata: Boolean = false,
-    // ── Unified-provider fields. Drives source-aware rendering of the
-    // download/sync UI, local subtitle selector, asset-aware image resolution,
-    // and capability-gated navigation. Empty/default for a plain REMOTE item so
-    // the remote-only rendering path is unchanged. ──
-    /** Source origin of the snapshot. Null until the first snapshot lands. */
-    val origin: DetailOrigin? = null,
-    /** Attached download lifecycle + sync state + series aggregate. */
-    val detailContext: DetailContext? = null,
-    /** Capability set for the snapshot — single authority for source-aware gating. */
-    val capabilities: DetailCapabilities = DetailUiState.DefaultCapabilities,
-    /** On-disk artwork (poster/backdrop/cast portraits) preferred for local origins. */
-    val assets: DetailAssets = DetailAssets(),
-    /** Manifest-backed external subtitles selectable for local playback. */
-    val localSubtitles: List<LocalSubtitleOption> = emptyList(),
-    /** Currently-selected local subtitle stream index (null = none/disabled). */
-    val selectedLocalSubtitleIndex: Int? = null,
+    val canManageSeries: Boolean = false,
+    val preferences: DetailPreferences = DetailPreferences(),
     /** Resync / re-download action status surfaced on the freshness banner + sheet. */
     val resyncState: ResyncUiState = ResyncUiState.Idle,
+    /** The download-lifecycle slice the tree reads (see [DownloadsExtras]). */
+    val downloads: DownloadsExtras = DownloadsExtras(),
+) {
     /**
-     * Downloaded episode ids for the current series (populated lazily when the
-     * download sheet opens). Drives the per-episode delete badge in the seasons
-     * section for a REMOTE series with downloads. Empty for a plain remote series
-     * with no downloads (the badge is hidden); a LOCAL origin ignores this and
-     * treats every episode as downloaded.
+     * The download-lifecycle fields the content tree reads — one owner:
+     * [DownloadLifecycleActions] (the screen collects the helper's slim
+     * root-state projection and folds it here verbatim). The sheet-scoped
+     * caches, the cellular-size warning, and the per-tick progress map stay
+     * OUT — the sheets and the progress provider read those in their own
+     * narrow scopes, so a ~2 s transfer tick never re-copies this bag.
      */
-    val downloadedEpisodeIds: Set<String> = emptySet(),
-    // Pre-download picker (quality + external-subtitle selection).
-    val downloadPicker: DownloadPickerState = DownloadPickerState(),
-    // Book-only extras (BOOK media type): format + TOC cache + marks counts.
-    val book: DetailUiState.BookDetailState? = null,
-    // ── jellyfin-plugin-jellyplay companion sections (ADR 0010) ──
-    // Aggregated external ratings (mdblist) chips for the item's IMDb id.
-    // Empty = section absent (probe failure / no data — never an error).
-    val pluginRatings: List<com.raulshma.jellyplay.core.model.JellyPlayPluginRating> = emptyList(),
-    /** Server-scored "More like this", hydrated into displayable items.
-     *  Empty = section absent; the stock relatedItems row stays beside it. */
-    val pluginSimilarItems: List<MediaItem> = emptyList(),
-    /** True only when the plugin's scorer feeds the HOST's similar pipeline
-     *  (Jellyfin 12+ — the capabilities handshake says so): there the stock
-     *  row returns the same scored list and is suppressed. See
-     *  [DetailUiState.pluginSimilarSuppressesStock]. */
-    val pluginSimilarSuppressesStock: Boolean = false,
-    /** Anime filler/mixed/recap badges by episode number, rendered on the
-     *  seasons section's episode rows. Empty = no badges. */
-    val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
-    /** Per-season TMDB episode scores (ADR 0010, [JellyPlayPluginFeatures.Ratings])
-     *  keyed season id → (episode number → ratings). Empty = section absent
-     *  (probe failure / no data — never an error). */
-    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
-)
+    @Immutable
+    data class DownloadsExtras(
+        val isDownloading: Boolean = false,
+        val isDownloadingSeries: Boolean = false,
+        /**
+         * Downloaded episode ids for the current series (loaded at screen-open —
+         * — and re-read when the download sheet opens). Drives the per-episode
+         * delete badge in the seasons section for a REMOTE series with downloads.
+         * Empty for a plain remote series with no downloads (the badge is hidden);
+         * a LOCAL origin ignores this and treats every episode as downloaded.
+         */
+        val downloadedEpisodeIds: Set<String> = emptySet(),
+        /** Pre-download picker (quality + external-subtitle selection). */
+        val downloadPicker: DownloadPickerState = DownloadPickerState(),
+    )
+}
 
 /**
  * Artwork / image-URL resolution for the media-detail content tree.
@@ -190,8 +203,25 @@ internal data class PlaybackCallbacks(
      * (fire-and-forget VM action; success navigates via DetailMessage).
      */
     val onStartWatchParty: () -> Unit = {},
+    /**
+     * "Play (with pre-rolls)": plays the current item with server
+     * intros FORCED for this single play (the ⋮ action bypassing the global
+     * cinema-mode pref). The screen arms the one-shot
+     * [com.raulshma.jellyplay.core.data.playback.CinemaModeOverride] and
+     * dispatches through the normal play path.
+     */
+    val onPlayWithPrerolls: () -> Unit = {},
     /** Open the version picker sheet (multi-version items only). */
     val onOpenVersionPicker: () -> Unit = {},
+    /**
+     * "Play collection in order": queues the franchise row's members
+     * after the first-unwatched start entry (the manual up-next queue,
+     * queue-first semantics; suppressed under SyncPlay by the player's
+     * advance routing) and starts playback on the start entry. Composition
+     * seam — the queue controller is process-wide and consumed screen-side
+     * (DetailContent's enqueueInQueue precedent), so no VM round-trip.
+     */
+    val onPlayCollectionInOrder: (DetailUiState.FranchiseCollection) -> Unit = {},
 )
 
 /**
@@ -273,6 +303,14 @@ internal data class UserDataCallbacks(
     val onShowFromContinueWatching: () -> Unit = {},
     val onShowDetailUpNext: () -> Unit = {},
     val onHideDetailUpNext: () -> Unit = {},
+    /** Inline eye-hide: hides one franchise row for the current item (session memory). */
+    val onHideFranchiseRow: (collectionId: String) -> Unit = {},
+    /**
+     * Toggles the current series' new-episode notification opt-in (the
+     * ⋮ entry and the upcoming rows' bell both land here; the screen arms the
+     * POST_NOTIFICATIONS prompt beside the write).
+     */
+    val onToggleSeriesNotifications: (enabled: Boolean) -> Unit = {},
 )
 
 /**
@@ -359,6 +397,8 @@ internal data class ScreenCallbacks(
     val onMediaQuickActions: (MediaItem) -> Unit = {},
     /** Track the TV-focused row item so the Menu key can open its quick actions. */
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
+    /** The top-bar mute chip — mute/unmute the playing theme + write the per-series memory. */
+    val onToggleThemeMusicMuted: (Boolean) -> Unit = {},
 )
 
 /**

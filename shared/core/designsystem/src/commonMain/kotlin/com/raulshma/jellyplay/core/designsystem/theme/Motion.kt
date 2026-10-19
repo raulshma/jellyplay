@@ -129,7 +129,7 @@ fun defaultContentSizeSpec() = MaterialTheme.motionScheme.defaultSpatialSpec<Int
 // not need their own reduce-motion guard.
 // ---------------------------------------------------------------------------
 
-/** Deliberate horizontal-slide easing (previously-unused OverslideEasing). */
+/** Deliberate horizontal-slide easing (OverslideEasing). */
 fun expressiveSlideSpec(): FiniteAnimationSpec<IntOffset> =
     tween(
         durationMillis = 300,

@@ -32,7 +32,7 @@ data class MpvSubtitleOwnership(
 }
 
 /**
- * Per-key mpv.conf ownership for subtitle styling (issue #165).
+ * Per-key mpv.conf ownership for subtitle styling.
  *
  * The app unconditionally writes a full `sub-*` slate at init time
  * (`setOptionString` — command-line priority, beats mpv.conf) and re-applies
@@ -108,7 +108,7 @@ object MpvUserSubtitleKeys {
      * conf parser, so the key ends up "owned" but carrying no value — the
      * player shows mpv's default while the app correctly stays silent.
      *
-     * Root cause (issue #165 follow-up): mpv's `parse_configfile.c` cuts an
+     * Root cause: mpv's `parse_configfile.c` cuts an
      * unquoted value at the first `#` — `sub-color=#FF0000` parses as an
      * empty value and is rejected, while `sub-font-size=80` survives. Only
      * meaningful for the on-disk conf text: the in-app extra-config lines

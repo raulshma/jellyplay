@@ -7,14 +7,12 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Koin construction owner for the auth feature (docs/kmp-migration-plan.md
- * § cutover; feature-conveyor transform). The HiltViewModel/@Inject
- * annotations were stripped at the move — Koin is the single constructor
- * owner (one framework per type). Every ctor dep is Koin-native on BOTH
- * platforms, so unlike most conveyor features this module has zero Hilt
+ * Koin construction owner for the auth feature. Koin is the single
+ * constructor owner (one framework per type). Every ctor dep is Koin-native
+ * on BOTH platforms, so this module has zero Hilt
  * interop (calendar/requests/shortcuts class):
  *  - AuthRepository and ServerDiscoveryRepository resolve from dataJvmModule
- *    (singles since the C4 data common-ization).
+ *    (singles in the shared data graph).
  *  - LocalNetworkStatus (AddServerViewModel's Android-17-permission gate) is
  *    NOT defined here: it needs a Context on Android and none on desktop, so
  *    each platform registers its own definition — androidAuthModule(context)

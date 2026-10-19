@@ -112,7 +112,7 @@ abstract class EngineStateChassis(
     final override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
 
     // -------------------------------------------------------------------------------------------
-    // Published-state resets (C5). Each adapter's release() used to re-derive
+    // Published-state resets. Each adapter's release() used to re-derive
     // its own reset list over these chassis-owned flows; the lists live here
     // now so a field can never be silently dropped from one engine's teardown.
     // -------------------------------------------------------------------------------------------

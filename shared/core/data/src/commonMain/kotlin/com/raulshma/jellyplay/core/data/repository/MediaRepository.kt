@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -79,18 +80,6 @@ interface MediaRepository {
 
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
-    suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
-
-    suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
-
-    /**
-     * Fetches every episode for a series in a single round-trip and groups the
-     * result by `seasonId`. Collapses an N-season fan-out (one request per
-     * season) into a single call to Jellyfin's `/Shows/{seriesId}/Episodes`
-     * endpoint (which returns the full set when `seasonId` is omitted).
-     */
-    suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>>
-
     /**
      * [force] drops every cached page for the collection first — the prefix
      * evict spans all pages, so forcing one page heals the earlier ones too
@@ -155,6 +144,39 @@ interface MediaRepository {
 }
 
 /**
+ * The browse-catalogue enrichment family seam of [MediaRepository]: the
+ * filter sheets' tag facet and the detail screen's franchise (BoxSets-
+ * containing) row — two cached reads whose consumers are clean family
+ * consumers (nothing else on the wide surface they need). [MediaRepositoryImpl]
+ * implements this seam alongside the wide interface (the [MusicCatalogue]
+ * pattern), so the surface ratchet stays flat instead of absorbing growth
+ * that only two screens read.
+ */
+interface MediaCatalogueEnrichments {
+
+    /**
+     * The tag names feeding the filter sheets' tag facets ([parentId], or
+     * server-wide when null). The underlying read pages the library's items
+     * (a TAGS-only projection, scan-capped), so a tag past the first page
+     * still surfaces; the sorted distinct list is cached under the same
+     * near-static catalogue-metadata ceiling as genres/studios.
+     */
+    suspend fun getTags(parentId: String?): Result<List<String>>
+
+    /**
+     * The BoxSets whose hierarchy contains [itemId] — the detail screen's
+     * "More in this collection" franchise row's sources. The underlying read
+     * enumerates the user's boxsets and probes each for the item (one
+     * round-trip per boxset, bounded-concurrent), so the result is
+     * identity-keyed and TTL-cached beside the detail cluster: a detail
+     * re-entry inside the window re-serves the row instead of re-probing.
+     * A user-data write on the item evicts it with the item's other
+     * detail-scoped caches.
+     */
+    suspend fun getBoxSetsContaining(itemId: String): Result<List<CollectionSummary>>
+}
+
+/**
  * The music-catalogue family seam of [MediaRepository]: the album → track
  * reads and the theme-song lookup — the cached members only music surfaces
  * ever call. [MediaRepositoryImpl] implements this seam alongside the wide
@@ -191,6 +213,23 @@ interface MusicCatalogue {
     suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>>
 
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
+}
+
+/**
+ * The series-notification family seam of the media stack (the
+ * [MusicCatalogue] narrow-collaborator pattern): the per-series Next Up
+ * diff read the `NewMediaCheckWorker`'s second pass rides. Its clean sole
+ * consumer injects this seam instead of the union; the impl satisfies both
+ * declarations.
+ *
+ * The series-scoped Next Up row: `GET /Shows/NextUp` filtered to [seriesId]
+ * with resumable episodes excluded (a half-watched episode is not "new"),
+ * top row only — null when the series has no next-up episode. Uncached by
+ * contract: the notification diff wants the live answer, one call per
+ * opted-in series per check.
+ */
+interface SeriesNotificationReads {
+    suspend fun getSeriesNextUpEpisode(seriesId: String): Result<MediaItem?>
 }
 
 /**
@@ -259,19 +298,15 @@ interface HomeFeed {
      * the sanctioned freshness lever; narrower than a global cache drop).
      *
      * WRITE GUARANTEE (all callers, no exceptions): every assembled payload
-     * this read produces is written behind the data layer's ONE home
-     * cache-write generation token (`MediaRepositoryImpl.homeWriteGeneration`,
-     * bumped only by its `bumpHomeWriteGeneration` funnel and observed
-     * downstream by the network fetcher's row memo) — a fetch already on the
-     * wire when a roll or single-row refresh lands still returns to its
-     * caller but never pins its pre-roll payload into either cache. No caller
-     * therefore needs external serialization for cache safety. Historical
-     * rationale for why the guarantee is stated here at all: the feature
-     * refresher's mutex only ever serialized the feature layer's OWN fetches,
-     * while the background refetchers (TvWatchNextPublisher,
-     * UserDataSyncWorker, the library recommendations widget worker) call
-     * this directly — the token owner, not that mutex, is what guards their
-     * assembled writes.
+     * this read produces is written behind the pipeline's ONE
+     * [com.raulshma.jellyplay.core.network.library.HomeWriteGeneration] token
+     * — owned and bumped only by the data layer's funnel, mirrored by the
+     * network fetcher's row memo — so a fetch already on the wire when a roll
+     * or single-row refresh lands still returns to its caller but never pins
+     * its pre-roll payload into either cache. No caller therefore needs
+     * external serialization for cache safety (the background refetchers —
+     * TvWatchNextPublisher, UserDataSyncWorker, the library recommendations
+     * widget worker — call this directly, unmutexed).
      */
     suspend fun getHomeSections(
         query: HomeSectionQuery,
@@ -317,51 +352,17 @@ interface HomeFeed {
      * per-row memo so the next home-sections fetch serves the roll instead of
      * reverting or re-rolling it. Returns the fresh items.
      *
-     * ── THE ROLL PROTOCOL (single owner; implementation sites reference this
-     * doc instead of restating it) ──────────────────────────────────────────
-     *
-     * One user action must survive THREE race windows, one per layer:
-     *
-     *  1. FEATURE registry — a roll landing while a full home refresh is
-     *     already in flight: the raced fetch's resolved payloads still carry
-     *     the row's PRE-roll items, and its single sections write would
-     *     transiently revert the on-screen roll. The feature's
-     *     DiscoverRowsCoordinator registry (roll generations + the drain
-     *     point in HomeRefresher.fetchOnce, strictly between the last
-     *     suspension and the sections write) re-applies registered rolls.
-     *     This layer cannot see that write — it orders FEATURE state only,
-     *     a deliberately different axis from the cache-write token below.
-     *  2. REPO assembled cache — [MediaRepositoryImpl.homeWriteGeneration],
-     *     the pipeline's ONE cache-write generation token (bumped only by the
-     *     `bumpHomeWriteGeneration` funnel): a getHomeSections already on the
-     *     wire when the roll landed must not pin its pre-roll assembled
-     *     payload into the repo's in-memory cache (the seed's clear cannot
-     *     stop a LATER write). Bumped at invalidate AND at commit.
-     *  3. NETWORK row memo — the SAME token, one layer down: the fetcher
-     *     keeps no counter of its own; each mutating
-     *     [com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort]
-     *     verb carries the funnel's post-bump value as a `generation`
-     *     parameter, which the fetcher mirrors before its cache mutation.
-     *     The same stall-guard therefore covers the per-row TTL memo (a row
-     *     sub-call in flight across the roll must not memoise its pre-roll
-     *     response over the seed). Same bump rule, ONE bump per rule
-     *     instance: the repo funnel bumps, the verb delivers.
-     *
-     * The ORDERING is the operation's contract, owned by
-     * [MediaRepositoryImpl.rerollDiscoverRow]:
-     *   invalidate ([MediaRepositoryImpl.invalidateDiscoverRowCache]:
-     *     funnel bump + assembled home payload drop → network per-row memo
-     *     drop, carrying the post-bump token) → fetch (fresh row query,
-     *     every cache bypassed) → seed on success
-     *     ([MediaRepositoryImpl.seedDiscoverRowCache]: funnel bump + assembled
-     *     payload drop again — a periodic fetch that raced the roll may have
-     *     re-cached the pre-roll sections after the pre-fetch invalidate —
-     *     then the network row memo write, carrying the new post-bump token).
-     *
-     * The "generation bumped at invalidate AND at commit" rule is what closes
-     * the whole-roll window: a fetch that started BEFORE the invalidate and
-     * lands AFTER the commit stays stall-guarded across both halves — one
-     * token, delivered to both caches by the same funnel.
+     * THE ROLL PROTOCOL: the operation survives three race windows — the
+     * feature layer's DiscoverRowsCoordinator registry (FEATURE state), the
+     * repo's assembled cache, and the network row memo — all guarded by ONE
+     * token, [com.raulshma.jellyplay.core.network.library.HomeWriteGeneration]:
+     * the data layer's home cache-write generation, bumped by its single
+     * funnel at BOTH the invalidate and the commit step and carried into
+     * every cache mutation whose ordering matters. That type is the contract;
+     * the ordering it buys (invalidate → fetch → seed, a fetch straddling
+     * the whole roll returning but not pinning) is owned by
+     * `MediaRepositoryImpl.rerollDiscoverRow`, and each guarded cache
+     * documents its own window beside its guard.
      *
      * A failure or an empty result skips the commit and returns as-is — the
      * caches stay dropped, so the next home fetch re-queries the row rather

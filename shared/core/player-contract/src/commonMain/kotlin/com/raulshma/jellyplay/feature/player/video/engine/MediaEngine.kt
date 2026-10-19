@@ -30,6 +30,15 @@ data class PlaybackRequest(
     val headers: Map<String, String> = emptyMap(),
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
+    /**
+     * Engine-level audio-description bias: when true the Exo adapter adds
+     * `ROLE_FLAG_DESCRIBES_VIDEO` to its preferred audio role flags, so the
+     * platform track selector starts out leaning toward AD narration before
+     * the helper's label-bridge rung makes the authoritative pick. Engines
+     * without a role-flag concept (mpv/VLC) ignore it — their AD handling is
+     * title-based in the selection policy.
+     */
+    val preferAudioDescription: Boolean = false,
     val maxVideoBitrate: Int? = null,
     val serverUrl: String? = null,
     val authToken: String? = null,
@@ -154,6 +163,15 @@ data class EngineConfig(
      */
     val hdrSource: Boolean = false,
     /**
+     * The CURRENT item's HDR transfer family — the typed twin of [hdrSource]
+     * (invariant: `hdrSource == (hdrContent != HdrContentInfo.NONE)`), derived
+     * by the config builder via `hdrContentFromStreams`. Transient session
+     * input, never persisted. Engines with an HDR output surface resolve their
+     * passthrough-vs-tone-mapping posture from it
+     * (`resolveExoHdrOutput` / `resolveMpvHdrOutput`); other engines ignore it.
+     */
+    val hdrContent: HdrContentInfo = HdrContentInfo.NONE,
+    /**
      * Optional DRM hook. When non-null, engines that support DRM (currently
      * ExoPlayerEngine on Android) attach the supplied session manager —
      * `androidx.media3.exoplayer.drm.DrmSessionManager` on Android, passed
@@ -218,6 +236,25 @@ data class AudioEffectsConfig(
      * boost (the stronger of the two gains wins — one shared effect).
      */
     val downmixBoostDb: Float = 0f,
+    /**
+     * The user's ADVISORY "allow spatial audio" preference. There is no
+     * app-side spatialization enable (the platform spatializer engages when
+     * the system setting is on and the track/route qualify); this flag gates
+     * what the ENGINE does to keep the stream spatializable: while spatial
+     * audio is effective the engine neutralizes its own 5.1→2.0 downmix and
+     * the speaker-layout cap so multichannel PCM reaches the AudioTrack, and
+     * holds the Virtualizer session effect off (mutually exclusive — spatial
+     * wins). `false` = the engine's downmix/cap/virtualizer behavior is
+     * unchanged. ExoPlayer-only; other engines ignore it.
+     */
+    val spatialAudioEnabled: Boolean = false,
+    /**
+     * Qualifies [spatialAudioEnabled] to headphone-class outputs only (wired
+     * / Bluetooth / USB-BT / BLE headsets, hearing aids) — the routes
+     * platform spatialization targets. `true` (default): the engine only
+     * neutralizes its downmix/cap while such an output is active.
+     */
+    val spatialAudioOnlyHeadphones: Boolean = true,
 )
 
 @Immutable
@@ -241,10 +278,13 @@ data class EngineCapabilities(
     /**
      * Distinguishes "renders ASS/SSA" (`supportsAssOverride = true`, both
      * ExoPlayer and mpv) from "applies the user's style overrides to ASS/SSA
-     * tracks" (mpv only via libass `--ass-override=force`). When `false`, ASS
-     * tracks render with their embedded styling and the user's colors, borders,
-     * and Force-override only affect SRT/VTT. See `assMedia` 0.4.0 degradation
-     * notes in `ExoPlayerEngine`.
+     * tracks" — mpv live via libass `--ass-override=force`; ExoPlayer by
+     * rewriting the header's `Style: Default` line before libass parses the
+     * track (`AssStyleOverrideParserFactory`; ass-media 0.5.0 binds no
+     * style-override JNI), which is apply-at-load: style edits land on the next
+     * subtitle-track load rather than mid-playback. When `false`, ASS tracks
+     * render with their embedded styling and the user's colors, borders, and
+     * Force-override only affect SRT/VTT.
      */
     val supportsAssStyleOverride: Boolean = false,
     val supportsFontFamily: Boolean = false,
@@ -281,13 +321,55 @@ data class EngineCapabilities(
      * so the menu item is hidden rather than a dead control.
      */
     val supportsDeinterlace: Boolean = false,
+    /**
+     * Can hand the platform's spatializer (Android `android.media.Spatializer`,
+     * API 32+) a track it may spatialize: the engine renders multichannel PCM
+     * through a sink whose output layout the platform can engage, and does not
+     * force `SPATIALIZATION_BEHAVIOR_NEVER` on its stream. ExoPlayer only.
+     *
+     * DECLARED capability, not a promise: actual engagement is runtime-gated —
+     * the device must run API 32+ with a supported spatializer, the system
+     * spatial-audio setting must be on (user-controlled; there is no app-side
+     * enable), the output must qualify (typically headphones), and the engine
+     * must not defeat the stream (its own 5.1→2.0 downmix and speaker cap are
+     * neutralized while spatial audio is effective — see SpatialAudioPolicy).
+     * mpv/LibVLC render through their own audio outputs with no observable
+     * Spatializer surface, so they advertise `false`.
+     *
+     * Spec reliance ("auto-disable when passthrough or ≥5.1
+     * output is active"): covered structurally, no dedicated branch — this
+     * engine cannot passthrough ([supportsAudioPassthrough] = `false`, it
+     * always decodes to PCM), and ≥5.1 speaker/receiver routes fall outside
+     * the headphones-only qualification (HDMI/USB-audio out is not
+     * headphone-class) plus the platform spatializer's own route rules.
+     */
+    val supportsSpatialAudio: Boolean = false,
+    /**
+     * Honors `MpvEngineConfig.hdrPassthrough` — prefers an HDR output when the
+     * display reports an HDR target. Both mpv hosts qualify (desktop:
+     * `target-colorspace-hint` on the HWND-embed `vo=gpu-next`; Android: the
+     * same property on the SurfaceView `vo=gpu-next` path, evaluated against
+     * the `video-target-params` probe). ExoPlayer/LibVLC have no equivalent
+     * switch — `false`. Gates the settings row's applicability and the stats
+     * overlay's passthrough rows.
+     */
+    val supportsHdrPassthrough: Boolean = false,
+    /**
+     * Applies an in-engine HDR→SDR tone map for HDR content on a display that
+     * cannot output it. ExoPlayer only: the Media3 GL video-graph path
+     * (`setVideoEffects` → `DefaultVideoFrameProcessor`'s SDR-output branch;
+     * see `resolveExoHdrOutput`). mpv needs no flag — its `tone-mapping`
+     * default already handles HDR→SDR (its dial lives in `MpvEngineConfig`).
+     * LibVLC has no tone-mapping surface at all — `false`.
+     */
+    val supportsHdrToneMapping: Boolean = false,
 ) {
     /**
      * Admission for the free-form (hex/HSV) subtitle color pickers: the
      * engine must honor free-form ARGB colors *and* apply user styling to
-     * ASS tracks, so the picked color holds on every track type. mpv only
-     * today — ExoPlayer honors free-form colors on SRT/VTT but renders ASS
-     * as-authored, so the picker would look broken on half the tracks.
+     * ASS tracks, so the picked color holds on every track type. ExoPlayer
+     * (FORCE header rewrite — apply-at-load) and mpv (live) qualify; LibVLC
+     * renders ASS as-authored, so the picker would look broken there.
      * Derived, not a matrix field: keep the two source flags explicit there.
      */
     val supportsCustomSubtitleColors: Boolean
@@ -347,6 +429,68 @@ data class MediaTrack(
     val badges: List<TrackBadge> = emptyList(),
 )
 
+/**
+ * The honest spatial-audio state model for the ExoPlayer engine.
+ *
+ * **Research constraint this model encodes (do not "fix" it into a fake
+ * on/off):** Android's spatializer (`android.media.Spatializer`, API 32+) is a
+ * QUERY-ONLY surface. There is no app-side enable — the platform spatializes a
+ * track when (a) the device has a supported spatializer, (b) the user's system
+ * spatial-audio setting is on (`Spatializer.isEnabled()`, user-controlled in
+ * system settings), (c) the current output route qualifies
+ * (`Spatializer.isAvailable()` / `canBeSpatialized(...)`, typically
+ * headphones), and (d) the stream actually reaches the `AudioTrack`
+ * multichannel and non-offloaded. The only app-side controls are opt-outs
+ * (`SPATIALIZATION_BEHAVIOR_NEVER`, marking content pre-spatialized) — never an
+ * enable. Media3 1.11 surfaces the same truth: `SpatializerWrapper` (its public
+ * util) only queries/state-listens, and `DefaultAudioSink` exposes no
+ * spatialization option — the platform engages at the mixer for qualifying
+ * AudioTracks.
+ *
+ * The app-side feature is therefore: qualification gating + "don't defeat it"
+ * + honest UI state. The user's in-app toggle is ADVISORY — it gates what the
+ * ENGINE does to keep the stream spatializable (holding the in-sink 5.1→2.0
+ * downmix and the speaker-layout cap out of the way, and holding the
+ * Virtualizer session effect off — the two effects are mutually exclusive and
+ * spatial wins), never the spatialization itself.
+ */
+enum class SpatialAudioState {
+    /**
+     * The platform cannot spatialize this content here — no supported
+     * spatializer, a non-qualifying output route, or a format it cannot
+     * process. Derived from `Spatializer.canBeSpatialized` for the playing
+     * format (capability-only, independent of the system setting). The UI's
+     * "not spatializable on this output" reason.
+     */
+    UNAVAILABLE,
+
+    /**
+     * The ENGINE's own configuration holds spatial out: the session renders
+     * through audio offload (which bypasses the mixer path the spatializer
+     * effect lives in), or the headphones-only qualification is on while the
+     * output is not headphone-class. The downmix/cap behavior is unchanged.
+     */
+    OFF,
+
+    /**
+     * The route/device COULD spatialize (`canBeSpatialized`, no hard gate) but
+     * a user-facing switch is off — the in-app advisory toggle, or the system
+     * spatial-audio setting. The "flip this (or the system switch) to engage"
+     * state the UI surfaces honestly.
+     */
+    AVAILABLE,
+
+    /**
+     * Spatial audio is EFFECTIVE for this session: the user's advisory toggle
+     * is on, the system spatializer is enabled, the content can be
+     * spatialized on the current output, and no disqualifier (offload,
+     * headphones gate) holds. The engine neutralizes its downmix + speaker
+     * cap and holds the Virtualizer off so the platform has a clean
+     * multichannel stream.
+     */
+    ACTIVE,
+}
+
 @Immutable
 data class EngineVideoStats(
     val videoCodec: String? = null,
@@ -390,10 +534,12 @@ data class EngineVideoStats(
     val voFrameDropCount: Long? = null,
     /**
      * HDR passthrough is ACTIVE for the running session: the setting
-     * is on, the item is HDR, and mpv's `video-target-params` reports an HDR
-     * display target. Drives the "HDR output active" badge in the stats
-     * overlay. `false` on engines that don't expose the target surface
-     * (Android, software-render path).
+     * is on, the item is HDR, and the display target reports HDR — mpv's
+     * `video-target-params` probe on both mpv hosts, the Android
+     * `Display.HdrCapabilities` probe on ExoPlayer (an EXPECTATION there:
+     * Media3's own EGL-capability check remains the render-time arbiter).
+     * Drives the "HDR output active" badge in the stats overlay. `false` on
+     * engines that expose no target surface (LibVLC, software-render mpv).
      */
     val hdrOutputActive: Boolean = false,
     /**
@@ -403,6 +549,34 @@ data class EngineVideoStats(
      * report.
      */
     val hdrOutputNotice: String? = null,
+    /**
+     * The display's HDR capability summary for the stats overlay: the HDR
+     * families the current display accepts ("HDR10, Dolby Vision"), "SDR"
+     * for a display with no HDR types. `null` when no probe answered (the
+     * Android display probe was unavailable) or the engine has no display
+     * probe at all (the desktop mpv host answers per-target via
+     * `video-target-params` instead; LibVLC exposes nothing). Sits beside
+     * [videoHdrType] so content family and display capability read as one
+     * line of diagnosis.
+     */
+    val displayHdrTypes: String? = null,
+    /**
+     * The engine's effective spatial-audio state ([SpatialAudioState]).
+     * Null on engines/surfaces that expose no spatializer facts (mpv,
+     * LibVLC, pre-API-32 Android). The stats overlay's honest "what the
+     * platform spatializer is doing" row — there is no app-side
+     * spatialization enable, so this reports rather than controls.
+     */
+    val audioSpatialState: SpatialAudioState? = null,
+    /**
+     * Spatial won over a concurrently-requested Virtualizer for this
+     * session — the mutual-exclusion report the spatial-audio policy
+     * produces when the state is ACTIVE while a Virtualizer was also
+     * requested. Rendered as the "(virtualizer superseded)" note beside
+     * [audioSpatialState] — a separate flag so the note does not ride
+     * inside the state value.
+     */
+    val audioSpatialSuperseded: Boolean = false,
 )
 
 /**
@@ -456,6 +630,18 @@ interface MediaEngine :
     override val currentPositionMs: Long
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
+
+    // ── Scrubbing ──
+    /**
+     * Notifies the engine that a user-driven scrub session started or ended
+     * (seek-bar drag, swipe seek, double-tap-hold repeat seek). Media3's
+     * adapter maps this to `ExoPlayer.setScrubbingModeEnabled` — decode-only
+     * frames + dynamic scheduling while the drag is live — so the many
+     * preview seeks feel instant; engines without a scrubbing concept
+     * (mpv/VLC — their absolute seeks are already precise) inherit the no-op.
+     * Purely advisory: the committed seek still goes through [seekTo].
+     */
+    fun onScrubbingChanged(active: Boolean) {}
 
     // ── Identity ──
     /**

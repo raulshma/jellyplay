@@ -9,14 +9,14 @@ import java.time.ZoneId
 
 class NewsletterTriggerManager(
     private val notificationStore: NotificationStore,
-    /** Clock seam for the weekly-digest `today` read (D3): same read, fakes pin it. */
+    /** Clock seam for the weekly-digest `today` read: same read, fakes pin it. */
     private val timeSource: TimeSource,
 ) {
     fun shouldShowBanner(): Flow<Boolean> = notificationStore.notification.map { prefs ->
         if (!prefs.newsletterEnabled) return@map false
 
         val configuredDay = dayOfWeekFromPref(prefs.newsletterDayOfWeek)
-        // LocalDate.now() before D3; the system impl of today(zone) is the
+        // LocalDate.now() before the seam; the system impl of today(zone) is the
         // identical read.
         val today = timeSource.today(ZoneId.systemDefault())
         val todayDow = today.dayOfWeek

@@ -9,9 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
  * the write command over [AppearanceStore]'s showAdvancedSettings field.
  *
  * Stateless over its two shared deps, so the settings Koin module provides it
- * as ONE single injected into every settings ViewModel (nine of them used to
- * hand-copy the identical pair: `appearanceStore.showAdvancedSettings` +
- * `editor.edit { appearance.setShowAdvancedSettings(enabled) }`). The field
+ * as ONE single injected into every settings ViewModel. The field
  * itself stays on [AppearanceStore] — this is the settings-facing facade, not
  * a second home. Public only because the nine ViewModels that inject it have
  * public constructors — not a stable API surface.

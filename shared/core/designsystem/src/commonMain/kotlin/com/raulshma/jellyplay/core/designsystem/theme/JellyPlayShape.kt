@@ -9,7 +9,7 @@ import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
  *
  * These wrappers exist so consumers outside `core:designsystem` don't touch
  * the vendored `racra.compose.smooth_corner_rect_library` port directly
- * ([AbsoluteSmoothCornerShape] — ported verbatim into this module because
+ * ([AbsoluteSmoothCornerShape] — vendored into this module because
  * upstream publishes Android-only artifacts), keeping it off every
  * consumer's API surface while still letting feature code request
  * smooth-corner shapes.

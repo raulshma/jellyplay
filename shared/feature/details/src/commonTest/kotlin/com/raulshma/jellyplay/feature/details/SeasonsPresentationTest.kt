@@ -166,6 +166,23 @@ class SeasonsPresentationTest {
         assertEquals("/downloads/e1.jpg", presentation.episodeLocalImagePaths["e1"])
     }
 
+    @Test
+    fun `episode-row badge gates ride the display preferences`() {
+        // The stream-badge and download-progress gates are the
+        // preferences verbatim (both default on) — the fold only carries them.
+        val on = SeasonsPresentation.from(state(), series(), isLocalOrigin = false)
+        assertTrue(on.showStreamBadges)
+        assertTrue(on.showDownloadProgress)
+
+        val off = SeasonsPresentation.from(
+            state(preferences = DetailPreferences(showEpisodeStreamBadges = false, showDownloadProgress = false)),
+            series(),
+            isLocalOrigin = false,
+        )
+        assertFalse(off.showStreamBadges)
+        assertFalse(off.showDownloadProgress)
+    }
+
     // ── Fixtures (mirrors DetailSectionAdmissionTest's builder style) ──
 
     private fun series() = MediaItem(id = "sr1", name = "Series", mediaType = MediaType.SERIES)
@@ -189,30 +206,17 @@ class SeasonsPresentationTest {
         downloadedEpisodeIds: Set<String> = emptySet(),
         assets: DetailAssets = DetailAssets(),
     ) = DetailContentState(
+        core = DetailUiState(
+            detail = MediaDetail(item = series()),
+            seasons = seasons,
+            episodes = episodes,
+            isSeerrConnected = true,
+            isSeerrRecommendationsEnabled = false,
+            origin = DetailOrigin.REMOTE,
+            assets = assets,
+        ),
         itemId = "sr1",
-        detail = MediaDetail(item = series()),
-        seasons = seasons,
-        episodes = episodes,
-        fetchedSeasonIds = emptySet(),
-        smartPlayTarget = null,
-        selectedSubtitleIndex = null,
-        selectedAudioIndex = null,
-        isDownloading = false,
-        isDownloadingSeries = false,
-        activeDownload = null,
-        loadState = DetailUiLoadState.Loaded,
-        albumTracks = emptyList(),
-        collectionItems = emptyList(),
-        relatedItems = emptyList(),
-        relatedVideos = emptyList(),
-        seerrRecommendations = emptyList(),
-        seerrSimilar = emptyList(),
-        isSeerrConnected = true,
-        isSeerrRecommendationsEnabled = false,
         preferences = preferences,
-        canManageSeries = false,
-        origin = DetailOrigin.REMOTE,
-        downloadedEpisodeIds = downloadedEpisodeIds,
-        assets = assets,
+        downloads = DetailContentState.DownloadsExtras(downloadedEpisodeIds = downloadedEpisodeIds),
     )
 }

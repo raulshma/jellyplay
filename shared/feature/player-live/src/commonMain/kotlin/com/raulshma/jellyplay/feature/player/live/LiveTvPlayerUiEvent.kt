@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
  * is the single command funnel (the VideoPlayerUiEvent / AudioPlayerUiEvent
  * precedent): the VM exposes no per-action command methods beyond it and the
  * state flows/queries, so new intents are added here (and routed once in the
- * `when`) rather than as new public members on the VM (whose member ratchet
+ * `when`) rather than as new public members on the VM (whose member guard
  * this fold lowered).
  *
  * Deliberately NOT here: the lifecycle [LiveTvPlayerViewModel.stop] (the

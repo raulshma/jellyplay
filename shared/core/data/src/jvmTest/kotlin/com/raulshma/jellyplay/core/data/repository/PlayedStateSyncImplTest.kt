@@ -51,7 +51,7 @@ class PlayedStateSyncImplTest {
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var outboxRepository: PlaybackOutboxRepository
     private lateinit var offlineModeManager: OfflineModeManager
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var userDataAnnouncer: UserDataAnnouncer
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var downloadRepository: DownloadRepository
     // The deleted local copy defaulted now one minute after the fixture
@@ -71,7 +71,7 @@ class PlayedStateSyncImplTest {
         offlineRepository = mockk(relaxUnitFun = true)
         outboxRepository = mockk(relaxed = true)
         offlineModeManager = mockk()
-        mediaRepository = mockk()
+        userDataAnnouncer = mockk()
         downloadsStore = mockk()
         downloadRepository = mockk()
         sync = PlayedStateSyncImpl(
@@ -79,7 +79,7 @@ class PlayedStateSyncImplTest {
             offlineRepository = offlineRepository,
             playbackOutboxRepository = outboxRepository,
             offlineModeManager = offlineModeManager,
-            mediaRepository = lazy { mediaRepository },
+            userDataAnnouncer = userDataAnnouncer,
             downloadsStore = lazy { downloadsStore },
             downloadRepository = lazy { downloadRepository },
             timeSource = fakeTimeSource,
@@ -88,7 +88,7 @@ class PlayedStateSyncImplTest {
         every { offlineModeManager.isOffline } returns false
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
         // The confirmed-write announcement (strict mock otherwise).
-        every { mediaRepository.notifyUserDataChanged(any()) } returns Unit
+        every { userDataAnnouncer.notifyUserDataChanged(any()) } returns Unit
     }
 
     // ── flip ─────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ class PlayedStateSyncImplTest {
 
         // Socket-gap heal: the announcement rides the same flow server WS
         // pushes use, so open screens refresh even without an echo.
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(ITEM_ID)) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf(ITEM_ID)) }
     }
 
     @Test
@@ -136,7 +136,7 @@ class PlayedStateSyncImplTest {
 
         // Detail screens are keyed by the series id, never the season id — a
         // seasonId-only announcement would never match an open series screen.
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(SEASON_ID, SERIES_ID)) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf(SEASON_ID, SERIES_ID)) }
     }
 
     @Test
@@ -145,7 +145,7 @@ class PlayedStateSyncImplTest {
 
         sync.toggleFavorite(ITEM_ID)
 
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf(ITEM_ID)) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf(ITEM_ID)) }
     }
 
     @Test
@@ -154,7 +154,7 @@ class PlayedStateSyncImplTest {
 
         sync.flip(ITEM_ID, played = true)
 
-        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
+        verify(exactly = 0) { userDataAnnouncer.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -357,7 +357,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `reconcile reports NoChange when the server view is unavailable`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem()
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.failure(java.io.IOException("offline"))
 
         assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
@@ -366,7 +366,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `the server favorite state wins over the local row`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isFavorite = false)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isFavorite = true))
 
         sync.reconcileOfflineRow(ITEM_ID)
@@ -378,7 +378,7 @@ class PlayedStateSyncImplTest {
     fun `a server-watched item resets the local row to played and clean`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(isPlayed = false, playbackPositionTicks = 600_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true))
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
@@ -396,7 +396,7 @@ class PlayedStateSyncImplTest {
         // Reconcile re-asserts markPlayedItem, whose resetPosition zeroes it.
         every { offlineModeManager.isOffline } returns false
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true, playbackPositionTicks = 5_000_000L))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         // The repair pushes through the intent row + delivery probe.
@@ -409,14 +409,14 @@ class PlayedStateSyncImplTest {
         coVerify(exactly = 1) { offlineRepository.updatePlaybackProgress(ITEM_ID, 0L, 100.0, true) }
         // Exactly-once: the heal flip inside reconcile stays silent — the
         // driving drain's tail announce names the item exactly once instead.
-        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
+        verify(exactly = 0) { userDataAnnouncer.notifyUserDataChanged(any()) }
     }
 
     @Test
     fun `a failed heal stages the intent and reports undelivered (#157)`() = runTest {
         every { offlineModeManager.isOffline } returns false
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true, playbackPositionTicks = 5_000_000L))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.failure<UserDataWriteOutcome>(RuntimeException("5xx"))
 
@@ -433,7 +433,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `a played server row without a resume position is not re-asserted`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = false)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true, playbackPositionTicks = 0L))
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
@@ -445,7 +445,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `a locally-played item mirrors a server-unplayed flip`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = false))
 
         val result = sync.reconcileOfflineRow(ITEM_ID)
@@ -461,7 +461,7 @@ class PlayedStateSyncImplTest {
         // The intent row exists (branch taken) and the push delivers it.
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns true
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = false))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
 
@@ -479,7 +479,7 @@ class PlayedStateSyncImplTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = false)
         coEvery { outboxRepository.hasUnsyncedUnplayedIntent(ITEM_ID) } returns true
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = false) } returns true
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkUnplayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
 
@@ -499,7 +499,7 @@ class PlayedStateSyncImplTest {
         // it — so the delivery probe still reports an undelivered intent.
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns false
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = false))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.failure<UserDataWriteOutcome>(RuntimeException("down"))
 
@@ -518,7 +518,7 @@ class PlayedStateSyncImplTest {
         val serverPlayedAt = "2024-06-15T10:30:00Z"
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z", runTimeTicks = 100_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -553,7 +553,7 @@ class PlayedStateSyncImplTest {
     @Test
     fun `reconcile is a NOOP when the server has no played timestamp`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem()
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = false, lastPlayedDate = null))
 
         assertEquals(PlayedStateSync.ReconcileOutcome.NoChange, sync.reconcileOfflineRow(ITEM_ID))
@@ -570,7 +570,7 @@ class PlayedStateSyncImplTest {
         // must reject it instead of mirroring an impossible "future watch".
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:29:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z")
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -588,7 +588,7 @@ class PlayedStateSyncImplTest {
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z", runTimeTicks = 100_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -611,7 +611,7 @@ class PlayedStateSyncImplTest {
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "2024-06-15T12:00:00Z")
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -632,7 +632,7 @@ class PlayedStateSyncImplTest {
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "2024-06-15T10:30:00Z", runTimeTicks = 100_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -652,7 +652,7 @@ class PlayedStateSyncImplTest {
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "garbage-stamp", runTimeTicks = 100_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -672,7 +672,7 @@ class PlayedStateSyncImplTest {
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z", runTimeTicks = 100_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -699,7 +699,7 @@ class PlayedStateSyncImplTest {
         fakeTimeSource.nowMs = epochMillis("2024-06-15T10:31:00Z")
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns
             offlineItem(lastPlayedDate = "2024-01-01T00:00:00Z", runTimeTicks = 100_000_000L)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(
                 detail(
                     isPlayed = false,
@@ -724,7 +724,7 @@ class PlayedStateSyncImplTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineItem(isPlayed = true)
         coEvery { outboxRepository.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns true
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = false))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
 
@@ -746,7 +746,7 @@ class PlayedStateSyncImplTest {
             offlineItem(isPlayed = false, isFavorite = false)
         coEvery { outboxRepository.hasUnsyncedUnplayedIntent(ITEM_ID) } returns true
         coEvery { outboxRepository.isPlayedStateIntentDelivered(ITEM_ID, played = false) } returns true
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { apiClient.getMediaDetail(ITEM_ID) } returns
             Result.success(detail(isPlayed = true, isFavorite = true))
         coEvery { apiClient.writeUserData(UserDataWrite.MarkUnplayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
 

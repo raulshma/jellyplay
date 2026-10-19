@@ -48,10 +48,10 @@ data class PlaybackOutboxEntity(
      * `true` once the row has exhausted its retry budget. Dead-lettered rows
      * are retained for auditability (and a future "retry sync" affordance) but
      * skipped by [PlaybackSyncWorker]'s drain and excluded from `count()`/
-     * `countFlow()` so the sync indicator still clears. Previously these rows
-     * were hard-deleted, which silently discarded telemetry the server may
-     * already have received (the failure could have been a network blip after
-     * a 200) and left no audit trail.
+     * `countFlow()` so the sync indicator still clears. Hard-deleting these
+     * rows would silently discard telemetry the server may already have
+     * received (the failure could have been a network blip after a 200) and
+     * leave no audit trail.
      */
     @ColumnInfo(defaultValue = "0") val deadLetter: Boolean = false,
 )

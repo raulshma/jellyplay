@@ -17,11 +17,13 @@ import com.raulshma.jellyplay.core.network.api.AdminApiClientImpl
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.CollectionApiClientImpl
 import com.raulshma.jellyplay.core.network.api.DeviceProfileProvider
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.LazyProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
+import com.raulshma.jellyplay.core.network.api.PlaylistApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
@@ -128,6 +130,8 @@ val networkJvmModule: Module = module {
         JellyfinApiClientImpl(
             authClient = get(),
             libraryClient = get(),
+            playlistClient = get(),
+            collectionClient = get(),
             playbackClient = get(),
             syncPlayClient = get(),
             liveTvClient = get(),
@@ -144,7 +148,7 @@ val networkJvmModule: Module = module {
     single { AuthApiClientImpl(get(), get()) }
     single<AuthApiClient> { get<AuthApiClientImpl>() }
     // The get()-resolved TimeSource single is dataJvmModule's SystemTimeSource
-    // (D3: the seam moved to core:model precisely so this module below
+    // (the seam moved to core:model precisely so this module below
     // core:data could adopt it; Koin resolves it from the merged graph).
     // The 4th arg is the Seerr discover-row leaf source for the home fetcher
     // (SeerrHomeSectionSourcesImpl below — session-aware, built here because
@@ -164,21 +168,33 @@ val networkJvmModule: Module = module {
             get(),
             SeerrHomeSectionSourcesImpl(get(), get(), get()),
             jellyPlayHomeSectionSources = getOrNull<JellyPlayHomeSectionSources>(),
+            // The collection family adapter single — the same instance the
+            // CollectionApiClient seam binds below — also backs the home
+            // fetcher's collection-members source (HomeSectionSources'
+            // getCollectionItems), so the family's members exist in one place.
+            collectionApiClient = get(),
         )
     }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
-    // The two library family seams over the same impl single (the
-    // one-impl-many-seams idiom): single-family consumers (PlaylistRepositoryImpl,
-    // MediaRepositoryImpl's collection reads) inject the seam, never the wide
-    // library surface.
-    single<PlaylistApiClient> { get<LibraryApiClientImpl>() }
-    single<CollectionApiClient> { get<LibraryApiClientImpl>() }
+    // The two library family seams are their own impl singles now (the
+    // families moved off LibraryApiClientImpl): each adapter is constructed
+    // over the SAME engine single — no duplicate network state — and
+    // single-family consumers (PlaylistRepositoryImpl, MediaRepositoryImpl's
+    // collection reads/writes) inject the seam, never the wide library
+    // surface.
+    single { PlaylistApiClientImpl(get()) }
+    single<PlaylistApiClient> { get<PlaylistApiClientImpl>() }
+    single { CollectionApiClientImpl(get()) }
+    single<CollectionApiClient> { get<CollectionApiClientImpl>() }
     // The home cache-maintenance verbs ride their own port (beside the fetcher
     // that owns the caches): the data layer's write/roll paths drop/seed the
     // home hot-path sub-call caches through this seam instead of the wide
     // LibraryApiClient, so a new sub-call cache is a network-module-only
-    // change. Same underlying single — the client impl is the port's adapter.
-    single<HomeSectionsCachePort> { get<LibraryApiClientImpl>() }
+    // change. The port's production adapter ([HomeSectionsCachePortAdapter])
+    // is constructed ON the client impl — over its own fetcher — and
+    // re-exposed here, so the port, the client, and the fetcher stay one
+    // home stack.
+    single<HomeSectionsCachePort> { get<LibraryApiClientImpl>().homeSectionsCachePort }
     single { PlaybackApiClientImpl(get(), get(), get()) }
     single<PlaybackApiClient> { get<PlaybackApiClientImpl>() }
     single { SyncPlayApiClientImpl(get()) }

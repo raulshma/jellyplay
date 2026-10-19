@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
  *     initial (empty) availableTracks emission cannot act on a stale held
  *     selection.
  *
- * The ui state bag never crosses this boundary (the controllers' ratchet
+ * The ui state bag never crosses this boundary (the controllers' guard
  * rule): the ONE state write the choreography performs — the engine
  * capability mirror + the keep-screen-on seed — goes through the narrow
  * [onEngineCapabilities] lambda (the SettingsProjector god-pair shape: named
@@ -87,7 +87,7 @@ internal class EngineAttachController(
             activePlayerController.bindEngine(engine)
             val agg = getAggregate()
             // Subtitle style seed + dialogue-boost reset route through
-            // the style controller (A7); the writes land synchronously
+            // the style controller; the writes land synchronously
             // here, BEFORE anything below can rebuild an engine config —
             // the ordering constraint (seed before first
             // updateConfigWithUiState of this engine) is preserved
@@ -115,6 +115,8 @@ internal class EngineAttachController(
                 audioNormalizationEnabled = agg.audio.audioNormalizationEnabled,
                 channelMixMode = agg.audio.channelMixMode,
                 channelMixEnabled = agg.audio.channelMixEnabled,
+                spatialAudioEnabled = agg.playback.spatialAudioEnabled,
+                spatialAudioOnlyHeadphones = agg.playback.spatialAudioOnlyHeadphones,
             )
             cast.updateCastStrategyForEngine(engine)
             notifyUnsupportedAudioDelayIfNeeded(engine, agg.audio.audioDelayMs)

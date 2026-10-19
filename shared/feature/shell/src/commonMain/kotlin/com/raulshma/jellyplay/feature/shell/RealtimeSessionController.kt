@@ -16,14 +16,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * The authenticated-edge realtime choreography both shells duplicated
+ * The authenticated-edge realtime choreography both shells share
  * (Android `SessionCoordinator` / desktop `DesktopSessionCoordinator`):
  * connect the session WebSocket on the auth true edge, start the
  * remote-control receiver with it, disconnect + stop the receiver on the
  * false edge, and re-arm capabilities on every socket (re)connect.
  *
  * Lives in shared/feature/shell as the second half of the session-policy
- * wiring (ADR 0001's construction pattern, beside [ShellSessionController]):
+ * wiring (the shell-session pattern, beside [ShellSessionController]):
  * pure inputs only — flows and lambdas, no Koin binding, no repository types —
  * so the module keeps its repository-free dependency set. Each shell
  * constructs it directly with its own [CoroutineScope], adapting its
@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
  * (stays in `DesktopAppRoot`); the Android-only fan-out (health monitor,
  * widgets, cache maintenance, library folders) hangs off [onConnected].
  *
- * Choreography (identical in both former copies):
+ * Choreography:
  *  - auth true: resolve (server, user); when both exist, [connect] with
  *    credentials whose server address prefers the transport's ACTIVE
  *    endpoint ([serverUrl] — the reachable address after failover) over
@@ -41,8 +41,7 @@ import kotlinx.coroutines.launch
  *    the flows with `first()` — if auth flips true before the server/user
  *    StateFlows are populated it no-ops and never retries (auth will not
  *    re-emit), skipping BOTH the credentials and [onConnected].
- *    Behavior-identical to both retired host copies; hosts populate
- *    server/user before setting auth true.
+ *    Hosts populate server/user before setting auth true.
  *  - auth false: [disconnect] + [stopReceiver] (logout teardown rides the
  *    same edge).
  *  - socket opens: wait for the FIRST connect off [isConnected] (the
@@ -66,7 +65,7 @@ import kotlinx.coroutines.launch
  *
  * @param scope the host's own coroutine scope (Android: the activity-scoped
  *   ViewModel scope; desktop: the composition scope) — every collector dies
- *   with it, exactly as the inlined copies did.
+ *   with it.
  * @param isAuthenticated the auth state to choreograph around and to gate
  *   reconnect arms with (the hosts pass `AuthRepository.isAuthenticated`).
  * @param currentServer the signed-in server flow (`null` when signed out).
@@ -170,10 +169,9 @@ class RealtimeSessionController(
     /**
      * One capabilities arm: launched INSIDE the reconnect watcher ([this] is
      * the watcher's own scope, not [scope]) so an in-flight post is cancelled
-     * with the collector on [stop] — the previous per-shell copies scoped
-     * their posts the same way. Gated on the LIVE auth state at dispatch time
-     * (a stray connect during teardown must not fire a stale post), failures
-     * swallowed so one failed post cannot kill the watcher.
+     * with the collector on [stop]. Gated on the LIVE auth state at dispatch
+     * time (a stray connect during teardown must not fire a stale post),
+     * failures swallowed so one failed post cannot kill the watcher.
      */
     private fun CoroutineScope.armCapabilities() {
         launch {
@@ -186,9 +184,8 @@ class RealtimeSessionController(
     companion object {
         /**
          * The construction path for both shells (Android `SessionCoordinator`
-         * / desktop `DesktopAppRoot`), which used to hand-duplicate the same
-         * lambda bundle adapting these three collaborators onto the
-         * constructor's plain-flow/lambda seams. The collaborators enter as
+         * / desktop `DesktopAppRoot`): adapts these three collaborators onto
+         * the constructor's plain-flow/lambda seams. The collaborators enter as
          * the narrow surfaces they already are — [RealtimeConnection] (split
          * out of AuthRepository precisely so the session shell depends on the
          * transport surface alone), the receiver and the identity store; the
@@ -196,7 +193,7 @@ class RealtimeSessionController(
          * [isAuthenticated]/[currentServer]/[currentUser], a suspend lambda
          * for [onReconnect] — the hosts' `postCapabilities` posts), so no
          * repository type crosses this module's signatures. Direct
-         * construction, no Koin binding (ADR 0001's pattern); per-shell
+         * construction, no Koin binding; per-shell
          * remains: the client name and Android's [onConnected] fan-out.
          */
         fun create(

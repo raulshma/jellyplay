@@ -151,10 +151,10 @@ class JellyPlayCwSyncAdapterTest {
         homeStore.unhideCwItem("cw-1")
         settle()
 
-        assertEquals(setOf("hidden/cw-1"), adapter.deletedKeys())
+        assertEquals(setOf("hidden/cw-1"), adapter.deletedKeys(adapter.snapshot()))
 
         adapter.deleteRemote(setOf("hidden/cw-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.snapshot().isEmpty())
         assertNullMirror("hidden/cw-1")
     }
@@ -170,7 +170,7 @@ class JellyPlayCwSyncAdapterTest {
         settle(setOf("cw-2"))
 
         assertEquals(setOf("cw-2"), idsOf(adapter.snapshot()))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
     }
 

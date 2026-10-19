@@ -135,4 +135,67 @@ class ImageUrlBuilderTest {
             buildUserImageUrl(base, "0b0f2a7556774c76a416a1c0d9d11111", "Primary", maxWidth = 96),
         )
     }
+
+    // --- buildItemFillImageUrl (the fillWidth/fillHeight/quality variant) ---
+
+    @Test
+    fun `fill url emits the legacy settings-row key order byte-for-byte`() {
+        // Pins: ActiveDevicesRow's now-playing card URL — tag first, NOT the
+        // SDK buildMap order — so Coil cache keys stay stable.
+        assertEquals(
+            "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Backdrop" +
+                "?tag=e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6&fillWidth=400&fillHeight=300&quality=90",
+            buildItemFillImageUrl(
+                baseUrl = base,
+                itemId = "0b0f2a75-5677-4c76-a416-a1c0d9d11111",
+                imageType = "Backdrop",
+                tag = "e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6",
+                fillWidth = 400,
+                fillHeight = 300,
+                quality = 90,
+            ),
+        )
+    }
+
+    @Test
+    fun `fill url appends tag verbatim and omits null params`() {
+        assertEquals(
+            "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary?tag=pt",
+            buildItemFillImageUrl(base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary", tag = "pt"),
+        )
+        assertEquals(
+            "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary?tag=pt&fillHeight=300",
+            buildItemFillImageUrl(
+                base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary",
+                tag = "pt", fillHeight = 300,
+            ),
+        )
+        assertEquals(
+            "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary",
+            buildItemFillImageUrl(base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary"),
+            "all-null params reduce to the bare path",
+        )
+    }
+
+    @Test
+    fun `fill url refusals mirror the item builder`() {
+        assertEquals("", buildItemFillImageUrl(null, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary", "pt"))
+        assertEquals("", buildItemFillImageUrl("", "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Primary", "pt"),
+            "blank base URL refused")
+        assertEquals("", buildItemFillImageUrl(base, "not-a-uuid", "Primary", "pt"), "non-UUID item id refused")
+        assertEquals("", buildItemFillImageUrl(base, "0b0f2a75-5677-4c76-a416-a1c0d9d11111", "Frobnicate", "pt"),
+            "unknown image type refused")
+    }
+
+    @Test
+    fun `fill url accepts compact 32-hex item ids`() {
+        assertEquals(
+            "$base/Items/0b0f2a75-5677-4c76-a416-a1c0d9d11111/Images/Primary" +
+                "?tag=abc123&fillWidth=400&fillHeight=300&quality=90",
+            buildItemFillImageUrl(
+                base, "0b0f2a7556774c76a416a1c0d9d11111", "Primary",
+                tag = "abc123", fillWidth = 400, fillHeight = 300, quality = 90,
+            ),
+        )
+    }
 }

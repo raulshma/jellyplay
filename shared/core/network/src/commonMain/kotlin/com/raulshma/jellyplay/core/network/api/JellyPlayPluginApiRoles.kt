@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -71,7 +74,7 @@ interface JellyPlaySettingsSyncRoutes {
     suspend fun getSyncStatus(): Result<JellyPlaySyncStatus?>
 
     /**
-     * The sync history ledger, newest first. null = the same pre-wave 404
+     * The sync history ledger, newest first. null = the same old-plugin 404
      * degradation contract as [getSyncStatus].
      */
     suspend fun getSyncHistory(since: Long? = null, limit: Int = 50): Result<JellyPlaySyncHistory?>
@@ -80,7 +83,7 @@ interface JellyPlaySettingsSyncRoutes {
      * The changed keys behind one history entry ([seq]) — the per-key diff
      * face of the ledger. Reset rows and entries the server no longer details
      * return an empty [JellyPlaySyncHistoryKeys.keys]; null = the server's
-     * plugin predates the per-key history wave (404) — callers degrade
+     * plugin predates the per-key history endpoint (404) — callers degrade
      * quietly, never error. [limit] is server-clamped (default 200).
      */
     suspend fun getSyncHistoryKeys(seq: Long, limit: Int = 200): Result<JellyPlaySyncHistoryKeys?>
@@ -95,17 +98,17 @@ interface JellyPlaySettingsSyncRoutes {
     /**
      * The user's rolling restore points (server-side settings snapshots),
      * newest first. null = the server's plugin predates the restore-points
-     * wave (404) — callers degrade quietly (hide the surface), never error.
+     * endpoint (404) — callers degrade quietly (hide the surface), never error.
      */
     suspend fun getSnapshots(): Result<List<JellyPlaySnapshot>?>
 
-    /** Captures a manual restore point; [JellyPlaySnapshotCreated.id] is its handle. null = pre-wave 404. */
+    /** Captures a manual restore point; [JellyPlaySnapshotCreated.id] is its handle. null = the old-plugin 404. */
     suspend fun createSnapshot(): Result<JellyPlaySnapshotCreated?>
 
     /**
      * Restores [id]: a server-orchestrated tombstone batch over the current
      * rows followed by the snapshot re-applied (the restore always wins LWW).
-     * The result rides the ordinary batch pipeline's shape. null = pre-wave
+     * The result rides the ordinary batch pipeline's shape. null = the old-plugin
      * 404 (or the snapshot is not the caller's).
      */
     suspend fun restoreSnapshot(id: String): Result<JellyPlaySettingsBatchResult?>
@@ -114,7 +117,7 @@ interface JellyPlaySettingsSyncRoutes {
      * One restore point's full row content (the restore-preview read): the
      * stored rows grouped per device profile exactly like the export bundle,
      * values verbatim. null = the id is unknown or not the caller's, or the
-     * server's plugin predates the read (pre-wave 404) — callers degrade
+     * server's plugin predates the read (the old-plugin 404) — callers degrade
      * quietly (hide the snapshot PREVIEW; full restore via [restoreSnapshot]
      * stays available), never error.
      */
@@ -124,7 +127,7 @@ interface JellyPlaySettingsSyncRoutes {
      * The caller's whole synced store as one JSON export bundle (all profiles
      * + resolved modes + catalog stamp), verbatim — the payload is opaque to
      * the client (share/save it; hand it back to [importSettings]). null =
-     * pre-wave 404.
+     * the old-plugin 404.
      */
     suspend fun exportSettings(): Result<String?>
 
@@ -132,7 +135,7 @@ interface JellyPlaySettingsSyncRoutes {
      * Re-applies a bundle produced by [exportSettings] (the same wire shape)
      * for the caller, server-now stamped — it beats anything older but never
      * clobbers a legitimately newer local change. [deviceId] attributes the
-     * import. null = pre-wave 404.
+     * import. null = the old-plugin 404.
      */
     suspend fun importSettings(bundleJson: String, deviceId: String? = null): Result<JellyPlaySettingsBatchResult?>
 
@@ -159,7 +162,7 @@ interface JellyPlaySettingsSyncRoutes {
 interface JellyPlayDeviceRegistryRoutes {
     /**
      * Registers (or re-registers) this device. [push] is the explicit
-     * tri-state push half (the plugin's push wave): [JellyPlayDevicePush.Attach]
+     * tri-state push half (the plugin's push support): [JellyPlayDevicePush.Attach]
      * attaches/rotates the push endpoint for [deviceId],
      * [JellyPlayDevicePush.Detach] sends `push: null` — an explicit push-off
      * re-registration that clears any endpoint the server holds — and
@@ -241,38 +244,49 @@ interface JellyPlaySeerrRoutes {
  * The ratings role — the `ratings` feature family (`jellyplay/mdblist/…`,
  * `jellyplay/tmdb/seasonRatings`). Main consumer: the detail screen's plugin
  * enrichments (the mdblist chips row and the per-season TMDB episode scores).
+ * Returns the core:model projections ([JellyPlayPluginRating],
+ * [JellyPlayEpisodeScore]) — the wire DTOs stop at the impl (the
+ * JellyPlayDtoMappers convention).
  */
 interface JellyPlayRatingsRoutes {
-    /** null = MDBList unconfigured or no data for the id (plugin 404). */
-    suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?>
+    /**
+     * null = MDBList unconfigured or no data for the id (plugin 404). The
+     * entries map field-for-field (scoreless ones ride along) — dropping them
+     * is the detail feature's presentation rule, not this role's.
+     */
+    suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>
 
-    suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeRatings>?>
+    suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeScore>?>
 }
 
 /**
  * The recommendations role — `jellyplay/items/{id}/similar` (the plugin's
  * server-scored similar-items row). Main consumer: the detail screen's
- * "More like this" plugin enrichment.
+ * "More like this" plugin enrichment. Returns the scored item ids in the
+ * plugin's serve order — the only wire field the client consumes (each id is
+ * hydrated through the local detail read; the score/name fields ride the DTO
+ * verbatim and stop at the impl).
  */
 interface JellyPlayRecommendationsRoutes {
-    suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int = 12): Result<List<JellyPlayScoredItem>>
+    suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int = 12): Result<List<String>>
 }
 
 /**
  * The anime-markers role — `jellyplay/animemarkers/…` (series-level
  * filler/recap markers). Main consumer: the detail screen's seasons section
- * badges.
+ * badges. Returns the core:model marker projections in the wire's list order —
+ * the wrapper's series/provider-id echoes stop at the impl.
  */
 interface JellyPlayMarkersRoutes {
     /** null = no markers cached for the series (plugin 404). */
-    suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<JellyPlaySeriesMarkers?>
+    suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<List<JellyPlayEpisodeMarker>?>
 }
 
 /**
  * The rows role — the admin-defined home rows (`custom-rows`,
- * `seasonal-rows`: catalog, per-row items, seasonal row). Main consumer: the
- * home fetcher's plugin-row transport
- * (`JellyPlayHomeSectionSources`, core:network library).
+ * `seasonal-rows`: catalog, per-row items, seasonal row) and the curated hero
+ * billboards (`hero`) beside them. Main consumer: the home fetcher's
+ * plugin-row transport (`JellyPlayHomeSectionSources`, core:network library).
  */
 interface JellyPlayRowsRoutes {
     /** null = the admin-defined row does not exist (plugin 404). */
@@ -283,6 +297,14 @@ interface JellyPlayRowsRoutes {
 
     /** null = seasonal rows unconfigured (no TMDB key / no keyword this season). */
     suspend fun getSeasonalRow(keyword: String? = null): Result<JellyPlayRowResult?>
+
+    /**
+     * The admin-curated hero billboards in the plugin's serve order (weight
+     * descending, config order breaking ties); null = the hero feature is
+     * absent on the installed plugin wave (plugin 404) — the caller degrades
+     * to the local candidate pool quietly, never an error.
+     */
+    suspend fun getCuratedHero(): Result<JellyPlayHeroResult?>
 }
 
 /**
@@ -334,7 +356,7 @@ interface JellyPlayAnalyticsRoutes {
      * The admin's recent play sessions, newest first, optionally scoped to
      * [userId] and to sessions ending at/after [since] (pagination cursor =
      * the oldest `endedAt` of the previous page). [limit] is server-clamped
-     * (default 50, max 200). null = the same pre-wave 404 degradation contract
+     * (default 50, max 200). null = the same old-plugin 404 degradation contract
      * as [getAnalyticsOverview].
      */
     suspend fun getAnalyticsSessions(

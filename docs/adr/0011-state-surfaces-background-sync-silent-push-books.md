@@ -36,6 +36,15 @@ server, server-side byte caps per the plugin contract):
 | `cw` | `hidden/{itemId}` | `true` | 64 KB |
 | `reader` | `ann/{itemId}` | the book's annotation array | 1.5 MB |
 | `homelayout` | the store's 6 canonical `home_*` layout keys | the store's structured JSON | 64 KB |
+| `itemprefs` | `{scope}/{key}` — the `PlaybackPrefScope` name + the item or series id | the row's full playback-preference payload (the roam set capped to the 100 most-recent rows) | n/a |
+| `playlists` | `{smart\|mood\|moodpref}/{id}` | the playlist definition or per-playlist preference row (criteria/keyword blobs opaque) | n/a |
+| `integrations` | the owning store's allowlisted non-secret sync key | the raw stored value as a JSON primitive (secrets never sync) | n/a |
+
+The `itemprefs`, `playlists` and `integrations` rows are the settings-backup
+wave's additions (per-item/per-series playback preferences, smart/mood
+playlist definitions, non-secret integration toggles); the plugin CONTRACT.md
+sets no per-namespace cap for them, so each is bounded only by the per-user
+total.
 
 The sha1 search key keeps raw queries out of route-logged URL patterns and
 the key-size budget; per-item `reader` keys bound the blast radius of the

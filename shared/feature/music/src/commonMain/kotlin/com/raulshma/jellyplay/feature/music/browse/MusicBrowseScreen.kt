@@ -259,9 +259,8 @@ private fun AlbumsPage(
 }
 
 /**
- * List-variant page — previously hand-rolled its own refresh ladder; now the
- * chassis [PagedCollectionList] (gaining pull-to-refresh, append footer, TV
- * focus-on-launch and the status indicator).
+ * List-variant page on the chassis [PagedCollectionList] — pull-to-refresh,
+ * append footer, TV focus-on-launch and the status indicator included.
  */
 @Composable
 private fun TracksPage(
@@ -305,9 +304,8 @@ private fun TracksPage(
 }
 
 /**
- * List-sourced page over [SimpleCollectionGrid] — declared additions: the
- * loading/error ladder, pull-to-refresh and the status indicator (the page
- * previously rendered only the grid or a bare empty state).
+ * List-sourced page over [SimpleCollectionGrid] — the loading/error ladder,
+ * pull-to-refresh and the status indicator included.
  */
 @Composable
 private fun GenresPage(

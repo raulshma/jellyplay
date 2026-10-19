@@ -8,9 +8,7 @@ import androidx.compose.runtime.Stable
  * (search-module `rememberVoiceSearchLauncher` shape): what the add-server
  * screen needs to know about the grant and how to re-request it.
  *
- * Legacy shape: `LocalContext` + `LocalNetworkAccess.isGranted(context)` +
- * `rememberLauncherForActivityResult(RequestPermission)` inline in the
- * screen. The Android actual below bridges the legacy :core:ui
+ * The Android actual below bridges the :core:ui
  * LocalNetworkAccess object; the desktop actual reports a non-enforcing,
  * always-granted platform (no permission system — SSDP multicast and LAN
  * sockets work out of the box), so the rationale banner never renders and

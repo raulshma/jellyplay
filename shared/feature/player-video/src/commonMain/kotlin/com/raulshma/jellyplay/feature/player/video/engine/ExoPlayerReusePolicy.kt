@@ -40,6 +40,13 @@ internal data class LoadRebuildInputs(
     // clear → DRM) MUST take the teardown/rebuild path instead of leaking
     // the cached chain onto a non-cacheable item (or vice versa).
     val streamCacheEligible: Boolean,
+    // Whether the player was built with the GL video-graph path engaged
+    // (the HDR→SDR tone-mapping route, `setVideoEffects`). Sticky by
+    // construction — once a player renders through the video graph it never
+    // reverts to the direct MediaCodec→Surface path — so an engagement flip
+    // between loads (HDR-on-SDR item → SDR item) must rebuild to shed the
+    // GL pass, not silently keep it on the next item.
+    val hdrGlEngaged: Boolean,
 )
 
 /**

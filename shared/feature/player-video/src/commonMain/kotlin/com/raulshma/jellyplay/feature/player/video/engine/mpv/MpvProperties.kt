@@ -93,6 +93,14 @@ public object MpvProperties {
     public const val SUB_MARGIN_Y: String = "sub-margin-y"
     public const val SUB_POS: String = "sub-pos"
 
+    /**
+     * The ACTIVE output transfer read (`pq`/`hlg` on an HDR target) — the
+     * per-file probe both mpv hosts run through their stats seams (the
+     * [com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvCore]
+     * HDR probe machine caches the verdict).
+     */
+    public const val VIDEO_TARGET_PARAMS_GAMMA: String = "video-target-params/gamma"
+
     // ── Selection spellings (mpv choice values) ─────────────────────────────
     public const val SELECT_AUTO: String = "auto"
     public const val SELECT_NO: String = "no"

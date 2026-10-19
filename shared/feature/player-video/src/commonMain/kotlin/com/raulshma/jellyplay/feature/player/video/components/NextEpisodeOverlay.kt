@@ -94,7 +94,7 @@ fun NextEpisodeOverlay(
     pauseCountdown: Boolean = false,
     // True while the triggered next-episode load is in flight and unsettled:
     // the play button shows progress and stops accepting clicks, so rapid
-    // re-taps can't stack duplicate loads (#146).
+    // re-taps can't stack duplicate loads.
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,

@@ -7,16 +7,17 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.datastore.cancelGraphInitCollectors
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -59,7 +60,7 @@ class HomeDiscoverySpecDerivationTest {
 
     @AfterTest
     fun tearDown() {
-        scope.cancel()
+        cancelGraphInitCollectors(scope)
     }
 
     private suspend fun activate(userId: String) = identityStore.setActiveUser(userId)
@@ -69,12 +70,22 @@ class HomeDiscoverySpecDerivationTest {
     /**
      * The legacy wire name → stored value type each slot must keep — the exact
      * expectations the hand-written pre-spec store encoded at every read/write
-     * site (the JSON blobs and enum slots are STRING-typed on disk).
+     * site (the JSON blobs and enum slots are STRING-typed on disk). The
+     * home rows follow the same storage spellings: the two JSON
+     * string-set slices are STRING, the internal visit stamp is LONG, the
+     * announce-once stamp is INT, and the feature toggles are BOOLEAN.
      */
     private val expectedStoredType: Map<String, kotlin.reflect.KClass<*>> = mapOf(
         "home_mode" to String::class,
         "home_hero_enabled" to Boolean::class,
+        "home_hero_video_enabled" to Boolean::class,
+        "home_hero_video_tv_enabled" to Boolean::class,
         "home_backdrop_enabled" to Boolean::class,
+        "home_focus_backdrop" to Boolean::class,
+        "home_stats_card" to Boolean::class,
+        "home_genre_rail" to Boolean::class,
+        "home_presence_chips" to Boolean::class,
+        "home_new_section_announcements" to Boolean::class,
         "home_enabled_section_types" to String::class,
         "home_enabled_section_types_version" to Int::class,
         "home_section_order" to String::class,
@@ -83,27 +94,39 @@ class HomeDiscoverySpecDerivationTest {
         "pinned_home_sections" to String::class,
         "home_discover_rows" to String::class,
         "home_layout_presets" to String::class,
+        "home_layout_autopush" to Boolean::class,
         "continue_watching_click_behavior" to String::class,
         "show_unwatched_badge" to Boolean::class,
         "hide_watched_items" to Boolean::class,
         "show_watched_checkmark" to Boolean::class,
         "show_external_ratings" to Boolean::class,
+        "show_quality_badges" to Boolean::class,
+        "show_new_badges" to Boolean::class,
+        "home_trickplay_preview" to Boolean::class,
+        "anti_spoiler_home" to Boolean::class,
         "merge_continue_watching_next_up" to Boolean::class,
         "next_up_max_days" to Int::class,
         "next_up_rewatching" to Boolean::class,
         "classic_rows" to Boolean::class,
+        "home_cw_exclude_active_sessions" to Boolean::class,
         "next_up_excluded_series_ids" to String::class,
         "hidden_cw_item_ids" to String::class,
         "last_viewed_season_by_series" to String::class,
+        "my_media_hidden_library_ids" to String::class,
+        "theme_music_muted_series_ids" to String::class,
+        "home_last_visit_epoch_ms" to Long::class,
+        "home_announced_version" to Int::class,
         "show_clock_on_home" to Boolean::class,
         "show_settings_in_home_search" to Boolean::class,
         "hide_top_header_on_scroll" to Boolean::class,
         "home_ns_migrated" to Boolean::class,
+        "home_v3_upgrade_baseline_done" to Boolean::class,
     )
 
     private fun expectedKey(name: String, type: kotlin.reflect.KClass<*>): Preferences.Key<*> = when (type) {
         Boolean::class -> booleanPreferencesKey(name)
         Int::class -> intPreferencesKey(name)
+        Long::class -> longPreferencesKey(name)
         String::class -> stringPreferencesKey(name)
         else -> error("unexpected storage type for $name")
     }
@@ -143,9 +166,9 @@ class HomeDiscoverySpecDerivationTest {
     @Test
     fun `resetKeysFor returns exactly the HOME_DISCOVERY-category keys`() {
         val storeKeys = store.resetKeysFor(PreferenceResetCategory.HOME_DISCOVERY).map { it.name }
-        // The exact 27 keys the hand-written pre-spec reset list carried (the
-        // 25 legacy/canonical flat keys + the hidden-library migration source
-        // + the global namespace marker).
+        // The exact keys the declaration carries (the legacy/canonical flat
+        // keys — the home rows included — plus the hidden-library
+        // migration source and the global namespace marker).
         assertEquals(expectedStoredType.keys.sorted(), storeKeys.sorted())
         PreferenceResetCategory.entries
             .filter { it != PreferenceResetCategory.HOME_DISCOVERY }
@@ -156,32 +179,50 @@ class HomeDiscoverySpecDerivationTest {
 
     @Test
     fun `the namespace migration copy lists derive from the rows by storage`() {
-        // legacyKeys: every row except the global marker.
+        // legacyKeys: every row except the global markers.
         assertEquals(
-            expectedStoredType.keys.filter { it != "home_ns_migrated" }.sorted(),
+            expectedStoredType.keys
+                .filter { it != "home_ns_migrated" && it != "home_v3_upgrade_baseline_done" }.sorted(),
             HomeDiscoveryPreferenceSpecs.legacyKeys.map { it.name }.sorted(),
         )
 
         val migrationNames = HomeDiscoveryPreferenceSpecs.migrationRows.map { it.keyName }
-        // The hidden-library key is a migration SOURCE only, and the marker is
-        // global — neither is ever a copy destination.
+        // The hidden-library key is a migration SOURCE only, and the markers
+        // are global — none is ever a copy destination.
         assertFalse("home_hidden_library_section_ids" in migrationNames)
         assertFalse("home_ns_migrated" in migrationNames)
-        assertEquals(expectedStoredType.size - 2, migrationNames.size)
+        assertFalse("home_v3_upgrade_baseline_done" in migrationNames)
+        assertEquals(expectedStoredType.size - 3, migrationNames.size)
 
         // The per-type copy lists, exactly the hand-written predecessor's
-        // three lists (booleans, ints, strings — enum slots included).
+        // three lists (booleans, ints, strings — enum slots included) plus
+        // the home rows. The LONG visit stamp
+        // (`home_last_visit_epoch_ms`) rides NO copy list by design: it is a
+        // brand-new key with no legacy flat presence to migrate.
         assertEquals(
             listOf(
+                "anti_spoiler_home",
                 "classic_rows",
                 "hide_top_header_on_scroll",
                 "hide_watched_items",
                 "home_backdrop_enabled",
+                "home_cw_exclude_active_sessions",
+                "home_focus_backdrop",
+                "home_genre_rail",
                 "home_hero_enabled",
+                "home_hero_video_enabled",
+                "home_hero_video_tv_enabled",
+                "home_layout_autopush",
+                "home_new_section_announcements",
+                "home_presence_chips",
+                "home_stats_card",
+                "home_trickplay_preview",
                 "merge_continue_watching_next_up",
                 "next_up_rewatching",
                 "show_clock_on_home",
                 "show_external_ratings",
+                "show_new_badges",
+                "show_quality_badges",
                 "show_settings_in_home_search",
                 "show_unwatched_badge",
                 "show_watched_checkmark",
@@ -189,7 +230,7 @@ class HomeDiscoverySpecDerivationTest {
             HomeDiscoveryPreferenceSpecs.booleanCopyRows.map { it.keyName }.sorted(),
         )
         assertEquals(
-            listOf("home_enabled_section_types_version", "next_up_max_days").sorted(),
+            listOf("home_announced_version", "home_enabled_section_types_version", "next_up_max_days").sorted(),
             HomeDiscoveryPreferenceSpecs.intCopyRows.map { it.keyName }.sorted(),
         )
         assertEquals(
@@ -203,8 +244,10 @@ class HomeDiscoverySpecDerivationTest {
                 "home_section_order",
                 "hidden_cw_item_ids",
                 "last_viewed_season_by_series",
+                "my_media_hidden_library_ids",
                 "next_up_excluded_series_ids",
                 "pinned_home_sections",
+                "theme_music_muted_series_ids",
             ).sorted(),
             HomeDiscoveryPreferenceSpecs.stringCopyRows.map { it.keyName }.sorted(),
         )

@@ -45,41 +45,51 @@ data class CinemaIntroUiState(
  * depend on the live position/duration, so they are re-derived inside
  * `computeOverlay` from the position-aware state. Only the *inputs* that do
  * not change every tick are projected.
+ *
+ * [hasQueuedNext] arrives as the uiState mirror of the Up Next controller's
+ * flow (the mirror survives item switches via [keepAcrossItems]); the queue
+ * verdict itself is folded into `toSegmentInput`'s single `hasNextEpisode`
+ * input — the calculator stays pure time-window math with no queue or series
+ * knowledge.
  */
 internal data class SegmentProjection(
     val segments: List<MediaSegment>,
     val chapters: List<ChapterInfo>,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior>,
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long>,
     val autoplayCancelled: Boolean,
     val isInSyncPlaySession: Boolean,
     val nextEpisode: MediaItem?,
-    val seriesId: String?,
+    val hasQueuedNext: Boolean,
 ) {
     constructor(state: VideoPlayerUiState) : this(
         segments = state.segmentState.segments,
         chapters = state.chapters,
         segmentBehaviors = state.segmentState.segmentBehaviors,
+        segmentSkipDelaysMs = state.segmentState.segmentSkipDelaysMs,
         autoplayCancelled = state.autoplay.autoplayCancelled,
         isInSyncPlaySession = state.isInSyncPlaySession,
         nextEpisode = state.episodes.nextEpisode,
-        seriesId = state.media.seriesId,
+        hasQueuedNext = state.hasQueuedNext,
     )
 
     /**
      * Builds the position-independent [SegmentCalculatorInput] for a given
      * duration. Everything here is low-frequency (projection + duration), so
      * the input is built only when one of those changes — not on every 4 Hz
-     * position tick.
+     * position tick. The continuation verdicts fold into ONE `hasNextEpisode`
+     * boolean: an episode sibling OR the Up Next controller's queue mirror
+     * (queue-first semantics, incl. movies, which have no sibling).
      */
     fun toSegmentInput(durationMs: Long) = SegmentCalculatorInput(
         segments = segments,
         chapters = chapters,
         segmentBehaviors = segmentBehaviors,
+        segmentSkipDelaysMs = segmentSkipDelaysMs,
         durationMs = durationMs,
         autoplayCancelled = autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
-        hasNextEpisode = nextEpisode != null,
-        seriesId = seriesId,
+        hasNextEpisode = nextEpisode != null || hasQueuedNext,
     )
 }
 
@@ -233,6 +243,15 @@ data class VideoPlayerUiState(
      */
     val segmentState: SegmentState = SegmentState(),
     val isInSyncPlaySession: Boolean = false,
+    /**
+     * The manual up-next queue holds an item — the up-next overlay and the
+     * autoplay gate count it as "next" (queue-first semantics, incl. movies).
+     * Mirrored from the Up Next controller's [UpNextController.hasQueuedNext]
+     * flow (queue non-empty under the SyncPlay gate) by the ViewModel's
+     * collector; a [SegmentProjection] input (the overlay computation folds it
+     * into `hasNextEpisode`).
+     */
+    val hasQueuedNext: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     val playerError: String? = null,
     /**

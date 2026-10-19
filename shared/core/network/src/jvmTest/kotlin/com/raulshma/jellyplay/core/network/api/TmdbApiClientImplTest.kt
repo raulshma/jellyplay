@@ -22,9 +22,11 @@ import kotlin.test.assertTrue
  *  1. `getVideos` GETs `/3/{movie|tv}/{id}/videos?api_key=…` and builds the
  *     YouTube watch URL only for YouTube-hosted videos;
  *  2. `getReviews` uses the same shape for the reviews endpoint;
- *  3. an HTTP status failure maps to a typed [ApiException] carrying the code,
+ *  3. `getDetails` targets the item root itself (`/3/{movie|tv}/{id}`) and
+ *     maps the vote aggregate + overview (the no-plugin ratings source);
+ *  4. an HTTP status failure maps to a typed [ApiException] carrying the code,
  *     retryable for 5xx and NOT retryable for 4xx;
- *  4. a malformed body maps to the non-retryable TMDB parse error instead of
+ *  5. a malformed body maps to the non-retryable TMDB parse error instead of
  *     throwing SerializationException raw.
  */
 class TmdbApiClientImplTest {
@@ -111,6 +113,37 @@ class TmdbApiClientImplTest {
         assertTrue(result.isSuccess)
         assertEquals(1, result.getOrThrow().size)
         assertEquals("/3/tv/1396/reviews", server.takeRequest().path?.substringBefore("?"))
+    }
+
+    @Test
+    fun `getDetails targets the item root and maps the vote aggregate`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {"overview":"A clockwork salesman.","vote_average":8.4,"vote_count":12345,"runtime":139}
+                """.trimIndent(),
+            ),
+        )
+
+        val details = client.getDetails(tmdbId = 550, mediaType = MediaType.MOVIE).getOrThrow()
+
+        assertEquals(8.4, details.voteAverage)
+        assertEquals(12345, details.voteCount)
+        assertEquals("A clockwork salesman.", details.overview)
+        assertEquals("/3/movie/550", server.takeRequest().path?.substringBefore("?"))
+    }
+
+    @Test
+    fun `getDetails uses the tv path and tolerates a vote-less body`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("""{"overview":"Series."}"""),
+        )
+
+        val details = client.getDetails(tmdbId = 1396, mediaType = MediaType.SERIES).getOrThrow()
+
+        assertNull(details.voteAverage, "an unvoted item decodes to null ratings, not a failure")
+        assertNull(details.voteCount)
+        assertEquals("/3/tv/1396", server.takeRequest().path?.substringBefore("?"))
     }
 
     @Test

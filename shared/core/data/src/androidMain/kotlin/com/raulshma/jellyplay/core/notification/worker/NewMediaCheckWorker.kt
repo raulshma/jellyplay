@@ -7,14 +7,22 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
+import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
+import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.SeriesNotificationConfig
 import com.raulshma.jellyplay.core.model.TimeSource
+import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import kotlinx.coroutines.flow.first
@@ -22,18 +30,31 @@ import kotlinx.coroutines.sync.Semaphore
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.Calendar
+import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.plus
+import kotlinx.datetime.toKotlinLocalDate
 
 class NewMediaCheckWorker(
     appContext: Context,
-    workerParams: WorkerParameters,
+    private val workerParams: WorkerParameters,
     private val mediaRepository: MediaRepository,
+    /** The series-notification family seam (the per-series Next Up diff read). */
+    private val seriesNotificationReads: SeriesNotificationReads,
     private val seenMediaRepository: SeenMediaRepository,
     private val notificationStore: NotificationStore,
     private val dispatcher: NotificationDispatcher,
     private val scheduler: NotificationScheduler,
-    /** Clock seam (D3) for the seen-media pruning window + seenAt stamps. */
+    /** Clock seam for the seen-media pruning window + seenAt stamps. */
     private val timeSource: TimeSource,
+    /**
+     * The *arr air-time accelerator reads the existing calendar ingestion
+     * (the home "Coming Soon" source) through this seam. Best-effort: every
+     * accelerator failure is swallowed — the periodic poller stays the safety
+     * net.
+     */
+    private val arrRepository: ArrRepository,
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -54,11 +75,15 @@ class NewMediaCheckWorker(
 
         return try {
             checkForNewMedia(prefs)
+            // Second pass: per-series new-episode diffs + the *arr
+            // accelerator re-schedule. Shares the master gate's failure
+            // mapping (IO → retry, the one-shot cap applied below).
+            checkSeriesNewEpisodes(prefs)
             Result.success()
         } catch (e: SocketTimeoutException) {
-            Result.retry()
+            retryOrFail()
         } catch (e: IOException) {
-            Result.retry()
+            retryOrFail()
         } catch (ce: kotlinx.coroutines.CancellationException) {
             throw ce
         } catch (e: Exception) {
@@ -66,6 +91,23 @@ class NewMediaCheckWorker(
             Result.failure()
         }
     }
+
+    /**
+     * The retry/fail split: the periodic run keeps the unbounded retry it has
+     * always had (the next period retries anyway), while the *arr
+     * accelerator's one-shot runs — recognizable by the series tag — cap
+     * their retries ([MAX_ONE_SHOT_RETRIES], the TvWatchNextWorker pattern)
+     * so a permanently-failing episode check dies instead of backing off
+     * forever.
+     */
+    private fun retryOrFail(): Result =
+        if (workerParams.tags.contains(NotificationScheduler.SERIES_CHECK_WORK_TAG) &&
+            runAttemptCount >= MAX_ONE_SHOT_RETRIES
+        ) {
+            Result.failure()
+        } else {
+            Result.retry()
+        }
 
     private suspend fun checkForNewMedia(prefs: NotificationPreferences) {
         val foldersResult = mediaRepository.getLibraryFolders()
@@ -118,6 +160,144 @@ class NewMediaCheckWorker(
         if (newItemsByLibrary.isNotEmpty()) {
             dispatcher.dispatch(newItemsByLibrary, prefs)
         }
+    }
+
+    // ── the per-series second pass ─────────────────────────────────
+
+    /**
+     * The opted-in series' new-episode pass: for each series whose
+     * [com.raulshma.jellyplay.core.model.SeriesNotificationConfig] is
+     * enabled, fetch the series' next-up episode (`getSeriesNextUpEpisode` —
+     * the spec's `getNextUp(seriesId, enableResumable=false)` read; a
+     * half-watched episode is not "new"), diff against the config's baseline,
+     * notify on the shared new-episodes channel, and record the new baseline.
+     * Then re-schedule the *arr accelerator one-shots for the same series.
+     *
+     * Cost shape (one pass, not one series):
+     *  - the newest-episode reads are independent per series, so they run
+     *    bounded-concurrent (the folder pass's gate pattern at the standard
+     *    fan-out width) instead of one serial round-trip per series. They
+     *    keep the per-series seam read exactly as-is — series-scoped,
+     *    `enableResumable=false`, top row — rather than one un-scoped
+     *    NextUp sweep: a cross-series sweep is recency-ordered and
+     *    limit-bounded, so it can silently omit an opted-in series on a
+     *    library with many active series, and a missed read would skip the
+     *    diff (a changed notification outcome) — the per-series read cannot.
+     *  - the diffs run serially in config order (dispatch + accelerator
+     *    scheduling keep their exact per-series behavior) and only collect
+     *    the updated configs in memory; every baseline write-back merges
+     *    into ONE [NotificationStore.updateSeriesNotificationConfigs] edit
+     *    at the end of the pass, instead of one DataStore write per series
+     *    (each of which re-ran the preference store's full slice
+     *    re-projection). No read → no entry (and no write for it), exactly
+     *    the serial loop's early-return shape.
+     *
+     * [com.raulshma.jellyplay.core.model.NotificationPreferences.newEpisodesEnabled]
+     * is the family's master switch — OFF suppresses ALL series work (the
+     * diff pass and the accelerator scheduling alike), mirroring how the
+     * first pass sits behind the global `enabled` gate. Quiet hours and the
+     * POST_NOTIFICATIONS gate are inherited: [doWork] returns before this
+     * pass when either applies.
+     */
+    private suspend fun checkSeriesNewEpisodes(prefs: NotificationPreferences) {
+        if (!prefs.newEpisodesEnabled) return
+        val optedIn = prefs.seriesConfigs.filterValues { it.enabled }
+        if (optedIn.isEmpty()) return
+
+        // The *arr calendar window is series-independent: refresh + read it
+        // once for the whole pass instead of per series. Best-effort — any
+        // failure leaves the accelerator off this run; the periodic poller
+        // stays the safety net. Cancellation passes through.
+        val calendarRows = runCatchingRethrowingCancellation {
+            val today = timeSource.today(ZoneId.systemDefault()).toKotlinLocalDate()
+            val end = today.plus(SERIES_ACCELERATOR_WINDOW_DAYS, DateTimeUnit.DAY)
+            arrRepository.refreshCalendar(today, end)
+            arrRepository.calendar(today, end).first()
+        }.getOrNull().orEmpty()
+
+        // Bounded-concurrent newest-episode fetch. A failed (or empty) read
+        // drops its series from the map — the pure degrade the serial loop's
+        // `getOrNull() ?: return` applied, per series.
+        val newestBySeries = Semaphore(MAX_CONCURRENT_SERIES_FETCHES)
+            .mapConcurrentCatching(optedIn.keys.toList()) { seriesId ->
+                seriesId to seriesNotificationReads.getSeriesNextUpEpisode(seriesId).getOrNull()
+            }
+            .toMap()
+
+        // The diff ladder (the pure [decideSeriesEpisode]): a null baseline
+        // (first check after opt-in) records the newest id WITHOUT notifying
+        // (the first-scan anti-spam rule at series granularity); a genuinely
+        // newer id dispatches then records; the same id (or no newest read)
+        // only moves the check stamp. Series with no newest read contribute
+        // no config entry — but still re-schedule the accelerator, exactly
+        // as the serial loop did (the check's early return never skipped it).
+        val updatedConfigs = HashMap<String, SeriesNotificationConfig>()
+        val now = timeSource.nowEpochMillis()
+        for ((seriesId, config) in optedIn) {
+            if (isStopped) break
+            val newest = newestBySeries[seriesId]
+            if (newest != null) {
+                updatedConfigs[seriesId] = when (
+                    decideSeriesEpisode(config.lastNotifiedEpisodeId, newest.id)
+                ) {
+                    SeriesEpisodeDecision.NONE ->
+                        config.copy(lastCheckAt = now)
+                    SeriesEpisodeDecision.BASELINE ->
+                        config.copy(lastNotifiedEpisodeId = newest.id, lastCheckAt = now)
+                    SeriesEpisodeDecision.NOTIFY -> {
+                        dispatcher.dispatchSeriesNewEpisode(seriesId, newest, prefs)
+                        config.copy(lastNotifiedEpisodeId = newest.id, lastCheckAt = now)
+                    }
+                }
+            }
+            scheduleSeriesAccelerators(seriesId, calendarRows)
+        }
+
+        // The pass's SINGLE store write: the merged read-modify-write keeps
+        // concurrent writers (the opt-in/out UI commands) loss-free and
+        // re-runs the preference slices once, not once per series. Skipped
+        // entirely when nothing was read (no entries — no write, exactly the
+        // old per-series early return).
+        if (updatedConfigs.isEmpty()) return
+        notificationStore.updateSeriesNotificationConfigs { configs ->
+            configs + updatedConfigs
+        }
+    }
+
+    /**
+     * The *arr air-time accelerator (best-effort — every failure swallowed;
+     * the poller above stays the safety net): resolve the series' tvdb id
+     * (the detail screen's `arrServerResolve` enrichment's providerIds
+     * precedent), filter the pass-level [calendarRows] (refreshed once in
+     * [checkSeriesNewEpisodes]) to this series, and schedule a KEEP-idempotent
+     * one-shot check per upcoming Sonarr episode row at airTime + buffer. A
+     * later pass re-scheduling the same (series, episode) pair is a
+     * WorkManager KEEP no-op.
+     */
+    private suspend fun scheduleSeriesAccelerators(
+        seriesId: String,
+        calendarRows: List<ArrCalendarItem>,
+    ) {
+        if (calendarRows.isEmpty()) return
+        val tvdbId = mediaRepository.getMediaDetail(seriesId)
+            .getOrNull()
+            ?.providerIds?.get("tvdb")?.toIntOrNull()
+            ?: return
+        val now = timeSource.nowEpochMillis()
+        calendarRows.asSequence()
+            .filter { it.mediaType == ArrMediaType.SERIES && it.tvdbId == tvdbId }
+            .forEach { row ->
+                val delayMs = acceleratorDelayMillis(
+                    airDateUtc = row.airDateUtc,
+                    bufferMs = SERIES_NOTIFY_BUFFER_MS,
+                    nowEpochMs = now,
+                ) ?: return@forEach
+                scheduler.enqueueSeriesEpisodeCheck(
+                    seriesId = seriesId,
+                    episodeKey = acceleratorEpisodeKey(row.tvdbId, row.airDateUtc),
+                    initialDelay = java.time.Duration.ofMillis(delayMs),
+                )
+            }
     }
 
     /**
@@ -200,6 +380,68 @@ class NewMediaCheckWorker(
         private const val MAX_CONCURRENT_FOLDER_FETCHES = 4
 
         /**
+         * Bounds the series pass's concurrent per-series next-up fetches
+         * (the folder pass's gate pattern) at the standard fan-out width.
+         */
+        private val MAX_CONCURRENT_SERIES_FETCHES = DEFAULT_FANOUT_PARALLELISM
+
+        // ── series-pass constants ───────────────────────────────────
+
+        /** The *arr calendar window the accelerator reads (days ahead). */
+        private const val SERIES_ACCELERATOR_WINDOW_DAYS = 7
+
+        /**
+         * Fired past the air time so the Sonarr download + the Jellyfin
+         * library scan have a chance to land before the check looks.
+         */
+        private const val SERIES_NOTIFY_BUFFER_MS = 30L * 60 * 1000
+
+        /** The one-shot retry cap (the TvWatchNextWorker pattern). */
+        private const val MAX_ONE_SHOT_RETRIES = 3
+
+        /**
+         * The pure diff decision behind [checkSeriesNewEpisode]. A null
+         * baseline (first check after opt-in) yields [SeriesEpisodeDecision.BASELINE]
+         * — the newest id is recorded but nothing notifies; a different id
+         * yields NOTIFY; the same id (or an empty newest read) yields NONE.
+         */
+        internal fun decideSeriesEpisode(
+            lastNotifiedEpisodeId: String?,
+            newestEpisodeId: String?,
+        ): SeriesEpisodeDecision = when {
+            newestEpisodeId.isNullOrEmpty() -> SeriesEpisodeDecision.NONE
+            lastNotifiedEpisodeId == null -> SeriesEpisodeDecision.BASELINE
+            newestEpisodeId == lastNotifiedEpisodeId -> SeriesEpisodeDecision.NONE
+            else -> SeriesEpisodeDecision.NOTIFY
+        }
+
+        /**
+         * The accelerator's per-episode identity: the calendar row carries no
+         * Jellyfin episode id, so (tvdb id, air-date stamp) — unique per
+         * airing — keys the idempotent one-shot name.
+         */
+        internal fun acceleratorEpisodeKey(tvdbId: Int?, airDateUtc: String?): String =
+            "${tvdbId ?: 0}:$airDateUtc"
+
+        /**
+         * The one-shot initial delay for an air time: null when the stamp is
+         * unparseable (never schedule on garbage) or already fired (the
+         * poller covers aired episodes); otherwise airTime + buffer − now.
+         */
+        internal fun acceleratorDelayMillis(
+            airDateUtc: String?,
+            bufferMs: Long,
+            nowEpochMs: Long,
+        ): Long? {
+            val airMs = airDateUtc?.let { stamp ->
+                runCatching { java.time.Instant.parse(stamp).toEpochMilli() }.getOrNull()
+            } ?: return null
+            val fireAt = airMs + bufferMs
+            if (fireAt <= nowEpochMs) return null
+            return fireAt - nowEpochMs
+        }
+
+        /**
          * Pure helper that decides whether [currentMinutes] falls inside a quiet-hours window
          * defined by [start], [end] (both in minutes-of-day, 0..1439). Handles overnight
          * wraparound (e.g. 22:00 → 07:00). Extracted from `isInQuietHours(NotificationPreferences)`
@@ -221,4 +463,7 @@ class NewMediaCheckWorker(
             }
         }
     }
+
+    /** The diff outcome [decideSeriesEpisode] reports for one series check. */
+    internal enum class SeriesEpisodeDecision { NONE, BASELINE, NOTIFY }
 }

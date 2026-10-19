@@ -13,11 +13,13 @@ import coil3.request.ImageRequest
 // own the repository on both platforms.
 
 /**
- * Refreshes the Android download-notification group summary when the portable
- * repository changes a row's state. Adapts the shared
- * [DownloadProgressNotifier] seam onto [com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper]
- * with the exact body the repository's refreshDownloadSummary previously
- * inlined.
+ * Posts the Android download-notification group summary onto the shared
+ * [DownloadProgressNotifier] seam — the ONE port consumer is the
+ * [com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface] single
+ * (which observes the in-flight count flow and posts on transitions); the
+ * body is the exact helper call the repository's refreshDownloadSummary
+ * previously inlined. The helper's same-count memo and cancel-at-zero
+ * semantics stay behind this port, unchanged.
  */
 class DownloadSummaryRefresher(
     private val context: Context,

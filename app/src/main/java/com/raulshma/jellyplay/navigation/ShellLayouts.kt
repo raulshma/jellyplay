@@ -43,7 +43,7 @@ import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.PlayOnViewModel
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.ui.components.ScrollDirectionVisibility
@@ -75,9 +75,9 @@ import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
  * skippable. The per-section hook values (logout, home mode, the audio
  * pair, …) deliberately live ONLY on [shellHost] — carrying them here too
  * duplicated ShellHostHooks byte-identically; branches read them through
- * the bundle. ADR 0001 note: this carries UI wiring only — the session
+ * the bundle. This carries UI wiring only — the session
  * policy it participates in (onLogout → ShellSessionController) stays
- * per-shell, exactly as before.
+ * per-shell.
  */
 @Immutable
 data class ShellNavParams(
@@ -117,7 +117,7 @@ internal fun TvContent(
     navItemOrder: List<String> = emptyList(),
     nowPlayingEnabled: Boolean,
     showMiniPlayer: Boolean,
-    audioPlaybackManager: AudioPlaybackManager,
+    audioPlaybackManager: ShellAudioSurface,
     onDismissMiniPlayer: () -> Unit,
 ) {
     val navigationState = shellParams.navigationState
@@ -156,10 +156,10 @@ internal fun TvContent(
             // frequently — it reads audio title/artist/artwork for the mini-
             // player). Re-running .map{} here would allocate a fresh list + N
             // fresh TvNavItem instances each time, invalidating the drawer.
-            // Shortcuts is no longer a top-level tab on phone (relocated to the
+            // Shortcuts is not a top-level tab on phone (it lives in the
             // ⋮ overflow). The TV drawer has no overflow menu, so keep Shortcuts
             // reachable here as an explicit primary item — positioned by the
-            // stored nav order like every other item (#152).
+            // stored nav order like every other item.
             val shortcutsLabel = stringResource(R.string.menu_shortcuts)
             val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel, hiddenNavItems, navItemOrder) {
                 tvPrimaryRoutes(
@@ -232,7 +232,7 @@ internal fun PhoneContent(
     hideBottomNavOnScroll: Boolean,
     bottomNavOffsetHeightPx: androidx.compose.runtime.MutableFloatState,
     showMiniPlayer: Boolean,
-    audioPlaybackManager: AudioPlaybackManager,
+    audioPlaybackManager: ShellAudioSurface,
     audioItemId: String?,
     onDismissMiniPlayer: () -> Unit,
     animatedNavBarColor: Color,
@@ -260,12 +260,12 @@ internal fun PhoneContent(
     // uiState is the LOW-FREQUENCY slice only (connection, metadata,
     // play/pause): the per-tick position/duration/volume streams pass to the
     // mini bar as narrow flows and are collected at its leaf sliders, so the
-    // ~1 Hz cast position tick no longer recomposes this whole shell scope.
+    // ~1 Hz cast position tick does not recompose this whole shell scope.
     val playOnState by playOn.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
     val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
-    // Current top-of-stack route — used to hide the persistent Play On mini bar
+    // Current top-of-stack route — hides the persistent Play On mini bar
     // while its full-screen companion is open (avoid a bar floating over its own
     // expanded view).
     val currentRoute = navigationState.backStacks[navigationState.topLevelRoute.value]?.lastOrNull()
@@ -277,7 +277,7 @@ internal fun PhoneContent(
     // Global "More" overflow — a DotsVertical toggle docked in the nav bar
     // (both Classic and Expressive styles) that expands an animated list of
     // destinations upward, so Settings/Downloads/SyncPlay/Play On are reachable
-    // from anywhere (#115). The expanded items render as an overlay above the
+    // from anywhere. The expanded items render as an overlay above the
     // nav bar (see OverflowMenuItems / OverflowMenuScrim below).
     var isOverflowExpanded by remember { mutableStateOf(false) }
     val onOverflowToggle: (Boolean) -> Unit = { isOverflowExpanded = it }
@@ -286,7 +286,7 @@ internal fun PhoneContent(
     // the call site (back = goBack / exit) takes over again. This also gives the
     // predictive-back system a real OnBackInvokedCallback for the overlay, which
     // stops the back-gesture preview indicator from freezing mid-screen when the
-    // scrim's full-screen clickable intercepts the edge swipe (#115).
+    // scrim's full-screen clickable intercepts the edge swipe.
     BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible
@@ -328,7 +328,7 @@ internal fun PhoneContent(
                 // Tablet NavigationRail has no floating nav bar, so the "More"
                 // overflow toggle that phones carry in the nav bar is absent
                 // here. Append it as a rail item so Settings/Downloads/SyncPlay/
-                // Play On/Shortcuts/Surprise/Offline stay reachable (#115).
+                // Play On/Shortcuts/Surprise/Offline stay reachable.
                 // On phones navigationSuiteType is None, so this never renders.
                 if (isExpanded) {
                     NavigationSuiteItem(
@@ -459,7 +459,7 @@ internal fun PhoneContent(
                 // Global "More" overflow — a DotsVertical toggle in the nav bar
                 // (both Classic and Expressive styles) expands an animated list
                 // of destinations upward, so Settings/Downloads/SyncPlay/Play On
-                // are reachable from anywhere (#115). The items render as an
+                // are reachable from anywhere. The items render as an
                 // overlay above the nav bar (see OverflowMenuItems below).
                 // On tablet the toggle lives in the NavigationRail (left edge),
                 // so the pills dock top-start beside the rail and flow top-down;

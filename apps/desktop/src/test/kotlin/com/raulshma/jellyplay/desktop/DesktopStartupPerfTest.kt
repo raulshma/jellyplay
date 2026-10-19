@@ -139,6 +139,8 @@ class DesktopStartupPerfTest {
 
         val json = startupJsonOf(dir)
         assertEquals(boot.toString(), jsonValue(json, "bootNanos"))
+        assertEquals("null", jsonValue(json, "preKoinDoneNanos"), "unmarked marks serialize as JSON null")
+        assertEquals("null", jsonValue(json, "preKoinDoneMs"))
         assertEquals("null", jsonValue(json, "koinStartedNanos"), "unmarked marks serialize as JSON null")
         assertEquals("null", jsonValue(json, "koinStartMs"))
         val windowShownNanos = jsonValue(json, "windowShownNanos")
@@ -198,6 +200,26 @@ class DesktopStartupPerfTest {
         val json = startupJsonOf(dir)
         assertEquals("null", jsonValue(json, "koinStartMs"))
         assertNull(jsonValue(json, "koinStartMs").toDoubleOrNull(), "null is not a number")
+    }
+
+    @Test
+    fun preKoinMarkCarriesAnExactDeltaWhenMarked() {
+        val dir = newLogsDir()
+        System.setProperty(DesktopStartupPerf.PROP_PERSIST, "true")
+        val boot = 42_000_000_000L
+        val perf = DesktopStartupPerf(logsDirNio = dir, bootT0Nanos = boot)
+
+        // No injectable overload — the mark stamps System.nanoTime(); the
+        // pinned property is null-vs-number + monotonicity, not exact math.
+        perf.markPreKoinDone()
+        perf.markWindowShown()
+        perf.markFirstFrame(System.nanoTime())
+
+        val json = startupJsonOf(dir)
+        val preKoinNanos = jsonValue(json, "preKoinDoneNanos")
+        assertTrue(preKoinNanos.toLongOrNull() != null && preKoinNanos != "null", "in: $json")
+        val preKoinMs = jsonValue(json, "preKoinDoneMs").toDouble()
+        assertTrue(preKoinMs >= 0.0, "pre-Koin mark lands after boot in wall-clock terms: $json")
     }
 
     @Test

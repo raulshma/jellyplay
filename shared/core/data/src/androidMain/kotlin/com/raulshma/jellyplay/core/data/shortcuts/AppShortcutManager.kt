@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -22,8 +23,14 @@ import kotlinx.coroutines.launch
 class AppShortcutManager(
     private val context: Context,
     private val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * IO scope hangs off as a SupervisorJob child — the manager never cancels
+     * its own scope, so the child now dies with an app-level teardown.
+     */
+    applicationScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.IO)
 
     private val maxDynamicShortcuts = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context)
         .coerceAtMost(MAX_DYNAMIC_SHORTCUTS)

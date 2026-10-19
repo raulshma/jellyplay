@@ -10,7 +10,7 @@ import androidx.security.crypto.MasterKey
  * pre-KMP wiring (AES256_GCM master key, AES256_SIV key encryption, AES256_GCM
  * value encryption) so existing installs read their secrets unchanged.
  *
- * SELF-HEALING on undecryptable state (issue #171's fresh-install crash loop):
+ * SELF-HEALING on undecryptable state:
  * the master key lives in AndroidKeystore, which NEVER survives uninstall,
  * backup restore or device transfer — but `allowBackup` happily restores the
  * encrypted XML files. Opening or reading such a file throws
@@ -23,6 +23,10 @@ import androidx.security.crypto.MasterKey
  * absorbs the crypto failure: the ciphertext is undecryptable forever (its
  * key is gone), so the only recovery is to wipe the file and start over.
  * Lost secrets are re-enterable; a crash loop is not.
+ *
+ * The heal decisions are platform-free — [SecureStorageHealMachine] (pinned by
+ * jvmTest against fake operations) — and this class is its thin adapter: the
+ * real open/delete operations plus the storage instances.
  */
 class AndroidSecureKeyValueStorage(
     private val context: Context,
@@ -30,11 +34,12 @@ class AndroidSecureKeyValueStorage(
 ) : SecureKeyValueStorage {
 
     // Rebuildable: a crypto failure swaps in a fresh empty instance after
-    // deleting the poisoned file. The constructor open can itself throw on a
-    // restored corrupt keyset (see class doc), so it takes the same reset
-    // path as the read/write guards below.
-    private var prefs: SharedPreferences = runCatching { open() }
-        .getOrElse { reset() }
+    // deleting the poisoned file (the machine's reset path).
+    private val healMachine = SecureStorageHealMachine(
+        fallback = InMemoryPreferences(),
+        open = { open() },
+        delete = { context.deleteSharedPreferences(fileName) },
+    )
 
     private fun open(): SharedPreferences {
         val masterKey = MasterKey.Builder(context)
@@ -47,26 +52,6 @@ class AndroidSecureKeyValueStorage(
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
-    }
-
-    /**
-     * Deletes the file and rebuilds an empty encrypted store. Two-step best
-     * effort: reopen ONLY when the delete actually succeeded — reopening a
-     * file that couldn't be removed would hand back a store whose keyset
-     * loads but whose values still throw on every read, outside the guards
-     * at the call sites. When the delete fails, or the fresh open fails
-     * (keystore unavailable), the in-memory fallback keeps reads/writes from
-     * crashing — the secrets were unreadable either way.
-     */
-    private fun reset(): SharedPreferences {
-        val deleted = runCatching { context.deleteSharedPreferences(fileName) }
-            .getOrDefault(false)
-        prefs = if (deleted) {
-            runCatching { open() }.getOrElse { InMemoryPreferences() }
-        } else {
-            InMemoryPreferences()
-        }
-        return prefs
     }
 
     /**
@@ -140,29 +125,14 @@ class AndroidSecureKeyValueStorage(
         }
     }
 
-    private fun <T> reading(fallback: T, block: SharedPreferences.() -> T): T =
-        try {
-            prefs.block()
-        } catch (_: Exception) {
-            reset().block()
-        }
-
     override fun getString(key: String, defValue: String?): String? =
-        reading(fallback = defValue) { getString(key, defValue) }
+        healMachine.guarded { prefs -> prefs.getString(key, defValue) }
 
     override fun putString(key: String, value: String?) {
-        try {
-            prefs.edit().putString(key, value).apply()
-        } catch (_: Exception) {
-            reset().edit().putString(key, value).apply()
-        }
+        healMachine.guarded { prefs -> prefs.edit().putString(key, value).apply() }
     }
 
     override fun remove(key: String) {
-        try {
-            prefs.edit().remove(key).apply()
-        } catch (_: Exception) {
-            reset().edit().remove(key).apply()
-        }
+        healMachine.guarded { prefs -> prefs.edit().remove(key).apply() }
     }
 }
