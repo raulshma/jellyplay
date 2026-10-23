@@ -79,6 +79,7 @@ class VideoPlayerStore constructor(
     internal object Keys {
         val VIDEO_SEEK_DURATION_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.keyName)
         val VIDEO_CONTROLS_TIMEOUT_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.keyName)
+        val SKIP_PROMPT_DURATION_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.keyName)
         val VIDEO_HIDE_OSD_ON_PAUSE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.keyName)
         val VIDEO_RESUME_ON_HEADSET_PLUG = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.keyName)
         val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.keyName)
@@ -144,6 +145,7 @@ class VideoPlayerStore constructor(
     internal fun read(prefs: Preferences): VideoPlayerSlice = VideoPlayerSlice(
         videoSeekDurationMs = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.readFrom(prefs),
         videoControlsTimeoutMs = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.readFrom(prefs),
+        skipPromptDurationMs = VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.readFrom(prefs).coerceIn(3_000L, 30_000L),
         videoHideOsdOnPause = VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.readFrom(prefs),
         videoResumeOnHeadsetPlug = VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.readFrom(prefs),
         videoDefaultOrientation = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.readFrom(prefs),
@@ -198,6 +200,10 @@ class VideoPlayerStore constructor(
 
     suspend fun setVideoControlsTimeoutMs(ms: Long) {
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(it, ms) }
+    }
+
+    suspend fun setSkipPromptDurationMs(ms: Long) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.writeTo(it, ms.coerceIn(3_000L, 30_000L)) }
     }
 
     /** Pausing must not summon the control overlay (default off). */
@@ -475,6 +481,7 @@ class VideoPlayerStore constructor(
         dataStore.edit { prefs ->
             VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.writeTo(prefs, slice.videoSeekDurationMs)
             VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(prefs, slice.videoControlsTimeoutMs)
+            VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.writeTo(prefs, slice.skipPromptDurationMs.coerceIn(3_000L, 30_000L))
             VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.writeTo(prefs, slice.videoHideOsdOnPause)
             VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.writeTo(prefs, slice.videoResumeOnHeadsetPlug)
             VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.writeTo(prefs, slice.videoDefaultOrientation)
@@ -538,6 +545,7 @@ class VideoPlayerStore constructor(
 data class VideoPlayerSlice(
     val videoSeekDurationMs: Long = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.default,
     val videoControlsTimeoutMs: Long = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.default,
+    val skipPromptDurationMs: Long = VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.default,
     /**
      * Pausing must not summon the control
      * overlay. Default **off** — today's show-on-pause behavior; on, only the

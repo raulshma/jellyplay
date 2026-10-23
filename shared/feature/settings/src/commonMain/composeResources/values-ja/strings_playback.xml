@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">すべての ExoPlayer 設定を復元</string>
     <string name="settings_media_segments">メディアセグメント</string>
     <string name="settings_media_segments_summary">%1$d 自動スキップ、%2$d ボタン表示</string>
-    <string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
+        <string name="settings_skip_prompt_duration">スキップボタンの表示時間</string>
+    <string name="settings_skip_prompt_duration_subtitle">スキップボタンの表示時間（イントロ/セグメント）</string>
+<string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
     <string name="settings_skip_segments_on_seek_on">前方シークが自動スキップ対象に重なった場合にスキップします</string>
     <string name="settings_segment_skip_delay">自動スキップの遅延</string>
     <string name="settings_segment_skip_delay_off">オフ</string>

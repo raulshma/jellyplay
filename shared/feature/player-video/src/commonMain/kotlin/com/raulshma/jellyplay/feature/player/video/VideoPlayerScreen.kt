@@ -82,6 +82,7 @@ import com.raulshma.jellyplay.feature.player.video.components.SyncPlayIndicator
 import com.raulshma.jellyplay.feature.player.video.components.TrackControls
 import com.raulshma.jellyplay.feature.player.video.components.TransportControls
 import com.raulshma.jellyplay.feature.player.video.components.GestureControls
+import com.raulshma.jellyplay.feature.player.video.components.rememberTimedSkipPrompt
 import com.raulshma.jellyplay.feature.player.video.components.SheetControls
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 
@@ -545,14 +546,29 @@ fun VideoPlayerScreen(
     val isInSyncPlaySession = uiState.isInSyncPlaySession
 
     val isNextEpisodeVisible = upNextCard != null && shouldShowUpNext
-    val isCinemaIntroVisible = cinemaIntroState != null && !isInPipMode
-    val isSkipSegmentVisible = isSkipSegmentButtonVisible(
+    val arePlaybackControlsVisible = chrome.visible && !isInPipMode && !isScreenLocked
+    val isSkipSegmentAvailable = isSkipSegmentButtonVisible(
         activeSegment = activeSegment,
         segmentBehavior = activeSegmentBehavior,
-        isInPipMode = isInPipMode,
-        isCinemaIntroVisible = isCinemaIntroVisible,
+        isInPipMode = false,
+        isCinemaIntroVisible = cinemaIntroState != null,
         shouldShowUpNext = shouldShowUpNext,
+        areControlsVisible = true,
     )
+    // The timed skip invitation: one countdown per segment, paused (not
+    // restarted) while a sheet/lock/PiP hides it, and restored — without
+    // resetting the clock — when the user touches the screen mid-countdown.
+    val canShowSkipPrompt = !isInPipMode && !isScreenLocked && currentSheet == PlayerSheet.None
+    val skipPrompt = rememberTimedSkipPrompt(
+        promptKey = cinemaIntroState ?: activeSegment?.takeIf { isSkipSegmentAvailable },
+        canShow = canShowSkipPrompt,
+        userInteractionCount = userInteractionCount,
+        durationMs = uiState.uiPrefs.skipPromptDurationMs.toInt(),
+    )
+    val showSkipButtons = canShowSkipPrompt && skipPrompt.isVisible(arePlaybackControlsVisible, userInteractionCount)
+    val isCinemaIntroVisible = cinemaIntroState != null && showSkipButtons
+    val isSkipSegmentVisible = isSkipSegmentAvailable && showSkipButtons
+    val skipPromptProgress = skipPrompt.progress.takeIf { skipPrompt.isInitialPromptActive }
 
     LaunchedEffect(chrome.visible, isTv, isNextEpisodeVisible, isSkipSegmentVisible, isCinemaIntroVisible) {
         if (isTv && !chrome.visible) {
@@ -1264,9 +1280,9 @@ fun VideoPlayerScreen(
                 isCinemaIntroVisible,
                 tvCinemaIntroFocusRequester,
                 activeSegment,
-                activeSegmentBehavior,
+                isSkipSegmentVisible,
+                skipPromptProgress,
                 shouldShowUpNext,
-                isInPipMode,
                 tvSkipSegmentFocusRequester,
                 upNextCard,
                 upNextImageUrl,
@@ -1288,9 +1304,9 @@ fun VideoPlayerScreen(
                     isCinemaIntroVisible = isCinemaIntroVisible,
                     tvCinemaIntroFocusRequester = tvCinemaIntroFocusRequester,
                     activeSegment = activeSegment,
-                    activeSegmentBehavior = activeSegmentBehavior,
+                    isSkipSegmentVisible = isSkipSegmentVisible,
+                    skipPromptProgress = skipPromptProgress,
                     shouldShowUpNext = shouldShowUpNext,
-                    isInPipMode = isInPipMode,
                     tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
                     upNextCard = upNextCard,
                     upNextImageUrl = upNextImageUrl,

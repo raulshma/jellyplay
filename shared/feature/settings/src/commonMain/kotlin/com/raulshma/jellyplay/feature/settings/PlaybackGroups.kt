@@ -26,6 +26,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segm
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segment_skip_delay_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segment_skip_delay_seconds
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_duration
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_duration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_syncplay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_syncplay_join_summary
@@ -86,6 +88,31 @@ internal fun PlaybackMediaSegmentsGroup(
                         checked = preferences.skipSegmentsOnSeek,
                         highlighted = highlightSettingId == PlaybackRows.SkipSegmentsOnSeek.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setSkipSegmentsOnSeek(it) } },
+                    )
+                    // The skip button's countdown length (the timed invitation
+                    // bar); 3–30 s, clamped by the store on both ends.
+                    val durationTitle = stringResource(Res.string.settings_skip_prompt_duration)
+                    val durationChoices = listOf(3_000L, 5_000L, 10_000L, 15_000L, 20_000L, 30_000L)
+                    val durationLabels = durationChoices.associateWith { seconds ->
+                        stringResource(Res.string.settings_segment_skip_delay_seconds, (seconds / 1000).toInt())
+                    }
+                    val currentDurationMs = preferences.skipPromptDurationMs
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.SkipPromptDuration),
+                        title = rowTitle(PlaybackRows.SkipPromptDuration),
+                        subtitle = stringResource(Res.string.settings_skip_prompt_duration_subtitle),
+                        trailingText = durationLabels[currentDurationMs]
+                            ?: stringResource(Res.string.settings_segment_skip_delay_seconds, (currentDurationMs / 1000).toInt()),
+                        highlighted = highlightSettingId == PlaybackRows.SkipPromptDuration.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = durationTitle,
+                                items = durationChoices,
+                                label = { durationLabels.getValue(it) },
+                                isSelected = { it == currentDurationMs },
+                                onSelect = { viewModel.edit { scope -> scope.videoPlayer.setSkipPromptDurationMs(it) } },
+                            )
+                        },
                     )
                     val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
                     val totalTypes = segmentTypes.size

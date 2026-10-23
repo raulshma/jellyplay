@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -477,6 +478,17 @@ internal class PlaybackSession(
 
     /** Direct alias of the session manager's engine flow — same instance, no re-publish. */
     val engineFlow: StateFlow<MediaEngine?> = playerSessionManager.engineFlow
+
+    /** The engines this platform can construct (the playback sheet's engine chips). */
+    internal val availablePlayerTypes: List<PlayerType> get() = platform.availablePlayerTypes
+
+    /**
+     * The subtitle-language preference slice the track picker's
+     * preferred-language display filter reads — picker presentation only;
+     * automatic selection never consults it.
+     */
+    internal val subtitlePreferences: StateFlow<SubtitleSlice> get() =
+        stores.subtitleLanguage.subtitle
 
     internal val autoplayController = AutoPlayController()
 
@@ -1165,6 +1177,7 @@ internal class PlaybackSession(
                 uiPrefs = it.uiPrefs.copy(keepScreenOnDuringVideo = keepScreenOnDuringVideo),
             ) }
         },
+        onStreamMetadataReset = { videoStats.value = EngineVideoStats() },
     )
 
     /**
@@ -1716,7 +1729,8 @@ internal class PlaybackSession(
     }
 
     /**
-     * Retry playback on a different engine after a fatal error.
+     * Retry playback on a different engine, or switch the live session when
+     * [sessionOnly] is true (preserving pause state and the saved default).
      * [playbackSpeed] and [streamingQuality] are supplied by the caller
      * wrapper from its ui-state mirror; the error-dialog clear stays
      * caller-side (a synchronous ui-state write).
@@ -1725,14 +1739,17 @@ internal class PlaybackSession(
         playerType: PlayerType,
         playbackSpeed: Float,
         streamingQuality: StreamingQuality,
+        sessionOnly: Boolean = false,
     ) {
+        val wasPaused = playerSessionManager.engine?.isPlaying?.value == false
         val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
         val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(streamingQuality)?.toInt()
         progressReporter.cancelJobs()
         mediaSessionController.release()
         scope.launch {
-            playbackStore.setPreferredPlayer(playerType)
+            if (!sessionOnly) playbackStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, playbackSpeed, maxBitrate)
+            if (sessionOnly && wasPaused) playerSessionManager.engine?.pause()
             rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
         }
     }

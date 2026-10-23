@@ -73,6 +73,9 @@ sealed interface VideoPlayerUiEvent {
     /** Errors: retry on a specific [playerType] (the switch-engine button). */
     data class RetryWithEngine(val playerType: PlayerType) : VideoPlayerUiEvent
 
+    /** Switch the current session's engine without changing the saved default. */
+    data class SwitchPlayerEngine(val playerType: PlayerType) : VideoPlayerUiEvent
+
     /** Errors: dismiss the playback-error dialog without retrying. */
     data object DismissPlaybackError : VideoPlayerUiEvent
 

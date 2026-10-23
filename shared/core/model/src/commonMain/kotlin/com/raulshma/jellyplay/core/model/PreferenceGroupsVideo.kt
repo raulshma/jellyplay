@@ -174,6 +174,8 @@ data class PlaybackPreferences(
     val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
     /** Skip-on-forward-seek. Default off — see `VideoPlayerSlice`. */
     val skipSegmentsOnSeek: Boolean = false,
+    /** The skip-intro/segment invitation countdown length (3–30 s). */
+    val skipPromptDurationMs: Long = 10_000L,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,

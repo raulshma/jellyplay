@@ -62,6 +62,14 @@ object ShapeCache {
     /** 24dp smooth corners — dialog surfaces, settings items */
     val smooth24: Shape get() = synthwaveAware(smooth24Shape)
 
+    /**
+     * 24dp plain rounded corners — the Android-13-safe clip for tall
+     * scrollable groups: the analytic smooth path's generic Path can reject
+     * touches inside a long clipped column after scrolling, the plain rounded
+     * outline does not. Cheap to construct; still synthwave-aware.
+     */
+    val rounded24: Shape get() = synthwaveAware(RoundedCornerShape(24.dp))
+
     /** 28dp smooth corners — bottom sheets, floating panels */
     val smooth28: Shape get() = synthwaveAware(smooth28Shape)
 

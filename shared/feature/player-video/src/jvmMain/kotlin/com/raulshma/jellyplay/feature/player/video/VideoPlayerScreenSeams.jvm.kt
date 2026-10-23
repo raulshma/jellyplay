@@ -27,6 +27,9 @@ import kotlinx.coroutines.CoroutineScope
 
 // ── Host window ────────────────────────────────────────────────────────────
 
+@Composable
+internal actual fun playerSystemGestureTopInsetPx(): Float = 0f
+
 private object DesktopPlayerWindowOps : PlayerWindowOps
 
 @Composable

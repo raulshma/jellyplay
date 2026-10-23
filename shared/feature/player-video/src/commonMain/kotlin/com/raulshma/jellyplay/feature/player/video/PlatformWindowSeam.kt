@@ -140,6 +140,10 @@ enum class PlayerOrientationLock {
 @Composable
 expect fun rememberPlayerWindowOps(): PlayerWindowOps
 
+/** Top touch band reserved for system gestures, including hidden bars; zero on desktop. */
+@Composable
+internal expect fun playerSystemGestureTopInsetPx(): Float
+
 /**
  * STREAM_MUSIC volume nudge for the hardware-keyboard volume shortcuts.
  * Android keeps the system-volume UI/ringer behaviour of the original

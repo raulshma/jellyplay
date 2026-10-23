@@ -193,6 +193,7 @@ class PlaybackApiClientImpl(
         mode: PlaybackMode,
         playerType: PlayerType,
         liveStreamOption: LiveStreamOption?,
+        maxVideoHeight: Int?,
     ): Result<PlaybackInfoResult> = engine.withApi { api ->
         val uuid = itemId.toUUID()
 
@@ -218,6 +219,7 @@ class PlaybackApiClientImpl(
                 audioPassthrough = prefs.audioPassthrough,
                 passthroughCodecs = prefs.audioPassthroughCodecs,
                 maxAudioChannels = prefs.maxAudioChannels,
+                maxVideoHeight = maxVideoHeight.takeIf { liveStreamOption == null },
             )
         }
 

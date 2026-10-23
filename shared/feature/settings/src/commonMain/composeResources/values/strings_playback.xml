@@ -238,7 +238,9 @@
     <string name="settings_reset_exoplayer">Restore all ExoPlayer settings</string>
     <string name="settings_media_segments">Media Segments</string>
     <string name="settings_media_segments_summary">%1$d auto-skip, %2$d show button</string>
-    <string name="settings_skip_segments_on_seek">Skip Segments on Seek</string>
+        <string name="settings_skip_prompt_duration">Skip Button Duration</string>
+    <string name="settings_skip_prompt_duration_subtitle">How long the skip intro/segment button stays on screen</string>
+<string name="settings_skip_segments_on_seek">Skip Segments on Seek</string>
     <string name="settings_skip_segments_on_seek_on">Forward seeks past auto-skip segments</string>
     <string name="settings_segment_skip_delay">Auto-skip delay</string>
     <string name="settings_segment_skip_delay_off">Off</string>

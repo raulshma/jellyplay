@@ -152,6 +152,19 @@ object SubtitlePreferenceSpecs {
                 routeKind = ROUTE_LANGUAGE_SETTINGS,
             ),
         ),
+        PreferenceSpec.plainBoolean(
+            keyName = "show_only_preferred_subtitles",
+            default = false,
+            resetCategory = PreferenceResetCategory.SUBTITLES_LANGUAGE,
+            search = PreferenceSearchSpec(
+                id = "show_only_preferred_subtitles",
+                titleKey = "ss_show_only_preferred_subtitles_title",
+                subtitleKey = "ss_show_only_preferred_subtitles_subtitle",
+                categoryKey = CATEGORY_LANGUAGE_SUBTITLES,
+                keywords = listOf("subtitles", "language", "filter", "preferred", "hide", "track list"),
+                routeKind = ROUTE_LANGUAGE_SETTINGS,
+            ),
+        ),
         PreferenceSpec.string(
             keyName = "preferred_audio_lang",
             resetCategory = PreferenceResetCategory.SUBTITLES_LANGUAGE,
@@ -517,6 +530,8 @@ object SubtitlePreferenceSpecs {
     val PREFERRED_SUBTITLE_LANG: PreferenceSpec<String?> get() = row("preferred_subtitle_lang")
 
     val SUBTITLES_FORCED_ONLY: PreferenceSpec<Boolean> get() = row("subtitles_forced_only")
+
+    val SHOW_ONLY_PREFERRED_SUBTITLES: PreferenceSpec<Boolean> get() = row("show_only_preferred_subtitles")
 
     val PREFERRED_AUDIO_LANG: PreferenceSpec<String?> get() = row("preferred_audio_lang")
 

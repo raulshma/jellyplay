@@ -193,7 +193,8 @@
     <string name="player_video_rendering">Rendu</string>
     <string name="player_video_deinterlace">Désentrelacement · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
-    <string name="player_video_stats_for_nerds">Stats pour initiés</string>
+        <string name="player_video_stats_close">Fermer</string>
+<string name="player_video_stats_for_nerds">Stats pour initiés</string>
     <string name="player_video_stats_for_nerds_on">Stats pour initiés \u00B7 Activé</string>
     <string name="player_video_video_filters">Filtres vidéo</string>
     <string name="player_video_video_filters_on">Filtres vidéo \u00B7 Activé</string>
@@ -331,7 +332,16 @@
     <string name="player_video_watched">Vu</string>
     <string name="player_video_time_left">%1$s restantes</string>
     <string name="player_video_now_playing">En cours de lecture</string>
-    <string name="player_video_quality_title">Qualite</string>
+        <string name="player_video_playback_options">Options de lecture</string>
+    <string name="player_video_playback_options_desc">Changez le moteur, le mode de diffusion du serveur et la qualité. Les changements s'appliquent à la session en cours.</string>
+    <string name="player_video_playback_options_engine_section">Moteur</string>
+    <string name="player_video_playback_options_delivery_section">Diffusion</string>
+    <string name="player_video_playback_options_quality_section">Qualité</string>
+    <string name="player_video_quality_unavailable">La qualité est indisponible pour cette lecture (lecture directe forcée, hors ligne, cast ou SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">Laisser le serveur choisir (lecture directe quand possible)</string>
+    <string name="player_video_playback_mode_force_direct_desc">Diffuser le fichier tel quel, sans transcodage</string>
+    <string name="player_video_playback_mode_force_transcode_desc">Toujours transcoder via le serveur</string>
+<string name="player_video_quality_title">Qualite</string>
     <string name="player_video_quality_description">Les modifications s appliquent immediatement pour les flux adaptatifs. Pour la lecture directe, cela definit le debit binaire maximal de lecture.</string>
     <string name="player_video_adaptive_bitrate_cap">Plafond de debit adaptatif</string>
     <string name="player_video_adaptive_bitrate_on">Limite la qualite sur les reseaux limites</string>

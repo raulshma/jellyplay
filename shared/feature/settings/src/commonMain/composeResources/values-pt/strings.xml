@@ -177,7 +177,9 @@
     <string name="settings_disable_pin_message">Introduza o seu PIN atual para desativar o bloqueio por PIN.</string>
     <string name="settings_current_pin">PIN atual</string>
     <string name="settings_incorrect_pin">PIN incorreto</string>
-    <string name="settings_confirm">Confirmar</string>
+        <string name="settings_picker_search">Pesquisar</string>
+    <string name="settings_picker_no_results">Sem opções correspondentes</string>
+<string name="settings_confirm">Confirmar</string>
     <string name="settings_authorize_quick_connect">Autorizar Quick Connect</string>
     <string name="settings_authorize_quick_connect_message">Introduza o código de 6 dígitos apresentado no outro dispositivo.</string>
     <string name="settings_authorization_failed">Falha na autorização</string>

@@ -86,6 +86,7 @@ internal data class PlaybackCoreBundle(
         segmentBehaviors = video.segmentBehaviors,
         segmentSkipDelaysMs = video.segmentSkipDelaysMs,
         skipSegmentsOnSeek = video.skipSegmentsOnSeek,
+        skipPromptDurationMs = video.skipPromptDurationMs,
         videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
         videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,
         videoPreloadBufferSize = video.videoPreloadBufferSize,

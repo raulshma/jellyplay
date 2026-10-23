@@ -140,6 +140,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_frames
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_loop_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_duration
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_duration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_silence
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_only_headphones
@@ -1542,6 +1544,13 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_skip_segments_on_seek_subtitle,
     )
 
+    val SkipPromptDuration = SettingsRow(
+        id = "skip_prompt_duration",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_skip_prompt_duration,
+        searchSubtitleRes = Res.string.settings_skip_prompt_duration_subtitle,
+    )
+
     /**
      * Every fused playback row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
@@ -1711,6 +1720,7 @@ internal val PlaybackMediaSegmentsRows: List<SettingsRow> = listOf(
     PlaybackRows.MediaSegmentCommercial,
     PlaybackRows.MediaSegmentUnknown,
     PlaybackRows.SkipSegmentsOnSeek,
+    PlaybackRows.SkipPromptDuration,
 )
 
 /**

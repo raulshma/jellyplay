@@ -288,6 +288,10 @@ internal class DesktopVideoPlayerPlatform(
 
     override fun isLowRamDevice(): Boolean = false
 
+    /** Desktop playback runs on the mpv host engine only. */
+    override val availablePlayerTypes: List<com.raulshma.jellyplay.core.model.PlayerType> =
+        listOf(com.raulshma.jellyplay.core.model.PlayerType.MPV)
+
     override fun queryFileSizeBytes(uri: String): Long = pickedLocalFile(uri)?.length() ?: 0L
 
     override fun readBytes(uri: String): ByteArray = pickedLocalFile(uri)?.readBytes() ?: ByteArray(0)

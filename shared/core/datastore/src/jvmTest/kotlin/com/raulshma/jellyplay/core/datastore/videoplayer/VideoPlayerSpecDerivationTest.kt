@@ -44,6 +44,7 @@ class VideoPlayerSpecDerivationTest {
     private val expectedStoredType: Map<String, KClass<*>> = mapOf(
         "video_seek_duration_ms" to Long::class,
         "video_controls_timeout_ms" to Long::class,
+        "skip_prompt_duration_ms" to Long::class,
         "video_hide_osd_on_pause" to Boolean::class,
         "video_resume_on_headset_plug" to Boolean::class,
         "video_default_orientation" to String::class,
@@ -192,6 +193,7 @@ class VideoPlayerSpecDerivationTest {
         val slice = VideoPlayerSlice()
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.default, slice.videoSeekDurationMs)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.default, slice.videoControlsTimeoutMs)
+        assertEquals(VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.default, slice.skipPromptDurationMs)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.default, slice.videoHideOsdOnPause)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.default, slice.videoResumeOnHeadsetPlug)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.default, slice.videoDefaultOrientation)
@@ -231,14 +233,14 @@ class VideoPlayerSpecDerivationTest {
         assertEquals(VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.default, slice.segmentBehaviors)
         assertEquals(VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.default, slice.segmentSkipDelaysMs)
         assertEquals(VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.default, slice.skipSegmentsOnSeek)
-        // Totality: every slice field is covered above — the 41 pinned
-        // properties are ALL the slice's fields (46 rows - 5 legacy-only rows
+        // Totality: every slice field is covered above — the 42 pinned
+        // properties are ALL the slice's fields (47 rows - 5 legacy-only rows
         // with no slice property). A field added without a spec-default pin
         // above (and without bumping this count) fails here. Statics
         // (the @Serializable Companion, Compose's $stable) don't count.
         val instanceFields = VideoPlayerSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(41, instanceFields)
+        assertEquals(42, instanceFields)
     }
 
     @Test

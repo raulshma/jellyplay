@@ -64,6 +64,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_only_preferred_subtitles_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_only_preferred_subtitles_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_on
@@ -469,6 +471,20 @@ fun LanguageSettingsScreen(
                         highlighted = highlightSettingId == LanguageRows.SubtitleForcedOnly.id,
                         onCheckedChange = { enabled ->
                             viewModel.edit { scope -> scope.subtitle.setSubtitlesForcedOnly(enabled) }
+                        },
+                    )
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Filter,
+                        title = rowTitle(LanguageRows.ShowOnlyPreferredSubtitles),
+                        subtitle = if (preferences.showOnlyPreferredSubtitles) {
+                            stringResource(Res.string.settings_show_only_preferred_subtitles_on)
+                        } else {
+                            stringResource(Res.string.settings_show_only_preferred_subtitles_off)
+                        },
+                        checked = preferences.showOnlyPreferredSubtitles,
+                        highlighted = highlightSettingId == LanguageRows.ShowOnlyPreferredSubtitles.id,
+                        onCheckedChange = { enabled ->
+                            viewModel.edit { scope -> scope.subtitle.setShowOnlyPreferredSubtitles(enabled) }
                         },
                     )
                     SettingToggleItem(

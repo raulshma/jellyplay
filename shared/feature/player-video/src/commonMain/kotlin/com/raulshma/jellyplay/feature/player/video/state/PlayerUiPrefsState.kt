@@ -15,6 +15,8 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
 @Immutable
 data class PlayerUiPrefsState(
     val controlsTimeoutMs: Long = 5_000L,
+    /** The skip-intro/segment invitation countdown length (3–30 s). */
+    val skipPromptDurationMs: Long = 10_000L,
     /**
      * When on, PAUSING must not summon the
      * control overlay. Default **off** — today's show-on-pause behavior.

@@ -193,7 +193,8 @@
     <string name="player_video_rendering">Renderizado</string>
     <string name="player_video_deinterlace">Desentrelazado · %1$s</string>
     <string name="player_video_passthrough">Paso directo</string>
-    <string name="player_video_stats_for_nerds">Estadísticas para nerds</string>
+        <string name="player_video_stats_close">Cerrar</string>
+<string name="player_video_stats_for_nerds">Estadísticas para nerds</string>
     <string name="player_video_stats_for_nerds_on">Estadísticas para nerds \u00B7 Activado</string>
     <string name="player_video_video_filters">Filtros de vídeo</string>
     <string name="player_video_video_filters_on">Filtros de vídeo \u00B7 Activado</string>
@@ -331,7 +332,16 @@
     <string name="player_video_watched">Visto</string>
     <string name="player_video_time_left">Quedan %1$s</string>
     <string name="player_video_now_playing">Reproduciendo ahora</string>
-    <string name="player_video_quality_title">Calidad</string>
+        <string name="player_video_playback_options">Opciones de reproducción</string>
+    <string name="player_video_playback_options_desc">Cambia el motor, cómo el servidor entrega la transmisión y la calidad. Los cambios se aplican a la sesión en curso.</string>
+    <string name="player_video_playback_options_engine_section">Motor</string>
+    <string name="player_video_playback_options_delivery_section">Entrega</string>
+    <string name="player_video_playback_options_quality_section">Calidad</string>
+    <string name="player_video_quality_unavailable">La calidad no está disponible para esta reproducción (directo forzado, sin conexión, cast o SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">Dejar que el servidor elija (reproducción directa cuando sea posible)</string>
+    <string name="player_video_playback_mode_force_direct_desc">Transmitir el archivo tal cual, sin transcodificar</string>
+    <string name="player_video_playback_mode_force_transcode_desc">Transcodificar siempre a través del servidor</string>
+<string name="player_video_quality_title">Calidad</string>
     <string name="player_video_quality_description">Los cambios se aplican inmediatamente para transmisiones adaptativas. Para reproduccion directa, esto establece la tasa de bits maxima de reproduccion.</string>
     <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
     <string name="player_video_adaptive_bitrate_on">Limita la calidad en redes medidas</string>

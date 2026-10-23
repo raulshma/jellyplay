@@ -177,7 +177,9 @@
     <string name="settings_disable_pin_message">PIN 잠금을 사용 안 함으로 설정하려면 현재 PIN을 입력하세요.</string>
     <string name="settings_current_pin">현재 PIN</string>
     <string name="settings_incorrect_pin">잘못된 PIN</string>
-    <string name="settings_confirm">확인</string>
+        <string name="settings_picker_search">검색</string>
+    <string name="settings_picker_no_results">일치하는 옵션이 없습니다</string>
+<string name="settings_confirm">확인</string>
     <string name="settings_authorize_quick_connect">빠른 연결 승인</string>
     <string name="settings_authorize_quick_connect_message">다른 기기에 표시된 6자리 코드를 입력하세요.</string>
     <string name="settings_authorization_failed">승인 실패</string>

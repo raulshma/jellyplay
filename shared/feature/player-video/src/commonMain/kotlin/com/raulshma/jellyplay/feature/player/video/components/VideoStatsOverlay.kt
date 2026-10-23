@@ -1,6 +1,19 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_close
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,47 +93,6 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_vo_delay
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_vo_dropped_frames
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -131,6 +103,7 @@ fun VideoStatsOverlay(
     // High-frequency streams collected here so only this overlay (shown
     // only while "Stats for Nerds" is enabled) recomposes on position ticks.
     statsFlow: StateFlow<EngineVideoStats>,
+    onClose: () -> Unit = {},
     currentPositionFlow: StateFlow<Long>,
     /** range-level buffered surface — the readout row below. */
     bufferedRangesFlow: StateFlow<List<LongRange>> = MutableStateFlow(emptyList()),
@@ -159,169 +132,179 @@ fun VideoStatsOverlay(
         modifier = modifier
             .clip(ShapeCache.smooth12)
             .background(playerScrimColor().copy(alpha = 0.78f))
+            // Swallow taps on the panel so touching it neither summons nor
+            // dismisses the player controls behind it.
+            .pointerInput(Unit) { detectTapGestures(onTap = {}) }
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = stringResource(Res.string.player_video_stats_for_nerds),
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp,
-            ),
-            color = playerOnScrim(),
-        )
-
-        StatsSection(stringResource(Res.string.player_video_stats_playback)) {
-            StatsRow(stringResource(Res.string.player_video_stats_state), if (isPlaying) stringResource(Res.string.player_video_stats_playing) else playbackState)
-            StatsRow(stringResource(Res.string.player_video_stats_position), formatDurationMsLocal(currentPositionMs))
-            StatsRow(stringResource(Res.string.player_video_duration), formatDurationMsLocal(durationMs))
-            if (durationMs > 0) {
-                val progress = (currentPositionMs.toFloat() / durationMs.toFloat() * 100f)
-                StatsRow(stringResource(Res.string.player_video_stats_progress), "${formatFixed(progress.toDouble(), 1)}%")
-            }
-            StatsRow(stringResource(Res.string.player_video_speed), "${playbackSpeed}x")
-            val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
-            StatsRow(stringResource(Res.string.player_video_stats_buffer_health), formatDurationMsLocal(bufferHealthMs))
-            StatsRow(stringResource(Res.string.player_video_stats_buffered), formatDurationMsLocal(stats.bufferedPositionMs))
-            // the multi-range readout — count of distinct cached
-            // windows plus their total span, so a dropped window after a
-            // forward seek is visible as "2 ranges" rather than one scalar.
-            if (bufferedRanges.isNotEmpty()) {
-                val totalBufferedMs = bufferedRanges.sumOf { it.last - it.first }
-                StatsRow(
-                    stringResource(Res.string.player_video_stats_buffered_ranges),
-                    "${bufferedRanges.size} · ${formatDurationMsLocal(totalBufferedMs)}",
-                )
-            }
-            StatsRow(stringResource(Res.string.player_video_stats_clock), rememberCurrentTimeString())
-        }
-
-        if (stats.videoCodec != null || stats.videoResolution != null) {
-            StatsSection(stringResource(Res.string.player_video_video)) {
-                // the HDR passthrough badge leads the video block —
-                // active (display switched to an HDR target) or, when the
-                // display stayed SDR, the one-line tone-mapping fallback
-                // notice. Both come from the engine's target-params probe.
-                if (stats.hdrOutputActive) {
-                    StatsRow(
-                        stringResource(Res.string.player_video_stats_hdr_output_active),
-                        "● HDR",
-                    )
-                }
-                stats.videoCodec?.let { StatsRow(stringResource(Res.string.player_video_codec), it.uppercase()) }
-                stats.videoDecoder?.let { StatsRow(stringResource(Res.string.player_video_decoder), it) }
-                stats.videoResolution?.let { StatsRow(stringResource(Res.string.player_video_resolution), it) }
-                stats.videoFrameRate?.let { StatsRow(stringResource(Res.string.player_video_frame_rate), "${formatFixed(it.toDouble(), 2)} fps") }
-                stats.videoBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
-                stats.videoHdrType?.let { StatsRow(stringResource(Res.string.player_video_stats_hdr), it) }
-                // the display's capability answers the content row above —
-                // tone-map decisions read as (content family, display family).
-                stats.displayHdrTypes?.let {
-                    StatsRow(stringResource(Res.string.player_video_stats_display_hdr), it)
-                }
-                stats.videoColorRange?.let { StatsRow(stringResource(Res.string.player_video_stats_color_range), it) }
-                stats.videoColorDepth?.let { StatsRow(stringResource(Res.string.player_video_stats_color_depth), it) }
-                stats.hdrOutputNotice?.let { notice ->
-                    Text(
-                        text = notice,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
-                        ),
-                        color = playerOnScrim().copy(alpha = 0.8f),
-                    )
-                }
-            }
-        }
-
-        if (stats.audioCodec != null || stats.audioChannels != null || stats.audioSpatialState != null) {
-            StatsSection(stringResource(Res.string.player_video_audio)) {
-                stats.audioCodec?.let { StatsRow(stringResource(Res.string.player_video_codec), it.uppercase()) }
-                stats.audioSampleRate?.let { StatsRow(stringResource(Res.string.player_video_stats_sample_rate), "${it} Hz") }
-                stats.audioChannels?.let { ch -> StatsRow(stringResource(Res.string.player_video_channels), formatChannels(ch)) }
-                stats.audioBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
-                // The platform spatializer's honest state (ExoPlayer, API 32+
-                // devices with the feature) — a report, not a control. The
-                // raw state name is technical by design (codec-style); the
-                // supersession note is localized prose, so it comes from
-                // resources rather than the policy module (commonMain pure
-                // Kotlin has no string access).
-                stats.audioSpatialState?.let { state ->
-                    StatsRow(
-                        stringResource(Res.string.player_video_stats_spatial),
-                        if (stats.audioSpatialSuperseded) {
-                            state.name + " " + stringResource(Res.string.player_video_stats_spatial_superseded)
-                        } else {
-                            state.name
-                        },
-                    )
-                }
-                if (audioSessionId != 0) {
-                    StatsRow(stringResource(Res.string.player_video_stats_session_id), "$audioSessionId")
-                }
-            }
-        }
-
-        StatsSection(stringResource(Res.string.player_video_stats_network)) {
-            StatsRow(
-                stringResource(Res.string.player_video_play_method),
-                playMethod,
-                badge = if (isOfflineSource) stringResource(Res.string.player_video_downloaded_badge) else null,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(Res.string.player_video_stats_for_nerds),
+                style = MaterialTheme.typography.titleSmall,
+                color = playerOnScrim(),
+                modifier = Modifier.weight(1f),
             )
-            StatsRow(stringResource(Res.string.player_video_stats_quality), streamingQuality)
-            if (stats.estimatedBandwidthBps > 0) {
-                StatsRow(stringResource(Res.string.player_video_stats_est_bandwidth), formatBandwidth(stats.estimatedBandwidthBps))
+            IconButton(onClick = onClose) {
+                Icon(Tabler.Outline.X, stringResource(Res.string.player_video_stats_close), tint = playerOnScrim())
             }
-            StatsRow(stringResource(Res.string.player_video_stats_stream_bitrate), formatBitrate(
-                stats.videoBitrate ?: (stats.audioBitrate ?: 0)
-            ))
-            if (transcodeReasons.isNotEmpty()) {
-                transcodeReasons.forEach { reason ->
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(
-                            text = reason.explanation,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = playerOnScrim().copy(alpha = 0.9f),
+        }
+        Column(
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).testTag("video-stats-content"),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            StatsSection(stringResource(Res.string.player_video_stats_playback)) {
+                StatsRow(stringResource(Res.string.player_video_stats_state), if (isPlaying) stringResource(Res.string.player_video_stats_playing) else playbackState)
+                StatsRow(stringResource(Res.string.player_video_stats_position), formatDurationMsLocal(currentPositionMs))
+                StatsRow(stringResource(Res.string.player_video_duration), formatDurationMsLocal(durationMs))
+                if (durationMs > 0) {
+                    val progress = (currentPositionMs.toFloat() / durationMs.toFloat() * 100f)
+                    StatsRow(stringResource(Res.string.player_video_stats_progress), "${formatFixed(progress.toDouble(), 1)}%")
+                }
+                StatsRow(stringResource(Res.string.player_video_speed), "${playbackSpeed}x")
+                val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
+                StatsRow(stringResource(Res.string.player_video_stats_buffer_health), formatDurationMsLocal(bufferHealthMs))
+                StatsRow(stringResource(Res.string.player_video_stats_buffered), formatDurationMsLocal(stats.bufferedPositionMs))
+                // the multi-range readout — count of distinct cached
+                // windows plus their total span, so a dropped window after a
+                // forward seek is visible as "2 ranges" rather than one scalar.
+                if (bufferedRanges.isNotEmpty()) {
+                    val totalBufferedMs = bufferedRanges.sumOf { it.last - it.first }
+                    StatsRow(
+                        stringResource(Res.string.player_video_stats_buffered_ranges),
+                        "${bufferedRanges.size} · ${formatDurationMsLocal(totalBufferedMs)}",
+                    )
+                }
+                StatsRow(stringResource(Res.string.player_video_stats_clock), rememberCurrentTimeString())
+            }
+
+            if (stats.videoCodec != null || stats.videoResolution != null) {
+                StatsSection(stringResource(Res.string.player_video_video)) {
+                    // the HDR passthrough badge leads the video block —
+                    // active (display switched to an HDR target) or, when the
+                    // display stayed SDR, the one-line tone-mapping fallback
+                    // notice. Both come from the engine's target-params probe.
+                    if (stats.hdrOutputActive) {
+                        StatsRow(
+                            stringResource(Res.string.player_video_stats_hdr_output_active),
+                            "● HDR",
                         )
-                        reason.hint?.let { hint ->
+                    }
+                    stats.videoCodec?.let { StatsRow(stringResource(Res.string.player_video_codec), it.uppercase()) }
+                    stats.videoDecoder?.let { StatsRow(stringResource(Res.string.player_video_decoder), it) }
+                    stats.videoResolution?.let { StatsRow(stringResource(Res.string.player_video_resolution), it) }
+                    stats.videoFrameRate?.let { StatsRow(stringResource(Res.string.player_video_frame_rate), "${formatFixed(it.toDouble(), 2)} fps") }
+                    stats.videoBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
+                    stats.videoHdrType?.let { StatsRow(stringResource(Res.string.player_video_stats_hdr), it) }
+                    // the display's capability answers the content row above —
+                    // tone-map decisions read as (content family, display family).
+                    stats.displayHdrTypes?.let {
+                        StatsRow(stringResource(Res.string.player_video_stats_display_hdr), it)
+                    }
+                    stats.videoColorRange?.let { StatsRow(stringResource(Res.string.player_video_stats_color_range), it) }
+                    stats.videoColorDepth?.let { StatsRow(stringResource(Res.string.player_video_stats_color_depth), it) }
+                    stats.hdrOutputNotice?.let { notice ->
+                        Text(
+                            text = notice,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                            ),
+                            color = playerOnScrim().copy(alpha = 0.8f),
+                        )
+                    }
+                }
+            }
+
+            if (stats.audioCodec != null || stats.audioChannels != null || stats.audioSpatialState != null) {
+                StatsSection(stringResource(Res.string.player_video_audio)) {
+                    stats.audioCodec?.let { StatsRow(stringResource(Res.string.player_video_codec), it.uppercase()) }
+                    stats.audioSampleRate?.let { StatsRow(stringResource(Res.string.player_video_stats_sample_rate), "${it} Hz") }
+                    stats.audioChannels?.let { ch -> StatsRow(stringResource(Res.string.player_video_channels), formatChannels(ch)) }
+                    stats.audioBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
+                    // The platform spatializer's honest state (ExoPlayer, API 32+
+                    // devices with the feature) — a report, not a control. The
+                    // raw state name is technical by design (codec-style); the
+                    // supersession note is localized prose, so it comes from
+                    // resources rather than the policy module (commonMain pure
+                    // Kotlin has no string access).
+                    stats.audioSpatialState?.let { state ->
+                        StatsRow(
+                            stringResource(Res.string.player_video_stats_spatial),
+                            if (stats.audioSpatialSuperseded) {
+                                state.name + " " + stringResource(Res.string.player_video_stats_spatial_superseded)
+                            } else {
+                                state.name
+                            },
+                        )
+                    }
+                    if (audioSessionId != 0) {
+                        StatsRow(stringResource(Res.string.player_video_stats_session_id), "$audioSessionId")
+                    }
+                }
+            }
+
+            StatsSection(stringResource(Res.string.player_video_stats_network)) {
+                StatsRow(
+                    stringResource(Res.string.player_video_play_method),
+                    playMethod,
+                    badge = if (isOfflineSource) stringResource(Res.string.player_video_downloaded_badge) else null,
+                )
+                StatsRow(stringResource(Res.string.player_video_stats_quality), streamingQuality)
+                if (stats.estimatedBandwidthBps > 0) {
+                    StatsRow(stringResource(Res.string.player_video_stats_est_bandwidth), formatBandwidth(stats.estimatedBandwidthBps))
+                }
+                StatsRow(stringResource(Res.string.player_video_stats_stream_bitrate), formatBitrate(
+                    stats.videoBitrate ?: (stats.audioBitrate ?: 0)
+                ))
+                if (transcodeReasons.isNotEmpty()) {
+                    transcodeReasons.forEach { reason ->
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text(
-                                text = hint,
+                                text = reason.explanation,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = playerOnScrim().copy(alpha = 0.65f),
+                                color = playerOnScrim().copy(alpha = 0.9f),
                             )
+                            reason.hint?.let { hint ->
+                                Text(
+                                    text = hint,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = playerOnScrim().copy(alpha = 0.65f),
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        StatsSection(stringResource(Res.string.player_video_stats_performance)) {
-            StatsRow(stringResource(Res.string.player_video_stats_dropped_frames), "${stats.droppedFrames}")
-            // Only show total rendered frames when the engine actually
-            // reports them (ExoPlayer via DecoderCounters, MPV via
-            // displayed-frame-count); otherwise the row is hidden rather
-            // than stuck on a misleading 0.
-            if (stats.totalVideoFrames > 0) {
-                StatsRow(stringResource(Res.string.player_video_stats_total_frames), "${stats.totalVideoFrames}")
-                val dropPct = if (stats.totalVideoFrames > 0) {
-                    stats.droppedFrames.toFloat() /
-                        (stats.droppedFrames + stats.totalVideoFrames) * 100f
-                } else 0f
-                StatsRow(stringResource(Res.string.player_video_stats_drop_rate), "${formatFixed(dropPct.toDouble(), 2)}%")
+            StatsSection(stringResource(Res.string.player_video_stats_performance)) {
+                StatsRow(stringResource(Res.string.player_video_stats_dropped_frames), "${stats.droppedFrames}")
+                // Only show total rendered frames when the engine actually
+                // reports them (ExoPlayer via DecoderCounters, MPV via
+                // displayed-frame-count); otherwise the row is hidden rather
+                // than stuck on a misleading 0.
+                if (stats.totalVideoFrames > 0) {
+                    StatsRow(stringResource(Res.string.player_video_stats_total_frames), "${stats.totalVideoFrames}")
+                    val dropPct = if (stats.totalVideoFrames > 0) {
+                        stats.droppedFrames.toFloat() /
+                            (stats.droppedFrames + stats.totalVideoFrames) * 100f
+                    } else 0f
+                    StatsRow(stringResource(Res.string.player_video_stats_drop_rate), "${formatFixed(dropPct.toDouble(), 2)}%")
+                }
+                if (stats.bufferSizeBytes > 0) {
+                    StatsRow(stringResource(Res.string.player_video_stats_buffer_size), formatBytes(stats.bufferSizeBytes))
+                }
+                // Sync / display diagnostics — null-safe: rows hidden when absent.
+                stats.voFrameDropCount?.let { StatsRow(stringResource(Res.string.player_video_stats_vo_dropped_frames), "$it") }
+                stats.avsyncMs?.let { StatsRow(stringResource(Res.string.player_video_av_sync), "${formatFixed(it.toDouble(), 1)} ms") }
+                stats.voDelayedMs?.let { StatsRow(stringResource(Res.string.player_video_stats_vo_delay), "${formatFixed(it.toDouble(), 1)} ms") }
+                stats.displayFps?.let { StatsRow(stringResource(Res.string.player_video_stats_display_rate), "${formatFixed(it.toDouble(), 2)} Hz") }
             }
-            if (stats.bufferSizeBytes > 0) {
-                StatsRow(stringResource(Res.string.player_video_stats_buffer_size), formatBytes(stats.bufferSizeBytes))
-            }
-            // Sync / display diagnostics — null-safe: rows hidden when absent.
-            stats.voFrameDropCount?.let { StatsRow(stringResource(Res.string.player_video_stats_vo_dropped_frames), "$it") }
-            stats.avsyncMs?.let { StatsRow(stringResource(Res.string.player_video_av_sync), "${formatFixed(it.toDouble(), 1)} ms") }
-            stats.voDelayedMs?.let { StatsRow(stringResource(Res.string.player_video_stats_vo_delay), "${formatFixed(it.toDouble(), 1)} ms") }
-            stats.displayFps?.let { StatsRow(stringResource(Res.string.player_video_stats_display_rate), "${formatFixed(it.toDouble(), 2)} Hz") }
-        }
 
-        StatsSection(stringResource(Res.string.player_video_stats_engine)) {
-            StatsRow(stringResource(Res.string.player_video_stats_player), playerType)
-            StatsRow(stringResource(Res.string.player_video_decoder_mode), decoderMode)
+            StatsSection(stringResource(Res.string.player_video_stats_engine)) {
+                StatsRow(stringResource(Res.string.player_video_stats_player), playerType)
+                StatsRow(stringResource(Res.string.player_video_decoder_mode), decoderMode)
+            }
         }
     }
 }
@@ -354,43 +337,41 @@ private fun StatsRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 1.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall.copy(
                 fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
             ),
             color = playerOnScrim().copy(alpha = 0.85f),
+            modifier = Modifier.weight(0.44f),
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Spacer(Modifier.width(12.dp))
+        Column(
+            modifier = Modifier.weight(0.56f),
+            horizontalAlignment = Alignment.End,
         ) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                 ),
                 color = playerOnScrim(),
+                textAlign = TextAlign.End,
             )
             // Small trailing pill (e.g. the "Downloaded" source badge) —
             // rendered only when the caller supplies one.
             if (badge != null) {
                 Text(
                     text = badge,
-                    modifier = Modifier
-                        .clip(ShapeCache.smoothPill)
+                    modifier = Modifier.clip(ShapeCache.smoothPill)
                         .background(playerOnScrim().copy(alpha = 0.16f))
                         .padding(horizontal = 6.dp, vertical = 1.dp),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 9.sp,
-                    ),
+                    style = MaterialTheme.typography.labelSmall,
                     color = playerOnScrim(),
                 )
             }

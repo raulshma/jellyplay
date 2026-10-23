@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disp
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_only_preferred_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_style
@@ -57,6 +58,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_f
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_font_size_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_forced_only_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_forced_only_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_only_preferred_subtitles_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_only_preferred_subtitles_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_language_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_sync_offset_subtitle
@@ -139,6 +142,15 @@ internal object LanguageRows {
         titleRes = Res.string.settings_forced_subtitles,
         searchTitleRes = Res.string.ss_subtitle_forced_only_title,
         searchSubtitleRes = Res.string.ss_subtitle_forced_only_subtitle,
+        gate = RowAdmission.Always,
+    )
+
+    val ShowOnlyPreferredSubtitles = SettingsRow(
+        id = "show_only_preferred_subtitles",
+        icon = Tabler.Outline.Filter,
+        titleRes = Res.string.settings_show_only_preferred_subtitles,
+        searchTitleRes = Res.string.ss_show_only_preferred_subtitles_title,
+        searchSubtitleRes = Res.string.ss_show_only_preferred_subtitles_subtitle,
         gate = RowAdmission.Always,
     )
 
@@ -276,6 +288,7 @@ internal val LanguageGeneralRows: List<SettingsRow> = listOf(
 internal val LanguageSubtitlesRows: List<SettingsRow> = listOf(
     LanguageRows.SubtitleFontSize,
     LanguageRows.SubtitleForcedOnly,
+    LanguageRows.ShowOnlyPreferredSubtitles,
     LanguageRows.PgsDirectPlay,
     LanguageRows.HdrSubtitleStyle,
     LanguageRows.SubtitleColor,

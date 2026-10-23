@@ -193,7 +193,8 @@
     <string name="player_video_rendering">レンダリング</string>
     <string name="player_video_deinterlace">インターレース解除 · %1$s</string>
     <string name="player_video_passthrough">パススルー</string>
-    <string name="player_video_stats_for_nerds">詳細統計</string>
+        <string name="player_video_stats_close">閉じる</string>
+<string name="player_video_stats_for_nerds">詳細統計</string>
     <string name="player_video_stats_for_nerds_on">詳細統計 \u00B7 オン</string>
     <string name="player_video_video_filters">ビデオフィルター</string>
     <string name="player_video_video_filters_on">ビデオフィルター \u00B7 オン</string>
@@ -330,7 +331,16 @@
     <string name="player_video_watched">視聴済み</string>
     <string name="player_video_time_left">残り %1$s</string>
     <string name="player_video_now_playing">再生中</string>
-    <string name="player_video_quality_title">品質</string>
+        <string name="player_video_playback_options">再生オプション</string>
+    <string name="player_video_playback_options_desc">エンジン、サーバーからのストリーム配信方式、品質を切り替えます。変更は実行中のセッションに適用されます。</string>
+    <string name="player_video_playback_options_engine_section">エンジン</string>
+    <string name="player_video_playback_options_delivery_section">配信方式</string>
+    <string name="player_video_playback_options_quality_section">品質</string>
+    <string name="player_video_quality_unavailable">この再生では品質を利用できません（強制ダイレクト再生、オフライン、キャスト、SyncPlay）。</string>
+    <string name="player_video_playback_mode_auto_desc">サーバーに任せる（可能な場合はダイレクト再生）</string>
+    <string name="player_video_playback_mode_force_direct_desc">ファイルをそのまま再生（トランスコードなし）</string>
+    <string name="player_video_playback_mode_force_transcode_desc">常にサーバー経由でトランスコード</string>
+<string name="player_video_quality_title">品質</string>
     <string name="player_video_quality_description">適応ストリーミングでは変更は直ちに適用されます。ダイレクトプレイの場合、再生の最大ビットレートを設定します。</string>
     <string name="player_video_adaptive_bitrate_cap">適応ビットレート上限</string>
     <string name="player_video_adaptive_bitrate_on">従量制ネットワークで品質を制限</string>

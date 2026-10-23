@@ -18,6 +18,9 @@
     <string name="settings_forced_subtitles">強制字幕のみ</string>
     <string name="settings_forced_subtitles_on">強制トラックがある場合のみ字幕を表示</string>
     <string name="settings_forced_subtitles_off">優先言語に従って字幕を表示</string>
+    <string name="settings_show_only_preferred_subtitles">優先言語の字幕のみ</string>
+    <string name="settings_show_only_preferred_subtitles_on">優先言語以外の字幕トラックを非表示にします</string>
+    <string name="settings_show_only_preferred_subtitles_off">すべての字幕トラックを表示</string>
     <string name="settings_high_contrast_subtitles">高コントラスト字幕</string>
     <string name="settings_high_contrast_on">アクセシビリティ向けに最も読みやすい字幕スタイル</string>
     <string name="settings_high_contrast_off">設定された字幕スタイルを使用</string>

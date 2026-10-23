@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -33,7 +34,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
@@ -87,9 +87,9 @@ internal data class CenterOverlayInputs(
     val isCinemaIntroVisible: Boolean,
     val tvCinemaIntroFocusRequester: FocusRequester,
     val activeSegment: MediaSegment?,
-    val activeSegmentBehavior: SegmentBehavior?,
+    val isSkipSegmentVisible: Boolean,
+    val skipPromptProgress: State<Float>?,
     val shouldShowUpNext: Boolean,
-    val isInPipMode: Boolean,
     val tvSkipSegmentFocusRequester: FocusRequester,
     /**
      * The Up Next card — the Up Next controller's projection, already resolved
@@ -137,36 +137,33 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         )
     }
 
-    if (inputs.isCinemaIntroVisible) {
-        IntroSkipOverlay(
-            isVisible = true,
+    IntroSkipOverlay(
+        isVisible = inputs.isCinemaIntroVisible,
+        initialPromptProgress = inputs.skipPromptProgress,
+        onSkip = {
+            viewModel.onEvent(VideoPlayerUiEvent.SkipIntro)
+            performConfirmHaptic()
+        },
+        focusRequester = inputs.tvCinemaIntroFocusRequester,
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(bottom = 100.dp, end = 40.dp),
+    )
+
+    if (inputs.activeSegment != null) {
+        SegmentSkipOverlay(
+            isVisible = inputs.isSkipSegmentVisible,
+            initialPromptProgress = inputs.skipPromptProgress,
+            segmentType = inputs.activeSegment.type,
             onSkip = {
-                viewModel.onEvent(VideoPlayerUiEvent.SkipIntro)
+                viewModel.onEvent(VideoPlayerUiEvent.SkipSegment(inputs.activeSegment))
                 performConfirmHaptic()
             },
-            focusRequester = inputs.tvCinemaIntroFocusRequester,
+            focusRequester = inputs.tvSkipSegmentFocusRequester,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 100.dp, end = 40.dp),
         )
-    }
-
-    if (inputs.activeSegment != null && inputs.activeSegmentBehavior == SegmentBehavior.SHOW_BUTTON && !inputs.isInPipMode) {
-        val hideForUpNext = inputs.activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && inputs.shouldShowUpNext
-        if (!hideForUpNext) {
-            SegmentSkipOverlay(
-                isVisible = true,
-                segmentType = inputs.activeSegment.type,
-                onSkip = {
-                    viewModel.onEvent(VideoPlayerUiEvent.SkipSegment(inputs.activeSegment))
-                    performConfirmHaptic()
-                },
-                focusRequester = inputs.tvSkipSegmentFocusRequester,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 100.dp, end = 40.dp),
-            )
-        }
     }
 
     // "Skipped …" confirmation: raised by the VM when an

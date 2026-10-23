@@ -109,6 +109,7 @@ internal fun BoxScope.PlayerStatusOverlayTier(
     if (uiState.uiPrefs.showVideoStats) {
         VideoStatsOverlay(
             statsFlow = viewModel.videoStats,
+            onClose = { viewModel.onEvent(VideoPlayerUiEvent.ToggleVideoStats) },
             currentPositionFlow = viewModel.currentPositionMs,
             // the ranges readout row's source, collected at
             // this leaf like statsFlow.

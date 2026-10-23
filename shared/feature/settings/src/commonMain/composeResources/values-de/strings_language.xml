@@ -18,6 +18,9 @@
     <string name="settings_forced_subtitles">Nur erzwungene Untertitel</string>
     <string name="settings_forced_subtitles_on">Untertitel nur zeigen, wenn erzwungene Spuren vorhanden sind</string>
     <string name="settings_forced_subtitles_off">Untertitel gemäß bevorzugter Sprache zeigen</string>
+    <string name="settings_show_only_preferred_subtitles">Nur bevorzugte Untertitel</string>
+    <string name="settings_show_only_preferred_subtitles_on">Untertitel-Tracks außerhalb deiner bevorzugten Sprachen ausblenden</string>
+    <string name="settings_show_only_preferred_subtitles_off">Alle Untertitel-Tracks anzeigen</string>
     <string name="settings_high_contrast_subtitles">Untertitel mit hohem Kontrast</string>
     <string name="settings_high_contrast_on">Maximal lesbarer Untertitel-Stil für Barrierefreiheit</string>
     <string name="settings_high_contrast_off">Untertitel-Stil wie konfiguriert verwenden</string>

@@ -343,6 +343,8 @@
     <string name="ss_subtitle_font_size_subtitle">Taille du texte des sous-titres pendant la lecture vidéo</string>
     <string name="ss_subtitle_forced_only_title">Sous-titres forcés uniquement</string>
     <string name="ss_subtitle_forced_only_subtitle">Afficher les sous-titres uniquement quand des pistes forcées sont présentes</string>
+    <string name="ss_show_only_preferred_subtitles_title">Sous-titres préférés uniquement</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Afficher uniquement les pistes de sous-titres dans vos langues préférées</string>
     <string name="ss_pgs_direct_play_title">Lecture directe PGS</string>
     <string name="ss_pgs_direct_play_subtitle">Rendre les sous-titres PGS nativement au lieu de les incruster</string>
     <string name="ss_hdr_subtitle_style_title">Style des sous-titres HDR</string>

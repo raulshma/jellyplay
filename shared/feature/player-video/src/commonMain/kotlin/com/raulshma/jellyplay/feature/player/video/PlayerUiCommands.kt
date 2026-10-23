@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * The session-owned pref write choreography (the [TransportRouter] shape):
@@ -87,6 +89,13 @@ internal class PlayerUiCommands(
     /** The effects controller's settle-gated per-item persist ([setVideoEffectsSettled]). */
     private val persistVideoEffects: (VideoEffectsConfig) -> Unit,
 ) {
+
+    /**
+     * Serializes the mode/quality persist-then-reload sequence: the options
+     * sheet stays open across picks, and without the mutex a quick second tap
+     * could let the first change's reload resolve against the stale mirror.
+     */
+    private val playbackPreferenceMutex = Mutex()
 
     fun setAspectRatio(ratio: AspectRatio) {
         updateVideoFx { it.copy(aspectRatio = ratio) }
@@ -168,8 +177,12 @@ internal class PlayerUiCommands(
         persist: suspend () -> Unit,
     ) {
         scope.launch {
-            persist()
-            reloadPlaybackForMode(mode = mode, quality = quality)
+            // The options sheet stays open across picks. Keep mode and quality
+            // reloads ordered so an older server response cannot win the race.
+            playbackPreferenceMutex.withLock {
+                persist()
+                reloadPlaybackForMode(mode = mode, quality = quality)
+            }
         }
     }
 

@@ -18,6 +18,9 @@
     <string name="settings_forced_subtitles">Apenas legendas forçadas</string>
     <string name="settings_forced_subtitles_on">Mostrar legendas apenas quando existem faixas forçadas</string>
     <string name="settings_forced_subtitles_off">Mostrar legendas conforme o idioma preferido</string>
+    <string name="settings_show_only_preferred_subtitles">Apenas legendas preferidas</string>
+    <string name="settings_show_only_preferred_subtitles_on">Ocultar faixas de legenda fora dos seus idiomas preferidos</string>
+    <string name="settings_show_only_preferred_subtitles_off">Mostrar todas as faixas de legenda</string>
     <string name="settings_high_contrast_subtitles">Legendas de alto contraste</string>
     <string name="settings_high_contrast_on">Estilo de legendas com legibilidade máxima para acessibilidade</string>
     <string name="settings_high_contrast_off">Usar o estilo de legendas configurado</string>

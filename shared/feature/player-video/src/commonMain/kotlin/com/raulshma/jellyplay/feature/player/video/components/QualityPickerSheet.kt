@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_adaptive_bitrate_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_description
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_title
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_quality_unavailable
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Video
 
@@ -56,66 +57,104 @@ fun QualityPickerSheet(
         subtitle = stringResource(Res.string.player_video_quality_description),
         onDismiss = onDismiss,
     ) { isTv, focusRequester ->
-        if (isTv) {
-            LazyColumn(modifier = Modifier.verticalWrapAround()) {
-                items(StreamingQuality.entries, key = { it.name }) { quality ->
-                    val isSelected = quality == currentQuality
-                    val isFirstOrSelected = isSelected || (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
-                    TvFocusableOptionRow(
-                        selected = isSelected,
-                        onClick = { onSelect(quality); onDismiss() },
-                        focusRequesterModifier = Modifier.ifElse(isFirstOrSelected, Modifier.focusRequester(focusRequester)),
-                        trailingCheck = true,
-                    ) {
-                        TvOptionRowLabel(text = quality.displayName, selected = isSelected)
-                    }
-                }
-            }
-        } else {
-            FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                StreamingQuality.entries.forEach { quality ->
-                    val isSelected = quality == currentQuality
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            onSelect(quality)
-                            onDismiss()
-                        },
-                        label = {
-                            Text(
-                                quality.displayName,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            )
-                        },
-                        shape = ShapeCache.smoothPill,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = Color.Transparent,
-                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                            enabled = true,
-                            selected = isSelected,
-                        ),
-                    )
+        QualityPickerOptions(
+            currentQuality = currentQuality,
+            adaptiveBitrateEnabled = adaptiveBitrateEnabled,
+            onToggleAdaptiveBitrate = onToggleAdaptiveBitrate,
+            onSelect = onSelect,
+            onDismiss = onDismiss,
+            isTv = isTv,
+            tvFocusRequester = focusRequester,
+        )
+    }
+}
+
+/**
+ * The quality chip row + adaptive-bitrate toggle, shared by the standalone
+ * quality sheet and the combined playback-options sheet (which embeds it so
+ * one open sheet covers engine + delivery + quality). [enabled] = false
+ * renders the section disabled with the unavailable help text (forced direct
+ * play / offline / cast / SyncPlay have no quality to pick).
+ */
+@Composable
+fun QualityPickerOptions(
+    currentQuality: StreamingQuality,
+    adaptiveBitrateEnabled: Boolean,
+    onToggleAdaptiveBitrate: (Boolean) -> Unit,
+    onSelect: (StreamingQuality) -> Unit,
+    onDismiss: () -> Unit,
+    isTv: Boolean,
+    tvFocusRequester: FocusRequester,
+    enabled: Boolean = true,
+) {
+    if (!enabled) {
+        Text(
+            text = stringResource(Res.string.player_video_quality_unavailable),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        return
+    }
+    if (isTv) {
+        LazyColumn(modifier = Modifier.verticalWrapAround()) {
+            items(StreamingQuality.entries, key = { it.name }) { quality ->
+                val isSelected = quality == currentQuality
+                val isFirstOrSelected = isSelected || (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
+                TvFocusableOptionRow(
+                    selected = isSelected,
+                    onClick = { onSelect(quality); onDismiss() },
+                    focusRequesterModifier = Modifier.ifElse(isFirstOrSelected, Modifier.focusRequester(tvFocusRequester)),
+                    trailingCheck = true,
+                ) {
+                    TvOptionRowLabel(text = quality.displayName, selected = isSelected)
                 }
             }
         }
-
-        Spacer(Modifier.height(20.dp))
-
-        AdaptiveBitrateToggle(
-            enabled = adaptiveBitrateEnabled,
-            onToggle = onToggleAdaptiveBitrate,
-        )
+    } else {
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StreamingQuality.entries.forEach { quality ->
+                val isSelected = quality == currentQuality
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        onSelect(quality)
+                        onDismiss()
+                    },
+                    label = {
+                        Text(
+                            quality.displayName,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    },
+                    shape = ShapeCache.smoothPill,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        selectedLabelColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        borderColor = Color.Transparent,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                        enabled = true,
+                        selected = isSelected,
+                    ),
+                )
+            }
+        }
     }
+
+    Spacer(Modifier.height(20.dp))
+
+    AdaptiveBitrateToggle(
+        enabled = adaptiveBitrateEnabled,
+        onToggle = onToggleAdaptiveBitrate,
+    )
 }
 
 @Composable

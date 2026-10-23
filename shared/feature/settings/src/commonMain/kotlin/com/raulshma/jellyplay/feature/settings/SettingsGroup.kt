@@ -96,14 +96,19 @@ internal fun SettingsGroup(
     val headerInteractionSource = remember { MutableInteractionSource() }
 
     val isLight = LocalIsLightTheme.current
+    // Android 13 can reject touches inside tall generic-path clips after
+    // scrolling. A rounded outline keeps the entire expanded group
+    // interactive, including its last rows, while retaining the theme's
+    // square-corner override.
+    val groupShape = ShapeCache.rounded24
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
-            .clip(ShapeCache.smooth24)
+            .then(if (isLight) Modifier.shadow(2.dp, groupShape) else Modifier)
+            .clip(groupShape)
             .background(settingsGroupContainerColor())
-            .lightModeHairlineBorder(ShapeCache.smooth24)
+            .lightModeHairlineBorder(groupShape)
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Row(

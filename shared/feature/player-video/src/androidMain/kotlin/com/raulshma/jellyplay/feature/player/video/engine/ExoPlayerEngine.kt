@@ -339,6 +339,7 @@ class ExoPlayerEngine(
      */
     @Volatile
     private var videoDecoderCounters: DecoderCounters? = null
+    private var videoDecoderName: String? = null
     // audioEffectsAttached / lastAudioEffectsConfig / lastAppliedReverbPreset
     // moved into AudioEffectChain.
 
@@ -473,8 +474,18 @@ class ExoPlayerEngine(
             videoDecoderCounters = decoderCounters
         }
 
+        override fun onVideoDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            videoDecoderName = decoderName
+        }
+
         override fun onVideoDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
             videoDecoderCounters = null
+            videoDecoderName = null
         }
     }
 
@@ -834,6 +845,7 @@ class ExoPlayerEngine(
         // first stats tick must never be suppressed by the previous one.
         statsGuard.reset()
         videoDecoderCounters = null
+        videoDecoderName = null
         wasPlayingBeforeActivityPause = false
     }
 
@@ -1713,9 +1725,8 @@ class ExoPlayerEngine(
 
         val counters = videoDecoderCounters
         counters?.ensureUpdated()
-        val dropped = (counters?.droppedInputBufferCount ?: 0)
-            .coerceAtLeast(counters?.droppedToKeyframeCount ?: 0)
-            .toLong()
+        // droppedBufferCount includes input and output drops; droppedToKeyframeCount counts events.
+        val dropped = (counters?.droppedBufferCount ?: 0).toLong()
         val rendered = (counters?.renderedOutputBufferCount ?: 0).toLong()
 
         // The HDR fold is computed BEFORE the dedup guard and compared by its
@@ -1775,7 +1786,7 @@ class ExoPlayerEngine(
 
         val newStats = EngineVideoStats(
             videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
-            videoDecoder = videoFormat?.codecs,
+            videoDecoder = videoDecoderName,
             videoResolution = videoFormat?.let { f ->
                 val w = f.width
                 val h = f.height

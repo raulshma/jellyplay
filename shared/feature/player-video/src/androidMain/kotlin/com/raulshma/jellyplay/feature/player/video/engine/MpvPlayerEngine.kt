@@ -108,6 +108,10 @@ class MpvPlayerEngine(
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
+    // Transport commands can arrive before the Compose video surface creates
+    // the native handle. Replay pause and speed after playFile instead of losing them.
+    private var pauseRequested = false
+    private var requestedPlaybackSpeed = 1f
 
     // ── time-pos dispatch dedupe (see the postInitOptions observe KDoc) ─────
     // The observer events and the reset sites below all run on the main
@@ -804,6 +808,7 @@ class MpvPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
+        pauseRequested = false
         // Engine may have been release()d and is being reused — beginLoad
         // clears the teardown guard + per-item state (pending batch, fold
         // latches, side-load registry, server duration rung, cue flows) so
@@ -831,6 +836,8 @@ class MpvPlayerEngine(
                 applyAndroidAudioEffects()
                 configureMpvForRequest(view, request)
                 view.playFile(request.uri)
+                core.setPlaybackSpeed(requestedPlaybackSpeed)
+                if (pauseRequested) core.pause()
                 pendingRequest = null
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
@@ -919,11 +926,13 @@ class MpvPlayerEngine(
     }
 
     override fun play() {
+        pauseRequested = false
         core.play()
         timePosDedupe.reset()
     }
 
     override fun pause() {
+        pauseRequested = true
         core.pause()
         timePosDedupe.reset()
     }
@@ -939,6 +948,7 @@ class MpvPlayerEngine(
     }
 
     override fun setPlaybackSpeed(speed: Float) {
+        requestedPlaybackSpeed = speed
         core.setPlaybackSpeed(speed)
     }
 
@@ -1261,6 +1271,8 @@ class MpvPlayerEngine(
             try {
                 configureMpvForRequest(view, request)
                 view.playFile(request.uri)
+                core.setPlaybackSpeed(requestedPlaybackSpeed)
+                if (pauseRequested) core.pause()
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
@@ -1309,8 +1321,8 @@ class MpvPlayerEngine(
 
     override val playbackSpeed: Float
         get() = try {
-            mpvView?.mpv?.getPropertyDouble(MpvProperties.SPEED)?.toFloat() ?: 1f
-        } catch (_: Exception) { 1f }
+            mpvView?.mpv?.getPropertyDouble(MpvProperties.SPEED)?.toFloat() ?: requestedPlaybackSpeed
+        } catch (_: Exception) { requestedPlaybackSpeed }
 
     override val audioSessionId: Int
         get() = generatedAudioSessionId

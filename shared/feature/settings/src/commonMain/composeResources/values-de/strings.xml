@@ -177,7 +177,9 @@
     <string name="settings_disable_pin_message">Gib deine aktuelle PIN ein, um die PIN-Sperre zu deaktivieren.</string>
     <string name="settings_current_pin">Aktuelle PIN</string>
     <string name="settings_incorrect_pin">Falsche PIN</string>
-    <string name="settings_confirm">Bestätigen</string>
+        <string name="settings_picker_search">Suchen</string>
+    <string name="settings_picker_no_results">Keine passenden Optionen</string>
+<string name="settings_confirm">Bestätigen</string>
     <string name="settings_authorize_quick_connect">Quick Connect autorisieren</string>
     <string name="settings_authorize_quick_connect_message">Gib den 6-stelligen Code ein, der auf dem anderen Gerät angezeigt wird.</string>
     <string name="settings_authorization_failed">Autorisierung fehlgeschlagen</string>

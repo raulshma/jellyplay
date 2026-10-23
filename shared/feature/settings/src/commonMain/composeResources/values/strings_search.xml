@@ -380,6 +380,8 @@
     <string name="ss_subtitle_font_size_subtitle">Size of subtitle texts during video playback</string>
     <string name="ss_subtitle_forced_only_title">Forced Subtitles Only</string>
     <string name="ss_subtitle_forced_only_subtitle">Show subtitles only when forced tracks are present</string>
+    <string name="ss_show_only_preferred_subtitles_title">Preferred Subtitles Only</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Show only subtitle tracks in your preferred languages</string>
     <string name="ss_pgs_direct_play_title">PGS Direct Play</string>
     <string name="ss_pgs_direct_play_subtitle">Render PGS subtitles natively instead of burning in</string>
     <string name="ss_hdr_subtitle_style_title">HDR Subtitle Style</string>

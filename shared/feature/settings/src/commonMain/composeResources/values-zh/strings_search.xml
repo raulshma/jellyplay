@@ -343,6 +343,8 @@
     <string name="ss_subtitle_font_size_subtitle">视频播放期间字幕文字的大小</string>
     <string name="ss_subtitle_forced_only_title">仅强制字幕</string>
     <string name="ss_subtitle_forced_only_subtitle">仅当存在强制轨道时显示字幕</string>
+    <string name="ss_show_only_preferred_subtitles_title">仅限首选字幕</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">仅显示首选语言的字幕轨道</string>
     <string name="ss_pgs_direct_play_title">PGS 直接播放</string>
     <string name="ss_pgs_direct_play_subtitle">原生渲染 PGS 字幕而不是烧录嵌入</string>
     <string name="ss_hdr_subtitle_style_title">HDR 字幕样式</string>

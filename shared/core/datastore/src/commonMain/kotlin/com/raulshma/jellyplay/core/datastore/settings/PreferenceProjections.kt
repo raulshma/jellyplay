@@ -289,6 +289,7 @@ class PreferenceProjections constructor(
                 preferredSubtitleLanguage = subtitle.preferredSubtitleLanguage,
                 preferredAudioLanguage = subtitle.preferredAudioLanguage,
                 subtitlesForcedOnly = subtitle.subtitlesForcedOnly,
+                showOnlyPreferredSubtitles = subtitle.showOnlyPreferredSubtitles,
                 highContrastSubtitles = subtitle.highContrastSubtitles,
                 pgsSubtitleDirectPlay = playback.pgsSubtitleDirectPlay,
                 hdrSubtitleStyleEnabled = subtitle.hdrSubtitleStyleEnabled,

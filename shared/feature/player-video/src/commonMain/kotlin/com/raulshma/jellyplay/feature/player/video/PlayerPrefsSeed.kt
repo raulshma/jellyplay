@@ -72,6 +72,7 @@ internal object PlayerPrefsSeed {
                 uiPrefs = uiPrefs.copy(
                     defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
                     controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
+                    skipPromptDurationMs = agg.videoPlayer.skipPromptDurationMs,
                     hideOsdOnPause = agg.videoPlayer.videoHideOsdOnPause,
                     passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
                     trickplayEnabled = agg.videoPlayer.trickplayEnabled,

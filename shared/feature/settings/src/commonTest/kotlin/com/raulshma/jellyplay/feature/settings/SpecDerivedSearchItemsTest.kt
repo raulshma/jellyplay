@@ -118,7 +118,7 @@ class SpecDerivedSearchItemsTest {
     @Test
     fun `live tv list keeps its order - dvr residuals then the spec-backed segment rows`() {
         val items = LiveTvSearchItems
-        assertEquals(10, items.size)
+        assertEquals(11, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DvrPrePadding.id,
@@ -131,6 +131,7 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.MediaSegmentCommercial.id,
                 PlaybackRows.MediaSegmentUnknown.id,
                 PlaybackRows.SkipSegmentsOnSeek.id,
+                PlaybackRows.SkipPromptDuration.id,
             ),
             items.map { it.id },
         )

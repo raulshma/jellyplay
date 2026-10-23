@@ -193,7 +193,8 @@
     <string name="player_video_rendering">Rendering</string>
     <string name="player_video_deinterlace">Deinterlacing · %1$s</string>
     <string name="player_video_passthrough">Durchreichung</string>
-    <string name="player_video_stats_for_nerds">Statistiken für Nerds</string>
+        <string name="player_video_stats_close">Schließen</string>
+<string name="player_video_stats_for_nerds">Statistiken für Nerds</string>
     <string name="player_video_stats_for_nerds_on">Statistiken für Nerds \u00B7 An</string>
     <string name="player_video_video_filters">Videofilter</string>
     <string name="player_video_video_filters_on">Videofilter \u00B7 An</string>
@@ -331,7 +332,16 @@
     <string name="player_video_watched">Angesehen</string>
     <string name="player_video_time_left">Noch %1$s</string>
     <string name="player_video_now_playing">Laeuft gerade</string>
-    <string name="player_video_quality_title">Qualitaet</string>
+        <string name="player_video_playback_options">Wiedergabeoptionen</string>
+    <string name="player_video_playback_options_desc">Engine, Art der Auslieferung und Qualität wechseln. Änderungen wirken auf die laufende Sitzung.</string>
+    <string name="player_video_playback_options_engine_section">Engine</string>
+    <string name="player_video_playback_options_delivery_section">Auslieferung</string>
+    <string name="player_video_playback_options_quality_section">Qualität</string>
+    <string name="player_video_quality_unavailable">Qualität ist für diese Wiedergabe nicht verfügbar (erzwungenes Direct Play, offline, Cast oder SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">Server entscheidet (Direct Play, wenn möglich)</string>
+    <string name="player_video_playback_mode_force_direct_desc">Datei unverändert streamen, ohne Transcoding</string>
+    <string name="player_video_playback_mode_force_transcode_desc">Immer über den Server transkodieren</string>
+<string name="player_video_quality_title">Qualitaet</string>
     <string name="player_video_quality_description">Aenderungen gelten sofort fuer adaptive Streams. Bei Direct Play wird die maximale Wiedergabe-Bitrate festgelegt.</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate-Obergrenze</string>
     <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>

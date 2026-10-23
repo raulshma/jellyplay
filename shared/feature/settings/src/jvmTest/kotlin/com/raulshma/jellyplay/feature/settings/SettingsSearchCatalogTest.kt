@@ -54,7 +54,7 @@ class SettingsSearchCatalogTest {
     @Test
     fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
-        assertEquals(365, items.size)
+        assertEquals(367, items.size)
         // Curated flat order starts with the account/session pair, and the
         // aggregation is a pure concatenation of the decorated per-screen
         // groups (no dedup, no reordering).

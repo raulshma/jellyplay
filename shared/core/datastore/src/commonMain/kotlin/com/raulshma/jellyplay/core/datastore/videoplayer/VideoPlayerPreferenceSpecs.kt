@@ -155,6 +155,20 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        PreferenceSpec.plainLong(
+            keyName = "skip_prompt_duration_ms",
+            default = 10_000L,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "skip_prompt_duration",
+                titleKey = "settings_skip_prompt_duration",
+                subtitleKey = "settings_skip_prompt_duration_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("skip", "intro", "outro", "button", "duration", "seconds"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
         /*
          * Pausing should not summon the control
          * overlay. Default **off** — today's show-on-pause behavior. On, the
@@ -1077,6 +1091,8 @@ object VideoPlayerPreferenceSpecs {
     val VIDEO_SEEK_DURATION_MS: PreferenceSpec<Long> get() = row("video_seek_duration_ms")
 
     val VIDEO_CONTROLS_TIMEOUT_MS: PreferenceSpec<Long> get() = row("video_controls_timeout_ms")
+
+    val SKIP_PROMPT_DURATION_MS: PreferenceSpec<Long> get() = row("skip_prompt_duration_ms")
 
     val VIDEO_HIDE_OSD_ON_PAUSE: PreferenceSpec<Boolean> get() = row("video_hide_osd_on_pause")
 

@@ -36,13 +36,13 @@ data class MediaStreamSelection(
 
 @Immutable
 @Serializable
-enum class StreamingQuality(override val displayName: String) : HasDisplayName {
+enum class StreamingQuality(override val displayName: String, val maxHeight: Int? = null) : HasDisplayName {
     AUTO("Auto"),
-    LOW_360P("360p"),
-    SD_480P("480p"),
-    HD_720P("720p"),
-    FHD_1080P("1080p"),
-    UHD_4K("4K"),
+    LOW_360P("360p", 360),
+    SD_480P("480p", 480),
+    HD_720P("720p", 720),
+    FHD_1080P("1080p", 1080),
+    UHD_4K("4K", 2160),
 }
 
 @Immutable

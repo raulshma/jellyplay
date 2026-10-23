@@ -177,7 +177,9 @@
     <string name="settings_disable_pin_message">输入你当前的 PIN 以禁用 PIN 锁。</string>
     <string name="settings_current_pin">当前 PIN</string>
     <string name="settings_incorrect_pin">PIN 不正确</string>
-    <string name="settings_confirm">确认</string>
+        <string name="settings_picker_search">搜索</string>
+    <string name="settings_picker_no_results">没有匹配的选项</string>
+<string name="settings_confirm">确认</string>
     <string name="settings_authorize_quick_connect">授权快速连接</string>
     <string name="settings_authorize_quick_connect_message">输入其他设备上显示的 6 位代码。</string>
     <string name="settings_authorization_failed">授权失败</string>

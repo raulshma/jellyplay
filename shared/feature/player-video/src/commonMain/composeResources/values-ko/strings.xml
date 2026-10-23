@@ -193,7 +193,8 @@
     <string name="player_video_rendering">렌더링</string>
     <string name="player_video_deinterlace">디인터레이스 · %1$s</string>
     <string name="player_video_passthrough">패스스루</string>
-    <string name="player_video_stats_for_nerds">전문가 통계</string>
+        <string name="player_video_stats_close">닫기</string>
+<string name="player_video_stats_for_nerds">전문가 통계</string>
     <string name="player_video_stats_for_nerds_on">전문가 통계 \u00B7 켜짐</string>
     <string name="player_video_video_filters">비디오 필터</string>
     <string name="player_video_video_filters_on">비디오 필터 \u00B7 켜짐</string>
@@ -330,7 +331,16 @@
     <string name="player_video_watched">시청함</string>
     <string name="player_video_time_left">%1$s 남음</string>
     <string name="player_video_now_playing">재생 중</string>
-    <string name="player_video_quality_title">품질</string>
+        <string name="player_video_playback_options">재생 옵션</string>
+    <string name="player_video_playback_options_desc">엔진, 서버 스트림 전달 방식, 화질을 전환합니다. 변경 사항은 현재 세션에 적용됩니다.</string>
+    <string name="player_video_playback_options_engine_section">엔진</string>
+    <string name="player_video_playback_options_delivery_section">전달 방식</string>
+    <string name="player_video_playback_options_quality_section">화질</string>
+    <string name="player_video_quality_unavailable">이 재생에서는 화질을 사용할 수 없습니다(강제 다이렉트 재생, 오프라인, 캐스트 또는 SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">서버가 선택(가능하면 다이렉트 재생)</string>
+    <string name="player_video_playback_mode_force_direct_desc">파일을 그대로 재생(트랜스코딩 없음)</string>
+    <string name="player_video_playback_mode_force_transcode_desc">항상 서버를 통해 트랜스코딩</string>
+<string name="player_video_quality_title">품질</string>
     <string name="player_video_quality_description">적응형 스트림의 경우 변경 사항이 즉시 적용됩니다. 다이렉트 재생에서는 최대 재생 비트레이트를 설정합니다.</string>
     <string name="player_video_adaptive_bitrate_cap">적응형 비트레이트 상한</string>
     <string name="player_video_adaptive_bitrate_on">종량제 네트워크에서 품질 제한</string>

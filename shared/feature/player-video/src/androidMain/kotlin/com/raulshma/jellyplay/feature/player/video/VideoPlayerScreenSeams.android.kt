@@ -7,7 +7,11 @@ import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -19,6 +23,8 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
@@ -43,6 +49,19 @@ import kotlinx.coroutines.launch
  */
 
 // ── Host window ────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal actual fun playerSystemGestureTopInsetPx(): Float {
+    val density = LocalDensity.current
+    // Immersive mode can report no gesture inset. Preserve a minimum band
+    // even then, and honor larger system/status-bar insets on other devices.
+    return maxOf(
+        with(density) { 32.dp.toPx() },
+        WindowInsets.statusBarsIgnoringVisibility.getTop(density).toFloat(),
+        WindowInsets.systemGestures.getTop(density).toFloat(),
+    )
+}
 
 /** Wraps the host [Activity]; a null activity (no window yet) no-ops every op. */
 private class AndroidPlayerWindowOps(private val activity: Activity?) : PlayerWindowOps {

@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">모든 ExoPlayer 설정 복원</string>
     <string name="settings_media_segments">미디어 세그먼트</string>
     <string name="settings_media_segments_summary">%1$d 자동 건너뛰기, %2$d 버튼 표시</string>
-    <string name="settings_skip_segments_on_seek">탐색 시 세그먼트 건너뛰기</string>
+        <string name="settings_skip_prompt_duration">건너뛰기 버튼 지속 시간</string>
+    <string name="settings_skip_prompt_duration_subtitle">인트로/세그먼트 건너뛰기 버튼이 화면에 머무는 시간</string>
+<string name="settings_skip_segments_on_seek">탐색 시 세그먼트 건너뛰기</string>
     <string name="settings_skip_segments_on_seek_on">앞으로 탐색이 자동 건너뛰기 세그먼트에 닿으면 건너뜁니다</string>
     <string name="settings_segment_skip_delay">자동 건너뛰기 지연</string>
     <string name="settings_segment_skip_delay_off">끔</string>

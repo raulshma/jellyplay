@@ -177,7 +177,9 @@
     <string name="settings_disable_pin_message">Saisissez votre PIN actuel pour désactiver le verrouillage PIN.</string>
     <string name="settings_current_pin">PIN actuel</string>
     <string name="settings_incorrect_pin">PIN incorrect</string>
-    <string name="settings_confirm">Confirmer</string>
+        <string name="settings_picker_search">Rechercher</string>
+    <string name="settings_picker_no_results">Aucune option correspondante</string>
+<string name="settings_confirm">Confirmer</string>
     <string name="settings_authorize_quick_connect">Autoriser Quick Connect</string>
     <string name="settings_authorize_quick_connect_message">Saisissez le code à 6 chiffres affiché sur l'autre appareil.</string>
     <string name="settings_authorization_failed">Échec de l'autorisation</string>

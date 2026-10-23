@@ -547,6 +547,13 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.RestartPlayback -> playbackSession.transport.restart()
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
+            is VideoPlayerUiEvent.SwitchPlayerEngine -> {
+                val currentEngine = playbackSession.playerSessionManager.engine
+                if (currentEngine != null && event.playerType in playbackSession.availablePlayerTypes &&
+                    !playbackSession.cast.isConnectedFlow.value && !_uiState.value.isInSyncPlaySession &&
+                    currentEngine.displayName != event.playerType.displayName
+                ) retryWithEngine(event.playerType, sessionOnly = true)
+            }
             is VideoPlayerUiEvent.DismissPlaybackError -> dismissPlaybackError()
             is VideoPlayerUiEvent.SetControlsVisible -> setControlsVisible(event.visible)
             is VideoPlayerUiEvent.InstallUserFont -> playbackSession.subtitleStyleController.installUserFont(event.uri)
@@ -1015,9 +1022,10 @@ class VideoPlayerViewModel(
      * error-dialog clear is a synchronous ui-state write and stays here;
      * everything from the reporter cancel to the engine swap and
      * tracking/media-session rebuild is session-owned
-     * ([PlaybackSession.retryWithEngine]).
+     * ([PlaybackSession.retryWithEngine]). A [sessionOnly] switch preserves
+     * pause state and the saved default engine.
      */
-    private fun retryWithEngine(playerType: PlayerType) {
+    private fun retryWithEngine(playerType: PlayerType, sessionOnly: Boolean = false) {
         clearPlaybackErrorState()
         _uiState.update {
             it.copy(preferredPlayerType = playerType)
@@ -1026,6 +1034,7 @@ class VideoPlayerViewModel(
             playerType = playerType,
             playbackSpeed = _uiState.value.playbackSpeed,
             streamingQuality = _uiState.value.uiPrefs.streamingQuality,
+            sessionOnly = sessionOnly,
         )
     }
 

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.ContainerMimeMapper
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
@@ -43,6 +44,10 @@ internal class AndroidVideoPlayerPlatform(
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         return am?.let { it.isLowRamDevice || it.memoryClass <= 256 } ?: false
     }
+
+    /** The engines the Android factory builds (the engine-switch sheet's options). */
+    override val availablePlayerTypes: List<PlayerType> =
+        listOf(PlayerType.EXO_PLAYER, PlayerType.MPV, PlayerType.LIBVLC)
 
     override fun queryFileSizeBytes(uri: String): Long {
         val cursor = context.contentResolver.query(

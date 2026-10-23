@@ -18,6 +18,9 @@
     <string name="settings_forced_subtitles">仅强制字幕</string>
     <string name="settings_forced_subtitles_on">仅当存在强制字幕轨道时显示字幕</string>
     <string name="settings_forced_subtitles_off">按首选语言显示字幕</string>
+    <string name="settings_show_only_preferred_subtitles">仅限首选字幕</string>
+    <string name="settings_show_only_preferred_subtitles_on">隐藏首选语言以外的字幕轨道</string>
+    <string name="settings_show_only_preferred_subtitles_off">显示所有字幕轨道</string>
     <string name="settings_high_contrast_subtitles">高对比度字幕</string>
     <string name="settings_high_contrast_on">为无障碍提供最大可读性的字幕样式</string>
     <string name="settings_high_contrast_off">使用已配置的字幕样式</string>

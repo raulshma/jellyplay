@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">Restaurer tous les réglages ExoPlayer</string>
     <string name="settings_media_segments">Segments média</string>
     <string name="settings_media_segments_summary">%1$d saut auto, %2$d afficher bouton</string>
-    <string name="settings_skip_segments_on_seek">Passer les segments lors d&#39;une avance</string>
+        <string name="settings_skip_prompt_duration">Durée du bouton Passer</string>
+    <string name="settings_skip_prompt_duration_subtitle">Durée d'affichage du bouton passer l'intro/segment</string>
+<string name="settings_skip_segments_on_seek">Passer les segments lors d&#39;une avance</string>
     <string name="settings_skip_segments_on_seek_on">Les avances rapides sautent les segments à saut automatique</string>
     <string name="settings_segment_skip_delay">Délai de saut automatique</string>
     <string name="settings_segment_skip_delay_off">Désactivé</string>

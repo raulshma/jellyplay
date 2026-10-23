@@ -210,7 +210,8 @@
     <string name="player_video_rendering">Rendering</string>
     <string name="player_video_deinterlace">Deinterlace · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
-    <string name="player_video_stats_for_nerds">Stats for Nerds</string>
+        <string name="player_video_stats_close">Close</string>
+<string name="player_video_stats_for_nerds">Stats for Nerds</string>
     <string name="player_video_stats_for_nerds_on">Stats for Nerds \u00B7 On</string>
     <string name="player_video_video_filters">Video Filters</string>
     <string name="player_video_video_filters_on">Video Filters \u00B7 On</string>
@@ -350,7 +351,16 @@
     <string name="player_video_watched">Watched</string>
     <string name="player_video_time_left">%1$s left</string>
     <string name="player_video_now_playing">Now Playing</string>
-    <string name="player_video_quality_title">Quality</string>
+        <string name="player_video_playback_options">Playback Options</string>
+    <string name="player_video_playback_options_desc">Switch the engine, how the server delivers the stream, and the quality. Changes apply to the running session.</string>
+    <string name="player_video_playback_options_engine_section">Engine</string>
+    <string name="player_video_playback_options_delivery_section">Delivery</string>
+    <string name="player_video_playback_options_quality_section">Quality</string>
+    <string name="player_video_quality_unavailable">Quality is unavailable for this playback (forced direct play, offline, cast, or SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">Let the server pick (direct play when possible)</string>
+    <string name="player_video_playback_mode_force_direct_desc">Stream the file verbatim, no transcoding</string>
+    <string name="player_video_playback_mode_force_transcode_desc">Always transcode via the server</string>
+<string name="player_video_quality_title">Quality</string>
     <string name="player_video_quality_description">Changes apply immediately for adaptive streams. For direct play, this sets the maximum playback bitrate.</string>
     <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate Cap</string>
     <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>

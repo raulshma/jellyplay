@@ -177,7 +177,9 @@
     <string name="settings_disable_pin_message">PINロックを無効にするには現在のPINを入力してください。</string>
     <string name="settings_current_pin">現在のPIN</string>
     <string name="settings_incorrect_pin">PINが正しくありません</string>
-    <string name="settings_confirm">確認</string>
+        <string name="settings_picker_search">検索</string>
+    <string name="settings_picker_no_results">一致する選択肢がありません</string>
+<string name="settings_confirm">確認</string>
     <string name="settings_authorize_quick_connect">Quick Connectを認証</string>
     <string name="settings_authorize_quick_connect_message">もう一方の端末に表示された6桁のコードを入力してください。</string>
     <string name="settings_authorization_failed">認証に失敗しました</string>

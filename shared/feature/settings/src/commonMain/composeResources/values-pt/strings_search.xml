@@ -343,6 +343,8 @@
     <string name="ss_subtitle_font_size_subtitle">Tamanho do texto das legendas durante a reprodução de vídeo</string>
     <string name="ss_subtitle_forced_only_title">Apenas Legendas Forçadas</string>
     <string name="ss_subtitle_forced_only_subtitle">Mostrar legendas apenas quando existem faixas forçadas</string>
+    <string name="ss_show_only_preferred_subtitles_title">Apenas legendas preferidas</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Mostrar apenas faixas de legenda nos seus idiomas preferidos</string>
     <string name="ss_pgs_direct_play_title">Reprodução Direta de PGS</string>
     <string name="ss_pgs_direct_play_subtitle">Renderizar legendas PGS nativamente em vez de as gravar no vídeo</string>
     <string name="ss_hdr_subtitle_style_title">Estilo de Legendas HDR</string>

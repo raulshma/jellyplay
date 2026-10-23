@@ -343,6 +343,8 @@
     <string name="ss_subtitle_font_size_subtitle">動画再生中の字幕テキストのサイズ</string>
     <string name="ss_subtitle_forced_only_title">強制字幕のみ</string>
     <string name="ss_subtitle_forced_only_subtitle">強制トラックが存在する場合のみ字幕を表示します</string>
+    <string name="ss_show_only_preferred_subtitles_title">優先言語の字幕のみ</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">優先言語の字幕トラックのみを表示します</string>
     <string name="ss_pgs_direct_play_title">PGS ダイレクト再生</string>
     <string name="ss_pgs_direct_play_subtitle">焼き込みではなく PGS 字幕をネイティブにレンダリングします</string>
     <string name="ss_hdr_subtitle_style_title">HDR 字幕スタイル</string>

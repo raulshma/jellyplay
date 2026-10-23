@@ -64,6 +64,7 @@ class DeviceProfileProvider(
         audioPassthrough: Boolean = false,
         passthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
         maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
+        maxVideoHeight: Int? = null,
     ): org.jellyfin.sdk.model.api.DeviceProfile {
         val base = when (playerType) {
             PlayerType.MPV -> if (pgsDirectPlay) mpvProfilePgsDirectPlay else mpvProfileDefault
@@ -74,7 +75,7 @@ class DeviceProfileProvider(
         val capChannels = maxAudioChannels.channelCount
         // The memoised default profiles stand while the prefs ask for nothing
         // this provider honours (the historical behaviour, byte for byte).
-        if (removedTokens.isEmpty() && capChannels == null) return base
+        if (removedTokens.isEmpty() && capChannels == null && maxVideoHeight == null) return base
         return base.copy(
             directPlayProfiles = base.directPlayProfiles.map { profile ->
                 val audio = profile.audioCodec
@@ -88,11 +89,10 @@ class DeviceProfileProvider(
                     )
                 }
             },
-            codecProfiles = if (capChannels == null) {
-                base.codecProfiles
-            } else {
-                base.codecProfiles + channelCapProfile(capChannels)
-            },
+            codecProfiles = base.codecProfiles + listOfNotNull(
+                capChannels?.let(::channelCapProfile),
+                maxVideoHeight?.takeIf { it > 0 }?.let(::resolutionCapProfile),
+            ),
         )
     }
 
@@ -127,6 +127,21 @@ class DeviceProfileProvider(
             type = CodecType.VIDEO_AUDIO
             applyConditions {
                 lowerThanOrEquals(ProfileConditionValue.AUDIO_CHANNELS, maxChannels)
+            }
+        }
+
+    /**
+     * The VIDEO LessThanEqual width/height conditions capping the stream at
+     * [maxHeight] (16:9 width assumption, rounded even). Jellyfin uses these
+     * conditions both to reject oversized direct streams and to generate
+     * MaxWidth/MaxHeight in the transcode URL.
+     */
+    private fun resolutionCapProfile(maxHeight: Int): org.jellyfin.sdk.model.api.CodecProfile =
+        buildCodecProfile {
+            type = CodecType.VIDEO
+            applyConditions {
+                lowerThanOrEquals(ProfileConditionValue.WIDTH, (maxHeight * 16 / 9 + 1) / 2 * 2)
+                lowerThanOrEquals(ProfileConditionValue.HEIGHT, maxHeight)
             }
         }
 

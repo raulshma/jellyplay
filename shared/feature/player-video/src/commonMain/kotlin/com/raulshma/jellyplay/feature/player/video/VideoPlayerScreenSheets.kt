@@ -348,10 +348,29 @@ internal fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.PlaybackMode -> {
+            // The combined options sheet stays open across picks: engine +
+            // delivery + quality in one panel. The engine section hides for
+            // cast/SyncPlay; quality hides for offline sessions too.
+            val engine by sheets.engineFlow.collectAsStateWithLifecycle()
+            val castConnected by viewModel.playbackSession.cast.isConnectedFlow.collectAsStateWithLifecycle()
+            val engineName = engine?.displayName
             PlaybackModeSheet(
                 currentMode = uiState.uiPrefs.playbackMode,
+                currentPlayMethod = uiState.media.playMethod,
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackMode(it)) },
                 onDismiss = inputs.dismissSheet,
+                currentQuality = uiState.uiPrefs.streamingQuality,
+                adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
+                onQualitySelect = { viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
+                onToggleAdaptiveBitrate = { viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
+                qualityAvailable = !uiState.media.showDownloadedBadge && !castConnected && !uiState.isInSyncPlaySession,
+                currentEngineName = engineName,
+                availablePlayers = if (castConnected || uiState.isInSyncPlaySession) {
+                    emptyList()
+                } else {
+                    viewModel.playbackSession.availablePlayerTypes.filter { it.displayName != engineName }
+                },
+                onPlayerSelect = { viewModel.onEvent(VideoPlayerUiEvent.SwitchPlayerEngine(it)) },
             )
         }
         is PlayerSheet.SleepTimer -> {

@@ -74,11 +74,12 @@ internal fun effectiveAspectRatio(selected: AspectRatio, detected: AspectRatio?)
     if (selected == AspectRatio.AUTO) detected ?: AspectRatio.FIT else selected
 
 /**
- * Skip-segment button visibility precedence: a segment must exist and its
+ * Skip-segment button AVAILABILITY precedence: a segment must exist and its
  * configured behavior must ask for a button, and the button is suppressed by
- * PiP and the cinema-intro overlay. During an OUTRO the up-next overlay wins
- * (its own play affordance replaces the skip button); up-next does not
- * suppress non-OUTRO segments.
+ * the cinema-intro overlay. During an OUTRO the up-next overlay wins (its own
+ * play affordance replaces the skip button); up-next does not suppress
+ * non-OUTRO segments. PiP/controls visibility gate the prompt's SHOWING (the
+ * timed-skip pipeline owns that), not its availability.
  */
 internal fun isSkipSegmentButtonVisible(
     activeSegment: MediaSegment?,
@@ -86,8 +87,9 @@ internal fun isSkipSegmentButtonVisible(
     isInPipMode: Boolean,
     isCinemaIntroVisible: Boolean,
     shouldShowUpNext: Boolean,
+    areControlsVisible: Boolean,
 ): Boolean =
-    activeSegment != null &&
+    areControlsVisible && activeSegment != null &&
         segmentBehavior == SegmentBehavior.SHOW_BUTTON &&
         !isInPipMode &&
         !isCinemaIntroVisible &&

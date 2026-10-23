@@ -29,6 +29,7 @@ internal fun VideoPlayerUiState.keepAcrossItems(): VideoPlayerUiState = VideoPla
     uiPrefs = PlayerUiPrefsState(
         defaultOrientation = uiPrefs.defaultOrientation,
         controlsTimeoutMs = uiPrefs.controlsTimeoutMs,
+        skipPromptDurationMs = uiPrefs.skipPromptDurationMs,
         showPlaybackMetadata = uiPrefs.showPlaybackMetadata,
         showClock = uiPrefs.showClock,
         showTimeRemaining = uiPrefs.showTimeRemaining,

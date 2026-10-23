@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
 
@@ -33,6 +34,13 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
      * actual returns `false`.
      */
     fun isLowRamDevice(): Boolean
+
+    /**
+     * The [PlayerType]s this platform can actually construct engines for —
+     * the engine-switch UI's option list. The interface default is empty
+     * (a platform without playback); actuals list what their factory builds.
+     */
+    val availablePlayerTypes: List<PlayerType> get() = emptyList()
 
     /** Offline-media probing seam (duration extraction + container→MIME). */
     val offlineMediaProbe: OfflineMediaProbe

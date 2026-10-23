@@ -28,11 +28,9 @@ interface MpvStatsReads {
  * thin adapters per host). The two engines previously re-typed ~15 property
  * reads per tick with drift; the unifications this projection pins:
  *
- * - **audioCodec** reads `audio-codec` — the descriptive codec string — and
- *   NOT `audio-codec-name` (the desktop's former bare canonical name).
- *   `ExoPlayerEngine` fills the same field with a descriptive string
- *   (`codecFromMime`, e.g. `mp4a-latm`), not a bare name: the richer form is
- *   the field's cross-engine contract.
+ * - **audioCodec** prefers the selected track's canonical codec id, then the
+ *   legacy canonical property, and only then the decoder description. A
+ *   description such as ATSC A/52B can cover both AC-3 and E-AC-3.
  * - **videoResolution** reads the canonical `video-params/w`+`/h` map (the
  *   Android engine's former `width`/`height` reads are its legacy aliases).
  * - **bufferSizeBytes** prefers the demuxer's true byte count
@@ -41,7 +39,7 @@ interface MpvStatsReads {
  *   ONLY source (bytes = bits/8 × seconds).
  * - **Sanitize guards** are the Android/ExoPlayer set everywhere: bitrates,
  *   frame rate, sample rate, channel count and display-fps must be > 0 to
- *   surface (0 = mpv's "unset"); avsync and vo-delay must be non-zero. The
+ *   surface (0 = mpv's "unset"); avsync is converted from seconds to milliseconds. The
  *   desktop formerly passed raw values through (its `0` renders showed up as
  *   noise instead of a blank row).
  * - **videoDecoder** keeps the RAW `hwdec-current` value — `"no"` is the
@@ -54,9 +52,8 @@ interface MpvStatsReads {
  * desktop's HDR badge trio (`videoHdrType` / `hdrOutputActive` /
  * `hdrOutputNotice` — its display-target probe, merged via
  * `EngineVideoStats.copy`). Both hosts now also fill the mpv-generic fields
- * only one of them used to read (`totalVideoFrames` / `voDelayedMs` /
- * `estimatedBandwidthBps` on desktop) — they are plain mpv properties, not
- * platform behavior.
+ * only one of them used to read (`totalVideoFrames` on desktop). Unsupported
+ * duration and bandwidth estimates stay absent instead of using unrelated values.
  *
  * Pinned by `MpvStatsProjectionTest` through a fake reads seam.
  */
@@ -83,6 +80,8 @@ object MpvStatsProjection {
         const val VIDEO_PARAMS_H = "video-params/h"
         const val CONTAINER_FPS = "container-fps"
         const val VIDEO_BITRATE = "video-bitrate"
+        const val AUDIO_TRACK_CODEC = "current-tracks/audio/codec"
+        const val AUDIO_CODEC_NAME = "audio-codec-name"
         const val AUDIO_CODEC = "audio-codec"
         const val AUDIO_SAMPLE_RATE = "audio-params/samplerate"
         const val AUDIO_CHANNELS = "audio-params/channel-count"
@@ -90,9 +89,8 @@ object MpvStatsProjection {
         const val DEMUXER_TOTAL_BYTES = "demuxer-cache-state/total-bytes"
         const val DECODER_FRAME_DROP_COUNT = "decoder-frame-drop-count"
         const val DISPLAYED_FRAME_COUNT = "displayed-frame-count"
-        const val TOTAL_AVSYNC = "total-avsync"
+        const val AVSYNC = "avsync"
         const val DISPLAY_FPS = "display-fps"
-        const val VO_DELAYED = "vo-delayed"
         const val FRAME_DROP_COUNT = "frame-drop-count"
     }
 
@@ -127,18 +125,20 @@ object MpvStatsProjection {
             videoResolution = resolution(reads),
             videoFrameRate = reads.readDouble(NAMES.CONTAINER_FPS)?.takeIf { it > 0.0 }?.toFloat(),
             videoBitrate = scalars.videoBitrateBps,
-            audioCodec = reads.readString(NAMES.AUDIO_CODEC),
+            audioCodec = reads.readString(NAMES.AUDIO_TRACK_CODEC)?.takeIf { it.isNotBlank() }
+                ?: reads.readString(NAMES.AUDIO_CODEC_NAME)?.takeIf { it.isNotBlank() }
+                ?: reads.readString(NAMES.AUDIO_CODEC),
             audioSampleRate = reads.readDouble(NAMES.AUDIO_SAMPLE_RATE)?.takeIf { it > 0.0 }?.toInt(),
             audioChannels = reads.readDouble(NAMES.AUDIO_CHANNELS)?.takeIf { it > 0.0 }?.toInt(),
             audioBitrate = scalars.audioBitrateBps,
-            estimatedBandwidthBps = combinedBitrateBps.toLong(),
+            estimatedBandwidthBps = 0L, // mpv does not expose an available-bandwidth estimate.
             droppedFrames = scalars.droppedFrames,
             totalVideoFrames = scalars.totalVideoFrames,
             bufferedPositionMs = bufferedPositionMs,
             bufferSizeBytes = bufferSizeBytes(reads, positionMs, bufferedPositionMs, combinedBitrateBps),
-            avsyncMs = reads.readDouble(NAMES.TOTAL_AVSYNC)?.toFloat()?.takeIf { it != 0f },
+            avsyncMs = reads.readDouble(NAMES.AVSYNC)?.takeIf { it.isFinite() }?.let { (it * 1000).toFloat() },
             displayFps = reads.readDouble(NAMES.DISPLAY_FPS)?.takeIf { it > 0.0 }?.toFloat(),
-            voDelayedMs = reads.readDouble(NAMES.VO_DELAYED)?.toFloat()?.takeIf { it != 0f },
+            voDelayedMs = null, // There is no mpv vo-delayed duration property.
             voFrameDropCount = reads.readLong(NAMES.FRAME_DROP_COUNT),
         )
     }

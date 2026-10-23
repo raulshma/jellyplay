@@ -60,6 +60,9 @@
     <string name="settings_forced_subtitles">Forced Subtitles Only</string>
     <string name="settings_forced_subtitles_on">Show subtitles only when forced tracks are present</string>
     <string name="settings_forced_subtitles_off">Show subtitles per preferred language</string>
+    <string name="settings_show_only_preferred_subtitles">Preferred Subtitles Only</string>
+    <string name="settings_show_only_preferred_subtitles_on">Hide subtitle tracks outside your preferred languages</string>
+    <string name="settings_show_only_preferred_subtitles_off">Show all subtitle tracks</string>
     <string name="settings_high_contrast_subtitles">High-Contrast Subtitles</string>
     <string name="settings_high_contrast_on">Maximally legible subtitle style for accessibility</string>
     <string name="settings_high_contrast_off">Use subtitle style as configured</string>

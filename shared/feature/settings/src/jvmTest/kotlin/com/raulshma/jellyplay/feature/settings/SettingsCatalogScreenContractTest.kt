@@ -644,17 +644,18 @@ class SettingsCatalogScreenContractTest {
         // The declaration side keeps the ids inside LiveTvSearchItems and must
         // keep following the media_segment_<enum-name> convention so the
         // derived scroll set and the hand-built rows stay in lock-step. The
-        // group's skip-on-seek toggle is the one non-enum member — a
-        // hand-built row like the per-type rows.
+        // group's skip-on-seek toggle and skip-prompt-duration row are the two
+        // non-enum members — hand-built rows like the per-type rows.
         val enumSegmentIds = MediaSegmentType.entries.map { "media_segment_${it.name.lowercase()}" }
         assertEquals(
-            enumSegmentIds + PlaybackRows.SkipSegmentsOnSeek.id,
+            enumSegmentIds + PlaybackRows.SkipSegmentsOnSeek.id + PlaybackRows.SkipPromptDuration.id,
             SettingsScreenGroups.playbackMediaSegments.itemIds,
-            "media-segment group declarations drifted from MediaSegmentType.entries + the skip-on-seek toggle",
+            "media-segment group declarations drifted from MediaSegmentType.entries + the hand-built transport rows",
         )
         assertTrue(
             SettingsScreenGroups.playbackDvr.itemIds.none {
-                it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) || it == PlaybackRows.SkipSegmentsOnSeek.id
+                it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) || it == PlaybackRows.SkipSegmentsOnSeek.id ||
+                    it == PlaybackRows.SkipPromptDuration.id
             },
             "DVR group must not absorb media-segment ids",
         )
