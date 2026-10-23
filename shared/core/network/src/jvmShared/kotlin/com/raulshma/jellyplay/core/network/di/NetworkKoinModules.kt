@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.di
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.model.CACHE_SIZE_DISABLED
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
@@ -407,16 +408,19 @@ internal fun baseOkHttpClient(
 ): OkHttpClient {
     // Read config synchronously via StateFlow.value — no runBlocking.
     // On a cold start the Eagerly-shared StateFlow may still hold the
-    // initialValue sentinel (maxCacheSizeMb = 0), in which case the cache
-    // falls back to 50 MB below. The real preference lands in .value
+    // initialValue sentinel (maxCacheSizeMb = 0, read as "Unlimited" below).
+    // The real preference lands in .value
     // within tens of ms (DataStore disk read) and is picked up on the
     // next process start; timeouts are re-applied per request by the
     // interceptor below, so only the (rarely-changed) cache size is
     // affected, and only on the very first launch.
     val initialConfig = okHttpConfigProvider.config.value
     cacheDir.mkdirs()
+    // max_cache_size_mb semantics (mirrors the Coil side in
+    // JellyPlayImageLoader): >0 sizes the cache in MB, 0 is the picker's
+    // "Unlimited", and the -1 "Disabled" sentinel
+    // (core:model CACHE_SIZE_DISABLED) installs no cache at all.
     val cacheMb = initialConfig.maxCacheSizeMb
-    val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
     val initialTimeout = initialConfig.networkTimeoutPreset
 
     // Custom logger that strips Jellyfin access tokens from log lines.
@@ -454,7 +458,13 @@ internal fun baseOkHttpClient(
         .connectTimeout(initialTimeout.connectSec, TimeUnit.SECONDS)
         .readTimeout(initialTimeout.readSec, TimeUnit.SECONDS)
         .writeTimeout(initialTimeout.writeSec, TimeUnit.SECONDS)
-        .cache(Cache(cacheDir, cacheSize))
+        .apply {
+            when {
+                cacheMb == CACHE_SIZE_DISABLED -> Unit // "Disabled" — no response cache installed.
+                cacheMb == 0 -> cache(Cache(cacheDir, Long.MAX_VALUE))
+                else -> cache(Cache(cacheDir, cacheMb * 1024L * 1024L))
+            }
+        }
         // RANDOM-sorted /Items queries (dice re-roll, Random library sort) must
         // never be served from the response cache above: the query is
         // byte-identical every time and the shuffle happens server-side, so a

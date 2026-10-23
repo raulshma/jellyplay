@@ -11,6 +11,9 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_fi
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_name
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_recent
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_size
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_active
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_completed
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_failed
 import org.jetbrains.compose.resources.StringResource
 
 /**
@@ -45,6 +48,45 @@ enum class DownloadListFilter(val labelRes: StringResource) {
     companion object {
         /** Tolerant decode of the persisted value — an unknown name falls back to ALL. */
         fun fromName(name: String?): DownloadListFilter =
+            entries.firstOrNull { it.name == name } ?: ALL
+    }
+}
+
+/**
+ * Status filter for the downloads list — All / Active / Completed / Failed
+ * (gh-178): the queue screen shows every status mixed together, and the
+ * reporter's ask was a surface that isolates what's in flight so it can be
+ * controlled from inside the app. Active folds the four in-flight statuses
+ * (PENDING/QUEUED/DOWNLOADING/PAUSED — the same set the per-row transfer
+ * controls address) into one view; CANCELLED rows delete themselves on cancel
+ * and never linger to be filtered.
+ */
+enum class DownloadStatusFilter(val labelRes: StringResource) {
+    ALL(Res.string.downloads_filter_all),
+    ACTIVE(Res.string.downloads_status_active),
+    COMPLETED(Res.string.downloads_status_completed),
+    FAILED(Res.string.downloads_status_failed),
+    ;
+
+    /** Whether [item] belongs in this filter's view. */
+    fun accepts(item: DownloadItem): Boolean = when (this) {
+        ALL -> true
+        ACTIVE -> item.status in ACTIVE_STATUSES
+        COMPLETED -> item.status == DownloadStatus.COMPLETED
+        FAILED -> item.status == DownloadStatus.FAILED
+    }
+
+    companion object {
+        /**
+         * The in-flight statuses an Active view shows — the [DownloadBulkAction.CANCEL]
+         * admission column, folded off the table so the filter can never drift
+         * from the transfer controls it isolates.
+         */
+        val ACTIVE_STATUSES: Set<DownloadStatus> =
+            requireNotNull(DownloadActions.admittedStatuses(DownloadBulkAction.CANCEL))
+
+        /** Tolerant decode of the persisted value — an unknown name falls back to ALL. */
+        fun fromName(name: String?): DownloadStatusFilter =
             entries.firstOrNull { it.name == name } ?: ALL
     }
 }
@@ -145,6 +187,16 @@ internal sealed interface DownloadListRow {
     val key: String
 
     /**
+     * A header over a group of episode ids (series or season) — the shape the
+     * screen's shared header wiring (tri-state checkbox, transfer controls)
+     * keys on, so both header kinds wire identically. Sealed so the row
+     * `when` stays exhaustive over the three leaves.
+     */
+    sealed interface GroupHeader : DownloadListRow {
+        val episodeIds: List<String>
+    }
+
+    /**
      * Expandable series group header. [episodeIds] backs the tri-state group
      * checkbox in selection mode (covers collapsed episodes too) and arrives
      * in the group's numeric playback order — the order the header's Play
@@ -156,10 +208,10 @@ internal sealed interface DownloadListRow {
         val name: String,
         val episodeCount: Int,
         val seasonCount: Int,
-        val episodeIds: List<String>,
+        override val episodeIds: List<String>,
         val totalBytes: Long,
         val completedCount: Int,
-    ) : DownloadListRow
+    ) : GroupHeader
 
     /** Season sub-header — only emitted while a series spans 2+ seasons. */
     data class SeasonHeader(
@@ -167,10 +219,10 @@ internal sealed interface DownloadListRow {
         val name: String?,
         val number: Int?,
         val episodeCount: Int,
-        val episodeIds: List<String>,
+        override val episodeIds: List<String>,
         val totalBytes: Long,
         val completedCount: Int,
-    ) : DownloadListRow
+    ) : GroupHeader
 
     /** A single download row — exactly the flat-list entry the screen always had. */
     data class Item(val download: DownloadItem) : DownloadListRow {

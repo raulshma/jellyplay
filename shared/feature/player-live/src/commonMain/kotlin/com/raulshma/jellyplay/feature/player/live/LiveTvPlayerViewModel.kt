@@ -129,6 +129,14 @@ class LiveTvPlayerViewModel(
      */
     private val playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
         com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
+    /**
+     * The system media-session factory (gh-178 headset control during live
+     * playback). Android binds the [LiveMediaSessionFactory] in
+     * androidPlayerLiveModule; desktop resolves null (the live screen never
+     * composes there — the module's documented-latent rule), and jvmTest
+     * constructs the VM bare.
+     */
+    private val mediaSessionFactory: LiveMediaSessionFactory? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
@@ -174,6 +182,8 @@ class LiveTvPlayerViewModel(
         lastChannelStore = lastChannelStore,
         transcodeReasonsRenderer = transcodeReasonsRenderer,
         playbackRepository = playbackRepository,
+        mediaSessionFactory = mediaSessionFactory,
+        channelImageUrl = { channelId, maxWidth -> imageUrlProvider.getImageUrl(channelId, maxWidth) },
     )
 
     /**

@@ -111,6 +111,8 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_fo
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_no_items_in_category
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_pause_all
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resume_all
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_cancel_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_action
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_empty
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_title
@@ -145,6 +147,7 @@ fun DownloadsScreen(
     // the first (off-Main) derivation is still in flight.
     val currentRows = viewModel.rows.collectAsStateWithLifecycle(initialValue = null).value
     val listFilter by viewModel.filter.collectAsStateWithLifecycle()
+    val listStatusFilter by viewModel.statusFilter.collectAsStateWithLifecycle()
     val listSort by viewModel.sort.collectAsStateWithLifecycle()
     val expandedKeys by viewModel.expandedKeys.collectAsStateWithLifecycle()
     // Live per-row progress, collected ONCE into a State whose .value is
@@ -218,14 +221,28 @@ fun DownloadsScreen(
     val hasCancellable = remember(downloads, selectedIds) {
         DownloadActions.supports(DownloadBulkAction.CANCEL, downloads, selectedIds, DownloadActionScope.Selected)
     }
-    // Global action predicates: the app-bar Pause All / Retry all failed
-    // buttons are only enabled when the matching status exists anywhere in the
-    // list, so neither offers a no-op (mirrors the selection-bar predicates).
-    val hasAnyDownloading = remember(downloads) {
-        DownloadActions.supports(DownloadBulkAction.PAUSE, downloads, emptySet(), DownloadActionScope.All)
+    // Global action predicates: the app-bar Pause All / Resume All / Cancel All
+    // / Retry all failed buttons are enabled only when the matching status
+    // exists in the STATUS FILTER's view (the same visibility rule selectAll
+    // applies), and they act on exactly that view's ids — a filter that hides
+    // every paused row also hides Resume All, and a click can never touch rows
+    // the list isn't showing. Cancel All is destructive, so it confirms first
+    // (pendingCancelAll, payload = the visible ids).
+    val visibleDownloads = remember(downloads, listStatusFilter) {
+        downloads.filter { listStatusFilter.accepts(it) }
     }
-    val hasAnyFailed = remember(downloads) {
-        DownloadActions.supports(DownloadBulkAction.RETRY_FAILED, downloads, emptySet(), DownloadActionScope.All)
+    val visibleIds = remember(visibleDownloads) { visibleDownloads.map { it.id } }
+    val hasAnyDownloading = remember(visibleDownloads) {
+        DownloadActions.supports(DownloadBulkAction.PAUSE, visibleDownloads, emptySet(), DownloadActionScope.All)
+    }
+    val hasAnyPaused = remember(visibleDownloads) {
+        DownloadActions.supports(DownloadBulkAction.RESUME, visibleDownloads, emptySet(), DownloadActionScope.All)
+    }
+    val hasAnyCancellable = remember(visibleDownloads) {
+        DownloadActions.supports(DownloadBulkAction.CANCEL, visibleDownloads, emptySet(), DownloadActionScope.All)
+    }
+    val hasAnyFailed = remember(visibleDownloads) {
+        DownloadActions.supports(DownloadBulkAction.RETRY_FAILED, visibleDownloads, emptySet(), DownloadActionScope.All)
     }
 
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
@@ -247,12 +264,12 @@ fun DownloadsScreen(
             // Global actions (reachable without entering selection mode).
             // Pause All halts every active transfer; Retry all failed
             // re-queues every Failed download. Each is disabled when there's
-            // nothing to act on so neither offers a no-op, mirroring the
-            // selection-bar predicates.
+            // nothing to act on in the filter's view so none offers a no-op,
+            // mirroring the selection-bar predicates.
             if (hasAnyDownloading) {
                 val pauseFocus = rememberTvFocusState()
                 IconButton(
-                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All) },
+                    onClick = { viewModel.applyBulkActionToIds(DownloadBulkAction.PAUSE, visibleIds) },
                     modifier = Modifier
                         .then(pauseFocus.focusModifier)
                         .tvFocusIndicator(pauseFocus, CircleShape),
@@ -263,10 +280,38 @@ fun DownloadsScreen(
                     )
                 }
             }
+            if (hasAnyPaused) {
+                val resumeFocus = rememberTvFocusState()
+                IconButton(
+                    onClick = { viewModel.applyBulkActionToIds(DownloadBulkAction.RESUME, visibleIds) },
+                    modifier = Modifier
+                        .then(resumeFocus.focusModifier)
+                        .tvFocusIndicator(resumeFocus, CircleShape),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerPlay,
+                        contentDescription = stringResource(Res.string.downloads_resume_all),
+                    )
+                }
+            }
+            if (hasAnyCancellable) {
+                val cancelAllFocus = rememberTvFocusState()
+                IconButton(
+                    onClick = { viewModel.pendingCancelAll.show(visibleIds) },
+                    modifier = Modifier
+                        .then(cancelAllFocus.focusModifier)
+                        .tvFocusIndicator(cancelAllFocus, CircleShape),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerStop,
+                        contentDescription = stringResource(Res.string.downloads_cancel_all),
+                    )
+                }
+            }
             if (hasAnyFailed) {
                 val retryFocus = rememberTvFocusState()
                 IconButton(
-                    onClick = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All) },
+                    onClick = { viewModel.applyBulkActionToIds(DownloadBulkAction.RETRY_FAILED, visibleIds) },
                     modifier = Modifier
                         .then(retryFocus.focusModifier)
                         .tvFocusIndicator(retryFocus, CircleShape),
@@ -339,11 +384,14 @@ fun DownloadsScreen(
                 description = stringResource(Res.string.downloads_empty_description),
             )
         } else {
-            // Type filter (All / Movies / Series) + sort menu (gh-175), plus
-            // the expand/collapse-all control while the view has series groups.
+            // Type filter (All / Movies / Series) + status filter (All / Active
+            // / Completed / Failed, gh-178) + sort menu (gh-175), plus the
+            // expand/collapse-all control while the view has series groups.
             DownloadsFilterBar(
                 selected = listFilter,
                 onSelectFilter = viewModel::setFilter,
+                statusFilter = listStatusFilter,
+                onSelectStatusFilter = viewModel::setStatusFilter,
                 sort = listSort,
                 onSelectSort = viewModel::setSort,
                 hasGroups = currentRows?.any { it is DownloadListRow.SeriesHeader } == true,
@@ -378,6 +426,10 @@ fun DownloadsScreen(
                     .filter { it.status == DownloadStatus.COMPLETED }
                     .associate { it.id to it.mediaItemId }
             }
+            // Download-id → item map for the group headers' transfer controls
+            // (gh-178): each header's pause/cancel gate folds its own episode
+            // ids through the shared admission table over this map's values.
+            val itemById = remember(downloads) { downloads.associateBy { it.id } }
             val headerUpdateCount = remember(updateIds, mediaItemIdByDownloadId) {
                 { episodeIds: List<String> ->
                     episodeIds.count { id -> mediaItemIdByDownloadId[id]?.let { it in updateIds } == true }
@@ -458,40 +510,63 @@ fun DownloadsScreen(
                                     progress = { entrance.value },
                                     slideDivisor = 10f,
                                 )
+                            // Group-transfer wiring shared by both header kinds
+                            // (gh-178): the header's ids resolved to live items,
+                            // then the admission table decides whether pause /
+                            // cancel exist for the group (null = never offer a
+                            // no-op). Item rows leave all three unset.
+                            val header = row as? DownloadListRow.GroupHeader
+                            val groupItems = remember(row.key, itemById) {
+                                header?.episodeIds?.mapNotNull(itemById::get).orEmpty()
+                            }
+                            val onPauseGroup = header?.let {
+                                groupTransferAction(DownloadBulkAction.PAUSE, groupItems, it.episodeIds, viewModel)
+                            }
+                            val onCancelGroup = header?.let {
+                                groupTransferAction(DownloadBulkAction.CANCEL, groupItems, it.episodeIds, viewModel)
+                            }
                             when (row) {
-                                is DownloadListRow.SeriesHeader -> DownloadListHeaderRow(
-                                    title = row.name,
-                                    episodeCount = row.episodeCount,
-                                    episodeIds = row.episodeIds,
-                                    completedCount = row.completedCount,
-                                    totalBytes = row.totalBytes,
-                                    updateCount = headerUpdateCount(row.episodeIds),
-                                    expanded = row.key in expandedKeys,
-                                    selectionMode = selectionMode,
-                                    selection = groupSelectionState(row.episodeIds, selectedIds),
-                                    onToggleExpanded = { viewModel.toggleExpanded(row.key) },
-                                    onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
-                                    onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
-                                    onPlayOffline = onPlayOffline,
-                                    modifier = entranceModifier,
-                                )
-                                is DownloadListRow.SeasonHeader -> DownloadListHeaderRow(
-                                    title = row.name?.takeIf(String::isNotBlank)
-                                        ?: row.number?.let { stringResource(Res.string.downloads_season_n, it) },
-                                    episodeCount = row.episodeCount,
-                                    episodeIds = row.episodeIds,
-                                    completedCount = row.completedCount,
-                                    totalBytes = row.totalBytes,
-                                    updateCount = headerUpdateCount(row.episodeIds),
-                                    expanded = row.key in expandedKeys,
-                                    selectionMode = selectionMode,
-                                    selection = groupSelectionState(row.episodeIds, selectedIds),
-                                    onToggleExpanded = { viewModel.toggleExpanded(row.key) },
-                                    onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
-                                    onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
-                                    onPlayOffline = onPlayOffline,
-                                    modifier = entranceModifier.padding(start = 28.dp),
-                                )
+                                is DownloadListRow.SeriesHeader -> {
+                                    DownloadListHeaderRow(
+                                        title = row.name,
+                                        episodeCount = row.episodeCount,
+                                        episodeIds = row.episodeIds,
+                                        completedCount = row.completedCount,
+                                        totalBytes = row.totalBytes,
+                                        updateCount = headerUpdateCount(row.episodeIds),
+                                        expanded = row.key in expandedKeys,
+                                        selectionMode = selectionMode,
+                                        selection = groupSelectionState(row.episodeIds, selectedIds),
+                                        onToggleExpanded = { viewModel.toggleExpanded(row.key) },
+                                        onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
+                                        onPauseGroup = onPauseGroup,
+                                        onCancelGroup = onCancelGroup,
+                                        onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
+                                        onPlayOffline = onPlayOffline,
+                                        modifier = entranceModifier,
+                                    )
+                                }
+                                is DownloadListRow.SeasonHeader -> {
+                                    DownloadListHeaderRow(
+                                        title = row.name?.takeIf(String::isNotBlank)
+                                            ?: row.number?.let { stringResource(Res.string.downloads_season_n, it) },
+                                        episodeCount = row.episodeCount,
+                                        episodeIds = row.episodeIds,
+                                        completedCount = row.completedCount,
+                                        totalBytes = row.totalBytes,
+                                        updateCount = headerUpdateCount(row.episodeIds),
+                                        expanded = row.key in expandedKeys,
+                                        selectionMode = selectionMode,
+                                        selection = groupSelectionState(row.episodeIds, selectedIds),
+                                        onToggleExpanded = { viewModel.toggleExpanded(row.key) },
+                                        onToggleGroupSelection = { viewModel.toggleGroupSelection(row.episodeIds) },
+                                        onPauseGroup = onPauseGroup,
+                                        onCancelGroup = onCancelGroup,
+                                        onPlayTarget = { viewModel.resolveGroupPlayTarget(row.episodeIds) },
+                                        onPlayOffline = onPlayOffline,
+                                        modifier = entranceModifier.padding(start = 28.dp),
+                                    )
+                                }
                                 is DownloadListRow.Item -> {
                                     val download = row.download
                                     // Hot read scoped to the only rows that move: just the
@@ -699,9 +774,9 @@ fun DownloadsScreen(
 /**
  * The [DownloadGroupHeader] wiring shared by the series and season header
  * rows — the branches differ only in title resolution and the season's
- * leading indent; the selection tri-state, update dot, and group Play are
- * identical. [onPlayTarget] resolves the header's play target (an offline DB
- * read) and is launched off the click path.
+ * leading indent; the selection tri-state, update dot, group Play, and group
+ * transfer controls are identical. [onPlayTarget] resolves the header's play
+ * target (an offline DB read) and is launched off the click path.
  */
 @Composable
 private fun DownloadListHeaderRow(
@@ -716,6 +791,8 @@ private fun DownloadListHeaderRow(
     selection: ToggleableState,
     onToggleExpanded: () -> Unit,
     onToggleGroupSelection: () -> Unit,
+    onPauseGroup: (() -> Unit)?,
+    onCancelGroup: (() -> Unit)?,
     onPlayTarget: suspend () -> DownloadItem?,
     onPlayOffline: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit,
     modifier: Modifier = Modifier,
@@ -733,6 +810,8 @@ private fun DownloadListHeaderRow(
         totalBytes = totalBytes,
         formatBytes = Long::formatBytes,
         updateCount = updateCount,
+        onPauseGroup = onPauseGroup,
+        onCancelGroup = onCancelGroup,
         onPlay = {
             groupScope.launch {
                 onPlayTarget()?.let { target -> onPlayOffline(target.mediaItemId, target.mediaType) }
@@ -740,4 +819,22 @@ private fun DownloadListHeaderRow(
         },
         modifier = modifier,
     )
+}
+
+/**
+ * The group headers' transfer wiring (gh-178): null when no episode in
+ * [groupItems] admits [action] (the header hides the button — the same
+ * "never offer a no-op" rule the appbar actions apply, folded over the
+ * group's own items with the All scope), otherwise a dispatch to the VM's
+ * ids-scoped fold over [episodeIds]. A plain function, not a @Composable —
+ * the lambda allocation is unconditional either way.
+ */
+private fun groupTransferAction(
+    action: DownloadBulkAction,
+    groupItems: List<DownloadItem>,
+    episodeIds: List<String>,
+    viewModel: DownloadsViewModel,
+): (() -> Unit)? {
+    if (!DownloadActions.supports(action, groupItems, emptySet(), DownloadActionScope.All)) return null
+    return { viewModel.applyBulkActionToIds(action, episodeIds) }
 }

@@ -46,13 +46,17 @@ import com.composables.icons.tabler.outline.ChevronsDown
 import com.composables.icons.tabler.outline.ChevronsUp
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.ChevronRight
+import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.PlayerStop
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_collapse_all_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_episode_count
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_expand_all_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_group_progress
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_pause_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_cd
 
 /**
@@ -67,11 +71,18 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_so
  * control for the group tree parked beside the sort button. The expand control
  * is only composed while the current view actually contains series groups —
  * a flat view (Movies filter, no identified episodes) has nothing to expand.
+ *
+ * The second segmented row is the status filter (All / Active / Completed /
+ * Failed, gh-178) — the "show me what's downloading" view the transfer
+ * notification alone never offered in-app. It sits on its own row so neither
+ * segmented group exceeds four segments on a narrow phone.
  */
 @Composable
 internal fun DownloadsFilterBar(
     selected: DownloadListFilter,
     onSelectFilter: (DownloadListFilter) -> Unit,
+    statusFilter: DownloadStatusFilter,
+    onSelectStatusFilter: (DownloadStatusFilter) -> Unit,
     sort: DownloadListSort,
     onSelectSort: (DownloadListSort) -> Unit,
     hasGroups: Boolean,
@@ -79,67 +90,81 @@ internal fun DownloadsFilterBar(
     onToggleExpandAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        val options = DownloadListFilter.entries
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-            options.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = option == selected,
-                    onClick = { onSelectFilter(option) },
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val options = DownloadListFilter.entries
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
+                options.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = option == selected,
+                        onClick = { onSelectFilter(option) },
+                        shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    ) {
+                        Text(stringResource(option.labelRes))
+                    }
+                }
+            }
+            if (hasGroups) {
+                val expandFocus = rememberTvFocusState(focusedScale = 1.1f)
+                IconButton(
+                    onClick = onToggleExpandAll,
+                    modifier = Modifier
+                        .then(expandFocus.focusModifier)
+                        .tvFocusIndicator(expandFocus, CircleShape),
                 ) {
-                    Text(stringResource(option.labelRes))
+                    Icon(
+                        if (anyExpanded) Tabler.Outline.ChevronsUp else Tabler.Outline.ChevronsDown,
+                        contentDescription = stringResource(
+                            if (anyExpanded) {
+                                Res.string.downloads_collapse_all_cd
+                            } else {
+                                Res.string.downloads_expand_all_cd
+                            },
+                        ),
+                    )
+                }
+            }
+            Box {
+                var sortMenuOpen by remember { mutableStateOf(false) }
+                val sortFocus = rememberTvFocusState(focusedScale = 1.1f)
+                IconButton(
+                    onClick = { sortMenuOpen = true },
+                    modifier = Modifier
+                        .then(sortFocus.focusModifier)
+                        .tvFocusIndicator(sortFocus, CircleShape),
+                ) {
+                    Icon(
+                        Tabler.Outline.ArrowDown,
+                        contentDescription = stringResource(Res.string.downloads_sort_cd),
+                    )
+                }
+                DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                    DownloadListSort.entries.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(option.labelRes),
+                                    fontWeight = if (option == sort) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            },
+                            onClick = {
+                                onSelectSort(option)
+                                sortMenuOpen = false
+                            },
+                        )
+                    }
                 }
             }
         }
-        if (hasGroups) {
-            val expandFocus = rememberTvFocusState(focusedScale = 1.1f)
-            IconButton(
-                onClick = onToggleExpandAll,
-                modifier = Modifier
-                    .then(expandFocus.focusModifier)
-                    .tvFocusIndicator(expandFocus, CircleShape),
-            ) {
-                Icon(
-                    if (anyExpanded) Tabler.Outline.ChevronsUp else Tabler.Outline.ChevronsDown,
-                    contentDescription = stringResource(
-                        if (anyExpanded) {
-                            Res.string.downloads_collapse_all_cd
-                        } else {
-                            Res.string.downloads_expand_all_cd
-                        },
-                    ),
-                )
-            }
-        }
-        Box {
-            var sortMenuOpen by remember { mutableStateOf(false) }
-            val sortFocus = rememberTvFocusState(focusedScale = 1.1f)
-            IconButton(
-                onClick = { sortMenuOpen = true },
-                modifier = Modifier
-                    .then(sortFocus.focusModifier)
-                    .tvFocusIndicator(sortFocus, CircleShape),
-            ) {
-                Icon(
-                    Tabler.Outline.ArrowDown,
-                    contentDescription = stringResource(Res.string.downloads_sort_cd),
-                )
-            }
-            DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
-                DownloadListSort.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(option.labelRes),
-                                fontWeight = if (option == sort) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        },
-                        onClick = {
-                            onSelectSort(option)
-                            sortMenuOpen = false
-                        },
-                    )
+        val statusOptions = DownloadStatusFilter.entries
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(top = 4.dp).fillMaxWidth()) {
+            statusOptions.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = option == statusFilter,
+                    onClick = { onSelectStatusFilter(option) },
+                    shape = SegmentedButtonDefaults.itemShape(index, statusOptions.size),
+                ) {
+                    Text(stringResource(option.labelRes))
                 }
             }
         }
@@ -155,9 +180,12 @@ internal fun DownloadsFilterBar(
  *
  * Beyond the count line the header renders the group's context at a glance:
  * a summary line (partial download progress + total size, gh-175 follow-up),
- * the update-available dot when episodes inside are flagged for a resync, and
+ * the update-available dot when episodes inside are flagged for a resync,
  * — outside selection mode — a Play button targeting the group's next
- * unwatched episode.
+ * unwatched episode, and (also outside selection mode) group-level transfer
+ * controls (gh-178): pause / cancel for the group's in-flight episodes, each
+ * shown only when at least one episode admits it, mirroring the per-row
+ * button gates.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -179,6 +207,10 @@ internal fun DownloadGroupHeader(
     updateCount: Int = 0,
     /** Play the group's next unwatched episode; null hides the button. */
     onPlay: (() -> Unit)? = null,
+    /** Pause the group's in-flight episodes; null hides the button. */
+    onPauseGroup: (() -> Unit)? = null,
+    /** Cancel the group's in-flight episodes; null hides the button. */
+    onCancelGroup: (() -> Unit)? = null,
 ) {
     val countText = pluralStringResource(Res.plurals.downloads_episode_count, episodeCount, episodeCount)
     // Summary line: partial progress ("3 of 10 downloaded") whenever anything
@@ -277,6 +309,42 @@ internal fun DownloadGroupHeader(
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.tertiary),
                 )
+            }
+            // Group transfer controls (gh-178): pause / cancel for the group's
+            // in-flight episodes, gated by the caller's per-group admission
+            // (null = nothing in the group admits the action). Outside
+            // selection mode, alongside the group Play button. Cancel dispatches
+            // directly — the per-row cancel carries no confirmation either;
+            // only DELETE and the appbar's Cancel All confirm.
+            if (!selectionMode && onPauseGroup != null) {
+                val pauseFocus = rememberTvFocusState(focusedScale = 1.1f)
+                IconButton(
+                    onClick = onPauseGroup,
+                    modifier = Modifier
+                        .then(pauseFocus.focusModifier)
+                        .tvFocusIndicator(pauseFocus, ShapeCache.smooth10),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerPause,
+                        contentDescription = stringResource(Res.string.downloads_pause_all),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (!selectionMode && onCancelGroup != null) {
+                val cancelFocus = rememberTvFocusState(focusedScale = 1.1f)
+                IconButton(
+                    onClick = onCancelGroup,
+                    modifier = Modifier
+                        .then(cancelFocus.focusModifier)
+                        .tvFocusIndicator(cancelFocus, ShapeCache.smooth10),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerStop,
+                        contentDescription = stringResource(Res.string.downloads_action_cancel),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             // Group Play: outside selection mode, targets the next unwatched
             // episode in the group's playback order.

@@ -11,9 +11,10 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
  * the session-ID uniqueness choreography unchanged.
  *
  * No member carries an opaque player handle: [createForPlayer] takes the
- * typed [MediaEngine] (the androidMain impl narrows it to media3 `Player`
- * via `MediaEngine.asMedia3Player()` and no-ops when the engine hosts none),
- * and [createForBackgroundCast] resolves the cast receiver's player behind a
+ * typed [MediaEngine] (the androidMain impl resolves its media3 transport —
+ * the live player for ExoPlayer, a SimpleBasePlayer adapter for every other
+ * engine, so a session exists on mpv / libVLC too), and
+ * [createForBackgroundCast] resolves the cast receiver's player behind a
  * provider wired in androidMain. The jvmMain actual is a no-op (no desktop
  * media-session integration).
  */
@@ -21,7 +22,7 @@ interface MediaSessionController {
 
     /**
      * Builds + activates a session for the current item, pinning the
-     * title/subtitle + artwork. No-op without a bound platform player.
+     * title/subtitle + artwork. No-op without a bound engine.
      */
     fun createForItem(itemId: String, title: String, subtitle: String)
 
@@ -29,7 +30,7 @@ interface MediaSessionController {
      * Builds + activates a bare session around [engine]'s platform player
      * (local-engine reattach path); [videoItemId], when supplied, pins the
      * session activity to the fullscreen video item. No-op when [engine] is
-     * null or hosts no media3 player.
+     * null.
      */
     fun createForPlayer(engine: MediaEngine?, sessionId: String, videoItemId: String? = null)
 
@@ -48,8 +49,9 @@ interface MediaSessionController {
  * Factory seam replacing the ViewModel's former direct construction of the
  * androidMain controller with a legacy
  * [PlaybackSessionManager][com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager]
- * + `Context`: the androidMain actual captures both, narrows [getEngine]'s
- * engine to its media3 player, and owns the cast-player provider behind
+ * + `Context`: the androidMain actual captures both, passes [getEngine]
+ * through raw (the controller resolves the media3 transport per engine), and
+ * owns the cast-player provider behind
  * [MediaSessionController.createForBackgroundCast]. The jvmMain actual
  * produces a no-op controller.
  */

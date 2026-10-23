@@ -63,6 +63,14 @@ object DownloadActions {
     )
 
     /**
+     * The status set [action] admits — `null` when it admits every status
+     * (DELETE). Exposed read-only so derived vocabularies (the status
+     * filter's Active set) fold off this table instead of hand-copying it.
+     */
+    fun admittedStatuses(action: DownloadBulkAction): Set<DownloadStatus>? =
+        admittingStatuses.getValue(action)
+
+    /**
      * The actions the admission table admits for [item], in declaration order
      * — the single source the row renderer consults for which actions EXIST
      * for a status. Per-status placement (which slot a button renders in,

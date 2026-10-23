@@ -142,6 +142,7 @@ fun PrivacyDataScreen(
                     title = stringResource(Res.string.settings_clear_cache),
                     subtitle = stringResource(Res.string.settings_clear_cache_subtitle),
                     index = 0, count = 6,
+                    showChevron = false,
                     onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.ClearCache) },
                 )
             }
@@ -151,6 +152,7 @@ fun PrivacyDataScreen(
                     title = stringResource(Res.string.settings_clear_image_cache),
                     subtitle = stringResource(Res.string.settings_clear_image_cache_subtitle),
                     index = 1, count = 6,
+                    showChevron = false,
                     onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.ClearImageCache) },
                 )
             }
@@ -160,6 +162,7 @@ fun PrivacyDataScreen(
                     title = stringResource(Res.string.settings_clear_search_history),
                     subtitle = stringResource(Res.string.settings_clear_search_history_subtitle),
                     index = 2, count = 6,
+                    showChevron = false,
                     onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.ClearSearchHistory) },
                 )
             }
@@ -170,6 +173,7 @@ fun PrivacyDataScreen(
                     subtitle = stringResource(Res.string.settings_factory_reset_message),
                     isDestructive = true,
                     index = 3, count = 6,
+                    showChevron = false,
                     onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.FactoryReset) },
                 )
             }
@@ -180,6 +184,7 @@ fun PrivacyDataScreen(
                     subtitle = stringResource(Res.string.settings_sign_out_subtitle),
                     isDestructive = true,
                     index = 4, count = 6,
+                    showChevron = false,
                     onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.SignOut(fromServer = false)) },
                 )
             }
@@ -190,6 +195,7 @@ fun PrivacyDataScreen(
                     subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
                     isDestructive = true,
                     index = 5, count = 6,
+                    showChevron = false,
                     onClick = { pendingAction = pendingAction.hold(PendingPrivacyAction.SignOut(fromServer = true)) },
                 )
             }

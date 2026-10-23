@@ -1,7 +1,11 @@
 package com.raulshma.jellyplay.feature.player.live.di
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import com.raulshma.jellyplay.feature.player.live.AndroidLiveMediaSessionController
+import com.raulshma.jellyplay.feature.player.live.LiveMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.live.engine.ExoLiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerAudio
@@ -11,7 +15,7 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android platform pick for the live player's two ctor seams
+ * Android platform pick for the live player's ctor seams
  * (subtitle-tester's `androidSubtitleTesterModule(context)` pattern):
  *  - [LiveEngineFactory] — [ExoLiveEngineFactory] over the application
  *    context and the shared `NetworkQualifiers.streamingHttpClient` (the
@@ -19,7 +23,12 @@ import org.koin.dsl.module
  *  - [LivePlayerAudio] — a factory (per-ViewModel) whose `bind(owner)` is
  *    invoked from the VM's init; it owns the becoming-noisy receiver and the
  *    focus-surface binding (the legacy PlayerAudioLifecycle focus request
- *    died with the seat move into core:data's PlaybackFocus).
+ *    died with the seat move into core:data's PlaybackFocus);
+ *  - [LiveMediaSessionFactory] — the gh-178 system media session: builds the
+ *    [AndroidLiveMediaSessionController] over the shared core:data
+ *    [PlaybackSessionManager] singleton (the same slot the VOD and audio
+ *    sessions register through) and the Koin-native [ImageUrlProvider] for
+ *    channel artwork.
  *
  * The transcode-reason seam is NOT bound here: it became the commonMain
  * `CatalogTranscodeReasonsRenderer`, bound in `playerLiveModule` itself.
@@ -50,5 +59,15 @@ fun androidPlayerLiveModule(context: Context): Module = module {
             // it as the focus module's command target (the video focus slice).
             videoFocusSurface = getOrNull(),
         )
+    }
+    factory<LiveMediaSessionFactory> {
+        LiveMediaSessionFactory { getEngine, getImageUrl ->
+            AndroidLiveMediaSessionController(
+                context = context,
+                sessionManager = get(),
+                getEngine = getEngine,
+                getImageUrl = { channelId, maxWidth -> getImageUrl(channelId, maxWidth) },
+            )
+        }
     }
 }

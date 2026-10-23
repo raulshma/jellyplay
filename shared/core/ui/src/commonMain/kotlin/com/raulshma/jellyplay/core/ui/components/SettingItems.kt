@@ -145,6 +145,7 @@ fun SettingListItem(
     isDestructive: Boolean = false,
     highlighted: Boolean = false,
     modifier: Modifier = Modifier,
+    showChevron: Boolean = true,
     onClick: () -> Unit,
 ) {
     // Inside a SettingsItemList, pick up the auto-incrementing index and the
@@ -163,6 +164,7 @@ fun SettingListItem(
         isDestructive = isDestructive,
         highlighted = highlighted,
         modifier = modifier,
+        showChevron = showChevron,
         onClick = onClick,
     )
 }
@@ -179,6 +181,7 @@ private fun SettingListItemImpl(
     isDestructive: Boolean,
     highlighted: Boolean,
     modifier: Modifier,
+    showChevron: Boolean,
     onClick: () -> Unit,
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
@@ -260,12 +263,14 @@ private fun SettingListItemImpl(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Icon(
-                    Tabler.Outline.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
+                if (showChevron) {
+                    Icon(
+                        Tabler.Outline.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         },
         colors = ListItemDefaults.colors(

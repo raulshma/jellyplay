@@ -12,6 +12,7 @@ import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngineSessionPlayer
 import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
 
 /**
@@ -34,8 +35,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
  *    `getMediaMetadata()` here is non-destructive: the underlying timeline and
  *    position are untouched.
  *  - [createForPlayer]: builds a bare session around an engine's platform
- *    player (the local-engine reattach path narrows via
- *    [asMedia3Player][com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player]).
+ *    player (the local-engine reattach path). Engines that host a media3
+ *    player (ExoPlayer) are used directly; every other engine is wrapped in a
+ *    [MediaEngineSessionPlayer] adapter so a session — and with it headset /
+ *    Bluetooth / lock-screen media-button control — exists on every engine
+ *    (gh-178; previously mpv / libVLC silently had no session at all).
  *  - [createForBackgroundCast]: builds a bare session around the cast
  *    receiver's player (the background-cast detach/reattach path, which swaps
  *    the local engine player for the cast receiver's player).
@@ -57,12 +61,44 @@ import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
 internal class AndroidMediaSessionController(
     private val context: Context,
     private val sessionManager: PlaybackSessionManager,
-    private val getPlayer: () -> Player?,
+    private val getEngine: () -> MediaEngine?,
     private val getCastPlayer: () -> Player?,
     private val getImageUrl: (itemId: String, maxWidth: Int) -> String,
 ) : MediaSessionController {
 
     private var session: MediaSession? = null
+
+    /**
+     * The adapter-backed player for the current non-media3 engine (mpv /
+     * libVLC — gh-178), owned here so its state collectors die with the
+     * session it backs. `null` while the active engine is media3-backed
+     * (ExoPlayer / cast), whose live player is used directly.
+     */
+    private var attachedEnginePlayer: MediaEngineSessionPlayer? = null
+
+    /**
+     * The transport for [engine]: its live media3 player when it hosts one
+     * (ExoPlayer, the reattach narrowing), otherwise a fresh (or the still
+     * matching) [MediaEngineSessionPlayer] adapter. An engine swap retires
+     * the previous adapter — its collectors must not outlive the engine they
+     * poll.
+     */
+    private fun resolveEnginePlayer(engine: MediaEngine): Player {
+        engine.asMedia3Player()?.let { media3Player ->
+            attachedEnginePlayer?.releaseAdapter()
+            attachedEnginePlayer = null
+            return media3Player
+        }
+        attachedEnginePlayer?.takeIf { it.boundEngine !== engine }?.releaseAdapter()
+        attachedEnginePlayer?.takeIf { it.boundEngine === engine }?.let { return it }
+        return MediaEngineSessionPlayer(engine).also { attachedEnginePlayer = it }
+    }
+
+    /** Tears down the attached adapter, if any. Idempotent. */
+    private fun releaseAttachedEnginePlayer() {
+        attachedEnginePlayer?.releaseAdapter()
+        attachedEnginePlayer = null
+    }
 
     /**
      * Build + activate a session for the current item, pinning [title] /
@@ -82,7 +118,8 @@ internal class AndroidMediaSessionController(
      * [PlaybackSessionManager.startPlaybackService]).
      */
     override fun createForItem(itemId: String, title: String, subtitle: String) {
-        val player = getPlayer() ?: return
+        val engine = getEngine() ?: return
+        val player = resolveEnginePlayer(engine)
 
         releaseSupersededSession()
 
@@ -114,11 +151,13 @@ internal class AndroidMediaSessionController(
      *
      * [videoItemId], when supplied, pins the session activity to
      * [buildPlayerSessionActivity] so the notification still reopens the
-     * fullscreen video after a session rebuild. No-op when [engine] hosts no
-     * media3 player — [asMedia3Player] is the seam's single narrowing site.
+     * fullscreen video after a session rebuild. No-op when [engine] is null;
+     * a non-media3 engine is adapted ([resolveEnginePlayer]) so the reattach
+     * path keeps a session on every engine, mirroring [createForItem].
      */
     override fun createForPlayer(engine: MediaEngine?, sessionId: String, videoItemId: String?) {
-        activateBareSession(engine?.asMedia3Player() ?: return, sessionId, videoItemId)
+        val platformPlayer = engine?.let(::resolveEnginePlayer) ?: return
+        activateBareSession(platformPlayer, sessionId, videoItemId)
     }
 
     /**
@@ -152,6 +191,7 @@ internal class AndroidMediaSessionController(
 
     /** Tear down the active session. Idempotent. */
     override fun release() {
+        releaseAttachedEnginePlayer()
         val current = session ?: return
         if (sessionManager.currentSession === current) {
             sessionManager.clearSession(current)

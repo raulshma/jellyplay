@@ -41,6 +41,10 @@
     <string name="downloads_action_more_cd">More actions</string>
     <string name="downloads_pause_all">Pause all</string>
     <string name="downloads_retry_failed">Retry all failed</string>
+    <string name="downloads_resume_all">Resume all</string>
+    <string name="downloads_cancel_all">Cancel all</string>
+    <string name="downloads_cancel_all_title">Cancel all downloads?</string>
+    <string name="downloads_cancel_all_message">This stops every active transfer and removes paused downloads from the queue. Partial files are deleted.</string>
     <string name="downloads_clear_cd">Clear</string>
     <string name="downloads_search_cd">Search</string>
     <string name="downloads_sort_cd">Sort</string>
@@ -92,6 +96,9 @@
     <string name="downloads_filter_series">Series</string>
     <string name="downloads_filter_music">Music</string>
     <string name="downloads_filter_books">Books</string>
+    <!-- Status filter (gh-178) -->
+    <string name="downloads_status_active">Active</string>
+    <string name="downloads_status_completed">Completed</string>
 
     <!-- Offline download resync -->
     <string name="downloads_resync">Resync</string>

@@ -11,6 +11,9 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_cancel
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_cancel_all
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_cancel_all_message
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_cancel_all_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_delete
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_delete_download_message
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_delete_download_title
@@ -60,6 +63,26 @@ internal fun DownloadsDeleteDialogs(
                 viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
             },
             onDismiss = { viewModel.pendingBulkDelete.dismiss(inFlight = false) },
+        )
+    }
+
+    // Cancel All (gh-178): the appbar action lands here for its confirmation —
+    // a one-tap sweep stopping every in-flight transfer and deleting partial
+    // files is destructive enough to gate, unlike the per-row cancel. The
+    // payload scopes the sweep to the status filter's visible ids.
+    if (viewModel.pendingCancelAll.isPending) {
+        ConfirmDialog(
+            title = stringResource(Res.string.downloads_cancel_all_title),
+            message = stringResource(Res.string.downloads_cancel_all_message),
+            confirmText = stringResource(Res.string.downloads_cancel_all),
+            dismissText = stringResource(Res.string.downloads_cancel),
+            icon = Tabler.Outline.PlayerStop,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = {
+                val targetIds = viewModel.pendingCancelAll.confirm() ?: return@ConfirmDialog
+                viewModel.applyBulkActionToIds(DownloadBulkAction.CANCEL, targetIds)
+            },
+            onDismiss = { viewModel.pendingCancelAll.dismiss(inFlight = false) },
         )
     }
 }

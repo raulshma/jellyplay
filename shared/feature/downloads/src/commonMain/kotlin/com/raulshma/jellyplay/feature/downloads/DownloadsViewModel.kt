@@ -99,6 +99,19 @@ class DownloadsViewModel(
     val pendingBulkDelete = ConfirmationHost<Unit>()
 
     /**
+     * Pending Cancel All (the appbar action — gh-178). Cancel is destructive
+     * (in-flight workers stop, partial files are deleted) and this one sweep
+     * touches every active/paused row at once, so unlike the per-row cancel it
+     * confirms first. Same synchronous settle arm as the delete hosts.
+     */
+    /**
+     * The Cancel All arm (gh-178): the payload is the status filter's visible
+     * id set — the sweep the dialog confirms is exactly the list the user is
+     * looking at, never hidden rows.
+     */
+    val pendingCancelAll = ConfirmationHost<List<String>>()
+
+    /**
      * One-shot delete feedback, screen-forward seam. Buffered, single
      * collector, never replayed — [DownloadsScreen] resolves the
      * resource text and posts it to the shared UserMessageBus.
@@ -209,6 +222,14 @@ class DownloadsViewModel(
     private val _sort = MutableStateFlow(DownloadListSort.RECENT)
     val sort: StateFlow<DownloadListSort> = _sort.asStateFlow()
 
+    /**
+     * Status filter for the downloads list — All / Active / Completed / Failed
+     * (gh-178). Persisted through [DownloadsStore] so the choice survives app
+     * restarts.
+     */
+    private val _statusFilter = MutableStateFlow(DownloadStatusFilter.ALL)
+    val statusFilter: StateFlow<DownloadStatusFilter> = _statusFilter.asStateFlow()
+
     fun setFilter(value: DownloadListFilter) {
         _filter.value = value
         launch { downloadsStore.setDownloadsListFilter(value.name) }
@@ -217,6 +238,11 @@ class DownloadsViewModel(
     fun setSort(value: DownloadListSort) {
         _sort.value = value
         launch { downloadsStore.setDownloadsListSort(value.name) }
+    }
+
+    fun setStatusFilter(value: DownloadStatusFilter) {
+        _statusFilter.value = value
+        launch { downloadsStore.setDownloadsListStatusFilter(value.name) }
     }
 
     /** Expanded series/season group keys — groups start collapsed (session-only). */
@@ -271,9 +297,14 @@ class DownloadsViewModel(
      * emptyList would flash "nothing in this category" while downloads exist.
      */
     internal val rows: StateFlow<List<DownloadListRow>?> =
-        combine(structuralItems, _filter, _sort, _expandedKeys) { items, filter, sort, expanded ->
+        combine(structuralItems, _filter, _statusFilter, _sort, _expandedKeys) { items, filter, statusFilter, sort, expanded ->
             withContext(Dispatchers.Default) {
-                downloadListRows(items, filter, sort, expanded)
+                downloadListRows(
+                    items.filter { statusFilter.accepts(it) },
+                    filter,
+                    sort,
+                    expanded,
+                )
             }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -291,6 +322,9 @@ class DownloadsViewModel(
             }
             if (_sort.value == DownloadListSort.RECENT) {
                 _sort.value = DownloadListSort.fromName(slice.downloadsListSort)
+            }
+            if (_statusFilter.value == DownloadStatusFilter.ALL) {
+                _statusFilter.value = DownloadStatusFilter.fromName(slice.downloadsListStatusFilter)
             }
         }
         launch {
@@ -352,6 +386,39 @@ class DownloadsViewModel(
         val state = _uiState.value
         val targets = DownloadActions.targets(action, state.downloads, state.selectedIds, scope)
         if (targets.isEmpty()) return
+        dispatchBulk(action, targets) {
+            if (action == DownloadBulkAction.DELETE) {
+                if (scope == DownloadActionScope.Selected) clearSelection()
+                // Only claim success where deletions are real — a
+                // fabricated "Deleted" toast would lie.
+                if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
+            }
+        }
+    }
+
+    /**
+     * Ids-scoped dispatch behind the series/season headers' pause/cancel and
+     * the app bar's filter-aware global actions (gh-178): the caller hands its
+     * target ids in (a header's episodes, or the status filter's visible set),
+     * [DownloadActions.targets] intersects them with the live list and the
+     * admission table via the Selected scope (ids ∩ list ∩ admission — no
+     * selection mode needed), and the same verb fold as [applyBulkAction]
+     * runs. An id set in terminal states dispatches nothing.
+     */
+    fun applyBulkActionToIds(action: DownloadBulkAction, targetIds: Collection<String>) {
+        val state = _uiState.value
+        val targets = DownloadActions.targets(action, state.downloads, targetIds.toSet(), DownloadActionScope.Selected)
+        if (targets.isEmpty()) return
+        dispatchBulk(action, targets)
+    }
+
+    /**
+     * The one verb fold both dispatches share: [bulkMap] over the targets
+     * inside a single launch, [onDone] running after every verb completed
+     * (DELETE's selection clear + message ride it to keep their post-delete
+     * timing).
+     */
+    private fun dispatchBulk(action: DownloadBulkAction, targets: List<DownloadItem>, onDone: () -> Unit = {}) {
         launch {
             bulkMap(targets) { item ->
                 when (action) {
@@ -362,12 +429,7 @@ class DownloadsViewModel(
                     DownloadBulkAction.DELETE -> queue.deleteDownload(item.id)
                 }
             }
-            if (action == DownloadBulkAction.DELETE) {
-                if (scope == DownloadActionScope.Selected) clearSelection()
-                // Only claim success where deletions are real — a
-                // fabricated "Deleted" toast would lie.
-                if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
-            }
+            onDone()
         }
     }
 
@@ -405,12 +467,15 @@ class DownloadsViewModel(
     /**
      * Selects every download matching the ACTIVE filter — a collapsed group's
      * episodes count too (they're part of the Series view), while items hidden
-     * by the Movies/Series filter don't.
+     * by the Movies/Series or status filter don't.
      */
     fun selectAll() {
         val activeFilter = _filter.value
+        val activeStatusFilter = _statusFilter.value
         _uiState.update { state ->
-            val candidates = state.downloads.filter(activeFilter::accepts).map { it.id }
+            val candidates = state.downloads
+                .filter { activeFilter.accepts(it) && activeStatusFilter.accepts(it) }
+                .map { it.id }
             state.copy(selection = state.selection.selectAll(candidates))
         }
     }

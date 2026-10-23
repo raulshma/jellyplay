@@ -492,6 +492,13 @@ class DownloadsViewModelTest {
         )
         advanceUntilIdle()
 
+        // The rows derivation hops to Dispatchers.Default and back, so
+        // advanceUntilIdle cannot guarantee the post-push derivation has
+        // landed — and expandAll early-returns on stale rows (it reads the
+        // rendered headers). Await the collapsed baseline first; otherwise
+        // this races (observed 1-in-5 at HEAD under parallel test load).
+        awaitRows(listOf("series:s1", "series:sB"))
+
         // Everything expanded: the multi-season series discloses its season
         // headers AND their episodes; the single-season one lists directly.
         viewModel.expandAll()

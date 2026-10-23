@@ -29,6 +29,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
+import com.raulshma.jellyplay.core.model.CACHE_SIZE_DISABLED
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.formatBytes
@@ -249,6 +250,7 @@ fun StorageSettingsScreen(
                             title = rowTitle(StorageRows.ClearCache),
                             subtitle = rowSubtitle(StorageRows.ClearCache),
                             highlighted = highlightSettingId == StorageRows.ClearCache.id,
+                            showChevron = false,
                             onClick = { viewModel.clearCache() },
                         )
                         SettingListItem(
@@ -256,6 +258,7 @@ fun StorageSettingsScreen(
                             title = rowTitle(StorageRows.ClearImageCache),
                             subtitle = rowSubtitle(StorageRows.ClearImageCache),
                             highlighted = highlightSettingId == StorageRows.ClearImageCache.id,
+                            showChevron = false,
                             onClick = { viewModel.clearImageCache() },
                         )
                         if (showAdvanced) {
@@ -311,17 +314,25 @@ fun StorageSettingsScreen(
                             )
                             val maxCacheSizeTitle = rowTitle(StorageRows.MaxCacheSize)
                             val maxCacheUnlimited = stringResource(Res.string.settings_unlimited)
+                            val maxCacheDisabled = stringResource(Res.string.settings_disabled)
+                            val maxCacheLabel: (Int) -> String = {
+                                when (it) {
+                                    CACHE_SIZE_DISABLED -> maxCacheDisabled
+                                    0 -> maxCacheUnlimited
+                                    else -> "$it MB"
+                                }
+                            }
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
                                 title = maxCacheSizeTitle,
                                 subtitle = rowSubtitle(StorageRows.MaxCacheSize),
-                                trailingText = if (preferences.maxCacheSizeMb == 0) maxCacheUnlimited else "${preferences.maxCacheSizeMb} MB",
+                                trailingText = maxCacheLabel(preferences.maxCacheSizeMb),
                                 highlighted = highlightSettingId == StorageRows.MaxCacheSize.id,
                                 onClick = {
                                     activePicker.value = PickerState.List(
                                         title = maxCacheSizeTitle,
-                                        items = listOf(0, 250, 500, 1000, 2000, 5000),
-                                        label = { if (it == 0) maxCacheUnlimited else "$it MB" },
+                                        items = listOf(CACHE_SIZE_DISABLED, 0, 250, 500, 1000, 2000, 5000),
+                                        label = maxCacheLabel,
                                         isSelected = { it == preferences.maxCacheSizeMb },
                                         onSelect = { viewModel.edit { scope -> scope.networkOffline.setMaxCacheSize(it) } },
                                     )
@@ -682,6 +693,7 @@ fun StorageSettingsScreen(
                                 }
                             } ?: stringResource(Res.string.settings_auto_download_clean_up_now_subtitle),
                             highlighted = highlightSettingId == StorageRows.AutoDownloadCleanUpNow.id,
+                            showChevron = false,
                             onClick = { viewModel.cleanupDownloadsNow() },
                         )
                     }

@@ -105,6 +105,7 @@ class DownloadsStore constructor(
          */
         val DOWNLOADS_LIST_FILTER = stringPreferencesKey("downloads_list_filter")
         val DOWNLOADS_LIST_SORT = stringPreferencesKey("downloads_list_sort")
+        val DOWNLOADS_LIST_STATUS_FILTER = stringPreferencesKey("downloads_list_status_filter")
     }
 
     val downloads: StateFlow<DownloadsSlice> =
@@ -128,6 +129,7 @@ class DownloadsStore constructor(
         maxDownloadStorageGb = PreferenceCodec.readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
         downloadsListFilter = prefs[Keys.DOWNLOADS_LIST_FILTER] ?: "",
         downloadsListSort = prefs[Keys.DOWNLOADS_LIST_SORT] ?: "",
+        downloadsListStatusFilter = prefs[Keys.DOWNLOADS_LIST_STATUS_FILTER] ?: "",
         downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
         autoDeleteAfterWatch = prefs[Keys.AUTO_DELETE_AFTER_WATCH] ?: false,
         cellularDownloadSizeWarningMb = PreferenceCodec.readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
@@ -226,6 +228,11 @@ class DownloadsStore constructor(
         dataStore.edit { it[Keys.DOWNLOADS_LIST_SORT] = value }
     }
 
+    /** Persists the downloads-list status filter (an enum name string; see [Keys.DOWNLOADS_LIST_STATUS_FILTER]). */
+    suspend fun setDownloadsListStatusFilter(value: String) {
+        dataStore.edit { it[Keys.DOWNLOADS_LIST_STATUS_FILTER] = value }
+    }
+
     suspend fun setDownloadStorageLocation(location: String) {
         dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
     }
@@ -282,6 +289,7 @@ class DownloadsStore constructor(
             Keys.DOWNLOAD_STORAGE_LOCATION,
             Keys.DOWNLOADS_LIST_FILTER,
             Keys.DOWNLOADS_LIST_SORT,
+            Keys.DOWNLOADS_LIST_STATUS_FILTER,
             Keys.AUTO_DELETE_AFTER_WATCH,
             Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
             Keys.DOWNLOAD_SCHEDULE_ENABLED,
@@ -337,6 +345,7 @@ class DownloadsStore constructor(
             it[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
             it[Keys.DOWNLOADS_LIST_FILTER] = slice.downloadsListFilter
             it[Keys.DOWNLOADS_LIST_SORT] = slice.downloadsListSort
+            it[Keys.DOWNLOADS_LIST_STATUS_FILTER] = slice.downloadsListStatusFilter
             it[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
             it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = slice.cellularDownloadSizeWarningMb
             it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
@@ -388,6 +397,8 @@ data class DownloadsSlice(
     val downloadsListFilter: String = "",
     /** Downloads-list sort as an enum name string ("" = feature default). */
     val downloadsListSort: String = "",
+    /** Downloads-list status filter as an enum name string ("" = feature default). */
+    val downloadsListStatusFilter: String = "",
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,
