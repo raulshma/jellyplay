@@ -31,6 +31,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resolution_switching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_video
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_running
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_result
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_on
@@ -437,7 +440,19 @@ internal fun PlaybackAdvancedVideoGroup(
                         icon = rowIcon(PlaybackRows.SpeedTest),
                         title = rowTitle(PlaybackRows.SpeedTest),
                         subtitle = rowSubtitle(PlaybackRows.SpeedTest),
-                        trailingText = viewModel.speedTestResult ?: "",
+                        trailingText = when (val state = viewModel.speedTestResult) {
+                            null -> ""
+                            SpeedTestState.Running -> stringResource(Res.string.settings_speed_test_running)
+                            SpeedTestState.Failed -> stringResource(Res.string.settings_speed_test_failed)
+                            is SpeedTestState.Measured -> {
+                                val oneDecimal = ((state.mbps * 10f).toInt()) / 10f
+                                stringResource(
+                                    Res.string.settings_speed_test_result,
+                                    oneDecimal.toString(),
+                                    state.suggestedTier.displayName,
+                                )
+                            }
+                        },
                         highlighted = highlightSettingId == PlaybackRows.SpeedTest.id,
                         onClick = { viewModel.runSpeedTest() },
                     )

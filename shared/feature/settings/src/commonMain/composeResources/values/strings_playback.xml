@@ -346,6 +346,9 @@
     <string name="settings_home_network_quality_subtitle">Home network (LAN) quality cap</string>
     <string name="settings_speed_test">Test connection speed</string>
     <string name="settings_speed_test_subtitle">Measure throughput and propose a quality cap</string>
+    <string name="settings_speed_test_running">Testing…</string>
+    <string name="settings_speed_test_failed">Speed test failed</string>
+    <string name="settings_speed_test_result">%1$s Mbps · suggests %2$s</string>
     <string name="settings_next_up_preroll">Next Up Button Preroll</string>
     <string name="settings_next_up_preroll_subtitle">Seconds before the end the Next Up button appears</string>
     <string name="settings_mpv_tone_mapping_curve">Tone Mapping Curve</string>

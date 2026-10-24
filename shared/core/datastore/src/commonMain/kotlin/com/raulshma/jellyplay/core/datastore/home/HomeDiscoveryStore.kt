@@ -825,7 +825,7 @@ class HomeDiscoveryStore constructor(
      */
     suspend fun setHomeHeroSlideshowIntervalSec(seconds: Int) = editForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC.userKey(userId)] =
-            seconds.coerceIn(3, 60)
+            seconds.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC_BOUNDS)
     }
 
     suspend fun setHomeBackdropEnabled(enabled: Boolean) = editForUser { prefs, userId ->
@@ -1276,7 +1276,7 @@ class HomeDiscoveryStore constructor(
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = slice.homeHeroEnabled
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.rawUserKey(userId)] = slice.homeHeroStyle.name
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC.userKey(userId)] =
-                slice.homeHeroSlideshowIntervalSec.coerceIn(3, 60)
+                slice.homeHeroSlideshowIntervalSec.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC_BOUNDS)
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.userKey(userId)] = slice.homeHeroVideoEnabled
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = slice.homeHeroVideoTvEnabled
             prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = slice.homeBackdropEnabled

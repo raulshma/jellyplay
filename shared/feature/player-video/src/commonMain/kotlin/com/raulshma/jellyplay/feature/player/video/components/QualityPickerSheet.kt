@@ -61,8 +61,13 @@ fun QualityPickerSheet(
             currentQuality = currentQuality,
             adaptiveBitrateEnabled = adaptiveBitrateEnabled,
             onToggleAdaptiveBitrate = onToggleAdaptiveBitrate,
-            onSelect = onSelect,
-            onDismiss = onDismiss,
+            // Standalone sheet: a pick confirms and closes. The combined
+            // playback-options sheet embeds the options directly (no dismiss
+            // on select) so it stays open across picks.
+            onSelect = { quality ->
+                onSelect(quality)
+                onDismiss()
+            },
             isTv = isTv,
             tvFocusRequester = focusRequester,
         )
@@ -72,9 +77,10 @@ fun QualityPickerSheet(
 /**
  * The quality chip row + adaptive-bitrate toggle, shared by the standalone
  * quality sheet and the combined playback-options sheet (which embeds it so
- * one open sheet covers engine + delivery + quality). [enabled] = false
- * renders the section disabled with the unavailable help text (forced direct
- * play / offline / cast / SyncPlay have no quality to pick).
+ * one open sheet covers engine + delivery + quality). Never dismisses its
+ * host — the caller decides what a pick does. [enabled] = false renders the
+ * section disabled with the unavailable help text (forced direct play /
+ * offline / cast / SyncPlay have no quality to pick).
  */
 @Composable
 fun QualityPickerOptions(
@@ -82,7 +88,6 @@ fun QualityPickerOptions(
     adaptiveBitrateEnabled: Boolean,
     onToggleAdaptiveBitrate: (Boolean) -> Unit,
     onSelect: (StreamingQuality) -> Unit,
-    onDismiss: () -> Unit,
     isTv: Boolean,
     tvFocusRequester: FocusRequester,
     enabled: Boolean = true,
@@ -103,7 +108,7 @@ fun QualityPickerOptions(
                 val isFirstOrSelected = isSelected || (currentQuality !in StreamingQuality.entries && quality == StreamingQuality.AUTO)
                 TvFocusableOptionRow(
                     selected = isSelected,
-                    onClick = { onSelect(quality); onDismiss() },
+                    onClick = { onSelect(quality) },
                     focusRequesterModifier = Modifier.ifElse(isFirstOrSelected, Modifier.focusRequester(tvFocusRequester)),
                     trailingCheck = true,
                 ) {
@@ -123,10 +128,7 @@ fun QualityPickerOptions(
                 val isSelected = quality == currentQuality
                 FilterChip(
                     selected = isSelected,
-                    onClick = {
-                        onSelect(quality)
-                        onDismiss()
-                    },
+                    onClick = { onSelect(quality) },
                     label = {
                         Text(
                             quality.displayName,

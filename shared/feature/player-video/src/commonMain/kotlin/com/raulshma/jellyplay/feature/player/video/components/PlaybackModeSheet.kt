@@ -69,6 +69,9 @@ fun PlaybackModeSheet(
     PickerSheetScaffold(
         title = stringResource(Res.string.player_video_playback_options),
         icon = Tabler.Outline.Server,
+        // Three sections exceed a phone sheet — the body column scrolls
+        // (the TV rows keep their own focused LazyColumn scroll).
+        scrollable = true,
         onDismiss = onDismiss,
         preContent = {
             Spacer(Modifier.height(4.dp))
@@ -187,8 +190,9 @@ fun PlaybackModeSheet(
                 currentQuality = currentQuality,
                 adaptiveBitrateEnabled = adaptiveBitrateEnabled,
                 onToggleAdaptiveBitrate = onToggleAdaptiveBitrate,
+                // Select updates in place; only the scaffold's dismiss closes
+                // the sheet.
                 onSelect = onQualitySelect,
-                onDismiss = onDismiss,
                 isTv = isTv,
                 // The combined sheet's quality section is never the TV focus
                 // landing zone (the delivery rows own the requester); the

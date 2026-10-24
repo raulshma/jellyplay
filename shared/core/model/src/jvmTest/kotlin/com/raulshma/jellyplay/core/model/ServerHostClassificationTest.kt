@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.data.network
+package com.raulshma.jellyplay.core.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,9 +8,8 @@ import kotlin.test.assertTrue
 
 /**
  * Boundary table for [isLocalServerHost] — the network-split bitrate cap's
- * host classifier. Mirrors the core:ui `LocalNetworkAddressTest` case table
- * (the two implementations are documented duplicates; this suite is the
- * drift alarm). Public hosts must classify `false` (a remote relay must not
+ * host classifier and the local-network-permission heuristic's shared home.
+ * Public hosts must classify `false` (a remote relay must not
  * silently inherit the home-network quality tier); every RFC-private/
  * loopback/link-local range, mDNS and bare hostname must classify `true`.
  */

@@ -1357,6 +1357,9 @@ object VideoPlayerPreferenceSpecs {
 
     val SKIP_PROMPT_DURATION_MS: PreferenceSpec<Long> get() = row("skip_prompt_duration_ms")
 
+    /** The clamp every [SKIP_PROMPT_DURATION_MS] read/write shares. */
+    val SKIP_PROMPT_DURATION_MS_BOUNDS: ClosedRange<Long> = 3_000L..30_000L
+
     val VIDEO_HIDE_OSD_ON_PAUSE: PreferenceSpec<Boolean> get() = row("video_hide_osd_on_pause")
 
     val VIDEO_RESUME_ON_HEADSET_PLUG: PreferenceSpec<Boolean> get() = row("video_resume_on_headset_plug")
@@ -1425,9 +1428,15 @@ object VideoPlayerPreferenceSpecs {
 
     val PAUSE_SCREENSAVER_AFTER_MINUTES: PreferenceSpec<Int> get() = row("pause_screensaver_after_minutes")
 
+    /** The clamp every [PAUSE_SCREENSAVER_AFTER_MINUTES] read/write shares. */
+    val PAUSE_SCREENSAVER_AFTER_MINUTES_BOUNDS: ClosedRange<Int> = 1..60
+
     val PAUSE_DETAILS_ENABLED: PreferenceSpec<Boolean> get() = row("pause_details_enabled")
 
     val NEXT_UP_BUTTON_PREROLL_SEC: PreferenceSpec<Int> get() = row("next_up_button_preroll_sec")
+
+    /** The clamp every [NEXT_UP_BUTTON_PREROLL_SEC] read/write shares. */
+    val NEXT_UP_BUTTON_PREROLL_SEC_BOUNDS: ClosedRange<Int> = 5..120
 
     val MPV_TONE_MAPPING_CURVE: PreferenceSpec<MpvToneMappingCurve> get() = row("mpv_tone_mapping_curve")
 

@@ -165,7 +165,7 @@ class VideoPlayerStore constructor(
     internal fun read(prefs: Preferences): VideoPlayerSlice = VideoPlayerSlice(
         videoSeekDurationMs = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.readFrom(prefs),
         videoControlsTimeoutMs = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.readFrom(prefs),
-        skipPromptDurationMs = VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.readFrom(prefs).coerceIn(3_000L, 30_000L),
+        skipPromptDurationMs = VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.readFrom(prefs).coerceIn(VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS_BOUNDS),
         videoHideOsdOnPause = VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.readFrom(prefs),
         videoResumeOnHeadsetPlug = VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.readFrom(prefs),
         videoDefaultOrientation = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.readFrom(prefs),
@@ -237,7 +237,7 @@ class VideoPlayerStore constructor(
     }
 
     suspend fun setSkipPromptDurationMs(ms: Long) {
-        dataStore.edit { VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.writeTo(it, ms.coerceIn(3_000L, 30_000L)) }
+        dataStore.edit { VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.writeTo(it, ms.coerceIn(VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS_BOUNDS)) }
     }
 
     /** Pausing must not summon the control overlay (default off). */
@@ -437,7 +437,7 @@ class VideoPlayerStore constructor(
      */
     suspend fun setPauseScreensaverAfterMinutes(minutes: Int) {
         dataStore.edit {
-            VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_AFTER_MINUTES.writeTo(it, minutes.coerceIn(1, 60))
+            VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_AFTER_MINUTES.writeTo(it, minutes.coerceIn(VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_AFTER_MINUTES_BOUNDS))
         }
     }
 
@@ -459,7 +459,7 @@ class VideoPlayerStore constructor(
     /** Seconds before the current item ends that the "Next up" button appears; clamped to 5–120. */
     suspend fun setNextUpButtonPrerollSec(seconds: Int) {
         dataStore.edit {
-            VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC.writeTo(it, seconds.coerceIn(5, 120))
+            VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC.writeTo(it, seconds.coerceIn(VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC_BOUNDS))
         }
     }
 
@@ -597,7 +597,7 @@ class VideoPlayerStore constructor(
         dataStore.edit { prefs ->
             VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.writeTo(prefs, slice.videoSeekDurationMs)
             VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(prefs, slice.videoControlsTimeoutMs)
-            VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.writeTo(prefs, slice.skipPromptDurationMs.coerceIn(3_000L, 30_000L))
+            VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.writeTo(prefs, slice.skipPromptDurationMs.coerceIn(VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS_BOUNDS))
             VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.writeTo(prefs, slice.videoHideOsdOnPause)
             VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.writeTo(prefs, slice.videoResumeOnHeadsetPlug)
             VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.writeTo(prefs, slice.videoDefaultOrientation)
@@ -651,13 +651,13 @@ class VideoPlayerStore constructor(
             VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_MODE.writeTo(prefs, slice.pauseScreensaverMode)
             VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_AFTER_MINUTES.writeTo(
                 prefs,
-                slice.pauseScreensaverAfterMinutes.coerceIn(1, 60),
+                slice.pauseScreensaverAfterMinutes.coerceIn(VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_AFTER_MINUTES_BOUNDS),
             )
             VideoPlayerPreferenceSpecs.PAUSE_DETAILS_ENABLED.writeTo(prefs, slice.pauseDetailsEnabled)
             VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.writeTo(prefs, slice.skipSegmentsOnSeek)
             VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC.writeTo(
                 prefs,
-                slice.nextUpButtonPrerollSec.coerceIn(5, 120),
+                slice.nextUpButtonPrerollSec.coerceIn(VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC_BOUNDS),
             )
             VideoPlayerPreferenceSpecs.MPV_TONE_MAPPING_CURVE.writeTo(prefs, slice.mpvToneMappingCurve)
             VideoPlayerPreferenceSpecs.MPV_DEBAND_MODE.writeTo(prefs, slice.mpvDebandMode)

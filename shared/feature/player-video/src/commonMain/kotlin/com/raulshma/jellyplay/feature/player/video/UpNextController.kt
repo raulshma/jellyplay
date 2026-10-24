@@ -586,8 +586,9 @@ internal class UpNextController(
 
     /**
      * The unattended binge streak: consecutive AUTO-advances this player
-     * session. Grows ONLY on the two auto arms ([advanceFromPlaybackEnd] /
-     * [advanceFromUpNextCountdown]); every manual item selection resets it —
+     * session. Grows ONLY on [advanceUnattended] (both auto arms — the
+     * engine end and the Up Next countdown); every manual item selection
+     * resets it —
      * the manual verbs here ([playEpisode] / [playPreviousEpisode] /
      * [playQueueItem] / [markWatchedAndSkip] / [playNextManually]) plus the
      * player-open arm ([resetAutoAdvanceStreak], the VM's Initialize funnel).
@@ -619,22 +620,14 @@ internal class UpNextController(
     }
 
     /**
-     * The engine-end auto-advance arm (the VM's `handlePlaybackEnded`): the
-     * binge streak grows, then the advance — blocked upstream by
-     * [canAutoAdvance] when the cap is reached, so this only runs while the
-     * cap allows it.
+     * The unattended auto-advance: the binge streak grows, then the advance.
+     * Two triggers share it — the engine-end arm (the VM's
+     * `handlePlaybackEnded`) and the Up Next countdown's expiry (the
+     * overlay's [NextEpisodeOverlay] countdown reaching zero) — in both the
+     * user pressed nothing. Blocked upstream by [canAutoAdvance] when the
+     * cap is reached, so this only runs while the cap allows it.
      */
-    fun advanceFromPlaybackEnd() {
-        recordAutoAdvanceForLimit()
-        playNextEpisode()
-    }
-
-    /**
-     * The Up Next countdown's expiry arm (the overlay's [NextEpisodeOverlay]
-     * countdown reaching zero): the SAME accounting as the engine end — the
-     * user pressed nothing, so it is an auto-advance.
-     */
-    fun advanceFromUpNextCountdown() {
+    fun advanceUnattended() {
         recordAutoAdvanceForLimit()
         playNextEpisode()
     }

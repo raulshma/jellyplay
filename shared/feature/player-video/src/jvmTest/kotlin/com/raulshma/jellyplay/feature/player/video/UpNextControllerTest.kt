@@ -639,11 +639,11 @@ class UpNextControllerTest {
         autoplayLimit.value = 2
         val c = controller()
 
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertFalse(c.isAutoplayLimitReached.value, "one auto-advance under a cap of 2 does not arm")
 
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value, "the streak reached the cap")
         assertFalse(c.canAutoAdvance(), "the end-of-playback gate blocks further auto-advances")
@@ -655,7 +655,7 @@ class UpNextControllerTest {
         stubSeason(episode("ep2"), episode("ep3"))
         val c = controller()
 
-        c.advanceFromUpNextCountdown()
+        c.advanceUnattended()
         advanceUntilIdle()
 
         assertTrue(c.isAutoplayLimitReached.value, "the countdown ran out with no user press — an auto-advance")
@@ -668,7 +668,7 @@ class UpNextControllerTest {
         autoplayLimit.value = 1
         val c = controller()
 
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value)
 
@@ -686,7 +686,7 @@ class UpNextControllerTest {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 1
         val c = controller()
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value)
 
@@ -694,7 +694,7 @@ class UpNextControllerTest {
         advanceUntilIdle()
         assertFalse(c.isAutoplayLimitReached.value, "a manual episode pick resets")
 
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value)
         videoQueue?.enqueueLast(VideoQueueItem(itemId = "movie-1", title = "movie-1"))
@@ -702,7 +702,7 @@ class UpNextControllerTest {
         advanceUntilIdle()
         assertFalse(c.isAutoplayLimitReached.value, "a manual queue-row pick resets")
 
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value)
         hasNext = false
@@ -716,7 +716,7 @@ class UpNextControllerTest {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 1
         val c = controller()
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value)
 
@@ -730,7 +730,7 @@ class UpNextControllerTest {
         stubSeason(episode("ep2"), episode("ep3"))
         val c = controller()
         repeat(5) {
-            c.advanceFromPlaybackEnd()
+            c.advanceUnattended()
             advanceUntilIdle()
         }
         assertFalse(c.isAutoplayLimitReached.value, "0 = unlimited")
@@ -742,7 +742,7 @@ class UpNextControllerTest {
         stubSeason(episode("ep2"), episode("ep3"))
         autoplayLimit.value = 1
         val c = controller()
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
         assertTrue(c.isAutoplayLimitReached.value)
 
@@ -774,7 +774,7 @@ class UpNextControllerTest {
         showDetailsAfterFinish = true
         autoplayLimit.value = 1
         val c = controller()
-        c.advanceFromPlaybackEnd()
+        c.advanceUnattended()
         advanceUntilIdle()
 
         assertTrue(

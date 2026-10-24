@@ -1,12 +1,12 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.network.isLocalServerHost
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.isLocalServerHost
 
 /**
  * Moved from the legacy `:core:data` shim (playback flips): the
@@ -107,8 +107,7 @@ class AdaptiveBitrateManager(
             ?.takeUnless { it == StreamingQuality.AUTO }
         val quality = when {
             serverHost != null && homeTier != null && isLocalServerHost(serverHost) -> homeTier
-            isUnmeteredConnection() -> pb.streamingQuality
-            else -> pb.cellularStreamingQuality
+            else -> effectiveQuality(pb.streamingQuality, pb.cellularStreamingQuality)
         }
         val resolved = resolveMaxBitrate(quality)
         // Data saver forces an upper bound independent of the selected quality.
@@ -119,6 +118,15 @@ class AdaptiveBitrateManager(
             resolved
         }
     }
+
+    /**
+     * The base network-split fold shared by every quality consumer (#19): the
+     * wifi tier on an unmetered connection, the cellular tier on metered.
+     * [resolveEffectiveMaxBitrate] layers the home-host tier and the
+     * data-saver clamp on top of this base.
+     */
+    fun effectiveQuality(unmetered: StreamingQuality, metered: StreamingQuality): StreamingQuality =
+        if (isUnmeteredConnection()) unmetered else metered
 
     fun isUnmeteredConnection(): Boolean = !networkMonitor.isMetered.value
 

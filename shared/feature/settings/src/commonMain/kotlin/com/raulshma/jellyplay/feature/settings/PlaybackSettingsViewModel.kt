@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.model.MpvAudioDevice
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +13,17 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+
+/**
+ * The connection-speed probe's outcome as data — the advanced-video action
+ * row renders the localized strings. [Measured] carries the raw rate plus
+ * the tier [ConnectionSpeedTester.proposedQualityTier] proposes.
+ */
+sealed interface SpeedTestState {
+    data object Running : SpeedTestState
+    data object Failed : SpeedTestState
+    data class Measured(val mbps: Float, val suggestedTier: StreamingQuality) : SpeedTestState
+}
 
 class PlaybackSettingsViewModel(
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
@@ -39,13 +51,12 @@ class PlaybackSettingsViewModel(
     val preferences: StateFlow<PlaybackPreferences> = projections.playbackPreferences
 
     /**
-     * The connection-speed probe's outcome — "Testing…" while the probe
-     * runs, then `"142.3 Mbps · suggests 4K"` (the measured rate + the tier
-     * [ConnectionSpeedTester.proposedQualityTier] proposes) or "Speed test
-     * failed" when no sample completed. The advanced-video `speed_test`
-     * action row renders it.
+     * The connection-speed probe's outcome — [SpeedTestState.Running] while
+     * the probe runs, then [SpeedTestState.Measured] (rate + suggested tier)
+     * or [SpeedTestState.Failed] when no sample completed. The advanced-video
+     * `speed_test` action row renders it.
      */
-    var speedTestResult: String? by mutableStateOf(null)
+    var speedTestResult: SpeedTestState? by mutableStateOf(null)
         private set
 
     /** The in-flight probe; a second tap while one runs is swallowed. */
@@ -54,20 +65,19 @@ class PlaybackSettingsViewModel(
     /**
      * Runs the connection-speed probe (two bounded downloads, best sample
      * kept — see [ConnectionSpeedTester]): flips [speedTestResult] to
-     * "Testing…" immediately, then to the Mbps + suggested-tier text on
-     * success or "Speed test failed" when the probe yields nothing.
+     * [SpeedTestState.Running] immediately, then to [SpeedTestState.Measured]
+     * on success or [SpeedTestState.Failed] when the probe yields nothing.
      */
     fun runSpeedTest() {
         val tester = connectionSpeedTester ?: return
         if (speedTestJob?.isActive == true) return
-        speedTestResult = SPEED_TEST_RUNNING
+        speedTestResult = SpeedTestState.Running
         speedTestJob = scope.launch {
             val mbps = tester.measureMbps()
             speedTestResult = if (mbps == null) {
-                SPEED_TEST_FAILED
+                SpeedTestState.Failed
             } else {
-                val oneDecimal = ((mbps * 10f).toInt()) / 10f
-                "$oneDecimal Mbps · suggests ${ConnectionSpeedTester.proposedQualityTier(mbps).displayName}"
+                SpeedTestState.Measured(mbps, ConnectionSpeedTester.proposedQualityTier(mbps))
             }
         }
     }
@@ -102,13 +112,5 @@ class PlaybackSettingsViewModel(
     fun resetPlaybackSettings() {
         editor.resetCategory(PreferenceResetCategory.PLAYBACK)
         editor.resetCategory(PreferenceResetCategory.PLAYER_ENGINES)
-    }
-
-    private companion object {
-        /** The probe-in-progress state the action row renders. */
-        const val SPEED_TEST_RUNNING = "Testing…"
-
-        /** The probe's failure state (both samples failed — offline / blocked endpoint). */
-        const val SPEED_TEST_FAILED = "Speed test failed"
     }
 }

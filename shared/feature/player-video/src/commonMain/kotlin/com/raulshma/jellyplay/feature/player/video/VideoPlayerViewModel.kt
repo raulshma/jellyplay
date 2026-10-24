@@ -483,11 +483,7 @@ class VideoPlayerViewModel(
             // ("Keep" or a failing permission read). Conditional on the #17
             // after-finish keep gate re-evaluated LIVE: a card still holding
             // the player outlives the dismissed dialog.
-            val heldByCard = playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
-                autoplayEnabled = _uiState.value.autoplay.videoAutoplayNext,
-                autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
-            )
-            if (!heldByCard) _closePlayer.trySend(Unit)
+            if (!heldByAfterFinishCard()) _closePlayer.trySend(Unit)
         },
         notifyDeleteFailed = { title ->
             userMessageBus.error(
@@ -1196,7 +1192,7 @@ class VideoPlayerViewModel(
                 playbackSession.autoplayController.recordAutoAdvance()
                 // The engine-end AUTO arm: the binge streak grows here (#17);
                 // manual play-next paths reset it instead.
-                playbackSession.upNext.advanceFromPlaybackEnd()
+                playbackSession.upNext.advanceUnattended()
             }
         } else {
             onEndedWithNoNext()
@@ -1222,19 +1218,23 @@ class VideoPlayerViewModel(
      *    persistently (the position is frozen at the end, so the card's
      *    window stays open) instead of closing.
      */
+    /**
+     * The #17 after-finish keep gate, live-evaluated against the current
+     * autoplay state — both end-of-media close paths re-consult it.
+     */
+    private fun heldByAfterFinishCard(): Boolean =
+        playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
+            autoplayEnabled = _uiState.value.autoplay.videoAutoplayNext,
+            autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
+        )
+
     private fun onEndedWithNoNext() {
         if (playbackSession.cinemaIntroContext != null) {
             playbackSession.advanceCinemaIntro()
             return
         }
         if (postPlaybackActions.onPlaybackEndedNaturally()) return
-        if (playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
-                autoplayEnabled = _uiState.value.autoplay.videoAutoplayNext,
-                autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
-            )
-        ) {
-            return
-        }
+        if (heldByAfterFinishCard()) return
         _closePlayer.trySend(Unit)
     }
 

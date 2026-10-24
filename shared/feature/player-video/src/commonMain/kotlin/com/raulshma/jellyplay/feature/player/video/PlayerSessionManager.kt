@@ -649,11 +649,10 @@ internal class PlayerSessionManager(
         // The resolution cap follows the network: the cellular tier on
         // metered connections, the wifi tier otherwise (same split the
         // effective bitrate uses).
-        val quality = if (adaptiveBitrateManager.isUnmeteredConnection()) {
-            agg.playback.streamingQuality
-        } else {
-            agg.playback.cellularStreamingQuality
-        }
+        val quality = adaptiveBitrateManager.effectiveQuality(
+            agg.playback.streamingQuality,
+            agg.playback.cellularStreamingQuality,
+        )
         return PlaybackResolveRequest(
             itemId = itemId,
             mediaSourceId = source?.id ?: "",
@@ -663,7 +662,7 @@ internal class PlayerSessionManager(
             // wifi/cellular ladder. The host is the pure string parse of the
             // session's server URL (the identity seam's platform-neutral read).
             maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                com.raulshma.jellyplay.core.data.network.serverHostOf(playbackIdentity.serverUrl()),
+                sessionServerHost(),
             ),
             maxVideoHeight = quality.maxHeight,
             mode = agg.playback.playbackMode,
@@ -671,6 +670,14 @@ internal class PlayerSessionManager(
             staticFallbackLiveStreamId = source?.liveStreamId,
         )
     }
+
+    /**
+     * The pure host parse of the session's server URL — the #19 input to the
+     * bitrate resolution (a LOCAL host honours the home tier). One read for
+     * every resolve path so they cannot drift.
+     */
+    private fun sessionServerHost(): String? =
+        com.raulshma.jellyplay.core.model.serverHostOf(playbackIdentity.serverUrl())
 
     private suspend fun loadOnline(
         itemId: String,
@@ -852,7 +859,7 @@ internal class PlayerSessionManager(
                 // Same server, same split (#19): the external hand-off honours
                 // the home tier on a LOCAL server like the in-app paths do.
                 adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                    com.raulshma.jellyplay.core.data.network.serverHostOf(serverUrl),
+                    com.raulshma.jellyplay.core.model.serverHostOf(serverUrl),
                 )?.toInt()
                 else null,
             serverUrl = serverUrl,
@@ -1027,7 +1034,7 @@ internal class PlayerSessionManager(
         return reresolveAndSwap(
             mode = aggregateStore.aggregate.value.playback.playbackMode,
             maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                com.raulshma.jellyplay.core.data.network.serverHostOf(playbackIdentity.serverUrl()),
+                sessionServerHost(),
             ),
             selection = selection,
             startPositionMs = currentPositionMs,
@@ -1064,7 +1071,7 @@ internal class PlayerSessionManager(
         return reresolveAndSwap(
             mode = aggregateStore.aggregate.value.playback.playbackMode,
             maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                com.raulshma.jellyplay.core.data.network.serverHostOf(playbackIdentity.serverUrl()),
+                sessionServerHost(),
             ),
             selection = null,
             startPositionMs = currentPositionMs,
@@ -1097,11 +1104,10 @@ internal class PlayerSessionManager(
         selection: MediaStreamSelection?,
         startPositionMs: Long,
         markForced: Boolean,
-        quality: com.raulshma.jellyplay.core.model.StreamingQuality = if (adaptiveBitrateManager.isUnmeteredConnection()) {
-            aggregateStore.aggregate.value.playback.streamingQuality
-        } else {
-            aggregateStore.aggregate.value.playback.cellularStreamingQuality
-        },
+        quality: com.raulshma.jellyplay.core.model.StreamingQuality = adaptiveBitrateManager.effectiveQuality(
+            aggregateStore.aggregate.value.playback.streamingQuality,
+            aggregateStore.aggregate.value.playback.cellularStreamingQuality,
+        ),
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""

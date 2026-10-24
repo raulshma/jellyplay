@@ -209,7 +209,7 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
-    /** The [HomeHeroStyle.SLIDESHOW] auto-advance pacing in seconds (3–60). */
+    /** The [HomeHeroStyle.SLIDESHOW] auto-advance pacing in seconds. */
     val HOME_HERO_SLIDESHOW_INTERVAL_SEC: PreferenceSpec<Int> = PreferenceSpec.plainInt(
         keyName = "home_hero_slideshow_interval_sec",
         default = 8,
@@ -225,6 +225,9 @@ object HomeDiscoveryPreferenceSpecs {
             routeKind = ROUTE_HOME_SETTINGS,
         ),
     )
+
+    /** The clamp every [HOME_HERO_SLIDESHOW_INTERVAL_SEC] read/write shares. */
+    val HOME_HERO_SLIDESHOW_INTERVAL_SEC_BOUNDS: ClosedRange<Int> = 3..60
 
     val HOME_BACKDROP_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "home_backdrop_enabled",

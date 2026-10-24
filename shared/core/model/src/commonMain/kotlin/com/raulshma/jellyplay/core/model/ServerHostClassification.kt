@@ -1,17 +1,13 @@
-package com.raulshma.jellyplay.core.data.network
+package com.raulshma.jellyplay.core.model
 
 /**
  * Pure host classifier deciding whether a server address points at the
- * LOCAL network — the network-split bitrate cap's input (#19: a home
- * Wi-Fi server honours the `home_network_streaming_quality` tier, a remote
- * (relayed / cellular-out) server stays on the wifi/cellular ladder).
- *
- * Deliberately a DUPLICATE of core:ui's `LocalNetworkAccess.isLocalAddress`
- * (same RFC1918/loopback/link-local/`.local`/bare-hostname table, same IPv6
- * bracket parsing): core:ui does not depend on core:data (and must not —
- * the edge would cycle the module graph), so the table lives twice. The
- * jvmTest here pins the SAME case table as the core:ui Robolectric suite so
- * the two copies cannot drift silently.
+ * LOCAL network. Single home for the table — core:ui's
+ * `LocalNetworkAccess.isLocalAddress` (the local-network-permission
+ * heuristic) and core:data's network-split bitrate cap (#19: a home
+ * Wi-Fi server honours the `home_network_streaming_quality` tier, a
+ * remote (relayed / cellular-out) server stays on the wifi/cellular
+ * ladder) both read this function, so the case table cannot drift.
  *
  * Recognizes IPv4 private/loopback/link-local ranges, the IPv6 loopback,
  * `.local` mDNS hostnames, and bare hostnames (common for LAN Jellyfin

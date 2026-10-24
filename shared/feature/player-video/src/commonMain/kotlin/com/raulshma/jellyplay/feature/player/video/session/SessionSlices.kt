@@ -208,7 +208,7 @@ internal class OverlaySessionSlice(
      * manual "Watch now" taps keep riding the manual event, which resets the
      * streak instead).
      */
-    fun onUpNextCountdownFinished() = upNext.advanceFromUpNextCountdown()
+    fun onUpNextCountdownFinished() = upNext.advanceUnattended()
 
     /**
      * The #14 offer-delete-after-playback dialog's state; `null` = hidden.

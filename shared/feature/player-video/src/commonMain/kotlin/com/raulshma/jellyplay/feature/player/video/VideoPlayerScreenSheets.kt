@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
@@ -363,7 +364,10 @@ internal fun PlayerSheetRouter(
                 adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
                 onQualitySelect = { viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
                 onToggleAdaptiveBitrate = { viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
-                qualityAvailable = !uiState.media.showDownloadedBadge && !castConnected && !uiState.isInSyncPlaySession,
+                // Forced direct play has no transcode quality to pick either —
+                // the section disables until the delivery mode changes.
+                qualityAvailable = uiState.uiPrefs.playbackMode != PlaybackMode.FORCE_DIRECT_PLAY &&
+                    !uiState.media.showDownloadedBadge && !castConnected && !uiState.isInSyncPlaySession,
                 currentEngineName = engineName,
                 availablePlayers = if (castConnected || uiState.isInSyncPlaySession) {
                     emptyList()
