@@ -10,7 +10,9 @@ import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StillWatchingMode
+import com.raulshma.jellyplay.core.model.TrickplayMode
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -39,6 +41,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_countdown_immediate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_countdown_seconds
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes_value
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
 
 /** The `playback.player` group: player defaults (engine picker, transport, autoplay, player UX). */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -303,6 +306,132 @@ internal fun PlaybackPlayerGroup(
                     // "Still watching?" confirm prompt (feature 1.3): both
                     // rows ride the autoplay toggle (their declared WhenOn
                     // admission — no autoplay, no prompt to configure).
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.AutoplayEpisodeLimit.id, rowFlags)) {
+                        val autoplayLimitTitle = rowTitle(PlaybackRows.AutoplayEpisodeLimit)
+                        val unlimitedLabel = stringResource(Res.string.settings_unlimited)
+                        SettingListItem(
+                            icon = rowIcon(PlaybackRows.AutoplayEpisodeLimit),
+                            title = autoplayLimitTitle,
+                            subtitle = rowSubtitle(PlaybackRows.AutoplayEpisodeLimit),
+                            trailingText = if (preferences.autoplayEpisodeLimit == 0) unlimitedLabel else "${preferences.autoplayEpisodeLimit}",
+                            highlighted = highlightSettingId == PlaybackRows.AutoplayEpisodeLimit.id,
+                            onClick = {
+                                val limits = listOf(0, 1, 2, 3, 5, 10)
+                                activePicker.value = PickerState.List(
+                                    title = autoplayLimitTitle,
+                                    items = limits,
+                                    label = { if (it == 0) unlimitedLabel else "$it" },
+                                    isSelected = { it == preferences.autoplayEpisodeLimit },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setAutoplayEpisodeLimit(it) } },
+                                )
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.SessionRestore.id, rowFlags)) {
+                        val sessionRestoreTitle = rowTitle(PlaybackRows.SessionRestore)
+                        // Localized labels resolved in composable scope; the
+                        // picker's label lambda runs outside composition (the
+                        // orientation-row pattern).
+                        val sessionRestoreLabels = SessionRestoreMode.entries.associateWith { stringResource(sessionRestoreModeLabelRes(it)) }
+                        SettingListItem(
+                            icon = rowIcon(PlaybackRows.SessionRestore),
+                            title = sessionRestoreTitle,
+                            subtitle = rowSubtitle(PlaybackRows.SessionRestore),
+                            trailingText = sessionRestoreLabels[preferences.sessionRestoreMode]
+                                ?: preferences.sessionRestoreMode.name,
+                            highlighted = highlightSettingId == PlaybackRows.SessionRestore.id,
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = sessionRestoreTitle,
+                                    items = SessionRestoreMode.entries,
+                                    label = { sessionRestoreLabels.getValue(it) },
+                                    isSelected = { it == preferences.sessionRestoreMode },
+                                    onSelect = { viewModel.edit { scope -> scope.playback.setSessionRestoreMode(it) } },
+                                )
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.NextEpisodeDetails.id, rowFlags)) {
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.NextEpisodeDetails),
+                            title = rowTitle(PlaybackRows.NextEpisodeDetails),
+                            subtitle = rowSubtitle(PlaybackRows.NextEpisodeDetails),
+                            checked = preferences.showNextEpisodeDetailsAfterFinish,
+                            highlighted = highlightSettingId == PlaybackRows.NextEpisodeDetails.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.videoPlayer.setShowNextEpisodeDetailsAfterFinish(enabled) }
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.OfferDeleteAfterPlaybackMovies.id, rowFlags)) {
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.OfferDeleteAfterPlaybackMovies),
+                            title = rowTitle(PlaybackRows.OfferDeleteAfterPlaybackMovies),
+                            subtitle = rowSubtitle(PlaybackRows.OfferDeleteAfterPlaybackMovies),
+                            checked = preferences.offerDeleteAfterPlaybackMovies,
+                            highlighted = highlightSettingId == PlaybackRows.OfferDeleteAfterPlaybackMovies.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.playback.setOfferDeleteAfterPlaybackMovies(enabled) }
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.OfferDeleteAfterPlaybackEpisodes.id, rowFlags)) {
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.OfferDeleteAfterPlaybackEpisodes),
+                            title = rowTitle(PlaybackRows.OfferDeleteAfterPlaybackEpisodes),
+                            subtitle = rowSubtitle(PlaybackRows.OfferDeleteAfterPlaybackEpisodes),
+                            checked = preferences.offerDeleteAfterPlaybackEpisodes,
+                            highlighted = highlightSettingId == PlaybackRows.OfferDeleteAfterPlaybackEpisodes.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.playback.setOfferDeleteAfterPlaybackEpisodes(enabled) }
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.AmbientBlur.id, rowFlags)) {
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.AmbientBlur),
+                            title = rowTitle(PlaybackRows.AmbientBlur),
+                            subtitle = rowSubtitle(PlaybackRows.AmbientBlur),
+                            checked = preferences.ambientBlurEnabled,
+                            highlighted = highlightSettingId == PlaybackRows.AmbientBlur.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.videoPlayer.setAmbientBlurEnabled(enabled) }
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.PauseDetails.id, rowFlags)) {
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.PauseDetails),
+                            title = rowTitle(PlaybackRows.PauseDetails),
+                            subtitle = rowSubtitle(PlaybackRows.PauseDetails),
+                            checked = preferences.pauseDetailsEnabled,
+                            highlighted = highlightSettingId == PlaybackRows.PauseDetails.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.videoPlayer.setPauseDetailsEnabled(enabled) }
+                            },
+                        )
+                    }
+                    if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.TrickplayMode.id, rowFlags)) {
+                        val trickplayModeTitle = rowTitle(PlaybackRows.TrickplayMode)
+                        val trickplayModeLabels = TrickplayMode.entries.associateWith { stringResource(trickplayModeLabelRes(it)) }
+                        SettingListItem(
+                            icon = rowIcon(PlaybackRows.TrickplayMode),
+                            title = trickplayModeTitle,
+                            subtitle = rowSubtitle(PlaybackRows.TrickplayMode),
+                            trailingText = trickplayModeLabels[preferences.trickplayMode]
+                                ?: preferences.trickplayMode.name,
+                            highlighted = highlightSettingId == PlaybackRows.TrickplayMode.id,
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = trickplayModeTitle,
+                                    items = TrickplayMode.entries,
+                                    label = { trickplayModeLabels.getValue(it) },
+                                    isSelected = { it == preferences.trickplayMode },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setTrickplayMode(it) } },
+                                )
+                            },
+                        )
+                    }
                     if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.StillWatchingMode.id, rowFlags)) {
                         val stillWatchingModeTitle = rowTitle(PlaybackRows.StillWatchingMode)
                         SettingListItem(

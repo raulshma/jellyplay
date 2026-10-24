@@ -658,7 +658,13 @@ internal class PlayerSessionManager(
             itemId = itemId,
             mediaSourceId = source?.id ?: "",
             startTimeTicks = startTimeTicks,
-            maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            // The server host rides the bitrate resolution (#19): a LOCAL
+            // server honours the home-network quality tier; remote keeps the
+            // wifi/cellular ladder. The host is the pure string parse of the
+            // session's server URL (the identity seam's platform-neutral read).
+            maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                com.raulshma.jellyplay.core.data.network.serverHostOf(playbackIdentity.serverUrl()),
+            ),
             maxVideoHeight = quality.maxHeight,
             mode = agg.playback.playbackMode,
             playerType = agg.playback.preferredPlayer,
@@ -843,7 +849,11 @@ internal class PlayerSessionManager(
                 ruleResolution?.subtitleLanguage ?: agg.subtitle.preferredSubtitleLanguage
             },
             maxVideoBitrate = if (agg.playback.playbackMode == PlaybackMode.AUTO)
-                adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
+                // Same server, same split (#19): the external hand-off honours
+                // the home tier on a LOCAL server like the in-app paths do.
+                adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                    com.raulshma.jellyplay.core.data.network.serverHostOf(serverUrl),
+                )?.toInt()
                 else null,
             serverUrl = serverUrl,
             authToken = token,
@@ -1016,7 +1026,9 @@ internal class PlayerSessionManager(
         if (_sessionState.value.currentItemId == null) return null
         return reresolveAndSwap(
             mode = aggregateStore.aggregate.value.playback.playbackMode,
-            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                com.raulshma.jellyplay.core.data.network.serverHostOf(playbackIdentity.serverUrl()),
+            ),
             selection = selection,
             startPositionMs = currentPositionMs,
             // A stream-index re-POST is orthogonal to the forced-direct-play
@@ -1051,7 +1063,9 @@ internal class PlayerSessionManager(
         }
         return reresolveAndSwap(
             mode = aggregateStore.aggregate.value.playback.playbackMode,
-            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                com.raulshma.jellyplay.core.data.network.serverHostOf(playbackIdentity.serverUrl()),
+            ),
             selection = null,
             startPositionMs = currentPositionMs,
             markForced = false,

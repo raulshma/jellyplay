@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -251,6 +253,31 @@ internal class PlayerUiCommands(
         updateAutoplay { it.copy(videoAutoplayNext = enabled) }
         setAutoplayEnabled(enabled)
         scope.launch { videoPlayerStore.setVideoAutoplayNext(enabled) }
+    }
+
+    /**
+     * The Rendering sheet's persisted mpv render prefs (the same
+     * mirror-write-then-persist choreography as [setVideoAutoplayNext]): the
+     * eager uiPrefs mirror keeps the sheet's chips responsive, the store
+     * write re-emits the aggregate, and the fanout's render-pref diff
+     * rebuilds the engine config so the running engine applies the pick
+     * through its config diff caches (no reload).
+     */
+    fun setMpvToneMappingCurve(curve: MpvToneMappingCurve) {
+        updateUiPrefs { it.copy(mpvToneMappingCurve = curve) }
+        scope.launch { videoPlayerStore.setMpvToneMappingCurve(curve) }
+    }
+
+    /** The deband strength pick — same choreography as [setMpvToneMappingCurve]. */
+    fun setMpvDebandMode(mode: MpvDebandMode) {
+        updateUiPrefs { it.copy(mpvDebandMode = mode) }
+        scope.launch { videoPlayerStore.setMpvDebandMode(mode) }
+    }
+
+    /** The motion-interpolation toggle — same choreography as [setMpvToneMappingCurve]. */
+    fun setMpvMotionInterpolation(enabled: Boolean) {
+        updateUiPrefs { it.copy(mpvMotionInterpolation = enabled) }
+        scope.launch { videoPlayerStore.setMpvMotionInterpolation(enabled) }
     }
 }
 

@@ -39,6 +39,14 @@
     <string name="settings_show_hero_section">Show Hero Section</string>
     <string name="settings_show_hero_on">Featured content banner on home</string>
     <string name="settings_show_hero_off">Compact home layout</string>
+    <string name="settings_home_hero_style">Hero Style</string>
+    <string name="settings_home_hero_style_subtitle">How the home hero renders</string>
+    <string name="settings_home_hero_style_carousel">Carousel</string>
+    <string name="settings_home_hero_style_slideshow">Slideshow</string>
+    <string name="settings_home_hero_style_detailed">Detailed</string>
+    <string name="settings_home_hero_style_tv_slider">TV slider</string>
+    <string name="settings_home_hero_slideshow_interval">Hero Slideshow Interval</string>
+    <string name="settings_home_hero_slideshow_interval_subtitle">Seconds each slideshow hero stays on screen</string>
     <string name="settings_home_backdrop">Home Backdrop</string>
     <string name="settings_home_backdrop_on">Blur the hero artwork as an ambient background</string>
     <string name="settings_home_backdrop_off">Solid background colour</string>

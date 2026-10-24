@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import kotlin.test.Test
@@ -249,5 +250,108 @@ class HdrOutputPolicyTest {
         val decision = resolveMpvHdrOutput(HdrContentInfo.HDR10, passthroughRequested = true, targetIsHdr = false)
         assertFalse(decision.hdrOutputExpected)
         assertTrue(decision.toneMappingActive)
+    }
+
+    // ── applyHdrFormatPreference (the #5 output posture) ──
+
+    private val hdr10Display = DisplayHdrSupport(setOf(HdrContentInfo.HDR10))
+    private val dvDisplay = DisplayHdrSupport(setOf(HdrContentInfo.DOLBY_VISION))
+
+    @Test
+    fun preference_autoAndPreferDvChangeNothing() {
+        val native = HdrOutputDecision(hdrOutputExpected = true)
+        for (pref in listOf(HdrFormatPreference.AUTO, HdrFormatPreference.PREFER_DV_OVER_HDR10)) {
+            assertEquals(native, applyHdrFormatPreference(native, HdrContentInfo.HDR10, pref))
+            assertEquals(native, applyHdrFormatPreference(native, HdrContentInfo.DOLBY_VISION, pref))
+        }
+        // PREFER_DV_OVER_HDR10 is a DECODER concern — the output policy
+        // treats it as AUTO (pinned twice above for both families).
+    }
+
+    @Test
+    fun preference_sdrOnlyForcesToneMapDownAndNeverHdrPassthrough() {
+        for (content in listOf(HdrContentInfo.HDR10, HdrContentInfo.HDR10_PLUS, HdrContentInfo.HLG, HdrContentInfo.DOLBY_VISION)) {
+            val forced = applyHdrFormatPreference(
+                HdrOutputDecision(hdrOutputExpected = true),
+                content,
+                HdrFormatPreference.SDR_ONLY,
+            )
+            assertTrue(forced.toneMappingActive, content.name)
+            assertFalse(forced.hdrOutputExpected, content.name)
+            assertFalse(forced.unhandledHdr, content.name)
+            assertEquals(HdrOutputDecision.NOTICE_PREFERENCE_SDR_ONLY, forced.notice, content.name)
+        }
+        // …and it holds even when passthrough was requested with an HDR target…
+        val mpv = resolveMpvHdrOutput(
+            HdrContentInfo.HDR10,
+            passthroughRequested = true,
+            targetIsHdr = true,
+            formatPreference = HdrFormatPreference.SDR_ONLY,
+        )
+        assertTrue(mpv.toneMappingActive)
+        assertFalse(mpv.hdrOutputExpected)
+        // …and on Exo over a compatible HDR display.
+        val exo = resolveExoHdrOutput(
+            HdrContentInfo.HDR10,
+            hdr10Display,
+            ExoHdrToneMappingMode.AUTO,
+            formatPreference = HdrFormatPreference.SDR_ONLY,
+        )
+        assertTrue(exo.toneMappingActive)
+        assertFalse(exo.hdrOutputExpected)
+    }
+
+    @Test
+    fun preference_sdrOnlyLeavesSdrContentUntouched() {
+        assertEquals(
+            HdrOutputDecision.NONE,
+            applyHdrFormatPreference(HdrOutputDecision.NONE, HdrContentInfo.NONE, HdrFormatPreference.SDR_ONLY),
+        )
+    }
+
+    @Test
+    fun preference_hdr10OnlyAllowsTheHdr10FamilyAndToneMapsTheRest() {
+        // HDR10 and HDR10+ (the baseline-layer compatible pair) keep the
+        // resolved decision…
+        for (content in listOf(HdrContentInfo.HDR10, HdrContentInfo.HDR10_PLUS)) {
+            val native = HdrOutputDecision(hdrOutputExpected = true)
+            assertEquals(native, applyHdrFormatPreference(native, content, HdrFormatPreference.HDR10_ONLY), content.name)
+        }
+        // …HLG and DV are tone mapped down.
+        for (content in listOf(HdrContentInfo.HLG, HdrContentInfo.DOLBY_VISION)) {
+            val restricted = applyHdrFormatPreference(
+                HdrOutputDecision(hdrOutputExpected = true),
+                content,
+                HdrFormatPreference.HDR10_ONLY,
+            )
+            assertTrue(restricted.toneMappingActive, content.name)
+            assertFalse(restricted.hdrOutputExpected, content.name)
+            assertEquals(HdrOutputDecision.NOTICE_PREFERENCE_FAMILY_RESTRICTED, restricted.notice, content.name)
+        }
+    }
+
+    @Test
+    fun preference_dolbyVisionOnlyToneMapsEveryOtherFamily() {
+        val native = HdrOutputDecision(hdrOutputExpected = true)
+        assertEquals(native, applyHdrFormatPreference(native, HdrContentInfo.DOLBY_VISION, HdrFormatPreference.DOLBY_VISION_ONLY))
+        for (content in listOf(HdrContentInfo.HDR10, HdrContentInfo.HDR10_PLUS, HdrContentInfo.HLG)) {
+            val restricted = applyHdrFormatPreference(native, content, HdrFormatPreference.DOLBY_VISION_ONLY)
+            assertTrue(restricted.toneMappingActive, content.name)
+            assertEquals(HdrOutputDecision.NOTICE_PREFERENCE_FAMILY_RESTRICTED, restricted.notice, content.name)
+        }
+    }
+
+    @Test
+    fun preference_familyRestrictionWinsOverDisplayNegotiation() {
+        // DV content on a DV display would negotiate native output; the
+        // HDR10_ONLY preference restricts the OUTPUT family regardless.
+        val restricted = resolveExoHdrOutput(
+            HdrContentInfo.DOLBY_VISION,
+            dvDisplay,
+            ExoHdrToneMappingMode.AUTO,
+            formatPreference = HdrFormatPreference.HDR10_ONLY,
+        )
+        assertTrue(restricted.toneMappingActive)
+        assertFalse(restricted.hdrOutputExpected)
     }
 }

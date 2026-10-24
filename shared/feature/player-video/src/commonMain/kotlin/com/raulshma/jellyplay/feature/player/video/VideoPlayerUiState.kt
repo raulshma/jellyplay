@@ -80,13 +80,22 @@ internal data class SegmentProjection(
      * position tick. The continuation verdicts fold into ONE `hasNextEpisode`
      * boolean: an episode sibling OR the Up Next controller's queue mirror
      * (queue-first semantics, incl. movies, which have no sibling).
+     *
+     * [nextUpPrerollMs] is the configured up-next pre-roll window
+     * (`nextUpButtonPrerollSec * 1000` at the VM funnels — #16); the default
+     * keeps the historical constant for the state-delegate and reporter-tick
+     * callers that don't carry the pref.
      */
-    fun toSegmentInput(durationMs: Long) = SegmentCalculatorInput(
+    fun toSegmentInput(
+        durationMs: Long,
+        nextUpPrerollMs: Long = SegmentCalculator.UP_NEXT_PRE_ROLL_MS,
+    ) = SegmentCalculatorInput(
         segments = segments,
         chapters = chapters,
         segmentBehaviors = segmentBehaviors,
         segmentSkipDelaysMs = segmentSkipDelaysMs,
         durationMs = durationMs,
+        nextUpPrerollMs = nextUpPrerollMs,
         autoplayCancelled = autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = nextEpisode != null || hasQueuedNext,

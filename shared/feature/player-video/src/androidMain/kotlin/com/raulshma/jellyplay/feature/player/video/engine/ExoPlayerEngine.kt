@@ -61,7 +61,6 @@ import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
 import com.raulshma.jellyplay.core.model.DecoderMode
-import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
@@ -416,6 +415,9 @@ class ExoPlayerEngine(
                 audioPipelineReconfiguring = false
             }
             updateSpatialState()
+            // The active audio codec just resolved (or moved) — reconcile the
+            // passthrough offload posture with the per-codec allow-list.
+            refreshAudioOffloadSelection()
         }
 
         override fun onCues(cueGroup: CueGroup) {
@@ -446,6 +448,7 @@ class ExoPlayerEngine(
             // A track switch can move the playing audio format — the
             // canBeSpatialized answer rides the format.
             updateSpatialState()
+            refreshAudioOffloadSelection()
         }
 
         override fun onVolumeChanged(volume: Float) {
@@ -578,6 +581,28 @@ class ExoPlayerEngine(
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): DefaultAudioSink {
+                // Bitstream passthrough (audio offload) split: when the config
+                // requests passthrough, the sink is built WITHOUT the PCM
+                // in-sink chain — audio processors force the decode-to-PCM
+                // path and are incompatible with offload (the passthrough
+                // session forgoes the in-sink DSP, which is the point of
+                // bitstreaming). A processor-free sink is OFFLOAD-CAPABLE in
+                // media3 1.11: the per-format offload support is resolved
+                // intrinsically (AudioOutputProvider → platform AudioTrack
+                // checks, API 29+), and the offload DEMAND rides the track
+                // selection (ExoPassthroughOffload.offloadMode) — media3's
+                // renderer sets the sink's offload mode from the selection
+                // (the 1.11 refactor removed the builder-level offload flag).
+                // CONSTRUCTION-time split: the renderer set (and its sink) is
+                // fixed at player build, so a mid-session passthrough flip
+                // applies on the next player rebuild (the mode/decoder reload
+                // path), while the track-selection half re-pushes live.
+                if (currentConfig.audioPassthrough) {
+                    return DefaultAudioSink.Builder(context)
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                        .build()
+                }
                 return DefaultAudioSink.Builder(context)
                     // ONE in-sink chain order, shared with the music sink
                     // (core:data `inSinkAudioChain`): channel mix first — it
@@ -920,21 +945,68 @@ class ExoPlayerEngine(
             // the null-check branch, so !! is provably safe.
             params.setMaxVideoBitrate(request.maxVideoBitrate!!)
         }
-        if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {
-            params.setPreferredVideoMimeTypes(*exoCfg.preferredVideoMimeTypes.toTypedArray())
+        // The HDR delivery posture (HdrFormatPreference) owns the preferred
+        // MIME ordering when set — it is the finer settings surface over the
+        // raw list. See ExoPassthroughOffload.preferredMimeTypes for the
+        // fold (DV / HEVC ordering; SDR_ONLY and AUTO leave the raw list).
+        val mimeOrder = ExoPassthroughOffload.preferredMimeTypes(
+            pref = exoCfg.hdrFormatPreference,
+            base = exoCfg.preferredVideoMimeTypes,
+        )
+        if (mimeOrder.isNotEmpty()) {
+            params.setPreferredVideoMimeTypes(*mimeOrder.toTypedArray())
         }
-        if (exoCfg.audioOffloadMode != com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED) {
-            // Media3 surfaces audio offload through the track selector, not the
-            // ExoPlayer.Builder. Map the pref onto AudioOffloadPreferences and
-            // push it into the parameters so the selector prefers offload-decodable
-            // tracks when the user has enabled (or required) the mode.
+        // Media3 surfaces audio offload through the track selector, not the
+        // ExoPlayer.Builder. The mode composes the user's plain offload pref
+        // with the bitstream-passthrough gate (passthrough requested + the
+        // active codec allow-listed → REQUIRED). The sink half of the
+        // posture is construction-time (see buildAudioSink); the selection
+        // half is re-pushed live as the active codec resolves (see
+        // refreshAudioOffloadSelection).
+        val offloadMode = ExoPassthroughOffload.offloadMode(
+            passthroughRequested = currentConfig.audioPassthrough,
+            passthroughCodecs = currentConfig.audioPassthroughCodecs,
+            activeAudioMime = null, // nothing is selected yet at apply time
+            configuredMode = exoCfg.audioOffloadMode,
+        )
+        if (offloadMode != androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED) {
             params.setAudioOffloadPreferences(
                 androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                    .setAudioOffloadMode(exoCfg.audioOffloadMode.value)
+                    .setAudioOffloadMode(offloadMode)
                     .build(),
             )
         }
         selector.setParameters(params)
+    }
+
+    /**
+     * The live half of the passthrough posture: re-pushes the track
+     * selector's offload mode once the ACTIVE audio codec resolves (tracks
+     * changed / audio session re-bound). When the resolved codec is excluded
+     * from the passthrough allow-list, the REQUIRED posture drops back to
+     * the plain pref (or disabled) so decode-to-PCM stands; when the codec
+     * is allow-listed, REQUIRED pursues the bitstream path. Change-guarded
+     * on the selector's current mode so an unrelated parameter push does not
+     * churn selections.
+     */
+    private fun refreshAudioOffloadSelection() {
+        val selector = trackSelector ?: return
+        val exoCfg = currentExoConfig
+        val mode = ExoPassthroughOffload.offloadMode(
+            passthroughRequested = currentConfig.audioPassthrough,
+            passthroughCodecs = currentConfig.audioPassthroughCodecs,
+            activeAudioMime = player?.audioFormat?.sampleMimeType,
+            configuredMode = exoCfg.audioOffloadMode,
+        )
+        if (selector.parameters.audioOffloadPreferences.audioOffloadMode == mode) return
+        selector.setParameters(
+            selector.buildUponParameters()
+                .setAudioOffloadPreferences(
+                    androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                        .setAudioOffloadMode(mode)
+                        .build(),
+                ),
+        )
     }
 
     private fun buildSubtitleConfigurations(
@@ -1511,6 +1583,18 @@ class ExoPlayerEngine(
 
     override fun applySubtitleStyle(style: SubtitleStyle) {
         val pv = playerView ?: return
+        // Bitmap-subtitle (PGS/VobSub) scale mode (issue #29): the Exo side is
+        // FIT-ONLY. Media3 1.11.1's SubtitleView draws Cue.bitmap planes at
+        // intrinsic size inside its package-private CanvasSubtitleOutput /
+        // SubtitlePainter, and its public surface (text size + style only)
+        // exposes no scaling hook — honoring STRETCH/COVER here would mean
+        // forking Media3 internals, which JellyPlay deliberately does not do.
+        // The pref still folds into ExoPlayerEngineConfig.bitmapSubtitleScaleMode
+        // (see the field's KDoc) so the seam is symmetric with mpv — which
+        // fully honors the mode via `sub-scale-with-window` — and a future
+        // Media3 hook can consume it without another fold change. Nothing to
+        // read at this site: FIT is Media3's own behavior, so the correct
+        // implementation is the absence of any scaling write.
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or
             (com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveBackgroundColor(style) and 0x00FFFFFF)
@@ -1903,8 +1987,15 @@ class ExoPlayerEngine(
             inputs = SpatialAudioInputs(
                 userEnabled = currentConfig.audioEffects.spatialAudioEnabled,
                 onlyHeadphones = currentConfig.audioEffects.spatialAudioOnlyHeadphones,
-                offloadActive = currentExoConfig.audioOffloadMode !=
-                    com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED,
+                // The same composed posture the track selector runs (the
+                // plain offload pref OR the passthrough gate) — an offloaded
+                // (or bitstreamed) session disqualifies spatialization.
+                offloadActive = ExoPassthroughOffload.offloadMode(
+                    passthroughRequested = currentConfig.audioPassthrough,
+                    passthroughCodecs = currentConfig.audioPassthroughCodecs,
+                    activeAudioMime = format?.sampleMimeType,
+                    configuredMode = currentExoConfig.audioOffloadMode,
+                ) != androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
             ),
         )
     }

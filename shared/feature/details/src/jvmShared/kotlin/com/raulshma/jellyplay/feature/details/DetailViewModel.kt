@@ -216,6 +216,16 @@ class DetailViewModel internal constructor(
      * keeping the direct-construction test harnesses compiling.
      */
     private val tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
+    /**
+     * The appearance store, read DIRECTLY for the awards-badge toggle
+     * (`AppearanceSlice.detailsAwardsBadgesEnabled`): the projection bundle
+     * ([DetailPreferences]) cannot carry it (the datastore projection lives
+     * outside this feature's edit surface), so the store rides the same
+     * nullable-with-default Koin pattern as the plugin seams — production
+     * passes the core:datastore single; null (unwired tests) suppresses the
+     * badge, the same silent absence an OFF toggle produces.
+     */
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -1147,10 +1157,27 @@ class DetailViewModel internal constructor(
                     )
                 }
             if (resolved == null || resolved.isEmpty) return@DetailEnrichment
+            // The OMDb awards leg (the `omdb-awards` feature): an award badge
+            // beside the chips when the plugin source answers AND the
+            // appearance toggle allows badges. Every leg missing (unwired
+            // seam, plugin unavailable, toggle off, no data for the id)
+            // renders nothing — silent absence, the plugin contract. The
+            // call is null-safe like the mdbList one; the toggle read is a
+            // synchronous slice value (a preference read, not snapshot state).
+            val awards: String? = if (
+                appearanceStore?.appearance?.value?.detailsAwardsBadgesEnabled == true &&
+                pluginFeature(JellyPlayPluginFeatures.OmdbAwards, inputs.itemId)
+            ) {
+                resolveImdbId(inputs.detail)?.let { imdbId ->
+                    pluginRatingsApi?.getOmdbAwards(imdbId)?.getOrNull()?.awards
+                }
+            } else {
+                null
+            }
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update {
                 it.copy(
-                    externalRatings = resolved,
+                    externalRatings = resolved.copy(awards = awards),
                     externalRatingsSuppressedByPlugin = pluginRatingsLive,
                 )
             }

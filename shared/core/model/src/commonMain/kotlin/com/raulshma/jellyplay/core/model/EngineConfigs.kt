@@ -140,6 +140,43 @@ enum class MpvToneMapping(val key: String?, val displayName: String) {
 }
 
 /**
+ * The HDR→SDR tone-mapping CURVE family — the persisted settings-side
+ * counterpart to the per-item [MpvToneMapping] override, widened with the
+ * curve algorithms the structured per-item picker does not carry (BT.2446A,
+ * spline, linear). [mpvValue] is the raw `tone-mapping` token; [AUTO] maps to
+ * `auto` (mpv's default selection) so the runtime diff cache can express a
+ * preset→AUTO transition. Persistence is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class MpvToneMappingCurve(val mpvValue: String) {
+    AUTO("auto"),
+    BT_2390("bt.2390"),
+    BT_2446A("bt.2446a"),
+    SPLINE("spline"),
+    HABLE("hable"),
+    CLIP("clip"),
+    LINEAR("linear"),
+}
+
+/**
+ * The deband strength level: [OFF] disables deband (`deband=no`); the three
+ * armed levels enable it (`deband=yes`) and differ in the preset strength
+ * written to the deband params (`deband-iterations`/`deband-threshold`), so
+ * the enum's ordinal carries the level — [LIGHT]/[MEDIUM]/[HEAVY] in
+ * increasing strength. [mpvValue] is the master `deband` flag token.
+ * Persistence is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class MpvDebandMode(val mpvValue: String) {
+    OFF("no"),
+    LIGHT("yes"),
+    MEDIUM("yes"),
+    HEAVY("yes"),
+}
+
+/**
  * The render-quality bundle: one dial over `scale`/`dscale`/`cscale`
  * /`deband`. [BALANCED] is the neutral point — no bundle is written and the
  * structured scaler/deband rows stand; [HIGH] forces the high-order chain with
@@ -318,6 +355,36 @@ data class MpvEngineConfig(
      * curated default). An empty string (the default) applies nothing.
      */
     val mpvExtraConfig: String = "",
+    /**
+     * The persisted HDR→SDR tone-mapping curve family ([MpvToneMappingCurve]).
+     * `null` = unset — the structured [toneMapping] row stands and nothing is
+     * written for this knob. Nullable + defaulted so existing constructors and
+     * serialized blobs stay valid.
+     */
+    val toneMappingCurve: MpvToneMappingCurve? = null,
+    /**
+     * The deband strength level ([MpvDebandMode]). `null` = unset — the
+     * structured [deband] boolean stands.
+     */
+    val debandMode: MpvDebandMode? = null,
+    /**
+     * Motion interpolation (mpv `interpolation=yes` + the [interpolationTscale]
+     * temporal filter). `null` = unset — the structured [interpolation]
+     * boolean stands.
+     */
+    val motionInterpolation: Boolean? = null,
+    /**
+     * How bitmap subtitle (PGS/VobSub) planes scale onto the frame
+     * ([BitmapSubtitleScaleMode]). `null` = unset — the engine default (FIT)
+     * stands.
+     */
+    val bitmapSubtitleScaleMode: BitmapSubtitleScaleMode? = null,
+    /**
+     * Raw `input.conf`-style key bindings text for mpv (the power-user input
+     * escape hatch, parsed by the engine layer like [mpvExtraConfig]). An
+     * empty string (the default) applies nothing.
+     */
+    val userInputConf: String? = null,
 ) : EngineSpecificConfig
 
 /**
@@ -466,6 +533,32 @@ data class ExoPlayerEngineConfig(
      * probe reports no matching HDR type — SDR content never pays the GL pass.
      */
     val hdrToneMapping: ExoHdrToneMappingMode = ExoHdrToneMappingMode.AUTO,
+    /**
+     * The HDR delivery posture for direct play ([HdrFormatPreference]):
+     * which HDR MIME family the engine prefers when more than one decoder
+     * exists. `null` = unset — the engine's default negotiation stands.
+     * Nullable + defaulted so existing constructors and serialized blobs
+     * stay valid.
+     */
+    val hdrFormatPreference: HdrFormatPreference? = null,
+    /**
+     * How bitmap subtitle (PGS/VobSub) planes scale onto the frame
+     * ([BitmapSubtitleScaleMode]). `null` = unset — FIT stands.
+     *
+     * HONEST CONSUMPTION STATUS (issue #29): the Exo side is FIT-only.
+     * Media3 1.11.1's `SubtitleView` renders `Cue.bitmap` planes inside its
+     * package-private `CanvasSubtitleOutput`/`SubtitlePainter` with no
+     * public scaling hook (`SubtitleView`'s public surface is text size +
+     * style only — verified against the 1.11.1 artifact), so STRETCH/COVER
+     * would require forking Media3 internals, which JellyPlay does not do.
+     * The field exists so the pref plumbs through the engine-config seam
+     * symmetrically with mpv (which fully honors all three modes via
+     * `sub-scale-with-window`) and a future Media3 hook can consume it
+     * without another fold change; `ExoPlayerEngine.applySubtitleStyle`
+     * documents the limitation at the render site. FIT is a no-op pass
+     * through (Media3's own intrinsic-size drawing).
+     */
+    val bitmapSubtitleScaleMode: BitmapSubtitleScaleMode? = null,
 ) : EngineSpecificConfig
 
 /**

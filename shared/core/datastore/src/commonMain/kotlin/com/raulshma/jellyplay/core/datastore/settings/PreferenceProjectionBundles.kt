@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
@@ -41,6 +42,13 @@ internal data class PlaybackCoreBundle(
     val subtitle: SubtitleSlice,
     val audio: AudioSlice,
     val engine: PlayerEngineSlice,
+    /**
+     * The network/offline slice — only the home-streaming quality rides it
+     * today (the row renders beside the transcode cluster), but it is carried
+     * as a slice so a second network knob on the playback screen joins for
+     * free.
+     */
+    val network: NetworkOfflineSlice,
 ) {
     fun toPlaybackPreferences(sp: SyncPlayCastSlice, volume: VolumeProfileSlice) = PlaybackPreferences(
         preferredPlayer = playback.preferredPlayer,
@@ -70,6 +78,8 @@ internal data class PlaybackCoreBundle(
         videoDefaultSpeed = video.videoDefaultSpeed,
         videoDefaultAspectRatio = video.videoDefaultAspectRatio,
         videoAutoplayNext = video.videoAutoplayNext,
+        autoplayEpisodeLimit = video.autoplayEpisodeLimit,
+        showNextEpisodeDetailsAfterFinish = video.showNextEpisodeDetailsAfterFinish,
         stillWatchingMode = video.stillWatchingMode,
         stillWatchingEpisodeThreshold = video.stillWatchingEpisodeThreshold,
         trailerAutoplay = video.trailerAutoplay,
@@ -83,9 +93,11 @@ internal data class PlaybackCoreBundle(
         videoPassOutProtectionHours = video.videoPassOutProtectionHours,
         trickplayEnabled = video.trickplayEnabled,
         trickplayOnSeekGesture = video.trickplayOnSeekGesture,
+        trickplayMode = video.trickplayMode,
         segmentBehaviors = video.segmentBehaviors,
         segmentSkipDelaysMs = video.segmentSkipDelaysMs,
         skipSegmentsOnSeek = video.skipSegmentsOnSeek,
+        nextUpButtonPrerollSec = video.nextUpButtonPrerollSec,
         skipPromptDurationMs = video.skipPromptDurationMs,
         videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
         videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,
@@ -101,12 +113,31 @@ internal data class PlaybackCoreBundle(
         backgroundVideoAudioEnabled = playback.backgroundVideoAudioEnabled,
         autoEnterPip = playback.autoEnterPip,
         autoPlayCountdownSec = playback.autoPlayCountdownSec,
+        sessionRestoreMode = playback.sessionRestoreMode,
+        offerDeleteAfterPlaybackMovies = playback.offerDeleteAfterPlaybackMovies,
+        offerDeleteAfterPlaybackEpisodes = playback.offerDeleteAfterPlaybackEpisodes,
+        customDeviceProfileJson = playback.customDeviceProfileJson,
         incognitoModeEnabled = video.incognitoModeEnabled,
         showClockInPlayer = video.showClockInPlayer,
+        ambientBlurEnabled = video.ambientBlurEnabled,
         tvZoomModePercent = video.tvZoomModePercent,
+        bitmapSubtitleScaleMode = video.bitmapSubtitleScaleMode,
+        pauseScreensaverMode = video.pauseScreensaverMode,
+        pauseScreensaverAfterMinutes = video.pauseScreensaverAfterMinutes,
+        pauseDetailsEnabled = video.pauseDetailsEnabled,
         streamingQuality = playback.streamingQuality,
+        hdrFormatPreference = playback.hdrFormatPreference,
+        forceTranscodeAboveHeight = playback.forceTranscodeAboveHeight,
+        preferredTranscodeVideoCodec = playback.preferredTranscodeVideoCodec,
+        preferredTranscodeAudioCodec = playback.preferredTranscodeAudioCodec,
+        homeStreamingQuality = network.homeStreamingQuality,
         liveStreamOption = playback.liveStreamOption,
         offlinePlaybackPreference = playback.offlinePlaybackPreference,
+        mpvToneMappingCurve = video.mpvToneMappingCurve,
+        mpvDebandMode = video.mpvDebandMode,
+        mpvMotionInterpolation = video.mpvMotionInterpolation,
+        mpvInputConf = video.mpvInputConf,
+        mpvCustomButtons = video.mpvCustomButtons,
         mpvConfig = engine.mpvConfig,
         libVlcConfig = engine.libVlcConfig,
         exoPlayerConfig = engine.exoPlayerConfig,

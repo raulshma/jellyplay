@@ -28,9 +28,9 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 42-row order and projects the spec faces`() {
+    fun `playback player list keeps its 53-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(42, items.size)
+        assertEquals(53, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
         assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
 
@@ -67,9 +67,9 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `advanced video list keeps its 18-row order with the three residuals in place`() {
+    fun `advanced video list keeps its 25-row order with the residuals in place`() {
         val items = PlaybackAdvancedVideoSearchItems
-        assertEquals(18, items.size)
+        assertEquals(25, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DialogueBoost.id,
@@ -88,6 +88,13 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.FrameRateMatching.id,
                 PlaybackRows.OfflinePlayback.id,
                 PlaybackRows.StreamingQuality.id,
+                PlaybackRows.HdrFormatPreference.id,
+                PlaybackRows.ForceTranscodeAboveHeight.id,
+                PlaybackRows.PreferredTranscodeVideoCodec.id,
+                PlaybackRows.PreferredTranscodeAudioCodec.id,
+                PlaybackRows.CustomDeviceProfileJson.id,
+                PlaybackRows.HomeNetworkQuality.id,
+                PlaybackRows.SpeedTest.id,
                 PlaybackRows.AudioDelay.id,
                 PlaybackRows.LiveStreamOption.id,
             ),
@@ -118,7 +125,7 @@ class SpecDerivedSearchItemsTest {
     @Test
     fun `live tv list keeps its order - dvr residuals then the spec-backed segment rows`() {
         val items = LiveTvSearchItems
-        assertEquals(11, items.size)
+        assertEquals(12, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DvrPrePadding.id,
@@ -132,6 +139,7 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.MediaSegmentUnknown.id,
                 PlaybackRows.SkipSegmentsOnSeek.id,
                 PlaybackRows.SkipPromptDuration.id,
+                PlaybackRows.NextUpPreroll.id,
             ),
             items.map { it.id },
         )
@@ -176,16 +184,17 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance library list keeps its 23-row order with the five residuals in place`() {
+    fun `appearance library list keeps its 24-row order with the detail-display toggles in place`() {
         // The home-discovery watch-state quartet lives in
         // HomeCardsSearchItems; the appearance side keeps the library
         // residuals, the
         // haptics / share-media / hide-search-history spec-backed trio, and
         // the detail-display toggles parked in Library &
         // Cards (badges, stream-info, tagline, theme-music, external links,
-        // reviews, trailers, promoted actions, download progress).
+        // reviews, awards badges, trailers, promoted actions, download
+        // progress).
         val items = AppearanceLibrarySearchItems
-        assertEquals(23, items.size)
+        assertEquals(24, items.size)
         assertEquals(
             listOf(
                 AppearanceRows.HideEpisodeThumbnails.id,
@@ -202,6 +211,7 @@ class SpecDerivedSearchItemsTest {
                 AppearanceRows.ShowShareMedia.id,
                 AppearanceRows.ShowExternalLinks.id,
                 AppearanceRows.ShowReviews.id,
+                AppearanceRows.AwardsBadges.id,
                 AppearanceRows.PreferLocalTrailers.id,
                 AppearanceRows.TrailerPreviewOnFocus.id,
                 AppearanceRows.ShowPromotedActionsLandscape.id,
@@ -237,11 +247,12 @@ class SpecDerivedSearchItemsTest {
 
     @Test
     fun `home lists keep their sizes and derive their routes from the spec kinds`() {
-        // The display group: hero video, the badge rows'
+        // The display group: hero video, the hero style pair, the badge rows'
         // new-section/continue-watching knobs, the stats card, the
         // genre rail and the presence chips (17 rows), plus the
-        // hidden-libraries restore row (18).
-        assertEquals(18, HomeDisplaySearchItems.size)
+        // hidden-libraries restore row (18), plus the hero style and
+        // slideshow-interval rows (20).
+        assertEquals(20, HomeDisplaySearchItems.size)
         assertEquals(HomeRows.HomeMode.id, HomeDisplaySearchItems.first().id)
         assertEquals(HomeRows.UnhideCw.id, HomeDisplaySearchItems.last().id)
         // The exclude-active-sessions toggle joined the Next Up quartet.

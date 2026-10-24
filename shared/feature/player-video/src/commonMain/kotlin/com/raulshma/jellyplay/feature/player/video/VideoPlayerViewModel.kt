@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.feature.player.video.session.createSessionSlices
 import com.raulshma.jellyplay.feature.player.video.session.PlayerSessionSlices
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_direct_play_fallback
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_delete_offer_failed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
 
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
@@ -207,6 +208,12 @@ class VideoPlayerViewModel(
     private val nowPlayingReporter: NowPlayingReporter,
     /** The next-item stream-cache pre-warm seam; null disables it (test graphs). */
     private val nextStreamByteWarmer: NextStreamByteWarmer? = null,
+    /**
+     * The #14 delete seams (can-delete capability + server delete + cache
+     * invalidation), bundled for one slot; null in test graphs — the
+     * post-playback delete offer never arms without it.
+     */
+    private val postPlaybackDeleteSources: PostPlaybackDeleteSources? = null,
 ) : JellyPlayViewModel() {
 
     private val castManager: CastManager = castManager
@@ -274,8 +281,15 @@ class VideoPlayerViewModel(
         combine(
             durationMs,
             uiState.map(::SegmentProjection).distinctUntilChanged(),
-        ) { dur, proj ->
-            proj.toSegmentInput(dur)
+            // #16: the configured up-next pre-roll window
+            // (`nextUpButtonPrerollSec * 1000`) rides the aggregate leaf so a
+            // settings change re-derives the overlay; the input rebuild itself
+            // still only happens when a low-frequency input changes.
+            stores.aggregateStore.aggregate
+                .map { it.videoPlayer.nextUpButtonPrerollSec * 1000L }
+                .distinctUntilChanged(),
+        ) { dur, proj, prerollMs ->
+            proj.toSegmentInput(dur, nextUpPrerollMs = prerollMs)
         },
     ) { pos, input ->
         computeOverlay(pos, input)
@@ -435,6 +449,54 @@ class VideoPlayerViewModel(
     )
 
     /**
+     * #14 offer-delete-after-playback: the post-playback controller,
+     * constructed VM-side (the session is at its composition-root line
+     * ratchet). The [UpNextController] shape — every read is the narrow
+     * constructor lambda below, NO uiState handle crosses; the screen reaches
+     * its offer flow + commands through the overlay session slice. The
+     * core:data delete seams arrive as one nullable bundle
+     * ([PostPlaybackDeleteSources]); null (test graphs) disables the feature.
+     * The offer arms only from the end-of-media policy ([onEndedWithNoNext])
+     * — a cinema chain continuing, an auto-advance, a still-watching prompt
+     * and the sleep-timer intercept all route away before it — and a passing
+     * precheck HOLDS that end's close (the dialog lives in this screen); the
+     * hold resolves through Delete / Keep / the permission-read release.
+     */
+    private val postPlaybackActions = PostPlaybackActionsController(
+        scope = scope,
+        sources = postPlaybackDeleteSources,
+        getMediaKind = {
+            playbackSession.playerSessionManager.sessionState.value.mediaDetail?.item?.mediaType
+        },
+        getItemId = { playbackSession.playerSessionManager.sessionState.value.currentItemId },
+        getItemTitle = { playbackSession.playerSessionManager.sessionState.value.title },
+        getSeriesIdHint = {
+            playbackSession.playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId
+        },
+        isIncognito = { playbackSession.cachedAggregate.videoPlayer.incognitoModeEnabled },
+        isOfflinePlayback = { playbackSession.playerSessionManager.sessionState.value.isOffline },
+        offerForMovies = { playbackSession.cachedAggregate.playback.offerDeleteAfterPlaybackMovies },
+        offerForEpisodes = { playbackSession.cachedAggregate.playback.offerDeleteAfterPlaybackEpisodes },
+        closePlayer = { _closePlayer.trySend(Unit) },
+        closeAfterKeep = {
+            // The end-of-media close, deferred until the offer resolved
+            // ("Keep" or a failing permission read). Conditional on the #17
+            // after-finish keep gate re-evaluated LIVE: a card still holding
+            // the player outlives the dismissed dialog.
+            val heldByCard = playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
+                autoplayEnabled = _uiState.value.autoplay.videoAutoplayNext,
+                autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
+            )
+            if (!heldByCard) _closePlayer.trySend(Unit)
+        },
+        notifyDeleteFailed = { title ->
+            userMessageBus.error(
+                getString(Res.string.player_video_delete_offer_failed, title),
+            )
+        },
+    )
+
+    /**
      * The per-region session slices (the GLOSSARY "Session slice" seam): the
      * ONE read surface the player screens program against — hot flows are
      * collected in the leaf that reads them, and the session controllers sit
@@ -443,7 +505,10 @@ class VideoPlayerViewModel(
      * [createSessionSlices] so construction has locality.
      */
     // The route-button projection rides the platform cast-chrome seam.
-    internal val sessionSlices: PlayerSessionSlices = playbackSession.createSessionSlices(routeButton = platformCastRouteButton())
+    internal val sessionSlices: PlayerSessionSlices = playbackSession.createSessionSlices(
+        routeButton = platformCastRouteButton(),
+        postPlayback = postPlaybackActions,
+    )
 
     /**
      * Runs the session's arm phase: registers every collector the former
@@ -528,8 +593,10 @@ class VideoPlayerViewModel(
         when (event) {
             is VideoPlayerUiEvent.Initialize -> {
                 // A user-driven player open: the still-watching streak starts
-                // fresh (auto-advance loads bypass onEvent and keep it).
+                // fresh (auto-advance loads bypass onEvent and keep it) — and
+                // so does the autoplay-limit binge streak (#17).
                 playbackSession.autoplayController.onUserInteraction()
+                playbackSession.upNext.resetAutoAdvanceStreak()
                 playbackSession.initialize(
                     itemId = event.itemId,
                     mediaSourceId = event.mediaSourceId,
@@ -578,7 +645,10 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.PlayNextEpisode -> {
                 // Manual navigation: the still-watching streak restarts.
                 playbackSession.autoplayController.onUserInteraction()
-                playbackSession.upNext.playNextEpisode()
+                // MANUAL play-next (the card's "Watch now" button): the
+                // autoplay-limit binge streak restarts too (#17) — the
+                // countdown's expiry arm routes through the slice instead.
+                playbackSession.upNext.playNextManually()
             }
             is VideoPlayerUiEvent.MarkWatchedAndSkip -> {
                 // A deliberate user advance — resets the still-watching streak.
@@ -740,7 +810,7 @@ class VideoPlayerViewModel(
             // exactly like the former direct seekTo call.
             is SegmentSkipTarget.SeekToPosition ->
                 playbackSession.transport.seekLocal(target.positionMs, userInitiated)
-            SegmentSkipTarget.SkipToNextEpisode -> playbackSession.upNext.playNextEpisode()
+            SegmentSkipTarget.SkipToNextEpisode -> playbackSession.upNext.playNextManually()
             SegmentSkipTarget.AdvanceCinemaIntro -> playbackSession.advanceCinemaIntro()
             SegmentSkipTarget.None -> Unit
         }
@@ -1103,7 +1173,10 @@ class VideoPlayerViewModel(
         if (playbackSession.autoplayController.shouldAutoPlayNext(
                 autoplayNext,
                 hasQueuedNext = queuedNext,
-            )
+                // #17 binge controls: a reached autoplay-episode cap blocks
+                // the advance — the card renders manual instead (the overlay
+                // reads the cap verdict through the slice).
+            ) && playbackSession.upNext.canAutoAdvance()
         ) {
             // End-of-episode sleep timer outranks the advance/still-watching
             // gates; an explicit skip-credits press still wins (deliberate).
@@ -1121,7 +1194,9 @@ class VideoPlayerViewModel(
                 playbackSession.stillWatching.show(StillWatchingReason.EPISODE_COUNT)
             } else {
                 playbackSession.autoplayController.recordAutoAdvance()
-                playbackSession.upNext.playNextEpisode()
+                // The engine-end AUTO arm: the binge streak grows here (#17);
+                // manual play-next paths reset it instead.
+                playbackSession.upNext.advanceFromPlaybackEnd()
             }
         } else {
             onEndedWithNoNext()
@@ -1132,13 +1207,35 @@ class VideoPlayerViewModel(
      * End-of-stream with nothing queued: a cinema-intro chain advances to its
      * next item, anything else closes the player. Byte-identical fold of the
      * progress reporter's `onPlaybackEndedNoNext` callback — must not drift.
+     *
+     * The two #17/#14 end-of-media policy arms hang here, where playback has
+     * CONCLUDED (no advance fired, no cinema chain continues, the prompt and
+     * sleep-timer arms already routed away):
+     *  - #14: the offer-delete-after-playback evaluation (a natural end —
+     *    this is reached from the engine-ENDED arm and the reporter's
+     *    safety net, never a user close). A passing precheck HOLDS the close
+     *    (the dialog lives in this screen — closing first would kill it
+     *    unseen); the hold resolves through the offer's Delete / Keep / the
+     *    permission-read release, each re-consulting the keep gate below;
+     *  - #17: the after-finish keep gate — `showNextEpisodeDetailsAfterFinish`
+     *    + a next item + no auto-advance pending keeps the Up Next card up
+     *    persistently (the position is frozen at the end, so the card's
+     *    window stays open) instead of closing.
      */
     private fun onEndedWithNoNext() {
         if (playbackSession.cinemaIntroContext != null) {
             playbackSession.advanceCinemaIntro()
-        } else {
-            _closePlayer.trySend(Unit)
+            return
         }
+        if (postPlaybackActions.onPlaybackEndedNaturally()) return
+        if (playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
+                autoplayEnabled = _uiState.value.autoplay.videoAutoplayNext,
+                autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
+            )
+        ) {
+            return
+        }
+        _closePlayer.trySend(Unit)
     }
 
     private fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {

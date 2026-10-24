@@ -28,6 +28,9 @@ import com.raulshma.jellyplay.core.data.repository.JpsyncReservation
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.streaming.ConnectionSpeedTester
+import com.raulshma.jellyplay.core.data.streaming.SpeedSampleExecutors
+import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -149,6 +152,14 @@ internal val dataSessionPlaybackModule: Module = module {
     // PlayerCastController / PlaybackSession / PlayerSessionManager /
     // VideoPlayerViewModel) resolve this single from Koin directly.
     single { AdaptiveBitrateManager(get(), get(), get()) }
+
+    // The settings screen's connection-speed probe (#9): the transfer rides
+    // the shared download client (large-payload tuning, no HTTP cache — the
+    // same client the app-update APK download uses); the tier mapping is
+    // pure. PlaybackSettingsViewModel resolves this single directly.
+    single {
+        ConnectionSpeedTester(SpeedSampleExecutors.okHttp(get(NetworkQualifiers.downloadHttpClient)))
+    }
 
     // V3 livetv conveyor: the mini-player holder moved from the legacy
     // core:data shim (one framework per type — @Singleton/@Inject stripped at

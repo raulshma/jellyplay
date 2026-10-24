@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertDoesNotExist
+// assertDoesNotExist() is a member of SemanticsNodeInteraction — no import
+// (the former top-level extension import stopped resolving under the current
+// compose-ui-test and broke the whole androidHostTest lane).
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick

@@ -28,6 +28,7 @@ object JellyPlayPluginFeatures {
     const val SeerrBridge = "seerr-bridge"
     const val Newsletter = "newsletter"
     const val Ratings = "ratings"
+    const val OmdbAwards = "omdb-awards"
     const val CustomRows = "custom-rows"
     const val SeasonalRows = "seasonal-rows"
     const val Hero = "hero"
@@ -62,6 +63,20 @@ data class JellyPlayPluginRating(
 data class JellyPlayEpisodeScore(
     val tmdbScore: Double? = null,
     val tmdbVotes: Int? = null,
+)
+
+/**
+ * The OMDb awards enrichment the detail screen's ratings block renders beside
+ * the external rating chips (the model projection of the plugin client's
+ * `JellyPlayOmdbAwards` wire shape — mapped at the core:network boundary).
+ * Every field is optional on the wire; absent fields render nothing (no empty
+ * badge), and the whole result is null when the plugin's OMDb source is
+ * unconfigured or has no data for the id.
+ */
+data class JellyPlayPluginOmdbAwards(
+    val awards: String? = null,
+    val boxOffice: String? = null,
+    val imdbRating: String? = null,
 )
 
 /**

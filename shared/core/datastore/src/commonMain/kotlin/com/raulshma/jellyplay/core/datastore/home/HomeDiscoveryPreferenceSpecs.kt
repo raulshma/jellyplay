@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeHeroStyle
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -189,6 +190,38 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_hero_section_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("hero", "banner", "featured", "home", "carousel"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The hero block's presentation: paged carousel, auto-advancing slideshow, spotlight card or TV slider. */
+    val HOME_HERO_STYLE: PreferenceSpec<HomeHeroStyle> = PreferenceSpec.enumRow(
+        keyName = "home_hero_style",
+        default = HomeHeroStyle.CAROUSEL,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_hero_style",
+            titleKey = "ss_home_hero_style_title",
+            subtitleKey = "ss_home_hero_style_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("hero", "style", "carousel", "slideshow", "detailed", "slider", "layout", "banner"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** The [HomeHeroStyle.SLIDESHOW] auto-advance pacing in seconds (3–60). */
+    val HOME_HERO_SLIDESHOW_INTERVAL_SEC: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_hero_slideshow_interval_sec",
+        default = 8,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 3,
+        max = 60,
+        search = PreferenceSearchSpec(
+            id = "home_hero_slideshow_interval",
+            titleKey = "ss_home_hero_slideshow_interval_title",
+            subtitleKey = "ss_home_hero_slideshow_interval_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("slideshow", "interval", "seconds", "hero", "timing", "rotate", "advance", "speed"),
             routeKind = ROUTE_HOME_SETTINGS,
         ),
     )
@@ -897,6 +930,8 @@ object HomeDiscoveryPreferenceSpecs {
     val all: List<PreferenceSpec<*>> = listOf(
         HOME_MODE,
         HOME_HERO_ENABLED,
+        HOME_HERO_STYLE,
+        HOME_HERO_SLIDESHOW_INTERVAL_SEC,
         HOME_HERO_VIDEO_ENABLED,
         HOME_HERO_VIDEO_TV_ENABLED,
         HOME_BACKDROP_ENABLED,
@@ -1026,6 +1061,8 @@ object HomeDiscoveryPreferenceSpecs {
     val searchEntries: List<PreferenceSearchSpec> = listOf(
         HOME_MODE.searchEntry(),
         HOME_HERO_ENABLED.searchEntry(),
+        HOME_HERO_STYLE.searchEntry(),
+        HOME_HERO_SLIDESHOW_INTERVAL_SEC.searchEntry(),
         HOME_HERO_VIDEO_ENABLED.searchEntry(),
         HOME_HERO_VIDEO_TV_ENABLED.searchEntry(),
         HOME_BACKDROP_ENABLED.searchEntry(),

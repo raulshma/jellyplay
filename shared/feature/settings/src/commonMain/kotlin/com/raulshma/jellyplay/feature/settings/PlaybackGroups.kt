@@ -114,6 +114,26 @@ internal fun PlaybackMediaSegmentsGroup(
                             )
                         },
                     )
+                    // The Next Up button's preroll — renders beside the skip
+                    // prompt (the other seconds-before-the-end transport knob).
+                    val nextUpPrerollTitle = rowTitle(PlaybackRows.NextUpPreroll)
+                    val prerollChoices = listOf(5, 10, 15, 30, 45, 60, 90, 120)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.NextUpPreroll),
+                        title = nextUpPrerollTitle,
+                        subtitle = rowSubtitle(PlaybackRows.NextUpPreroll),
+                        trailingText = "${preferences.nextUpButtonPrerollSec}s",
+                        highlighted = highlightSettingId == PlaybackRows.NextUpPreroll.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = nextUpPrerollTitle,
+                                items = prerollChoices,
+                                label = { "${it}s" },
+                                isSelected = { it == preferences.nextUpButtonPrerollSec },
+                                onSelect = { viewModel.edit { scope -> scope.videoPlayer.setNextUpButtonPrerollSec(it) } },
+                            )
+                        },
+                    )
                     val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
                     val totalTypes = segmentTypes.size
                     segmentTypes.forEachIndexed { index, type ->

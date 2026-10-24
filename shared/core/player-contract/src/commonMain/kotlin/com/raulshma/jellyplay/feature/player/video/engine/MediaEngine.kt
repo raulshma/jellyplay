@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.DeinterlaceMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackTls
@@ -171,6 +172,23 @@ data class EngineConfig(
      * (`resolveExoHdrOutput` / `resolveMpvHdrOutput`); other engines ignore it.
      */
     val hdrContent: HdrContentInfo = HdrContentInfo.NONE,
+    /**
+     * The user's HDR delivery posture for direct play
+     * ([com.raulshma.jellyplay.core.model.HdrFormatPreference]) — which HDR
+     * family may reach the display and which wins when the device decodes
+     * more than one. [HdrFormatPreference.AUTO] (the default) keeps the
+     * engine's default negotiation; [HdrFormatPreference.SDR_ONLY] forces
+     * tone mapping down and never HDR passthrough; the family-only arms
+     * restrict the allowed OUTPUT transfer families through
+     * [applyHdrFormatPreference] (the OUTPUT half of the posture — the
+     * decoder-side half for Exo rides
+     * [com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig.hdrFormatPreference],
+     * which the engine's owners consume). Persisted in the PlaybackStore
+     * slice; folded into every config build by EngineConfigBuilder, so a
+     * runtime change reaches the engines through the shared-pairs diff
+     * ([EngineConfigDelta.sharedPairsChanged]).
+     */
+    val hdrFormatPreference: HdrFormatPreference = HdrFormatPreference.AUTO,
     /**
      * Optional DRM hook. When non-null, engines that support DRM (currently
      * ExoPlayerEngine on Android) attach the supplied session manager —
@@ -808,6 +826,21 @@ interface MediaEngine :
      * a runtime toggle no-op.
      */
     fun setNativeSubtitlesVisible(visible: Boolean) {}
+
+    /**
+     * Executes one user-authored raw engine command — the custom on-screen
+     * player buttons' "command" / "toggleFilter" actions (issue #27; an mpv
+     * command line such as `vf toggle sharpen` or `no-osd cycleValues speed`).
+     * The command is split on whitespace into the engine's command arguments;
+     * whitespace-embedded values are not supported by this surface.
+     *
+     * Default no-op returning `false`: only mpv-backed engines override it
+     * (mpv is the only engine with a raw command surface), so callers must
+     * treat `false` (or a non-mpv engine) as "the action did not apply" and
+     * stay silent — never fail playback over a custom command. Engines that
+     * override it absorb their own failures into the Boolean.
+     */
+    fun executeUserCommand(command: String): Boolean = false
 
     // ── Native surface creation and aspect-ratio control. ──
     //    Surface creation itself is platform-specific and lives on

@@ -89,7 +89,41 @@ data class LanguageRule(
     val audioLanguages: List<String> = emptyList(),
     val subtitleLanguages: List<String> = emptyList(),
     val subtitleMode: SubtitleTrackMode = SubtitleTrackMode.FULL,
+    /**
+     * Which subtitle TRACK KIND this rule wants, discriminated by the track's
+     * title ([SubtitleTitleHeuristics]). Applied as a PREFERENCE inside the
+     * matcher's existing tier ladder — tracks whose classified kind matches
+     * rank ahead, and the other kinds still resolve when no matching-kind
+     * track exists (a signs-only rule over a full-only item still picks the
+     * full track rather than dropping to Off). [ANY] = no kind preference.
+     */
+    val subtitleContentKind: SubtitleContentKindFilter = SubtitleContentKindFilter.ANY,
+    /**
+     * The commentary bias: `false` (the DEFAULT — "exclude commentary tracks
+     * by default when this rule matches") ranks non-commentary same-language
+     * tracks ahead of commentary ones ([SubtitleTitleClass.COMMENTARY]);
+     * `true` opts the rule in to treating commentary tracks as equals. Like
+     * [subtitleContentKind] this is a bias, not a hard filter — a
+     * commentary-only item still resolves to its commentary track.
+     */
+    val commentary: Boolean = false,
 )
+
+/**
+ * The subtitle content kind a [LanguageRule] targets — the v2 rule dimension
+ * (issue #23) that discriminates full-dialogue tracks from signs/songs and
+ * commentary tracks via their TITLES
+ * ([SubtitleTitleHeuristics.classifySubtitleTitle]). [ANY] (the default)
+ * keeps the pre-v2 behavior: every same-language track is a candidate.
+ */
+@Immutable
+@Serializable
+enum class SubtitleContentKindFilter(override val displayName: String) : HasDisplayName {
+    ANY("Any track kind"),
+    FULL("Full dialogue"),
+    SIGNS_SONGS("Signs / songs"),
+    EXCLUDE_COMMENTARY("Not commentary"),
+}
 
 /**
  * The persisted track-language rule set (stored as JSON under the

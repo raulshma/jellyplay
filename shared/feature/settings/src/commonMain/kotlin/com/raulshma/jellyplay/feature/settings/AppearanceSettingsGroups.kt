@@ -246,6 +246,17 @@ internal fun AppearanceLibraryGroup(
             onCheckedChange = { viewModel.edit { scope -> scope.library.setShowReviews(it) } },
         )
 
+        // Renders beside the reviews toggle — the other details-page
+        // ratings/awards display knob (appearance-store-backed).
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.AwardsBadges),
+            title = rowTitle(AppearanceRows.AwardsBadges),
+            subtitle = rowSubtitle(AppearanceRows.AwardsBadges),
+            checked = preferences.detailsAwardsBadgesEnabled,
+            highlighted = highlightSettingId == AppearanceRows.AwardsBadges.id,
+            onCheckedChange = { viewModel.edit { scope -> scope.appearance.setDetailsAwardsBadgesEnabled(it) } },
+        )
+
         SettingToggleItem(
             icon = Tabler.Outline.Movie,
             title = rowTitle(AppearanceRows.PreferLocalTrailers),

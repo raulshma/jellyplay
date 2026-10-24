@@ -22,7 +22,13 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
  */
 object SegmentCalculator {
 
-    /** Up-next pre-roll window: show the "next episode" card this far before the end. */
+    /**
+     * Up-next pre-roll window: show the "next episode" card this far before
+     * the end. The DEFAULT — the configured `nextUpButtonPrerollSec` pref
+     * rides [SegmentCalculatorInput.nextUpPrerollMs] (the VM funnels feed it),
+     * so the constant stays as the input's default and the fallback for
+     * callers that build the input without the pref.
+     */
     const val UP_NEXT_PRE_ROLL_MS = 30_000L
 
     /** Outro-near-end threshold: if the outro ends within this of total duration, up-next fires. */
@@ -127,7 +133,7 @@ object SegmentCalculator {
         if (input.isInSyncPlaySession) return false
         if (!input.hasNextEpisode) return false
         if (isOutroNearEnd(input, activeSegment())) return true
-        if (input.durationMs > 0 && positionMs >= (input.durationMs - UP_NEXT_PRE_ROLL_MS)) return true
+        if (input.durationMs > 0 && positionMs >= (input.durationMs - input.nextUpPrerollMs)) return true
         return false
     }
 

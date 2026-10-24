@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.model.withDiscoverRowEnabled
 import com.raulshma.jellyplay.core.model.withDiscoverRowMoved
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeHeroStyle
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
@@ -170,6 +171,8 @@ class HomeDiscoveryStore constructor(
     internal object Keys {
         val HOME_MODE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_MODE.keyName)
         val HOME_HERO_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.keyName)
+        val HOME_HERO_STYLE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.keyName)
+        val HOME_HERO_SLIDESHOW_INTERVAL_SEC = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC.keyName)
         val HOME_HERO_VIDEO_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.keyName)
         val HOME_HERO_VIDEO_TV_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.keyName)
         val HOME_BACKDROP_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.keyName)
@@ -485,6 +488,9 @@ class HomeDiscoveryStore constructor(
             return HomeDiscoverySlice(
                 homeMode = HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(prefs, userId),
                 homeHeroEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.readBoolForUser(prefs, userId),
+                homeHeroStyle = HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.readEnumForUser(prefs, userId),
+                homeHeroSlideshowIntervalSec = HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC
+                    .readIntForUser(prefs, userId),
                 homeHeroVideoEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.readBoolForUser(prefs, userId),
                 homeHeroVideoTvEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.readBoolForUser(prefs, userId),
                 homeBackdropEnabled = HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.readBoolForUser(prefs, userId),
@@ -806,6 +812,20 @@ class HomeDiscoveryStore constructor(
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) = editLayoutForUser { prefs, userId ->
         prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = enabled
+    }
+
+    /** The hero block's presentation: carousel, slideshow, detailed spotlight or TV slider. */
+    suspend fun setHomeHeroStyle(style: HomeHeroStyle) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.rawUserKey(userId)] = style.name
+    }
+
+    /**
+     * The slideshow hero's auto-advance pacing in seconds; clamped to the
+     * row's declared 3–60 bounds (the setter is the clamp owner).
+     */
+    suspend fun setHomeHeroSlideshowIntervalSec(seconds: Int) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC.userKey(userId)] =
+            seconds.coerceIn(3, 60)
     }
 
     suspend fun setHomeBackdropEnabled(enabled: Boolean) = editForUser { prefs, userId ->
@@ -1254,6 +1274,9 @@ class HomeDiscoveryStore constructor(
         editLayoutForUser { prefs, userId ->
             prefs[HomeDiscoveryPreferenceSpecs.HOME_MODE.rawUserKey(userId)] = slice.homeMode.name
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = slice.homeHeroEnabled
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.rawUserKey(userId)] = slice.homeHeroStyle.name
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC.userKey(userId)] =
+                slice.homeHeroSlideshowIntervalSec.coerceIn(3, 60)
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.userKey(userId)] = slice.homeHeroVideoEnabled
             prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = slice.homeHeroVideoTvEnabled
             prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = slice.homeBackdropEnabled
@@ -1351,6 +1374,10 @@ class HomeDiscoveryStore constructor(
 data class HomeDiscoverySlice(
     val homeMode: HomeMode = HomeMode.VIDEO,
     val homeHeroEnabled: Boolean = true,
+    /** The hero block's presentation: carousel, slideshow, detailed spotlight or TV slider. */
+    val homeHeroStyle: HomeHeroStyle = HomeHeroStyle.CAROUSEL,
+    /** The slideshow hero's auto-advance pacing in seconds (3–60). Default 8. */
+    val homeHeroSlideshowIntervalSec: Int = 8,
     /** Video hero billboard (touch/default form factors). Default off — static hero. */
     val homeHeroVideoEnabled: Boolean = false,
     /** Video hero billboard (TV form factor). Default off. */

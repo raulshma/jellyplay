@@ -176,6 +176,18 @@ internal data class HomeContentState(
      * own title/kicker slots, a miss renders item metadata as today.
      */
     val curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry> = emptyMap(),
+    /**
+     * The hero presentation fold ([homeHeroStyleDecision]) — the screen's
+     * resolution of the style pref against the form factor and the candidate
+     * pool. The hero slot branches on its render flags; the default instance
+     * IS the CAROUSEL output, so a default renders exactly the shipped hero.
+     */
+    val heroStyleDecision: HomeHeroStyleDecision = HomeHeroStyleDecision(),
+    /**
+     * The full rotation candidate pool (the screen's [selectHomeHeroCandidates]
+     * output) — the TV_SLIDER pager's pages; unused by every other style.
+     */
+    val heroCandidates: List<MediaItem> = emptyList(),
     val backgroundColor: Color,
     val contentPad: Dp,
     val headerHeight: Dp,
@@ -334,6 +346,12 @@ internal fun HomeContentList(
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
     renderInputs: HomeRenderInputs,
+    /**
+     * The hero controller — the TV_SLIDER hero's pager syncs the settled page
+     * into it ([HeroController.snapToSliderPage]) so the ambient backdrop and
+     * the candidate state stay in step with what the slider shows.
+     */
+    heroController: HeroController,
     listState: LazyListState,
     density: Density,
     /**
@@ -493,27 +511,60 @@ internal fun HomeContentList(
                     // featured — absent/null fields render the item's own
                     // metadata exactly as the local hero always has.
                     val curated = state.curatedHeroOverlay[featured.id]
+                    // The presentation fold carried whole from the screen
+                    // ([homeHeroStyleDecision]); its default instance is the
+                    // CAROUSEL output, so the shipped hero is untouched.
+                    val decision = state.heroStyleDecision
+                    // The DETAILED spotlight renders taller than the adaptive base.
+                    val heroHeight = if (decision.chromeVisibility == HomeHeroChromeVisibility.RICH) {
+                        state.headerHeight + DetailedHeroHeightExtra
+                    } else {
+                        state.headerHeight
+                    }
                     // Online and offline heroes alike open the unified detail
                     // tree — it renders remote and downloaded items alike, so
                     // the id is all the routing needs.
-                    AnimatedHeroHeader(
-                        featuredItem = featured,
-                        headline = curated?.headline,
-                        subhead = curated?.subhead,
-                        getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
-                            { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
-                        },
-                        height = state.headerHeight,
-                        backgroundColor = state.backgroundColor,
-                        contentPadding = state.contentPad,
-                        homeBackdropEnabled = state.core.homeBackdropEnabled,
-                        listState = listState,
-                        onItemClick = callbacks.onItemClick,
-                        onDetailsClick = callbacks.onItemClick,
-                        requestInitialFocus = !savedRowIsValid,
-                        onFocusChange = callbacks.onFocusChange,
-                        focusRequester = renderInputs.heroFocusRequester,
-                    )
+                    if (decision.isSlider) {
+                        HeroSliderHeader(
+                            candidates = state.heroCandidates,
+                            controller = heroController,
+                            getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
+                                { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
+                            },
+                            height = heroHeight,
+                            backgroundColor = state.backgroundColor,
+                            contentPadding = state.contentPad,
+                            homeBackdropEnabled = state.core.homeBackdropEnabled,
+                            listState = listState,
+                            curatedHeroOverlay = state.curatedHeroOverlay,
+                            onItemClick = callbacks.onItemClick,
+                            onDetailsClick = callbacks.onItemClick,
+                            requestInitialFocus = !savedRowIsValid,
+                            onFocusChange = callbacks.onFocusChange,
+                            focusRequester = renderInputs.heroFocusRequester,
+                        )
+                    } else {
+                        AnimatedHeroHeader(
+                            featuredItem = featured,
+                            headline = curated?.headline,
+                            subhead = curated?.subhead,
+                            getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
+                                { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
+                            },
+                            height = heroHeight,
+                            backgroundColor = state.backgroundColor,
+                            contentPadding = state.contentPad,
+                            homeBackdropEnabled = state.core.homeBackdropEnabled,
+                            listState = listState,
+                            onItemClick = callbacks.onItemClick,
+                            onDetailsClick = callbacks.onItemClick,
+                            requestInitialFocus = !savedRowIsValid,
+                            onFocusChange = callbacks.onFocusChange,
+                            focusRequester = renderInputs.heroFocusRequester,
+                            chromeVisibility = decision.chromeVisibility,
+                            fullBleed = decision.fullBleed,
+                        )
+                    }
                 }
             } else {
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }

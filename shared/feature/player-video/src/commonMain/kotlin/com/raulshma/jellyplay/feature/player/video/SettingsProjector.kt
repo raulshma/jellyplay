@@ -26,11 +26,17 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
  *
  * The *load-time* counterpart of this *change-time* projection is
  * [PlayerPrefsSeed]: the single home of which pref feeds which uiState leaf at
- * session start (one unguarded copy per load). Seven leaves are mapped in both
- * places (showPlaybackMetadata, showClock, showTimeRemaining, tvZoomModePercent,
- * keepScreenOnDuringVideo, passOutProtectionHours, autoPlayCountdownSec) — when
- * moving or adding a leaf, update both or drop one side deliberately. This
- * class's guarded-diff semantics are intentionally NOT merged into the seed.
+ * session start (one unguarded copy per load). Nineteen leaves are mapped in
+ * both places (showPlaybackMetadata, showClock, showTimeRemaining,
+ * tvZoomModePercent, keepScreenOnDuringVideo, passOutProtectionHours,
+ * autoPlayCountdownSec, and the thirteen render/pause/continuation leaves —
+ * mpvToneMappingCurve, mpvDebandMode, mpvMotionInterpolation,
+ * bitmapSubtitleScaleMode, mpvCustomButtons, trickplayMode, pauseScreensaverMode,
+ * pauseScreensaverAfterMinutes, ambientBlurEnabled, pauseDetailsEnabled,
+ * nextUpButtonPrerollSec, autoplayEpisodeLimit,
+ * showNextEpisodeDetailsAfterFinish) — when moving or adding a leaf, update
+ * both or drop one side deliberately. This class's guarded-diff semantics are
+ * intentionally NOT merged into the seed.
  */
 internal class SettingsProjector(
     private val getUiState: () -> VideoPlayerUiState,
@@ -120,6 +126,75 @@ internal class SettingsProjector(
             selector = { it.autoplay.autoPlayCountdownSec },
             newValue = agg.playback.autoPlayCountdownSec,
             updater = { v -> copy(autoplay = autoplay.copy(autoPlayCountdownSec = v)) },
+        )
+        // Render / pause / continuation leaves (the load-time twins live in
+        // PlayerPrefsSeed; the four mpv/bitmap render leaves are additionally
+        // engine-config-affecting — PlayerPrefsFanout owns that rebuild
+        // trigger, this class only mirrors state).
+        syncPref(
+            selector = { it.uiPrefs.mpvToneMappingCurve },
+            newValue = agg.videoPlayer.mpvToneMappingCurve,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(mpvToneMappingCurve = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.mpvDebandMode },
+            newValue = agg.videoPlayer.mpvDebandMode,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(mpvDebandMode = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.mpvMotionInterpolation },
+            newValue = agg.videoPlayer.mpvMotionInterpolation,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(mpvMotionInterpolation = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.bitmapSubtitleScaleMode },
+            newValue = agg.videoPlayer.bitmapSubtitleScaleMode,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(bitmapSubtitleScaleMode = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.mpvCustomButtons },
+            newValue = agg.videoPlayer.mpvCustomButtons,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(mpvCustomButtons = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.trickplayMode },
+            newValue = agg.videoPlayer.trickplayMode,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(trickplayMode = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.pauseScreensaverMode },
+            newValue = agg.videoPlayer.pauseScreensaverMode,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(pauseScreensaverMode = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.pauseScreensaverAfterMinutes },
+            newValue = agg.videoPlayer.pauseScreensaverAfterMinutes,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(pauseScreensaverAfterMinutes = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.ambientBlurEnabled },
+            newValue = agg.videoPlayer.ambientBlurEnabled,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(ambientBlurEnabled = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.pauseDetailsEnabled },
+            newValue = agg.videoPlayer.pauseDetailsEnabled,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(pauseDetailsEnabled = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.nextUpButtonPrerollSec },
+            newValue = agg.videoPlayer.nextUpButtonPrerollSec,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(nextUpButtonPrerollSec = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.autoplayEpisodeLimit },
+            newValue = agg.videoPlayer.autoplayEpisodeLimit,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(autoplayEpisodeLimit = v)) },
+        )
+        syncPref(
+            selector = { it.uiPrefs.showNextEpisodeDetailsAfterFinish },
+            newValue = agg.videoPlayer.showNextEpisodeDetailsAfterFinish,
+            updater = { v -> copy(uiPrefs = uiPrefs.copy(showNextEpisodeDetailsAfterFinish = v)) },
         )
         // The input mapping: settings-side editor writes + in-player quick
         // toggles both land here change-time (the seed owns the load-time

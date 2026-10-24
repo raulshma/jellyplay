@@ -15,9 +15,15 @@ import com.raulshma.jellyplay.feature.player.video.NoOpPlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.NoOpSubtitlePreviewRepository
 import com.raulshma.jellyplay.feature.player.video.PlayerStores
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
+import com.raulshma.jellyplay.feature.player.video.PostPlaybackDeleteSources
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository
@@ -125,6 +131,18 @@ val desktopPlayerVideoModule: Module = module {
             subtitlePreviewRepository = get(),
             userDataMutator = get(),
             nowPlayingReporter = get(),
+            // #14 offer-delete-after-playback: the existing server delete
+            // path (MediaInfoApiClient.deleteItem), the signed-in user's
+            // delete permission, and the repository's cache invalidation.
+            postPlaybackDeleteSources = PostPlaybackDeleteSources(
+                canDeleteContent = get<AuthRepository>().currentUser
+                    .map { it?.canDeleteContent == true }
+                    .distinctUntilChanged(),
+                deleteItem = { itemId -> get<MediaInfoApiClient>().deleteItem(itemId) },
+                invalidateAfterDelete = { itemId, seriesIdHint ->
+                    get<MediaRepositoryCacheInvalidation>().invalidateForUserDataChange(itemId, seriesIdHint)
+                },
+            ),
         )
     }
 }

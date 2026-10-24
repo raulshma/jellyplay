@@ -539,6 +539,7 @@ internal fun DetailHeaderSection(
                             rtUrl = state.core.externalRatings.rtUrl,
                             imdbUrl = state.core.externalRatings.imdbUrl,
                             tmdbUrl = state.core.externalRatings.tmdbUrl,
+                            awards = state.core.externalRatings.awards,
                         )
                     }
                     // Book meta: file format + reading progress (the

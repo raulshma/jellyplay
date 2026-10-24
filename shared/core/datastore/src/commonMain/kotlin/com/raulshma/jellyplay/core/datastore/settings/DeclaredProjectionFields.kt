@@ -357,6 +357,7 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         scheduledThemeStartHour = appearance.scheduledThemeStartHour,
         scheduledThemeEndHour = appearance.scheduledThemeEndHour,
         backdropThemeMusicEnabled = appearance.backdropThemeMusicEnabled,
+        detailsAwardsBadgesEnabled = appearance.detailsAwardsBadgesEnabled,
         homeMode = home.homeMode,
         enabledHomeSectionTypes = home.enabledHomeSectionTypes,
         homeSectionOrder = home.homeSectionOrder,

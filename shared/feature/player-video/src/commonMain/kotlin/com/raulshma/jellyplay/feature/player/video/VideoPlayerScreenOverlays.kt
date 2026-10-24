@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.model.TrickplayMode
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
@@ -44,6 +45,8 @@ import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.StillWatchingOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDelayOverlay
+import com.raulshma.jellyplay.feature.player.video.components.TrickplayFilmstripOverlay
+import com.raulshma.jellyplay.feature.player.video.components.TrickplayFullscreenOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_skipped_segment
@@ -58,8 +61,11 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 // are unchanged except `private` → `internal` where the root file calls the
 // symbol. See the section-host map on VideoPlayerScreen.kt.
 
-/** Trickplay thumbnail offset above the bottom controls. */
+/** Trickplay thumbnail offset above the bottom controls (the BUBBLE anchor). */
 private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
+
+/** The FILMSTRIP's anchor: at the seek-bar line, below the bubble's float. */
+private const val TRICKPLAY_FILMSTRIP_BOTTOM_CLEARANCE_DP = 88
 
 /**
  * Input bundle for [PlayerCenterOverlayTier] (the [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
@@ -73,6 +79,10 @@ private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 @Immutable
 internal data class CenterOverlayInputs(
     val trickplayOnSeekGesture: Boolean,
+    /** The trickplay presentation mode (#7) the gesture preview renders. */
+    val trickplayMode: TrickplayMode,
+    /** The sprite manifest the filmstrip/fullscreen surfaces need (null degrades to the bubble). */
+    val trickplayInfo: TrickplayInfo?,
     val gestureTrickplayVisible: Boolean,
     val gestureTrickplayBitmap: PlatformBitmap?,
     /**
@@ -117,24 +127,56 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     inputs: CenterOverlayInputs,
     performConfirmHaptic: () -> Unit,
 ) {
-    // Trickplay overlay for seek gestures
+    // Trickplay overlay for seek gestures. Drag-seek shows the preview in
+    // EVERY presentation mode (#7) — the mode only changes WHAT renders, the
+    // center anchor stays except the full-surface mode filling the box.
     AnimatedVisibility(
         visible = inputs.trickplayOnSeekGesture && inputs.gestureTrickplayVisible,
         enter = fadeIn(tween(150, easing = AlphaEasing)),
         exit = fadeOut(tween(200, easing = AlphaEasing)),
-        modifier = Modifier.align(Alignment.Center),
+        modifier = when (
+            trickplayAnchor(inputs.trickplayMode, inputs.trickplayInfo != null)
+        ) {
+            TrickplayAnchor.FULL_SURFACE ->
+                Modifier.align(Alignment.Center).fillMaxSize()
+            else -> Modifier.align(Alignment.Center)
+        },
     ) {
         // Collected HERE — inside the visible overlay's own recompose scope,
         // not the tier's: the feeds emit per drag frame, and only the
         // trickplay surface renders them.
         val gestureSeekPositionMs by inputs.gestureSeekPositionMs.collectAsStateWithLifecycle()
         val gestureDeltaMs by inputs.gestureDeltaMs.collectAsStateWithLifecycle()
-        TrickplayOverlay(
-            bitmap = inputs.gestureTrickplayBitmap,
-            positionMs = gestureSeekPositionMs,
-            deltaMs = gestureDeltaMs,
-            durationMs = inputs.durationMs,
-        )
+        val gestureBitmap = inputs.gestureTrickplayBitmap
+        when (
+            val presentation = trickplayPresentation(
+                mode = inputs.trickplayMode,
+                positionMs = gestureSeekPositionMs,
+                intervalMs = inputs.trickplayInfo?.interval ?: 0,
+                thumbnailCount = inputs.trickplayInfo?.thumbnailCount ?: 0,
+            )
+        ) {
+            TrickplayPresentation.Bubble -> TrickplayOverlay(
+                bitmap = gestureBitmap,
+                positionMs = gestureSeekPositionMs,
+                deltaMs = gestureDeltaMs,
+                durationMs = inputs.durationMs,
+            )
+            is TrickplayPresentation.Filmstrip -> TrickplayFilmstripOverlay(
+                tileIndices = presentation.tileIndices,
+                intervalMs = inputs.trickplayInfo?.interval ?: 0,
+                tileAspect = trickplayTileAspect(inputs.trickplayInfo),
+                positionMs = gestureSeekPositionMs,
+                loadTile = { position ->
+                    viewModel.loadTrickplayThumbnail(position) as? PlatformBitmap
+                },
+            )
+            TrickplayPresentation.Fullscreen -> TrickplayFullscreenOverlay(
+                bitmap = gestureBitmap,
+                positionMs = gestureSeekPositionMs,
+                durationMs = inputs.durationMs,
+            )
+        }
     }
 
     IntroSkipOverlay(
@@ -201,6 +243,13 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     // episode sibling — the SAME precedence the advance applies). The confirm
     // overlay suppresses the card while visible — the answer decides the
     // advance, the card must not race it.
+    //
+    // #17 binge controls: a reached autoplay-episode cap renders the card
+    // MANUAL — no countdown (autoplayEnabled false), no autoplay toggle
+    // (turning autoplay on would not lift the cap), "Watch now / Dismiss"
+    // only. The countdown's expiry is the AUTO arm (the streak grows); the
+    // buttons stay the manual event (the streak resets).
+    val autoplayLimitReached by viewModel.sessionSlices.overlay.isAutoplayLimitReached.collectAsStateWithLifecycle()
     inputs.upNextCard?.let { card ->
         NextEpisodeOverlay(
             isVisible = inputs.shouldShowUpNext && inputs.stillWatchingPrompt == null,
@@ -210,10 +259,15 @@ internal fun BoxScope.PlayerCenterOverlayTier(
             episodeNumber = card.episodeNumber,
             thumbnailUrl = inputs.upNextImageUrl,
             countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
-            autoplayEnabled = uiState.autoplay.videoAutoplayNext,
+            autoplayEnabled = uiState.autoplay.videoAutoplayNext && !autoplayLimitReached,
             onPlayNext = { viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) },
             onCancel = { viewModel.onEvent(VideoPlayerUiEvent.CancelAutoplay) },
-            onToggleAutoplay = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext)) },
+            onCountdownFinish = { viewModel.sessionSlices.overlay.onUpNextCountdownFinished() },
+            onToggleAutoplay = if (autoplayLimitReached) {
+                null
+            } else {
+                { viewModel.onEvent(VideoPlayerUiEvent.SetVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext)) }
+            },
             isPlaying = inputs.isPlaying,
             pauseCountdown = inputs.isSheetOpen || inputs.isScreenLocked,
             isLoading = inputs.isNextEpisodeLoading,
@@ -294,28 +348,69 @@ internal fun PlayerSubtitleDelayOverlay(
     )
 }
 
-/** Seek-scrub trickplay thumbnail anchored above the bottom controls (non-TV, controls visible, active scrub). */
+/**
+ * Seek-scrub trickplay anchored over the bottom controls (non-TV, controls
+ * visible, active scrub). The presentation mode (#7) decides the surface and
+ * its anchor: BUBBLE floats above the controls (the legacy look — regression
+ * bar), FILMSTRIP sits at the seek-bar line, FULLSCREEN fills the surface.
+ * A missing manifest degrades every mode to the bubble through the same
+ * [trickplayPresentation] fold the gesture site renders through.
+ */
 @Composable
 internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
     isTv: Boolean,
     trickplayEnabled: Boolean,
     showControls: Boolean,
     isSeeking: Boolean,
+    trickplayMode: TrickplayMode,
+    trickplayInfo: TrickplayInfo?,
     bitmap: PlatformBitmap?,
     positionMs: Long,
     durationMs: Long,
+    loadTile: suspend (positionMs: Long) -> PlatformBitmap?,
 ) {
+    val anchor = trickplayAnchor(trickplayMode, trickplayInfo != null)
     AnimatedVisibility(
         visible = !isTv && trickplayEnabled && showControls && isSeeking,
         enter = fadeIn(tween(150, easing = AlphaEasing)),
         exit = fadeOut(tween(200, easing = AlphaEasing)),
-        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp),
+        modifier = when (anchor) {
+            TrickplayAnchor.FLOATING_BUBBLE ->
+                Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP.dp)
+            TrickplayAnchor.SEEK_BAR_LINE ->
+                Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = TRICKPLAY_FILMSTRIP_BOTTOM_CLEARANCE_DP.dp)
+            TrickplayAnchor.FULL_SURFACE ->
+                Modifier.align(Alignment.Center).fillMaxSize()
+        },
     ) {
-        TrickplayOverlay(
-            bitmap = bitmap,
-            positionMs = positionMs,
-            durationMs = durationMs,
-        )
+        when (
+            val presentation = trickplayPresentation(
+                mode = trickplayMode,
+                positionMs = positionMs,
+                intervalMs = trickplayInfo?.interval ?: 0,
+                thumbnailCount = trickplayInfo?.thumbnailCount ?: 0,
+            )
+        ) {
+            TrickplayPresentation.Bubble -> TrickplayOverlay(
+                bitmap = bitmap,
+                positionMs = positionMs,
+                durationMs = durationMs,
+            )
+            is TrickplayPresentation.Filmstrip -> TrickplayFilmstripOverlay(
+                tileIndices = presentation.tileIndices,
+                intervalMs = trickplayInfo?.interval ?: 0,
+                tileAspect = trickplayTileAspect(trickplayInfo),
+                positionMs = positionMs,
+                loadTile = loadTile,
+            )
+            TrickplayPresentation.Fullscreen -> TrickplayFullscreenOverlay(
+                bitmap = bitmap,
+                positionMs = positionMs,
+                durationMs = durationMs,
+            )
+        }
     }
 }
 

@@ -5,7 +5,12 @@ import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrickplayMode
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -59,6 +64,56 @@ class SettingsProjectorTest {
         assertEquals(10, uiState.autoplay.autoPlayCountdownSec)
         assertTrue(uiState.uiPrefs.usePinForPlayerLock)
         assertTrue(uiState.uiPrefs.hasPin)
+    }
+
+    @Test
+    fun project_updatesTheRenderPauseContinuationLeaves() {
+        // The thirteen render/pause/continuation leaves are dual-home (the seed
+        // owns the load-time copy): every one must re-project change-time too.
+        // Stabilize the resolved subtitle style FIRST (the seeded
+        // SubtitleStyle.DEFAULT ≠ a default slice's plain SubtitleStyle, so the
+        // very first project() would signal a style change unrelated to these
+        // leaves — the preamble the style-change test below also runs).
+        projector.project(VideoPlayerAggregate())
+        val agg = VideoPlayerAggregate(
+            videoPlayer = VideoPlayerSlice(
+                mpvToneMappingCurve = MpvToneMappingCurve.BT_2390,
+                mpvDebandMode = MpvDebandMode.HEAVY,
+                mpvMotionInterpolation = true,
+                bitmapSubtitleScaleMode = BitmapSubtitleScaleMode.STRETCH,
+                mpvCustomButtons = "[{\"label\":\"proj\"}]",
+                trickplayMode = TrickplayMode.FILMSTRIP,
+                pauseScreensaverMode = PauseScreensaverMode.FADE_TO_BLACK,
+                pauseScreensaverAfterMinutes = 20,
+                ambientBlurEnabled = true,
+                pauseDetailsEnabled = true,
+                nextUpButtonPrerollSec = 90,
+                autoplayEpisodeLimit = 5,
+                showNextEpisodeDetailsAfterFinish = false,
+            ),
+        )
+
+        val changed = projector.project(agg)
+
+        assertFalse(changed, "None of the thirteen leaves feeds the resolved subtitle style")
+        assertEquals(MpvToneMappingCurve.BT_2390, uiState.uiPrefs.mpvToneMappingCurve)
+        assertEquals(MpvDebandMode.HEAVY, uiState.uiPrefs.mpvDebandMode)
+        assertTrue(uiState.uiPrefs.mpvMotionInterpolation)
+        assertEquals(BitmapSubtitleScaleMode.STRETCH, uiState.uiPrefs.bitmapSubtitleScaleMode)
+        assertEquals("[{\"label\":\"proj\"}]", uiState.uiPrefs.mpvCustomButtons)
+        assertEquals(TrickplayMode.FILMSTRIP, uiState.uiPrefs.trickplayMode)
+        assertEquals(PauseScreensaverMode.FADE_TO_BLACK, uiState.uiPrefs.pauseScreensaverMode)
+        assertEquals(20, uiState.uiPrefs.pauseScreensaverAfterMinutes)
+        assertTrue(uiState.uiPrefs.ambientBlurEnabled)
+        assertTrue(uiState.uiPrefs.pauseDetailsEnabled)
+        assertEquals(90, uiState.uiPrefs.nextUpButtonPrerollSec)
+        assertEquals(5, uiState.uiPrefs.autoplayEpisodeLimit)
+        assertFalse(uiState.uiPrefs.showNextEpisodeDetailsAfterFinish)
+
+        // Re-projecting the same aggregate is a no-op (the guarded-diff rule).
+        val uiStateBefore = uiState
+        assertFalse(projector.project(agg))
+        assertEquals(uiStateBefore, uiState)
     }
 
     // Note: the sleep-timer last-used duration and the Subtitle Manager's

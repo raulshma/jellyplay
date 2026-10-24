@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import kotlinx.coroutines.flow.Flow
 
@@ -257,6 +258,14 @@ interface JellyPlayRatingsRoutes {
     suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>
 
     suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeScore>?>
+
+    /**
+     * The OMDb awards enrichment (awards line, box office, IMDb rating); null
+     * = OMDb unconfigured or no data for the id (plugin 404). Absent fields
+     * render nothing — the empty-badge suppression is the detail feature's
+     * presentation rule.
+     */
+    suspend fun getOmdbAwards(imdbId: String): Result<JellyPlayPluginOmdbAwards?>
 }
 
 /**

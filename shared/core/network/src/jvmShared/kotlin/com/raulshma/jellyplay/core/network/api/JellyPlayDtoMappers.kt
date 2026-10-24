@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 
 /**
@@ -34,6 +35,14 @@ fun JellyPlayEpisodeRatings.toModel(): JellyPlayEpisodeScore =
     JellyPlayEpisodeScore(
         tmdbScore = tmdbScore,
         tmdbVotes = tmdbVotes,
+    )
+
+/** [JellyPlayOmdbAwards] → the detail ratings block's awards badge model (verbatim). */
+fun JellyPlayOmdbAwards.toModel(): JellyPlayPluginOmdbAwards =
+    JellyPlayPluginOmdbAwards(
+        awards = awards,
+        boxOffice = boxOffice,
+        imdbRating = imdbRating,
     )
 
 /** [JellyPlayAnimeMarker] → the seasons section's badge-fold marker model. */

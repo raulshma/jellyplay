@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.SubtitleContentKindFilter
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 
@@ -37,6 +38,16 @@ internal object SubtitleTrackMatcher {
      * apply, so a signs-only (or full-only) item still resolves. Both flags
      * default false — the unbiased, pre-engine behaviour.
      *
+     * The v2 content-kind bias (issue #23): when [contentKind] != [SubtitleContentKindFilter.ANY]
+     * or [allowCommentary] is false, a matching rule's finer discrimination
+     * ([TrackResolutionEngine.satisfiesContentPreference] over the track
+     * title heuristics) REPLACES the legacy full/signs flags inside the same
+     * tier-bias shape — satisfying candidates rank ahead per tier, and the
+     * tier falls back to the unsatisfied remainder when nothing satisfying
+     * exists (never a hard filter: a signs-only rule over a full-only item
+     * still resolves). Defaults ([SubtitleContentKindFilter.ANY] + `true`)
+     * keep the legacy path byte-identical.
+     *
      * @param lang ISO-639 language code the preference resolved to.
      * @param forced whether the preference pins a forced-narrative track, or null.
      * @param hearingImpaired whether the preference pins an SDH track, or null.
@@ -48,18 +59,35 @@ internal object SubtitleTrackMatcher {
         hearingImpaired: Boolean?,
         preferFull: Boolean = false,
         preferSigns: Boolean = false,
+        contentKind: SubtitleContentKindFilter = SubtitleContentKindFilter.ANY,
+        allowCommentary: Boolean = true,
     ): TrackOption? {
         val langMatches = tracks.filter { it.index >= 0 && isLanguageMatch(it.language, lang) }
         if (langMatches.isEmpty()) return null
+        val v2Preferred = contentPreference(contentKind, allowCommentary)
         // Tier 1 — exact descriptor (language + forced-role + SDH-role).
         langMatches.filter { roleMatches(it, forced, hearingImpaired) }
-            .biasedTiebreak(preferFull, preferSigns)?.let { return it }
+            .biasedTiebreak(preferFull, preferSigns, v2Preferred)?.let { return it }
         // Tier 2 — relax SDH, keep forced-role.
         langMatches.filter { roleMatches(it, forced, sdh = null) }
-            .biasedTiebreak(preferFull, preferSigns)?.let { return it }
+            .biasedTiebreak(preferFull, preferSigns, v2Preferred)?.let { return it }
         // Tier 3 — language only.
-        return langMatches.biasedTiebreak(preferFull, preferSigns)
+        return langMatches.biasedTiebreak(preferFull, preferSigns, v2Preferred)
     }
+
+    /**
+     * The v2 preferred-subset predicate, or null when the rule carries no v2
+     * opinion (ANY kind + commentary allowed) — the legacy flags then stand.
+     */
+    private fun contentPreference(
+        contentKind: SubtitleContentKindFilter,
+        allowCommentary: Boolean,
+    ): ((TrackOption) -> Boolean)? =
+        if (contentKind == SubtitleContentKindFilter.ANY && allowCommentary) {
+            null
+        } else {
+            { track -> TrackResolutionEngine.satisfiesContentPreference(track, contentKind, allowCommentary) }
+        }
 
     /**
      * Deterministic tie-break across several equally-good candidates: prefer the
@@ -70,12 +98,18 @@ internal object SubtitleTrackMatcher {
      * ([TrackResolutionEngine.isSignsTrack]) ranks AHEAD of the DEFAULT/index
      * order inside the tier — but the tier's own role pins (forced/SDH) still
      * outrank the class split, so an explicit forced or SDH pin keeps winning
-     * over the bias (accessibility intent over preference).
+     * over the bias (accessibility intent over preference). The v2 content
+     * predicate (non-null [v2Preferred]) REPLACES the legacy class split with
+     * the finer title-heuristics fold, same shape.
      */
     private fun List<TrackOption>.biasedTiebreak(
         preferFull: Boolean,
         preferSigns: Boolean,
+        v2Preferred: ((TrackOption) -> Boolean)? = null,
     ): TrackOption? {
+        if (v2Preferred != null) {
+            return filter(v2Preferred).bestTiebreak() ?: bestTiebreak()
+        }
         if (!preferFull && !preferSigns) return bestTiebreak()
         val wantSigns = preferSigns
         val preferredClass = filter { TrackResolutionEngine.isSignsTrack(it) == wantSigns }

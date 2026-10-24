@@ -16,9 +16,19 @@ import com.raulshma.jellyplay.feature.player.video.JellyfinRemotePlayCastStrateg
 import com.raulshma.jellyplay.feature.player.video.NextStreamByteWarmer
 import com.raulshma.jellyplay.feature.player.video.PlayerStores
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
+import com.raulshma.jellyplay.feature.player.video.PostPlaybackDeleteSources
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
+import com.raulshma.jellyplay.feature.player.video.session.latestResumeVideoSnapshot
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
@@ -135,6 +145,27 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // "Play (with pre-rolls)": the one-shot Cinema Mode override the
     // detail screen arms before the play dispatch (core:player-contract).
     single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
+    // Cold-start session restoration (the shell's "resume last watched?" gate):
+    // ONE evaluation per process, resolved by the app shell through ShellInfra's
+    // lazy provider — first use is the authenticated branch's prompt host
+    // (SessionRestorePromptHost), so the fetch never runs for auth/onboarding
+    // sessions. Server-authoritative by design: the snapshot is the resume query
+    // behind the home Continue Watching row, mapped once (latestResumeVideoSnapshot)
+    // and cached nowhere; a fetch failure degrades to no-offer inside the
+    // controller. classicRows stays the default — the factory's playable-video
+    // filter already drops Series/Season rollups.
+    single {
+        SessionRestorationController(
+            restoreMode = { get<PlaybackStore>().playback.value.sessionRestoreMode },
+            fetchLatestSnapshot = {
+                latestResumeVideoSnapshot(
+                    get<LibraryApiClient>()
+                        .getContinueWatching(limit = RESUME_SNAPSHOT_FETCH_LIMIT)
+                        .getOrThrow(),
+                )
+            },
+        )
+    }
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
@@ -189,6 +220,22 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             userDataMutator = get(),
             nowPlayingReporter = get(),
             nextStreamByteWarmer = get(),
+            // #14 offer-delete-after-playback: the existing server delete
+            // path (MediaInfoApiClient.deleteItem — the recordings/cleanup
+            // arm), the signed-in user's delete permission, and the
+            // repository's cache invalidation for the deleted item.
+            postPlaybackDeleteSources = PostPlaybackDeleteSources(
+                canDeleteContent = get<AuthRepository>().currentUser
+                    .map { it?.canDeleteContent == true }
+                    .distinctUntilChanged(),
+                deleteItem = { itemId -> get<MediaInfoApiClient>().deleteItem(itemId) },
+                invalidateAfterDelete = { itemId, seriesIdHint ->
+                    get<MediaRepositoryCacheInvalidation>().invalidateForUserDataChange(itemId, seriesIdHint)
+                },
+            ),
         )
     }
 }
+
+/** The one-shot cold-start fetch's row budget (the recency pick runs client-side). */
+private const val RESUME_SNAPSHOT_FETCH_LIMIT = 5

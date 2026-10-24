@@ -177,8 +177,27 @@ internal class DesktopLinkOpenQueue {
 
     private val events = Channel<DesktopOpenLinkEvent>(Channel.BUFFERED)
 
+    /**
+     * Whether the process argv seeded a link at boot — the LAUNCH fact the
+     * cold-start session restoration reads (an explicit launch destination must
+     * never be hijacked by a "resume last watched?" prompt; the second-instance
+     * forward and the clipboard accelerator are NOT launch inputs and never set
+     * this). Read once by the scaffold's restoration effect.
+     */
+    var launchCarriedLink: Boolean = false
+        private set
+
     /** The scaffold-side consume flow: each event is delivered exactly once. */
     val pending: Flow<DesktopOpenLinkEvent> = events.receiveAsFlow()
+
+    /**
+     * The argv seed's entry point: records [launchCarriedLink] AND enqueues the
+     * target — the only submit arm that counts as a launch input.
+     */
+    fun submitLaunchLink(target: DeepLinkTarget) {
+        launchCarriedLink = true
+        submitLink(target)
+    }
 
     /**
      * Classifies [raw] (usually the clipboard text) and enqueues the

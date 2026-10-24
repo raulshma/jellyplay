@@ -1216,6 +1216,17 @@ class MpvPlayerEngine(
             configDir.mkdirs()
         }
 
+        // The user's input.conf (issue #26): synced into the config dir
+        // BEFORE initialize() — mpv reads `input.conf` from `config-dir` once,
+        // during mpv_initialize (this engine runs `config=yes`). A blank pref
+        // clears a stale file; a failed write logs and skips (playback
+        // continues without the custom bindings). Mid-session edits land on
+        // the next engine rebuild — no live keybinding reload is attempted.
+        val mpvCfgForInput = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
+        if (MpvInputConfFile.sync(configDir, mpvCfgForInput.userInputConf) is MpvInputConfFile.SyncResult.Failed) {
+            Log.w(TAG, "mpv input.conf: write failed — custom key bindings skipped for this session")
+        }
+
         // NOTE: do NOT set FONTCONFIG_FILE / FONTCONFIG_PATH. Pointing fontconfig
         // at a minimal app-written fonts.conf breaks libass's font-provider init
         // on some devices (e.g. Adreno 509 / Nokia 6.1 Plus: "can't find selected
@@ -1302,6 +1313,28 @@ class MpvPlayerEngine(
      */
     override fun setNativeSubtitlesVisible(visible: Boolean) {
         core.setNativeSubtitlesVisible(visible)
+    }
+
+    /**
+     * The custom on-screen buttons' command seam (issue #27): splits the raw
+     * mpv command line on whitespace and runs it through the binding. The
+     * Android JNI transport throws on a rejected command — contained here and
+     * reported as `false`, per the contract's "absorb failures into the
+     * Boolean" rule (a custom command must never break playback).
+     */
+    override fun executeUserCommand(command: String): Boolean {
+        val mpv = mpvView?.mpv ?: return false
+        val args = command.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (args.isEmpty()) return false
+        return try {
+            // The JNI transport throws on a rejected command and returns an
+            // untyped Any? on success — the absence of a throw IS the success
+            // signal (the same containment the config writes use).
+            mpv.command(*args.toTypedArray())
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     override val currentPositionMs: Long

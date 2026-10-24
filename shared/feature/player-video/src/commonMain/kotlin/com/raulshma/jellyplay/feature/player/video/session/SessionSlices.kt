@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -19,6 +20,7 @@ import com.raulshma.jellyplay.feature.player.video.AbRepeatState
 import com.raulshma.jellyplay.feature.player.video.PlaybackSession
 import com.raulshma.jellyplay.feature.player.video.PlayerCastController
 import com.raulshma.jellyplay.feature.player.video.PlayerSessionManager
+import com.raulshma.jellyplay.feature.player.video.PostPlaybackActionsController
 import com.raulshma.jellyplay.feature.player.video.RenderControls
 import com.raulshma.jellyplay.feature.player.video.SessionRenderState
 import com.raulshma.jellyplay.feature.player.video.StillWatchingController
@@ -163,12 +165,22 @@ interface CastRouteButton {
 
 /**
  * Center-overlay region: the up-next card family and the "Still watching?"
- * confirm — the projections [PlayerCenterOverlayTier] renders. All
- * low-frequency (card resolves / load settles / prompt raises).
+ * confirm — the projections [PlayerCenterOverlayTier] renders — plus the
+ * binge-controls surface (the autoplay-cap verdict and the countdown's expiry
+ * arm) and the #14 offer-delete-after-playback dialog state + commands. All
+ * low-frequency (card resolves / load settles / prompt raises / cap flips /
+ * offer arms).
  */
 internal class OverlaySessionSlice(
-    upNext: UpNextController,
+    private val upNext: UpNextController,
     stillWatching: StillWatchingController,
+    /**
+     * The #14 post-playback controller — constructed VM-side (the session is
+     * at its line ratchet) and passed through [createSessionSlices]. Null in
+     * graphs without the delete seams: the commands no-op and the offer flow
+     * stays permanently null.
+     */
+    private val postPlayback: PostPlaybackActionsController? = null,
 ) {
     /**
      * The Up Next card — the controller's projection, already resolved with
@@ -182,6 +194,38 @@ internal class OverlaySessionSlice(
 
     /** The "Still watching?" confirm overlay's state surface; null = hidden (feature 1.3). */
     val stillWatchingPrompt: StateFlow<StillWatchingPromptState?> = stillWatching.prompt
+
+    /**
+     * The autoplay episode-cap verdict (#17): true once the unattended
+     * auto-advance streak reached the configured cap — the Up Next overlay
+     * renders MANUAL (no countdown, no autoplay toggle) while it holds.
+     */
+    val isAutoplayLimitReached: StateFlow<Boolean> = upNext.isAutoplayLimitReached
+
+    /**
+     * The Up Next countdown's EXPIRY arm (#17): a countdown that ran out is
+     * an AUTO advance — the binge streak grows before the advance fires (the
+     * manual "Watch now" taps keep riding the manual event, which resets the
+     * streak instead).
+     */
+    fun onUpNextCountdownFinished() = upNext.advanceFromUpNextCountdown()
+
+    /**
+     * The #14 offer-delete-after-playback dialog's state; `null` = hidden.
+     * Null controller (no delete seams) → a permanently-null flow.
+     */
+    val deleteOffer: StateFlow<PostPlaybackActionsController.DeleteOffer?> =
+        postPlayback?.deleteOffer ?: kotlinx.coroutines.flow.MutableStateFlow(null)
+
+    /**
+     * #14 "Keep" — dismiss the offer for good (the per-item latch holds) and
+     * release the end-of-media close hold (the #17 card gate decides whether
+     * the player closes).
+     */
+    fun keepPlayedItem() = postPlayback?.keepItem()
+
+    /** #14 "Delete" — server delete + cache invalidation, then close. */
+    fun deletePlayedItem() = postPlayback?.deleteOfferedItem()
 }
 
 /**
@@ -431,6 +475,12 @@ internal class SheetsSessionSlice(
 
     /** The HDR sheet's ExoPlayer tone-mapping pick (global pick — applies on next playback). */
     fun setExoHdrToneMapping(mode: ExoHdrToneMappingMode) = renderControls.setExoHdrToneMapping(mode)
+
+    /** The playback slice's HDR delivery posture — the HDR sheet's format picker starts from it (#5). */
+    val hdrFormatPreference: HdrFormatPreference get() = renderControls.hdrFormatPreference
+
+    /** The HDR sheet's HDR-format pick (persisted playback pref — the fanout's diff trigger re-applies it). */
+    fun setHdrFormatPreference(preference: HdrFormatPreference) = renderControls.setHdrFormatPreference(preference)
 }
 
 /**
@@ -442,11 +492,14 @@ internal class SheetsSessionSlice(
  */
 internal fun PlaybackSession.createSessionSlices(
     routeButton: CastRouteButton? = null,
+    /** The VM-constructed #14 controller (see [OverlaySessionSlice]). */
+    postPlayback: PostPlaybackActionsController? = null,
 ): PlayerSessionSlices = PlayerSessionSlices(
     cast = CastSessionSlice(cast, routeButton),
     overlay = OverlaySessionSlice(
         upNext = upNext,
         stillWatching = stillWatching,
+        postPlayback = postPlayback,
     ),
     status = StatusSessionSlice(
         abRepeat = abRepeat,

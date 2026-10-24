@@ -212,6 +212,10 @@ class PlaybackApiClientImpl(
             // passthrough allow-list prunes the direct-play audio set (a
             // disabled codec is transcoded to an allowed one) and the
             // channel cap is advertised as an AudioChannels condition.
+            // The transcode-target codec preferences reorder the transcoding
+            // profile (preferred codec first, the rest as fallback) and the
+            // custom device-profile JSON is deep-merged over the generated
+            // profile (invalid JSON ignored inside the provider).
             val prefs = playbackStore.playback.value
             deviceProfileProvider.forPlayer(
                 playerType = playerType,
@@ -220,6 +224,9 @@ class PlaybackApiClientImpl(
                 passthroughCodecs = prefs.audioPassthroughCodecs,
                 maxAudioChannels = prefs.maxAudioChannels,
                 maxVideoHeight = maxVideoHeight.takeIf { liveStreamOption == null },
+                preferredVideoCodec = prefs.preferredTranscodeVideoCodec,
+                preferredAudioCodec = prefs.preferredTranscodeAudioCodec,
+                customDeviceProfileJson = prefs.customDeviceProfileJson,
             )
         }
 

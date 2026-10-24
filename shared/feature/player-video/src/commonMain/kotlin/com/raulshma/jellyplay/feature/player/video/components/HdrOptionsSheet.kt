@@ -45,14 +45,24 @@ import com.composables.icons.tabler.outline.Video
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_auto
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_dv_only
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_hdr10_only
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_prefer_dv
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_preference_caption
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_preference_section
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hdr_format_sdr_only
 import com.raulshma.jellyplay.feature.player.video.engine.HdrPlaybackMode
 import com.raulshma.jellyplay.feature.player.video.engine.HdrPlaybackModeInfo
 import com.raulshma.jellyplay.feature.player.video.engine.hdrLabelFor
 import com.raulshma.jellyplay.feature.player.video.engine.resolveDetectedDisplayLabel
 import com.raulshma.jellyplay.feature.player.video.engine.resolveHdrPlaybackMode
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The "HDR" sheet (opened from the HDR chip in the playback-metadata row),
@@ -102,6 +112,15 @@ fun HdrOptionsSheet(
     onMpvHdrPassthroughChange: ((Boolean) -> Unit)? = null,
     exoHdrToneMapping: ExoHdrToneMappingMode? = null,
     onExoHdrToneMappingSelect: ((ExoHdrToneMappingMode) -> Unit)? = null,
+    /**
+     * The HDR delivery posture (#5) — the persisted playback pref every
+     * engine consumes (output posture via the HDR output policy; the Exo
+     * decoder half via its engine config). `null` (or no callback) hides the
+     * row — the unconfigured-engine posture (VLC / external, which cannot
+     * honor it) matches the sheet's other config blocks.
+     */
+    hdrFormatPreference: HdrFormatPreference? = null,
+    onHdrFormatPreferenceSelect: ((HdrFormatPreference) -> Unit)? = null,
     /** mpv only: routes to the Rendering sheet, which owns the tone-mapping preset row. */
     onOpenRender: (() -> Unit)? = null,
     onDismiss: () -> Unit,
@@ -151,6 +170,34 @@ fun HdrOptionsSheet(
                 contentLabel = contentLabel,
                 displayLabel = displayLabel,
             )
+
+            // The HDR delivery posture (#5): every engine-consuming pick —
+            // shown whenever the caller supplies the pref + write path (the
+            // engines that cannot honor it pass null, like the other config
+            // blocks).
+            if (hdrFormatPreference != null && onHdrFormatPreferenceSelect != null) {
+                Spacer(Modifier.height(16.dp))
+                HdrSectionTitle(stringResource(Res.string.player_video_hdr_format_preference_section))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HdrFormatPreference.entries.forEach { preference ->
+                        HdrChip(
+                            label = hdrFormatPreferenceLabel(preference),
+                            selected = preference == hdrFormatPreference,
+                            onClick = { onHdrFormatPreferenceSelect(preference) },
+                        )
+                    }
+                }
+                Text(
+                    stringResource(Res.string.player_video_hdr_format_preference_caption),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
+                )
+            }
 
             if (playerType == PlayerType.MPV &&
                 onMpvHdrPassthroughChange != null &&
@@ -291,6 +338,23 @@ private fun modeIcon(mode: HdrPlaybackMode): ImageVector = when (mode) {
     HdrPlaybackMode.SdrPlayback -> Tabler.Outline.Video
     HdrPlaybackMode.NotReported -> Tabler.Outline.InfoCircle
 }
+
+/**
+ * The [HdrFormatPreference] label map — one `when` arm per enum entry
+ * (compiler-exhaustive, so a new arm cannot silently render its raw name),
+ * over the sheet's picker strings. Kept beside the sheet so the settings
+ * screen's own label map and this one share the string keys' shape.
+ */
+@Composable
+private fun hdrFormatPreferenceLabel(preference: HdrFormatPreference): String = stringResource(
+    when (preference) {
+        HdrFormatPreference.AUTO -> Res.string.player_video_hdr_format_auto
+        HdrFormatPreference.PREFER_DV_OVER_HDR10 -> Res.string.player_video_hdr_format_prefer_dv
+        HdrFormatPreference.SDR_ONLY -> Res.string.player_video_hdr_format_sdr_only
+        HdrFormatPreference.HDR10_ONLY -> Res.string.player_video_hdr_format_hdr10_only
+        HdrFormatPreference.DOLBY_VISION_ONLY -> Res.string.player_video_hdr_format_dv_only
+    },
+)
 
 /** One status-card fact cell: the dim caption, then the value. */
 @Composable

@@ -39,6 +39,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,8 +50,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,12 +68,18 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
@@ -113,6 +124,66 @@ private const val HERO_RATING_PULSE_DURATION_MS = 2_000
 private val HeroDissolveReferenceHeight = 520.dp
 
 /**
+ * The scroll-coupled render signals both hero renderers ([AnimatedHeroHeader]
+ * and the TV_SLIDER's [HeroSliderHeader]) read off the home list — the
+ * parallax offset and the visibility/prominence/scrolling gates.
+ *
+ * Values are exposed as State (not delegated): the parallax value changes on
+ * every scroll frame, and its only consumer is the graphicsLayer lambda in
+ * HeroHeader. Keeping the read inside that lambda means scroll updates
+ * re-draw the layer instead of recomposing this scope and the whole hero
+ * tree below it.
+ */
+internal class HeroRenderSignals(
+    /**
+     * Stable wrapper instance (the rememberStableCallback idiom, which is
+     * typed for () -> Unit): a fresh `{ parallaxOffsetState.value }` per
+     * recomposition would hand HeroHeader a new lambda on every parent
+     * invalidation and un-skip the whole header.
+     */
+    val parallaxOffset: () -> Float,
+    val isVisible: androidx.compose.runtime.State<Boolean>,
+    val isProminent: androidx.compose.runtime.State<Boolean>,
+    val isScrolling: androidx.compose.runtime.State<Boolean>,
+)
+
+@Composable
+internal fun rememberHeroRenderSignals(listState: LazyListState): HeroRenderSignals {
+    val parallaxOffsetState = remember(listState) {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex == 0) {
+                listState.firstVisibleItemScrollOffset.toFloat() * 0.45f
+            } else 0f
+        }
+    }
+    val parallaxOffset = remember(parallaxOffsetState) {
+        { parallaxOffsetState.value }
+    }
+    val heroIsVisible = remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.index == 0 } || listState.layoutInfo.totalItemsCount == 0 }
+    }
+    // Whether the hero is "prominent" (near the top, not scrolled under
+    // content). The attention-grabbing play-pulse animations are gated on
+    // this so they only run when the hero is the focal element; once the
+    // user scrolls content over the hero, the high-frequency (1.8s) layer
+    // redraws stop, cutting continuous draw-phase work while keeping the
+    // benign slow breath.
+    val heroIsProminent = remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < listState.layoutInfo.viewportSize.height / 2 }
+    }
+    // The clip's scroll-defer leg — while the list is scrolling the
+    // ambient video unmounts (the same posture the rotation cadence takes to
+    // scrolling). Derived like the gates above so it stays a draw-phase
+    // read, not a per-scroll-frame recomposition of the header.
+    val heroIsScrolling = remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+    return remember(listState) {
+        HeroRenderSignals(parallaxOffset, heroIsVisible, heroIsProminent, heroIsScrolling)
+    }
+}
+
+/**
  * Start fraction (0–1 of the hero height) of the bottom dissolve band. The
  * fully-transparent anchor stays at 0.85 of the height on every device; only
  * the band top moves, and never higher than needed to keep the band at least
@@ -147,6 +218,10 @@ fun AnimatedHeroHeader(
     headline: String? = null,
     /** The curated subhead (kicker) override; null renders nothing above the title. */
     subhead: String? = null,
+    /** The style fold's chrome level ([homeHeroStyleDecision]); STANDARD is the shipped hero. */
+    chromeVisibility: HomeHeroChromeVisibility = HomeHeroChromeVisibility.STANDARD,
+    /** False (the DETAILED spotlight) insets the hero into a rounded card. */
+    fullBleed: Boolean = true,
 ) {
     val isTv = LocalTvMode.current
     val bringIntoViewResponder = remember(listState) {
@@ -158,51 +233,42 @@ fun AnimatedHeroHeader(
         }
     }
 
-    // Exposed as State (not delegated): the parallax value changes on every
-    // scroll frame, and its only consumer is the graphicsLayer lambda in
-    // HeroHeader. Keeping the read inside that lambda means scroll updates
-    // re-draw the layer instead of recomposing this scope and the whole hero
-    // tree below it.
-    val parallaxOffsetState = remember(listState) {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex == 0) {
-                listState.firstVisibleItemScrollOffset.toFloat() * 0.45f
-            } else 0f
-        }
-    }
+    // The scroll-coupled gates + parallax (see [rememberHeroRenderSignals]).
+    val signals = rememberHeroRenderSignals(listState)
 
-    // Stable wrapper instance (the rememberStableCallback idiom, which is
-    // typed for () -> Unit): a fresh `{ parallaxOffsetState.value }` per
-    // recomposition would hand HeroHeader a new lambda on every parent
-    // invalidation and un-skip the whole header.
-    val parallaxOffset: () -> Float = remember(parallaxOffsetState) {
-        { parallaxOffsetState.value }
-    }
-
-    val heroIsVisible by remember {
-        derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.index == 0 } || listState.layoutInfo.totalItemsCount == 0 }
-    }
-    // Whether the hero is "prominent" (near the top, not scrolled under
-    // content). The attention-grabbing play-pulse animations are gated on
-    // this so they only run when the hero is the focal element; once the
-    // user scrolls content over the hero, the high-frequency (1.8s) layer
-    // redraws stop, cutting continuous draw-phase work while keeping the
-    // benign slow breath.
-    val heroIsProminent by remember {
-        derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < listState.layoutInfo.viewportSize.height / 2 }
-    }
-    // The clip's scroll-defer leg — while the list is scrolling the
-    // ambient video unmounts (the same posture the rotation cadence takes to
-    // scrolling). Derived like the gates above so it stays a draw-phase
-    // read, not a per-scroll-frame recomposition of the header.
-    val heroIsScrolling by remember(listState) {
-        derivedStateOf { listState.isScrollInProgress }
-    }
     // Inline control: the pause-video chip's session memory. Hoisted here
     // (outside AnimatedContent) so it survives hero rotations AND navigation
     // (Home stays in the back stack) — per-hero-item state would reset on
     // every rotation tick and per-process state would outlive its screen.
     var heroVideoPausedForSession by rememberSaveable { mutableStateOf(false) }
+
+    // ── MINIMAL chrome reveal (the SLIDESHOW style) ──────────────────
+    // The metadata overlay stays hidden until the user taps the backdrop
+    // (touch) or focuses the hero buttons (TV). The tap latch resets per
+    // featured item, so each new slide starts pristine; on TV the focus
+    // mirror IS the reveal (leaving the hero hides the text again). The
+    // action pills stay composed on TV even when unrevealed — they are the
+    // hero's focus entry, and hiding them would make an unfocused slideshow
+    // hero unreachable by D-pad.
+    var slideshowRevealed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(featuredItem.id) { slideshowRevealed = false }
+    var heroFocusHeldLocal by remember { mutableStateOf(false) }
+    val chromeRevealed = when (chromeVisibility) {
+        HomeHeroChromeVisibility.STANDARD, HomeHeroChromeVisibility.RICH -> true
+        HomeHeroChromeVisibility.MINIMAL -> if (isTv) heroFocusHeldLocal else slideshowRevealed
+    }
+    // The focus wrapper the hero buttons report through — the outer
+    // onFocusChange contract is unchanged (the controller's focusInHero
+    // mirror still sees every transition); the MINIMAL style additionally
+    // latches the reveal. remember'd so the per-recomposition lambda identity
+    // doesn't un-skip HeroHeader.
+    val revealAwareFocusChange = remember(onFocusChange, chromeVisibility) {
+        { focused: Boolean ->
+            if (chromeVisibility == HomeHeroChromeVisibility.MINIMAL) heroFocusHeldLocal = focused
+            onFocusChange(focused)
+        }
+    }
+    val onChromeRevealRequest = remember { { slideshowRevealed = true } }
 
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -224,8 +290,20 @@ fun AnimatedHeroHeader(
         label = "heroRotation",
         modifier = Modifier
             .fillMaxWidth()
-            .height(height)
-            .ifElse(isTv, Modifier.bringIntoViewResponder(bringIntoViewResponder)),
+            // The DETAILED spotlight (fullBleed=false) is a contained card:
+            // inset by the screen content padding and clipped to rounded
+            // corners. The full-bleed styles render edge-to-edge exactly as
+            // the shipped hero always has.
+            .then(
+                if (fullBleed) {
+                    Modifier
+                } else {
+                    Modifier
+                        .padding(start = contentPadding, end = contentPadding, top = 16.dp)
+                        .clip(ShapeCache.smooth16)
+                }
+            )
+            .height(height),
     ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,
@@ -234,19 +312,22 @@ fun AnimatedHeroHeader(
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
             homeBackdropEnabled = homeBackdropEnabled,
-            parallaxOffset = parallaxOffset,
+            parallaxOffset = signals.parallaxOffset,
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
-            onFocusChange = onFocusChange,
+            onFocusChange = revealAwareFocusChange,
             requestInitialFocus = requestInitialFocus,
-            isVisible = heroIsVisible,
-            isProminent = heroIsProminent,
-            isScrolling = heroIsScrolling,
+            focusRequester = focusRequester,
+            isVisible = signals.isVisible.value,
+            isProminent = signals.isProminent.value,
+            isScrolling = signals.isScrolling.value,
             videoPausedForSession = heroVideoPausedForSession,
             onPauseVideoForSession = { heroVideoPausedForSession = true },
-            focusRequester = focusRequester,
             headline = headline,
             subhead = subhead,
+            chromeVisibility = chromeVisibility,
+            chromeRevealed = chromeRevealed,
+            onChromeRevealRequest = onChromeRevealRequest,
         )
     }
 }
@@ -278,6 +359,16 @@ fun HeroHeader(
     headline: String? = null,
     /** The curated subhead (kicker) override; null renders nothing above the title. */
     subhead: String? = null,
+    /** The style fold's chrome level ([homeHeroStyleDecision]); STANDARD is the shipped hero. MINIMAL (SLIDESHOW) suppresses the ambient clip. */
+    chromeVisibility: HomeHeroChromeVisibility = HomeHeroChromeVisibility.STANDARD,
+    /**
+     * Whether the metadata overlay is visible. STANDARD/RICH always pass true;
+     * MINIMAL passes the reveal latch — hidden until the user taps (touch) or
+     * focuses the hero (TV). Default true keeps the shipped hero byte-identical.
+     */
+    chromeRevealed: Boolean = true,
+    /** Backdrop tap while the MINIMAL chrome is hidden — reveals it instead of navigating (touch only). */
+    onChromeRevealRequest: () -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -345,7 +436,13 @@ fun HeroHeader(
     // The whole metadata leg (loader injection + fetch effect) lives inside
     // the capability+pref branch — the desktop / pref-off composition pays
     // for nothing but the gate booleans (the HomeTrickplayPeek gate posture).
-    val heroClip: HomeHeroVideoLoader.HeroClip? = if (videoGates.prefEnabled && heroVideoPlatformCapable) {
+    // The SLIDESHOW style (MINIMAL chrome) never mounts the clip: a pure
+    // backdrop slideshow, per the style spec.
+    val heroClip: HomeHeroVideoLoader.HeroClip? = if (
+        videoGates.prefEnabled &&
+        heroVideoPlatformCapable &&
+        chromeVisibility != HomeHeroChromeVisibility.MINIMAL
+    ) {
         val videoLoader = org.koin.compose.koinInject<HomeHeroVideoLoader>()
         var clip by remember(item.id) { mutableStateOf<HomeHeroVideoLoader.HeroClip?>(null) }
         LaunchedEffect(item.id) {
@@ -471,7 +568,11 @@ fun HeroHeader(
                     Modifier.clickable(
                         interactionSource = interactionSource,
                         indication = null,
-                        onClick = onClick,
+                        // The MINIMAL (SLIDESHOW) chrome's touch reveal: the
+                        // first backdrop tap surfaces the metadata, only a
+                        // revealed hero navigates. Every other style is always
+                        // revealed, so the tap routes through unchanged.
+                        onClick = { if (chromeRevealed) onClick() else onChromeRevealRequest() },
                     )
                 } else Modifier
             )
@@ -704,6 +805,10 @@ fun HeroHeader(
                 .padding(horizontal = contentPadding)
                 .padding(bottom = 32.dp)
         ) {
+            // ── the metadata leg ── Hidden until revealed in the MINIMAL
+            // (SLIDESHOW) chrome; always composed for STANDARD/RICH, so the
+            // shipped hero's layout is untouched.
+            if (chromeRevealed) {
             // The curated billboard's subhead — a kicker line above the
             // headline. Rendered only when the featured candidate carries a
             // curated subhead; the local hero's layout is unchanged otherwise.
@@ -826,14 +931,21 @@ fun HeroHeader(
                     text = overview,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    maxLines = 2,
+                    // The DETAILED spotlight's expanded synopsis; every other
+                    // style keeps the shipped two-line cap.
+                    maxLines = if (chromeVisibility == HomeHeroChromeVisibility.RICH) 5 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
 
             Spacer(Modifier.height(20.dp))
+            } // ── end chromeRevealed metadata leg ──
 
-            Row(
+            // The action pills. On TV they stay composed even when the MINIMAL
+            // chrome is unrevealed — they are the hero's focus entry, and
+            // hiding them would make an unfocused slideshow hero unreachable
+            // by D-pad (focus IS the reveal).
+            if (chromeRevealed || isTv) Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.ifElse(isTv, Modifier.tvHeroFocusExitHandler()),
@@ -944,6 +1056,166 @@ fun HeroHeader(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The TV_SLIDER hero (the [HomeHeroStyle.TV_SLIDER] presentation, TV only —
+ * the policy folds the style back to the carousel flags everywhere else): a
+ * horizontal snap pager over the rotation candidate list — the same pool
+ * [AnimatedHeroHeader] rotates through — replacing the timed rotation with
+ * explicit D-pad left/right paging and page indicators. One [HeroHeader] per
+ * page, so the render code is shared and only the choreography differs.
+ *
+ * The settled page snaps the hero controller ([HeroController.snapToSliderPage])
+ * so the ambient backdrop and the "Surprise Me" state stay in step with what
+ * the slider shows; an external featured change (a Surprise pick) pages the
+ * slider back to it. The preview-key handler intercepts D-pad left/right
+ * before the focused pill so a page move never has to wait for focus search
+ * across not-yet-composed pages; up/down (rows) pass through untouched.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun HeroSliderHeader(
+    candidates: List<MediaItem>,
+    controller: HeroController,
+    getBackdropUrl: (String) -> String,
+    height: Dp,
+    backgroundColor: Color,
+    contentPadding: Dp = 16.dp,
+    homeBackdropEnabled: Boolean = false,
+    listState: LazyListState,
+    /** The curated billboard copy keyed by item id (the overlay AnimatedHeroHeader reads). */
+    curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry> = emptyMap(),
+    onItemClick: (String) -> Unit,
+    onDetailsClick: ((String) -> Unit)? = null,
+    onFocusChange: (Boolean) -> Unit = {},
+    requestInitialFocus: Boolean = true,
+    focusRequester: FocusRequester? = null,
+) {
+    val isTv = LocalTvMode.current
+    val bringIntoViewResponder = remember(listState) {
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect = Rect.Zero
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) {
+                listState.scrollToItem(0, 0)
+            }
+        }
+    }
+    // The scroll-coupled gates + parallax, identical to the carousel hero's.
+    val signals = rememberHeroRenderSignals(listState)
+    var heroVideoPausedForSession by rememberSaveable { mutableStateOf(false) }
+
+    val pagerState = rememberPagerState(
+        initialPage = controller.currentFeaturedIndex.coerceAtLeast(0),
+        initialPageOffsetFraction = 0f,
+        pageCount = { candidates.size },
+    )
+    // Settled page → controller: the ambient backdrop and Surprise Me follow
+    // the slider (the snap is a no-op write when the index already matches).
+    LaunchedEffect(controller, pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { controller.snapToSliderPage(it) }
+    }
+    // Controller → pager: an external featured change (a Surprise pick) pages
+    // the slider; a snap the slider itself produced is already settled here,
+    // so the two effects cannot chase each other.
+    LaunchedEffect(controller, pagerState) {
+        snapshotFlow { controller.currentFeaturedIndex }.collect { index ->
+            if (index in candidates.indices && index != pagerState.settledPage) {
+                pagerState.animateScrollToPage(index)
+            }
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+    val pageBy: (Int) -> Unit = { delta ->
+        if (candidates.isNotEmpty()) {
+            val target = (pagerState.currentPage + delta).coerceIn(0, candidates.lastIndex)
+            if (target != pagerState.currentPage) {
+                scope.launch { pagerState.animateScrollToPage(target) }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height),
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .ifElse(isTv, Modifier.bringIntoViewResponder(bringIntoViewResponder))
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.DirectionLeft -> {
+                            pageBy(-1)
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            pageBy(+1)
+                            true
+                        }
+                        else -> false
+                    }
+                },
+        ) { page ->
+            val item = candidates.getOrNull(page) ?: return@HorizontalPager
+            val curated = curatedHeroOverlay[item.id]
+            HeroHeader(
+                item = item,
+                backdropUrl = getBackdropUrl(item.id),
+                height = height,
+                backgroundColor = backgroundColor,
+                contentPadding = contentPadding,
+                homeBackdropEnabled = homeBackdropEnabled,
+                parallaxOffset = signals.parallaxOffset,
+                onClick = { onItemClick(item.id) },
+                onDetailsClick = onDetailsClick?.let { { it(item.id) } },
+                onFocusChange = onFocusChange,
+                requestInitialFocus = requestInitialFocus,
+                focusRequester = focusRequester,
+                isVisible = signals.isVisible.value,
+                isProminent = signals.isProminent.value,
+                // A pager slide is the scrolling leg too — the ambient clip
+                // unmounts mid-slide (the same posture the list scroll takes).
+                isScrolling = signals.isScrolling.value || pagerState.isScrollInProgress,
+                videoPausedForSession = heroVideoPausedForSession,
+                onPauseVideoForSession = { heroVideoPausedForSession = true },
+                headline = curated?.headline,
+                subhead = curated?.subhead,
+            )
+        }
+
+        // Page indicators: the D-pad slider's position affordance (the timed
+        // carousel renders none — its position IS the rotation). Top-center:
+        // the bottom edge belongs to the metadata leg, and TV screens keep the
+        // top strip clear of the dissolve.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 12.dp)
+                .clip(ShapeCache.smoothPill)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.35f))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            candidates.indices.forEach { index ->
+                val active = index == pagerState.currentPage
+                Box(
+                    modifier = Modifier
+                        .size(if (active) 8.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (active) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                        ),
+                )
             }
         }
     }

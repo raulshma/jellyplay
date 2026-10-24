@@ -48,6 +48,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -70,9 +71,16 @@ import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingD
 import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdict
 import com.raulshma.jellyplay.feature.player.video.chrome.KEYBOARD_SEEK_COMMIT_DELAY_MS
 import com.raulshma.jellyplay.feature.player.video.chrome.rememberPlayerChromeController
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
+import com.raulshma.jellyplay.feature.player.video.components.AmbientBackdropLayer
+import com.raulshma.jellyplay.feature.player.video.components.PauseDetailsOverlay
+import com.raulshma.jellyplay.feature.player.video.components.PauseIdleOverlay
+import com.raulshma.jellyplay.feature.player.video.components.rememberPauseIdleController
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
+import com.raulshma.jellyplay.feature.player.video.components.CustomButtonsLayer
+import com.raulshma.jellyplay.feature.player.video.components.PostPlaybackDeleteDialog
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
 import com.raulshma.jellyplay.feature.player.video.components.PlayerOverflowMenuInputToggle
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
@@ -88,6 +96,11 @@ import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 
@@ -457,6 +470,29 @@ fun VideoPlayerScreen(
     LaunchedEffect(isPlaying) {
         if (isPlaying) playbackIntended = true
     }
+
+    // ── Paused-idle screensaver (#11) ───────────────────────────────────────
+    // Arms after `pauseScreensaverAfterMinutes` of CONTINUOUS pause (mode !=
+    // OFF) and covers the player content with the configured surface
+    // (PauseIdleOverlay, composed at the top of the box's overlay stack). Any
+    // tap/key interaction or play resumption dismisses instantly and resets
+    // the clock — the interaction funnels below poke [pauseIdle] directly.
+    // The arming gate folds the quiet windows (a sheet, the screen lock, PiP)
+    // in with the mode check; the pass-out protection (StillWatching*) is a
+    // separate autoplay-gating concern and stays uncoupled.
+    val pauseIdle = rememberPauseIdleController(
+        isPlaying = isPlaying,
+        isArmingEnabled = {
+            uiState.uiPrefs.pauseScreensaverMode != PauseScreensaverMode.OFF &&
+                currentSheet == PlayerSheet.None &&
+                !isScreenLocked &&
+                !isInPipMode
+        },
+        idleTimeoutMs = {
+            uiState.uiPrefs.pauseScreensaverAfterMinutes.coerceIn(1, 60) * 60_000L
+        },
+    )
+    val pauseIdleActive by pauseIdle.isActive.collectAsStateWithLifecycle()
     // The ENGINE duration: low-frequency (changes only on media load / live
     // updates), so it is safe to collect at the screen root. The cast
     // receiver's duration is no longer folded in here (see the cast-slice
@@ -859,7 +895,14 @@ fun VideoPlayerScreen(
     val currentStreamVolumeAdjuster by rememberUpdatedState(streamVolumeAdjuster)
     val currentOnScreenshotClick by rememberUpdatedState(onScreenshotClick)
     val onKeyUserInteraction: () -> Unit = remember {
-        { userInteractionCount++; viewModel.onEvent(VideoPlayerUiEvent.UserInteraction) }
+        {
+            userInteractionCount++
+            // The paused-idle screensaver's tap/key dismissal (#11): any key
+            // or D-pad press resets the idle clock (the controller no-ops
+            // while playing).
+            pauseIdle.onUserInteraction()
+            viewModel.onEvent(VideoPlayerUiEvent.UserInteraction)
+        }
     }
     val actionExecutor = remember(gestureController, chrome) {
         PlayerActionExecutor(
@@ -1078,7 +1121,13 @@ fun VideoPlayerScreen(
                         doubleTapHoldSeekEnabled = uiState.gestures.doubleTapHoldSeekEnabled,
                         dispatcher = { currentDispatcher },
                         holdRepeatScope = scope,
-                        onUserInteraction = { viewModel.onEvent(VideoPlayerUiEvent.UserInteraction) },
+                        // Tap arms dismiss the paused-idle screensaver (#11)
+                        // alongside their chrome work: a tap is an interaction,
+                        // whatever the arm resolves to.
+                        onUserInteraction = {
+                            pauseIdle.onUserInteraction()
+                            viewModel.onEvent(VideoPlayerUiEvent.UserInteraction)
+                        },
                         isHoldSpeedActive = { uiState.gestures.isHoldSpeedActive },
                         holdSpeedEnabled = { uiState.gestures.holdSpeedEnabled },
                         stopHoldSpeed = { viewModel.onEvent(VideoPlayerUiEvent.StopHoldSpeed) },
@@ -1123,6 +1172,26 @@ fun VideoPlayerScreen(
             // underlying videoZoom state is untouched.
             val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
             val zoomed = effectiveZoom > 1f
+
+            // ── Ambient backdrop (#12) ───────────────────────────────────────
+            // A blurred, scaled copy of the item's art behind the video
+            // surface, so a letterboxed/pillarboxed video's bars carry a soft
+            // glow. Composed BEFORE the engine surface (Box z-order: beneath
+            // it) — the video keeps its size, only the bars show the fill.
+            // Zero effect when the pref is off or the video fills the surface
+            // (the policy folds the geometry; the FILL/CROP override modes
+            // fill by construction and gate it off here).
+            val ambientVideoAspect = remember(uiState.media.mediaStreams) {
+                videoStreamAspect(uiState.media.mediaStreams)
+            }
+            AmbientBackdropLayer(
+                imageUrl = uiState.media.artworkUrl,
+                videoAspect = ambientVideoAspect,
+                enabled = uiState.uiPrefs.ambientBlurEnabled &&
+                    effectiveAspectRatio(aspectRatio, detectedAspectRatio).let { effective ->
+                        effective != AspectRatio.FILL && effective != AspectRatio.CROP
+                    },
+            )
 
             // Platform surface seam: Android hosts the engine's
             // SurfaceView (or the empty fallback view for non-View-surface
@@ -1273,6 +1342,8 @@ fun VideoPlayerScreen(
             // skipping until a value it actually renders flips.
             val centerOverlayInputs = remember(
                 uiState.uiPrefs.trickplayOnSeekGesture,
+                uiState.uiPrefs.trickplayMode,
+                uiState.uiPrefs.trickplayInfo,
                 gestureTrickplayVisible,
                 gestureTrickplayBitmap,
                 gestureController,
@@ -1296,6 +1367,8 @@ fun VideoPlayerScreen(
             ) {
                 CenterOverlayInputs(
                     trickplayOnSeekGesture = uiState.uiPrefs.trickplayOnSeekGesture,
+                    trickplayMode = uiState.uiPrefs.trickplayMode,
+                    trickplayInfo = uiState.uiPrefs.trickplayInfo,
                     gestureTrickplayVisible = gestureTrickplayVisible,
                     gestureTrickplayBitmap = gestureTrickplayBitmap,
                     gestureSeekPositionMs = gestureController.seekPositionMs,
@@ -1326,6 +1399,31 @@ fun VideoPlayerScreen(
                 inputs = centerOverlayInputs,
                 performConfirmHaptic = performConfirmHaptic,
             )
+
+            // ── Pause details (#13) ─────────────────────────────────────────
+            // Shows immediately on pause (unlike the #11 screensaver, which
+            // waits out the idle budget): a quiet bottom-start panel with the
+            // item's title, metadata line, synopsis and top-billed cast —
+            // all data the uiState projection already carries. Yields to the
+            // screensaver when both are active (the policy fold below), and
+            // the initial-load/buffering windows stay excluded from "paused".
+            AnimatedVisibility(
+                visible = shouldShowPauseDetails(
+                    enabled = uiState.uiPrefs.pauseDetailsEnabled,
+                    isPaused = !isPlaying && !uiState.isInitializing,
+                    hasDetails = uiState.title.isNotBlank() || uiState.media.overview.isNotBlank(),
+                    screensaverActive = pauseIdleActive,
+                ),
+                enter = fadeIn(tween(200, easing = AlphaEasing)),
+                exit = fadeOut(tween(300, easing = AlphaEasing)),
+            ) {
+                PauseDetailsOverlay(
+                    title = uiState.title,
+                    metadataLine = uiState.subtitle,
+                    synopsis = uiState.media.overview,
+                    cast = uiState.media.people,
+                )
+            }
 
             if (isScreenLocked && !isInPipMode) {
                 PlayerLockOverlayTier(
@@ -1681,15 +1779,58 @@ fun VideoPlayerScreen(
             )
             } // end PlayerDarkTheme (control bars)
 
+            // Custom on-screen mpv buttons (#27): the user-authored pill
+            // stacks beside the controls. Chrome-visibility-gated (controls
+            // hidden / PiP / locked screen hide them with the rest of the
+            // chrome), mpv-gated via the session's preferred engine, and
+            // inert unless the JSON parses to at least one button. The layer
+            // routes ONLY through the existing funnels below (routed seek,
+            // the one sheet opener, the engine command seam) and writes no
+            // uiState. Chrome-styled like the control bars.
+            CustomButtonsLayer(
+                buttonsJson = uiState.uiPrefs.mpvCustomButtons,
+                isMpvEngine = uiState.preferredPlayerType == PlayerType.MPV,
+                visible = arePlaybackControlsVisible,
+                getEngine = { engine },
+                currentPositionMs = { viewModel.currentPositionMs.value },
+                onSeekTo = doSeekTo,
+                onOpenSheet = openSheet,
+            )
+
+            // The FILMSTRIP mode's tile loader (#7): the VM's one trickplay
+            // funnel (TrickplayManager caches per tile index, so a sliding
+            // window's re-loads are free). Remembered once — the screen's
+            // lambda-stability rule.
+            val loadSeekTile: suspend (Long) -> PlatformBitmap? = remember {
+                { position: Long -> viewModel.loadTrickplayThumbnail(position) as? PlatformBitmap }
+            }
             PlayerSeekScrubTrickplayOverlay(
                 isTv = isTv,
                 trickplayEnabled = uiState.uiPrefs.trickplayEnabled,
                 showControls = chrome.visible,
                 isSeeking = isSeeking,
+                trickplayMode = uiState.uiPrefs.trickplayMode,
+                trickplayInfo = uiState.uiPrefs.trickplayInfo,
                 bitmap = seekTrickplayBitmap,
                 positionMs = seekPositionMs,
                 durationMs = duration,
+                loadTile = loadSeekTile,
             )
+
+            // ── Paused-idle screensaver surface (#11) ───────────────────────
+            // Composed near the top of the overlay stack (below the loading
+            // veil, above the controls): covers the paused content while the
+            // controller is active — clock / player mark / fade-to-black per
+            // the mode. Consumes no pointer input: the tap/key funnels above
+            // dismiss it, and a plain tap also falls through to the gesture
+            // layer as usual.
+            if (pauseIdleActive) {
+                PauseIdleOverlay(
+                    isActive = true,
+                    mode = uiState.uiPrefs.pauseScreensaverMode,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
 
             // Full-screen loading overlay during the initial media load. Covers
             // the surface + controls so the seek bar never paints a transient 0
@@ -1915,6 +2056,20 @@ fun VideoPlayerScreen(
             onRetryWithEngine = { viewModel.onEvent(VideoPlayerUiEvent.RetryWithEngine(it)) },
             onDismiss = { viewModel.onEvent(VideoPlayerUiEvent.DismissPlaybackError) },
             transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
+        )
+    }
+
+    // #14 offer-delete-after-playback: the PostPlaybackActionsController's
+    // dismissible offer — Delete removes the just-played item from the server
+    // (the existing MediaInfoApiClient.deleteItem path + the repository's
+    // cache invalidation), Keep dismisses for good. Hosted as a plain Compose
+    // layer beside the error dialog (immersive-window parity).
+    val deleteOffer by viewModel.sessionSlices.overlay.deleteOffer.collectAsStateWithLifecycle()
+    deleteOffer?.let { offer ->
+        PostPlaybackDeleteDialog(
+            itemTitle = offer.title,
+            onDelete = { viewModel.sessionSlices.overlay.deletePlayedItem() },
+            onKeep = { viewModel.sessionSlices.overlay.keepPlayedItem() },
         )
     }
 }

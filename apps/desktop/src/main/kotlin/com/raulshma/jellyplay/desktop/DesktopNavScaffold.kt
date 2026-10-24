@@ -23,7 +23,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +47,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalPullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
@@ -60,6 +64,9 @@ import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
+import com.raulshma.jellyplay.feature.player.video.session.LaunchContext
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationDecision
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
@@ -256,6 +263,38 @@ internal fun DesktopNavScaffold(
                 DesktopOpenLinkEvent.NoLinkFound ->
                     snackbarHostState.showSnackbar(DesktopLinkOpenMessages.NO_LINK_IN_CLIPBOARD)
             }
+        }
+    }
+
+    // ── cold-start session restoration ("resume last watched?") ─────
+    // ONE evaluation per process (the controller's latch), applied shell-side —
+    // the prompt lives HERE, not in the player screen. Launch context: an argv
+    // link at boot is an explicit launch destination ([LaunchContext.DeepLink])
+    // that must never be hijacked by the prompt; a plain launch is ColdStart.
+    // Two deliberate skips, both documented: (1) no video surface story — an
+    // AutoRestore would push an unregistered Route.VideoPlayer into the
+    // dead-end guard; (2) a not-yet-onboarded session — the first-run wizard
+    // push above owns that boot, and the skip is total for the session (the
+    // effect runs once per scaffold composition).
+    var restorePrompt by remember { mutableStateOf<SessionRestorationSnapshot?>(null) }
+    LaunchedEffect(services) {
+        if (!DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported &&
+            !DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported
+        ) {
+            return@LaunchedEffect
+        }
+        if (!services.appRuntimeStateStore.isOnboardingCompleted()) {
+            return@LaunchedEffect
+        }
+        val launchContext =
+            if (linkOpens?.launchCarriedLink == true) LaunchContext.DeepLink else LaunchContext.ColdStart
+        when (val decision = services.sessionRestoration.evaluate(launchContext)) {
+            is SessionRestorationDecision.Ask -> restorePrompt = decision.snapshot
+            is SessionRestorationDecision.AutoRestore -> {
+                services.sessionRestoration.onRestoreHandled()
+                guardedNavigator.navigate(decision.snapshot.toPlayerRoute())
+            }
+            SessionRestorationDecision.None -> Unit
         }
     }
 
@@ -594,7 +633,30 @@ internal fun DesktopNavScaffold(
             }
         }
     }
+
+    // The restoration prompt, over everything the scaffold renders (a window
+    // dialog — tree placement carries no visual weight; rendered last like the
+    // AppRoot About dialog). ConfirmDialog invokes onDismiss after the confirm
+    // arm, so the prompt state clears itself on both exits.
+    restorePrompt?.let { snapshot ->
+        ConfirmDialog(
+            title = "Resume \"${snapshot.title}\"?",
+            message = "Continue where you left off.",
+            confirmText = "Resume",
+            dismissText = "Dismiss",
+            tone = ConfirmTone.PRIMARY,
+            onConfirm = {
+                services.sessionRestoration.onRestoreHandled()
+                guardedNavigator.navigate(snapshot.toPlayerRoute())
+            },
+            onDismiss = { restorePrompt = null },
+        )
+    }
 }
+
+/** The snapshot's player entry point: the resume position as route ticks. */
+private fun SessionRestorationSnapshot.toPlayerRoute(): Route =
+    Route.VideoPlayer(itemId = itemId, startPositionTicks = positionMs * 10_000)
 
 @Composable
 private fun DesktopRailItem(

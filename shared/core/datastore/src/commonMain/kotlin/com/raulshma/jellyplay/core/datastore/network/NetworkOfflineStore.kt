@@ -53,6 +53,8 @@ class NetworkOfflineStore constructor(
         val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
         val AUTO_DELETE_CACHE = booleanPreferencesKey("auto_delete_cache")
         val SELF_SIGNED_TRUST_HOSTS = stringSetPreferencesKey("self_signed_trust_hosts")
+        /** The home-streaming quality stored as the enum NAME ("AUTO" default) — see [NetworkOfflineSlice.homeStreamingQuality]. */
+        val HOME_NETWORK_STREAMING_QUALITY = stringPreferencesKey("home_network_streaming_quality")
     }
 
     val networkOffline: StateFlow<NetworkOfflineSlice> =
@@ -62,6 +64,7 @@ class NetworkOfflineStore constructor(
         manualOfflineEnabled = PreferenceCodec.readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),
         autoOfflineEnabled = PreferenceCodec.readBool(prefs, Keys.AUTO_OFFLINE_ENABLED, "auto_offline_enabled", true),
         manualBandwidthCap = prefs[Keys.MANUAL_BANDWIDTH_CAP] ?: 0L,
+        homeStreamingQuality = prefs[Keys.HOME_NETWORK_STREAMING_QUALITY] ?: "AUTO",
         meteredNetworkBehavior = readMeteredNetworkBehavior(prefs),
         adaptiveBitrateEnabled = PreferenceCodec.readBool(prefs, Keys.ADAPTIVE_BITRATE_ENABLED, "adaptive_bitrate_enabled", true),
         dataSaverEnabled = PreferenceCodec.readBool(prefs, Keys.DATA_SAVER_ENABLED, "data_saver_enabled", false),
@@ -92,6 +95,16 @@ class NetworkOfflineStore constructor(
 
     suspend fun setManualBandwidthCap(cap: Long) {
         dataStore.edit { it[Keys.MANUAL_BANDWIDTH_CAP] = cap }
+    }
+
+    /**
+     * The home-streaming quality as the persisted enum NAME ("AUTO" default —
+     * the [com.raulshma.jellyplay.core.model.StreamingQuality] vocabulary).
+     * Carried as a raw String so an unknown name from a newer binary degrades
+     * to the caller's handling instead of a hard parse failure here.
+     */
+    suspend fun setHomeStreamingQuality(value: String) {
+        dataStore.edit { it[Keys.HOME_NETWORK_STREAMING_QUALITY] = value }
     }
 
     suspend fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) {
@@ -180,6 +193,7 @@ class NetworkOfflineStore constructor(
             Keys.MANUAL_OFFLINE_ENABLED,
             Keys.AUTO_OFFLINE_ENABLED,
             Keys.MANUAL_BANDWIDTH_CAP,
+            Keys.HOME_NETWORK_STREAMING_QUALITY,
             Keys.METERED_NETWORK_BEHAVIOR,
             Keys.ADAPTIVE_BITRATE_ENABLED,
             Keys.DATA_SAVER_ENABLED,
@@ -201,6 +215,7 @@ class NetworkOfflineStore constructor(
             it[Keys.MANUAL_OFFLINE_ENABLED] = slice.manualOfflineEnabled
             it[Keys.AUTO_OFFLINE_ENABLED] = slice.autoOfflineEnabled
             it[Keys.MANUAL_BANDWIDTH_CAP] = slice.manualBandwidthCap
+            it[Keys.HOME_NETWORK_STREAMING_QUALITY] = slice.homeStreamingQuality
             it[Keys.METERED_NETWORK_BEHAVIOR] = slice.meteredNetworkBehavior.name
             it[Keys.ADAPTIVE_BITRATE_ENABLED] = slice.adaptiveBitrateEnabled
             it[Keys.DATA_SAVER_ENABLED] = slice.dataSaverEnabled
@@ -221,6 +236,12 @@ data class NetworkOfflineSlice(
     val manualOfflineEnabled: Boolean = false,
     val autoOfflineEnabled: Boolean = true,
     val manualBandwidthCap: Long = 0L,
+    /**
+     * The home-streaming quality as the persisted enum NAME
+     * ([com.raulshma.jellyplay.core.model.StreamingQuality] vocabulary).
+     * Default "AUTO".
+     */
+    val homeStreamingQuality: String = "AUTO",
     val meteredNetworkBehavior: MeteredNetworkBehavior = MeteredNetworkBehavior.WARN,
     val adaptiveBitrateEnabled: Boolean = true,
     val dataSaverEnabled: Boolean = false,

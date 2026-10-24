@@ -356,6 +356,24 @@ object AppearancePreferenceSpecs {
     )
 
     /**
+     * The details screen's external-award badges (OMDb/oscars-derived): show
+     * the award/rating badge row under the title. Default on.
+     */
+    val DETAILS_AWARDS_BADGES_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "details_awards_badges_enabled",
+        default = true,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "awards_badges",
+            titleKey = "ss_awards_badges_title",
+            subtitleKey = "ss_awards_badges_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("awards", "omdb", "oscars", "ratings", "badge"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /**
      * Haptics reset under `MISC_APP`, not `APPEARANCE` — the one row of this
      * store in another category (the drift the row declaration pins: the
      * pre-spec hand-written reset list had already lost it once).
@@ -588,6 +606,7 @@ object AppearancePreferenceSpecs {
         BLUE_LIGHT_FILTER_ENABLED,
         BLUE_LIGHT_FILTER_STRENGTH,
         BACKDROP_THEME_MUSIC_ENABLED,
+        DETAILS_AWARDS_BADGES_ENABLED,
         HAPTICS_ENABLED,
         DATE_FORMAT_PREFERENCE,
         APP_FONT_SCALE,
@@ -636,6 +655,7 @@ object AppearancePreferenceSpecs {
         LAYOUT_MODE.searchEntry(),
         TV_OVERSCAN.searchEntry(),
         BACKDROP_THEME_MUSIC_ENABLED.searchEntry(),
+        DETAILS_AWARDS_BADGES_ENABLED.searchEntry(),
         ACCENT_COLOR_SWATCH.searchEntry(),
         COLOR_STYLE.searchEntry(),
         SCHEDULED_THEME_START_HOUR.searchEntry(),

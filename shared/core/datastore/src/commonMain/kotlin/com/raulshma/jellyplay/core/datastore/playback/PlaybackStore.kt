@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExternalPlayerApp
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -19,7 +20,10 @@ import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
+import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
+import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.Serializable
@@ -90,6 +94,10 @@ class PlaybackStore constructor(
         val PREFERRED_EXTERNAL_PLAYER = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.keyName)
         val STREAMING_QUALITY = stringPreferencesKey(PlaybackPreferenceSpecs.STREAMING_QUALITY.keyName)
         val CELLULAR_STREAMING_QUALITY = stringPreferencesKey(PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.keyName)
+        val HDR_FORMAT_PREFERENCE = stringPreferencesKey(PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.keyName)
+        val FORCE_TRANSCODE_ABOVE_HEIGHT = intPreferencesKey(PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.keyName)
+        val PREFERRED_TRANSCODE_VIDEO_CODEC = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_VIDEO_CODEC.keyName)
+        val PREFERRED_TRANSCODE_AUDIO_CODEC = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_AUDIO_CODEC.keyName)
         val FORCE_DIRECT_PLAY = booleanPreferencesKey(PlaybackPreferenceSpecs.FORCE_DIRECT_PLAY.keyName)
         val PLAYBACK_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.PLAYBACK_MODE.keyName)
         val DECODER_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.DECODER_MODE.keyName)
@@ -109,6 +117,10 @@ class PlaybackStore constructor(
         val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey(PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.keyName)
         val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.keyName)
         val AUTO_ENTER_PIP = booleanPreferencesKey(PlaybackPreferenceSpecs.AUTO_ENTER_PIP.keyName)
+        val SESSION_RESTORE_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.keyName)
+        val OFFER_DELETE_AFTER_PLAYBACK_MOVIES = booleanPreferencesKey(PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.keyName)
+        val OFFER_DELETE_AFTER_PLAYBACK_EPISODES = booleanPreferencesKey(PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.keyName)
+        val CUSTOM_DEVICE_PROFILE_JSON = stringPreferencesKey(PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.keyName)
         val PGS_SUBTITLE_DIRECT_PLAY = booleanPreferencesKey(PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.keyName)
         val USER_DATA_SYNC_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.keyName)
         val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.keyName)
@@ -133,6 +145,10 @@ class PlaybackStore constructor(
         preferredExternalPlayer = PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.readFrom(prefs),
         streamingQuality = PlaybackPreferenceSpecs.STREAMING_QUALITY.readFrom(prefs),
         cellularStreamingQuality = PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.readFrom(prefs),
+        hdrFormatPreference = PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.readFrom(prefs),
+        forceTranscodeAboveHeight = PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.readFrom(prefs),
+        preferredTranscodeVideoCodec = PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_VIDEO_CODEC.readFrom(prefs),
+        preferredTranscodeAudioCodec = PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_AUDIO_CODEC.readFrom(prefs),
         playbackMode = PlaybackPreferenceSpecs.PLAYBACK_MODE.readFrom(prefs),
         liveStreamOption = PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.readFrom(prefs),
         offlinePlaybackPreference = PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.readFrom(prefs),
@@ -151,6 +167,10 @@ class PlaybackStore constructor(
         autoPlayCountdownSec = PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.readFrom(prefs),
         backgroundVideoAudioEnabled = PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.readFrom(prefs),
         autoEnterPip = PlaybackPreferenceSpecs.AUTO_ENTER_PIP.readFrom(prefs),
+        sessionRestoreMode = PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.readFrom(prefs),
+        offerDeleteAfterPlaybackMovies = PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.readFrom(prefs),
+        offerDeleteAfterPlaybackEpisodes = PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.readFrom(prefs),
+        customDeviceProfileJson = PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.readFrom(prefs),
         pgsSubtitleDirectPlay = PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.readFrom(prefs),
         userDataSyncEnabled = PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.readFrom(prefs),
         androidTvWatchNextEnabled = PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.readFrom(prefs),
@@ -176,6 +196,54 @@ class PlaybackStore constructor(
 
     suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
         dataStore.edit { PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.writeTo(it, quality) }
+    }
+
+    /** The HDR delivery posture for direct play (which HDR family may reach the display). */
+    suspend fun setHdrFormatPreference(preference: HdrFormatPreference) {
+        dataStore.edit { PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.writeTo(it, preference) }
+    }
+
+    /**
+     * Force transcoding for sources taller than [heightPx] (`0` = off — never
+     * force by height). The `0` floor mirrors the row's declared `min`.
+     */
+    suspend fun setForceTranscodeAboveHeight(heightPx: Int) {
+        dataStore.edit {
+            PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.writeTo(it, heightPx.coerceAtLeast(0))
+        }
+    }
+
+    /** The preferred video codec when the server transcodes (AUTO = server decides). */
+    suspend fun setPreferredTranscodeVideoCodec(codec: TranscodeVideoCodecPreference) {
+        dataStore.edit { PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_VIDEO_CODEC.writeTo(it, codec) }
+    }
+
+    /** The preferred audio codec when the server transcodes (AUTO = server decides). */
+    suspend fun setPreferredTranscodeAudioCodec(codec: TranscodeAudioCodecPreference) {
+        dataStore.edit { PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_AUDIO_CODEC.writeTo(it, codec) }
+    }
+
+    /** What happens to an interrupted session on cold start (OFF / ASK / AUTO). */
+    suspend fun setSessionRestoreMode(mode: SessionRestoreMode) {
+        dataStore.edit { PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.writeTo(it, mode) }
+    }
+
+    /** Offer to delete the watched movie file after playback finishes. */
+    suspend fun setOfferDeleteAfterPlaybackMovies(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.writeTo(it, enabled) }
+    }
+
+    /** Offer to delete the watched episode file after playback finishes. */
+    suspend fun setOfferDeleteAfterPlaybackEpisodes(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.writeTo(it, enabled) }
+    }
+
+    /**
+     * The user-authored device-profile JSON merged over the server's transcode
+     * decision. An empty string merges nothing.
+     */
+    suspend fun setCustomDeviceProfileJson(profileJson: String) {
+        dataStore.edit { PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.writeTo(it, profileJson) }
     }
 
     suspend fun setPlaybackMode(mode: PlaybackMode) {
@@ -333,6 +401,10 @@ class PlaybackStore constructor(
             PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.writeTo(prefs, slice.preferredExternalPlayer)
             PlaybackPreferenceSpecs.STREAMING_QUALITY.writeTo(prefs, slice.streamingQuality)
             PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.writeTo(prefs, slice.cellularStreamingQuality)
+            PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.writeTo(prefs, slice.hdrFormatPreference)
+            PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.writeTo(prefs, slice.forceTranscodeAboveHeight)
+            PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_VIDEO_CODEC.writeTo(prefs, slice.preferredTranscodeVideoCodec)
+            PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_AUDIO_CODEC.writeTo(prefs, slice.preferredTranscodeAudioCodec)
             PlaybackPreferenceSpecs.PLAYBACK_MODE.writeTo(prefs, slice.playbackMode)
             PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.writeTo(prefs, slice.liveStreamOption)
             PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.writeTo(prefs, slice.offlinePlaybackPreference)
@@ -351,6 +423,10 @@ class PlaybackStore constructor(
             PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.writeTo(prefs, slice.autoPlayCountdownSec)
             PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.writeTo(prefs, slice.backgroundVideoAudioEnabled)
             PlaybackPreferenceSpecs.AUTO_ENTER_PIP.writeTo(prefs, slice.autoEnterPip)
+            PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.writeTo(prefs, slice.sessionRestoreMode)
+            PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.writeTo(prefs, slice.offerDeleteAfterPlaybackMovies)
+            PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.writeTo(prefs, slice.offerDeleteAfterPlaybackEpisodes)
+            PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.writeTo(prefs, slice.customDeviceProfileJson)
             PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.writeTo(prefs, slice.pgsSubtitleDirectPlay)
             PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.writeTo(prefs, slice.userDataSyncEnabled)
             PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.writeTo(prefs, slice.androidTvWatchNextEnabled)
@@ -380,6 +456,16 @@ data class PlaybackSlice(
     val preferredExternalPlayer: ExternalPlayerApp = PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.default,
     val streamingQuality: StreamingQuality = PlaybackPreferenceSpecs.STREAMING_QUALITY.default,
     val cellularStreamingQuality: StreamingQuality = PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.default,
+    /** The HDR delivery posture for direct play. Default AUTO (engine negotiation). */
+    val hdrFormatPreference: HdrFormatPreference = PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.default,
+    /** Force transcode for sources taller than this height in px; `0` = off. */
+    val forceTranscodeAboveHeight: Int = PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.default,
+    /** The preferred video codec when the server transcodes. */
+    val preferredTranscodeVideoCodec: TranscodeVideoCodecPreference =
+        PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_VIDEO_CODEC.default,
+    /** The preferred audio codec when the server transcodes. */
+    val preferredTranscodeAudioCodec: TranscodeAudioCodecPreference =
+        PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_AUDIO_CODEC.default,
     val playbackMode: PlaybackMode = PlaybackPreferenceSpecs.PLAYBACK_MODE.default,
     val liveStreamOption: LiveStreamOption = PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.default,
     val offlinePlaybackPreference: OfflinePlaybackPreference = PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.default,
@@ -398,6 +484,14 @@ data class PlaybackSlice(
     val autoPlayCountdownSec: Int = PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.default,
     val backgroundVideoAudioEnabled: Boolean = PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.default,
     val autoEnterPip: Boolean = PlaybackPreferenceSpecs.AUTO_ENTER_PIP.default,
+    /** What happens to an interrupted session on cold start. Default ASK. */
+    val sessionRestoreMode: SessionRestoreMode = PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.default,
+    /** Offer to delete the watched movie file after playback finishes. Default off. */
+    val offerDeleteAfterPlaybackMovies: Boolean = PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.default,
+    /** Offer to delete the watched episode file after playback finishes. Default off. */
+    val offerDeleteAfterPlaybackEpisodes: Boolean = PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.default,
+    /** The user-authored device-profile JSON merged over the server's transcode decision. Empty = nothing. */
+    val customDeviceProfileJson: String = PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.default,
     val pgsSubtitleDirectPlay: Boolean = PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.default,
     val userDataSyncEnabled: Boolean = PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.default,
     val androidTvWatchNextEnabled: Boolean = PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.default,

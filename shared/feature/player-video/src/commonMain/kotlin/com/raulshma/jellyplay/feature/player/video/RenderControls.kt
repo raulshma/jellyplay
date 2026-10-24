@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvInterpolationTscale
@@ -59,6 +60,10 @@ internal class RenderControls(
     private val getGlobalExoConfig: () -> ExoPlayerEngineConfig,
     /** Persists the global Exo slice (`stores.engine.setExoPlayerConfig`). */
     private val saveGlobalExoConfig: suspend (ExoPlayerEngineConfig) -> Unit,
+    /** The playback slice's HDR delivery posture (the HDR sheet's format picker lens). */
+    private val getHdrFormatPreference: () -> HdrFormatPreference,
+    /** Persists the HDR delivery posture (`playbackStore.setHdrFormatPreference`). */
+    private val saveHdrFormatPreference: suspend (HdrFormatPreference) -> Unit,
     /** Reads a stored per-item/series preference row (the playback-pref repository `get`). */
     private val loadStoredRow: suspend (prefScope: PlaybackPrefScope, id: String) -> ItemPlaybackPreference?,
     /** Persists the per-item/series override ([ItemPlaybackPreferenceWriter.setRenderProfile]). */
@@ -79,6 +84,10 @@ internal class RenderControls(
     /** Pass-through of [getGlobalExoConfig] — the HDR sheet's exo lens. */
     val globalExoConfig: ExoPlayerEngineConfig
         get() = getGlobalExoConfig()
+
+    /** Pass-through of [getHdrFormatPreference] — the HDR sheet's format-picker lens. */
+    val hdrFormatPreference: HdrFormatPreference
+        get() = getHdrFormatPreference()
 
     /**
      * The "Rendering" sheet's shader-pack pick. Applies to the session
@@ -160,6 +169,25 @@ internal class RenderControls(
         val next = getGlobalExoConfig().copy(hdrToneMapping = mode)
         scope.launch {
             saveGlobalExoConfig(next)
+        }
+        onConfigDirty()
+    }
+
+    /**
+     * The HDR sheet's HDR-format pick (#5) — a GLOBAL playback-slice
+     * preference ([HdrFormatPreference]). Persisted like the sibling global
+     * picks; no session lens needed (the sheet's own optimistic mirror
+     * covers the tap) because the write's aggregate emission carries a
+     * dedicated engine-config rebuild trigger
+     * ([PlayerPrefsFanout]'s hdrFormatPreference diff) — the rebuilt config
+     * reads the FRESH playback slice, and the hosts' shared-pairs diff
+     * ([com.raulshma.jellyplay.feature.player.video.engine.EngineConfigDelta.sharedPairsChanged])
+     * re-applies the HDR output posture. The immediate [onConfigDirty] is
+     * the belt-and-braces first pass (a stale-slice rebuild is a no-op).
+     */
+    fun setHdrFormatPreference(preference: HdrFormatPreference) {
+        scope.launch {
+            saveHdrFormatPreference(preference)
         }
         onConfigDirty()
     }

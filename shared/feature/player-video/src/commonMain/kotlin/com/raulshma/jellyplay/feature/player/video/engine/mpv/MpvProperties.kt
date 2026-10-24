@@ -73,6 +73,8 @@ public object MpvProperties {
     public const val WID: String = "wid"
     public const val INPUT_DEFAULT_BINDINGS: String = "input-default-bindings"
     public const val INPUT_VO_KEYBOARD: String = "input-vo-keyboard"
+    /** The user key-bindings file (issue #26) — read once during mpv_initialize. */
+    public const val INPUT_CONF: String = "input-conf"
     public const val OSC: String = "osc"
     public const val HWDEC_CODECS: String = "hwdec-codecs"
     public const val SUB_FONTS_DIR: String = "sub-fonts-dir"

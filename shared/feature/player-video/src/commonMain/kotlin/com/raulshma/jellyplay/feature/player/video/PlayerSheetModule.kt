@@ -212,6 +212,13 @@ internal object HdrSheetModule : PlayerSheetModule {
         val seededMpvPass = sheets.render.pending.hdrPassthrough ?: globalMpv.hdrPassthrough
         var mpvPassthrough by remember(seededMpvPass) { mutableStateOf(seededMpvPass) }
         var exoMode by remember(globalExo.hdrToneMapping) { mutableStateOf(globalExo.hdrToneMapping) }
+        // The HDR-format pick's optimistic mirror (the persisted-pref twin of
+        // the two engine-slice mirrors above — re-seeded when the DataStore
+        // round-trip lands). Only the engines that HONOR the posture offer
+        // the row: the output policy consumes it on mpv hosts + Exo; VLC and
+        // the external hand-off cannot, so they hide it like the other
+        // config blocks.
+        var hdrFormat by remember(sheets.hdrFormatPreference) { mutableStateOf(sheets.hdrFormatPreference) }
         val isMpv = scope.uiState.preferredPlayerType == PlayerType.MPV
         val isExo = scope.uiState.preferredPlayerType == PlayerType.EXO_PLAYER
         HdrOptionsSheet(
@@ -230,6 +237,11 @@ internal object HdrSheetModule : PlayerSheetModule {
             onExoHdrToneMappingSelect = { mode ->
                 exoMode = mode
                 scope.viewModel.onEvent(VideoPlayerUiEvent.SetExoHdrToneMapping(mode))
+            },
+            hdrFormatPreference = hdrFormat.takeIf { isMpv || isExo },
+            onHdrFormatPreferenceSelect = { preference ->
+                hdrFormat = preference
+                scope.sheets.setHdrFormatPreference(preference)
             },
             // The cross-sheet link declares through the sibling module's
             // registered key — the route target is the Render module's
@@ -267,18 +279,29 @@ internal object RenderSheetModule : PlayerSheetModule {
         val global = sheets.globalMpvConfig
         val effective = sessionRender.effectiveMpvConfig(global)
         val active = sessionRender.override
+        // The persisted render prefs read the uiPrefs slice (the
+        // VideoPlayerStore projection) and write through the session's pref
+        // commands — the aggregate fanout's render-pref diff then rebuilds
+        // the engine config so the pick reaches the running engine.
+        val uiPrefs = scope.uiState.uiPrefs
         RenderSheet(
             shaderPack = active?.shaderPack ?: global.shaderPack,
             toneMapping = active?.toneMapping ?: global.toneMapping,
             // The effective quality (the session lens may hold a pick the
             // DataStore round-trip hasn't mirrored into the aggregate yet).
             renderQuality = effective.renderQuality,
+            toneMappingCurve = uiPrefs.mpvToneMappingCurve,
+            debandMode = uiPrefs.mpvDebandMode,
+            motionInterpolation = uiPrefs.mpvMotionInterpolation,
             hasStoredOverride = active != null,
             canSaveForSeries = scope.uiState.media.seriesId != null || scope.inputs.itemId != null,
             saveForSeries = scope.inputs.saveRenderForSeries,
             onShaderPackSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderShaderPack(it, scope.inputs.saveRenderForSeries)) },
             onToneMappingSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderToneMapping(it, scope.inputs.saveRenderForSeries)) },
             onRenderQualitySelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderQuality(it)) },
+            onToneMappingCurveSelect = { scope.viewModel.playbackSession.uiCommands.setMpvToneMappingCurve(it) },
+            onDebandModeSelect = { scope.viewModel.playbackSession.uiCommands.setMpvDebandMode(it) },
+            onMotionInterpolationChange = { scope.viewModel.playbackSession.uiCommands.setMpvMotionInterpolation(it) },
             onSaveForSeriesChange = { scope.inputs.onSaveRenderForSeriesChange(it) },
             onInherit = {
                 scope.viewModel.onEvent(VideoPlayerUiEvent.ClearRenderOverride)

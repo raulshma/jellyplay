@@ -138,6 +138,19 @@ open class MpvDesktopEngine(
      * transfer instead of tone mapping.
      */
     private val targetColorspaceHint: Boolean = false,
+    /**
+     * Absolute path of the synced user `input.conf` (issue #26), or `null`
+     * when the pref is blank/absent or the write failed. The desktop mpv runs
+     * `config=no` (no config-dir), so the file is written by the engine
+     * factory ([com.raulshma.jellyplay.desktop.player.DesktopMpvPlayerEngineFactory],
+     * under the app data dir via the shared `MpvInputConfFile`) and handed
+     * here as the `input-conf=` option value — an INIT-time option, set
+     * before `mpv_initialize` (mpv parses the file exactly once, during
+     * init), so a pref edit applies on the next playback/engine rebuild.
+     * Bindings fire where mpv actually receives input events (mouse bindings
+     * on the HWND-embed path; the app owns keyboard routing).
+     */
+    val inputConfPath: String? = null,
 ) : EngineStateChassis(
     // The chassis's parameterized SharedFlow capacities — this engine's
     // deliberate divergences from the Android base's 0/1/1 defaults:
@@ -494,6 +507,10 @@ open class MpvDesktopEngine(
             yield(MpvProperties.INPUT_DEFAULT_BINDINGS to "no")
             yield(MpvProperties.INPUT_VO_KEYBOARD to "no")
             yield(MpvProperties.OSC to "no")
+            // The user's input.conf (issue #26): this mpv runs config=no, so
+            // the file is factory-written (MpvInputConfFile) and pointed at
+            // explicitly. Init-time — mpv parses it during mpv_initialize.
+            inputConfPath?.let { yield(MpvProperties.INPUT_CONF to it) }
         }.forEach { (k, v) -> MpvLib.mpv.mpv_set_option_string(context, k, v) }
         if (windowHandle != null) {
             MpvLib.mpv.mpv_set_option_string(context, MpvProperties.WID, windowHandle.toString())
@@ -1046,6 +1063,18 @@ open class MpvDesktopEngine(
 
     override fun setNativeSubtitlesVisible(visible: Boolean) {
         core.setNativeSubtitlesVisible(visible)
+    }
+
+    /**
+     * The custom on-screen buttons' command seam (issue #27): splits the raw
+     * mpv command line on whitespace and runs it through the JNA binding
+     * (whose writes return error codes — absorbed into the Boolean, per the
+     * contract).
+     */
+    override fun executeUserCommand(command: String): Boolean {
+        val args = command.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (args.isEmpty()) return false
+        return binding.command(*args.toTypedArray())
     }
 
     /**

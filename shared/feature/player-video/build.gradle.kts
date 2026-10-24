@@ -1,5 +1,8 @@
 plugins {
     id("jellyplay.kmp.library.compose")
+    // The custom on-screen player buttons (issue #27) parse their JSON schema
+    // with kotlinx.serialization in commonMain.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -60,6 +63,8 @@ kotlin {
             // androidx.collection.LruCache memoization in VttTagParser
             // (KMP artifact — shared/core:data precedent).
             implementation(libs.androidx.collection)
+            // CustomPlayerButtons' JSON schema parse (issue #27).
+            implementation(libs.kotlinx.serialization.json)
         }
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {

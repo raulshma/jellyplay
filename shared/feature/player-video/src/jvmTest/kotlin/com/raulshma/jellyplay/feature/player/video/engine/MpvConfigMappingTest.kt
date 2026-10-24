@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
 import com.raulshma.jellyplay.core.model.MpvAudioOutputMode
+import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvFrameDrop
@@ -13,6 +15,7 @@ import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvShaderPack
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvToneMapping
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -132,8 +135,10 @@ class MpvConfigMappingTest {
                 MpvOption("audio-device", "auto"),
                 MpvOption("audio-exclusive", "no"),
                 MpvOption("tone-mapping", "auto"),
+                // The persisted bitmap-subtitle scale mode's default (FIT).
+                MpvOption("sub-scale-with-window", "no"),
                 // The BALANCED quality bundle's explicit defaults (no dir →
-                // no glsl-shaders pair).
+                // no glsl-shaders pair; unset pref fields → no pref block).
                 MpvOption("dscale", "mipmap"),
                 MpvOption("cscale", "bilinear"),
                 MpvOption("dither-depth", "auto"),
@@ -557,5 +562,177 @@ class MpvConfigMappingTest {
                     .single { it.key == "deinterlace" }.value,
             )
         }
+    }
+
+    // ── The persisted render prefs (tone-mapping curve / deband / motion) ──
+
+    @Test
+    fun toneMappingCurve_setAndNotAuto_winsOverTheStructuredPreset() {
+        val config = MpvEngineConfig(
+            toneMapping = MpvToneMapping.HABLE,
+            toneMappingCurve = MpvToneMappingCurve.BT_2446A,
+        )
+        assertEquals(
+            "bt.2446a",
+            MpvConfigMapping.toneMappingValue(config, toneMappingSuppressed = false),
+        )
+        // AUTO (or null) leaves the structured preset standing.
+        assertEquals(
+            "hable",
+            MpvConfigMapping.toneMappingValue(
+                config.copy(toneMappingCurve = MpvToneMappingCurve.AUTO),
+                toneMappingSuppressed = false,
+            ),
+        )
+        // Every curve name maps to its raw mpv token through the pair.
+        for (curve in MpvToneMappingCurve.entries - MpvToneMappingCurve.AUTO) {
+            val pair = MpvConfigMapping.configPairs(config.copy(toneMappingCurve = curve))
+                .single { it.key == "tone-mapping" }
+            assertEquals(curve.mpvValue, pair.value, "curve $curve")
+        }
+    }
+
+    @Test
+    fun toneMappingCurve_hdrPassthroughSuppressionStillWins() {
+        val config = MpvEngineConfig(toneMappingCurve = MpvToneMappingCurve.BT_2390)
+        // The HDR→HDR rule outranks BOTH the curve and the preset: one
+        // explicit `auto` write un-sticks any prior curve value.
+        assertEquals(
+            "auto",
+            MpvConfigMapping.toneMappingValue(config, toneMappingSuppressed = true),
+        )
+        assertEquals(
+            "auto",
+            MpvConfigMapping.configPairs(config, toneMappingSuppressed = true)
+                .single { it.key == "tone-mapping" }.value,
+        )
+    }
+
+    @Test
+    fun debandPref_armsTheStrengthLadder_overTheQualityBundle() {
+        // The pref block rides AFTER the quality bundle, so a PERFORMANCE
+        // bundle's own `deband=no` (and the structured row) are overridden by
+        // order — HEAVY wins.
+        val config = MpvEngineConfig(
+            deband = false,
+            debandMode = MpvDebandMode.HEAVY,
+            renderQuality = MpvRenderQuality.PERFORMANCE, // bundle forces deband=no
+        )
+        val debandPairs = MpvConfigMapping.configPairs(config).filter { it.key == "deband" }
+        assertEquals(
+            listOf(
+                MpvOption("deband", "no"), // structured row
+                MpvOption("deband", "no"), // the PERFORMANCE bundle
+                MpvOption("deband", "yes"), // the pref — last, wins
+            ),
+            debandPairs,
+        )
+        val byKey = MpvConfigMapping.configPairs(config).associate { it.key to it.value }
+        assertEquals("60", byKey["deband-threshold"])
+    }
+
+    @Test
+    fun debandPref_offResetsTheThreshold_explicitly() {
+        // OFF writes the flag AND mpv's default threshold so a HEAVY→OFF→LIGHT
+        // sequence re-writes the knob through the runtime diff.
+        val byKey = MpvConfigMapping.configPairs(MpvEngineConfig(debandMode = MpvDebandMode.OFF))
+            .associate { it.key to it.value }
+        assertEquals("no", byKey["deband"])
+        assertEquals("48", byKey["deband-threshold"])
+        // The armed ladder climbs 20/40/60.
+        assertEquals("20", MpvConfigMapping.configPairs(MpvEngineConfig(debandMode = MpvDebandMode.LIGHT)).last { it.key == "deband-threshold" }.value)
+        assertEquals("40", MpvConfigMapping.configPairs(MpvEngineConfig(debandMode = MpvDebandMode.MEDIUM)).last { it.key == "deband-threshold" }.value)
+    }
+
+    @Test
+    fun debandPref_unset_writesNothingBeyondTheStructuredRow() {
+        val pairs = MpvConfigMapping.configPairs(MpvEngineConfig(deband = true))
+        assertEquals(1, pairs.count { it.key == "deband" })
+        assertNull(pairs.firstOrNull { it.key == "deband-threshold" })
+    }
+
+    @Test
+    fun motionInterpolationPref_on_overridesTheStructuredPipeline() {
+        // The pref is ON while the structured rows interpolate with a
+        // different tscale: the pref's yes + display-resample + oversample
+        // must come after (and win by order).
+        val pairs = MpvConfigMapping.configPairs(
+            MpvEngineConfig(
+                interpolation = true,
+                interpolationTscale = MpvInterpolationTscale.MITCHELL,
+                motionInterpolation = true,
+            ),
+        )
+        val last = { key: String -> pairs.last { it.key == key } }
+        assertEquals("yes", last("interpolation").value)
+        assertEquals("display-resample", last("video-sync").value)
+        assertEquals("oversample", last("tscale").value)
+        // …and the pref pairs sit below the escape hatch: extras still win.
+        val withExtra = MpvConfigMapping.configPairs(
+            MpvEngineConfig(motionInterpolation = true, mpvExtraConfig = "interpolation=no"),
+        )
+        assertEquals(MpvOption("interpolation", "no"), withExtra.last { it.key == "interpolation" })
+    }
+
+    @Test
+    fun motionInterpolationPref_off_writesNoOnlyWhenTheStructuredRowInterpolates() {
+        // Structured interpolation=true + pref off → the pref's explicit no.
+        val pairs = MpvConfigMapping.configPairs(
+            MpvEngineConfig(interpolation = true, motionInterpolation = false),
+        )
+        assertEquals(
+            listOf(MpvOption("interpolation", "yes"), MpvOption("interpolation", "no")),
+            pairs.filter { it.key == "interpolation" },
+        )
+        // Structured interpolation=false + pref off → the base pair already
+        // says no; the pref adds nothing.
+        val quiet = MpvConfigMapping.configPairs(
+            MpvEngineConfig(interpolation = false, motionInterpolation = false),
+        )
+        assertEquals(
+            listOf(MpvOption("interpolation", "no")),
+            quiet.filter { it.key == "interpolation" },
+        )
+        assertNull(quiet.firstOrNull { it.key == "tscale" })
+    }
+
+    @Test
+    fun bitmapSubtitleScale_stretchWritesYes_fitCoverAndUnsetWriteNo() {
+        fun value(mode: BitmapSubtitleScaleMode?) = MpvConfigMapping.configPairs(
+            MpvEngineConfig(bitmapSubtitleScaleMode = mode),
+        ).single { it.key == "sub-scale-with-window" }.value
+        assertEquals("yes", value(BitmapSubtitleScaleMode.STRETCH))
+        assertEquals("no", value(BitmapSubtitleScaleMode.FIT))
+        // COVER is reserved — the FIT value stands.
+        assertEquals("no", value(BitmapSubtitleScaleMode.COVER))
+        assertEquals("no", value(null))
+    }
+
+    @Test
+    fun prefRenderDiffs_writeThroughTheRuntimeDiffCache() {
+        // Mid-session pref moves must WRITE: HEAVY→OFF re-writes the flag and
+        // the threshold; STRETCH→FIT re-writes the window scale; the motion
+        // pref flipping on re-writes the interpolation trio.
+        val heavy = MpvConfigMapping.applyChanged(
+            MpvConfigMapping.configPairs(
+                MpvEngineConfig(debandMode = MpvDebandMode.HEAVY, bitmapSubtitleScaleMode = BitmapSubtitleScaleMode.STRETCH),
+            ),
+            emptyMap(),
+        ) { _, _ -> }
+        val written = mutableListOf<MpvOption>()
+        MpvConfigMapping.applyChanged(
+            MpvConfigMapping.configPairs(
+                MpvEngineConfig(debandMode = MpvDebandMode.OFF, bitmapSubtitleScaleMode = BitmapSubtitleScaleMode.FIT),
+            ),
+            heavy,
+        ) { key, value -> written.add(MpvOption(key, value)) }
+        assertEquals(
+            listOf(
+                MpvOption("deband", "no"),
+                MpvOption("sub-scale-with-window", "no"),
+                MpvOption("deband-threshold", "48"),
+            ),
+            written,
+        )
     }
 }

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
@@ -210,6 +211,7 @@ class DetailViewModelEnrichmentsTest {
         pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
         jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
         pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
+        appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore? = null,
     ): DetailViewModel = DetailViewModel(
         storageProbe = mockk<DetailStorageProbe>(relaxed = true),
         strings = strings,
@@ -281,6 +283,7 @@ class DetailViewModelEnrichmentsTest {
         pluginStatusStore = pluginStatusStore,
         pluginRatingsApi = pluginRatingsApi,
         jellyPlayFeatureGate = jellyPlayFeatureGate,
+        appearanceStore = appearanceStore,
     )
 
     private fun stubProvider(
@@ -818,6 +821,9 @@ class DetailViewModelEnrichmentsTest {
             callsBySeasonNumber[seasonNumber] = (callsBySeasonNumber[seasonNumber] ?: 0) + 1
             return resultsBySeasonNumber[seasonNumber] ?: Result.success(null)
         }
+
+        override suspend fun getOmdbAwards(imdbId: String): Result<JellyPlayPluginOmdbAwards?> =
+            Result.success(null)
     }
 
     private fun tmdbRatedSeries(itemId: String) =
@@ -1022,6 +1028,138 @@ class DetailViewModelEnrichmentsTest {
 
         assertEquals(1, failingApi.callsBySeasonNumber[1])
         assertTrue(viewModel.uiState.value.seasonRatings.isEmpty())
+    }
+
+    // ── externalRatings' OMDb awards leg — the gate matrix ──────────────
+
+    /**
+     * The ratings role's awards-counting fake: one canned OMDb payload plus
+     * the call log the suppression assertions read.
+     */
+    private class AwardsRatingsApi(
+        private val awards: JellyPlayPluginOmdbAwards?,
+    ) : JellyPlayRatingsRoutes {
+        var omdbCalls: Int = 0
+            private set
+
+        override suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?> =
+            Result.success(null)
+
+        override suspend fun getTmdbSeasonRatings(
+            tmdbId: String,
+            seasonNumber: Int,
+        ): Result<Map<Int, JellyPlayEpisodeScore>?> = Result.success(null)
+
+        override suspend fun getOmdbAwards(imdbId: String): Result<JellyPlayPluginOmdbAwards?> {
+            omdbCalls++
+            return Result.success(awards)
+        }
+    }
+
+    /** The tmdb-rated movie with the IMDb id the OMDb probe keys on. */
+    private fun imdbRatedMovie(itemId: String) = MediaDetail(
+        item = MediaItem(id = itemId, name = "Movie", mediaType = MediaType.MOVIE),
+        providerIds = mapOf("tmdb" to "123", "imdb" to "tt0111161"),
+    )
+
+    /**
+     * The OMDb wiring: the feature gate answers true for `omdb-awards` only,
+     * the appearance store carries the given toggle, and the TMDB fallback
+     * resolves the strip so the awards leg has something to enrich.
+     */
+    private fun omdbAwardsWiredViewModel(
+        ratingsApi: JellyPlayRatingsRoutes,
+        awardsBadgesEnabled: Boolean = true,
+        tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
+    ): DetailViewModel {
+        val pluginStatusStore =
+            mockk<com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore>(relaxed = true)
+        val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
+        // The catch-all must be registered FIRST: a later matching stub wins,
+        // and only `omdb-awards` may answer true (the ratingsFeature convention).
+        coEvery { featureGate.isAvailableNow(any()) } returns false
+        coEvery { featureGate.isAvailableNow(JellyPlayPluginFeatures.OmdbAwards) } returns true
+        val appearanceStore = mockk<com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore>(relaxed = true)
+        every { appearanceStore.appearance } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice(
+                detailsAwardsBadgesEnabled = awardsBadgesEnabled,
+            ),
+        )
+        return buildViewModel(
+            tmdbApiClient = tmdbApiClient,
+            pluginStatusStore = pluginStatusStore,
+            jellyPlayFeatureGate = featureGate,
+            pluginRatingsApi = ratingsApi,
+            appearanceStore = appearanceStore,
+        )
+    }
+
+    private fun stubTmdbFallback(tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient, itemId: String) {
+        coEvery { tmdbApiClient.getDetails(123, MediaType.MOVIE) } returns Result.success(
+            com.raulshma.jellyplay.core.model.seerr.TmdbDetails(voteAverage = 7.0),
+        )
+    }
+
+    @Test
+    fun externalRatings_omdbAwardsLive_enrichesTheStripWithTheAwardsLine() = runTest(mainDispatcher) {
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        stubTmdbFallback(tmdbApiClient, "oa1")
+        val ratingsApi = AwardsRatingsApi(
+            JellyPlayPluginOmdbAwards(awards = "Won 4 Oscars. 101 wins.", boxOffice = "$683,571,865", imdbRating = "9.3"),
+        )
+        viewModel = omdbAwardsWiredViewModel(ratingsApi, tmdbApiClient = tmdbApiClient)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider("oa1", snapshot(DetailOrigin.REMOTE, imdbRatedMovie("oa1"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("oa1"))
+        advanceUntilIdle()
+
+        val ratings = viewModel.uiState.value.externalRatings
+        // The strip resolved (TMDB fallback) AND the awards leg enriched it.
+        assertEquals(7.0f, ratings.tmdb)
+        assertEquals("Won 4 Oscars. 101 wins.", ratings.awards)
+        assertEquals(1, ratingsApi.omdbCalls)
+    }
+
+    @Test
+    fun externalRatings_omdbAwardsPluginUnavailable_neverFetchesNorRenders() = runTest(mainDispatcher) {
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        stubTmdbFallback(tmdbApiClient, "oa2")
+        val ratingsApi = AwardsRatingsApi(JellyPlayPluginOmdbAwards(awards = "Won 4 Oscars."))
+        // The DEFAULT wiring: no plugin status store → the pluginFeature gate
+        // answers false without consulting the fetch role.
+        viewModel = buildViewModel(tmdbApiClient = tmdbApiClient, pluginRatingsApi = ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider("oa2", snapshot(DetailOrigin.REMOTE, imdbRatedMovie("oa2"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("oa2"))
+        advanceUntilIdle()
+
+        // The strip renders; the awards badge never does and the fetch never ran.
+        assertEquals(7.0f, viewModel.uiState.value.externalRatings.tmdb)
+        assertNull(viewModel.uiState.value.externalRatings.awards)
+        assertEquals(0, ratingsApi.omdbCalls)
+    }
+
+    @Test
+    fun externalRatings_awardsPrefOff_suppressesTheBadgeAndTheFetch() = runTest(mainDispatcher) {
+        val tmdbApiClient = mockk<com.raulshma.jellyplay.core.network.api.TmdbApiClient>(relaxed = true)
+        stubTmdbFallback(tmdbApiClient, "oa3")
+        val ratingsApi = AwardsRatingsApi(JellyPlayPluginOmdbAwards(awards = "Won 4 Oscars."))
+        viewModel = omdbAwardsWiredViewModel(
+            ratingsApi = ratingsApi,
+            awardsBadgesEnabled = false,
+            tmdbApiClient = tmdbApiClient,
+        )
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider("oa3", snapshot(DetailOrigin.REMOTE, imdbRatedMovie("oa3"), remoteDiscoveryAllowed = true))
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("oa3"))
+        advanceUntilIdle()
+
+        assertEquals(7.0f, viewModel.uiState.value.externalRatings.tmdb)
+        assertNull(viewModel.uiState.value.externalRatings.awards)
+        assertEquals(0, ratingsApi.omdbCalls)
     }
 
 }

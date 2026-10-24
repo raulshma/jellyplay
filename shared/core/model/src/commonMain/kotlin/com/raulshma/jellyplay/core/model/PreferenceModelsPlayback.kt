@@ -152,3 +152,95 @@ enum class MaxAudioChannelsEnum(override val displayName: String, val channelCou
     FIVE_POINT_ONE("5.1", 6, "5.1"),
     SEVEN_POINT_ONE("7.1", 8, "7.1"),
 }
+
+/**
+ * What happens to an interrupted playback session when the app cold-starts.
+ * [OFF] discards the saved state (today's behavior); [ASK] offers the
+ * restore on the first launch after the interruption; [AUTO] resumes the
+ * saved position without asking. Persistence is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class SessionRestoreMode {
+    OFF,
+    ASK,
+    AUTO,
+}
+
+/**
+ * The HDR delivery posture for direct play: which HDR family may reach the
+ * display and which wins when the device decodes more than one. [AUTO] keeps
+ * the engine's default negotiation; the SDR arm forces tone mapping; the
+ * family arms restrict direct play to one codec (falling back per the
+ * playback-mode rules when the stream does not match). Persistence is the
+ * enum NAME.
+ */
+@Immutable
+@Serializable
+enum class HdrFormatPreference {
+    AUTO,
+    PREFER_DV_OVER_HDR10,
+    SDR_ONLY,
+    HDR10_ONLY,
+    DOLBY_VISION_ONLY,
+}
+
+/**
+ * The preferred video codec when the server transcodes. [AUTO] lets the
+ * server/device profile decide; the rest pin the transcode target so
+ * bandwidth-constrained or compatibility-sensitive setups get a predictable
+ * stream. Persistence is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class TranscodeVideoCodecPreference {
+    AUTO,
+    H264,
+    HEVC,
+    AV1,
+}
+
+/**
+ * The preferred audio codec when the server transcodes. [AUTO] lets the
+ * server/device profile decide; the rest pin the transcode target. Persistence
+ * is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class TranscodeAudioCodecPreference {
+    AUTO,
+    AAC,
+    AC3,
+    EAC3,
+    OPUS,
+}
+
+/**
+ * The scrub-preview presentation for trickplay tiles. [BUBBLE] floats the
+ * tile above the seek bar; [FILMSTRIP] docks a strip along the bar;
+ * [FULLSCREEN] takes over the player surface while scrubbing. Persistence is
+ * the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class TrickplayMode {
+    BUBBLE,
+    FILMSTRIP,
+    FULLSCREEN,
+}
+
+/**
+ * What replaces the video while playback is paused for a long time (the
+ * screensaver arm of the player). [OFF] keeps the paused frame; [CLOCK]
+ * shows a wall clock; [LOGO] shows the app mark; [FADE_TO_BLACK] dims to
+ * black (the burn-in-safe default posture when armed). Persistence is the
+ * enum NAME.
+ */
+@Immutable
+@Serializable
+enum class PauseScreensaverMode {
+    OFF,
+    CLOCK,
+    LOGO,
+    FADE_TO_BLACK,
+}

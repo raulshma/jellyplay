@@ -78,6 +78,8 @@ class HomeDiscoverySpecDerivationTest {
     private val expectedStoredType: Map<String, kotlin.reflect.KClass<*>> = mapOf(
         "home_mode" to String::class,
         "home_hero_enabled" to Boolean::class,
+        "home_hero_style" to String::class,
+        "home_hero_slideshow_interval_sec" to Int::class,
         "home_hero_video_enabled" to Boolean::class,
         "home_hero_video_tv_enabled" to Boolean::class,
         "home_backdrop_enabled" to Boolean::class,
@@ -230,7 +232,12 @@ class HomeDiscoverySpecDerivationTest {
             HomeDiscoveryPreferenceSpecs.booleanCopyRows.map { it.keyName }.sorted(),
         )
         assertEquals(
-            listOf("home_announced_version", "home_enabled_section_types_version", "next_up_max_days").sorted(),
+            listOf(
+                "home_announced_version",
+                "home_enabled_section_types_version",
+                "home_hero_slideshow_interval_sec",
+                "next_up_max_days",
+            ).sorted(),
             HomeDiscoveryPreferenceSpecs.intCopyRows.map { it.keyName }.sorted(),
         )
         assertEquals(
@@ -238,6 +245,7 @@ class HomeDiscoverySpecDerivationTest {
                 "continue_watching_click_behavior",
                 "home_discover_rows",
                 "home_enabled_section_types",
+                "home_hero_style",
                 "home_layout_presets",
                 "home_library_section_overrides",
                 "home_mode",

@@ -39,6 +39,16 @@ data class SegmentCalculatorInput(
      */
     val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
     val durationMs: Long = 0L,
+    /**
+     * Up-next pre-roll window (ms): the "next episode" card shows this far
+     * before the item's end. The default is the historical constant
+     * ([SegmentCalculator.UP_NEXT_PRE_ROLL_MS]); the VM funnels feed the
+     * configured `nextUpButtonPrerollSec` pref (5..120 s) so the card's
+     * timing follows the user's setting. A low-frequency display pref like
+     * the rest of the input — it rides the same `distinctUntilChanged`
+     * projection, not the per-tick position.
+     */
+    val nextUpPrerollMs: Long = SegmentCalculator.UP_NEXT_PRE_ROLL_MS,
     val autoplayCancelled: Boolean = false,
     val isInSyncPlaySession: Boolean = false,
     val hasNextEpisode: Boolean = false,

@@ -243,6 +243,9 @@ private val appearanceDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_theme_music_title, { it.appearance.backdropThemeMusicEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_blue_light_filter_title, { it.appearance.blueLightFilterEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_blue_light_strength_title, { it.appearance.blueLightFilterStrength }, Float::pct),
+    // The details-page awards toggle — the APPEARANCE-category spec row
+    // beside the screen's other display knobs.
+    DiffField(Res.string.ss_awards_badges_title, { it.appearance.detailsAwardsBadgesEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_date_format_title, { it.appearance.dateFormatPreference }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_font_scale_title, { it.appearance.appFontScale }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_scheduled_start_title, { it.appearance.scheduledThemeStartHour }, ::hour),
@@ -322,6 +325,30 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.settings_still_watching_episodes, { it.videoPlayer.stillWatchingEpisodeThreshold }, Int::toString),
     DiffField(Res.string.settings_video_cache_size, { it.videoPlayer.videoCacheSizeMb }, Int::toString),
     DiffField(Res.string.settings_skip_segments_on_seek, { it.videoPlayer.skipSegmentsOnSeek }, Boolean::onOff),
+    // The new playback knobs (the spec-backed rows whose specs land with
+    // them — the diff registry rides the same ss_* title keys).
+    DiffField(Res.string.ss_session_restore_title, { it.playback.sessionRestoreMode }, enumLabel = ::sessionRestoreModeLabelRes),
+    DiffField(Res.string.ss_autoplay_episode_limit_title, { it.videoPlayer.autoplayEpisodeLimit }, Int::toString),
+    DiffField(Res.string.ss_next_episode_details_title, { it.videoPlayer.showNextEpisodeDetailsAfterFinish }, Boolean::onOff),
+    DiffField(Res.string.ss_offer_delete_movies_title, { it.playback.offerDeleteAfterPlaybackMovies }, Boolean::onOff),
+    DiffField(Res.string.ss_offer_delete_episodes_title, { it.playback.offerDeleteAfterPlaybackEpisodes }, Boolean::onOff),
+    DiffField(Res.string.ss_ambient_blur_title, { it.videoPlayer.ambientBlurEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_pause_details_title, { it.videoPlayer.pauseDetailsEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_trickplay_mode_title, { it.videoPlayer.trickplayMode }, enumLabel = ::trickplayModeLabelRes),
+    DiffField(Res.string.ss_pause_screensaver_title, { it.videoPlayer.pauseScreensaverMode }, enumLabel = ::pauseScreensaverModeLabelRes),
+    DiffField(Res.string.ss_pause_screensaver_delay_title, { it.videoPlayer.pauseScreensaverAfterMinutes }, Int::toString),
+    DiffField(Res.string.ss_hdr_format_title, { it.playback.hdrFormatPreference }, enumLabel = ::hdrFormatPreferenceLabelRes),
+    DiffField(Res.string.ss_force_transcode_above_height_title, { it.playback.forceTranscodeAboveHeight }, Int::toString),
+    DiffField(Res.string.ss_preferred_transcode_video_codec_title, { it.playback.preferredTranscodeVideoCodec }, enumLabel = ::transcodeVideoCodecLabelRes),
+    DiffField(Res.string.ss_preferred_transcode_audio_codec_title, { it.playback.preferredTranscodeAudioCodec }, enumLabel = ::transcodeAudioCodecLabelRes),
+    DiffField(Res.string.ss_custom_device_profile_title, { it.playback.customDeviceProfileJson }, { v -> v.ifBlank { "Off" } }),
+    DiffField(Res.string.ss_mpv_tone_mapping_curve_title, { it.videoPlayer.mpvToneMappingCurve }, enumLabel = ::mpvToneMappingCurveLabelRes),
+    DiffField(Res.string.ss_mpv_deband_title, { it.videoPlayer.mpvDebandMode }, enumLabel = ::mpvDebandModeLabelRes),
+    DiffField(Res.string.ss_mpv_motion_interpolation_title, { it.videoPlayer.mpvMotionInterpolation }, Boolean::onOff),
+    DiffField(Res.string.ss_mpv_input_conf_title, { it.videoPlayer.mpvInputConf }, { v -> v.ifBlank { "Off" } }),
+    DiffField(Res.string.ss_mpv_custom_buttons_title, { it.videoPlayer.mpvCustomButtons }, { v -> v.ifBlank { "Off" } }),
+    DiffField(Res.string.ss_next_up_preroll_title, { it.videoPlayer.nextUpButtonPrerollSec }, Int::toString),
+    DiffField(Res.string.ss_bitmap_subtitle_scale_title, { it.videoPlayer.bitmapSubtitleScaleMode }, enumLabel = ::bitmapSubtitleScaleModeLabelRes),
 )
 
 private val audioDiffFields: List<DiffField<*>> = listOf(
@@ -404,6 +431,8 @@ private val downloadsNetworkDiffFields: List<DiffField<*>> = listOf(
 private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_home_mode_title, { it.homeDiscovery.homeMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_hero_section_title, { it.homeDiscovery.homeHeroEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_home_hero_style_title, { it.homeDiscovery.homeHeroStyle }, enumLabel = ::homeHeroStyleLabelRes),
+    DiffField(Res.string.ss_home_hero_slideshow_interval_title, { it.homeDiscovery.homeHeroSlideshowIntervalSec }, Int::toString),
     DiffField(Res.string.ss_hide_top_header_title, { it.homeDiscovery.hideTopHeaderOnScroll }, Boolean::onOff),
     DiffField(Res.string.diff_enabled_home_sections, { it.homeDiscovery.enabledHomeSectionTypes }, { it.size.sections() }),
     DiffField(Res.string.diff_home_section_order, { it.homeDiscovery.homeSectionOrder }, { it.size.sections() }),

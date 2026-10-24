@@ -87,6 +87,13 @@ fun NextEpisodeOverlay(
     onPlayNext: () -> Unit,
     onCancel: () -> Unit,
     onToggleAutoplay: (() -> Unit)? = null,
+    /**
+     * The countdown's EXPIRY arm — distinct from [onPlayNext] so the host can
+     * tell an AUTO advance (the countdown ran out; the binge streak grows,
+     * #17) from a MANUAL "Watch now" tap (which rides [onPlayNext] and resets
+     * the streak). Null falls back to [onPlayNext] (the pre-#17 behavior).
+     */
+    onCountdownFinish: (() -> Unit)? = null,
     isPlaying: Boolean,
     // Pauses the auto-play countdown while a settings sheet is open or the player
     // is locked, so the user isn't rushed out of a menu (or surprised by an
@@ -123,7 +130,11 @@ fun NextEpisodeOverlay(
                 kotlinx.coroutines.delay(1000)
                 countdown--
             } else {
-                onPlayNext()
+                // Expiry is the AUTO arm: an explicit [onCountdownFinish]
+                // takes it, so the host can grow the unattended-advance
+                // streak; the fallback preserves the plain onPlayNext wiring.
+                val fireExpiry = onCountdownFinish ?: onPlayNext
+                fireExpiry()
             }
         }
     }

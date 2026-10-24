@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import org.koin.compose.viewmodel.koinViewModel
@@ -55,6 +56,9 @@ internal fun playbackRowAdmissionFlags(
         PlaybackRows.VideoAutoplayNext.id to preferences.videoAutoplayNext,
         PlaybackRows.AudioPassthrough.id to preferences.audioPassthrough,
         PlaybackRows.SpatialAudio.id to preferences.spatialAudioEnabled,
+        // The pause-screensaver delay rides the mode row: any non-OFF
+        // screensaver counts as the parent being on.
+        PlaybackRows.PauseScreensaver.id to (preferences.pauseScreensaverMode != PauseScreensaverMode.OFF),
     ),
 )
 
@@ -180,13 +184,13 @@ fun PlaybackSettingsScreen(
                         // hiddenRowsFor derivation does not own: the real
                         // hidden-row count varies by platform, engine and the
                         // dialogue-boost toggle (the three advanced-only
-                        // groups alone hide anywhere from 7 to 19+ rows), so
-                        // no derivation via rowTotalFor reproduces 9 across
+                        // groups alone hide anywhere from 19 to 38+ rows), so
+                        // no derivation via rowTotalFor reproduces 28 across
                         // the (isTv, engine) combos. Its source rows are the
                         // advanced-only blocks: the player group's advanced
                         // rows, the advanced-video group, the engine group
                         // and the media-segments group.
-                        hiddenCount = 9,
+                        hiddenCount = 28,
                         onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
                     )
                 }

@@ -683,7 +683,7 @@ internal class PlaybackSession(
         getEngine = { playerSessionManager.engine },
         routedPlay = { play -> transport.play(play) },
         seekByStep = { direction -> transport.step(direction) },
-        playNextEpisode = { upNext.playNextEpisode() },
+        playNextEpisode = { upNext.playNextManually() },
     )
 
     /** The session-owned transport routing module (ladders + local seek arm; wiring in TransportRouter.kt). */
@@ -704,7 +704,7 @@ internal class PlaybackSession(
     internal val stillWatching = StillWatchingController(
         getCountdownSeconds = { uiState.value.autoplay.autoPlayCountdownSec },
         onUserInteraction = { autoplayController.onUserInteraction() },
-        playNextEpisode = { upNext.playNextEpisode() },
+        playNextEpisode = { upNext.playNextManually() },
         resumePlayback = { transport.resume() },
         pauseEngine = { playerSessionManager.engine?.pause() },
         cancelAutoplay = { upNext.cancelAutoplay() },
@@ -936,6 +936,13 @@ internal class PlaybackSession(
         setAutoplayCancelledMirror = { cancelled ->
             uiState.update { it.copy(autoplay = it.autoplay.copy(autoplayCancelled = cancelled)) }
         },
+        // Binge controls (#17): the cap leaf as a flow (the reactive limit
+        // verdict) and the after-finish keep-gate's pref arm (the same
+        // hydrated-aggregate read the incognito gate uses).
+        autoplayEpisodeLimit = stores.aggregateStore.aggregate
+            .map { it.videoPlayer.autoplayEpisodeLimit }
+            .distinctUntilChanged(),
+        isShowDetailsAfterFinishEnabled = { cachedAggregate.videoPlayer.showNextEpisodeDetailsAfterFinish },
         isSmartDownloadsEnabled = { stores.downloads.downloads.value.smartDownloadsEnabled },
         getDurationMs = { uiState.value.duration },
         deleteDownload = { itemId -> offlinePlaybackFacade.deleteDownload(itemId) },
@@ -1056,6 +1063,8 @@ internal class PlaybackSession(
         saveGlobalMpvConfig = { config -> stores.engine.setMpvConfig(config) },
         getGlobalExoConfig = { cachedAggregate.engine.exoPlayerConfig },
         saveGlobalExoConfig = { config -> stores.engine.setExoPlayerConfig(config) },
+        getHdrFormatPreference = { cachedAggregate.playback.hdrFormatPreference },
+        saveHdrFormatPreference = { preference -> playbackStore.setHdrFormatPreference(preference) },
         loadStoredRow = { prefScope, id -> itemPlaybackPreferenceRepository.get(prefScope, id) },
         saveRenderProfile = { overrides -> playbackPreferenceWriter.setRenderProfile(overrides) },
         clearStoredRenderProfile = { playbackPreferenceWriter.clearRenderProfile() },

@@ -23,7 +23,9 @@ import com.raulshma.jellyplay.core.model.MediaStreamSelection
  *     them,
  *  3. the engine-config rebuild triggers (subtitle-style change →
  *     [rebuildEngineConfigIfRunning]; volume-boost / equalizer-settings
- *     diffs → ditto), engine-null-guarded VM-side
+ *     diffs → ditto; the mpv render prefs (tone-mapping curve / deband /
+ *     motion interpolation / bitmap-subtitle scaling) diffs → ditto),
+ *     engine-null-guarded VM-side
  *     (no engine ⇒ no rebuild, exactly the old `engine?.let` posture),
  *  4. the autoplay-controller flip (guarded on the VM's applied-mirror read —
  *     [isAutoplayNextApplied] — then uiState copy + controller flip through
@@ -114,6 +116,33 @@ internal class PlayerPrefsFanout(
             old.audioEffects.volumeBoostGain != new.audioEffects.volumeBoostGain ||
             old.audioEffects.equalizerSettings != new.audioEffects.equalizerSettings
         ) {
+            rebuildEngineConfigIfRunning()
+        }
+
+        // The render prefs that fold into the mpv engine config (tone-mapping
+        // curve / deband / motion interpolation / bitmap-subtitle scaling —
+        // consumed by MpvConfigMapping through MpvEngineConfig): a diff on any
+        // of them needs the same rebuild trigger the audio-effects diffs run,
+        // so a settings- or sheet-side pick re-applies to the running engine
+        // through the config diff caches without a reload. The raw input.conf
+        // text rides the same trigger so a later engine rebuild (the only way
+        // input.conf applies — mpv parses it at mpv_initialize) always sees
+        // the current pref.
+        if (old.videoPlayer.mpvToneMappingCurve != new.videoPlayer.mpvToneMappingCurve ||
+            old.videoPlayer.mpvDebandMode != new.videoPlayer.mpvDebandMode ||
+            old.videoPlayer.mpvMotionInterpolation != new.videoPlayer.mpvMotionInterpolation ||
+            old.videoPlayer.bitmapSubtitleScaleMode != new.videoPlayer.bitmapSubtitleScaleMode ||
+            old.videoPlayer.mpvInputConf != new.videoPlayer.mpvInputConf
+        ) {
+            rebuildEngineConfigIfRunning()
+        }
+
+        // The HDR delivery posture (#5) rides the SHARED EngineConfig — a
+        // playback-slice write lands here first with the FRESH aggregate, so
+        // this trigger (not the sheet's immediate dirty mark) is the read
+        // that reaches the engines; EngineConfigDelta.sharedPairsChanged
+        // carries it the rest of the way.
+        if (old.playback.hdrFormatPreference != new.playback.hdrFormatPreference) {
             rebuildEngineConfigIfRunning()
         }
 

@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.NoOpPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.MpvInputConfFile
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
+import java.io.File
 import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_HWND
 import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_NO_OP
 import com.raulshma.jellyplay.desktop.player.EngineActivitySnapshot.Companion.SURFACE_SOFTWARE
@@ -74,6 +76,19 @@ class DesktopMpvPlayerEngineFactory(
      * `glsl-shaders` pair (no pack), never garbage paths.
      */
     private val shaderDirProvider: () -> String? = { null },
+    /**
+     * The user's raw `input.conf` key-bindings text (issue #26), read at
+     * engine creation time — the `input-conf` option is INIT-time, so a
+     * mid-session edit applies on the next playback (the settings row
+     * documents this). `null`/blank on any read failure or an empty pref.
+     * Tests inject a stub.
+     */
+    private val inputConfProvider: suspend () -> String? = { null },
+    /**
+     * The directory the synced input.conf is written into (`<data>/mpv`) —
+     * overridable so tests can point it at a temp dir.
+     */
+    private val inputConfDirProvider: () -> File = { File(System.getProperty("user.home"), ".jellyplay/mpv") },
 ) : PlayerEngineFactory {
 
     override suspend fun create(playerType: PlayerType): MediaEngine {
@@ -90,6 +105,7 @@ class DesktopMpvPlayerEngineFactory(
             PlayerType.LIBVLC,
             -> {
                 val shaderDir = shaderDirProvider()
+                val inputConfPath = resolveInputConfPath()
                 val hdrPassthrough = runCatchingRethrowingCancellation { hdrPassthroughProvider() }.getOrDefault(false)
                 if (hdrPassthrough) {
                     // HDR passthrough REQUIRES the wid/HWND-embed path —
@@ -110,6 +126,7 @@ class DesktopMpvPlayerEngineFactory(
                                 windowHandle = windowed,
                                 shaderDir = shaderDir,
                                 targetColorspaceHint = true,
+                                inputConfPath = inputConfPath,
                             )
                             surface = SURFACE_HWND
                         }
@@ -117,6 +134,7 @@ class DesktopMpvPlayerEngineFactory(
                             engine = degradeToWidNull(
                                 warn = DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported,
                                 shaderDir = shaderDir,
+                                inputConfPath = inputConfPath,
                             )
                             surface = SURFACE_WID_NULL
                         }
@@ -127,7 +145,7 @@ class DesktopMpvPlayerEngineFactory(
                     // reach the gesture layer), the HWND embed does not. See
                     // the class KDoc; the probe is cached per process, so this
                     // check is free after the first read.
-                    engine = MpvSoftwareRenderEngine(shaderDir = shaderDir)
+                    engine = MpvSoftwareRenderEngine(shaderDir = shaderDir, inputConfPath = inputConfPath)
                     surface = SURFACE_SOFTWARE
                 } else if (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported) {
                     val windowed = awaitSurfaceHandle()
@@ -137,17 +155,18 @@ class DesktopMpvPlayerEngineFactory(
                                 extraOptions = emptyMap(),
                                 windowHandle = windowed,
                                 shaderDir = shaderDir,
+                                inputConfPath = inputConfPath,
                             )
                             surface = SURFACE_HWND
                         }
 
                         else -> {
-                            engine = degradeToWidNull(warn = true, shaderDir = shaderDir)
+                            engine = degradeToWidNull(warn = true, shaderDir = shaderDir, inputConfPath = inputConfPath)
                             surface = SURFACE_WID_NULL
                         }
                     }
                 } else {
-                    engine = degradeToWidNull(warn = false, shaderDir = shaderDir)
+                    engine = degradeToWidNull(warn = false, shaderDir = shaderDir, inputConfPath = inputConfPath)
                     surface = SURFACE_WID_NULL
                 }
             }
@@ -168,19 +187,45 @@ class DesktopMpvPlayerEngineFactory(
     }
 
     /**
+     * Reads the user's raw input.conf text through [inputConfProvider] and
+     * syncs it into [inputConfDirProvider]'s directory (the shared
+     * [MpvInputConfFile] — atomic write, stale-file clear on blank). Returns
+     * the written file's absolute path for the engine's `input-conf=` option,
+     * or `null` when the pref is blank/absent or the write failed (the
+     * session then runs without custom bindings — never fails playback).
+     */
+    private suspend fun resolveInputConfPath(): String? {
+        val text = runCatchingRethrowingCancellation { inputConfProvider() }.getOrDefault(null)
+        if (text.isNullOrBlank()) return null
+        return when (val result = MpvInputConfFile.sync(inputConfDirProvider(), text)) {
+            is MpvInputConfFile.SyncResult.Synced -> result.path
+            is MpvInputConfFile.SyncResult.Failed -> {
+                System.err.println("[JellyPlay] video session: input.conf write failed — custom key bindings skipped")
+                null
+            }
+            is MpvInputConfFile.SyncResult.Cleared -> null
+        }
+    }
+
+    /**
      * Fallback chain: engine without wid → empty-surface audio-only playback.
      * On Windows this also means AWT never realized the child window inside
      * the budget — worth a line of stderr ([warn]) because the session
      * silently loses video otherwise.
      */
-    private fun degradeToWidNull(warn: Boolean, shaderDir: String?): MpvDesktopEngine {
+    private fun degradeToWidNull(warn: Boolean, shaderDir: String?, inputConfPath: String?): MpvDesktopEngine {
         if (warn) {
             System.err.println(
                 "[JellyPlay] video session: no embedded HWND available and sw " +
                     "probe failed — degrading to audio-only",
             )
         }
-        return MpvDesktopEngine(extraOptions = emptyMap(), windowHandle = null, shaderDir = shaderDir)
+        return MpvDesktopEngine(
+            extraOptions = emptyMap(),
+            windowHandle = null,
+            shaderDir = shaderDir,
+            inputConfPath = inputConfPath,
+        )
     }
 
     /**

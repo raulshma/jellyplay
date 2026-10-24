@@ -3,6 +3,14 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
+import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
+import com.raulshma.jellyplay.core.network.NetworkLog
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import org.jellyfin.sdk.model.api.CodecType
 import org.jellyfin.sdk.model.api.DlnaProfileType
 import org.jellyfin.sdk.model.api.EncodingContext
@@ -57,6 +65,20 @@ class DeviceProfileProvider(
      * condition so the server transcodes (or the client downmixes) sources
      * wider than the cap — the jellyfin-web mechanism; the SDK's
      * `DeviceProfile` has no `maxAudioChannels` property.
+     * @param preferredVideoCodec the TRANSCODE target video codec when not
+     * [TranscodeVideoCodecPreference.AUTO]: the transcoding profile's video
+     * codec list is reordered so the preferred token comes FIRST (the
+     * server's encoder picks the first advertised target), the other
+     * advertised codecs stay behind as fallback — filtering to only-one
+     * risks a server without that encoder finding no transcode target at
+     * all. Direct-play sets are untouched.
+     * @param preferredAudioCodec the TRANSCODE target audio codec, same
+     * reorder-to-front semantics as [preferredVideoCodec].
+     * @param customDeviceProfileJson a user-authored JSON object DEEP-MERGED
+     * over the generated profile ([deepMerge]: objects merge recursively,
+     * arrays/scalars replace). Invalid JSON logs a warning and is ignored —
+     * the generated profile ships unchanged (a broken override must never
+     * take playback down).
      */
     fun forPlayer(
         playerType: PlayerType,
@@ -65,6 +87,9 @@ class DeviceProfileProvider(
         passthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
         maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
         maxVideoHeight: Int? = null,
+        preferredVideoCodec: TranscodeVideoCodecPreference = TranscodeVideoCodecPreference.AUTO,
+        preferredAudioCodec: TranscodeAudioCodecPreference = TranscodeAudioCodecPreference.AUTO,
+        customDeviceProfileJson: String = "",
     ): org.jellyfin.sdk.model.api.DeviceProfile {
         val base = when (playerType) {
             PlayerType.MPV -> if (pgsDirectPlay) mpvProfilePgsDirectPlay else mpvProfileDefault
@@ -75,8 +100,14 @@ class DeviceProfileProvider(
         val capChannels = maxAudioChannels.channelCount
         // The memoised default profiles stand while the prefs ask for nothing
         // this provider honours (the historical behaviour, byte for byte).
-        if (removedTokens.isEmpty() && capChannels == null && maxVideoHeight == null) return base
-        return base.copy(
+        if (removedTokens.isEmpty() && capChannels == null && maxVideoHeight == null &&
+            preferredVideoCodec == TranscodeVideoCodecPreference.AUTO &&
+            preferredAudioCodec == TranscodeAudioCodecPreference.AUTO &&
+            customDeviceProfileJson.isBlank()
+        ) {
+            return base
+        }
+        val shaped = base.copy(
             directPlayProfiles = base.directPlayProfiles.map { profile ->
                 val audio = profile.audioCodec
                 if (removedTokens.isEmpty() || audio.isNullOrBlank()) {
@@ -93,7 +124,48 @@ class DeviceProfileProvider(
                 capChannels?.let(::channelCapProfile),
                 maxVideoHeight?.takeIf { it > 0 }?.let(::resolutionCapProfile),
             ),
+            transcodingProfiles = base.transcodingProfiles.map { profile ->
+                profile.copy(
+                    videoCodec = preferTranscodeCodec(profile.videoCodec, preferredVideoCodec.token),
+                    audioCodec = preferTranscodeCodec(profile.audioCodec, preferredAudioCodec.token),
+                )
+            },
         )
+        if (customDeviceProfileJson.isBlank()) return shaped
+        val userObject = parseUserDeviceProfile(customDeviceProfileJson) ?: return shaped
+        return deepMergeDeviceProfile(shaped, userObject)
+    }
+
+    /**
+     * The TRANSCODE codec list shaped by the user's preferred target: the
+     * preferred token moved to the FRONT of the comma-joined list (the rest
+     * stay as fallback, order intact). `null` preference token (`AUTO`)
+     * returns the list unchanged. The SDK's `TranscodingProfile` carries its
+     * codec sets as NON-NULL comma-joined strings (the same shape the
+     * direct-play profiles use; an unset set serializes as "").
+     */
+    private fun preferTranscodeCodec(codecList: String, preferredToken: String?): String {
+        if (preferredToken == null) return codecList
+        val codecs = codecList.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        return (listOf(preferredToken) + codecs.filterNot { it == preferredToken }).joinToString(",")
+    }
+
+    /**
+     * Parses the user's custom device-profile JSON; `null` (with a warning
+     * log) when it is invalid or not a JSON object — a scalar/array payload
+     * cannot merge over an object and is ignored whole.
+     */
+    private fun parseUserDeviceProfile(json: String): JsonObject? {
+        val element = try {
+            Json.parseToJsonElement(json)
+        } catch (e: Exception) {
+            NetworkLog.w(TAG, "Ignoring custom device profile: invalid JSON (${e.message})")
+            return null
+        }
+        return element as? JsonObject ?: run {
+            NetworkLog.w(TAG, "Ignoring custom device profile: not a JSON object")
+            null
+        }
     }
 
     /**
@@ -342,6 +414,8 @@ class DeviceProfileProvider(
     }
 
     private companion object {
+        private const val TAG = "DeviceProfile"
+
         /** Candidate video codecs intersected with the device decoder list. */
         private val HARDWARE_VIDEO_CANDIDATES = setOf(
             "h264", "hevc", "vp8", "vp9", "av1", "mpeg2video", "mpeg4", "h263",
@@ -363,4 +437,84 @@ class DeviceProfileProvider(
             "pcm_f32le", "pcm_alaw", "pcm_mulaw",
         )
     }
+}
+
+/**
+ * The Jellyfin transcode-target codec token a preference maps to, or `null`
+ * for [com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference.AUTO]
+ * (the profile stands). File-level so the provider and its jvmTest pin the
+ * same table.
+ */
+internal val TranscodeVideoCodecPreference.token: String?
+    get() = when (this) {
+        TranscodeVideoCodecPreference.AUTO -> null
+        TranscodeVideoCodecPreference.H264 -> "h264"
+        TranscodeVideoCodecPreference.HEVC -> "hevc"
+        TranscodeVideoCodecPreference.AV1 -> "av1"
+    }
+
+/** The audio twin of [TranscodeVideoCodecPreference.token]. */
+internal val TranscodeAudioCodecPreference.token: String?
+    get() = when (this) {
+        TranscodeAudioCodecPreference.AUTO -> null
+        TranscodeAudioCodecPreference.AAC -> "aac"
+        TranscodeAudioCodecPreference.AC3 -> "ac3"
+        TranscodeAudioCodecPreference.EAC3 -> "eac3"
+        TranscodeAudioCodecPreference.OPUS -> "opus"
+    }
+
+/**
+ * The user-override merge for the custom device-profile editor (#10):
+ * [overlay] (the user's JSON object) merged over [base] (the generated
+ * profile, serialized) — JSON objects merge RECURSIVELY key by key, while
+ * arrays and scalars REPLACE whole (a user-edited codec list is a complete
+ * list, never a per-element patch). The merged document decodes back into
+ * the SDK [org.jellyfin.sdk.model.api.DeviceProfile]; unknown user keys are
+ * ignored by the decode ([Json.ignoreUnknownKeys]), and an un-decodable
+ * merged document falls back to the un-merged profile — note a REPLACED
+ * array's entries must be complete (the SDK models carry required fields,
+ * e.g. `CodecProfile.ApplyConditions`), a partial nested object fails the
+ * decode and takes the fallback with it. The override can shape the profile
+ * but never crash the resolution.
+ */
+internal fun deepMergeDeviceProfile(
+    base: org.jellyfin.sdk.model.api.DeviceProfile,
+    overlay: JsonObject,
+): org.jellyfin.sdk.model.api.DeviceProfile {
+    val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = false
+    }
+    return try {
+        val baseJson = json.encodeToJsonElement(
+            org.jellyfin.sdk.model.api.DeviceProfile.serializer(),
+            base,
+        ).let { it as? JsonObject ?: JsonObject(emptyMap()) }
+        val merged = deepMergeJson(baseJson, overlay)
+        json.decodeFromJsonElement(org.jellyfin.sdk.model.api.DeviceProfile.serializer(), merged)
+    } catch (e: Exception) {
+        NetworkLog.w(MERGE_LOG_TAG, "Ignoring custom device profile: merge/decode failed (${e.message})")
+        base
+    }
+}
+
+/** File-level tag for the top-level merge helpers (the class's TAG is companion-private). */
+private const val MERGE_LOG_TAG = "DeviceProfile"
+
+/**
+ * The recursive JSON object merge: where both sides hold an object the merge
+ * descends; every other combination (array/scalar over anything, object over
+ * a scalar) replaces the base value with the overlay's.
+ */
+internal fun deepMergeJson(base: JsonObject, overlay: JsonObject): JsonObject {
+    val merged = LinkedHashMap<String, JsonElement>(base)
+    overlay.forEach { (key, value) ->
+        val existing = merged[key]
+        merged[key] = if (existing is JsonObject && value is JsonObject) {
+            deepMergeJson(existing, value)
+        } else {
+            value
+        }
+    }
+    return JsonObject(merged)
 }

@@ -268,6 +268,7 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
                                 rtUrl = scope.state.core.externalRatings.rtUrl,
                                 imdbUrl = scope.state.core.externalRatings.imdbUrl,
                                 tmdbUrl = scope.state.core.externalRatings.tmdbUrl,
+                                awards = scope.state.core.externalRatings.awards,
                             )
                         }
                     }

@@ -13,13 +13,18 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  * store-free) into the extension-lambda shape [SessionLoadOutputs.onPrefsProjected]
  * applies to the residual uiState.
  *
- * Leaf inventory (32, grouped by destination slice):
+ * Leaf inventory (45, grouped by destination slice):
  *  - root: `preferredPlayerType`
  *  - `uiPrefs`: defaultOrientation, controlsTimeoutMs, hideOsdOnPause,
  *    passOutProtectionHours, trickplayEnabled, trickplayOnSeekGesture,
- *    showPlaybackMetadata, showClock, showTimeRemaining,
+ *    trickplayMode, showPlaybackMetadata, showClock, showTimeRemaining,
  *    keepScreenOnDuringVideo, streamingQuality, adaptiveBitrateEnabled,
- *    playbackMode
+ *    playbackMode, mpvToneMappingCurve, mpvDebandMode,
+ *    mpvMotionInterpolation, bitmapSubtitleScaleMode, mpvCustomButtons,
+ *    pauseScreensaverMode,
+ *    pauseScreensaverAfterMinutes, ambientBlurEnabled, pauseDetailsEnabled,
+ *    nextUpButtonPrerollSec, autoplayEpisodeLimit,
+ *    showNextEpisodeDetailsAfterFinish
  *  - `gestures`: gestureMode (tap/swipe tier flags are derived views),
  *    holdSpeedEnabled, holdSpeedMultiplier, defaultSpeed, swipeSeekMaxMs,
  *    seekDurationMs, doubleTapHoldSeekEnabled, rememberBrightness,
@@ -37,7 +42,12 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  * load is the point. The *change-time* counterpart is [SettingsProjector]:
  * the same pref→leaf vocabulary (showPlaybackMetadata, showClock,
  * showTimeRemaining, tvZoomModePercent, keepScreenOnDuringVideo,
- * passOutProtectionHours, autoPlayCountdownSec overlap) re-projected per
+ * passOutProtectionHours, autoPlayCountdownSec, and the thirteen
+ * render/pause/continuation leaves — mpvToneMappingCurve, mpvDebandMode,
+ * mpvMotionInterpolation, bitmapSubtitleScaleMode, mpvCustomButtons, trickplayMode,
+ * pauseScreensaverMode, pauseScreensaverAfterMinutes, ambientBlurEnabled,
+ * pauseDetailsEnabled, nextUpButtonPrerollSec, autoplayEpisodeLimit,
+ * showNextEpisodeDetailsAfterFinish — overlap) re-projected per
  * DataStore emission with distinct-until-changed guards. When adding or moving
  * a leaf, update both sides or drop a leaf here deliberately.
  *
@@ -84,6 +94,19 @@ internal object PlayerPrefsSeed {
                     streamingQuality = agg.playback.streamingQuality,
                     adaptiveBitrateEnabled = adaptiveBitrateEnabled,
                     playbackMode = agg.playback.playbackMode,
+                    trickplayMode = agg.videoPlayer.trickplayMode,
+                    mpvToneMappingCurve = agg.videoPlayer.mpvToneMappingCurve,
+                    mpvDebandMode = agg.videoPlayer.mpvDebandMode,
+                    mpvMotionInterpolation = agg.videoPlayer.mpvMotionInterpolation,
+                    bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
+                    mpvCustomButtons = agg.videoPlayer.mpvCustomButtons,
+                    pauseScreensaverMode = agg.videoPlayer.pauseScreensaverMode,
+                    pauseScreensaverAfterMinutes = agg.videoPlayer.pauseScreensaverAfterMinutes,
+                    ambientBlurEnabled = agg.videoPlayer.ambientBlurEnabled,
+                    pauseDetailsEnabled = agg.videoPlayer.pauseDetailsEnabled,
+                    nextUpButtonPrerollSec = agg.videoPlayer.nextUpButtonPrerollSec,
+                    autoplayEpisodeLimit = agg.videoPlayer.autoplayEpisodeLimit,
+                    showNextEpisodeDetailsAfterFinish = agg.videoPlayer.showNextEpisodeDetailsAfterFinish,
                 ),
                 gestures = gestures.copy(
                     gestureMode = agg.videoPlayer.videoGestureMode,

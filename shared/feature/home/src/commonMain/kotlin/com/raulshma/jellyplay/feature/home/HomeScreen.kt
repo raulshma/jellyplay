@@ -354,6 +354,18 @@ private fun MainHomeContent(
     val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero) {
         selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero)
     }
+    // The hero presentation fold — the ONE place the style pref meets the
+    // form factor and the candidate pool ([homeHeroStyleDecision]). The
+    // controller consumes the SLIDESHOW advance interval; the hero slot in
+    // the content list consumes the render flags.
+    val heroStyleDecision = remember(
+        state.homeHeroStyle,
+        state.homeHeroSlideshowIntervalSec,
+        isTv,
+        featuredCandidates.size,
+    ) {
+        homeHeroStyleDecision(state.homeHeroStyle, isTv, state.homeHeroSlideshowIntervalSec, featuredCandidates.size)
+    }
     // The featured item's curated billboard copy, keyed by item id — the hero
     // reads the headline/subhead overrides for whichever candidate is
     // featured (curated or local; a miss renders the item's own metadata).
@@ -398,6 +410,7 @@ private fun MainHomeContent(
         featuredCandidates = featuredCandidates,
         listState = listState,
         getBackdropUrl = heroBackdropUrlBuilder,
+        timedAdvanceMs = heroStyleDecision.autoAdvanceMs,
     )
 
     // Global nav overflow "Surprise Me": the hero controller lives here
@@ -764,6 +777,8 @@ private fun MainHomeContent(
                     headerHeight = headerHeight,
                     heroController = heroController,
                     implicitOfflineBanner = implicitOfflineBanner,
+                    heroStyleDecision = heroStyleDecision,
+                    heroCandidates = featuredCandidates,
                     discoverRows = discoverRows,
                     allDiscoverItems = allDiscoverItems,
                     renderInputs = renderInputs,
@@ -845,6 +860,10 @@ private fun HomeSurfaceContent(
     isLightTheme: Boolean,
     headerHeight: Dp,
     heroController: HeroController,
+    /** The hero presentation fold (the screen's [homeHeroStyleDecision] output) the hero slot branches on. */
+    heroStyleDecision: HomeHeroStyleDecision,
+    /** The full rotation candidate pool — the TV_SLIDER hero's pager pages. */
+    heroCandidates: List<MediaItem>,
     implicitOfflineBanner: String?,
     discoverRows: List<List<SeerrSearchItem>>,
     allDiscoverItems: List<SeerrSearchItem>,
@@ -949,6 +968,8 @@ private fun HomeSurfaceContent(
                     feed = s.feed,
                     featuredItem = heroController.featuredItem,
                     curatedHeroOverlay = curatedHeroOverlay,
+                    heroStyleDecision = heroStyleDecision,
+                    heroCandidates = heroCandidates,
                     backgroundColor = backgroundColor,
                     contentPad = contentPad,
                     headerHeight = headerHeight,
@@ -1024,6 +1045,7 @@ private fun HomeSurfaceContent(
                     },
                 ),
                 renderInputs = renderInputs,
+                heroController = heroController,
                 listState = listState,
                 density = density,
                 // The chips' own flow (see HomeViewModel.presenceChips) —

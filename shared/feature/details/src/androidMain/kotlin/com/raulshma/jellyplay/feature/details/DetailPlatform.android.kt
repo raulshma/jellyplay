@@ -115,6 +115,9 @@ fun androidDetailsModule(context: Context): Module = module {
             // The direct-TMDB details fallback behind the externalRatings
             // enrichment (core:network single, NetworkKoinModules).
             tmdbApiClient = get(),
+            // The awards-badge toggle read (the AppearanceStore single, the
+            // datastore common graph) — the externalRatings OMDb leg's pref half.
+            appearanceStore = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure

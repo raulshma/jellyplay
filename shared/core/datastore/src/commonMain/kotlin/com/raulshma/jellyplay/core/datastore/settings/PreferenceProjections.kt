@@ -205,10 +205,17 @@ class PreferenceProjections constructor(
                 stores.playback.playback,
                 stores.videoPlayer.videoPlayer,
                 stores.audioEffects.audioEffects,
-                combine(stores.subtitle.subtitle, stores.audio.audio) { sub, au -> sub to au },
+                // The network slice rides the subtitle/audio pair so the
+                // combine stays within Flow's 5-arg arity (the bundle's
+                // `network` field is the home-streaming quality's source).
+                combine(
+                    stores.subtitle.subtitle,
+                    stores.audio.audio,
+                    stores.networkOffline.networkOffline,
+                ) { sub, au, net -> Triple(sub, au, net) },
                 stores.engine.playerEngine,
-            ) { playback, video, effects, (subtitle, audio), engine ->
-                PlaybackCoreBundle(playback, video, effects, subtitle, audio, engine)
+            ) { playback, video, effects, (subtitle, audio, network), engine ->
+                PlaybackCoreBundle(playback, video, effects, subtitle, audio, engine, network)
             },
             stores.syncPlayCast.syncPlayCast,
             stores.volumeProfile.volumeProfile,
@@ -347,6 +354,8 @@ class PreferenceProjections constructor(
             HomeScreenPreferences(
                 homeMode = home.homeMode,
                 homeHeroEnabled = home.homeHeroEnabled,
+                homeHeroStyle = home.homeHeroStyle,
+                homeHeroSlideshowIntervalSec = home.homeHeroSlideshowIntervalSec,
                 homeHeroVideoEnabled = home.homeHeroVideoEnabled,
                 homeHeroVideoTvEnabled = home.homeHeroVideoTvEnabled,
                 homeBackdropEnabled = home.homeBackdropEnabled,

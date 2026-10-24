@@ -1,15 +1,18 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.MpvAudioOutputMode
+import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvDemuxerMaxBytes
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvOption
 import com.raulshma.jellyplay.core.model.MpvRenderQuality
 import com.raulshma.jellyplay.core.model.MpvShaderPack
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStyleMapping
 
@@ -25,8 +28,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStyleMapping
  * `interpolation` (+ `video-sync=display-resample`), `framedrop`,
  * `vd-lavc-skiploopfilter`, the demuxer byte budgets, the audio trio
  * (`audio-device` / `audio-exclusive` / `audio-spdif` via the output mode),
- * and the user's `mpvExtraConfig` lines LAST (so a raw line overrides its
- * structured counterpart — the documented escape-hatch intent). Engine-owned
+ * the persisted render prefs (`tone-mapping` curve, `deband-threshold`,
+ * `interpolation`/`tscale` via [prefOverridePairs], `sub-scale-with-window`
+ * via the bitmap-subtitle scale mode), and the user's `mpvExtraConfig` lines
+ * LAST (so a raw line overrides its structured counterpart — the documented
+ * escape-hatch intent). Engine-owned
  * surfaces with platform-specific behavior (`hwdec`, the `ao` backend chain,
  * subtitle styling, the effects `af`/`vf` chains, msg-level/profile) stay in
  * the engines.
@@ -248,11 +254,76 @@ object MpvConfigMapping {
      * is written EXPLICITLY so the runtime diff can express preset→AUTO and
      * entering-passthrough transitions — an omitted pair would leave a stale
      * preset stuck until restart.
+     *
+     * The persisted curve family ([MpvEngineConfig.toneMappingCurve]) wins
+     * when set and not [MpvToneMappingCurve.AUTO] — it is the finer
+     * settings-side surface over the structured preset row (which keeps
+     * standing while the curve is null/AUTO), and the suppression gate still
+     * outranks BOTH (HDR→HDR never tone maps).
      */
     fun toneMappingValue(config: MpvEngineConfig, toneMappingSuppressed: Boolean): String {
         if (toneMappingSuppressed) return AUTO_TONE_MAPPING
+        config.toneMappingCurve
+            ?.takeIf { it != MpvToneMappingCurve.AUTO }
+            ?.let { return it.mpvValue }
         return config.toneMapping.key ?: AUTO_TONE_MAPPING
     }
+
+    /**
+     * The persisted render-pref override block: the pairs appended AFTER the
+     * structured rows AND the render-quality bundle (so the prefs win over
+     * both by order — the mapper's later-same-key-wins convention) whenever
+     * the corresponding [MpvEngineConfig] field carries a pref (non-null):
+     *
+     *  - [MpvEngineConfig.debandMode]: OFF → `deband=no`; the armed levels →
+     *    `deband=yes` plus the strength ladder on `deband-threshold`
+     *    (20/40/60 — mpv's threshold range is 0..4096, default 48). The
+     *    threshold is written for OFF too (at mpv's default), so a
+     *    HEAVY→OFF→LIGHT sequence re-writes the knob through the runtime
+     *    diff instead of inheriting a stale value. `null` = the structured
+     *    [MpvEngineConfig.deband] boolean stands and nothing is written.
+     *  - [MpvEngineConfig.motionInterpolation]: true → `interpolation=yes` +
+     *    `video-sync=display-resample` + `tscale=oversample`; false → an
+     *    explicit `interpolation=no`, emitted ONLY when the structured
+     *    [MpvEngineConfig.interpolation] row would have interpolated (the
+     *    pref's declining vote must override a yes it disagrees with, and an
+     *    unconditional no would be redundant against the base pair's own
+     *    off value). `null` = the structured rows stand.
+     *
+     * Still ordered BEFORE [MpvEngineConfig.mpvExtraConfig]: a raw user line
+     * remains the final escape hatch over everything structured.
+     */
+    fun prefOverridePairs(config: MpvEngineConfig): List<MpvOption> = buildList {
+        config.debandMode?.let { mode ->
+            add(MpvOption("deband", if (mode == MpvDebandMode.OFF) "no" else "yes"))
+            add(MpvOption("deband-threshold", mode.debandThreshold.toString()))
+        }
+        when (config.motionInterpolation) {
+            true -> {
+                add(MpvOption("interpolation", "yes"))
+                add(MpvOption("video-sync", "display-resample"))
+                add(MpvOption("tscale", INTERPOLATION_TSCALE))
+            }
+            false ->
+                if (config.interpolation) {
+                    add(MpvOption("interpolation", "no"))
+                }
+            null -> {}
+        }
+    }
+
+    /**
+     * The `sub-scale-with-window` value for [config] — the persisted bitmap
+     * subtitle scale mode's mpv surface. mpv has no true bitmap-subtitle
+     * stretch: this is the window-vs-video scaling surface's approximation.
+     * [BitmapSubtitleScaleMode.FIT] (and the unset/null default) writes `no`
+     * — planes anchor to the VIDEO rectangle; [BitmapSubtitleScaleMode.STRETCH]
+     * writes `yes` — the window-scaled approximation; [BitmapSubtitleScaleMode.COVER]
+     * is reserved and keeps the FIT value. Emitted EXPLICITLY for every mode
+     * (mpv's own default is `yes`) so the runtime diff sees every transition.
+     */
+    fun bitmapSubtitleScaleValue(config: MpvEngineConfig): String =
+        if (config.bitmapSubtitleScaleMode == BitmapSubtitleScaleMode.STRETCH) "yes" else "no"
 
     /**
      * The [MpvRenderQuality] bundle pairs appended AFTER the structured
@@ -341,11 +412,18 @@ object MpvConfigMapping {
             add(MpvOption("glsl-shaders", paths.joinToString(",")))
         }
         add(MpvOption("tone-mapping", toneMappingValue(config, toneMappingSuppressed)))
+        // The persisted bitmap-subtitle scale mode (mpv `sub-scale-with-window`)
+        // — always written, see bitmapSubtitleScaleValue.
+        add(MpvOption("sub-scale-with-window", bitmapSubtitleScaleValue(config)))
         // The quality bundle after the structured scale/deband pairs, so its
         // own scale/deband entries override them by order (BALANCED forces
         // neither — the structured rows stand; its dscale/cscale/dither-depth
         // entries are explicit defaults, see renderQualityBundle).
         addAll(renderQualityBundle(config.renderQuality))
+        // The persisted render prefs last-but-one: they override both the
+        // structured rows and the quality bundle by order, and stay below the
+        // raw escape hatch (see prefOverridePairs).
+        addAll(prefOverridePairs(config))
         // Power-user escape hatch, LAST: a raw line overrides its structured
         // counterpart above.
         addAll(parseMpvConfigOptions(config.mpvExtraConfig))
@@ -407,6 +485,28 @@ object MpvConfigMapping {
 
     /** mpv's untouched `tone-mapping` default (AUTO and passthrough-active). */
     const val AUTO_TONE_MAPPING = "auto"
+
+    /**
+     * The `tscale` the motion-interpolation pref writes (the no-blur
+     * oversample preset — the pref is a toggle, so the filter is fixed).
+     */
+    const val INTERPOLATION_TSCALE = "oversample"
+
+    /** mpv's untouched `deband-threshold` default (the OFF-mode reset value). */
+    const val DEFAULT_DEBAND_THRESHOLD = 48
+
+    /**
+     * The deband-strength ladder on mpv's `deband-threshold` (range 0..4096,
+     * default 48 — see [DEFAULT_DEBAND_THRESHOLD]): OFF resets to the default,
+     * the armed levels climb 20/40/60.
+     */
+    private val MpvDebandMode.debandThreshold: Int
+        get() = when (this) {
+            MpvDebandMode.OFF -> DEFAULT_DEBAND_THRESHOLD
+            MpvDebandMode.LIGHT -> 20
+            MpvDebandMode.MEDIUM -> 40
+            MpvDebandMode.HEAVY -> 60
+        }
 
     /** mpv's untouched `audio-channels` default (the effects chain's off value). */
     private const val AUTO_CHANNELS = "auto"

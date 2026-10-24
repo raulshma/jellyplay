@@ -346,6 +346,98 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_skip_l
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_skip_loop_filter_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_output_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_output_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ambient_blur
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ambient_blur_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_episode_limit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_episode_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_device_profile_json
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_device_profile_json_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_force_transcode_above_height
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_force_transcode_above_height_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_preference
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_format_preference_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_network_quality
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_network_quality_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_custom_buttons
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_custom_buttons_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_deband
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_deband_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_input_conf
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_input_conf_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_motion_interpolation
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_motion_interpolation_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_tone_mapping_curve
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_tone_mapping_curve_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_episode_details
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_episode_details_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_preroll
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_preroll_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offer_delete_after_playback_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offer_delete_after_playback_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offer_delete_after_playback_movies
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offer_delete_after_playback_movies_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_details
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_details_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver_delay
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver_delay_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_transcode_audio_codec
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_transcode_audio_codec_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_transcode_video_codec
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_transcode_video_codec_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_session_restore
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_session_restore_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trickplay_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trickplay_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_ambient_blur_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_ambient_blur_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_episode_limit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_episode_limit_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_force_transcode_above_height_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_force_transcode_above_height_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_custom_buttons_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_custom_buttons_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_deband_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_deband_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_input_conf_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_input_conf_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_motion_interpolation_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_motion_interpolation_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tone_mapping_curve_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_tone_mapping_curve_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_episode_details_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_episode_details_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_preroll_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_preroll_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_details_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_details_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_screensaver_delay_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_screensaver_delay_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_screensaver_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_screensaver_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_transcode_audio_codec_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_transcode_audio_codec_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_transcode_video_codec_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_transcode_video_codec_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_session_restore_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_session_restore_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_trickplay_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_trickplay_mode_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bitmap_subtitle_scale
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bitmap_subtitle_scale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_bitmap_subtitle_scale_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_bitmap_subtitle_scale_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_custom_device_profile_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_custom_device_profile_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hdr_format_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hdr_format_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_episodes_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_movies_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_offer_delete_movies_title
 
 /**
  * The playback/video domain's fused row declarations — the feature-side single
@@ -370,7 +462,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
  */
 internal object PlaybackRows {
 
-    // -- The "Video Player" group's 40 rows (39 spec-backed + the desktop volume-memory residual), in catalog order. --
+    // -- The "Video Player" group's 53 rows (52 spec-backed + the desktop volume-memory residual), in catalog order. --
 
     val PlayerEngine = SettingsRow(
         id = "player_engine",
@@ -483,6 +575,116 @@ internal object PlaybackRows {
         subtitleRes = Res.string.settings_auto_play_countdown_subtitle,
         searchTitleRes = Res.string.ss_autoplay_countdown_title,
         searchSubtitleRes = Res.string.ss_autoplay_countdown_subtitle,
+    )
+
+    // The autoplay/resume cluster's extensions: the episode limit beside the
+    // countdown, session restore and the post-playback offer pair, the
+    // pause-screen experience toggles and the trickplay style — all
+    // always-visible rows (their emission sits in the player group's
+    // non-advanced flow, gated by their declared admissions).
+    val AutoplayEpisodeLimit = SettingsRow(
+        id = "autoplay_episode_limit",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_autoplay_episode_limit,
+        subtitleRes = Res.string.settings_autoplay_episode_limit_subtitle,
+        searchTitleRes = Res.string.ss_autoplay_episode_limit_title,
+        searchSubtitleRes = Res.string.ss_autoplay_episode_limit_subtitle,
+    )
+
+    val SessionRestore = SettingsRow(
+        id = "session_restore",
+        icon = Tabler.Outline.History,
+        titleRes = Res.string.settings_session_restore,
+        subtitleRes = Res.string.settings_session_restore_subtitle,
+        searchTitleRes = Res.string.ss_session_restore_title,
+        searchSubtitleRes = Res.string.ss_session_restore_subtitle,
+    )
+
+    val NextEpisodeDetails = SettingsRow(
+        id = "next_episode_details",
+        icon = Tabler.Outline.PlayerSkipForward,
+        titleRes = Res.string.settings_next_episode_details,
+        subtitleRes = Res.string.settings_next_episode_details_subtitle,
+        searchTitleRes = Res.string.ss_next_episode_details_title,
+        searchSubtitleRes = Res.string.ss_next_episode_details_subtitle,
+    )
+
+    val OfferDeleteAfterPlaybackMovies = SettingsRow(
+        id = "offer_delete_movies",
+        icon = Tabler.Outline.Trash,
+        titleRes = Res.string.settings_offer_delete_after_playback_movies,
+        subtitleRes = Res.string.settings_offer_delete_after_playback_movies_subtitle,
+        searchTitleRes = Res.string.ss_offer_delete_movies_title,
+        searchSubtitleRes = Res.string.ss_offer_delete_movies_subtitle,
+    )
+
+    val OfferDeleteAfterPlaybackEpisodes = SettingsRow(
+        id = "offer_delete_episodes",
+        icon = Tabler.Outline.Trash,
+        titleRes = Res.string.settings_offer_delete_after_playback_episodes,
+        subtitleRes = Res.string.settings_offer_delete_after_playback_episodes_subtitle,
+        searchTitleRes = Res.string.ss_offer_delete_episodes_title,
+        searchSubtitleRes = Res.string.ss_offer_delete_episodes_subtitle,
+    )
+
+    val AmbientBlur = SettingsRow(
+        id = "ambient_blur",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_ambient_blur,
+        subtitleRes = Res.string.settings_ambient_blur_subtitle,
+        searchTitleRes = Res.string.ss_ambient_blur_title,
+        searchSubtitleRes = Res.string.ss_ambient_blur_subtitle,
+    )
+
+    val PauseDetails = SettingsRow(
+        id = "pause_details",
+        icon = Tabler.Outline.Eye,
+        titleRes = Res.string.settings_pause_details,
+        subtitleRes = Res.string.settings_pause_details_subtitle,
+        searchTitleRes = Res.string.ss_pause_details_title,
+        searchSubtitleRes = Res.string.ss_pause_details_subtitle,
+    )
+
+    /** Renders beside [TrickplayPreview] — the other trickplay knob. */
+    val TrickplayMode = SettingsRow(
+        id = "trickplay_mode",
+        icon = Tabler.Outline.Photo,
+        titleRes = Res.string.settings_trickplay_mode,
+        subtitleRes = Res.string.settings_trickplay_mode_subtitle,
+        searchTitleRes = Res.string.ss_trickplay_mode_title,
+        searchSubtitleRes = Res.string.ss_trickplay_mode_subtitle,
+    )
+
+    // The pause screensaver pair — advanced rows emitted in the player
+    // group's advanced block (the delay rides the mode row).
+    val PauseScreensaver = SettingsRow(
+        id = "pause_screensaver",
+        icon = Tabler.Outline.Moon,
+        titleRes = Res.string.settings_pause_screensaver,
+        subtitleRes = Res.string.settings_pause_screensaver_subtitle,
+        searchTitleRes = Res.string.ss_pause_screensaver_title,
+        searchSubtitleRes = Res.string.ss_pause_screensaver_subtitle,
+    )
+
+    val PauseScreensaverDelay = SettingsRow(
+        id = "pause_screensaver_delay",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_pause_screensaver_delay,
+        subtitleRes = Res.string.settings_pause_screensaver_delay_subtitle,
+        searchTitleRes = Res.string.ss_pause_screensaver_delay_title,
+        searchSubtitleRes = Res.string.ss_pause_screensaver_delay_subtitle,
+        gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.PauseScreensaver.id)),
+    )
+
+    // Renders beside the zoom/scaling rows — the other how-the-frame-fits
+    // knob (bitmap subtitle scaling).
+    val BitmapSubtitleScale = SettingsRow(
+        id = "bitmap_subtitle_scale",
+        icon = Tabler.Outline.ArrowAutofitHeight,
+        titleRes = Res.string.settings_bitmap_subtitle_scale,
+        subtitleRes = Res.string.settings_bitmap_subtitle_scale_subtitle,
+        searchTitleRes = Res.string.ss_bitmap_subtitle_scale_title,
+        searchSubtitleRes = Res.string.ss_bitmap_subtitle_scale_subtitle,
     )
 
     val StillWatchingMode = SettingsRow(
@@ -768,7 +970,7 @@ internal object PlaybackRows {
         gate = RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
     )
 
-    // -- The "Advanced Video" group's 18 rows (14 spec-backed + the dialogue-boost pair + the spatial sub-knob and audio-delay residuals), in catalog order. --
+    // -- The "Advanced Video" group's 25 rows (20 spec-backed + the dialogue-boost pair + the spatial sub-knob, audio-delay and LAN-quality/speed-test residuals), in catalog order. --
 
     // ── RESIDUAL rows (AudioEffectsStore — no spec machinery): the boost
     // toggle and its strength row (the strength row rides the toggle).
@@ -908,6 +1110,83 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_streaming_quality_subtitle,
     )
 
+    // The streaming-quality/transcode cluster: the HDR format preference and
+    // the transcode caps/codecs render beside [StreamingQuality] — the knobs
+    // that steer the same direct-play-vs-transcode decision.
+    val HdrFormatPreference = SettingsRow(
+        id = "hdr_format",
+        icon = Tabler.Outline.SunHigh,
+        titleRes = Res.string.settings_hdr_format_preference,
+        subtitleRes = Res.string.settings_hdr_format_preference_subtitle,
+        searchTitleRes = Res.string.ss_hdr_format_title,
+        searchSubtitleRes = Res.string.ss_hdr_format_subtitle,
+    )
+
+    val ForceTranscodeAboveHeight = SettingsRow(
+        id = "force_transcode_above_height",
+        icon = Tabler.Outline.ArrowAutofitHeight,
+        titleRes = Res.string.settings_force_transcode_above_height,
+        subtitleRes = Res.string.settings_force_transcode_above_height_subtitle,
+        searchTitleRes = Res.string.ss_force_transcode_above_height_title,
+        searchSubtitleRes = Res.string.ss_force_transcode_above_height_subtitle,
+    )
+
+    val PreferredTranscodeVideoCodec = SettingsRow(
+        id = "preferred_transcode_video_codec",
+        icon = Tabler.Outline.Video,
+        titleRes = Res.string.settings_preferred_transcode_video_codec,
+        subtitleRes = Res.string.settings_preferred_transcode_video_codec_subtitle,
+        searchTitleRes = Res.string.ss_preferred_transcode_video_codec_title,
+        searchSubtitleRes = Res.string.ss_preferred_transcode_video_codec_subtitle,
+    )
+
+    val PreferredTranscodeAudioCodec = SettingsRow(
+        id = "preferred_transcode_audio_codec",
+        icon = Tabler.Outline.Music,
+        titleRes = Res.string.settings_preferred_transcode_audio_codec,
+        subtitleRes = Res.string.settings_preferred_transcode_audio_codec_subtitle,
+        searchTitleRes = Res.string.ss_preferred_transcode_audio_codec_title,
+        searchSubtitleRes = Res.string.ss_preferred_transcode_audio_codec_subtitle,
+    )
+
+    // Advanced: the hand-tuned device-profile escape hatch (a multi-line
+    // JSON text editor, the mpv.conf PickerState.Text shape).
+    val CustomDeviceProfileJson = SettingsRow(
+        id = "custom_device_profile",
+        icon = Tabler.Outline.Code,
+        titleRes = Res.string.settings_custom_device_profile_json,
+        subtitleRes = Res.string.settings_custom_device_profile_json_subtitle,
+        searchTitleRes = Res.string.ss_custom_device_profile_title,
+        searchSubtitleRes = Res.string.ss_custom_device_profile_subtitle,
+    )
+
+    // ── RESIDUAL row (NetworkOfflineStore — no spec machinery): the LAN
+    // quality cap. The wire value is the StreamingQuality name; the picker
+    // reuses the streaming-quality labels.
+    val HomeNetworkQuality = SettingsRow(
+        id = "home_network_quality",
+        icon = Tabler.Outline.Wifi,
+        titleRes = Res.string.settings_home_network_quality,
+        subtitleRes = Res.string.settings_home_network_quality_subtitle,
+        searchSubtitleRes = Res.string.settings_home_network_quality_subtitle,
+        keywords = listOf("home network", "lan", "local", "quality", "cap", "bandwidth", "streaming"),
+        route = Route.PlaybackSettings(),
+        isAdvanced = true,
+    )
+
+    // ── RESIDUAL action row (the quality feature agent implements the
+    // measurement): renders beside the quality rows.
+    val SpeedTest = SettingsRow(
+        id = "speed_test",
+        icon = Tabler.Outline.Gauge,
+        titleRes = Res.string.settings_speed_test,
+        subtitleRes = Res.string.settings_speed_test_subtitle,
+        searchSubtitleRes = Res.string.settings_speed_test_subtitle,
+        keywords = listOf("speed test", "throughput", "bandwidth", "measure", "connection"),
+        route = Route.PlaybackSettings(),
+        isAdvanced = true,
+    )
+
     // ── RESIDUAL row (AudioStore — no spec machinery).
     val AudioDelay = SettingsRow(
         id = "audio_delay",
@@ -963,6 +1242,55 @@ internal object PlaybackRows {
         keywords = listOf("mpv", "deband", "debanding", "banding", "gradient"),
         route = Route.PlaybackSettings(),
         isAdvanced = true,
+    )
+
+    // The VideoPlayerStore-backed mpv quality knobs — advanced rows that
+    // render beside the engine-config knobs they qualify (the shared
+    // mpvToneMappingCurve / deband / interpolation settings, plus the
+    // input.conf / custom-buttons escape hatches).
+    val MpvToneMappingCurve = SettingsRow(
+        id = "mpv_tone_mapping_curve",
+        icon = Tabler.Outline.Brightness,
+        titleRes = Res.string.settings_mpv_tone_mapping_curve,
+        subtitleRes = Res.string.settings_mpv_tone_mapping_curve_subtitle,
+        searchTitleRes = Res.string.ss_mpv_tone_mapping_curve_title,
+        searchSubtitleRes = Res.string.ss_mpv_tone_mapping_curve_subtitle,
+    )
+
+    val MpvDeband = SettingsRow(
+        id = "mpv_deband",
+        icon = Tabler.Outline.ColorFilter,
+        titleRes = Res.string.settings_mpv_deband,
+        subtitleRes = Res.string.settings_mpv_deband_subtitle,
+        searchTitleRes = Res.string.ss_mpv_deband_title,
+        searchSubtitleRes = Res.string.ss_mpv_deband_subtitle,
+    )
+
+    val MpvMotionInterpolation = SettingsRow(
+        id = "mpv_motion_interpolation",
+        icon = Tabler.Outline.ArrowsHorizontal,
+        titleRes = Res.string.settings_mpv_motion_interpolation,
+        subtitleRes = Res.string.settings_mpv_motion_interpolation_subtitle,
+        searchTitleRes = Res.string.ss_mpv_motion_interpolation_title,
+        searchSubtitleRes = Res.string.ss_mpv_motion_interpolation_subtitle,
+    )
+
+    val MpvInputConf = SettingsRow(
+        id = "mpv_input_conf",
+        icon = Tabler.Outline.Settings,
+        titleRes = Res.string.settings_mpv_input_conf,
+        subtitleRes = Res.string.settings_mpv_input_conf_subtitle,
+        searchTitleRes = Res.string.ss_mpv_input_conf_title,
+        searchSubtitleRes = Res.string.ss_mpv_input_conf_subtitle,
+    )
+
+    val MpvCustomButtons = SettingsRow(
+        id = "mpv_custom_buttons",
+        icon = Tabler.Outline.Code,
+        titleRes = Res.string.settings_mpv_custom_buttons,
+        subtitleRes = Res.string.settings_mpv_custom_buttons_subtitle,
+        searchTitleRes = Res.string.ss_mpv_custom_buttons_title,
+        searchSubtitleRes = Res.string.ss_mpv_custom_buttons_subtitle,
     )
 
     val MpvInterpolation = SettingsRow(
@@ -1551,6 +1879,17 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.settings_skip_prompt_duration_subtitle,
     )
 
+    // Renders beside [SkipPromptDuration] — the other seconds-before-the-end
+    // transport knob (the Next Up button's preroll).
+    val NextUpPreroll = SettingsRow(
+        id = "next_up_preroll",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_next_up_preroll,
+        subtitleRes = Res.string.settings_next_up_preroll_subtitle,
+        searchTitleRes = Res.string.ss_next_up_preroll_title,
+        searchSubtitleRes = Res.string.ss_next_up_preroll_subtitle,
+    )
+
     /**
      * Every fused playback row. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
@@ -1588,10 +1927,21 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.DefaultAspect,
     PlaybackRows.VideoAutoplayNext,
     PlaybackRows.AutoplayCountdown,
+    PlaybackRows.AutoplayEpisodeLimit,
+    PlaybackRows.SessionRestore,
+    PlaybackRows.NextEpisodeDetails,
+    PlaybackRows.OfferDeleteAfterPlaybackMovies,
+    PlaybackRows.OfferDeleteAfterPlaybackEpisodes,
+    PlaybackRows.AmbientBlur,
+    PlaybackRows.PauseDetails,
+    PlaybackRows.TrickplayMode,
     PlaybackRows.StillWatchingMode,
     PlaybackRows.StillWatchingEpisodes,
     PlaybackRows.ControlsTimeout,
     PlaybackRows.HideOsdOnPause,
+    PlaybackRows.PauseScreensaver,
+    PlaybackRows.PauseScreensaverDelay,
+    PlaybackRows.BitmapSubtitleScale,
     PlaybackRows.SkipBackOnResume,
     PlaybackRows.ShowClockPlayer,
     PlaybackRows.PassOutProtection,
@@ -1638,6 +1988,13 @@ internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.FrameRateMatching,
     PlaybackRows.OfflinePlayback,
     PlaybackRows.StreamingQuality,
+    PlaybackRows.HdrFormatPreference,
+    PlaybackRows.ForceTranscodeAboveHeight,
+    PlaybackRows.PreferredTranscodeVideoCodec,
+    PlaybackRows.PreferredTranscodeAudioCodec,
+    PlaybackRows.CustomDeviceProfileJson,
+    PlaybackRows.HomeNetworkQuality,
+    PlaybackRows.SpeedTest,
     PlaybackRows.AudioDelay,
     PlaybackRows.LiveStreamOption,
 )
@@ -1646,7 +2003,9 @@ internal val PlaybackEngineMpvRows: List<SettingsRow> = listOf(
     PlaybackRows.MpvVideoOutput,
     PlaybackRows.MpvScaler,
     PlaybackRows.MpvDebanding,
+    PlaybackRows.MpvDeband,
     PlaybackRows.MpvInterpolation,
+    PlaybackRows.MpvMotionInterpolation,
     PlaybackRows.MpvAudioOutput,
     PlaybackRows.MpvAudioFallback,
     PlaybackRows.MpvAudioDevice,
@@ -1654,6 +2013,7 @@ internal val PlaybackEngineMpvRows: List<SettingsRow> = listOf(
     PlaybackRows.MpvAudioMode,
     PlaybackRows.MpvShaderPack,
     PlaybackRows.MpvToneMapping,
+    PlaybackRows.MpvToneMappingCurve,
     PlaybackRows.MpvRenderQuality,
     PlaybackRows.MpvHdrPassthrough,
     PlaybackRows.MpvInterpolationTscale,
@@ -1662,6 +2022,8 @@ internal val PlaybackEngineMpvRows: List<SettingsRow> = listOf(
     PlaybackRows.MpvSkipLoopFilter,
     PlaybackRows.MpvFrameDrop,
     PlaybackRows.MpvExtraConfig,
+    PlaybackRows.MpvInputConf,
+    PlaybackRows.MpvCustomButtons,
     PlaybackRows.ResetEngineDefaults,
 )
 
@@ -1721,6 +2083,7 @@ internal val PlaybackMediaSegmentsRows: List<SettingsRow> = listOf(
     PlaybackRows.MediaSegmentUnknown,
     PlaybackRows.SkipSegmentsOnSeek,
     PlaybackRows.SkipPromptDuration,
+    PlaybackRows.NextUpPreroll,
 )
 
 /**

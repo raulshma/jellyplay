@@ -151,6 +151,24 @@ internal data class WatchedActionDecision(
 )
 
 /**
+ * The pause-details overlay's gate (#13): when the pref is on and playback is
+ * paused, the player renders a quiet item-details panel (title, metadata
+ * line, synopsis, cast ribbon — all data already in the uiState projection).
+ * [hasDetails] means the session actually carries displayable content (a
+ * title or a synopsis); [screensaverActive] is the #11 paused-idle
+ * screensaver's live state — the details YIELD to it (the screensaver covers
+ * the whole surface; a details panel under a clock would be unreadable
+ * twice). Pure so the precedence stays pinned by [PauseDetailsPolicyTest]
+ * instead of living inline in the overlay stack.
+ */
+internal fun shouldShowPauseDetails(
+    enabled: Boolean,
+    isPaused: Boolean,
+    hasDetails: Boolean,
+    screensaverActive: Boolean,
+): Boolean = enabled && isPaused && hasDetails && !screensaverActive
+
+/**
  * The decision matrix for the two mark-and-exit overflow actions. Pure so the
  * incognito/SyncPlay/has-next combinations stay pinned by the JVM matrix test
  * instead of living inline in the ViewModel.

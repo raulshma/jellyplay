@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlin.test.Test
@@ -176,6 +177,16 @@ class EngineConfigDeltaTest {
     }
 
     @Test
+    fun of_hdrFormatPreferenceAlone_flipsOnlyTheGroup() {
+        // The #5 posture: a runtime HDR-format pick must reach the hosts'
+        // shared-pair re-diff even when no engine-specific slice moved.
+        assertFlags(
+            changed { copy(hdrFormatPreference = HdrFormatPreference.SDR_ONLY) },
+            sharedPairs = true,
+        )
+    }
+
+    @Test
     fun of_engineSpecificAlone_flipsItselfAndTheGroup() {
         // Convergence pin: a change TO an engine-specific slice (including to
         // null — see EngineConfigDelta's KDoc) must re-diff the shared pairs.
@@ -257,6 +268,7 @@ class EngineConfigDeltaTest {
             audioPassthrough = true,
             deinterlace = DeinterlaceMode.ON,
             hdrSource = true,
+            hdrFormatPreference = HdrFormatPreference.DOLBY_VISION_ONLY,
             audioEffects = base.audioEffects.copy(channelMixEnabled = true),
             videoEffects = base.videoEffects.copy(brightness = 0.2f),
         )

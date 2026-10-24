@@ -17,6 +17,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.data.repository.HomeLayoutRestoreFetch
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.HomeHeroStyle
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -138,10 +139,15 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
  * conditional unhide action row, which renders only while hidden
  * continue-watching items exist — a content-state condition with no
  * admission vocabulary (the storage cache-used info row shape: the screen
- * adds the +1 explicitly).
+ * adds the +1 explicitly). The hero-slideshow interval row rides its
+ * declared WhenOn(home_hero_style) gate; the screen feeds "style is
+ * slideshow" as that parent's on-state.
  */
-internal fun homeDisplayScreenRowTotal(hiddenCwItems: Int): Int =
-    rowTotalFor(SettingsScreenGroups.homeDisplay, RowAdmissionFlags()) + if (hiddenCwItems > 0) 1 else 0
+internal fun homeDisplayScreenRowTotal(hiddenCwItems: Int, heroSlideshowOn: Boolean): Int =
+    rowTotalFor(
+        SettingsScreenGroups.homeDisplay,
+        RowAdmissionFlags(parentsOn = rowParentsOn(HomeRows.HomeHeroStyle.id to heroSlideshowOn)),
+    ) + if (hiddenCwItems > 0) 1 else 0
 
 /**
  * The cards group's `SettingsItemList(total = …)` row count: the
@@ -234,13 +240,17 @@ fun HomeSettingsScreen(
                     // Derived from the declared display group (the derivation
                     // source the row total below reads — one declaration, no
                     // parallel id list): the always-rendered config rows in
-                    // catalog order, plus the unhide row while hidden
-                    // continue-watching items exist.
-                    val displayItems = remember(preferences.hiddenCwItemIds) {
-                        SettingsScreenGroups.homeDisplay.itemIds.filter { it != HomeRows.UnhideCw.id } +
+                    // catalog order, the hero-slideshow interval only while
+                    // its WhenOn parent (style = slideshow) is on, plus the
+                    // unhide row while hidden continue-watching items exist.
+                    val heroSlideshowOn = preferences.homeHeroStyle == HomeHeroStyle.SLIDESHOW
+                    val displayItems = remember(preferences.hiddenCwItemIds, heroSlideshowOn) {
+                        SettingsScreenGroups.homeDisplay.itemIds
+                            .filter { it != HomeRows.UnhideCw.id }
+                            .filter { heroSlideshowOn || it != HomeRows.HomeHeroSlideshowInterval.id } +
                             if (preferences.hiddenCwItemIds.isNotEmpty()) listOf(HomeRows.UnhideCw.id) else emptyList()
                     }
-                    SettingsItemList(total = homeDisplayScreenRowTotal(preferences.hiddenCwItemIds.size)) {
+                    SettingsItemList(total = homeDisplayScreenRowTotal(preferences.hiddenCwItemIds.size, heroSlideshowOn)) {
                     displayItems.forEach { item ->
                         when (item) {
                             HomeRows.HomeMode.id -> {
@@ -264,6 +274,53 @@ fun HomeSettingsScreen(
                                     checked = preferences.homeHeroEnabled,
                                     highlighted = highlightSettingId == HomeRows.HeroSection.id,
                                     onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroEnabled(it) } },
+                                )
+                            }
+                            // The hero's render style — rides beside the
+                            // hero toggle (the master switch it qualifies).
+                            HomeRows.HomeHeroStyle.id -> {
+                                val heroStyleTitle = rowTitle(HomeRows.HomeHeroStyle)
+                                val heroStyleLabels = HomeHeroStyle.entries.associateWith { stringResource(homeHeroStyleLabelRes(it)) }
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeHeroStyle),
+                                    title = heroStyleTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeHeroStyle),
+                                    trailingText = heroStyleLabels[preferences.homeHeroStyle]
+                                        ?: preferences.homeHeroStyle.name,
+                                    highlighted = highlightSettingId == HomeRows.HomeHeroStyle.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = heroStyleTitle,
+                                            items = HomeHeroStyle.entries,
+                                            label = { heroStyleLabels.getValue(it) },
+                                            isSelected = { it == preferences.homeHeroStyle },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroStyle(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            // The slideshow style's per-slide dwell — emitted
+                            // only while its WhenOn(home_hero_style) parent is
+                            // on (style = slideshow); the displayItems
+                            // derivation above filters it, matching the
+                            // declared admission the total reads.
+                            HomeRows.HomeHeroSlideshowInterval.id -> {
+                                val slideshowIntervalTitle = rowTitle(HomeRows.HomeHeroSlideshowInterval)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeHeroSlideshowInterval),
+                                    title = slideshowIntervalTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeHeroSlideshowInterval),
+                                    trailingText = "${preferences.homeHeroSlideshowIntervalSec}s",
+                                    highlighted = highlightSettingId == HomeRows.HomeHeroSlideshowInterval.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = slideshowIntervalTitle,
+                                            items = listOf(3, 5, 8, 10, 15, 20, 30, 60),
+                                            label = { "${it}s" },
+                                            isSelected = { it == preferences.homeHeroSlideshowIntervalSec },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroSlideshowIntervalSec(it) } },
+                                        )
+                                    },
                                 )
                             }
                             HomeRows.HomeBackdrop.id -> {

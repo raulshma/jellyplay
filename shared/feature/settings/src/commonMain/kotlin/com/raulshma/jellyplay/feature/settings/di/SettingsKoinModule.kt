@@ -139,7 +139,9 @@ val settingsModule: Module = module {
 
     // Hand-written, not viewModelOf: the nullable audio-device seam resolves
     // with getOrNull (the ctor KDoc owns the rationale), which viewModelOf's
-    // per-param hard get() cannot express.
+    // per-param hard get() cannot express. The connection-speed probe rides
+    // the same getOrNull shape (always bound in production; nullable keeps
+    // the VM's unit-test construction seam-free).
     viewModel {
         PlaybackSettingsViewModel(
             projections = get(),
@@ -147,6 +149,7 @@ val settingsModule: Module = module {
             editor = get(),
             watchNextRefresher = get(),
             audioDeviceEnumerator = getOrNull(),
+            connectionSpeedTester = getOrNull(),
         )
     }
 

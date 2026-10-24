@@ -289,6 +289,11 @@ internal fun rememberHeroController(
     featuredCandidates: List<MediaItem>,
     listState: LazyListState,
     getBackdropUrl: (String) -> String,
+    /**
+     * The SLIDESHOW style's timed-advance interval (from the
+     * [homeHeroStyleDecision] fold); null keeps the shipped 8 s idle cadence.
+     */
+    timedAdvanceMs: Long? = null,
 ): HeroController {
     // Conveyor transform: Context.isTv() (UI_MODE check on
     // LocalContext) is Android-only; LocalTvMode is the shared core:ui
@@ -356,13 +361,14 @@ internal fun rememberHeroController(
     // snapshotFlow instead — a pref or "Surprise Me" flip still re-evaluates
     // the cadence immediately, while per-emission candidates churn does not
     // cancel a pending 8 s idle wait.
-    LaunchedEffect(listState, candidatesEpoch) {
+    LaunchedEffect(listState, candidatesEpoch, timedAdvanceMs) {
         snapshotFlow { listState.isScrollInProgress to controller.autoRotateEnabled }
             .collectLatest { (isScrolling, _) ->
                 when (
                     val cadence = controller.rotationCadence(
                         isScrolling = isScrolling,
                         lifecycleResumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+                        advanceMs = timedAdvanceMs ?: HeroController.IDLE_ROTATION_DELAY_MS,
                     )
                 ) {
                     RotationCadence.None -> Unit
@@ -462,6 +468,13 @@ internal class HeroController(
     val featuredItem: MediaItem? get() = candidates.getOrNull(featuredIndex)
 
     /**
+     * The read-only featured-index mirror — the TV_SLIDER pager's sync source
+     * ([HeroSliderHeader] pages to it when an external change — a Surprise
+     * pick — moves the featured item).
+     */
+    val currentFeaturedIndex: Int get() = featuredIndex
+
+    /**
      * The rotation successor of [featuredItem] (featuredIndex + 1, wrapping) —
      * the candidate the next auto-rotation tick features, known ahead of time
      * so its backdrop can be prefetched while the current item displays. Null
@@ -525,6 +538,18 @@ internal class HeroController(
     }
 
     /**
+     * The TV_SLIDER snap: the pager's settled page becomes the featured index,
+     * so the ambient backdrop and the "Surprise Me" state stay in step with
+     * what the slider shows. Out-of-range pages are ignored (a pool shrink can
+     * leave the pager momentarily ahead of the candidate list).
+     */
+    fun snapToSliderPage(index: Int) {
+        if (index in candidates.indices) {
+            featuredIndex = index
+        }
+    }
+
+    /**
      * The rotation-cadence decision behind the composable's snapshotFlow
      * collector — the whole policy, Compose-free and synchronously testable.
      * Returns [RotationCadence.None] when no delay may be scheduled (no
@@ -538,12 +563,16 @@ internal class HeroController(
      * re-check. The decision carries its kind, so the collector dispatches on
      * the sealed type instead of comparing raw delay constants.
      */
-    internal fun rotationCadence(isScrolling: Boolean, lifecycleResumed: Boolean): RotationCadence {
+    internal fun rotationCadence(
+        isScrolling: Boolean,
+        lifecycleResumed: Boolean,
+        advanceMs: Long = IDLE_ROTATION_DELAY_MS,
+    ): RotationCadence {
         if (candidates.isEmpty() || !autoRotateEnabled || !focusInHero || !lifecycleResumed) return RotationCadence.None
         return if (isScrolling) {
             RotationCadence.RecheckAfter(SCROLL_DEFER_DELAY_MS)
         } else {
-            RotationCadence.TickAfter(IDLE_ROTATION_DELAY_MS)
+            RotationCadence.TickAfter(advanceMs)
         }
     }
 

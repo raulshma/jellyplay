@@ -648,6 +648,8 @@ internal class HomeViewModel(
                     // query rides).
                     hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                     homeHeroEnabled = prefs.home.homeHeroEnabled,
+                    homeHeroStyle = prefs.home.homeHeroStyle,
+                    homeHeroSlideshowIntervalSec = prefs.home.homeHeroSlideshowIntervalSec,
                     homeBackdropEnabled = prefs.home.homeBackdropEnabled,
                     showClock = prefs.home.showClockOnHome,
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,

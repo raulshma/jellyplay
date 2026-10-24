@@ -55,6 +55,15 @@ data class JellyPlayEpisodeRatings(
     val tmdbVotes: Int? = null,
 )
 
+/** The OMDb awards enrichment (`GET jellyplay/omdb/awards`) — fields absent upstream decode null. */
+@Serializable
+data class JellyPlayOmdbAwards(
+    val imdbId: String,
+    val awards: String? = null,
+    val boxOffice: String? = null,
+    val imdbRating: String? = null,
+)
+
 @Serializable
 data class JellyPlayScoredItem(
     val itemId: String,

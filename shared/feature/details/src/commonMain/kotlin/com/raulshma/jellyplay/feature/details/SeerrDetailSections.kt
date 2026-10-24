@@ -27,7 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -168,6 +171,8 @@ internal fun RatingsRow(
     rtUrl: String? = null,
     imdbUrl: String? = null,
     tmdbUrl: String? = null,
+    /** The OMDb awards line — rendered as the row's last badge when non-null. */
+    awards: String? = null,
 ) {
     val chips = externalRatingChipSources(
         DetailExternalRatings(
@@ -180,7 +185,7 @@ internal fun RatingsRow(
             tmdbUrl = tmdbUrl,
         ),
     )
-    if (chips.isEmpty()) return
+    if (chips.isEmpty() && awards == null) return
     val uriHandler = LocalUriHandler.current
 
     FlowRow(
@@ -266,18 +271,45 @@ internal fun RatingsRow(
                 }
             }
         }
+
+        // The OMDb awards badge — the row's last chip, truncated to one line
+        // (the full line rides the content description for screen readers;
+        // a tap without a deep link reads nothing more). Only composed when
+        // the plugin's awards leg answered — no empty badge, ever.
+        if (awards != null) {
+            RatingChip(
+                url = null,
+                contentDescription = awards,
+            ) {
+                Text(text = "🏆", modifier = Modifier.padding(end = 4.dp))
+                Text(
+                    text = awards,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = AwardsBadgeMaxWidth),
+                )
+            }
+        }
     }
 }
+
+/** The awards badge's one-line width cap — long award lists ellipsize inside it. */
+private val AwardsBadgeMaxWidth = 220.dp
 
 /**
  * One chip shell of the shared strip: a vertically-centered row that gains the
  * click + TV-focus vocabulary only when it carries a deep link (the
  * [DetailExternalLinksRow] pattern); url-less chips render exactly as the
- * former non-clickable strip did.
+ * former non-clickable strip did. [contentDescription] (the awards badge's
+ * full-text leg) replaces the chip's screen-reader text when set.
  */
 @Composable
 private fun RatingChip(
     url: String?,
+    contentDescription: String? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
@@ -291,6 +323,13 @@ private fun RatingChip(
                         .then(focusState.focusModifier)
                         .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smoothPill))
                         .clickable { uriHandler.openUri(url) }
+                } else {
+                    Modifier
+                },
+            )
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
                 } else {
                     Modifier
                 },

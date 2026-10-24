@@ -22,3 +22,19 @@ enum class ContinueWatchingClickBehavior(val displayName: String) {
     PLAY("Resume Playback"),
     ASK("Always Ask"),
 }
+
+/**
+ * The hero block's presentation on home. [CAROUSEL] is the shipped
+ * horizontally-paged hero; [SLIDESHOW] auto-advances on a timer (the
+ * `home_hero_slideshow_interval_sec` pacing); [DETAILED] shows a single
+ * expanded spotlight card; [TV_SLIDER] is the focus-driven TV row. Persistence
+ * is the enum NAME.
+ */
+@Immutable
+@Serializable
+enum class HomeHeroStyle {
+    CAROUSEL,
+    SLIDESHOW,
+    DETAILED,
+    TV_SLIDER,
+}

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
@@ -428,6 +429,7 @@ class SettingsCatalogScreenContractTest {
                 videoAutoplayNext = true,
                 audioPassthrough = true,
                 spatialAudioEnabled = true,
+                pauseScreensaverMode = PauseScreensaverMode.CLOCK,
             ),
         )
         val declaredParents = listOf(
@@ -644,18 +646,20 @@ class SettingsCatalogScreenContractTest {
         // The declaration side keeps the ids inside LiveTvSearchItems and must
         // keep following the media_segment_<enum-name> convention so the
         // derived scroll set and the hand-built rows stay in lock-step. The
-        // group's skip-on-seek toggle and skip-prompt-duration row are the two
-        // non-enum members — hand-built rows like the per-type rows.
+        // group's skip-on-seek toggle, skip-prompt-duration row and the
+        // Next Up preroll row are the three non-enum members — hand-built
+        // rows like the per-type rows.
         val enumSegmentIds = MediaSegmentType.entries.map { "media_segment_${it.name.lowercase()}" }
         assertEquals(
-            enumSegmentIds + PlaybackRows.SkipSegmentsOnSeek.id + PlaybackRows.SkipPromptDuration.id,
+            enumSegmentIds + PlaybackRows.SkipSegmentsOnSeek.id + PlaybackRows.SkipPromptDuration.id +
+                PlaybackRows.NextUpPreroll.id,
             SettingsScreenGroups.playbackMediaSegments.itemIds,
             "media-segment group declarations drifted from MediaSegmentType.entries + the hand-built transport rows",
         )
         assertTrue(
             SettingsScreenGroups.playbackDvr.itemIds.none {
                 it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) || it == PlaybackRows.SkipSegmentsOnSeek.id ||
-                    it == PlaybackRows.SkipPromptDuration.id
+                    it == PlaybackRows.SkipPromptDuration.id || it == PlaybackRows.NextUpPreroll.id
             },
             "DVR group must not absorb media-segment ids",
         )
@@ -969,9 +973,9 @@ class SettingsCatalogScreenContractTest {
         )
         // Every non-advanced declaration renders with caps on (isTv off: the
         // two TV rows ride isTv alone — shipped semantics, also without
-        // advanced mode), EXCEPT the two still-watching rows, which ride the
-        // autoplay toggle (their declared WhenOn gate — the flags here carry
-        // no parentsOn).
+        // advanced mode), EXCEPT the two still-watching rows and the
+        // pause-screensaver delay row, which ride their parent toggles (their
+        // declared WhenOn gates — the flags here carry no parentsOn).
         assertEquals(
             SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 2,
             rowTotalFor(
@@ -985,7 +989,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 5, // minus the two TV rows, the two WhenOn(autoplay) still-watching rows, and the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
+            SettingsScreenGroups.playbackPlayer.items.size - 6, // minus the two TV rows, the two WhenOn(autoplay) still-watching rows, the WhenOn(pause_screensaver) delay row, and the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1000,11 +1004,12 @@ class SettingsCatalogScreenContractTest {
         // semantics, also without advanced mode); every other advanced
         // declaration (the resume-on-headset-plug row among them) admits
         // under advanced, and the Always-admitted input-bindings editor row
-        // needs no advanced. Only the two WhenOn(autoplay) still-watching
-        // rows (no parents on) and the Platform(Pip) auto-PiP row (off on
-        // this desktop JVM's seam — TV does not back it) drop.
+        // needs no advanced. The two WhenOn(autoplay) still-watching rows
+        // (no parents on), the WhenOn(pause_screensaver) delay row (no
+        // parents on), and the Platform(Pip) auto-PiP row (off on this
+        // desktop JVM's seam — TV does not back it) drop.
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 2 - 1,
+            SettingsScreenGroups.playbackPlayer.items.size - 2 - 1 - 1,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1239,26 +1244,34 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home display row total is the nine declared rows plus the conditional unhide row`() {
-        // The count follows the emitted rows: the nine always-declared rows
-        // plus the explicit unhide +1 when hidden CW items exist, rather than
-        // items.size (10, including the unhide row) + 1.
-        val displayRowsWithoutUnhide = SettingsScreenGroups.homeDisplay.items.count { it.id != HomeRows.UnhideCw.id }
-        assertEquals(displayRowsWithoutUnhide, homeDisplayScreenRowTotal(hiddenCwItems = 0))
+    fun `home display row total is the declared rows minus the gated pair plus the conditional unhide row`() {
+        // The count follows the emitted rows: the declared rows minus the
+        // unhide row (the content-gated +1 once hidden CW items exist) and
+        // minus the hero-slideshow interval row while its WhenOn
+        // (home_hero_style = slideshow) parent is off.
+        val displayRowsWithoutGatedPair = SettingsScreenGroups.homeDisplay.items.count {
+            it.id != HomeRows.UnhideCw.id && it.id != HomeRows.HomeHeroSlideshowInterval.id
+        }
+        assertEquals(displayRowsWithoutGatedPair, homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false))
         assertEquals(
-            displayRowsWithoutUnhide + 1, // +1: the unhide row, once hidden CW items exist
-            homeDisplayScreenRowTotal(hiddenCwItems = 1),
+            displayRowsWithoutGatedPair + 1, // +1: the unhide row, once hidden CW items exist
+            homeDisplayScreenRowTotal(hiddenCwItems = 1, heroSlideshowOn = false),
         )
         assertEquals(
-            SettingsScreenGroups.homeDisplay.items.size - 1,
-            homeDisplayScreenRowTotal(hiddenCwItems = 0),
+            displayRowsWithoutGatedPair + 1, // +1: the slideshow interval row, its parent on
+            homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = true),
+        )
+        assertEquals(
+            SettingsScreenGroups.homeDisplay.items.size - 2,
+            homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false),
             "the display declaration changed — update this pin",
         )
         // The unhide row is declared last, so the derived emission order
         // keeps it at the end.
         assertEquals(HomeRows.UnhideCw.id, SettingsScreenGroups.homeDisplay.itemIds.last())
-        // …and it admits for emission (rowAdmitted's no-gate default) — the
-        // screen's content-state `if` carries its gate.
+        // …and they admit for emission (rowAdmitted's no-gate default /
+        // the WhenOn parent fed by the screen) — the screen's content-state
+        // `if`s carry their gates.
         assertTrue(SettingsScreenGroups.homeDisplay.rowAdmitted(HomeRows.UnhideCw.id, RowAdmissionFlags()))
     }
 

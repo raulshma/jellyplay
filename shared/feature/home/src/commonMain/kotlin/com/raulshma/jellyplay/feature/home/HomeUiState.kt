@@ -141,6 +141,10 @@ data class HomeUiState(
     val renderSource: HomeRenderSource = HomeRenderSource.Online,
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
+    /** The hero block's presentation (`home_hero_style` pref mirror). */
+    val homeHeroStyle: com.raulshma.jellyplay.core.model.HomeHeroStyle = com.raulshma.jellyplay.core.model.HomeHeroStyle.CAROUSEL,
+    /** The SLIDESHOW auto-advance pacing in seconds (`home_hero_slideshow_interval_sec` mirror). */
+    val homeHeroSlideshowIntervalSec: Int = 8,
     val homeBackdropEnabled: Boolean = true,
     val showClock: Boolean = false,
     /**

@@ -124,3 +124,28 @@ enum class SubtitleEdgeType {
     RAISED,
     DEPRESSED,
 }
+
+/**
+ * How a bitmap subtitle (PGS/VobSub) plane is scaled onto the video frame
+ * when its native resolution disagrees with the render target. [FIT] keeps
+ * the plane's aspect (the historical behavior); [STRETCH] fills the frame
+ * ignoring aspect; [COVER] fills the frame cropping the overflow. Persistence
+ * is the enum NAME.
+ *
+ * Engine support (issue #29, honest status): **mpv fully honors all three
+ * modes** (`sub-scale-with-window`, via MpvConfigMapping — STRETCH writes
+ * `yes`, FIT/COVER write `no`; mpv has no true stretch/cover surface, so
+ * COVER is FIT there by design). **ExoPlayer is FIT-only**: Media3 1.11.1's
+ * `SubtitleView` draws `Cue.bitmap` planes at intrinsic size inside its
+ * package-private `CanvasSubtitleOutput`/`SubtitlePainter` with no public
+ * scaling hook, and JellyPlay does not fork Media3 internals — the mode is
+ * plumbed to `ExoPlayerEngineConfig.bitmapSubtitleScaleMode` for symmetry,
+ * but the Exo render site renders FIT regardless (see its KDoc).
+ */
+@Immutable
+@Serializable
+enum class BitmapSubtitleScaleMode {
+    FIT,
+    STRETCH,
+    COVER,
+}

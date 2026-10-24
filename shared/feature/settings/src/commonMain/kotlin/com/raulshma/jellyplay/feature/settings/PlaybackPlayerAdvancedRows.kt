@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -86,6 +88,70 @@ internal fun PlaybackPlayerAdvancedRows(
                             highlighted = highlightSettingId == PlaybackRows.HideOsdOnPause.id,
                             onCheckedChange = { enabled ->
                                 viewModel.edit { scope -> scope.videoPlayer.setVideoHideOsdOnPause(enabled) }
+                            },
+                        )
+                        // The pause screensaver: renders beside the
+                        // pause-OSD toggle (the other paused-screen knob);
+                        // its delay row rides the mode row's WhenOn admission.
+                        val pauseScreensaverTitle = rowTitle(PlaybackRows.PauseScreensaver)
+                        val pauseScreensaverLabels = PauseScreensaverMode.entries.associateWith { stringResource(pauseScreensaverModeLabelRes(it)) }
+                        SettingListItem(
+                            icon = rowIcon(PlaybackRows.PauseScreensaver),
+                            title = pauseScreensaverTitle,
+                            subtitle = rowSubtitle(PlaybackRows.PauseScreensaver),
+                            trailingText = pauseScreensaverLabels[preferences.pauseScreensaverMode]
+                                ?: preferences.pauseScreensaverMode.name,
+                            highlighted = highlightSettingId == PlaybackRows.PauseScreensaver.id,
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = pauseScreensaverTitle,
+                                    items = PauseScreensaverMode.entries,
+                                    label = { pauseScreensaverLabels.getValue(it) },
+                                    isSelected = { it == preferences.pauseScreensaverMode },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setPauseScreensaverMode(it) } },
+                                )
+                            },
+                        )
+                        if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.PauseScreensaverDelay.id, rowFlags)) {
+                            val screensaverDelayTitle = rowTitle(PlaybackRows.PauseScreensaverDelay)
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.PauseScreensaverDelay),
+                                title = screensaverDelayTitle,
+                                subtitle = rowSubtitle(PlaybackRows.PauseScreensaverDelay),
+                                trailingText = "${preferences.pauseScreensaverAfterMinutes}m",
+                                highlighted = highlightSettingId == PlaybackRows.PauseScreensaverDelay.id,
+                                onClick = {
+                                    val minutes = listOf(1, 2, 5, 10, 15, 30)
+                                    activePicker.value = PickerState.List(
+                                        title = screensaverDelayTitle,
+                                        items = minutes,
+                                        label = { "${it}m" },
+                                        isSelected = { it == preferences.pauseScreensaverAfterMinutes },
+                                        onSelect = { viewModel.edit { scope -> scope.videoPlayer.setPauseScreensaverAfterMinutes(it) } },
+                                    )
+                                },
+                            )
+                        }
+                        // The bitmap-subtitle scaling mode — beside the
+                        // zoom/aspect knobs (the other how-the-frame-fits
+                        // control).
+                        val bitmapScaleTitle = rowTitle(PlaybackRows.BitmapSubtitleScale)
+                        val bitmapScaleLabels = BitmapSubtitleScaleMode.entries.associateWith { stringResource(bitmapSubtitleScaleModeLabelRes(it)) }
+                        SettingListItem(
+                            icon = rowIcon(PlaybackRows.BitmapSubtitleScale),
+                            title = bitmapScaleTitle,
+                            subtitle = rowSubtitle(PlaybackRows.BitmapSubtitleScale),
+                            trailingText = bitmapScaleLabels[preferences.bitmapSubtitleScaleMode]
+                                ?: preferences.bitmapSubtitleScaleMode.name,
+                            highlighted = highlightSettingId == PlaybackRows.BitmapSubtitleScale.id,
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = bitmapScaleTitle,
+                                    items = BitmapSubtitleScaleMode.entries,
+                                    label = { bitmapScaleLabels.getValue(it) },
+                                    isSelected = { it == preferences.bitmapSubtitleScaleMode },
+                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setBitmapSubtitleScaleMode(it) } },
+                                )
                             },
                         )
                         val skipBackOnResumeTitle = rowTitle(PlaybackRows.SkipBackOnResume)

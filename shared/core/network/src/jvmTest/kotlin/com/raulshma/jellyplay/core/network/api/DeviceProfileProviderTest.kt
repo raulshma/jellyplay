@@ -3,6 +3,13 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
+import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jellyfin.sdk.model.api.CodecType
 import org.jellyfin.sdk.model.api.ProfileConditionType
 import org.jellyfin.sdk.model.api.ProfileConditionValue
@@ -10,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DeviceProfileProviderTest {
@@ -155,5 +163,176 @@ class DeviceProfileProviderTest {
             profile.applyConditions.any { it.property == ProfileConditionValue.AUDIO_CHANNELS }
         }
         assertFalse(hasCap, "AUTO must not advertise a channel cap")
+    }
+
+    // ── transcode-target codec preferences (#21) ────────────────────────────
+
+    /** The transcoding profile's codec lists (single video/audio profile per base profile). */
+    private fun transcodeVideoCodecs(profile: org.jellyfin.sdk.model.api.DeviceProfile): List<String> =
+        profile.transcodingProfiles.first().videoCodec.orEmpty().split(',').map { it.trim() }
+
+    private fun transcodeAudioCodecs(profile: org.jellyfin.sdk.model.api.DeviceProfile): List<String> =
+        profile.transcodingProfiles.first().audioCodec.orEmpty().split(',').map { it.trim() }
+
+    @Test
+    fun `preferred video codec moves to the front of the transcode list`() {
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            preferredVideoCodec = TranscodeVideoCodecPreference.H264,
+        )
+        // The mpv base list is ["hevc", "h264"]; preferring h264 reorders it
+        // to ["h264", "hevc"] — hevc stays as fallback (no filter-to-one).
+        assertEquals(listOf("h264", "hevc"), transcodeVideoCodecs(shaped))
+    }
+
+    @Test
+    fun `preferred audio codec moves to the front of the transcode list`() {
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            preferredAudioCodec = TranscodeAudioCodecPreference.EAC3,
+        )
+        val codecs = transcodeAudioCodecs(shaped)
+        assertEquals("eac3", codecs.first(), "preferred eac3 must be first")
+        assertTrue(codecs.containsAll(listOf("aac", "ac3", "mp3", "opus", "flac")), "fallbacks survive")
+        assertEquals(codecs.size, codecs.distinct().size, "the preferred token must not duplicate")
+    }
+
+    @Test
+    fun `preferred codec missing from the transcode list is prepended`() {
+        // The mpv transcode profile advertises hevc/h264 only; a preferred
+        // AV1 target is prepended ahead of the existing fallbacks (a server
+        // without an AV1 encoder still finds hevc/h264 behind it).
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            preferredVideoCodec = TranscodeVideoCodecPreference.AV1,
+        )
+        assertEquals(listOf("av1", "hevc", "h264"), transcodeVideoCodecs(shaped))
+    }
+
+    @Test
+    fun `codec preferences leave direct play sets and AUTO untouched`() {
+        val baseline = provider.forPlayer(PlayerType.MPV)
+        val auto = provider.forPlayer(
+            PlayerType.MPV,
+            preferredVideoCodec = TranscodeVideoCodecPreference.AUTO,
+            preferredAudioCodec = TranscodeAudioCodecPreference.AUTO,
+        )
+        assertEquals(baseline, auto, "AUTO must reproduce the memoised profile byte for byte")
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            preferredVideoCodec = TranscodeVideoCodecPreference.HEVC,
+            preferredAudioCodec = TranscodeAudioCodecPreference.OPUS,
+        )
+        assertEquals(
+            baseline.directPlayProfiles,
+            shaped.directPlayProfiles,
+            "the transcode preference must not touch the direct-play sets",
+        )
+    }
+
+    // ── custom device-profile deep merge (#10) ──────────────────────────────
+
+    @Test
+    fun `custom profile object deep merges over the generated profile`() {
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            customDeviceProfileJson = """
+                {
+                  "Name": "my-profile",
+                  "MaxStreamingBitrate": 123456789,
+                  "DirectPlayProfiles": [],
+                  "CodecProfiles": [
+                    { "Type": "Video", "Conditions": [], "ApplyConditions": [] }
+                  ]
+                }
+            """.trimIndent(),
+        )
+        assertEquals("my-profile", shaped.name, "the overlay replaces scalar fields")
+        assertEquals(123456789, shaped.maxStreamingBitrate, "the overlay replaces numeric fields")
+        assertTrue(shaped.directPlayProfiles.isEmpty(), "an array replaces the base array whole")
+        assertEquals(1, shaped.codecProfiles.size, "an array replaces the base array whole")
+    }
+
+    @Test
+    fun `custom profile with a partial nested object falls back to the generated profile`() {
+        // An array replacement is a COMPLETE list: the SDK's CodecProfile
+        // carries required fields (ApplyConditions), so a partial entry fails
+        // the merged decode and the generated profile ships unchanged — the
+        // override can shape the profile but never crash the resolution.
+        val baseline = provider.forPlayer(PlayerType.MPV)
+        assertEquals(
+            baseline,
+            provider.forPlayer(
+                PlayerType.MPV,
+                customDeviceProfileJson = """{ "CodecProfiles": [ { "Type": "Video", "Conditions": [] } ] }""",
+            ),
+        )
+    }
+
+    @Test
+    fun `custom profile merge keeps base content the overlay is silent about`() {
+        val baseline = provider.forPlayer(PlayerType.MPV)
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            customDeviceProfileJson = """{ "MaxStreamingBitrate": 987654321 }""",
+        )
+        assertEquals(987654321, shaped.maxStreamingBitrate, "the targeted field is replaced")
+        assertEquals(baseline.name, shaped.name, "untouched scalars stand")
+        assertEquals(baseline.subtitleProfiles, shaped.subtitleProfiles, "untouched arrays stand")
+        assertEquals(baseline.transcodingProfiles, shaped.transcodingProfiles, "untouched arrays stand")
+    }
+
+    @Test
+    fun `invalid custom profile json is ignored whole`() {
+        val baseline = provider.forPlayer(PlayerType.MPV)
+        assertEquals(
+            baseline,
+            provider.forPlayer(PlayerType.MPV, customDeviceProfileJson = "{ not json"),
+            "invalid JSON must ship the generated profile unchanged",
+        )
+        assertEquals(
+            baseline,
+            provider.forPlayer(PlayerType.MPV, customDeviceProfileJson = "\"just a string\""),
+            "a non-object payload must ship the generated profile unchanged",
+        )
+    }
+
+    @Test
+    fun `unknown custom profile keys do not break the decode`() {
+        val shaped = provider.forPlayer(
+            PlayerType.MPV,
+            customDeviceProfileJson = """{ "TotallyUnknownFutureField": 42 }""",
+        )
+        assertNotNull(shaped.name, "an unknown overlay key must not fail the merged decode")
+    }
+
+    @Test
+    fun `deepMergeJson replaces arrays and scalars and descends objects`() {
+        val base = Json.parseToJsonElement(
+            """{"a":{"x":1,"y":2},"b":[1,2,3],"c":"keep","d":{"deep":{"v":"old"}}}""",
+        ).jsonObject
+        val overlay = Json.parseToJsonElement(
+            """{"a":{"y":20},"b":[9],"c":"replaced","d":{"deep":{"v":"new","w":1}}}""",
+        ).jsonObject
+        val merged = deepMergeJson(base, overlay)
+        assertEquals("20", merged["a"]!!.jsonObject["y"]!!.jsonPrimitive.content, "nested scalar replaced")
+        assertEquals("1", merged["a"]!!.jsonObject["x"]!!.jsonPrimitive.content, "base sibling kept")
+        assertEquals(listOf("9"), merged["b"]!!.jsonArray.map { it.jsonPrimitive.content }, "array replaced whole")
+        assertEquals("replaced", merged["c"]!!.jsonPrimitive.content)
+        assertEquals("new", merged["d"]!!.jsonObject["deep"]!!.jsonObject["v"]!!.jsonPrimitive.content)
+        assertEquals("1", merged["d"]!!.jsonObject["deep"]!!.jsonObject["w"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `transcode codec token table maps the preference vocabulary`() {
+        assertNull(TranscodeVideoCodecPreference.AUTO.token)
+        assertEquals("h264", TranscodeVideoCodecPreference.H264.token)
+        assertEquals("hevc", TranscodeVideoCodecPreference.HEVC.token)
+        assertEquals("av1", TranscodeVideoCodecPreference.AV1.token)
+        assertNull(TranscodeAudioCodecPreference.AUTO.token)
+        assertEquals("aac", TranscodeAudioCodecPreference.AAC.token)
+        assertEquals("ac3", TranscodeAudioCodecPreference.AC3.token)
+        assertEquals("eac3", TranscodeAudioCodecPreference.EAC3.token)
+        assertEquals("opus", TranscodeAudioCodecPreference.OPUS.token)
     }
 }
