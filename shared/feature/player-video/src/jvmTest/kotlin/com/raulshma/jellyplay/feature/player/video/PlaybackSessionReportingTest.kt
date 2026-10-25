@@ -139,8 +139,8 @@ class PlaybackSessionReportingTest {
         engine.advanceTo(50_000L)
         // A seek followed by an immediate teardown must report the seek
         // position, not the engine's not-yet-caught-up position.
-        session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = nowMs // the latch was stamped "just now"
+        session.positionLedger.lastSeekPositionMs = 42_000L
+        session.positionLedger.lastSeekTimestamp = nowMs // the latch was stamped "just now"
 
         assertEquals(42_000L, session.getReportPositionMs())
     }
@@ -148,8 +148,8 @@ class PlaybackSessionReportingTest {
     @Test
     fun getReportPositionMs_staleSeek_fallsBackToEnginePosition() {
         engine.advanceTo(50_000L)
-        session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = nowMs - 60_000L // far past the 3 s window
+        session.positionLedger.lastSeekPositionMs = 42_000L
+        session.positionLedger.lastSeekTimestamp = nowMs - 60_000L // far past the 3 s window
 
         assertEquals(50_000L, session.getReportPositionMs())
     }
@@ -169,7 +169,7 @@ class PlaybackSessionReportingTest {
         assertEquals(10_000L, persist.positionMs)
         assertEquals("server-1", persist.playSessionId)
         assertEquals(nowMs, persist.nowMs, "the snapshot carries the injected clock's reading")
-        assertEquals(10_000L, session.lastPersistedPositionMs)
+        assertEquals(10_000L, session.positionLedger.lastPersistedPositionMs)
 
         // The offline mirror runs on the session scope (Unconfined → synchronous).
         coVerify(exactly = 1) {
@@ -185,7 +185,7 @@ class PlaybackSessionReportingTest {
 
         // Only the first write landed; the throttled one left no trace.
         assertEquals(1, positionStore.persists.size)
-        assertEquals(10_000L, session.lastPersistedPositionMs)
+        assertEquals(10_000L, session.positionLedger.lastPersistedPositionMs)
         coVerify(exactly = 1) { offlinePlaybackFacade.recordProgress(any(), any(), any(), any()) }
     }
 
@@ -222,7 +222,7 @@ class PlaybackSessionReportingTest {
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
         }
-        assertEquals("server-1", session.stopReportedForSession)
+        assertEquals("server-1", session.positionLedger.stopReportedForSession)
     }
 
     @Test
@@ -247,7 +247,7 @@ class PlaybackSessionReportingTest {
         session.reportCurrentPlaybackStopped()
 
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any()) }
-        assertNull(session.stopReportedForSession)
+        assertNull(session.positionLedger.stopReportedForSession)
     }
 
     @Test
@@ -259,7 +259,7 @@ class PlaybackSessionReportingTest {
         // A zero-tick stop is worthless to the server — never reported, and
         // the latch stays open so a real position can still be reported later.
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any()) }
-        assertNull(session.stopReportedForSession)
+        assertNull(session.positionLedger.stopReportedForSession)
     }
 
     // ── Failed flag + stalled-finish stop dedup ────────────────────
@@ -300,7 +300,7 @@ class PlaybackSessionReportingTest {
         // duration (stalled-finish): a second stop at the stalled position
         // would only downgrade it.
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
-        assertEquals("server-1", session.stopReportedForSession)
+        assertEquals("server-1", session.positionLedger.stopReportedForSession)
     }
 
     @Test
@@ -325,7 +325,7 @@ class PlaybackSessionReportingTest {
         coVerify(timeout = 5_000L, exactly = 0) {
             playbackRepository.reportPlaybackStopped(any(), any(), any(), any())
         }
-        assertEquals("server-1", session.stopReportedForSession)
+        assertEquals("server-1", session.positionLedger.stopReportedForSession)
     }
 
     // ── reloadForMode: SessionEvent.InformUser notices ──────────────────────
@@ -434,7 +434,7 @@ class PlaybackSessionReportingTest {
         coVerify(timeout = 5_000L, exactly = 1) {
             offlinePlaybackFacade.recordProgress("item-1", 450_000_000L, any(), false)
         }
-        assertEquals("server-1", session.stopReportedForSession)
+        assertEquals("server-1", session.positionLedger.stopReportedForSession)
     }
 
     @Test
@@ -481,7 +481,7 @@ class PlaybackSessionReportingTest {
 
         val slot = io.mockk.slot<PlaybackStartInfo>()
         coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(capture(slot)) }
-        assertEquals(session.playSessionId, slot.captured.sessionId)
+        assertEquals(session.positionLedger.playSessionId, slot.captured.sessionId)
     }
 
     @kotlin.test.Test

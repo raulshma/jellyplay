@@ -222,16 +222,16 @@ class PlaybackSessionLifecycleTest {
     @Test
     fun initialize_resetsTheSeekStopAndReleaseLatches() = runTest {
         buildSession()
-        session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = System.currentTimeMillis()
-        session.stopReportedForSession = "server-old"
+        session.positionLedger.lastSeekPositionMs = 42_000L
+        session.positionLedger.lastSeekTimestamp = System.currentTimeMillis()
+        session.positionLedger.stopReportedForSession = "server-old"
         session.released = true
 
         session.initialize(request())
 
-        assertNull(session.lastSeekPositionMs)
-        assertEquals(0L, session.lastSeekTimestamp)
-        assertNull(session.stopReportedForSession)
+        assertNull(session.positionLedger.lastSeekPositionMs)
+        assertEquals(0L, session.positionLedger.lastSeekTimestamp)
+        assertNull(session.positionLedger.stopReportedForSession)
         assertFalse(session.released)
     }
 
@@ -385,11 +385,11 @@ class PlaybackSessionLifecycleTest {
         positionStore.savedPlaySessionIdValue = "srv-9"
 
         session.initialize(request(itemId = "item-9"))
-        assertEquals("srv-9", session.playSessionId)
+        assertEquals("srv-9", session.positionLedger.playSessionId)
 
         // A different item must allocate a FRESH local session id.
         session.initialize(request(itemId = "item-8"))
-        assertNotEquals("srv-9", session.playSessionId)
+        assertNotEquals("srv-9", session.positionLedger.playSessionId)
     }
 
     // ── 2. Mini-player reclaim body ──────────────────────────────────────────
