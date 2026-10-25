@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.artists
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
  * type would leak sort state across the three routes.
  */
 class ArtistsViewModel(
-    mediaRepository: MediaRepository,
+    mediaRepository: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the artists grid renders through. */
     val artworkUrls: ArtworkUrls,

@@ -168,13 +168,15 @@ class MediaRepositoryImpl internal constructor(
 ) : MediaRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the music-catalogue and user-data-write families,
-    // the home-feed family and the user-data change feed alongside the
-    // union — [MusicCatalogue] / [UserDataWriteOperations] / [HomeFeed] /
-    // [UserDataChanges].
+    // the home-feed family, the user-data change feed and the library/browse
+    // family alongside the union — [MusicCatalogue] /
+    // [UserDataWriteOperations] / [HomeFeed] / [UserDataChanges] /
+    // [LibraryFeed].
     MusicCatalogue,
     UserDataWriteOperations,
     HomeFeed,
     UserDataChanges,
+    LibraryFeed,
     SeriesNotificationReads,
     MediaRepositoryCacheInvalidation,
     MediaCatalogueEnrichments,

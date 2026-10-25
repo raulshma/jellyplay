@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -98,7 +98,7 @@ class DiscoverRowsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LibraryFeed
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var editor: PreferencesEditor
 
@@ -111,9 +111,9 @@ class DiscoverRowsViewModelTest {
         mediaRepository = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
-        coEvery { mediaRepository.getGenres() } returns Result.success(emptyList())
-        coEvery { mediaRepository.getStudios() } returns Result.success(emptyList())
+        coEvery { mediaRepository.getLibraryFolders(force = false) } returns Result.success(emptyList())
+        coEvery { mediaRepository.getGenres(null, false) } returns Result.success(emptyList())
+        coEvery { mediaRepository.getStudios(parentId = null) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(emptyList())
         editor = PreferencesEditor(

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -267,7 +267,7 @@ class MusicBrowseViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val mediaRepository: LibraryFeed = mockk()
     private val playlistRepository: PlaylistRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
@@ -278,7 +278,7 @@ class MusicBrowseViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
-        coEvery { mediaRepository.getGenres() } returns
+        coEvery { mediaRepository.getGenres(null, false) } returns
             Result.success(listOf(Genre(id = "g1", name = "Rock")))
         coEvery { playlistRepository.getPlaylists() } returns Result.success(emptyList())
         viewModel = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
@@ -401,7 +401,7 @@ class MusicBrowseViewModelTest {
 
     @Test
     fun genresFailure_surfacesTheFailureAndClearsLoading() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getGenres() } returns Result.failure(RuntimeException())
+        coEvery { mediaRepository.getGenres(null, false) } returns Result.failure(RuntimeException())
         val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
@@ -455,7 +455,7 @@ class AlbumsViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val mediaRepository: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
     private lateinit var viewModel: AlbumsViewModel
@@ -497,7 +497,7 @@ class ArtistsViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val mediaRepository: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
     private lateinit var viewModel: ArtistsViewModel
@@ -539,7 +539,7 @@ class GenresViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val mediaRepository: LibraryFeed = mockk()
 
     private lateinit var viewModel: GenresViewModel
 

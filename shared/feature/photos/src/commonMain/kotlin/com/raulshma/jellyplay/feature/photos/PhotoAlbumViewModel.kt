@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.photos
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -21,7 +21,7 @@ enum class PhotoSortOption(val option: SortOption, val displayName: String) {
 }
 
 class PhotoAlbumViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the photo grid renders through. */
     val artworkUrls: ArtworkUrls,
@@ -57,6 +57,8 @@ class PhotoAlbumViewModel(
                         mediaTypes = listOf(MediaType.PHOTO),
                         sortBy = sort.option,
                     ),
+                    studioIds = null,
+                    kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
                 )
             }
         },

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music.genres
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.collection.SimpleListCollection
@@ -12,11 +12,11 @@ import com.raulshma.jellyplay.feature.music.collection.SimpleListCollection
  * is screen-side navigation, not ViewModel state.
  */
 class GenresViewModel(
-    mediaRepository: MediaRepository,
+    mediaRepository: LibraryFeed,
 ) : JellyPlayViewModel() {
 
     private val collection = SimpleListCollection<Genre>(scope = scope) { force ->
-        mediaRepository.getGenres(force = force)
+        mediaRepository.getGenres(parentId = null, force = force)
     }
 
     val genres = collection.items

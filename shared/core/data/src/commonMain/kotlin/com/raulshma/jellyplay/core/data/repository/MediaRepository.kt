@@ -410,8 +410,54 @@ interface UserDataChanges {
     /**
      * Hot stream of server-side user-data changes (played / favorite flips from
      * any client, including this one). Collecting subscribes to the realtime
-     * channel; cancelling the collector unsubscribes after a grace window — the
-     * underlying socket survives (owned app-lifetime).
+     * channel; cancelling the collector unsubscribes after a grace window —
+     * the underlying socket survives (owned app-lifetime).
      */
     val userDataChanges: Flow<UserDataChange>
+}
+
+/**
+ * The library/browse family seam of [MediaRepository]: the folders, latest,
+ * paged-browse, search, genres and studios reads the library, search, music,
+ * photos and settings screens consume. [MediaRepositoryImpl] implements this
+ * seam alongside the wide interface (the [MusicCatalogue] over-the-impl
+ * pattern — one override satisfies both declarations), so a browse-only
+ * consumer narrows without a second repository instance. Detail/similar and
+ * the collection verbs stay on the union (their consumers are mixed); mixed
+ * browse+detail consumers keep [MediaRepository].
+ *
+ * No member here carries a default argument — the family-seam rule recorded
+ * on [MusicCatalogue]: an override whose two superinterfaces both declare
+ * default arguments is forbidden, so seam-typed callers pass explicit values.
+ */
+interface LibraryFeed {
+
+    /** Library folders. [force] bypasses the folders cache for this read. */
+    suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>>
+
+    suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>>
+
+    suspend fun search(
+        query: String,
+        filters: LibraryFilters,
+        limit: Int,
+        startIndex: Int,
+    ): Result<SearchResult>
+
+    fun getMediaItemsPaged(
+        parentId: String?,
+        filters: LibraryFilters,
+        studioIds: List<String>?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
+    ): Flow<PagingData<MediaItem>>
+
+    fun searchPaged(
+        query: String,
+        filters: LibraryFilters,
+    ): Flow<PagingData<MediaItem>>
+
+    /** Genres for a library ([parentId], or server-wide when null). [force] bypasses the genres cache for this read. */
+    suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>>
+
+    suspend fun getStudios(parentId: String?): Result<List<Studio>>
 }

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
@@ -39,7 +39,7 @@ class LibraryLayoutViewModelTest {
 
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var editor: PreferencesEditor
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LibraryFeed
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var playlistRepository: PlaylistRepository
 
@@ -52,7 +52,7 @@ class LibraryLayoutViewModelTest {
         libraryApiClient = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
+        coEvery { mediaRepository.getLibraryFolders(force = false) } returns Result.success(emptyList())
     }
 
     @AfterTest
@@ -62,7 +62,7 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `loadLibraryFolders exposes non-music libraries`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(
+        coEvery { mediaRepository.getLibraryFolders(force = false) } returns Result.success(
             listOf(
                 LibraryFolder(id = "movies", name = "Movies", collectionType = "movies"),
                 LibraryFolder(id = "music", name = "Music", collectionType = "music"),

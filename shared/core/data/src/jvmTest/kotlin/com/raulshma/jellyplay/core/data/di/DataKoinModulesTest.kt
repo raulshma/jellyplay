@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
@@ -187,6 +188,10 @@ class DataKoinModulesTest {
             assertTrue(
                 koin.get<HomeFeed>() === koin.get<MediaRepository>(),
                 "HomeFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<LibraryFeed>() === koin.get<MediaRepository>(),
+                "LibraryFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
                 koin.get<UserDataChanges>() === koin.get<MediaRepository>(),

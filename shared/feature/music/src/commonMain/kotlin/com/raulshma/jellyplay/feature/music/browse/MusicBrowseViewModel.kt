@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.music.browse
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
  * fire-and-forget loads had neither).
  */
 class MusicBrowseViewModel(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LibraryFeed,
     private val playlistRepository: PlaylistRepository,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the browse pages render through. */
@@ -40,7 +40,7 @@ class MusicBrowseViewModel(
     private val trackCollection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.TRACKS)
 
     private val genreCollection = SimpleListCollection<Genre>(scope = scope) { force ->
-        mediaRepository.getGenres(force = force)
+        mediaRepository.getGenres(parentId = null, force = force)
     }
 
     private val playlistCollection = SimpleListCollection<Playlist>(scope) { _ ->

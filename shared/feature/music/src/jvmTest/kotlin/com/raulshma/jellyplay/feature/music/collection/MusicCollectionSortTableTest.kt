@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music.collection
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -83,7 +83,7 @@ class MusicCollectionSortTableTest {
 
     @Test
     fun sortedPagedPath_rejectsListSourcedKinds() {
-        val mediaRepository: MediaRepository = mockk()
+        val mediaRepository: LibraryFeed = mockk()
         val error = assertFailsWith<IllegalStateException> {
             SortedPagedCollection(mediaRepository, CoroutineScope(Dispatchers.Unconfined), MusicCollectionKind.GENRES)
         }

@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.music.genres
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 
 class GenreDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the track rows render through. */
     val artworkUrls: ArtworkUrls,
@@ -26,11 +26,14 @@ class GenreDetailViewModel(
     private val genreName: String = savedStateHandle[Route.GenreDetail::genreName.name] ?: ""
 
     val tracks: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
+        parentId = null,
         filters = com.raulshma.jellyplay.core.model.LibraryFilters(
             mediaTypes = listOf(MediaType.AUDIO),
             genres = listOf(genreName),
             sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
         ),
+        studioIds = null,
+        kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ).cachedIn(scope)
 
     fun getImageUrl(itemId: String): String =

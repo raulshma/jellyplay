@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.music.collection
 
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SortOption
@@ -52,7 +52,7 @@ enum class MusicSortOption(val option: SortOption, val labelRes: StringResource)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SortedPagedCollection(
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LibraryFeed,
     scope: CoroutineScope,
     /** The bound collection — must be one of the three server-paged kinds. */
     val kind: MusicCollectionKind,
@@ -72,10 +72,13 @@ class SortedPagedCollection(
 
     val items: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
+            parentId = null,
             filters = LibraryFilters(
                 mediaTypes = listOf(requireNotNull(kind.mediaType)),
                 sortBy = sort.option,
             ),
+            studioIds = null,
+            kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
         )
     }.cachedIn(scope)
 

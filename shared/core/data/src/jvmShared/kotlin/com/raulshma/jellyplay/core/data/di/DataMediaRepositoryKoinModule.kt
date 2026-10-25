@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
@@ -183,6 +184,11 @@ internal val dataMediaRepositoryModule: Module = module {
     // refetchers take it beside the surfaces they are mixed consumers of.
     single<HomeFeed> { get<MediaRepositoryImpl>() }
     single<UserDataChanges> { get<MediaRepositoryImpl>() }
+    // The library/browse family (folders, latest, paged browse, search,
+    // genres, studios): the same over-the-impl aliasing, so browse-only
+    // consumers (library screens, search, the music collection hosts, photo
+    // albums, the settings library-views) inject the seam alone.
+    single<LibraryFeed> { get<MediaRepositoryImpl>() }
     // Module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }

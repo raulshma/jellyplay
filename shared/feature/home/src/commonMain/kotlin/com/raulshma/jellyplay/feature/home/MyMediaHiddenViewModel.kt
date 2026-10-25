@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -48,7 +48,7 @@ data class MyMediaHiddenUiState(
 class MyMediaHiddenViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LibraryFeed,
 ) : JellyPlayViewModel() {
 
     private val _state = MutableStateFlow(MyMediaHiddenUiState())
@@ -59,7 +59,7 @@ class MyMediaHiddenViewModel(
 
     init {
         scope.launch {
-            mediaRepository.getLibraryFolders()
+            mediaRepository.getLibraryFolders(force = false)
                 .onSuccess { folders ->
                     foldersById = folders.associateBy { it.id }
                     republish()

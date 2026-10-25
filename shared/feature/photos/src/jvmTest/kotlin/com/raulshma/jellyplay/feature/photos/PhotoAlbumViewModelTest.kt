@@ -7,7 +7,7 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -41,7 +41,7 @@ class PhotoAlbumViewModelTest {
     // scheduler, so the VM's viewModelScope coroutines run on this scheduler).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaRepository: LibraryFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
 
     private val photo1 = MediaItem(id = "a1", name = "Album Photo 1", mediaType = MediaType.PHOTO)
@@ -112,6 +112,8 @@ class PhotoAlbumViewModelTest {
             mediaRepository.getMediaItemsPaged(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.PHOTO), sortBy = SortOption.DATE_ADDED),
+                studioIds = null,
+                kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
             )
         }
         grid.cancel()
@@ -132,12 +134,16 @@ class PhotoAlbumViewModelTest {
             mediaRepository.getMediaItemsPaged(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.PHOTO), sortBy = SortOption.SORT_NAME),
+                studioIds = null,
+                kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
             )
         }
         verify(exactly = 1) {
             mediaRepository.getMediaItemsPaged(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.PHOTO), sortBy = SortOption.PREMIERE_DATE),
+                studioIds = null,
+                kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
             )
         }
         grid.cancel()
@@ -156,6 +162,8 @@ class PhotoAlbumViewModelTest {
             mediaRepository.getMediaItemsPaged(
                 parentId = "album-9",
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.PHOTO), sortBy = SortOption.DATE_ADDED),
+                studioIds = null,
+                kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
             )
         }
         grid.cancel()

@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.toHomeLayoutConfig
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -36,7 +36,7 @@ data class PinnableOption(
 class LibraryLayoutViewModel(
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: MediaRepository,
+    private val mediaRepository: LibraryFeed,
     /** The SearchResult-shaped reads (the layout preview's items query — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val playlistRepository: PlaylistRepository,
@@ -76,7 +76,7 @@ class LibraryLayoutViewModel(
     private fun loadLibraryFolders() {
         launch {
             libraryError = null
-            mediaRepository.getLibraryFolders()
+            mediaRepository.getLibraryFolders(force = false)
                 .onSuccess { folders ->
                     _libraryFolders.value = folders.filter { it.collectionType != "music" }
                 }
@@ -156,11 +156,11 @@ class LibraryLayoutViewModel(
                             .map { PinnableOption(it.id, it.name, "${it.itemCount} items") }
 
                     PinnedSectionType.GENRE ->
-                        mediaRepository.getGenres().getOrDefault(emptyList())
+                        mediaRepository.getGenres(parentId = null, force = false).getOrDefault(emptyList())
                             .map { PinnableOption(it.id, it.name) }
 
                     PinnedSectionType.STUDIO ->
-                        mediaRepository.getStudios().getOrDefault(emptyList())
+                        mediaRepository.getStudios(parentId = null).getOrDefault(emptyList())
                             .map { PinnableOption(it.id, it.name) }
 
                     PinnedSectionType.FAVORITES ->
