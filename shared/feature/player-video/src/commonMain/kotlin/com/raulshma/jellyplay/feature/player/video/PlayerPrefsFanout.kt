@@ -124,15 +124,17 @@ internal class PlayerPrefsFanout(
         // consumed by MpvConfigMapping through MpvEngineConfig): a diff on any
         // of them needs the same rebuild trigger the audio-effects diffs run,
         // so a settings- or sheet-side pick re-applies to the running engine
-        // through the config diff caches without a reload. The raw input.conf
-        // text rides the same trigger so a later engine rebuild (the only way
-        // input.conf applies — mpv parses it at mpv_initialize) always sees
-        // the current pref.
-        if (old.videoPlayer.mpvToneMappingCurve != new.videoPlayer.mpvToneMappingCurve ||
-            old.videoPlayer.mpvDebandMode != new.videoPlayer.mpvDebandMode ||
-            old.videoPlayer.mpvMotionInterpolation != new.videoPlayer.mpvMotionInterpolation ||
-            old.videoPlayer.bitmapSubtitleScaleMode != new.videoPlayer.bitmapSubtitleScaleMode ||
-            old.videoPlayer.mpvInputConf != new.videoPlayer.mpvInputConf
+        // through the config diff caches without a reload. The four leaves'
+        // diff is table-driven (PLAYER_PREF_LEAVES' rebuild flags — the same
+        // rows the seed and projector apply); the raw input.conf text rides
+        // the same trigger (it has no uiState leaf, so it is checked beside
+        // the table) so a later engine rebuild (the only way input.conf
+        // applies — mpv parses it at mpv_initialize) always sees the current
+        // pref.
+        if (old.videoPlayer.mpvInputConf != new.videoPlayer.mpvInputConf ||
+            PLAYER_PREF_LEAVES.any { leaf ->
+                leaf.rebuildsEngineConfig && leaf.readAggregateAny(old) != leaf.readAggregateAny(new)
+            }
         ) {
             rebuildEngineConfigIfRunning()
         }
