@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+// Moved verbatim from :shared:feature:player-video (SAME package, zero consumer
+// import churn) so the mpv option vocabulary has one home beside MpvPropertyIntake
+// and MpvStyleMapping; the engine choreography (MpvCore, MpvBinding) stayed behind.
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -20,7 +23,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
  * a stable API surface.
  */
 
-internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
+fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
     // Zero-copy `mediacodec` first: mpv picks the first entry that inits, and
     // `mediacodec-copy` (GPU→CPU→GPU per frame) almost always inits when listed
     // first, so copy-first ordering silently forced every HW decode through the
@@ -31,7 +34,7 @@ internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
     DecoderMode.SW_ONLY -> "no"
 }
 
-internal fun channelMixModeToAudioChannels(
+fun channelMixModeToAudioChannels(
     mode: ChannelMixMode,
     enabled: Boolean = true,
 ): String = if (!enabled) {
@@ -44,7 +47,7 @@ internal fun channelMixModeToAudioChannels(
 }
 
 /** Returns null for NONE so callers can omit it from the af chain. */
-internal fun audioNormalizationModeToAfFilter(mode: AudioNormalizationMode): String? = when (mode) {
+fun audioNormalizationModeToAfFilter(mode: AudioNormalizationMode): String? = when (mode) {
     AudioNormalizationMode.DYNAMIC -> DYNAMIC_COMPRESSOR_FILTER
     AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> "loudnorm=I=-23:LRA=7:tp=-1"
     AudioNormalizationMode.NONE -> null

@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+// Moved verbatim from :shared:feature:player-video (SAME package, zero consumer
+// import churn) so the mpv option vocabulary has one home beside MpvPropertyIntake
+// and MpvStyleMapping; the engine choreography (MpvCore, MpvBinding) stayed behind.
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
