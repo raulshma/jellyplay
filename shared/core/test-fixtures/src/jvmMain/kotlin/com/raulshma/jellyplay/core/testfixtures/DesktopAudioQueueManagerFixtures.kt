@@ -65,11 +65,11 @@ class FakeResolver : AudioTrackResolver {
 }
 
 class FakeImages : ImageUrlProvider {
-    override fun getImageUrl(itemId: String, maxWidth: Int?): String =
+    override fun getImageUrl(itemId: String, maxWidth: Int?, tag: String?): String =
         "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String = ""
-    override fun getBackdropUrl(itemId: String, maxWidth: Int): String = ""
-    override fun getLogoUrl(itemId: String): String = ""
+    override fun getBackdropUrl(itemId: String, maxWidth: Int, tag: String?): String = ""
+    override fun getLogoUrl(itemId: String, tag: String?): String = ""
 }
 
 class StartRecord(

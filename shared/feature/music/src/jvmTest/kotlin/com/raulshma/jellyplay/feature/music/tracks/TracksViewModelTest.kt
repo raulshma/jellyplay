@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.tracks
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -50,6 +51,7 @@ class TracksViewModelTest {
         viewModel = TracksViewModel(
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
         )
     }

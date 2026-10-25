@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -234,6 +235,7 @@ class DataKoinModulesTest {
             assertResolves<NetworkMonitor>(koin)
             assertResolves<OfflineModeManager>(koin)
             assertResolves<ImageUrlProvider>(koin)
+            assertResolves<ArtworkUrls>(koin)
             assertResolves<LocalStreamProbe>(koin)
 
             // V3 downloads conveyor: the download engine resolves on desktop —

@@ -205,7 +205,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_toggleSurprise_onPicksNewCandidateAndPausesAutoRotate() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = false)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -224,7 +224,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_toggleSurprise_offRestoresAutoRotate() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = false)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -242,7 +242,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_onSurpriseArmed_showsSurpriseAndPausesAutoRotate() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -259,7 +259,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationTick_wrapsAroundToFirstCandidate() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -278,7 +278,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationTick_withEmptyCandidates_isNoOp() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
 
         controller.rotationTick()
 
@@ -288,7 +288,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_onFocusChange_updatesFocusState_andSnapStartsUnsettled() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         assertFalse(controller.focusSnapSettled)
 
         controller.onFocusChange(false)
@@ -300,7 +300,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_backdropUrl_delegatesToCtorLambda() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
         assertEquals("url/m1", controller.backdropUrl)
@@ -308,7 +308,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_updateCandidates_preservesStillValidIndex() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -331,7 +331,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_updateCandidates_shrunkPoolYieldsNullFeaturedItem() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -354,7 +354,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationCadence_emptyCandidates_returnsNone() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
 
         // All four gates precede any timing, for both scroll states.
         assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
@@ -363,7 +363,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationCadence_autoRotateDisabled_returnsNone() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = false)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
         assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
@@ -372,7 +372,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationCadence_focusOutsideHero_returnsNone() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
         controller.onFocusChange(false)
@@ -383,7 +383,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationCadence_lifecycleNotResumed_returnsNone() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(listOf(item("m1", MediaType.MOVIE)))
 
         assertEquals(RotationCadence.None, controller.rotationCadence(isScrolling = false, lifecycleResumed = false))
@@ -392,7 +392,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_rotationCadence_scrollingDefersRecheck_idleTicks() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -407,7 +407,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_shouldTickNow_falseAfterAutoRotateFlipsOffMidDelay() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -425,7 +425,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_shouldTickNow_falseWhenFocusLeavesHero() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         controller.updateCandidates(
             listOf(
                 item("m1", MediaType.MOVIE),
@@ -446,7 +446,7 @@ class HomeHeroControllerTest {
     @Test
     fun heroController_rotationCadence_touchFormFactor_attachFocusEventStillTicks() {
         val controller = HeroController(
-            getBackdropUrl = { "url/$it" },
+            getBackdropUrl = { item -> "url/${item.id}" },
             initialAutoRotateEnabled = true,
             focusGatesRotation = false,
         )
@@ -468,7 +468,7 @@ class HomeHeroControllerTest {
     @Test
     fun heroController_shouldTickNow_touchFormFactor_ignoresFocus() {
         val controller = HeroController(
-            getBackdropUrl = { "url/$it" },
+            getBackdropUrl = { item -> "url/${item.id}" },
             initialAutoRotateEnabled = true,
             focusGatesRotation = false,
         )
@@ -489,7 +489,7 @@ class HomeHeroControllerTest {
     @Test
     fun heroController_onFocusEffect_firstInvocationConsumesSkipRegardlessOfArgs() {
         for ((focused, isTv) in listOf(true to true, true to false, false to true, false to false)) {
-            val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+            val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
 
             // The first emission of the focus effect only settles the skip,
             // never snaps — whatever the focus/TV state.
@@ -500,7 +500,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_onFocusEffect_snapsOnlyWhenFocusedOnTv() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
 
         assertFalse(controller.onFocusEffect(focused = true, isTv = true)) // skip consumed
         assertTrue(controller.onFocusEffect(focused = true, isTv = true))
@@ -514,7 +514,7 @@ class HomeHeroControllerTest {
 
     @Test
     fun heroController_updateCandidates_repeatedIdenticalCallsPreserveIndex() {
-        val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = true)
+        val controller = HeroController(getBackdropUrl = { item -> "url/${item.id}" }, initialAutoRotateEnabled = true)
         val candidates = listOf(
             item("m1", MediaType.MOVIE),
             item("m2", MediaType.MOVIE),

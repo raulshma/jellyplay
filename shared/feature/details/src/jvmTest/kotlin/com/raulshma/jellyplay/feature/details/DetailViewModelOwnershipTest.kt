@@ -42,6 +42,13 @@ import kotlin.test.assertTrue
  * intent and not behaviour: a read-side URL getter cannot fold into
  * [DetailUiEvent]. This admits exactly one member; never raise it again
  * without a relocation or deletion to offset it.
+ * 2026-10-25, ceiling stays 25 (deletion-offset swap): the image-tag
+ * (cache-buster) sweep replaced `getLogoUrl(itemId)` — dead once the content
+ * tree's `ArtworkCallbacks` carried the core:data [com.raulshma.jellyplay.core.data.util.ArtworkUrls]
+ * resolver instead of raw per-id lambdas — with `artwork`, the one accessor
+ * exposing that resolver; the same read-side query shape (its `poster(item)` /
+ * `backdrop(item)` slots are the item-backed siblings of the raw getters),
+ * and its admission is offset 1:1 by the getLogoUrl deletion.
  * Before the fold
  * the VM exposed ~48 members: the same read/helper/funnel surfaces minus
  * onEvent, plus 27 public command funs (loadItem, forceRefresh,

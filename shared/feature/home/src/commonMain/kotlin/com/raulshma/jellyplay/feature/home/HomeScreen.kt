@@ -176,8 +176,8 @@ data class HomeCallbacks(
 
 /**
  * The wiring-shaped values every rendered surface shares, bundled — the
- * four adjacent same-typed string-returning lambdas of the former flat
- * parameter list ([mediaImageUrlBuilder] / [mediaBackdropUrlBuilder] /
+ * four adjacent string-returning lambdas of the former flat parameter list
+ * ([mediaImageUrlBuilder] / [mediaBackdropUrlBuilder] /
  * [onlineBackdropResolver] / [heroBackdropUrlBuilder]) made transposition a
  * compile-passing bug, and the same ten values were re-threaded through
  * [HomeSurfaceContent] into [HomeContentCallbacks] verbatim. Built ONCE in
@@ -200,9 +200,10 @@ internal data class HomeRenderInputs(
     val onlineBackdropResolver: (String) -> String,
     /**
      * The single hero backdrop builder — the parent resolves online-vs-offline
-     * once, so children never re-branch.
+     * once, so children never re-branch. Item-based (the featured item is the
+     * resolver's input), so the online URL carries the item's image tag.
      */
-    val heroBackdropUrlBuilder: (String) -> String,
+    val heroBackdropUrlBuilder: (MediaItem) -> String,
     /** Ordered fallback poster URLs for a [MediaItem] (see [fallbackImageUrls]). */
     val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
     /** Seerr details prefetch (id + media type + completion callback). */
@@ -371,8 +372,8 @@ private fun MainHomeContent(
     // featured (curated or local; a miss renders the item's own metadata).
     val curatedHeroOverlay = remember(state.curatedHero) { state.curatedHero.associateBy { it.item.id } }
     val heroFocusRequester = remember { FocusRequester() }
-    val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
-    val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
+    val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.posterUrl(item) } }
+    val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.backdropUrl(item) } }
     // Hero artwork while offline resolves to the downloaded item's local
     // backdrop (falling back to its poster) instead of a server URL, which is
     // unreachable offline. Episodes are included so an all-episodes offline
@@ -388,14 +389,18 @@ private fun MainHomeContent(
             offlineContent.episodes.map { Triple(it.id, it.backdropPath, it.posterPath) }
     }
     val offlineBackdropResolver = remember(offlineResolverKey) {
-        return@remember { id: String ->
-            currentOfflineContent.itemsById[id]?.let { it.backdropPath ?: it.posterPath } ?: ""
+        return@remember { item: com.raulshma.jellyplay.core.model.MediaItem ->
+            currentOfflineContent.itemsById[item.id]?.let { it.backdropPath ?: it.posterPath } ?: ""
         }
     }
     val onlineBackdropResolver = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
     // The single hero backdrop builder the content list consumes — the parent
-    // resolves online-vs-offline once, so the child never re-branches.
-    val heroBackdropUrlBuilder = if (renderingOffline) offlineBackdropResolver else onlineBackdropResolver
+    // resolves online-vs-offline once, so the child never re-branches. Online
+    // it is the item-level resolver (the URL carries the item's image tag);
+    // offline it reads the local file paths.
+    val onlineHeroBackdropBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.backdropUrl(item) } }
+    val heroBackdropUrlBuilder: (com.raulshma.jellyplay.core.model.MediaItem) -> String =
+        if (renderingOffline) offlineBackdropResolver else onlineHeroBackdropBuilder
 
     // Scroll state must exist before the hero controller (auto-rotate reads
     // listState.isScrollInProgress). Both own Compose side-effects, so order
@@ -1002,7 +1007,7 @@ private fun HomeSurfaceContent(
                             heroController.onFocusChange(focused)
                         }
                     },
-                    getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                    seriesPosterUrl = remember(viewModel) { { item: MediaItem -> viewModel.seriesPosterUrl(item) } },
                     photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                     onSeerrItemClick = callbacks.onSeerrItemClick,
                     onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
@@ -1082,7 +1087,7 @@ private fun HomeDockArea(
     // Lift the search-results-overlay lambdas (recreated per keystroke
     // below) into remembered locals so HomeSearchResultsOverlay's
     // results LazyColumn stops being re-scored each keystroke.
-    val searchGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+    val searchPosterUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.posterUrl(item) } }
     val searchOnJellyfinClick = remember(viewModel, callbacks, closeSearch) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
             closeSearch()
@@ -1179,7 +1184,7 @@ private fun HomeDockArea(
                     jellyfinResults = search.jellyfinResults,
                     seerrResults = search.seerrResults,
                     isSearching = search.isSearching,
-                    getImageUrl = searchGetImageUrl,
+                    posterUrl = searchPosterUrlBuilder,
                     onJellyfinClick = searchOnJellyfinClick,
                     onSeerrClick = searchOnSeerrClick,
                     searchHistory = searchHistory,

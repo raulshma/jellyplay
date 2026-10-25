@@ -77,6 +77,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             mediaDetailProvider = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             offlineRepository = get(),
             stores = get(),
             remoteDiscovery = get(),
@@ -111,6 +112,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             mediaDownloadActions = get(),
         )
     }
@@ -120,6 +122,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             mediaDownloadActions = get(),
             projections = get(),
         )

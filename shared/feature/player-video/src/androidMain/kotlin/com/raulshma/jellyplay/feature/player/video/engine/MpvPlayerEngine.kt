@@ -523,19 +523,26 @@ class MpvPlayerEngine(
             mpv.setOptionString(MpvProperties.CONFIG_DIR, configDir.absolutePath)
 
             val fontsDir = fontProvider.provideFontsDir()
-            mpv.setOptionString(MpvProperties.SUB_FONTS_DIR, fontsDir.absolutePath)
-            // Force the libass font provider off. On some devices libass's
-            // fontconfig provider fails to initialize ("can't find selected font
-            // provider" — observed on Adreno 509 / Nokia 6.1 Plus under app
-            // isolation, with OR without a FONTCONFIG_FILE env override), and
-            // EVERY subtitle then rasterizes to an empty bitmap. With "none",
-            // libass resolves fonts solely from sub-fonts-dir (the bundled
-            // subfont.ttf + any user-installed .ttf) plus the ASS `sub-font`
-            // default set below. System fontconfig aliasing is lost, but that is
-            // strictly better than no subtitles at all, and ASS tracks usually
-            // embed their own fonts (mkv attachments), which libass loads via
-            // the demuxer regardless of provider.
-            mpv.setOptionString(MpvProperties.SUB_FONT_PROVIDER, "none")
+            // App default, but yields to a user-owned sub-fonts-dir (mpv.conf
+            // or the in-app advanced config): power users may point libass at
+            // their own font folder — see the provider note below.
+            mpv.safeSetOptionUnlessUserOwned(MpvProperties.SUB_FONTS_DIR, fontsDir.absolutePath)
+            // Force the libass font provider off — the app DEFAULT, and like
+            // sub-fonts-dir above it yields to a user-owned key. On some
+            // devices libass's fontconfig provider fails to initialize ("can't
+            // find selected font provider" — observed on Adreno 509 / Nokia
+            // 6.1 Plus under app isolation, with OR without a FONTCONFIG_FILE
+            // env override), and EVERY subtitle then rasterizes to an empty
+            // bitmap. With "none", libass resolves fonts solely from
+            // sub-fonts-dir (the bundled subfont.ttf + any user-installed
+            // .ttf) plus the ASS `sub-font` default set below. System
+            // fontconfig aliasing is lost, but that is strictly better than no
+            // subtitles at all, and ASS tracks usually embed their own fonts
+            // (mkv attachments), which libass loads via the demuxer regardless
+            // of provider. A user who overrides the provider owns the
+            // consequence: system fonts (e.g. Roboto) resolve only if the
+            // provider can actually see them.
+            mpv.safeSetOptionUnlessUserOwned(MpvProperties.SUB_FONT_PROVIDER, "none")
             // Default the requested family to the bundled fallback's own family
             // so libass matches it exactly under the none provider. Overridden
             // per-style by the shared MpvSubtitleStyleApplier when the user picks a

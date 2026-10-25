@@ -14,8 +14,8 @@ import org.koin.dsl.module
  *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are Hilt-owned
  *    and reach Koin through the app
  *    composition root's Hilt interop module;
- *  - ImageUrlProvider (shared data) and LibraryStore (shared datastore)
- *    resolve from the shared-module graph;
+ *  - ImageUrlProvider / ArtworkUrls (shared data) and LibraryStore (shared
+ *    datastore) resolve from the shared-module graph;
  *  - PhotoExport resolves from feature/photos' photosModule, which carries the
  *    per-platform export modules (androidPhotoExportModule /
  *    desktopPhotoExportModule) along with the photo suite (PhotoAlbum/PhotoViewer
@@ -42,6 +42,7 @@ val libraryModule: Module = module {
             userMessageBus = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             photoFolderPrefetcher = get(),
             libraryStore = get(),
         )
@@ -51,6 +52,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             quickDownloadActions = get(),
             photoFolderPrefetcher = get(),
         )
@@ -61,6 +63,7 @@ val libraryModule: Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             quickDownloadActions = get(),
         )
     }

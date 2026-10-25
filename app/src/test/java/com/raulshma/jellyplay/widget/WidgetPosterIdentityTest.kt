@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.widget
 
+import com.raulshma.jellyplay.core.model.MediaImageTags
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -15,11 +17,17 @@ import org.junit.Test
  */
 class WidgetPosterIdentityTest {
 
-    private fun item(id: String, seriesId: String? = null) = MediaItem(
+    private fun item(
+        id: String,
+        seriesId: String? = null,
+        primary: String? = null,
+        seriesPrimary: String? = null,
+    ) = MediaItem(
         id = id,
         name = "Item $id",
         mediaType = if (seriesId != null) MediaType.EPISODE else MediaType.MOVIE,
         seriesId = seriesId,
+        imageTags = MediaImageTags(primary = primary, seriesPrimary = seriesPrimary),
     )
 
     @Test
@@ -36,6 +44,21 @@ class WidgetPosterIdentityTest {
     fun `library-recommendation rows prefer the series id too`() {
         assertEquals("series-4", WidgetPosterIdentity.libraryRecommendationsPosterImageId(item("ser-1", seriesId = "series-4")))
         assertEquals("movie-2", WidgetPosterIdentity.libraryRecommendationsPosterImageId(item("movie-2")))
+    }
+
+    @Test
+    fun `poster tag follows the id resolution - series tag for series rows, own tag otherwise`() {
+        assertEquals(
+            "stag-9",
+            WidgetPosterIdentity.posterImageTag(item("ep-1", seriesId = "series-9", primary = "ptag-1", seriesPrimary = "stag-9")),
+        )
+        assertEquals("ptag-2", WidgetPosterIdentity.posterImageTag(item("movie-2", primary = "ptag-2")))
+    }
+
+    @Test
+    fun `poster tag stays null when the resolved source has no tag`() {
+        assertNull(WidgetPosterIdentity.posterImageTag(item("ep-2", seriesId = "series-9", primary = "ptag-2")))
+        assertNull(WidgetPosterIdentity.posterImageTag(item("movie-3")))
     }
 
     @Test

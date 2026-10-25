@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
@@ -260,6 +261,7 @@ class DetailViewModelTest {
             mediaDetailProvider = mediaDetailProvider,
             playbackRepository = playbackRepository,
             imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true),
+            artworkUrls = ArtworkUrls.EMPTY,
             offlineRepository = offlineRepository,
             stores = DetailStores(
                 projections = projections,

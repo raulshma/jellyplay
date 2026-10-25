@@ -179,7 +179,7 @@ internal fun StudioDetailScreen(
                 val progress = item.progressFraction()
                 PosterCard(
                     item = item,
-                    imageUrl = viewModel.getImageUrl(item.id),
+                    imageUrl = viewModel.artworkUrls.poster(item),
                     onClick = { onItemClick(item.id) },
                     showProgress = progress != null && progress > 0f,
                     progressPercent = progress ?: 0f,

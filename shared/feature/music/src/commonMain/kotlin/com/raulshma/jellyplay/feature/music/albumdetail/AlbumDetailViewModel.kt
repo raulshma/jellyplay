@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -45,6 +46,8 @@ class AlbumDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val musicCatalogue: MusicCatalogue,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the album hero + track rows render through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
     private val downloads: TrackDownloadStatusWindow,
     private val downloadIntake: DownloadIntake,

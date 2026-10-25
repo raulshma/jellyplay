@@ -77,7 +77,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // singles now register their commonMain seam interface (the ViewModel's
     // ctor slots are interface-typed) plus the concrete Android class for the
     // androidMain call sites (engines, overlay) — one instance, two keys.
-    single { AndroidFontProvider(context) }
+    single { AndroidFontProvider(context, subtitleStore = get()) }
     single<FontProvider> { get<AndroidFontProvider>() }
     single {
         VideoStreamCache(
@@ -179,6 +179,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             cinemaModeOverride = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             downloadRepository = get(),
             offlineRepository = get(),
             offlinePlaybackFacade = get(),

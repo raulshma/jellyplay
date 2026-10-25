@@ -120,6 +120,7 @@ val homeModule: Module = module {
             mediaSearchEngine = get(),
             homeFeed = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             photoFolderPrefetcher = get(),
             downloadIntake = get(),
             quickDownloadActions = get(),
@@ -154,7 +155,7 @@ val homeModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
-            imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {

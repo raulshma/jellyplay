@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.currentPlatform
 import com.raulshma.jellyplay.core.model.isAudioType
@@ -42,8 +43,8 @@ internal class MediaDetailProjection(
     private val setChapters: (List<ChapterInfo>) -> Unit,
     /** The media-slice write ([MediaContentProjector.onDetail]). */
     private val onDetail: (detail: MediaDetail, artworkUrl: String) -> Unit,
-    /** The media slice's artwork URL (the VM's `getImageUrl(id, 400)`). */
-    private val artworkUrl: (itemId: String) -> String,
+    /** The media slice's artwork URL (the [ArtworkUrls] poster slot — item in, tagged URL out). */
+    private val artworkUrl: (item: MediaItem) -> String,
     /** The episode-slice adoption ([UpNextController.adoptSeasonOf]). */
     private val adoptSeasonOf: (MediaDetail) -> Unit,
     /** Lyrics fold into the media slice ([MediaContentProjector.onLyrics]). */
@@ -57,7 +58,7 @@ internal class MediaDetailProjection(
     fun applyDetail(detail: MediaDetail) {
         setDetail(detail)
         setChapters(detail.chapters)
-        onDetail(detail, artworkUrl(detail.item.id))
+        onDetail(detail, artworkUrl(detail.item))
         adoptSeasonOf(detail)
         fetchCompanionLyrics(detail)
         applyVolumeMemory(detail)

@@ -575,7 +575,10 @@ fun VideoPlayerScreen(
             null -> null
             else -> when (card.source) {
                 UpNextCard.Source.QUEUE -> card.imageUrl
-                UpNextCard.Source.EPISODE -> viewModel.getImageUrl(card.itemId, 300)
+                // The sibling item rides the card, so its tagged poster
+                // resolves here; without it the raw-id URL stands.
+                UpNextCard.Source.EPISODE -> card.episode?.let { viewModel.posterUrl(it, 300) }
+                    ?: viewModel.getImageUrl(card.itemId, 300)
             }
         }
     }
@@ -2125,7 +2128,8 @@ private fun CastCompanionDashboardBranch(
         onSelectAudioTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectAudioTrack(it)) },
         onSelectSubtitleTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectSubtitleTrack(it)) },
         onPlayEpisode = { epId -> viewModel.onEvent(VideoPlayerUiEvent.PlayEpisode(epId)) },
-        getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+        personPortraitUrl = { person -> viewModel.personPortraitUrl(person) },
+        episodePosterUrl = { episode -> viewModel.posterUrl(episode, 300) },
         onToggleOrientation = onToggleOrientation,
         modifier = Modifier.fillMaxSize()
     )

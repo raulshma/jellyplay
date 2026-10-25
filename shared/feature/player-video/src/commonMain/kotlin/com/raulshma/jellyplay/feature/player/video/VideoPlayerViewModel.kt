@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
@@ -29,9 +30,11 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.TrackType
@@ -144,6 +147,14 @@ class VideoPlayerViewModel(
     cinemaModeOverride: com.raulshma.jellyplay.core.data.playback.CinemaModeOverride? = null,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
+    /**
+     * The tagged-artwork resolver (the item-based seam over [imageUrlProvider]):
+     * backs the item-based accessors the player surfaces use (episode rows,
+     * companion-dashboard tabs, the Up Next card) so every URL carries the
+     * item's image tag — the etag cache-buster that makes re-uploaded art
+     * visible without manual cache clears.
+     */
+    private val artworkUrls: ArtworkUrls,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
@@ -1258,6 +1269,23 @@ class VideoPlayerViewModel(
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
+
+    /**
+     * Tag-carrying poster URL for an item the surface holds in full (episode
+     * picker rows, the companion dashboard's episodes tab, the Up Next card's
+     * episode sibling): the [ArtworkUrls] poster slot, so the URL carries the
+     * item's own primary image tag. Raw-id twin: [getImageUrl].
+     */
+    fun posterUrl(item: MediaItem, maxWidth: Int = 400): String =
+        artworkUrls.poster(item, maxWidth = maxWidth)
+
+    /**
+     * Tag-carrying portrait for the companion dashboard's cast-and-crew row:
+     * the person's own primary image tag rides along, same etag contract as
+     * [posterUrl].
+     */
+    fun personPortraitUrl(person: PersonInfo, maxWidth: Int = 400): String =
+        artworkUrls.personPortrait(person, maxWidth = maxWidth)
 
     /**
      * Scrubbing-session bracket for the engine (seek-bar drag, swipe seek,

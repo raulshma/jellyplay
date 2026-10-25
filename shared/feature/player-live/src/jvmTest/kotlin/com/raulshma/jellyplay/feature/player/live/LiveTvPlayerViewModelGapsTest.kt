@@ -791,7 +791,9 @@ class LiveTvPlayerViewModelGapsTest {
 
     @Test
     fun `logoUrlFor resolves only when the channel carries an image tag`() = runTest {
-        every { imageUrlProvider.getImageUrl("ch-1", any()) } returns "https://srv/Items/ch-1/Images/Primary"
+        // The channel's tag is forwarded as the ?tag= cache-buster (the third
+        // arg; maxWidth rides its default).
+        every { imageUrlProvider.getImageUrl("ch-1", any(), any()) } returns "https://srv/Items/ch-1/Images/Primary"
         val vm = createVm()
 
         assertEquals("https://srv/Items/ch-1/Images/Primary", vm.logoUrlFor(LiveTvChannel(id = "ch-1", name = "One", imageTag = "abc")))

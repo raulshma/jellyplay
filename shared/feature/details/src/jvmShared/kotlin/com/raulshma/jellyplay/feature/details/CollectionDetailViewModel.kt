@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -30,6 +31,7 @@ class CollectionDetailViewModel constructor(
     private val mediaRepository: MediaRepository,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    private val artworkUrls: ArtworkUrls,
     private val mediaDownloadActions: MediaDownloadActions,
 ) : JellyPlayViewModel() {
 
@@ -112,6 +114,12 @@ class CollectionDetailViewModel constructor(
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
+
+    fun poster(item: MediaItem): String =
+        artworkUrls.poster(item)
+
+    fun backdrop(item: MediaItem): String =
+        artworkUrls.backdrop(item)
 
     /**
      * The screen's container adapter: where the collection's exposed items

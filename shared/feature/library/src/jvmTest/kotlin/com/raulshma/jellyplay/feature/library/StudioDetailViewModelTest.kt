@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -75,6 +76,7 @@ class StudioDetailViewModelTest {
             mediaRepository = mediaRepository,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             quickDownloadActions = quickDownloadActions,
         )
     }

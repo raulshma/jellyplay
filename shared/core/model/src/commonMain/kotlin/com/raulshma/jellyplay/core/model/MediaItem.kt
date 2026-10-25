@@ -62,6 +62,42 @@ data class ImageBlurHashes(
     val backdrop: String? = null,
 )
 
+/**
+ * The item's server image etags ("tags") — Jellyfin's per-image revision
+ * stamps. Threaded into image URLs (`?tag=`) so a server-side artwork change
+ * mints a new URL, which busts every downstream cache (Coil memory + disk
+ * both key on the URL string) without any manual cache clear.
+ *
+ * Populated in JellyfinDtoMappers from `imageTags`, `backdropImageTags`, and
+ * the parent/series/album tag properties the wire carries alongside them. All
+ * fields default null: a listing that predates the mapping (offline JSON,
+ * session restore) decodes to the default and those surfaces keep emitting
+ * untagged URLs rather than breaking.
+ *
+ * A null tag means "unknown", NOT "no image" — the has-image existence gate
+ * stays the callers' fold (see ImageUrlProvider.getImageUrlOrNull).
+ */
+@Immutable
+@Serializable
+data class MediaImageTags(
+    /** The item's own Primary image tag (poster). */
+    val primary: String? = null,
+    /** First Backdrop tag (the wide art the details screen renders). */
+    val backdrop: String? = null,
+    /** The item's own Logo image tag (details title block). */
+    val logo: String? = null,
+    /** Parent item's Primary tag — the season poster for episodes, the series poster for seasons, the album art for tracks. */
+    val parentPrimary: String? = null,
+    /** Parent item's Thumb tag — the wide fallback art for episodes. */
+    val parentThumb: String? = null,
+    /** The containing series' Primary tag (episodes/seasons without own art). */
+    val seriesPrimary: String? = null,
+    /** The containing series' Thumb tag. */
+    val seriesThumb: String? = null,
+    /** The containing album's Primary tag (music tracks). */
+    val album: String? = null,
+)
+
 @Immutable
 @Serializable
 data class MediaItem(
@@ -99,6 +135,7 @@ data class MediaItem(
     val container: String? = null,
     val videoType: String? = null,
     val blurHashes: ImageBlurHashes = ImageBlurHashes(),
+    val imageTags: MediaImageTags = MediaImageTags(),
     val normalizationGain: Float? = null,
     val normalizationPeak: Float? = null,
     val playCount: Int = 0,

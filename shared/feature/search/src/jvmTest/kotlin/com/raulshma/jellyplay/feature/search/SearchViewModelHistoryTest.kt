@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import io.mockk.coEvery
@@ -89,6 +90,7 @@ class SearchViewModelHistoryTest {
             libraryApiClient,
             mockk(relaxed = true),
             imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository,
             seerrRequestDelegate,
             mediaSearchEngine,

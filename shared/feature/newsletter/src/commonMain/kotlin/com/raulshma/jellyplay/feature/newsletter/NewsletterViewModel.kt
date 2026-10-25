@@ -3,8 +3,10 @@ package com.raulshma.jellyplay.feature.newsletter
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.network.api.NewsletterApiClient
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -21,6 +23,7 @@ import kotlin.time.Clock
 class NewsletterViewModel(
     private val newsletterApiClient: NewsletterApiClient,
     private val imageUrlProvider: ImageUrlProvider,
+    private val artworkUrls: ArtworkUrls,
     private val notificationStore: NotificationStore,
     authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
@@ -61,6 +64,12 @@ class NewsletterViewModel(
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
+
+    fun posterUrl(item: MediaItem): String =
+        artworkUrls.poster(item)
+
+    fun backdropUrl(item: MediaItem): String =
+        artworkUrls.backdrop(item)
 
     private fun loadData(isPullToRefresh: Boolean = false) {
         launch {

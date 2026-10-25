@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.collection
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -60,7 +61,7 @@ class MusicCollectionAdapterWiringTest {
 
     @Test
     fun artistsAdapter_queriesArtistsWithTheKindAndDefaultNameSort() = runTest(mainDispatcher) {
-        val viewModel = ArtistsViewModel(mediaRepository, imageUrlProvider)
+        val viewModel = ArtistsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         viewModel.artists.first()
@@ -77,7 +78,7 @@ class MusicCollectionAdapterWiringTest {
 
     @Test
     fun albumsAdapter_setSortRequeriesWithTheMappedJellyfinSort() = runTest(mainDispatcher) {
-        val viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider)
+        val viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         viewModel.setSort(MusicSortOption.YEAR)
@@ -95,7 +96,7 @@ class MusicCollectionAdapterWiringTest {
 
     @Test
     fun tracksAdapter_queriesAudioWithTheKindAndDefaultNameSort() = runTest(mainDispatcher) {
-        val viewModel = TracksViewModel(mediaRepository, imageUrlProvider, audioQueueFacade)
+        val viewModel = TracksViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY, audioQueueFacade)
         advanceUntilIdle()
 
         viewModel.tracks.first()
@@ -113,7 +114,7 @@ class MusicCollectionAdapterWiringTest {
     @Test
     fun imageUrl_resolvesThroughTheSharedMusicMaxWidthSeam() {
         every { imageUrlProvider.getImageUrl("i1", ImageUrlProvider.MUSIC_MAX_WIDTH) } returns "img"
-        val viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider)
+        val viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
 
         assertEquals("img", viewModel.getImageUrl("i1"))
     }

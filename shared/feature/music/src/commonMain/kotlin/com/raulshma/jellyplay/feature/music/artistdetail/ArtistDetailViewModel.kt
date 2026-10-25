@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
@@ -31,6 +32,8 @@ class ArtistDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the album row renders through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 

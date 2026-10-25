@@ -67,6 +67,16 @@ internal class AndroidStorageAreas(
 
     override suspend fun clearImageCache() {
         withContext(Dispatchers.IO) {
+            // Coil's own eviction first — the disk-cache journal stays
+            // consistent with the wiped files (a bare deleteRecursively
+            // leaves stale index entries behind). Parity with the desktop
+            // actual (DesktopCoilImageCache), including the deliberate choice
+            // to leave the MEMORY cache warm: visible artwork must not flash
+            // to its blurHash mid-session.
+            coil3.SingletonImageLoader.get(context).diskCache?.clear()
+            // The directory walk stays as the floor: it also covers the
+            // cache-disabled mode, where the loader has no disk cache to
+            // clear but legacy entries from earlier runs may still exist.
             val imageDir = File(context.cacheDir, ImageCache.DIR)
             if (imageDir.exists()) {
                 imageDir.deleteRecursively()

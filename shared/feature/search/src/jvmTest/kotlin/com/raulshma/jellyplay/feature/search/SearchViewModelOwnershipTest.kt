@@ -15,8 +15,10 @@ import kotlin.test.assertTrue
  * `SearchUiEvent` fold routed through the single `onEvent` funnel (the
  * HomeViewModel precedent) instead of new per-action command members.
  *
- * Baseline: 20 members (the SearchUiEvent intent fold routes user intents
+ * Baseline: 21 members (the SearchUiEvent intent fold routes user intents
  * through the single `onEvent` funnel rather than per-command publics).
+ * 22: the artwork-tags sweep's `posterUrl(item)` item-level accessor (the
+ * HomeViewModel pattern — the tagged-URL seam beside the raw-id `getImageUrl`).
  *
  * The Seerr request-dialog cell lives in the feature-facing
  * SeerrRequestDialogHolder rather than in core:data's SeerrRequestStateHolder
@@ -29,7 +31,7 @@ import kotlin.test.assertTrue
 class SearchViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 21
+    private val maxPublicInternalMembers = 22
 
     /**
      * A class-body declaration line at the ViewModel's single level of

@@ -104,8 +104,12 @@ internal class LivePlaybackSession(
      * zaps, releases with the session.
      */
     private val mediaSessionFactory: LiveMediaSessionFactory? = null,
-    /** Channel artwork resolver for the session metadata (blank = no artwork). */
-    private val channelImageUrl: (channelId: String, maxWidth: Int) -> String = { _, _ -> "" },
+    /**
+     * Channel artwork resolver for the session metadata (blank = no artwork).
+     * The channel's [LiveTvChannel.imageTag] rides as the third argument —
+     * the `?tag=` etag cache-buster on the notification artwork.
+     */
+    private val channelImageUrl: (channelId: String, maxWidth: Int, tag: String?) -> String = { _, _, _ -> "" },
 ) {
 
     // ── Upward event pipe ─────────────────────────────────────────────────────
@@ -398,7 +402,9 @@ internal class LivePlaybackSession(
         // here — so headset / lock-screen control always targets the tuned
         // channel. Same-channel re-tunes rebuild the session id (the
         // controller's release-superseded order handles the uniqueness rule).
-        mediaSessionController?.createForChannel(channel.id, channel.name)
+        // The channel's imageTag rides along so the session artwork URL
+        // carries the etag cache-buster.
+        mediaSessionController?.createForChannel(channel.id, channel.name, channel.imageTag)
         // PiP auto-entry arms on every successful tune (init, zap, retry,
         // stream-option reload all funnel through here) — mirrors the VOD
         // session's per-load arm. The Activity additionally gates entry on

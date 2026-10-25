@@ -10,8 +10,8 @@ import org.koin.dsl.module
  * Koin construction owner for the photo suite (extracted from feature/library
  * at the photo-suite move — these were the trailing two definitions of the
  * former libraryModule, feature/library's di/LibraryKoinModule.kt). Ctor
- * deps: MediaRepository / ImageUrlProvider resolve from the shared data
- * graph; PhotoExport comes from the per-platform export module
+ * deps: MediaRepository / ImageUrlProvider / ArtworkUrls resolve from the
+ * shared data graph; PhotoExport comes from the per-platform export module
  * (androidPhotoExportModule / desktopPhotoExportModule, the shells' inline
  * platform registrations — this module moved with the suite).
  *
@@ -24,6 +24,7 @@ val photosModule: Module = module {
         PhotoAlbumViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {
@@ -31,6 +32,7 @@ val photosModule: Module = module {
             mediaRepository = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             photoExport = get(),
         )
     }

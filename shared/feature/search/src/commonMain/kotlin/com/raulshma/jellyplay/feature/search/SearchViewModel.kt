@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -51,6 +52,7 @@ internal class SearchViewModel(
     private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    private val artworkUrls: ArtworkUrls,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val mediaSearchEngine: MediaSearchEngine,
@@ -357,6 +359,9 @@ internal class SearchViewModel(
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
+
+    fun posterUrl(item: MediaItem): String =
+        artworkUrls.poster(item)
 
     /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
     // Whether this platform has a download pipeline — screens gate the

@@ -91,6 +91,7 @@ val desktopPlayerVideoModule: Module = module {
             cinemaModeOverride = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             downloadRepository = get(),
             offlineRepository = get(),
             offlinePlaybackFacade = get(),

@@ -54,7 +54,6 @@ import androidx.compose.material3.IconButtonDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
 import com.raulshma.jellyplay.core.ui.components.displayTitle
-import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
 import com.raulshma.jellyplay.core.ui.components.rememberProgressFraction
 import androidx.compose.material3.MaterialTheme
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
@@ -463,10 +462,11 @@ internal fun LibraryScreen(
     // rendering tiny cards. Scaled from the same adaptive baseline.
     val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / browser.posterSize * (16f / 9f) * (3f / 4f)
 
-    // Stable image resolvers for the view-mode contents: one lambda identity per VM
-    // (the former branches remembered the same wrappers inline per item lambda).
-    val getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
-    val getBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+    // The tag-aware artwork resolver for the view-mode contents — one stable
+    // instance per VM (the former id-lambda wrappers), so a tag change rides
+    // the item identity into the per-card remembers instead of a URL rebuild
+    // keyed on an unchanging id.
+    val artworkUrls = viewModel.artworkUrls
     val photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } }
 
     // D-pad Left at any content left edge expands the navigation drawer. The
@@ -889,7 +889,7 @@ internal fun LibraryScreen(
                                                 gridPadding = gridPadding,
                                                 refreshGeneration = refreshGeneration,
                                                 onItemClick = onItemClick,
-                                                getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                                                resolver = artworkUrls,
                                                 onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                             )
                                         } else when (activeMode) {
@@ -899,7 +899,7 @@ internal fun LibraryScreen(
                                             contentPadding = gridPadding,
                                             refreshGeneration = refreshGeneration,
                                             onItemClick = onItemClick,
-                                            getImageUrl = getImageUrl,
+                                            resolver = artworkUrls,
                                             onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                         )
                                         LibraryViewMode.THUMB -> LibraryThumbContent(
@@ -910,8 +910,7 @@ internal fun LibraryScreen(
                                             spacing = spacing,
                                             refreshGeneration = refreshGeneration,
                                             onItemClick = onItemClick,
-                                            getImageUrl = getImageUrl,
-                                            getBackdropUrl = getBackdropUrl,
+                                            resolver = artworkUrls,
                                             onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                         )
                                         LibraryViewMode.GRID -> LibraryGridContent(
@@ -922,7 +921,7 @@ internal fun LibraryScreen(
                                             spacing = spacing,
                                             refreshGeneration = refreshGeneration,
                                             onItemClick = onItemClick,
-                                            getImageUrl = getImageUrl,
+                                            resolver = artworkUrls,
                                             photoFolderChildUrlsFor = photoFolderChildUrlsFor,
                                             onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                         )
@@ -934,7 +933,7 @@ internal fun LibraryScreen(
                                             spacing = spacing,
                                             refreshGeneration = refreshGeneration,
                                             onItemClick = onItemClick,
-                                            getImageUrl = getImageUrl,
+                                            resolver = artworkUrls,
                                             onFocusedItemChange = { item -> quickActionIntake.tvFocusedItem = item },
                                         )
                                     }

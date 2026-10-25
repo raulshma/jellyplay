@@ -110,7 +110,7 @@ fun NewsletterContent(
                 NewsletterSectionType.RECENTLY_ADDED -> {
                     NewsletterRecentlyAdded(
                         items = state.recentlyAdded,
-                        imageUrlBuilder = { viewModel.getImageUrl(it) },
+                        imageUrlBuilder = rememberSectionPosterBuilder(state.recentlyAdded, viewModel),
                         onItemClick = onItemClick,
                         modifier = sectionModifier,
                     )
@@ -125,7 +125,7 @@ fun NewsletterContent(
                 NewsletterSectionType.CONTINUE_WATCHING -> {
                     NewsletterContinueWatching(
                         items = state.continueWatching,
-                        imageUrlBuilder = { viewModel.getImageUrl(it) },
+                        imageUrlBuilder = rememberSectionPosterBuilder(state.continueWatching, viewModel),
                         onItemClick = onItemClick,
                         onPlayClick = { item ->
                             onPlayClick(item.id, null, item.playbackPositionTicks ?: 0L)
@@ -136,7 +136,7 @@ fun NewsletterContent(
                 NewsletterSectionType.NEXT_UP -> {
                     NewsletterNextUp(
                         items = state.nextUp,
-                        imageUrlBuilder = { viewModel.getImageUrl(it) },
+                        imageUrlBuilder = rememberSectionPosterBuilder(state.nextUp, viewModel),
                         onItemClick = onItemClick,
                         modifier = sectionModifier,
                     )
@@ -144,8 +144,8 @@ fun NewsletterContent(
                 NewsletterSectionType.CURATED_PICKS -> {
                     NewsletterCuratedPicks(
                         items = state.curatedPicks,
-                        imageUrlBuilder = { viewModel.getImageUrl(it) },
-                        backdropUrlBuilder = { viewModel.getBackdropUrl(it) },
+                        imageUrlBuilder = rememberSectionPosterBuilder(state.curatedPicks, viewModel),
+                        backdropUrlBuilder = rememberSectionBackdropBuilder(state.curatedPicks, viewModel),
                         onItemClick = onItemClick,
                         onViewAllClick = onViewAllFreshPicks,
                         modifier = sectionModifier,
@@ -178,4 +178,36 @@ private fun animateEntranceAlpha(
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "entrance",
     )
+}
+
+/**
+ * The `(itemId) -> url` shape the section rows take, resolved through the
+ * [items] the section itself renders so each card's URL carries that item's
+ * image tag (the etag cache-buster — the row holds the [MediaItem], only its
+ * id crosses this legacy seam). The id→item index is remembered off the list,
+ * so a section re-render looks the URL up in O(1) instead of re-indexing.
+ */
+@Composable
+private fun rememberSectionPosterBuilder(
+    items: List<MediaItem>,
+    viewModel: NewsletterViewModel,
+): (String) -> String = rememberSectionUrlBuilder(items, viewModel) { viewModel.posterUrl(it) }
+
+/** The backdrop-slot twin of [rememberSectionPosterBuilder] (the Fresh Picks featured card). */
+@Composable
+private fun rememberSectionBackdropBuilder(
+    items: List<MediaItem>,
+    viewModel: NewsletterViewModel,
+): (String) -> String = rememberSectionUrlBuilder(items, viewModel) { viewModel.backdropUrl(it) }
+
+@Composable
+private fun rememberSectionUrlBuilder(
+    items: List<MediaItem>,
+    viewModel: NewsletterViewModel,
+    urlFor: (MediaItem) -> String,
+): (String) -> String {
+    val byId = remember(items) { items.associateBy { it.id } }
+    return remember(byId, viewModel, urlFor) {
+        { id -> byId[id]?.let(urlFor) ?: viewModel.getImageUrl(id) }
+    }
 }

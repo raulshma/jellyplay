@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -81,6 +82,7 @@ class AlbumDetailViewModelTest {
             mediaRepository = mediaRepository,
             musicCatalogue = musicCatalogue,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
             downloads = trackDownloads,
             downloadIntake = downloadIntake,

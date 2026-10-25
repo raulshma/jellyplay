@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -48,7 +49,7 @@ class CastAndCrewViewModelTest {
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
-        viewModel = CastAndCrewViewModel(mediaRepository, imageUrlProvider)
+        viewModel = CastAndCrewViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @Test

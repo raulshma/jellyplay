@@ -66,7 +66,7 @@ fun androidPlayerLiveModule(context: Context): Module = module {
                 context = context,
                 sessionManager = get(),
                 getEngine = getEngine,
-                getImageUrl = { channelId, maxWidth -> getImageUrl(channelId, maxWidth) },
+                getImageUrl = { channelId, maxWidth, tag -> getImageUrl(channelId, maxWidth, tag) },
             )
         }
     }

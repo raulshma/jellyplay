@@ -21,13 +21,16 @@ interface LiveMediaSessionController {
     /**
      * Builds + activates a session for [channelId], pinning [title] (and the
      * channel artwork the factory's image-url lambda resolves) at the session
-     * layer. No-op when no engine is bound (the same guard the VOD controller
-     * applies). Re-tunes replace the session; a same-channel re-tune
+     * layer. [imageTag] is the channel's `LiveTvChannel.imageTag` — it rides
+     * the artwork URL as the `?tag=` etag cache-buster so a re-uploaded logo
+     * mints a new cache key on the notification surface too. No-op when no
+     * engine is bound (the same guard the VOD controller applies). Re-tunes
+     * replace the session; a same-channel re-tune
      * ([LivePlaybackSession.retry]) reuses the outgoing id, so the outgoing
      * session is released first — the Media3 session-ID uniqueness rule the
      * VOD controller documents.
      */
-    fun createForChannel(channelId: String, title: String)
+    fun createForChannel(channelId: String, title: String, imageTag: String? = null)
 
     /** Tears down the active session. Idempotent. */
     fun release()
@@ -38,11 +41,11 @@ interface LiveMediaSessionController {
  * [com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory] SAM
  * shape. [getEngine] is re-read on every [LiveMediaSessionController.createForChannel]
  * so the controller follows engine creation; [getImageUrl] resolves channel
- * artwork (blank string = no artwork).
+ * artwork (blank string = no artwork) with the channel's image tag forwarded.
  */
 fun interface LiveMediaSessionFactory {
     fun create(
         getEngine: () -> LivePlayerEngine?,
-        getImageUrl: (channelId: String, maxWidth: Int) -> String,
+        getImageUrl: (channelId: String, maxWidth: Int, tag: String?) -> String,
     ): LiveMediaSessionController
 }

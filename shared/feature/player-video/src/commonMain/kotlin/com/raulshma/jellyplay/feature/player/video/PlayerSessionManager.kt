@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
@@ -172,6 +174,13 @@ internal class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * The artwork resolver over [imageUrlProvider]: the engine hand-off's
+     * artwork URI carries the item's own primary image tag, so a re-uploaded
+     * poster mints a new URL (and a new cache key) on the next load.
+     */
+    private val artworkUrls: ArtworkUrls = DefaultArtworkUrls(imageUrlProvider)
 
     /**
      * The position the current load started at (ms) — the now-playing
@@ -810,7 +819,7 @@ internal class PlayerSessionManager(
 
         val externalSubtitles = sessionSubtitleSources.buildExternalSubtitles(detail, source, playMethod)
 
-        val artworkUri = imageUrlProvider.getImageUrl(detail.item.id, maxWidth = 300)
+        val artworkUri = artworkUrls.poster(detail.item, maxWidth = 300)
 
         val headers = mutableMapOf<String, String>()
         val serverUrl = playbackIdentity.serverUrl()

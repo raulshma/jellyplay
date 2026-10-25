@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
@@ -99,7 +100,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     private fun newViewModel(): WatchProgressHeatmapViewModel = WatchProgressHeatmapViewModel(
         watchHistoryRepository = watchHistoryRepository,
         mediaRepository = mediaRepository,
-        imageUrlProvider = imageUrlProvider,
+        artworkUrls = DefaultArtworkUrls(imageUrlProvider),
     )
 
     private fun session(itemId: String, name: String) = PlaybackReportingDetail(

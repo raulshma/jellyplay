@@ -56,6 +56,7 @@ class IdentifyActionsTest {
             strings = strings,
             editorRepository = editorRepository,
             mediaRepository = mockk<MediaRepository>(relaxed = true),
+            onRefreshAccepted = {},
             authRepository = authRepository,
         )
     }

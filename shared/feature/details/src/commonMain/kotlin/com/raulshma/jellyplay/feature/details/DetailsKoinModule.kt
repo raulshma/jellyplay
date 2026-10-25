@@ -56,6 +56,7 @@ val detailsModule: Module = module {
         CastAndCrewViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {

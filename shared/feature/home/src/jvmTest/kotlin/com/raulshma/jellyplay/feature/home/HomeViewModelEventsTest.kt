@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolderFactory
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -300,6 +301,7 @@ class HomeViewModelEventsTest {
         mediaSearchEngine = mediaSearchEngine,
         homeFeed = homeFeed,
         imageUrlProvider = imageUrlProvider,
+        artworkUrls = DefaultArtworkUrls(imageUrlProvider),
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadIntake = downloadIntake,
         quickDownloadActions = quickDownloadActions,

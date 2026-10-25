@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.paging.compose.LazyPagingItems
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.GroupBy
@@ -42,8 +43,8 @@ import com.raulshma.jellyplay.core.model.sortedByCachedKey
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
-import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
 import com.raulshma.jellyplay.core.ui.components.rememberProgressFraction
+import com.raulshma.jellyplay.core.ui.components.seriesImageFallback
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableColumn
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow
@@ -115,7 +116,8 @@ fun GroupedLibraryContent(
     spacing: androidx.compose.ui.unit.Dp,
     gridPadding: PaddingValues,
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
-    getImageUrl: (String) -> String,
+    /** The tag-aware artwork resolver — posters/backdrops carry the item's image tag. */
+    resolver: ArtworkUrls,
     onFocusedItemChange: ((MediaItem?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     /** Bumped by the host on completed refreshes; resets the cursor and re-grabs focus on TV. */
@@ -189,13 +191,17 @@ fun GroupedLibraryContent(
                     item.libraryListSubtitle()
                 }
                 // Seasons fall back to the parent series poster when the season's
-                // own artwork 404s (shared with the ungrouped list path).
-                val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
+                // own artwork 404s (shared with the ungrouped list path). Keyed
+                // on the item — the series poster URL now carries the
+                // seriesPrimary tag, which only changes with a fresh instance.
+                val fallbackUrls = remember(item, resolver) {
+                    item.seriesImageFallback { resolver.seriesPoster(it) }
+                }
                 LibraryListItem(
                     item = item,
                     title = item.displayTitle(),
                     subtitle = subtitle,
-                    imageUrl = remember(item.id) { getImageUrl(item.id) },
+                    imageUrl = remember(item, resolver) { resolver.poster(item) },
                     fallbackUrls = fallbackUrls,
                     blurHash = item.blurHashes.primary,
                     onClick = memoizedClick,
@@ -255,8 +261,10 @@ fun GroupedLibraryContent(
                     val itemProgress = item.rememberProgressFraction()
                     val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                         item = item,
-                        itemImageUrl = remember(item.id) { getImageUrl(item.id) },
-                        seriesPosterResolver = getImageUrl,
+                        itemImageUrl = remember(item, resolver) { resolver.poster(item) },
+                        seriesPosterResolver = remember(resolver) {
+                            { item: MediaItem -> resolver.seriesPoster(item) }
+                        },
                     )
                     PosterCard(
                         item = item,

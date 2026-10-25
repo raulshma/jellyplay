@@ -183,7 +183,7 @@ class LiveTvPlayerViewModel(
         transcodeReasonsRenderer = transcodeReasonsRenderer,
         playbackRepository = playbackRepository,
         mediaSessionFactory = mediaSessionFactory,
-        channelImageUrl = { channelId, maxWidth -> imageUrlProvider.getImageUrl(channelId, maxWidth) },
+        channelImageUrl = { channelId, maxWidth, tag -> imageUrlProvider.getImageUrl(channelId, maxWidth, tag) },
     )
 
     /**
@@ -632,9 +632,9 @@ class LiveTvPlayerViewModel(
     /** Exposes the live engine for PlayerView attachment (null before first load). */
     fun engineForRendering(): LivePlayerEngine? = playbackSession.engineForRendering()
 
-    /** Channel logo URL for the chrome/zap toast; null when no image tag. */
+    /** Channel logo URL for the chrome/zap toast; null when no image tag. The tag rides the URL as the etag cache-buster. */
     fun logoUrlFor(channel: LiveTvChannel): String? =
-        if (!channel.imageTag.isNullOrBlank()) imageUrlProvider.getImageUrl(channel.id) else null
+        if (!channel.imageTag.isNullOrBlank()) imageUrlProvider.getImageUrl(channel.id, tag = channel.imageTag) else null
 
     /**
      * Releases the live session and resets playback state. Called from

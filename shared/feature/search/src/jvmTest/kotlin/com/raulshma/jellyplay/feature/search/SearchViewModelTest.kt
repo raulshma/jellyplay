@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSideSearchState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.model.Genre
@@ -125,6 +126,7 @@ class SearchViewModelTest {
             libraryApiClient,
             userDataMutator,
             imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository,
             seerrRequestDelegate,
             mediaSearchEngine,
@@ -211,6 +213,7 @@ class SearchViewModelTest {
         // Recreate so the init-time suggestion load picks up the stub.
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
 
@@ -254,6 +257,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
@@ -272,6 +276,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
@@ -288,6 +293,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.tags.collect { } }
@@ -305,6 +311,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrConnected.collect { } }
@@ -320,6 +327,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrSearchEnabled.collect { } }
@@ -341,6 +349,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         advanceUntilIdle()
@@ -357,6 +366,7 @@ class SearchViewModelTest {
         )
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         advanceUntilIdle()
@@ -383,6 +393,7 @@ class SearchViewModelTest {
         }
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         viewModel.onEvent(SearchUiEvent.Search("matrix"))
@@ -415,6 +426,7 @@ class SearchViewModelTest {
         }
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
@@ -437,6 +449,7 @@ class SearchViewModelTest {
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
@@ -467,6 +480,7 @@ class SearchViewModelTest {
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
@@ -511,6 +525,7 @@ class SearchViewModelTest {
 
         viewModel = SearchViewModel(
             mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.searchHistory.collect { } }

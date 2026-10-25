@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DetailPreferences
@@ -147,21 +148,23 @@ internal data class DetailContentState(
 /**
  * Artwork / image-URL resolution for the media-detail content tree.
  *
- * Grouping rule: every lambda that turns an id (or chapter coordinates) into a
- * loadable image URL. These are read across nearly every section (poster,
- * cast, rows, chapter tiles), so they live in their own bundle rather than
- * inside any single section's action group. URL getters default to an empty
- * string (MediaImage renders its placeholder) so partially-wired consumers
- * keep compiling.
+ * Grouping rule: everything that turns the items the sections hold (or chapter
+ * coordinates) into a loadable image URL. These are read across nearly every
+ * section (poster, cast, rows, chapter tiles), so they live in their own bundle
+ * rather than inside any single section's action group. [urls] is the core:data
+ * [ArtworkUrls] resolver — sections hand it the MediaItem/PersonInfo they
+ * already render, and it selects the matching image tag (the per-image etag
+ * that busts Coil's caches on artwork re-upload) — defaulting to
+ * [ArtworkUrls.EMPTY] (every slot renders the MediaImage placeholder) so
+ * partially-wired consumers keep compiling. The chapter getter stays a lambda:
+ * ChapterInfo has no id, only coordinates + tag onto the hosting item.
  */
 @Immutable
 internal data class ArtworkCallbacks(
-    val getImageUrl: (String) -> String = { "" },
-    val getBackdropUrl: (String) -> String = { "" },
+    /** The item/tag-aware artwork resolver behind every non-chapter image slot. */
+    val urls: ArtworkUrls = ArtworkUrls.EMPTY,
     /** Resolves a chapter thumbnail URL (imageType = Chapter) by list index + tag. */
     val getChapterImageUrl: (itemId: String, imageIndex: Int, tag: String?) -> String = { _, _, _ -> "" },
-    /** Resolves the clear-logo URL (imageType = Logo) for the "prefer logos" title. */
-    val getLogoUrl: (String) -> String = { "" },
 )
 
 /**

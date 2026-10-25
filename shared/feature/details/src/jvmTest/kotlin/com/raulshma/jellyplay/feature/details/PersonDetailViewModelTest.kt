@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DetailPreferences
@@ -57,12 +58,13 @@ class PersonDetailViewModelTest {
         val projections = mockk<PreferenceProjections>(relaxed = true)
         every { projections.detailPreferences } returns MutableStateFlow(detailPreferences)
         return PersonDetailViewModel(
-            mediaRepository,
-            libraryApiClient,
-            userDataMutator,
-            imageUrlProvider,
-            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
-            projections,
+            mediaRepository = mediaRepository,
+            libraryApiClient = libraryApiClient,
+            userDataMutator = userDataMutator,
+            imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
+            mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+            projections = projections,
         )
     }
 

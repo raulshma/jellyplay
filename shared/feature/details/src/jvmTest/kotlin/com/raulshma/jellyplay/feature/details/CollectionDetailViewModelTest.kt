@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -55,7 +56,8 @@ class CollectionDetailViewModelTest {
             mediaRepository,
             userDataMutator,
             imageUrlProvider,
-            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+            artworkUrls = ArtworkUrls.EMPTY,
+            mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
         )
     }
 
@@ -394,6 +396,7 @@ class CollectionDetailViewModelTest {
         mediaRepository,
         userDataMutator,
         imageUrlProvider,
-        mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+        artworkUrls = ArtworkUrls.EMPTY,
+        mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
     )
 }

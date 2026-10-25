@@ -171,12 +171,18 @@ fun MediaDetailScreen(
     // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
     // scroll-derived state change funnelling through ArtworkThemeWrapper).
     // Books have no Backdrop image — the hero (and the cover-tinted theme)
-    // source the PRIMARY (cover) art instead.
-    val backdropUrl = remember(targetBackdropId, currentItem?.mediaType) {
-        if (currentItem?.mediaType == MediaType.BOOK) {
-            viewModel.getImageUrl(targetBackdropId)
-        } else {
-            viewModel.getBackdropUrl(targetBackdropId)
+    // source the PRIMARY (cover) art instead. Item-backed ids resolve through
+    // the tag-aware resolver (keyed on the ITEM, not its id, so a re-tagged
+    // artwork remints the URL); the parent-series leg (episodes render the
+    // SERIES backdrop) has no series backdrop tag on MediaImageTags, so it
+    // stays the raw untagged getter — same target id as before.
+    val backdropUrl = remember(currentItem) {
+        when {
+            currentItem == null -> viewModel.getBackdropUrl(targetBackdropId)
+            currentItem.mediaType == MediaType.BOOK -> viewModel.artwork.poster(currentItem)
+            currentItem.mediaType == MediaType.EPISODE ->
+                viewModel.getBackdropUrl(currentItem.seriesId ?: currentItem.id)
+            else -> viewModel.artwork.backdrop(currentItem)
         }
     }
 
@@ -452,12 +458,9 @@ fun MediaDetailScreen(
                     viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType, onDone)
                 }
             ) {
-                val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
-                val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
                 val rememberedGetChapterImageUrl = remember(viewModel) {
                     { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
                 }
-                val rememberedGetLogoUrl = remember(viewModel) { { id: String -> viewModel.getLogoUrl(id) } }
 
                 // Series id used by season-episode fetches. Keyed on BOTH the
                 // item id and the resolved series id so it recomputes once the
@@ -510,17 +513,14 @@ fun MediaDetailScreen(
                 // captures must not go stale now that the other bundles' keys
                 // are stable. Delegated reads (`uiState`, `var … by remember`)
                 // resolve at invocation time and need no keys. ──
-                val artworkCallbacks = remember(
-                    rememberedGetImageUrl,
-                    rememberedGetBackdropUrl,
-                    rememberedGetChapterImageUrl,
-                    rememberedGetLogoUrl,
-                ) {
+                // The resolver itself is the stateless core:data single the VM
+                // holds — sections tag URLs off the MediaItems they already
+                // render; only the chapter getter (coordinates, no id) stays a
+                // lambda.
+                val artworkCallbacks = remember(viewModel, rememberedGetChapterImageUrl) {
                     ArtworkCallbacks(
-                        getImageUrl = rememberedGetImageUrl,
-                        getBackdropUrl = rememberedGetBackdropUrl,
+                        urls = viewModel.artwork,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
-                        getLogoUrl = rememberedGetLogoUrl,
                     )
                 }
 
@@ -548,7 +548,12 @@ fun MediaDetailScreen(
                                     remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
                                     audioStreamIndex = viewModel.selectedAudioIndex,
                                     trailers = uiState.trailers,
-                                    currentItemPosterUrl = viewModel.getImageUrl(itemId),
+                                    // The loaded detail item IS the route id; fall
+                                    // back to the raw getter for the pre-load window.
+                                    currentItemPosterUrl = uiState.detail?.item
+                                        ?.takeIf { it.id == itemId }
+                                        ?.let { viewModel.artwork.poster(it) }
+                                        ?: viewModel.getImageUrl(itemId),
                                     playTrailerBeforeMovie = seams.videoPlayerStore.videoPlayer.value.playTrailerBeforeMovie,
                                     isSyncPlayActive = seams.syncPlayManager.isInSyncPlaySession,
                                 ),
@@ -648,7 +653,7 @@ fun MediaDetailScreen(
                                             itemId = member.id,
                                             title = member.name,
                                             subtitle = member.seriesName ?: member.year?.toString(),
-                                            imageUrl = viewModel.getImageUrl(member.id),
+                                            imageUrl = viewModel.artwork.poster(member),
                                             runTimeTicks = member.runTimeTicks,
                                         ),
                                     )
@@ -1237,11 +1242,18 @@ fun MediaDetailScreen(
             // Sheet-scoped full-state collect (inventory fields aren't on
             // the slim root projection); lives only while the sheet is composed.
             val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+            // Episode/season sheets render the SERIES backdrop — MediaImageTags
+            // carries no series backdrop tag, so that leg stays the raw untagged
+            // getter; every item-backed id resolves through the tag-aware
+            // resolver (same target ids as before, + the item's own tag).
             val sheetBackdropUrl = uiState.assets.backdropPath
-                ?: viewModel.getBackdropUrl(detailsItem.seriesId ?: detailsItem.id)
+                // Smart-cast hoist: seriesId is a public API property of another
+                // module, so the null check can't smart-cast it inline.
+                ?: detailsItem.seriesId?.let { seriesId -> viewModel.getBackdropUrl(seriesId) }
+                ?: viewModel.artwork.backdrop(detailsItem)
 
             val sheetPosterUrl = uiState.assets.posterPath
-                ?: viewModel.getImageUrl(detailsItem.id)
+                ?: viewModel.artwork.poster(detailsItem)
 
             DownloadDetailsSheet(
                 download = uiState.detailContext?.download,

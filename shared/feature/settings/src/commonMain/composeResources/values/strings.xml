@@ -476,6 +476,7 @@
     <string name="settings_auto_delete_off">Manual cache management</string>
     <string name="settings_max_cache_size">Max Cache Size</string>
     <string name="settings_max_cache_size_subtitle">Maximum disk space for caching</string>
+    <string name="settings_max_cache_applies_after_restart">Applies the next time the app starts</string>
     <string name="settings_unlimited">Unlimited</string>
     <string name="settings_network_offline">Network &amp; Offline</string>
     <string name="settings_status_value">Status: %1$s</string>

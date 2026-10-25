@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.LazyPagingItems
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -33,7 +34,7 @@ import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
 import com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage
 import com.raulshma.jellyplay.core.ui.components.rememberProgressFraction
-import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
+import com.raulshma.jellyplay.core.ui.components.seriesImageFallback
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.TvFocusablePagingColumn
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -65,7 +66,8 @@ internal fun LibraryListContent(
     contentPadding: PaddingValues,
     refreshGeneration: Int,
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
-    getImageUrl: (String) -> String,
+    /** The tag-aware artwork resolver — posters/backdrops carry the item's image tag. */
+    resolver: ArtworkUrls,
     onFocusedItemChange: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -99,13 +101,18 @@ internal fun LibraryListContent(
             }
             // Seasons fall back to the parent series poster when the
             // season's own artwork 404s (shared with the grouped list).
-            val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
+            // Keyed on the item, not its id: the series poster URL now
+            // carries the seriesPrimary tag, which only changes with a
+            // fresh item instance.
+            val fallbackUrls = remember(item, resolver) {
+                item.seriesImageFallback { resolver.seriesPoster(it) }
+            }
             Box(modifier = itemModifier) {
                 LibraryListItem(
                     item = item,
                     title = item.displayTitle(),
                     subtitle = subtitle,
-                    imageUrl = remember(item.id) { getImageUrl(item.id) },
+                    imageUrl = remember(item, resolver) { resolver.poster(item) },
                     fallbackUrls = fallbackUrls,
                     blurHash = item.blurHashes.primary,
                     onClick = memoizedClick,
@@ -127,8 +134,8 @@ internal fun LibraryThumbContent(
     spacing: Dp,
     refreshGeneration: Int,
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
-    getImageUrl: (String) -> String,
-    getBackdropUrl: (String) -> String,
+    /** The tag-aware artwork resolver — thumb cards pick backdrop vs poster by blurhash. */
+    resolver: ArtworkUrls,
     onFocusedItemChange: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -155,16 +162,19 @@ internal fun LibraryThumbContent(
             }
             val itemProgress = item.rememberProgressFraction()
             // Seasons fall back to the parent series poster when the
-            // season's own artwork 404s in the thumb view too.
-            val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
+            // season's own artwork 404s in the thumb view too. Keyed on
+            // the item (the seriesPrimary tag rides item identity).
+            val fallbackUrls = remember(item, resolver) {
+                item.seriesImageFallback { resolver.seriesPoster(it) }
+            }
             Box(modifier = itemModifier) {
                 ThumbCard(
                     item = item,
-                    imageUrl = remember(item.id, item.blurHashes.backdrop) {
+                    imageUrl = remember(item, resolver) {
                         if (item.blurHashes.backdrop != null) {
-                            getBackdropUrl(item.id)
+                            resolver.backdrop(item)
                         } else {
-                            getImageUrl(item.id)
+                            resolver.poster(item)
                         }
                     },
                     fallbackUrls = fallbackUrls,
@@ -190,7 +200,8 @@ internal fun LibraryGridContent(
     spacing: Dp,
     refreshGeneration: Int,
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
-    getImageUrl: (String) -> String,
+    /** The tag-aware artwork resolver — episodes resolve through the series art slots. */
+    resolver: ArtworkUrls,
     photoFolderChildUrlsFor: (String) -> Flow<List<String>>,
     onFocusedItemChange: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
@@ -225,11 +236,16 @@ internal fun LibraryGridContent(
             // Resolve the episode's parent-series poster (and badge)
             // the same way the home Latest row does, so episodes
             // render as series posters instead of landscape scene
-            // grabs. See rememberEpisodeCardImage.
+            // grabs. See rememberEpisodeCardImage. The series-poster
+            // resolver takes the item, so its URL carries the item's
+            // seriesPrimary tag; the remember keeps the lambda identity
+            // stable.
             val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                 item = item,
-                itemImageUrl = remember(item.id) { getImageUrl(item.id) },
-                seriesPosterResolver = getImageUrl,
+                itemImageUrl = remember(item, resolver) { resolver.poster(item) },
+                seriesPosterResolver = remember(resolver) {
+                    { item: MediaItem -> resolver.seriesPoster(item) }
+                },
             )
             Box(modifier = itemModifier) {
                 PosterCard(
@@ -265,7 +281,8 @@ internal fun LibraryMasonryContent(
     spacing: Dp,
     refreshGeneration: Int,
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
-    getImageUrl: (String) -> String,
+    /** The tag-aware artwork resolver — episodes resolve through the series art slots. */
+    resolver: ArtworkUrls,
     onFocusedItemChange: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -320,8 +337,10 @@ internal fun LibraryMasonryContent(
                 val itemProgress = item.rememberProgressFraction()
                 val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                     item = item,
-                    itemImageUrl = remember(item.id) { getImageUrl(item.id) },
-                    seriesPosterResolver = getImageUrl,
+                    itemImageUrl = remember(item, resolver) { resolver.poster(item) },
+                    seriesPosterResolver = remember(resolver) {
+                        { item: MediaItem -> resolver.seriesPoster(item) }
+                    },
                 )
                 Box(
                     modifier = Modifier

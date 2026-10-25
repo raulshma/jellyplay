@@ -70,6 +70,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.model.EpisodeStreamInfo
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MissingEpisodeReason
@@ -137,7 +138,8 @@ internal fun SeasonsSection(
      * in which case resolution behaves exactly as it did before this feature.
      */
     persistedSeasonId: String?,
-    getImageUrl: (String) -> String,
+    /** The item/tag-aware artwork resolver for the episode thumbnails. */
+    urls: ArtworkUrls,
     /** Season-tab, episode-list and mark callbacks (see [SeasonsSectionCallbacks] for the pin/select split). */
     callbacks: SeasonsSectionCallbacks,
     /**
@@ -478,7 +480,7 @@ internal fun SeasonsSection(
                             currentEpisodes.forEach { episode ->
                                 CompactEpisodeRow(
                                     episode = episode,
-                                    getImageUrl = getImageUrl,
+                                    urls = urls,
                                     isCurrentEpisode = episode.id == presentation.currentItemId,
                                     onPlayClick = { callbacks.onEpisodePlayClick(episode) },
                                     onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
@@ -513,7 +515,7 @@ internal fun SeasonsSection(
                         ) { _, episode, focusModifier ->
                                 EpisodeCard(
                                     episode = episode,
-                                    getImageUrl = getImageUrl,
+                                    urls = urls,
                                     isCurrentEpisode = episode.id == presentation.currentItemId,
                                     onPlayClick = { callbacks.onEpisodePlayClick(episode) },
                                     onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
@@ -585,7 +587,7 @@ private fun episodeThumbSharedModifier(
 @Composable
 internal fun EpisodeCard(
     episode: MediaItem,
-    getImageUrl: (String) -> String,
+    urls: ArtworkUrls,
     isCurrentEpisode: Boolean = false,
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit,
@@ -598,7 +600,7 @@ internal fun EpisodeCard(
     isDownloaded: Boolean = false,
     /** Per-episode delete (downloaded episodes only). No-op default. */
     onDeleteClick: () -> Unit = {},
-    /** On-disk thumbnail path; preferred over [getImageUrl] when non-null. */
+    /** On-disk thumbnail path; preferred over the resolver URL when non-null. */
     localImagePath: String? = null,
     /** Plugin anime badge for this episode number (null = none — ADR 0010). */
     animeBadge: AnimeBadgeKind? = null,
@@ -611,9 +613,10 @@ internal fun EpisodeCard(
 ) {
     // Build the episode image URL once per episode instead of 3× per recomposition.
     // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
-    // image) before the server [getImageUrl] fallback — matches the offline card.
-    val episodeImageUrl = remember(episode.id, localImagePath) {
-        localImagePath ?: getImageUrl(episode.id)
+    // image) before the server fallback — matches the offline card. Keyed on the
+    // episode (not its id) so a tag change re-keys.
+    val episodeImageUrl = remember(episode, localImagePath) {
+        localImagePath ?: urls.poster(episode)
     }
 
     // Card chrome — press scale, focus tracking, click, peek wiring — seats on
@@ -888,7 +891,7 @@ internal fun EpisodeCard(
 @Composable
 private fun CompactEpisodeRow(
     episode: MediaItem,
-    getImageUrl: (String) -> String,
+    urls: ArtworkUrls,
     isCurrentEpisode: Boolean = false,
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit,
@@ -924,8 +927,10 @@ private fun CompactEpisodeRow(
         label = "compactEpisodeRowPlayScale",
     )
 
-    val episodeImageUrl = remember(episode.id, localImagePath) {
-        localImagePath ?: getImageUrl(episode.id)
+    // Local thumbnail preferred over the server URL (EpisodeCard's chain);
+    // keyed on the episode (not its id) so a tag change re-keys.
+    val episodeImageUrl = remember(episode, localImagePath) {
+        localImagePath ?: urls.poster(episode)
     }
     // Same watch-state fold as EpisodeCard — dim/overlays/tags/meta lines all
     // come from [EpisodeRowPresentation] so the two layouts can't drift.

@@ -220,7 +220,7 @@ internal fun FavoritesScreen(
                 }
                 PosterCard(
                     item = item,
-                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                    imageUrl = remember(item, viewModel.artworkUrls) { viewModel.artworkUrls.poster(item) },
                     blurHash = item.blurHashes.primary,
                     onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
                     photoFolderChildImageUrls = photoFolderChildImageUrls,

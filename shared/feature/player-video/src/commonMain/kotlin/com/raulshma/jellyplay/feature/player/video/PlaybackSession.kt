@@ -22,6 +22,8 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
@@ -276,6 +278,14 @@ internal class PlaybackSession(
     private val resumeReminder get() = handles.resumeReminder
     private val closePlayer get() = handles.closePlayer
     private val passOutEvents get() = handles.passOutEvents
+
+    /**
+     * The artwork resolver over this session's [imageUrlProvider]: every
+     * tagged artwork URL the session mints (the media slice's artwork the
+     * detail apply publishes, the engine hand-off + media-session pins) rides
+     * the item's image tags, so re-uploaded art mints a new cache key.
+     */
+    private val artworkUrls: ArtworkUrls = DefaultArtworkUrls(imageUrlProvider)
 
     // ── The ui-mirror seams (derived, not injected) ───────────────────────────
     //
@@ -639,7 +649,7 @@ internal class PlaybackSession(
         setChapters = { chapters ->
             uiState.update { it.copy(chapters = chapters) }
         },
-        artworkUrl = { itemId -> imageUrlProvider.getImageUrl(itemId, maxWidth = 400) },
+        artworkUrl = { item -> artworkUrls.poster(item) },
         adoptSeasonOf = { detail -> upNext.adoptSeasonOf(detail) },
         getEngine = { playerSessionManager.engine },
     )
@@ -1301,7 +1311,14 @@ internal class PlaybackSession(
     internal val mediaSessionController: MediaSessionController = mediaSessionControllerOverride
         ?: sessionStack.mediaSessionFactory.create(
             getEngine = { playerSessionManager.engine },
-            getImageUrl = { itemId, maxWidth -> imageUrlProvider.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
+            // The artwork read runs at session-build time, so the tag resolves
+            // against the detail the session holds THEN (the pipeline builds
+            // the session after loadMedia, the rebind funnel against the live
+            // session state) — same itemId, the item's own primary tag rides
+            // along; without a matching detail the raw-id URL stands.
+            getImageUrl = { itemId, maxWidth ->
+                artworkUrls.posterFor(playerSessionManager.sessionState.value.mediaDetail?.item, itemId, maxWidth)
+            },
         )
 
 

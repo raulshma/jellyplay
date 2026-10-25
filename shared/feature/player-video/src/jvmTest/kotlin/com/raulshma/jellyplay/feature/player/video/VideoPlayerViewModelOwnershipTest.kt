@@ -14,19 +14,19 @@ import kotlin.test.assertTrue
  * [VideoPlayerUiEvent]s through the single funnel, the former command funs
  * are private handlers, and the only public members beyond the funnel are
  * the state flows/getters, the result-returning queries
- * (`getImageUrl` / `loadTrickplayThumbnail` / `verifyPlayerLockPin` /
- * `useDownloadedSubtitle`), the `release` dispose hook, and the ONE
- * session-slice seam member (`sessionSlices` — the GLOSSARY "Session slice":
- * per-region projections (cast/overlay/status/controls/sheets) whose
- * interfaces the screens program against; a screen reading a session
- * controller directly, or this VM re-exposing one as a pass-through, is a
- * defect). The session's `resolveOfflineResumeTicks` hook lives on
- * SessionLoadPipeline since the VideoSessionHost deletion. The whole
- * collaborator graph is built by the PlaybackSession composition root (the
- * former PlayerWiring builder's construction that broke the six
- * mutual-recursion cycles, since absorbed into single-phase ownership); the
- * VM's reads of it go through private aliases, so this ceiling held through
- * that move too. New
+ * (`getImageUrl` / `posterUrl` / `personPortraitUrl` /
+ * `loadTrickplayThumbnail` / `verifyPlayerLockPin` / `useDownloadedSubtitle`),
+ * the `release` dispose hook, and the ONE session-slice seam member
+ * (`sessionSlices` — the GLOSSARY "Session slice": per-region projections
+ * (cast/overlay/status/controls/sheets) whose interfaces the screens program
+ * against; a screen reading a session controller directly, or this VM
+ * re-exposing one as a pass-through, is a defect). The session's
+ * `resolveOfflineResumeTicks` hook lives on SessionLoadPipeline since the
+ * VideoSessionHost deletion. The whole collaborator graph is built by the
+ * PlaybackSession composition root (the former PlayerWiring builder's
+ * construction that broke the six mutual-recursion cycles, since absorbed
+ * into single-phase ownership); the VM's reads of it go through private
+ * aliases, so this ceiling held through that move too. New
  * behaviour belongs in an extracted module built from constructor lambdas —
  * the SettingsProjector / PlayerPrefsFanout / MediaContentProjector seam
  * shape — with the VM left a thin caller that owns the uiState writes.
@@ -54,13 +54,17 @@ import kotlin.test.assertTrue
  * (`stillWatchingPrompt` / `isNextEpisodeLoading` / `trackState` /
  * `playerEngineRef` / `playerEngineFlow` / `videoQueueItems` / `upNextCard` /
  * `globalMpvConfig`) were deleted in favor of the one `sessionSlices` member.
+ * 23 through the 2026-10-25 tagged-artwork sweep, then 25 — the two item-based
+ * artwork accessors the sweep added (`posterUrl` / `personPortraitUrl`, the
+ * injected ArtworkUrls resolver's slots the player surfaces need; the raw-id
+ * `getImageUrl` stays beside them).
  * Lower the ceiling when a slice moves out and deletes members; never raise
  * it to admit new ones.
  */
 class VideoPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 23
+    private val maxPublicInternalMembers = 25
 
     /**
      * A class-body declaration line at the ViewModel's single level of

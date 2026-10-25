@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DetailPreferences
@@ -40,6 +41,7 @@ class PersonDetailViewModel constructor(
     private val libraryApiClient: LibraryApiClient,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    private val artworkUrls: ArtworkUrls,
     private val mediaDownloadActions: MediaDownloadActions,
     /** Preference projections — the filmography gates (SeerrDetailViewModel's smallest pattern). */
     private val projections: PreferenceProjections,
@@ -166,6 +168,9 @@ class PersonDetailViewModel constructor(
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
+
+    fun poster(item: MediaItem): String =
+        artworkUrls.poster(item)
 
     /**
      * The screen's container adapter: where the filmography's exposed items

@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilderImpl
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import com.raulshma.jellyplay.core.data.util.DataBuildFlags
@@ -56,6 +58,8 @@ fun androidDataModule(context: Context): Module {
                 appearanceStore = get(),
             )
         }
+
+        single<ArtworkUrls> { DefaultArtworkUrls(get()) }
 
         single<LocalStreamProbe> { MediaExtractorLocalStreamProbe() }
 

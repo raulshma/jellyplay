@@ -31,7 +31,8 @@ private const val AMBIENT_DIM_ALPHA = 0.55f
  * zero effect is a zero-cost composition, not a transparent layer.
  *
  * The artwork rides `uiState.media.artworkUrl` — the item art the media
- * projection already carries (the `getImageUrl(id, 400)` seam). The player's
+ * projection already carries (the tagged [ArtworkUrls] poster slot; the
+ * item's image tag rides the URL). The player's
  * state has no separate backdrop URL (the projection's art seam is the
  * single image the session holds), and the heavy blur + fill scale makes the
  * art type immaterial.

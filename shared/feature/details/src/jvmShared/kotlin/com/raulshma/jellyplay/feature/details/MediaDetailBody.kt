@@ -59,6 +59,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Star
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
@@ -484,7 +485,7 @@ private fun DetailRelatedVideosSection(
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         VideosSection(
             trailers = state.core.trailers,
-            getImageUrl = callbacks.artwork.getImageUrl,
+            urls = callbacks.artwork.urls,
             onVideoClick = callbacks.seerr.onVideoClick,
             onPlayLocal = { trailerId ->
                 // A local (server-hosted) trailer plays through the
@@ -553,7 +554,7 @@ internal fun SeerrItemsRow(
 @Composable
 private fun VideosSection(
     trailers: List<DetailUiState.TrailerEntry>,
-    getImageUrl: (String) -> String,
+    urls: ArtworkUrls,
     onVideoClick: (SeerrRelatedVideo) -> Unit,
     onPlayLocal: (String) -> Unit,
 ) {
@@ -616,7 +617,8 @@ private fun VideosSection(
                 is TrailerEntryDispatch.PlayerSession -> LocalTrailerVideoCard(
                     mediaItem = dispatch.mediaItem,
                     fallbackLabel = "Video",
-                    imageUrl = remember(dispatch.mediaItem.id) { getImageUrl(dispatch.mediaItem.id) },
+                    // Keyed on the item (not its id) so a tag change re-keys.
+                    imageUrl = remember(dispatch.mediaItem) { urls.poster(dispatch.mediaItem) },
                     badgeLabel = localBadge,
                     onClick = { onPlayLocal(dispatch.mediaItem.id) },
                     modifier = focusModifier,

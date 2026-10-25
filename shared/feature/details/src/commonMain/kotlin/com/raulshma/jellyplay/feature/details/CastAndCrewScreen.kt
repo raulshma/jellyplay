@@ -160,8 +160,9 @@ fun CastAndCrewScreen(
                         // Only fetch a portrait when the person carries a primary
                         // image tag (PersonInfo.hasPortrait); tagless entries
                         // render the placeholder instead of issuing a 404'ing URL.
-                        imageUrl = remember(person.id) {
-                            if (person.hasPortrait()) viewModel.getImageUrl(person.id) else ""
+                        // Keyed on the person (not the id) so a tag change re-keys.
+                        imageUrl = remember(person) {
+                            if (person.hasPortrait()) viewModel.personPortrait(person) else ""
                         },
                         onClick = rememberStableCallback { onPersonClick(person.id) },
                         modifier = itemModifier,

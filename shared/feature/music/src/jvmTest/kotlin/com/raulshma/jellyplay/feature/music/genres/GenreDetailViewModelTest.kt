@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -63,6 +64,7 @@ class GenreDetailViewModelTest {
             savedStateHandle = handle,
             mediaRepository = mediaRepository,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
         )
     }

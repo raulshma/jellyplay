@@ -92,6 +92,17 @@ class SubtitleLanguageStore constructor(
     }
 
     /**
+     * One-shot gate for [migrateLegacyFontPaths] — the
+     * [PreferenceCodec.TYPED_MIGRATION_DONE] pattern, scoped to this store's
+     * font-path rename. Declared OUTSIDE [Keys] on purpose: Keys is pinned
+     * one-to-one to the [SubtitlePreferenceSpecs] rows (the derivation test),
+     * and this gate is one-time migration machinery, not a user-tunable
+     * preference — a factory reset clearing it is harmless (the styles reset
+     * to defaults with it, and no path can carry the legacy prefix again).
+     */
+    private val fontPathMigrationGate = booleanPreferencesKey("subtitle_font_path_migration_done")
+
+    /**
      * The subtitle &amp; language preference slice, derived directly from the raw
      * DataStore (not mapped through the whole-`UserPreferences` aggregate), so
      * a write to an unrelated preference does not re-derive these fields.
@@ -211,6 +222,53 @@ class SubtitleLanguageStore constructor(
                 kotlinx.serialization.serializer<List<SubtitleStylePreset>>(),
                 presets,
             )
+        }
+    }
+
+    /**
+     * One-shot rename of the persisted selected-font paths when the fonts home
+     * moves (Android's subtitle-fonts dir relocated out of cacheDir — the
+     * store half of that move): every [SubtitleStyle.fontFamilyPath] still
+     * under [legacyPathPrefix] — the selected style, the HDR style and each
+     * user preset — is rewritten to [newPathPrefix] in ONE DataStore
+     * transaction, then [Keys.FONT_PATH_MIGRATION_DONE] latches so later
+     * calls are no-ops (the [PreferenceCodec.runTypedKeyMigration] gate
+     * pattern). Store-domain on purpose: the paths live in this store's
+     * blobs, so the rewrite belongs here, not in the platform font provider.
+     * The prefix pair comes from the caller (Context dirs); this store never
+     * touches the filesystem.
+     */
+    suspend fun migrateLegacyFontPaths(legacyPathPrefix: String, newPathPrefix: String) {
+        if (legacyPathPrefix == newPathPrefix) return
+        dataStore.edit { prefs ->
+            if (prefs[fontPathMigrationGate] == true) return@edit
+            fun rewrite(path: String?): String? =
+                path?.takeIf { it.startsWith(legacyPathPrefix) }
+                    ?.let { newPathPrefix + it.removePrefix(legacyPathPrefix) }
+
+            val style = SubtitlePreferenceSpecs.SUBTITLE_STYLE.readFrom(prefs)
+            rewrite(style.fontFamilyPath)?.let {
+                SubtitlePreferenceSpecs.SUBTITLE_STYLE.writeTo(prefs, style.copy(fontFamilyPath = it))
+            }
+            val hdrStyle = SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.readFrom(prefs)
+            rewrite(hdrStyle.fontFamilyPath)?.let {
+                SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.writeTo(prefs, hdrStyle.copy(fontFamilyPath = it))
+            }
+            val presets = SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.readFrom(prefs)
+            if (presets.isNotEmpty()) {
+                val migrated = presets.map { preset ->
+                    rewrite(preset.style.fontFamilyPath)
+                        ?.let { rewritten -> preset.copy(style = preset.style.copy(fontFamilyPath = rewritten)) }
+                        ?: preset
+                }
+                if (migrated != presets) {
+                    prefs[Keys.SUBTITLE_STYLE_PRESETS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                        kotlinx.serialization.serializer<List<SubtitleStylePreset>>(),
+                        migrated,
+                    )
+                }
+            }
+            prefs[fontPathMigrationGate] = true
         }
     }
 

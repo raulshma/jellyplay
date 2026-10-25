@@ -38,4 +38,18 @@ internal object WidgetPosterIdentity {
      * so a future divergence has one home).
      */
     fun libraryRecommendationsPosterImageId(item: MediaItem): String = item.seriesId ?: item.id
+
+    /**
+     * The image tag that belongs to the poster id above: the containing
+     * series' tag when the poster resolves to the series (the tag must be
+     * the etag OF the id in the url, or a re-uploaded item poster would
+     * mint a cache key for a url that never changed), the item's own
+     * Primary tag otherwise. Null keeps the tag-less url.
+     *
+     * Must be resolved through the same seriesId-first fold as the id
+     * resolvers — always pair the two, never pick a tag beside a
+     * hand-resolved id.
+     */
+    fun posterImageTag(item: MediaItem): String? =
+        if (item.seriesId != null) item.imageTags.seriesPrimary else item.imageTags.primary
 }

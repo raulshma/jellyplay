@@ -15,6 +15,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
+import com.raulshma.jellyplay.feature.music.collection.musicArtUrl
 import com.raulshma.jellyplay.feature.music.components.AlbumCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -81,7 +82,7 @@ fun AlbumsScreen(
                 name = album.name,
                 artist = album.albumArtist,
                 year = album.year,
-                imageUrl = viewModel.getImageUrl(album.id),
+                imageUrl = viewModel.artworkUrls.musicArtUrl(album),
                 onClick = { onItemClick(album.id) },
                 modifier = itemModifier,
                 blurHash = album.blurHashes.primary,

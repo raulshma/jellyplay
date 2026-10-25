@@ -34,10 +34,10 @@ class DreamImageProviderTest {
     private val primaryImages = mutableMapOf<String, String>()
 
     private val imageUrlProvider = object : ImageUrlProvider {
-        override fun getImageUrl(itemId: String, maxWidth: Int?) = primaryImages[itemId] ?: ""
+        override fun getImageUrl(itemId: String, maxWidth: Int?, tag: String?) = primaryImages[itemId] ?: ""
         override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?) = ""
-        override fun getBackdropUrl(itemId: String, maxWidth: Int) = backdrops[itemId] ?: ""
-        override fun getLogoUrl(itemId: String) = ""
+        override fun getBackdropUrl(itemId: String, maxWidth: Int, tag: String?) = backdrops[itemId] ?: ""
+        override fun getLogoUrl(itemId: String, tag: String?) = ""
     }
 
     private val libraryApiClient: LibraryApiClient = mockk()

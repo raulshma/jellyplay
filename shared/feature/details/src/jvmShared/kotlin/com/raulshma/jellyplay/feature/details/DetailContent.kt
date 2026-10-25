@@ -127,6 +127,9 @@ internal fun DetailContent(
     // before the player opens. koinInject — the book feature's desktop-host
     // precedent for a process-wide core:data single a screen consumes directly.
     val videoQueue = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.VideoQueueController>()
+    // Raw image seam, kept ONLY for the backdrop lambda's parent-series leg
+    // below (an id this scope holds no MediaItem for) — item-backed URLs go
+    // through the bundle's tag-aware resolver.
     val imageUrlProvider = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>()
     fun enqueueInQueue(item: com.raulshma.jellyplay.core.model.MediaItem?, next: Boolean) {
         if (item == null) return
@@ -134,7 +137,7 @@ internal fun DetailContent(
             itemId = item.id,
             title = item.name,
             subtitle = item.seriesName ?: item.year?.toString(),
-            imageUrl = imageUrlProvider.getImageUrl(item.id, maxWidth = 300),
+            imageUrl = callbacks.artwork.urls.poster(item, maxWidth = 300),
             runTimeTicks = item.runTimeTicks,
         )
         if (next) videoQueue.enqueueNext(queueItem) else videoQueue.enqueueLast(queueItem)
@@ -301,10 +304,27 @@ internal fun DetailContent(
             !isTv && !isExpanded -> BookCoverHero.SHARP
             else -> BookCoverHero.BLURRED
         }
+        // Item-backed ids resolve through the bundle's tag-aware resolver
+        // (books render their Primary cover, everything else the Backdrop);
+        // the parent-series leg (episodes/seasons render the SERIES backdrop —
+        // MediaImageTags carries no series backdrop tag) stays the raw untagged
+        // provider read, same target id as before. Remembered on the item (not
+        // its id) so a tag change re-keys, per the bundle-resolver pattern.
+        val getBackdropUrl = remember(item, isBook, callbacks.artwork.urls) {
+            { backdropId: String ->
+                when {
+                    item != null && backdropId == item.id && isBook ->
+                        callbacks.artwork.urls.poster(item)
+                    item != null && backdropId == item.id ->
+                        callbacks.artwork.urls.backdrop(item)
+                    else -> imageUrlProvider.getBackdropUrl(backdropId)
+                }
+            }
+        }
         DetailBackdrop(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
-            getBackdropUrl = if (isBook) callbacks.artwork.getImageUrl else callbacks.artwork.getBackdropUrl,
+            getBackdropUrl = getBackdropUrl,
             trailers = state.core.trailers,
             preferences = state.preferences,
             scrollState = scrollState,

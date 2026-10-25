@@ -175,7 +175,14 @@ fun CollectionDetailScreen(
                                     .height(200.dp),
                             ) {
                                 MediaImage(
-                                    url = viewModel.getBackdropUrl(collectionId),
+                                    // The loaded collection item's id IS the route id —
+                                    // resolve through the tag-aware accessor so the URL
+                                    // carries the collection's own Backdrop tag; the raw
+                                    // getter covers the not-yet-loaded frame.
+                                    url = success?.detail?.item
+                                        ?.takeIf { it.id == collectionId }
+                                        ?.let { viewModel.backdrop(it) }
+                                        ?: viewModel.getBackdropUrl(collectionId),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
@@ -228,7 +235,8 @@ fun CollectionDetailScreen(
                             val itemProgress = item.progressFraction()
                             PosterCard(
                                 item = item,
-                                imageUrl = viewModel.getImageUrl(item.id),
+                                // Keyed on the item (not its id) so a tag change re-keys.
+                                imageUrl = remember(item) { viewModel.poster(item) },
                                 onClick = { onItemClick(item.id) },
                                 // graphicsLayer before focusModifier so the reveal
                                 // wraps the whole cell (focus indicator included),

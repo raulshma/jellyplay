@@ -43,11 +43,14 @@ data class MpvSubtitleOwnership(
  * engines can skip writing exactly those keys — the user's value (conf or raw
  * line) then wins for the whole session.
  *
- * Scope: **styling keys only**. A functional set the player UI drives at
- * runtime (subtitle visibility toggle, delay sync, the aspect-ratio margin
- * pair) plus the Android font-provider workarounds stay app-owned regardless
- * of user config, so in-app controls keep working. Only top-level `sub-*` keys
- * claim ownership: profile-section keys inside `[profile]` blocks are not
+ * Scope: **styling keys + the font keys**. A functional set the player UI
+ * drives at runtime (subtitle visibility toggle, delay sync, the
+ * aspect-ratio margin pair) stays app-owned regardless of user config, so
+ * in-app controls keep working. The Android font-provider pair
+ * (`sub-font-provider` / `sub-fonts-dir`) used to be app-owned too; it now
+ * yields to user config — the app's workaround values remain the default
+ * writes, but a user who sets the keys takes them over. Only top-level `sub-*`
+ * keys claim ownership: profile-section keys inside `[profile]` blocks are not
  * attributed (mpv applies them only when the profile activates; the engines
  * never write those keys back, so nothing to yield).
  *
@@ -68,9 +71,16 @@ object MpvUserSubtitleKeys {
      * `sub-*` keys that never become user-owned: the player surface writes
      * them programmatically per session state. Yielding these would break
      * in-app subtitle show/hide, subtitle delay sync, or the aspect-ratio
-     * caption handling. `sub-font-provider` / `sub-fonts-dir` encode the
-     * Android libass font-provider workaround (an empty-bitmap caption bug
-     * when fontconfig initializes) — platform-required, not styling.
+     * caption handling.
+     *
+     * `sub-font-provider` / `sub-fonts-dir` are NOT here: the Android libass
+     * font-provider workaround (an empty-bitmap caption bug when fontconfig
+     * initializes) is the app's DEFAULT write, but both keys yield to a
+     * user-owned value (mpv.conf or the in-app advanced config) — the escape
+     * hatch for pointing libass at a custom font folder or re-enabling a
+     * provider. A user who overrides them owns the consequence: with a
+     * non-none provider the empty-bitmap bug can return, and system fonts
+     * resolve only if the chosen provider actually sees them.
      */
     private val APP_OWNED_ALWAYS: Set<String> = setOf(
         "sub-visibility",
@@ -78,8 +88,6 @@ object MpvUserSubtitleKeys {
         "secondary-sub-delay",
         "sub-use-margins",
         "sub-ass-force-margins",
-        "sub-font-provider",
-        "sub-fonts-dir",
     )
 
     /**

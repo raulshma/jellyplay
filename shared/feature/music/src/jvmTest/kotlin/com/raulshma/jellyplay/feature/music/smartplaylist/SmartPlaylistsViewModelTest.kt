@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.CriterionOperator
 import com.raulshma.jellyplay.core.model.CriterionType
@@ -74,6 +75,7 @@ class SmartPlaylistsViewModelTest {
             mediaRepository = mediaRepository,
             libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
             smartPlaylistRepository = smartPlaylistRepository,
         )

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music.browse
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -29,6 +30,8 @@ class MusicBrowseViewModel(
     private val mediaRepository: MediaRepository,
     private val playlistRepository: PlaylistRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the browse pages render through. */
+    val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     // One collection per tab; each starts on NAME (the previous hard-coded default).

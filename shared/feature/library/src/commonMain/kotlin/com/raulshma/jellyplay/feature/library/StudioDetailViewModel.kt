@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
@@ -21,6 +22,8 @@ internal class StudioDetailViewModel(
     private val mediaRepository: MediaRepository,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the studio grid renders through. */
+    val artworkUrls: ArtworkUrls,
     private val quickDownloadActions: QuickDownloadActions,
 ) : JellyPlayViewModel() {
 

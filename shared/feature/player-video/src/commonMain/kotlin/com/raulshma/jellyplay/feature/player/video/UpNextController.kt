@@ -46,8 +46,9 @@ private const val QUEUE_ADVANCE_LOG_TAG = "UpNextQueue"
  * Display fields only ([VideoQueueItem]'s shape): playback always goes through
  * the item id. `seasonNumber`/`episodeNumber` ride along so the episode card
  * keeps its "S1 · E2" subtitle line; `imageUrl` carries the queue row's own
- * artwork (an episode card's artwork is resolved from [itemId] by the screen,
- * which owns the image-url seam).
+ * artwork (an episode card's artwork is resolved from [episode] by the screen,
+ * which owns the tagged-artwork seam — the full item rides so its image tag
+ * can; surfaces that only have [itemId] stay untagged).
  */
 @Immutable
 data class UpNextCard(
@@ -58,6 +59,8 @@ data class UpNextCard(
     val source: Source,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
+    /** The episode-sibling item in full (EPISODE source only) — the screen resolves its tagged poster. */
+    val episode: MediaItem? = null,
 ) {
     /** Where the card's item came from — mirrors the advance's precedence ladder. */
     enum class Source {
@@ -289,6 +292,7 @@ internal class UpNextController(
                 source = UpNextCard.Source.EPISODE,
                 seasonNumber = sibling.seasonNumber,
                 episodeNumber = sibling.episodeNumber,
+                episode = sibling,
             )
             else -> null
         }

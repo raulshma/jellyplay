@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.artists
 
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 class ArtistsViewModel(
     mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the artists grid renders through. */
+    val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     /** Sorted paged artists — sort state, pager and declared sort set live in the collection. */

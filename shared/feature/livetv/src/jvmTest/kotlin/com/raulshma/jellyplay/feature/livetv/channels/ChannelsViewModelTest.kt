@@ -253,12 +253,12 @@ class ChannelsViewModelTest {
     }
 
     /**
-     * Pins the (quirky) forwarding contract: a non-null tag selects the
-     * provider path but the tag value itself is dropped on the floor — the
-     * provider only ever sees the item id.
+     * Pins the forwarding contract: a non-null tag selects the provider path
+     * and the tag rides with it (the interface fold forwards it as the `?tag=`
+     * etag cache-buster — pinned end-to-end in ImageUrlProviderImplTest).
      */
     @Test
-    fun getImageUrl_forwards_a_present_tag_to_the_interface_fold_ignoring_the_tag() {
+    fun getImageUrl_forwards_a_present_tag_to_the_interface_fold() {
         val viewModel = newViewModel()
 
         assertEquals("http://img/chan", viewModel.getImageUrl("chan-a", "tag-xyz"))

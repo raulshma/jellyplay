@@ -28,8 +28,10 @@ import java.util.Collections
  * function of (itemId, effectiveWidth, tag), so it is memoised in a bounded
  * access-order LRU ([lruMapOf]'s JVM actual + a synchronized wrapper — the
  * exact historical construction on both platforms), keyed with the effective
- * width (which embeds the performance-mode decision) so a perf-mode toggle
- * produces a distinct, correct entry rather than serving a stale width.
+ * width (which embeds the performance-mode decision) and the image tag (a
+ * changed server tag must yield a distinct entry, not a stale-art hit) so
+ * either variation produces its own correct URL rather than serving a stale
+ * width or stale artwork.
  *
  * Width policy (the width-taking members, [getImageUrl]/[getBackdropUrl]): a
  * null caller width (original-resolution requests, e.g. the full-screen photo
@@ -63,41 +65,41 @@ class ImageUrlProviderImpl(
     private val urlCache: MutableMap<String, String> =
         Collections.synchronizedMap(lruMapOf(URL_CACHE_MAX_ENTRIES))
 
-    override fun getImageUrl(itemId: String, maxWidth: Int?): String {
+    override fun getImageUrl(itemId: String, maxWidth: Int?, tag: String?): String {
         // Original-resolution requests (null) bypass performance mode: callers
         // like the full-screen photo viewer deliberately ask for the source
         // bitmap, and capping null to a fixed perf width silently broke that contract.
         if (maxWidth == null) {
-            return libraryApiClient.getImageUrl(itemId, maxWidth = null)
+            return libraryApiClient.getImageUrl(itemId, maxWidth = null, tag = tag)
         }
         // The default-width (UI card) request is the one path performance mode
         // clamps; explicit caller widths are honored verbatim (see the class
         // KDoc) so per-surface sizes keep emitting their exact URLs.
         val effectiveWidth = if (maxWidth == ImageUrlProvider.DEFAULT_MAX_WIDTH && performanceMode) PERF_MAX_WIDTH
         else maxWidth
-        val key = "p_$itemId|$effectiveWidth"
+        val key = "p_$itemId|$effectiveWidth|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getImageUrl(itemId, maxWidth = effectiveWidth)
+        val url = libraryApiClient.getImageUrl(itemId, maxWidth = effectiveWidth, tag = tag)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
 
-    override fun getBackdropUrl(itemId: String, maxWidth: Int): String {
-        val key = "b_$itemId|$maxWidth"
+    override fun getBackdropUrl(itemId: String, maxWidth: Int, tag: String?): String {
+        val key = "b_$itemId|$maxWidth|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getBackdropImageUrl(itemId, maxWidth = maxWidth)
+        val url = libraryApiClient.getBackdropImageUrl(itemId, maxWidth = maxWidth, tag = tag)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
 
-    override fun getLogoUrl(itemId: String): String {
+    override fun getLogoUrl(itemId: String, tag: String?): String {
         // Detail-screen title block: one logo per item, same perf-aware width
         // clamp + shared LRU as the poster/backdrop variants.
         val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
-        val key = "l_$itemId|$effectiveWidth"
+        val key = "l_$itemId|$effectiveWidth|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth)
+        val url = libraryApiClient.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth, tag = tag)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }

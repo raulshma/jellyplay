@@ -148,7 +148,7 @@ fun MoodPlaylistDetailScreen(
                             val duration = remember(track.id) {
                                 track.runTimeTicks?.let { formatDurationMs(it / 10_000) }
                             }
-                            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
+                            val imageUrl = remember(track, viewModel.artworkUrls) { viewModel.artworkUrls.poster(track) }
                             TrackRow(
                                 name = track.name,
                                 artist = track.albumArtist,

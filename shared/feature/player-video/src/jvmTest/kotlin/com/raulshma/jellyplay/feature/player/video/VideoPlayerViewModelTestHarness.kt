@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
@@ -158,6 +159,8 @@ open class VideoPlayerViewModelHarness {
         every { offlineModeManager.networkStatus } returns
             MutableStateFlow(com.raulshma.jellyplay.core.model.NetworkStatus.Online)
 
+        val imageUrlProviderMock = mockk<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>(relaxed = true)
+
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
             mediaRepository = mediaRepository,
@@ -170,7 +173,11 @@ open class VideoPlayerViewModelHarness {
             },
             subtitleProviderRepository = mockk(relaxed = true),
             streamingSubtitleStore = noOpStreamingSubtitleStore(),
-            imageUrlProvider = mockk(relaxed = true),
+            imageUrlProvider = imageUrlProviderMock,
+            // The real resolver over the same relaxed provider mock — its
+            // getImageUrl answers "" (mockk's relaxed String default), the
+            // exact URL shape the pre-tag seams produced.
+            artworkUrls = DefaultArtworkUrls(imageUrlProviderMock),
             downloadRepository = mockk(relaxed = true),
             offlineRepository = mockk(relaxed = true),
             offlinePlaybackFacade = mockk(relaxed = true),

@@ -257,7 +257,7 @@ internal data class HomeContentState(
 
 /**
  * The content list's per-surface event sinks + the seams only it consumes
- * ([getImageUrl] for the series-art resolvers, the per-item photo-folder
+ * ([seriesPosterUrl] for the series-art resolver, the per-item photo-folder
  * URL slice). The shared render wiring (URL builders, click funnels,
  * prefetch/loading, hero focus) lives in [HomeRenderInputs] — passed beside
  * these callbacks so the two bundles never re-thread the same lambdas.
@@ -270,8 +270,10 @@ internal data class HomeContentCallbacks(
     val onOfflineLibraryClick: () -> Unit,
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
-    /** Image URL for an item ID — the series-poster resolver's source. */
-    val getImageUrl: (String) -> String,
+    /** Series poster URL for a [MediaItem] — the episode/season cards'
+     * series-art resolver (series id + its image tag; item-based, so a
+     * re-uploaded series poster mints a new URL on those cards). */
+    val seriesPosterUrl: (MediaItem) -> String,
     /** Per-item slice of the photo-folder child-URL cache — collected at the
      * photo-folder card, not orchestrator scope, so a prefetch merge only
      * recomposes the card whose urls changed. */
@@ -528,9 +530,7 @@ internal fun HomeContentList(
                         HeroSliderHeader(
                             candidates = state.heroCandidates,
                             controller = heroController,
-                            getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
-                                { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
-                            },
+                            getBackdropUrl = renderInputs.heroBackdropUrlBuilder,
                             height = heroHeight,
                             backgroundColor = state.backgroundColor,
                             contentPadding = state.contentPad,
@@ -548,9 +548,7 @@ internal fun HomeContentList(
                             featuredItem = featured,
                             headline = curated?.headline,
                             subhead = curated?.subhead,
-                            getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
-                                { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
-                            },
+                            getBackdropUrl = renderInputs.heroBackdropUrlBuilder,
                             height = heroHeight,
                             backgroundColor = state.backgroundColor,
                             contentPadding = state.contentPad,
@@ -1288,7 +1286,10 @@ private fun HomeSectionOnlinePosterRow(
         } else {
             null
         },
-        seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
+        // Item-level series-poster resolver (series id + image tag — see
+        // HomeContentCallbacks.seriesPosterUrl); the backdrop leg stays
+        // id-level (the model carries no series backdrop tag).
+        seriesPosterResolver = callbacks.seriesPosterUrl,
         seriesBackdropResolver = remember(renderInputs.onlineBackdropResolver) { { id: String -> renderInputs.onlineBackdropResolver(id) } },
         edgeRefresh = ctx.edgeRefresh,
     )

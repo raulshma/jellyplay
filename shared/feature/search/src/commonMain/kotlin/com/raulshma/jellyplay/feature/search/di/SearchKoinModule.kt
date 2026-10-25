@@ -23,6 +23,7 @@ val searchModule: Module = module {
             libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             seerrRepository = get(),
             seerrRequestDelegate = get(),
             mediaSearchEngine = get(),

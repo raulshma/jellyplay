@@ -154,7 +154,9 @@ class LibraryRecommendationsWidgetWorkerTest {
                 startIndex = 0,
             ),
         )
-        every { imageUrlProvider.getImageUrl(eq("series-9"), any()) } returns "https://img/series-9"
+        // The worker forwards the item-matching image tag as the ?tag=
+        // cache-buster (null on these fixtures — the tag-less URL stands).
+        every { imageUrlProvider.getImageUrl(eq("series-9"), any(), any()) } returns "https://img/series-9"
         // Blank default for "movie-1" (relaxed mock) — must yield a null poster.
 
         createWorker().doWork()
@@ -162,8 +164,8 @@ class LibraryRecommendationsWidgetWorkerTest {
         val persisted = verifyPersistedOnce()
         assertEquals("https://img/series-9", persisted[0].posterUrl)
         assertNull(persisted[1].posterUrl)
-        coVerify(exactly = 1) { imageUrlProvider.getImageUrl(eq("series-9"), any()) }
-        coVerify(exactly = 1) { imageUrlProvider.getImageUrl(eq("movie-1"), any()) }
+        coVerify(exactly = 1) { imageUrlProvider.getImageUrl(eq("series-9"), any(), any()) }
+        coVerify(exactly = 1) { imageUrlProvider.getImageUrl(eq("movie-1"), any(), any()) }
     }
 
     @Test

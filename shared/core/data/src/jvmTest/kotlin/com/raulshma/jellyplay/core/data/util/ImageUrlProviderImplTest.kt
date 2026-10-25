@@ -29,7 +29,11 @@ import kotlin.test.assertEquals
  *  6. the interface's tag-guard default ([ImageUrlProvider.getImageUrlOrNull]
  *     — inherited, not overridden): a null tag is empty with NO client
  *     call, any tag delegates to [ImageUrlProvider.getImageUrl] at its
- *     default width — the fold the Live TV ViewModels formerly hand-copied.
+ *     default width, the tag FORWARDED — the fold the Live TV ViewModels
+ *     formerly hand-copied;
+ *  7. the image tag is part of the cache key: a tagged URL is a distinct
+ *     entry from the untagged one, and a changed tag is a fresh fetch — the
+ *     mechanism that makes re-uploaded artwork appear without a cache clear.
  */
 class ImageUrlProviderImplTest {
 
@@ -147,12 +151,12 @@ class ImageUrlProviderImplTest {
     }
 
     @Test
-    fun `any image tag delegates to getImageUrl at the default width`() {
-        every { libraryApiClient.getImageUrl(ITEM, "Primary", 400) } returns "https://s/p400"
+    fun `any image tag delegates to getImageUrl at the default width, tag forwarded`() {
+        every { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, "tag") } returns "https://s/p400"
 
         assertEquals("https://s/p400", provider.getImageUrlOrNull(ITEM, "tag"))
 
-        verify(exactly = 1) { libraryApiClient.getImageUrl(ITEM, "Primary", 400) }
+        verify(exactly = 1) { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, "tag") }
     }
 
     // ── logo URLs (the "prefer logos" detail title) ───────────────────────
@@ -194,12 +198,51 @@ class ImageUrlProviderImplTest {
     }
 
     @Test
-    fun `any logo tag delegates to getLogoUrl`() {
-        every { libraryApiClient.getImageUrl(ITEM, "Logo", 400) } returns "https://s/logo400"
+    fun `any logo tag delegates to getLogoUrl, tag forwarded`() {
+        every { libraryApiClient.getImageUrl(ITEM, "Logo", 400, null, "tag") } returns "https://s/logo400"
 
         assertEquals("https://s/logo400", provider.getLogoUrlOrNull(ITEM, "tag"))
 
-        verify(exactly = 1) { libraryApiClient.getImageUrl(ITEM, "Logo", 400) }
+        verify(exactly = 1) { libraryApiClient.getImageUrl(ITEM, "Logo", 400, null, "tag") }
+    }
+
+    // ── tag threading (the stale-artwork fix: a new tag must be a new key) ──
+
+    @Test
+    fun `a tagged poster is a distinct cache entry from the untagged one`() {
+        every { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, null) } returns "https://s/p-old"
+        every { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, "new-tag") } returns "https://s/p-new"
+
+        assertEquals("https://s/p-old", provider.getImageUrl(ITEM))
+        assertEquals("https://s/p-new", provider.getImageUrl(ITEM, tag = "new-tag"))
+        // Both entries memoise independently — the untagged read did not poison
+        // the tagged one (this is the pairing that makes re-uploaded art appear).
+        assertEquals("https://s/p-new", provider.getImageUrl(ITEM, tag = "new-tag"))
+
+        verify(exactly = 1) { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, null) }
+        verify(exactly = 1) { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, "new-tag") }
+    }
+
+    @Test
+    fun `a changed tag is a fresh fetch, not a stale hit`() {
+        every { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, "t1") } returns "https://s/v1"
+        every { libraryApiClient.getImageUrl(ITEM, "Primary", 400, null, "t2") } returns "https://s/v2"
+
+        assertEquals("https://s/v1", provider.getImageUrl(ITEM, tag = "t1"))
+        assertEquals("https://s/v2", provider.getImageUrl(ITEM, tag = "t2"))
+    }
+
+    @Test
+    fun `tagged backdrop and logo keys are distinct from their untagged variants`() {
+        every { libraryApiClient.getBackdropImageUrl(ITEM, 1920, null) } returns "https://s/b-old"
+        every { libraryApiClient.getBackdropImageUrl(ITEM, 1920, "bt") } returns "https://s/b-new"
+        every { libraryApiClient.getImageUrl(ITEM, "Logo", 400, null, null) } returns "https://s/l-old"
+        every { libraryApiClient.getImageUrl(ITEM, "Logo", 400, null, "lt") } returns "https://s/l-new"
+
+        assertEquals("https://s/b-old", provider.getBackdropUrl(ITEM))
+        assertEquals("https://s/b-new", provider.getBackdropUrl(ITEM, tag = "bt"))
+        assertEquals("https://s/l-old", provider.getLogoUrl(ITEM))
+        assertEquals("https://s/l-new", provider.getLogoUrl(ITEM, tag = "lt"))
     }
 
     private companion object {

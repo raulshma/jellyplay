@@ -550,10 +550,12 @@ internal fun HomeMediaRow(
     // TV-only: reports the D-pad-focused item so the screen's Menu key can open
     // its quick actions
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
-    // Resolves a series' poster URL by id — used so episode cards render the
-    // show's poster instead of the episode's own primary image (a landscape
-    // scene grab). See [EpisodePosterResolver] usage below.
-    seriesPosterResolver: (String) -> String = { "" },
+    // Resolves the series' poster URL FROM the item (series id + its image
+    // tag) — used so episode cards render the show's poster instead of the
+    // episode's own primary image (a landscape scene grab), and so a
+    // re-uploaded series poster mints a new URL on these cards. See
+    // [EpisodePosterResolver] usage below.
+    seriesPosterResolver: (MediaItem) -> String = { "" },
     // Resolves a series' backdrop URL by id — middle fallback when a series has
     // no Primary image (common for freshly-added series whose library scan has
     // not yet generated a poster). See [EpisodePosterResolver].

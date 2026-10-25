@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -89,6 +90,8 @@ internal class HomeViewModel(
     /** Read here only for the offline home's cached-layout mirror (see [offlineHomeGate]). */
     private val homeFeed: HomeFeed,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-level artwork resolver ([ArtworkUrls]) behind [posterUrl]/[backdropUrl]. */
+    private val artworkUrls: ArtworkUrls,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadIntake: DownloadIntake,
     private val quickDownloadActions: QuickDownloadActions,
@@ -1025,6 +1028,16 @@ internal class HomeViewModel(
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
+
+    fun posterUrl(item: MediaItem): String =
+        artworkUrls.poster(item)
+
+    /** The containing series' poster for episode/season cards (series id + series image tag). */
+    fun seriesPosterUrl(item: MediaItem): String =
+        artworkUrls.seriesPoster(item)
+
+    fun backdropUrl(item: MediaItem): String =
+        artworkUrls.backdrop(item)
 
     fun getHomeScrollPosition(): HomeScrollPosition = scrollPositionStore.get()
 

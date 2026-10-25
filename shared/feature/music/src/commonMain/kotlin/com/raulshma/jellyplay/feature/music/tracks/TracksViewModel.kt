@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.tracks
 
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 class TracksViewModel(
     mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the tracks list renders through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 

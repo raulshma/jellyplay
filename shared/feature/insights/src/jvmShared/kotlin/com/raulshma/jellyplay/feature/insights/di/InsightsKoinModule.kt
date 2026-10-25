@@ -10,7 +10,7 @@ import org.koin.dsl.module
  * The HiltViewModel/@Inject annotations were stripped at
  * the move — Koin is the single constructor owner (one framework per type).
  * All three ctor deps are Koin-native on BOTH platforms — WatchHistoryRepository,
- * MediaRepository and ImageUrlProvider
+ * MediaRepository and ArtworkUrls
  * resolve from dataJvmModule in :shared:core:data. Desktop is live: nav v1
  * renders insightsSection in the rail (and the share seam's desktop
  * actual writes a tmpdir PNG, so the share button works there).
@@ -20,7 +20,7 @@ val insightsModule: Module = module {
         WatchProgressHeatmapViewModel(
             watchHistoryRepository = get(),
             mediaRepository = get(),
-            imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
 }

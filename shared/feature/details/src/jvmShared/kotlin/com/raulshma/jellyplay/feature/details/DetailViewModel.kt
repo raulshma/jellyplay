@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionRequest
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionStateHolder
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -149,6 +150,8 @@ class DetailViewModel internal constructor(
     private val mediaDetailProvider: MediaDetailProvider,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item/tag-aware artwork resolver exposed as [artwork] (the raw seam is [imageUrlProvider]). */
+    private val artworkUrls: ArtworkUrls,
     private val offlineRepository: OfflineRepository,
     /** Preference/state stores read by the content core (pure DI aggregation). */
     private val stores: DetailStores,
@@ -448,6 +451,7 @@ class DetailViewModel internal constructor(
         session = _session,
         messages = _messages,
         strings = strings,
+        onRefreshAccepted = { forceRefresh() },
     )
 
     init {
@@ -1621,7 +1625,9 @@ class DetailViewModel internal constructor(
             episode = episode,
             label = label,
             startPositionTicks = startPositionTicks,
-            primaryImageUrl = imageUrlProvider.getImageUrl(episode.id),
+            // The episode's own Primary art — tag included, so a re-uploaded
+            // still mints a new URL (the stale-artwork fix).
+            primaryImageUrl = artworkUrls.poster(episode),
             labelKind = this.label,
         )
     }
@@ -1966,9 +1972,15 @@ class DetailViewModel internal constructor(
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
 
-    /** Clear-logo URL for the "prefer logos" detail title. */
-    fun getLogoUrl(itemId: String): String =
-        imageUrlProvider.getLogoUrl(itemId)
+    /**
+     * The item/tag-aware artwork resolver (the [ArtworkUrls] seam): one
+     * MediaItem/PersonInfo in, the URL for the slot it renders with the right
+     * image tag already selected. The same read-side query shape as the raw
+     * getters above — it replaces the per-id `getLogoUrl` delegate, whose only
+     * consumer (the "prefer logos" title) now reads `urls.logo(item)` off the
+     * content tree's [ArtworkCallbacks].
+     */
+    internal val artwork: ArtworkUrls get() = artworkUrls
 
     /**
      * Available bytes on the volume backing the download destination

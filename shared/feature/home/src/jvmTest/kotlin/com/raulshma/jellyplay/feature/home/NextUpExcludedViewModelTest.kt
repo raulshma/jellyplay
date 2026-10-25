@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -122,7 +123,7 @@ class NextUpExcludedViewModelTest {
         MediaItem(id = id, name = name, mediaType = MediaType.SERIES, year = year)
 
     private fun viewModel(): NextUpExcludedViewModel =
-        NextUpExcludedViewModel(homeDiscovery, editor, mediaRepository, imageUrlProvider)
+        NextUpExcludedViewModel(homeDiscovery, editor, mediaRepository, DefaultArtworkUrls(imageUrlProvider))
 
     // ---------------------------------------------------------------- hydration
 

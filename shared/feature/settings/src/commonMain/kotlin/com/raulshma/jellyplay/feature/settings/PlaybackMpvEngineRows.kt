@@ -48,6 +48,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hwde
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_options
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_mpv_config
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_fonts_helper_text
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_helper_text
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_config_placeholder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_raw_mpv_options
@@ -493,6 +494,7 @@ internal fun PlaybackMpvEngineRows(
                             val customOptionsSuffix = stringResource(Res.string.settings_custom_options)
                             val advancedMpvConfigTitle = stringResource(Res.string.settings_advanced_mpv_config)
                             val mpvHelperText = stringResource(Res.string.settings_mpv_helper_text)
+                            val mpvFontsHelperText = stringResource(Res.string.settings_mpv_fonts_helper_text)
                             val mpvConfigPlaceholder = stringResource(Res.string.settings_mpv_config_placeholder)
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.MpvExtraConfig),
@@ -508,7 +510,7 @@ internal fun PlaybackMpvEngineRows(
                                     activePicker.value = PickerState.Text(
                                         title = advancedMpvConfigTitle,
                                         initialText = mpvCfg.mpvExtraConfig,
-                                        helperText = mpvHelperText,
+                                        helperText = mpvHelperText + "\n\n" + mpvFontsHelperText,
                                         placeholder = mpvConfigPlaceholder,
                                         onSave = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(mpvExtraConfig = it)) } },
                                     )

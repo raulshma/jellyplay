@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -127,6 +128,7 @@ class MusicHomeViewModelTest {
             musicCatalogue = musicCatalogue,
             libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
             activeDownloads = activeDownloads,
             homeDiscoveryStore = homeDiscoveryStore,

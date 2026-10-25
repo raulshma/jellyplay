@@ -94,6 +94,7 @@ fun androidDetailsModule(context: Context): Module = module {
             mediaDetailProvider = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             offlineRepository = get(),
             stores = get(),
             remoteDiscovery = get(),
@@ -128,6 +129,7 @@ fun androidDetailsModule(context: Context): Module = module {
             mediaRepository = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             mediaDownloadActions = get(),
         )
     }
@@ -137,6 +139,7 @@ fun androidDetailsModule(context: Context): Module = module {
             libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             mediaDownloadActions = get(),
             projections = get(),
         )

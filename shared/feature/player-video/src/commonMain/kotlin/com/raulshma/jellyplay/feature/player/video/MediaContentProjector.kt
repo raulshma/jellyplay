@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
@@ -86,8 +87,8 @@ internal class MediaContentProjector(
     private val setDetail: (MediaDetail) -> Unit,
     /** Chapters are a top-level uiState field — the projection's one direct state write. */
     private val setChapters: (List<ChapterInfo>) -> Unit,
-    /** The media slice's artwork URL (the `getImageUrl(id, 400)` seam). */
-    private val artworkUrl: (itemId: String) -> String,
+    /** The media slice's artwork URL (the [ArtworkUrls] poster slot — item in, tagged URL out). */
+    private val artworkUrl: (item: MediaItem) -> String,
     /** The episode-slice adoption ([UpNextController.adoptSeasonOf]). */
     private val adoptSeasonOf: (MediaDetail) -> Unit,
     /** The active engine (volume-memory restore + capture arm). */
@@ -200,7 +201,7 @@ internal class MediaContentProjector(
 
     /**
      * Applies a detail's media fields (overview, people, artwork, series id).
-     * [artworkUrl] is resolved by the caller (the image-url provider is a VM
+     * [artworkUrl] is resolved by the caller (the ArtworkUrls resolver is a VM
      * dependency); chapters and the episode-navigator/lyrics fan-outs stay
      * with [applyDetail].
      */

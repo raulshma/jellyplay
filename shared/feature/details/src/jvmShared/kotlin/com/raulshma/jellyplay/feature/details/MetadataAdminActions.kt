@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_ref
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_split_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_split_started
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +56,10 @@ internal class MetadataAdminActions(
     private val editorRepository: MetadataEditorRepository,
     /** Same-name library search for the merge sheet's candidate rows. */
     private val mediaRepository: MediaRepository,
+    /** Invoked once after an accepted refresh so the screen re-fetches the
+     * item snapshot and the new image tags reach the artwork (the refresh is
+     * server-async — see [refreshScreenItem]). */
+    private val onRefreshAccepted: () -> Unit,
     authRepository: AuthRepository,
 ) {
     /**
@@ -71,6 +77,7 @@ internal class MetadataAdminActions(
             session: StateFlow<DetailSession?>,
             messages: MutableSharedFlow<DetailMessage>,
             strings: DetailStrings,
+            onRefreshAccepted: () -> Unit,
         ): MetadataAdminActions = MetadataAdminActions(
             scope = scope,
             session = session,
@@ -78,6 +85,7 @@ internal class MetadataAdminActions(
             strings = strings,
             editorRepository = editorRepository,
             mediaRepository = mediaRepository,
+            onRefreshAccepted = onRefreshAccepted,
             authRepository = authRepository,
         )
     }
@@ -99,17 +107,30 @@ internal class MetadataAdminActions(
      * Fire-and-forget from the UI's standpoint — success/failure flow back as
      * one-shot messages. Refreshing a SERIES cascades to its episodes
      * server-side, which is the per-series bulk path.
+     *
+     * The refresh itself is server-async (the request is ACCEPTED, not
+     * finished), so on acceptance one delayed [onRefreshAccepted] is scheduled
+     * — late enough that a small item's refresh has landed, and the re-fetch
+     * carries the new image tags. A newer refresh or scope cancellation
+     * (leaving the screen) cancels the pending one.
      */
     fun refreshScreenItem(option: MetadataRefreshOption) {
         val itemId = session.value?.detail?.item?.id ?: return
         scope.launch {
             editorRepository.refreshItemMetadata(itemId, option.toRefreshParams()).onSuccess {
                 messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_refresh_started)))
+                refreshReloadJob?.cancel()
+                refreshReloadJob = scope.launch {
+                    delay(MetadataEditorRepository.REFRESH_APPLY_DELAY_MS)
+                    onRefreshAccepted()
+                }
             }.onFailure {
                 messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_refresh_failed)))
             }
         }
     }
+
+    private var refreshReloadJob: Job? = null
 
     // ── Identify (provider re-match, jellyfin-web parity) ────────────────
 

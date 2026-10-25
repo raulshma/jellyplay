@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_started
@@ -164,6 +165,7 @@ class LibraryViewModelTest {
         userMessageBus = userMessageBus,
         userDataMutator = userDataMutator,
         imageUrlProvider = imageUrlProvider,
+        artworkUrls = ArtworkUrls.EMPTY,
         photoFolderPrefetcher = photoFolderPrefetcher,
         libraryStore = libraryStore,
     )

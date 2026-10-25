@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class CastAndCrewViewModel constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    private val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow<CastAndCrewUiState>(CastAndCrewUiState.Loading)
@@ -43,4 +46,6 @@ class CastAndCrewViewModel constructor(
     }
 
     fun getImageUrl(personId: String): String = imageUrlProvider.getImageUrl(personId)
+
+    fun personPortrait(person: PersonInfo): String = artworkUrls.personPortrait(person)
 }

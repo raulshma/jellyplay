@@ -203,7 +203,8 @@ private fun heroDissolveStartFraction(
 @Composable
 fun AnimatedHeroHeader(
     featuredItem: MediaItem,
-    getBackdropUrl: (String) -> String,
+    /** Backdrop URL for a featured item — resolved from the item so its image tag rides along. */
+    getBackdropUrl: (MediaItem) -> String,
     height: Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
@@ -307,7 +308,7 @@ fun AnimatedHeroHeader(
     ) { currentFeatured ->
         HeroHeader(
             item = currentFeatured,
-            backdropUrl = getBackdropUrl(currentFeatured.id),
+            backdropUrl = getBackdropUrl(currentFeatured),
             height = height,
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
@@ -1081,7 +1082,8 @@ fun HeroHeader(
 internal fun HeroSliderHeader(
     candidates: List<MediaItem>,
     controller: HeroController,
-    getBackdropUrl: (String) -> String,
+    /** Backdrop URL for a candidate item — resolved from the item so its image tag rides along. */
+    getBackdropUrl: (MediaItem) -> String,
     height: Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
@@ -1168,7 +1170,7 @@ internal fun HeroSliderHeader(
             val curated = curatedHeroOverlay[item.id]
             HeroHeader(
                 item = item,
-                backdropUrl = getBackdropUrl(item.id),
+                backdropUrl = getBackdropUrl(item),
                 height = height,
                 backgroundColor = backgroundColor,
                 contentPadding = contentPadding,

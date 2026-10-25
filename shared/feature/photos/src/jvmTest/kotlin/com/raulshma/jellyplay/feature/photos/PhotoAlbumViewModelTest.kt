@@ -8,6 +8,7 @@ import androidx.paging.PagingData
 import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -76,6 +77,7 @@ class PhotoAlbumViewModelTest {
     private fun createViewModel(): PhotoAlbumViewModel = PhotoAlbumViewModel(
         mediaRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
+        artworkUrls = ArtworkUrls.EMPTY,
     )
 
     private class PhotoGrid(val presenter: PagingDataPresenter<MediaItem>, val job: Job) {

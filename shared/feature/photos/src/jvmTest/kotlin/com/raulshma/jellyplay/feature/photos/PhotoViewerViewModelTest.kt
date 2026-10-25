@@ -4,6 +4,7 @@ package com.raulshma.jellyplay.feature.photos
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -73,6 +74,7 @@ class PhotoViewerViewModelTest {
         mediaRepository = mediaRepository,
         libraryApiClient = libraryApiClient,
         imageUrlProvider = imageUrlProvider,
+        artworkUrls = ArtworkUrls.EMPTY,
         photoExport = photoExport,
     )
 

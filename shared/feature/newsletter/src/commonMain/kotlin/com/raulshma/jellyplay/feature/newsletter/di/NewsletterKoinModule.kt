@@ -21,6 +21,7 @@ val newsletterModule: Module = module {
         NewsletterViewModel(
             newsletterApiClient = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             notificationStore = get(),
             authRepository = get(),
         )

@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSideSearchState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.model.MediaType
@@ -124,6 +125,7 @@ class SearchViewModelQueryStateGapsTest {
         libraryApiClient,
         userDataMutator,
         imageUrlProvider,
+        DefaultArtworkUrls(imageUrlProvider),
         seerrRepository,
         seerrRequestDelegate,
         mediaSearchEngine,

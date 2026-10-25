@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.music
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -280,7 +281,7 @@ class MusicBrowseViewModelTest {
         coEvery { mediaRepository.getGenres() } returns
             Result.success(listOf(Genre(id = "g1", name = "Rock")))
         coEvery { playlistRepository.getPlaylists() } returns Result.success(emptyList())
-        viewModel = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider)
+        viewModel = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @AfterTest
@@ -401,7 +402,7 @@ class MusicBrowseViewModelTest {
     @Test
     fun genresFailure_surfacesTheFailureAndClearsLoading() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getGenres() } returns Result.failure(RuntimeException())
-        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider)
+        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         // Message-less failures surface the Throwable itself; the ladder
@@ -415,7 +416,7 @@ class MusicBrowseViewModelTest {
     @Test
     fun playlistsFailure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
         coEvery { playlistRepository.getPlaylists() } returns Result.failure(RuntimeException("no pl"))
-        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider)
+        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         assertEquals("no pl", failing.playlistsError.value?.message)
@@ -464,7 +465,7 @@ class AlbumsViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
-        viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider)
+        viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @AfterTest
@@ -506,7 +507,7 @@ class ArtistsViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
-        viewModel = ArtistsViewModel(mediaRepository, imageUrlProvider)
+        viewModel = ArtistsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @AfterTest

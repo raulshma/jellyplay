@@ -113,7 +113,7 @@ fun NewsletterSectionListScreen(
             ) { _, item, itemModifier ->
                 NewsletterGridCard(
                     item = item,
-                    imageUrl = viewModel.getImageUrl(item.id),
+                    imageUrl = viewModel.posterUrl(item),
                     onClick = { onItemClick(item) },
                     modifier = itemModifier,
                 )

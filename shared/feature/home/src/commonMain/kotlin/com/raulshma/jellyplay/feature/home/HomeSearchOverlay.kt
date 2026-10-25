@@ -80,7 +80,8 @@ fun HomeSearchResultsOverlay(
     jellyfinResults: List<MediaItem>,
     seerrResults: List<SeerrSearchItem>,
     isSearching: Boolean,
-    getImageUrl: (String) -> String,
+    /** Poster URL for a library result — resolved from the item so its image tag rides along. */
+    posterUrl: (MediaItem) -> String,
     onJellyfinClick: (MediaItem) -> Unit,
     onSeerrClick: (SeerrSearchItem) -> Unit,
     searchHistory: List<com.raulshma.jellyplay.core.data.repository.SearchHistoryItem> = emptyList(),
@@ -280,7 +281,10 @@ fun HomeSearchResultsOverlay(
                                 subtitle = subtitle,
                                 onClick = remember(item) { { onJellyfinClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = remember(item.id) { { HomeResultTile(getImageUrl(item.id)) } },
+                                // Keyed on the item (not its id): the URL now
+                                // carries the item's image tag, so a refreshed
+                                // result with new artwork must re-resolve it.
+                                leading = remember(item) { { HomeResultTile(posterUrl(item)) } },
                             )
                         }
                     }

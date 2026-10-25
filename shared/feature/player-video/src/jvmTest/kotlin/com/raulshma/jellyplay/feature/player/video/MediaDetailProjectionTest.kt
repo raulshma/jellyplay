@@ -90,7 +90,7 @@ class MediaDetailProjectionTest {
             recording.slicedDetailId = detail.item.id
             recording.order += "onDetail:$artwork"
         },
-        artworkUrl = { id -> "art/$id" },
+        artworkUrl = { item -> "art/${item.id}" },
         adoptSeasonOf = { recording.adoptedSeasonId = it.item.id; recording.order += "adoptSeason" },
         onLyrics = { recording.lyrics = it; recording.order += "lyrics" },
         onDetailRefreshed = { recording.refreshed = it; recording.order += "refreshed" },

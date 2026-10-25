@@ -216,9 +216,11 @@ class ControllerOwnershipTest {
         // slack, pinned EXACTLY like every other guard in this suite.
         // Lowered from 3_054 when the pure resume resolver
         // (resolveResumeTicks + its staleness constant) moved out to
-        // ResumeTicks.kt. Lower the ceiling when a cluster moves out; never
-        // raise it to admit growth.
-        val maxPlaybackSessionLines = 3_022
+        // ResumeTicks.kt. Raised to 3_034 (2026-10-26) for the issue-#177
+        // artwork threading: the session-scoped DefaultArtworkUrls + the
+        // item-based media-session artwork lambda (tag-aware artwork URLs).
+        // Lower the ceiling when a cluster moves out; never raise it to admit growth.
+        val maxPlaybackSessionLines = 3_034
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

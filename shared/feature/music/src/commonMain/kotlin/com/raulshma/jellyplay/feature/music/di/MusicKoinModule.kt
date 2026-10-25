@@ -33,9 +33,9 @@ import org.koin.dsl.module
  *    download reads resolve from core:data's own seams
  *    (TrackDownloadStatusWindow for the album rows, ActiveDownloadCount for
  *    the home badge — both bound by core:data on both platforms);
- *  - ImageUrlProvider / MoodPlaylistRepository / SmartPlaylistRepository
- *    (shared data), HomeDiscoveryStore (shared datastore) and
- *    OfflineModeManager resolve from the shared-module graph;
+ *  - ImageUrlProvider / ArtworkUrls / MoodPlaylistRepository /
+ *    SmartPlaylistRepository (shared data), HomeDiscoveryStore (shared
+ *    datastore) and OfflineModeManager resolve from the shared-module graph;
  *  - MusicMessageBus is app-provided on Android (bridge to the Koin-owned
  *    UserMessageBus) and a buffering relay on desktop
  *    (desktopMusicMessageBusModule — the desktop shell's snackbar host
@@ -55,6 +55,7 @@ val musicModule: Module = module {
             musicCatalogue = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
             activeDownloads = get(),
             homeDiscoveryStore = get(),
@@ -66,12 +67,14 @@ val musicModule: Module = module {
         AlbumsViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {
         ArtistsViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {
@@ -79,6 +82,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             playlistRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {
@@ -91,6 +95,7 @@ val musicModule: Module = module {
             savedStateHandle = params.get<SavedStateHandle>(),
             mediaRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
         )
     }
@@ -99,6 +104,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
             moodPlaylistRepository = get(),
         )
@@ -108,6 +114,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
             smartPlaylistRepository = get(),
         )
@@ -128,6 +135,7 @@ val musicModule: Module = module {
         TracksViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
         )
     }
@@ -136,6 +144,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             musicCatalogue = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
             downloads = get(),
             downloadIntake = get(),
@@ -146,6 +155,7 @@ val musicModule: Module = module {
             mediaRepository = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             audioQueueFacade = get(),
         )
     }

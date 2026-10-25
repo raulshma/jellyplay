@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
@@ -75,6 +76,8 @@ internal class LibraryViewModel(
     private val userMessageBus: UserMessageBus,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the view-mode contents render through. */
+    val artworkUrls: ArtworkUrls,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
 ) : JellyPlayViewModel() {

@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lege
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_legend_downloads
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_legend_images
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_manual_bandwidth_cap
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_applies_after_restart
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_download_storage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_simultaneous_downloads
@@ -315,6 +316,7 @@ fun StorageSettingsScreen(
                             val maxCacheSizeTitle = rowTitle(StorageRows.MaxCacheSize)
                             val maxCacheUnlimited = stringResource(Res.string.settings_unlimited)
                             val maxCacheDisabled = stringResource(Res.string.settings_disabled)
+                            val maxCacheRestartHint = stringResource(Res.string.settings_max_cache_applies_after_restart)
                             val maxCacheLabel: (Int) -> String = {
                                 when (it) {
                                     CACHE_SIZE_DISABLED -> maxCacheDisabled
@@ -333,8 +335,16 @@ fun StorageSettingsScreen(
                                         title = maxCacheSizeTitle,
                                         items = listOf(CACHE_SIZE_DISABLED, 0, 250, 500, 1000, 2000, 5000),
                                         label = maxCacheLabel,
+                                        // The Coil/OkHttp caches read the size once
+                                        // per process — only Disabled takes effect
+                                        // immediately (it also wipes the image cache
+                                        // below); every other value is next-launch.
+                                        subtitle = { if (it == CACHE_SIZE_DISABLED) "" else maxCacheRestartHint },
                                         isSelected = { it == preferences.maxCacheSizeMb },
-                                        onSelect = { viewModel.edit { scope -> scope.networkOffline.setMaxCacheSize(it) } },
+                                        onSelect = {
+                                            viewModel.edit { scope -> scope.networkOffline.setMaxCacheSize(it) }
+                                            if (it == CACHE_SIZE_DISABLED) viewModel.clearImageCache()
+                                        },
                                     )
                                 },
                             )

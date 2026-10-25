@@ -72,11 +72,14 @@ class DreamImageProvider(
                     else -> return@mapNotNull null
                 }
                 // Photos surface their Primary image (the photo-album grid's
-                // URL surface); video/music entries use the backdrop.
+                // URL surface); video/music entries use the backdrop. The
+                // item's own tag rides each URL — the etag cache-buster that
+                // makes re-uploaded artwork visible to the screensaver's Coil
+                // caches.
                 val imageUrl = if (category == DreamImageCategory.PHOTOS) {
-                    imageUrlProvider.getImageUrl(item.id)
+                    imageUrlProvider.getImageUrl(item.id, tag = item.imageTags.primary)
                 } else {
-                    imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
+                    imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920, tag = item.imageTags.backdrop)
                 }
                 if (imageUrl.isBlank()) return@mapNotNull null
                 DreamImage(

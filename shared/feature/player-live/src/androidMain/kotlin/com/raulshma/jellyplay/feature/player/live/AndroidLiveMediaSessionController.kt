@@ -41,18 +41,18 @@ internal class AndroidLiveMediaSessionController(
     private val context: Context,
     private val sessionManager: PlaybackSessionManager,
     private val getEngine: () -> LivePlayerEngine?,
-    private val getImageUrl: (channelId: String, maxWidth: Int) -> String,
+    private val getImageUrl: (channelId: String, maxWidth: Int, tag: String?) -> String,
 ) : LiveMediaSessionController {
 
     private var session: MediaSession? = null
 
-    override fun createForChannel(channelId: String, title: String) {
+    override fun createForChannel(channelId: String, title: String, imageTag: String?) {
         val engine = getEngine() ?: return
         val player = (engine as? Media3LivePlayerEngine)?.media3Player ?: return
 
         releaseSupersededSession()
 
-        val artworkUri = getImageUrl(channelId, ARTWORK_MAX_WIDTH)
+        val artworkUri = getImageUrl(channelId, ARTWORK_MAX_WIDTH, imageTag)
             .takeIf { it.isNotBlank() }
             ?.let { runCatching { Uri.parse(it) }.getOrNull() }
         val pinnedMetadata = MediaMetadata.Builder()

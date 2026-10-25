@@ -268,7 +268,7 @@ internal fun PlayerSheetRouter(
                     inputs.onSheetChange(PlayerSheet.None)
                 },
                 onDismiss = inputs.dismissSheet,
-                getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+                posterUrl = { episode -> viewModel.posterUrl(episode, 300) },
             )
         }
         is PlayerSheet.Queue -> {

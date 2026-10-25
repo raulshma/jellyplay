@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -22,6 +23,8 @@ internal class FavoritesViewModel(
     private val mediaRepository: MediaRepository,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the favorites grid renders through. */
+    val artworkUrls: ArtworkUrls,
     private val quickDownloadActions: QuickDownloadActions,
     photoFolderPrefetcher: PhotoFolderPrefetcher,
 ) : JellyPlayViewModel() {

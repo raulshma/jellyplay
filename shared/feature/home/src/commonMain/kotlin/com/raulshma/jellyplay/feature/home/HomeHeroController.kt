@@ -292,7 +292,8 @@ internal fun rememberIsLifecycleResumed(): State<Boolean> {
 internal fun rememberHeroController(
     featuredCandidates: List<MediaItem>,
     listState: LazyListState,
-    getBackdropUrl: (String) -> String,
+    /** Backdrop URL for a candidate item — resolved from the item so its image tag rides along. */
+    getBackdropUrl: (MediaItem) -> String,
     /**
      * The SLIDESHOW style's timed-advance interval (from the
      * [homeHeroStyleDecision] fold); null keeps the shipped 8 s idle cadence.
@@ -441,7 +442,7 @@ internal fun rememberHeroController(
             if (!autoRotate) return@collect
             val candidate = next ?: return@collect
             if (candidate.id == current?.id) return@collect
-            val url = getBackdropUrl(candidate.id)
+            val url = getBackdropUrl(candidate)
             if (url.isBlank()) return@collect
             backdropPrefetcher.prefetch(
                 context = prefetchContext,
@@ -488,7 +489,7 @@ private data class RotationGates(
 
 @Stable
 internal class HeroController(
-    private val getBackdropUrl: (String) -> String,
+    private val getBackdropUrl: (MediaItem) -> String,
     initialAutoRotateEnabled: Boolean,
     /**
      * Whether hero focus participates in the rotation gates. True on TV, where
@@ -549,9 +550,10 @@ internal class HeroController(
      * Memoized per (candidates, featuredIndex) read: [featuredItem]'s
      * backdrop string is resolved once per actual featured-item change instead
      * of on every read. [derivedStateOf] tracks both state reads, so the
-     * value is identical to the old per-read resolution.
+     * value is identical to the old per-read resolution. The item itself is
+     * the resolver's input, so the URL carries its image tag.
      */
-    val backdropUrl: String? by derivedStateOf { featuredItem?.let { getBackdropUrl(it.id) } }
+    val backdropUrl: String? by derivedStateOf { featuredItem?.let { getBackdropUrl(it) } }
 
     fun updateCandidates(items: List<MediaItem>) {
         candidates = items

@@ -131,10 +131,12 @@ class LibraryRecommendationsWidgetWorker(
 
     private fun MediaItem.toWidgetItem(): LibraryWidgetItem {
         val imageId = WidgetPosterIdentity.libraryRecommendationsPosterImageId(this)
+        val imageTag = WidgetPosterIdentity.posterImageTag(this)
         val poster = runCatching {
             imageUrlProvider.getImageUrl(
                 imageId,
                 maxWidth = WidgetPosterIdentity.LIBRARY_RECOMMENDATIONS_POSTER_MAX_WIDTH,
+                tag = imageTag,
             )
         }
             .getOrNull()
