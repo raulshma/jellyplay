@@ -40,6 +40,12 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
+import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
+import com.raulshma.jellyplay.core.model.seerr.TmdbDetails
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
@@ -988,356 +994,93 @@ class DetailViewModel internal constructor(
 
         override suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R> =
             hydrationSemaphore.mapConcurrentCatching(items, transform)
+
+        // ── Wave-3 roles: the state-arm reads (DetailEnrichmentModules.kt) —
+        //    thin delegations to the collaborators the moved bodies read.
+
+        override fun currentState(): DetailUiState = uiState.value
+
+        override fun playThemeMusic(itemId: String) = themeMusicPlayer.playThemeFor(itemId)
+
+        override suspend fun resolveArrServers(): Result<ArrServiceSummary> =
+            remoteDiscovery.arrRepository.resolveServers()
+
+        override suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
+            mediaRepository.getSimilarItems(itemId, limit)
+
+        override suspend fun mediaSegments(itemId: String): Result<List<MediaSegment>> =
+            playbackRepository.getMediaSegments(itemId)
+
+        override suspend fun triggerSeerrDiscovery(detail: MediaDetail) =
+            loadSeerrDataIfNeeded(detail)
+
+        override suspend fun localRelatedItems(
+            currentId: String,
+            genres: List<String>,
+            studios: List<String>,
+            limit: Int,
+        ): List<MediaItem> =
+            offlineRepository.getLocalRelated(
+                currentId = currentId,
+                genres = genres,
+                studios = studios,
+                limit = limit,
+            )
+
+        override suspend fun seerrRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> =
+            remoteDiscovery.seerrRepository.getRatings(tmdbId, mediaType)
+
+        override suspend fun tmdbDetails(tmdbId: Int, mediaType: MediaType): TmdbDetails? =
+            tmdbApiClient?.getDetails(tmdbId, mediaType)?.getOrNull()
+
+        override suspend fun omdbAwards(imdbId: String): JellyPlayPluginOmdbAwards? =
+            pluginRatingsApi?.getOmdbAwards(imdbId)?.getOrNull()
+
+        override fun awardsBadgesEnabled(): Boolean =
+            appearanceStore?.appearance?.value?.detailsAwardsBadgesEnabled == true
+
+        override suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> =
+            pluginRecommendationsApi?.getJellyPlaySimilarItems(itemId, limit)?.getOrNull().orEmpty()
+
+        override suspend fun mediaDetailItem(itemId: String): MediaItem? =
+            mediaRepository.getMediaDetail(itemId).getOrNull()?.item
+
+        override fun serverSimilarPipeline(): Boolean =
+            pluginStatusStore?.capabilities?.value?.serverSimilarPipeline == true
+
+        override suspend fun animeMarkers(
+            seriesId: String,
+            providerSeriesId: String,
+        ): List<JellyPlayEpisodeMarker>? =
+            pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)?.getOrNull()
+
+        override suspend fun tmdbSeasonRatings(
+            tmdbId: String,
+            seasonNumber: Int,
+        ): Map<Int, JellyPlayEpisodeScore>? =
+            pluginRatingsApi?.getTmdbSeasonRatings(tmdbId, seasonNumber)?.getOrNull()
+
+        override suspend fun localTrailers(itemId: String): Result<List<MediaItem>> =
+            libraryApiClient.getLocalTrailers(itemId)
+
+        override suspend fun themeVideoClips(itemId: String): List<MediaItem> =
+            libraryApiClient.getThemeVideos(itemId).getOrNull().orEmpty()
+
+        override fun streamUrl(itemId: String, mediaSourceId: String): String =
+            playbackRepository.getStreamUrl(itemId = itemId, mediaSourceId = mediaSourceId)
     }
 
     private val enrichments: List<DetailEnrichment> =
-        listOf(
-        DetailEnrichment(
-            name = "themeMusic",
-            // Gate matrix: the global pref must be ON and the series not
-            // per-series muted (the mute chip's memory) on top of the shared
-            // remote gate — a muted series's enrichment doesn't start
-            // playback at all.
-            gate = {
-                it.remoteDiscoveryAllowed &&
-                    preferences.value.playThemeMusic &&
-                    !preferences.value.isThemeMusicMutedFor(
-                        it.detail.item.seriesId ?: it.itemId,
-                    )
-            },
-        ) { inputs ->
-            val themeSourceId = inputs.detail.item.seriesId ?: inputs.itemId
-            themeMusicPlayer.playThemeFor(themeSourceId)
-        },
-        DetailEnrichment(
-            name = "arrServerResolve",
-            // SERIES/EPISODE only (the canManageSeries menu lives on series
-            // detail), and only when a Sonarr-resolvable tvdb id exists.
-            gate = {
-                it.remoteDiscoveryAllowed &&
-                    (it.mediaType == MediaType.SERIES || it.mediaType == MediaType.EPISODE) &&
-                    it.detail.providerIds["tvdb"]?.toIntOrNull() != null
-            },
-        ) { inputs ->
-            val summary = remoteDiscovery.arrRepository.resolveServers()
-                .getOrDefault(ArrServiceSummary())
-            // Guard: don't write sonarr resolution onto a different item's state.
-            if (loadGuard.isCurrent(inputs.itemId)) {
-                _uiState.update { it.copy(sonarrServersResolved = summary.sonarrServers.isNotEmpty()) }
-            }
-        },
-        DetailEnrichment(
-            name = "similarItems",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Fetch similar/related items concurrently and non-blocking so the core
-            // detail renders immediately. The result lands in relatedItems.
-            mediaRepository.getSimilarItems(inputs.itemId, limit = 12)
-                .onSuccess { items ->
-                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                    _uiState.update {
-                        it.copy(relatedItems = items.filter { related -> related.id != inputs.itemId })
-                    }
-                }
-        },
-        DetailEnrichment(
-            name = "mediaSegments",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Pre-warm the player's media-segment TTL cache and surface the two
-            // intro/credits skip affordances as a detail-side chip. The cache fill
-            // is an implicit side effect of the call; only the booleans flow into
-            // uiState so the chip can render before the player attaches.
-            playbackRepository.getMediaSegments(inputs.itemId).onSuccess { segments ->
-                if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                val availability = segments.toAvailability()
-                _uiState.update {
-                    it.copy(
-                        hasIntroSegment = availability.hasIntro,
-                        hasCreditSegment = availability.hasCredits,
-                    )
-                }
-            }
-        },
-        DetailEnrichment(
-            name = "seerrDiscovery",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Trigger the Seerr recommendations/videos fetch from the VM. The 350ms
-            // delay is preserved for frame priority (don't contend with first-frame
-            // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
-            kotlinx.coroutines.delay(350)
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            loadSeerrDataIfNeeded(inputs.detail)
-        },
-        DetailEnrichment(
-            name = "localRelatedItems",
-            // LOCAL-origin counterpart: remote discovery is server-only, so a
-            // downloaded item would otherwise render as an island. Requires at
-            // least one genre/studio to mine the on-device offline library for
-            // (the former triggerLocalSideEffects early return).
-            gate = {
-                !it.isRemote &&
-                    (it.detail.item.genres.isNotEmpty() || it.detail.item.studios.isNotEmpty())
-            },
-        ) { inputs ->
-            val related = offlineRepository.getLocalRelated(
-                currentId = inputs.itemId,
-                genres = inputs.detail.item.genres,
-                studios = inputs.detail.item.studios,
-                limit = 12,
-            )
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(localRelatedItems = related.filter { r -> r.id != inputs.itemId })
-            }
-        },
-    ) +
-        // The section modules' enrichment arms (the detail section registry):
-        // the wave-1 pluginRatings fetch, verbatim from its former hand-written
-        // entry, spliced exactly where that entry sat so the fan-out order
-        // (and externalRatings' read of the latched probe below) is unchanged;
-        // the wave-2 arms (specialFeatures, collectionItems, franchise,
-        // upcoming) joined their sections' modules and ride the same spliced
-        // list.
-        DetailSectionRegistry.enrichments(host = sectionEnrichmentHost) +
-        listOf(
-        DetailEnrichment(
-            name = "externalRatings",
-            // The no-plugin ratings strip (RT/IMDb/TMDB chips when the
-            // plugin is absent). Source order mirrors the spec: Seerr's
-            // detail-by-provider-id ratings first (the loadSeerrData path —
-            // same repository, same tmdbId resolution), the direct-TMDB
-            // vote aggregate as the fallback when Seerr is disconnected or
-            // its ratings fetch failed/returned nothing. MOVIE/SERIES only:
-            // the provider-id sources and the ratings payload exist for
-            // nothing else.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // The user-pref half of the gate rides the body: the gate lambda
-            // stays a pure snapshot read (the DetailEnrichmentInputs
-            // contract), so `showExternalRatings` is checked here instead —
-            // a preference read, not snapshot state.
-            if (!preferences.value.showExternalRatings) return@DetailEnrichment
-            // The plugin dedupe probe, the pluginSimilarSuppressesStock
-            // mirror: one synchronous Ratings-feature read (the store refresh
-            // is latched — the pluginRatings enrichment above probed this
-            // item already), remembered on the state, and suppressing the external-ratings
-            // chips at RENDER time only when the plugin row actually has
-            // content. `!hasPluginRatings` cannot gate the START — the plugin
-            // row's content lands asynchronously from the same fan-out.
-            val pluginRatingsLive = pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)
-            val mediaType = inputs.mediaType
-            if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@DetailEnrichment
-            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
+        // Wave 3: the twelve state-feeding declarations moved verbatim into
+        // DetailEnrichmentModules.kt (one module per arm family, evaluated
+        // through [sectionEnrichmentHost]); the section modules' arms stay
+        // spliced between the registry's leading and trailing lists — the
+        // pluginRatings probe externalRatings reads latches before the
+        // trailing arms fire (the load-bearing order contract above).
+        DetailEnrichmentRegistry.leadingArms(sectionEnrichmentHost) +
+            DetailSectionRegistry.enrichments(host = sectionEnrichmentHost) +
+            DetailEnrichmentRegistry.trailingArms(sectionEnrichmentHost)
 
-            // Seerr ratings first — the same connection-flag read
-            // loadSeerrData uses (the flags live only on the published
-            // aggregator, never on _uiState). The fetch is cache-backed
-            // (SeerrRepositoryImpl's detail cache), so a failed/empty Seerr
-            // payload costs one call before the TMDB fallback.
-            val seerrRatings = if (uiState.value.isSeerrConnected) {
-                remoteDiscovery.seerrRepository
-                    .getRatings(tmdbId, if (mediaType == MediaType.MOVIE) "movie" else "tv")
-                    .getOrNull()
-                    ?.takeUnless { seerr ->
-                        seerr.rt?.criticsScore == null && seerr.rt?.audienceScore == null &&
-                            seerr.imdb?.criticsScore == null && seerr.imdb?.rating == null &&
-                            seerr.tmdb?.rating == null
-                    }
-                    ?.let { DetailExternalRatings.fromSeerr(it) }
-            } else {
-                null
-            }
-            val resolved = seerrRatings
-                // TMDB-only fallback: the public vote aggregate + the
-                // constructed provider link. Null seam (unwired tests) or a
-                // failed fetch leave the strip empty — silent absence.
-                ?: tmdbApiClient?.getDetails(tmdbId, mediaType)?.getOrNull()?.let { details ->
-                    DetailExternalRatings.tmdbOnly(
-                        voteAverage = details.voteAverage?.toFloat(),
-                        tmdbPathSegment = if (mediaType == MediaType.MOVIE) "movie" else "tv",
-                        tmdbId = tmdbId,
-                    )
-                }
-            if (resolved == null || resolved.isEmpty) return@DetailEnrichment
-            // The OMDb awards leg (the `omdb-awards` feature): an award badge
-            // beside the chips when the plugin source answers AND the
-            // appearance toggle allows badges. Every leg missing (unwired
-            // seam, plugin unavailable, toggle off, no data for the id)
-            // renders nothing — silent absence, the plugin contract. The
-            // call is null-safe like the mdbList one; the toggle read is a
-            // synchronous slice value (a preference read, not snapshot state).
-            val awards: String? = if (
-                appearanceStore?.appearance?.value?.detailsAwardsBadgesEnabled == true &&
-                pluginFeature(JellyPlayPluginFeatures.OmdbAwards, inputs.itemId)
-            ) {
-                resolveImdbId(inputs.detail)?.let { imdbId ->
-                    pluginRatingsApi?.getOmdbAwards(imdbId)?.getOrNull()?.awards
-                }
-            } else {
-                null
-            }
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(
-                    externalRatings = resolved.copy(awards = awards),
-                    externalRatingsSuppressedByPlugin = pluginRatingsLive,
-                )
-            }
-        },
-        DetailEnrichment(
-            name = "pluginSimilarItems",
-            // The server-scored "More like this" row, rendered BESIDE the stock
-            // one. The stock row stands down only when the capabilities
-            // handshake says the plugin registered into the host's similar
-            // pipeline (Jellyfin 12+ — there the stock endpoint returns the
-            // same scored list and both rows would duplicate); on pre-12 hosts
-            // / older plugins the lists differ and both render. The plugin
-            // returns scored item ids only, so each id is hydrated through
-            // the same per-item fetch the detail screen already uses
-            // (getMediaDetail), preserving score order; per-id failures drop
-            // out and an empty hydration leaves the stock row in place.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
-            val scored = pluginRecommendationsApi?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
-                ?.getOrNull()
-                .orEmpty()
-                .filter { it != inputs.itemId }
-                .distinct()
-            if (scored.isEmpty()) return@DetailEnrichment
-            // The shared bounded-parallel hydration (DEFAULT_FANOUT_PARALLELISM,
-            // the arrqueue/heatmap idiom): per-id failures and null details drop
-            // out (mapConcurrentCatching's drop policy) instead of an unbounded
-            // async/awaitAll fan-out over the server.
-            val hydrated = hydrationSemaphore.mapConcurrentCatching(scored) { candidate ->
-                mediaRepository.getMediaDetail(candidate).getOrNull()?.item
-            }
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(
-                    pluginSimilarItems = hydrated
-                        .filterNotNull()
-                        .filter { item -> item.id != inputs.itemId }
-                        .distinctBy { item -> item.id },
-                    // The probe ran synchronously inside pluginFeature above, so
-                    // the capabilities payload is fresh for this read.
-                    pluginSimilarSuppressesStock =
-                        pluginStatusStore?.capabilities?.value?.serverSimilarPipeline == true,
-                )
-            }
-        },
-        DetailEnrichment(
-            name = "pluginAnimeMarkers",
-            // Series-scoped filler/recap badges for the seasons section's
-            // episode rows. SERIES resolves to itself, EPISODE/SEASON to the
-            // parent series (seriesIdForDetail) — the same series context the
-            // seasons tree renders.
-            gate = {
-                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
-            },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
-            val seriesId = inputs.detail.item.seriesIdForDetail ?: return@DetailEnrichment
-            val providerSeriesId = resolveProviderSeriesId(inputs.detail) ?: return@DetailEnrichment
-            val markers = pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)
-                ?.getOrNull() ?: return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(animeMarkers = animeBadges(markers)) }
-        },
-        DetailEnrichment(
-            name = "pluginSeasonRatings",
-            // The TMDB per-episode scores for the seasons section's episode
-            // rows + the season header's average (ADR 0010, the `ratings`
-            // feature family's season leg). Same series context as the anime
-            // badges; one fetch per LOADED season (a lazily-expanded season
-            // re-emits a new generation, so the enrichment re-runs and picks
-            // it up — seasons already scored on a previous generation merge
-            // in place of a re-fetch, so the re-run requests only the new
-            // arrivals). The shared bounded-parallel per-season fetch (the
-            // pluginSimilarItems idiom): per-season null/empty results and
-            // failures drop out; a wholly empty fold leaves the field empty
-            // — silent absence, never an error.
-            gate = {
-                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
-            },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
-            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
-            // Seasons still unscored on this field's last emission (the
-            // merge source) — numberless seasons never fetch (the serial
-            // loop's `?: continue`).
-            val alreadyScored = _uiState.value.seasonRatings.keys
-            val seasonsToFetch = inputs.snapshot.seasons.mapNotNull { season ->
-                val seasonNumber = season.indexNumber ?: return@mapNotNull null
-                if (season.id in alreadyScored) return@mapNotNull null
-                season to seasonNumber
-            }
-            if (seasonsToFetch.isEmpty()) return@DetailEnrichment
-            val fetchedRatingsBySeasonId = hydrationSemaphore
-                .mapConcurrentCatching(seasonsToFetch) { (season, seasonNumber) ->
-                    pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
-                        ?.getOrNull()
-                        ?.takeIf { it.isNotEmpty() }
-                        ?.let { ratings -> season.id to ratings }
-                }
-                .filterNotNull()
-                .toMap()
-            if (fetchedRatingsBySeasonId.isEmpty()) return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(seasonRatings = it.seasonRatings + fetchedRatingsBySeasonId) }
-        },
-        DetailEnrichment(
-            name = "trailers",
-            // The merged trailer list's local leg — the server-hosted
-            // trailers (the parental-filtered getLocalTrailers wrapper) merged
-            // with the TMDB/Seerr videos into `state.trailers`, ordered by the
-            // `preferLocalTrailers` pref. The remote leg re-merges on its own
-            // landing (foldCompanionLanding's Videos case — the seerrDiscovery
-            // enrichment fetches it independently and later), so whichever
-            // source resolves first already leaves a correct list. A failed
-            // local fetch degrades to the remote-only list (today's content);
-            // remote-only is exactly the no-local-trailer shape.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            val local = libraryApiClient.getLocalTrailers(inputs.itemId).getOrNull().orEmpty()
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(
-                    trailers = mergeTrailerEntries(
-                        localTrailers = local,
-                        remoteVideos = it.relatedVideos,
-                        preferLocalTrailers = preferences.value.preferLocalTrailers,
-                    ),
-                )
-            }
-        },
-        DetailEnrichment(
-            name = "themeVideo",
-            // The server ThemeVideo clip behind the detail hero's ambient
-            // video (preferred over the YouTube embed when it resolves). Same
-            // remote gate as the trailers leg — the user-pref half
-            // (`trailerAutoplay`) rides the body: without the autoplay pref
-            // no mount ever reads the URL, so the fetch is skipped entirely.
-            // A failed/empty lookup degrades to the embed (today's content);
-            // the URL is shaped fresh against the active session.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            if (!preferences.value.trailerAutoplay) return@DetailEnrichment
-            val clip = libraryApiClient.getThemeVideos(inputs.itemId).getOrNull()?.firstOrNull()
-            if (clip == null) return@DetailEnrichment
-            val streamUrl = playbackRepository.getStreamUrl(itemId = clip.id, mediaSourceId = clip.id)
-            if (streamUrl.isBlank()) return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(themeVideoStreamUrl = streamUrl) }
-        },
-        )
-
-    /** The stock similar row's limit (the plugin row mirrors it). */
-    private companion object {
-        const val SIMILAR_ITEMS_LIMIT = 12
-    }
 
     /**
      * The ADR 0010 feature gate for the plugin sections: one capabilities

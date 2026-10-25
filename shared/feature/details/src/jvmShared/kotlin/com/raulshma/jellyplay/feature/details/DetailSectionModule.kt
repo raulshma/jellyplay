@@ -23,14 +23,21 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DetailPreferences
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
+import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
+import com.raulshma.jellyplay.core.model.seerr.TmdbDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -177,6 +184,77 @@ internal interface DetailSectionEnrichmentHost {
      * hydration rides it.
      */
     suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R>
+
+    // ── Wave 3: the VM-state enrichment arms (DetailEnrichmentModules.kt) —
+    //    the reads their former hand-written bodies in DetailViewModel made
+    //    directly on the VM's collaborators. Unlike the wave-1/2 roles these
+    //    carry DEFAULT bodies with the unwired-seam contract every plugin arm
+    //    already documents: an unoverridden role degrades to silent absence
+    //    (null / empty / false / no-op), so the registry's test fakes override
+    //    only the roles their arms exercise.
+
+    /** The published detail state read (suspension-point reads: isSeerrConnected, seasonRatings). */
+    fun currentState(): DetailUiState = DetailUiState()
+
+    /** The theme-music player's start ([DetailThemeMusic.playThemeFor]) — the themeMusic arm. Defaults to no-op. */
+    fun playThemeMusic(itemId: String) {}
+
+    /** The ARR servers resolve ([ArrRepository.resolveServers]) — the arrServerResolve arm. */
+    suspend fun resolveArrServers(): Result<ArrServiceSummary> = Result.success(ArrServiceSummary())
+
+    /** The stock similar read ([MediaRepository.getSimilarItems]) — the similarItems arm. */
+    suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> = Result.success(emptyList())
+
+    /** The media-segments pre-warm ([PlaybackRepository.getMediaSegments]) — the mediaSegments arm. */
+    suspend fun mediaSegments(itemId: String): Result<List<MediaSegment>> = Result.success(emptyList())
+
+    /** The Seerr companion trigger (the VM's loadSeerrDataIfNeeded) — the seerrDiscovery arm. No-op by default. */
+    suspend fun triggerSeerrDiscovery(detail: MediaDetail) {}
+
+    /** The on-device related read ([OfflineRepository.getLocalRelated]) — the localRelatedItems arm. */
+    suspend fun localRelatedItems(
+        currentId: String,
+        genres: List<String>,
+        studios: List<String>,
+        limit: Int,
+    ): List<MediaItem> = emptyList()
+
+    /** The Seerr ratings read ([SeerrRepository.getRatings]) — the externalRatings arm's first leg. */
+    suspend fun seerrRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> =
+        Result.failure(UnsupportedOperationException("unwired"))
+
+    /** The direct-TMDB details read — the externalRatings fallback leg. Null when the seam is unwired. */
+    suspend fun tmdbDetails(tmdbId: Int, mediaType: MediaType): TmdbDetails? = null
+
+    /** The OMDb awards read. Null when the plugin seam is unwired — silent absence. */
+    suspend fun omdbAwards(imdbId: String): JellyPlayPluginOmdbAwards? = null
+
+    /** The appearance toggle for award badges — the externalRatings awards leg. */
+    fun awardsBadgesEnabled(): Boolean = false
+
+    /** The plugin-scored similar ids ([JellyPlayPluginApiRoles.getJellyPlaySimilarItems]). Empty when unwired. */
+    suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> = emptyList()
+
+    /** The per-item detail hydration ([MediaRepository.getMediaDetail]) — the pluginSimilarItems arm. Null on failure. */
+    suspend fun mediaDetailItem(itemId: String): MediaItem? = null
+
+    /** The capabilities' server-similar-pipeline flag ([JellyPlayCapabilities.serverSimilarPipeline]). */
+    fun serverSimilarPipeline(): Boolean = false
+
+    /** The series-scoped anime markers. Null when the plugin seam is unwired — silent absence. */
+    suspend fun animeMarkers(seriesId: String, providerSeriesId: String): List<JellyPlayEpisodeMarker>? = null
+
+    /** The per-season TMDB scores. Null when the plugin seam is unwired — silent absence. */
+    suspend fun tmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Map<Int, JellyPlayEpisodeScore>? = null
+
+    /** The server-hosted local trailers ([LibraryApiClient.getLocalTrailers]) — the trailers arm. */
+    suspend fun localTrailers(itemId: String): Result<List<MediaItem>> = Result.success(emptyList())
+
+    /** The server ThemeVideo clips ([LibraryApiClient.getThemeVideos]) — the themeVideo arm. */
+    suspend fun themeVideoClips(itemId: String): List<MediaItem> = emptyList()
+
+    /** The shaped stream URL ([PlaybackRepository.getStreamUrl]) — the themeVideo arm. Blank by default. */
+    fun streamUrl(itemId: String, mediaSourceId: String): String = ""
 }
 
 /**
