@@ -437,6 +437,17 @@ class PlayerActivity : FragmentActivity() {
     // gesture is irrelevant in the floating window) and restores it on expand.
     private var savedBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
+    // Stashed orientation request so the PiP window can run orientation-free.
+    // A fixed-orientation request (the player's landscape lock) held while the
+    // activity floats in PiP leaves the task in a fixed-rotation conflict that
+    // the window manager resolves by CLOSING the activity — the Issue-#11
+    // teardown where any configuration ripple (e.g. an HDR-format pref flip
+    // made from Settings while playback floated in PiP) killed the session
+    // within seconds, 3/3 reproducible. PiP windows are system-letterboxed, so
+    // the lock has no meaning while docked; restore it on expand (a dismiss
+    // path hits onDestroy's UNSPECIFIED reset anyway).
+    private var savedPipOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
     // ── PIN/biometric lock gate ─────────────────────────────────
     //
     // Closes the media-notification bypass: the video MediaSession pins its
@@ -574,6 +585,12 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
+            // Same fold for the orientation request: drop the landscape lock
+            // while docked (see savedPipOrientation) so the floating task never
+            // sits in the fixed-rotation conflict the WM "resolves" by closing
+            // the activity. Restored on exit below.
+            savedPipOrientation = requestedOrientation
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         } else {
             // PiP-expand gate re-check: some
             // OEMs keep the activity RESUMED through the whole PiP session,
@@ -589,6 +606,10 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = savedBrightness
             }
+            // Re-apply the player's orientation lock on expand (stashed on
+            // entry; VideoPlayerScreen's lock effect only runs on composition,
+            // not on PiP exit).
+            requestedOrientation = savedPipOrientation
             // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss; the
             // two are distinguished by lifecycle state at this callback and
             // the whole dismiss/expand fold (arm justExitedPip vs finish

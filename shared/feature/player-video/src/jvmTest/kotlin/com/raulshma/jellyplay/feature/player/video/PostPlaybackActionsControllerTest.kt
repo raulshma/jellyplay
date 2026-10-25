@@ -362,6 +362,51 @@ class PostPlaybackActionsControllerTest {
         assertEquals(1, closeAfterKeepRequests, "the hold releases — the natural close resumes")
     }
 
+    // ── twin end events (Issue #10: the natural end dispatches twice) ─────
+
+    @Test
+    fun `a twin end event of an armed item keeps holding the close until resolved`() = runTest(dispatcher) {
+        val c = controller()
+
+        // The reporter's end-of-stream safety net fires first and arms.
+        assertTrue(c.onPlaybackEndedNaturally(), "first end arms and holds")
+        advanceUntilIdle()
+
+        // The engine's genuine ENDED lands ~500 ms later: the twin must not
+        // release the hold the first event placed (the player used to close
+        // out from under the just-armed dialog here).
+        assertTrue(c.onPlaybackEndedNaturally(), "the twin end of the SAME armed item still holds")
+        advanceUntilIdle()
+        assertEquals(0, closeAfterKeepRequests, "the hold outlives the twin event")
+        assertTrue(c.deleteOffer.value != null, "the offer survives the twin event")
+
+        // Resolution ends the ownership: a post-resolution twin proceeds.
+        c.keepItem()
+        assertEquals(1, closeAfterKeepRequests, "Keep releases the hold exactly once")
+        assertFalse(c.onPlaybackEndedNaturally(), "a twin after resolution proceeds with the normal close")
+    }
+
+    @Test
+    fun `a twin end event of a suppressed item never holds`() = runTest(dispatcher) {
+        val c = controller()
+
+        incognito = true
+        assertFalse(c.onPlaybackEndedNaturally(), "suppressed: no hold")
+        assertFalse(c.onPlaybackEndedNaturally(), "the twin of a suppressed end also never holds")
+    }
+
+    @Test
+    fun `a failed permission read ends the armed ownership for late twins`() = runTest(dispatcher) {
+        val c = controller()
+        canDelete.value = false
+
+        assertTrue(c.onPlaybackEndedNaturally(), "the precheck holds before the permission read")
+        advanceUntilIdle()
+        assertEquals(1, closeAfterKeepRequests, "the hold released")
+
+        assertFalse(c.onPlaybackEndedNaturally(), "a twin after the released hold proceeds normally")
+    }
+
     @Test
     fun `no delete sources - the feature is inert`() = runTest(dispatcher) {
         val c = controller(sources = null)

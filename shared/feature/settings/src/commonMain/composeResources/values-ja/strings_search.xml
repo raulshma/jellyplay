@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">ディスプレイのリフレッシュレートを動画フレームに同期します (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">ストリーミング品質</string>
     <string name="ss_streaming_quality_subtitle">ストリーミングのデフォルト動画品質を設定します: 1080p、4K、SD、自動</string>
+    <string name="ss_playback_mode_title">再生モード</string>
+    <string name="ss_playback_mode_subtitle">自動、直接再生を強制、またはトランスコードを強制 — ストリームの配信方式</string>
     <string name="ss_audio_delay_title">オーディオ同期遅延</string>
     <string name="ss_audio_delay_subtitle">オーディオ同期の遅延オフセットを調整します (ms)</string>
     <string name="ss_live_stream_option_title">ライブテレビストリーム</string>

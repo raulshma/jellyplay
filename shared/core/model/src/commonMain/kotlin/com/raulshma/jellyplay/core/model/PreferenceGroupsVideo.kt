@@ -233,6 +233,14 @@ data class PlaybackPreferences(
     /** Whether the pause surface shows item details. Default off. */
     val pauseDetailsEnabled: Boolean = false,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    /**
+     * The delivery method (Auto / Force Direct Play / Force Transcode). It
+     * governs whether the quality cap applies at all, so the Settings row
+     * renders it beside the quality/transcode cluster. Default AUTO — the
+     * legacy `force_direct_play` migration no longer forces DIRECT_PLAY on
+     * absent keys (Issue #1).
+     */
+    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
     /** The HDR delivery posture for direct play (which HDR family may reach the display). Default AUTO. */
     val hdrFormatPreference: HdrFormatPreference = HdrFormatPreference.AUTO,
     /** Force transcode for sources taller than this height in px; `0` = off. */

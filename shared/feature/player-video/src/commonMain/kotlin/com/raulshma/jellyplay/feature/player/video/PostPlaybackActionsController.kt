@@ -97,6 +97,11 @@ internal fun decidePostPlaybackDeleteOffer(inputs: PostPlaybackOfferInputs): Boo
  *    and the hold resolves through [closeAfterKeep] / [closePlayer];
  *  - the offer latches per item on raise: "Keep" (and any later natural end
  *    of the same item) can never re-arm it this session;
+ *  - the natural end dispatches TWICE per playback end (the reporter's
+ *    end-of-stream safety net + the engine's genuine ENDED): a twin event of
+ *    an armed-and-unresolved item keeps answering "owned" so the hold
+ *    survives the second dispatch, while a twin of a suppressed item — or
+ *    one arriving after the offer resolved — proceeds with the normal close;
  *  - "Keep" dismisses the dialog and fires [closeAfterKeep] — the deferred
  *    end-of-media close, which the VM wires conditionally on the #17
  *    after-finish keep gate (a card still holding the player outlives the
@@ -157,11 +162,37 @@ internal class PostPlaybackActionsController(
     val deleteOffer: StateFlow<DeleteOffer?> = _deleteOffer.asStateFlow()
 
     /**
-     * The per-session latch — the item ids this session already offered for.
+     * The per-session offer latch, per item id: [OfferLatch.OFFERED] marks an
+     * item this session already evaluated (the once-per-session latch), and
+     * [OfferLatch.ARMED] the subset whose end-of-media close this flow
+     * currently owns. One map keeps the "armed ⊆ offered" invariant structural
+     * — resolving an offer steps the entry back to [OfferLatch.OFFERED] rather
+     * than dropping it, so the latch survives the resolution.
+     *
      * All access rides the caller's dispatch path (the natural-end events are
-     * sequential on the player's scope), so a plain set is race-free here.
+     * sequential on the player's scope), so a plain map is race-free here.
      */
-    private val offeredItemIds = MutableStateFlow<Set<String>>(emptySet())
+    private enum class OfferLatch { OFFERED, ARMED }
+
+    /**
+     * A repeat end event for an ARMED item must keep answering "owned": the
+     * natural end dispatches twice (the reporter's `endedNoNext` safety net
+     * fires within the last ~500 ms, the engine's genuine ENDED lands at the
+     * stream's real end), and a `false` on the twin would release the hold the
+     * first event placed — closing the player out from under the just-armed
+     * dialog (Issue #10). Only a repeat for a gate-suppressed (OFFERED-only)
+     * item proceeds with the normal close. The entry steps back to
+     * [OfferLatch.OFFERED] when the offer resolves (Keep / Delete / failed
+     * permission read) so a post-resolution twin proceeds with the normal
+     * close instead of dangling the player under an ownership nothing will
+     * honour.
+     */
+    private val latchedItems = MutableStateFlow<Map<String, OfferLatch>>(emptyMap())
+
+    /** The latch map's single write, so every arm/release transition keeps one shape. */
+    private fun latch(itemId: String, state: OfferLatch) {
+        latchedItems.value = latchedItems.value + (itemId to state)
+    }
 
     /**
      * Playback concluded naturally with no continuation — evaluate the offer.
@@ -182,9 +213,12 @@ internal class PostPlaybackActionsController(
     fun onPlaybackEndedNaturally(): Boolean {
         if (sources == null) return false
         val itemId = getItemId() ?: return false
-        // Never twice for the same item + session.
-        if (itemId in offeredItemIds.value) return false
-        offeredItemIds.value = offeredItemIds.value + itemId
+        // Never twice for the same item + session — but a twin end event for
+        // an ARMED item still reports ownership (see [latchedItems]); only a
+        // repeat for a gate-suppressed item proceeds with the normal close.
+        val latched = latchedItems.value[itemId]
+        if (latched != null) return latched == OfferLatch.ARMED
+        latch(itemId, OfferLatch.OFFERED)
 
         val precheck = decidePostPlaybackDeleteOffer(
             PostPlaybackOfferInputs(
@@ -199,6 +233,7 @@ internal class PostPlaybackActionsController(
             ),
         )
         if (!precheck) return false
+        latch(itemId, OfferLatch.ARMED)
         val title = getItemTitle()
         scope.launch {
             val canDelete = runCatchingRethrowingCancellation {
@@ -207,6 +242,7 @@ internal class PostPlaybackActionsController(
             if (!canDelete) {
                 // Nothing will be offered — release the hold (the natural
                 // close resumes; the VM's wiring re-checks the #17 card gate).
+                latch(itemId, OfferLatch.OFFERED)
                 closeAfterKeep()
                 return@launch
             }
@@ -222,9 +258,13 @@ internal class PostPlaybackActionsController(
      * pending; the latch keeps the item from re-offering.
      */
     fun keepItem() {
-        val hadOffer = _deleteOffer.value != null
+        val offer = _deleteOffer.value
         _deleteOffer.value = null
-        if (hadOffer) closeAfterKeep()
+        if (offer != null) {
+            // The hold is resolved — a late twin end event proceeds normally.
+            latch(offer.itemId, OfferLatch.OFFERED)
+            closeAfterKeep()
+        }
     }
 
     /**
@@ -236,6 +276,7 @@ internal class PostPlaybackActionsController(
         val sessionSources = sources ?: return
         val offer = _deleteOffer.value ?: return
         _deleteOffer.value = null
+        latch(offer.itemId, OfferLatch.OFFERED)
         scope.launch {
             val deleted = runCatchingRethrowingCancellation {
                 sessionSources.deleteItem(offer.itemId)

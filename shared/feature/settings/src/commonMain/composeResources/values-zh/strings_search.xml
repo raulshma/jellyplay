@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">将显示刷新率与视频帧同步 (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">流式传输画质</string>
     <string name="ss_streaming_quality_subtitle">设置默认的流式视频画质：1080p、4K、SD、自动</string>
+    <string name="ss_playback_mode_title">播放模式</string>
+    <string name="ss_playback_mode_subtitle">自动、强制直接播放或强制转码 — 流的传输方式</string>
     <string name="ss_audio_delay_title">音频同步延迟</string>
     <string name="ss_audio_delay_subtitle">调整音频同步延迟偏移 (毫秒)</string>
     <string name="ss_live_stream_option_title">直播电视流</string>

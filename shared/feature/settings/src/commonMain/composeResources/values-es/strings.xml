@@ -610,7 +610,7 @@
     <string name="diff_synthwave_mode">Modo synthwave</string>
     <string name="diff_soothing_mode">Modo relajante</string>
     <string name="diff_monochrome_mode">Modo monocromo</string>
-    <string name="diff_playback_mode">Modo de reproducción</string>
+    <string name="settings_playback_mode">Modo de reproducción</string>
     <string name="diff_hold_to_speed">Mantener para acelerar</string>
     <string name="diff_auto_skip_intro">Saltar intro automáticamente</string>
     <string name="diff_auto_skip_outro">Saltar cierre automáticamente</string>

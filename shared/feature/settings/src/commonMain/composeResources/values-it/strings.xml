@@ -612,7 +612,7 @@
     <string name="diff_synthwave_mode">Modalità synthwave</string>
     <string name="diff_soothing_mode">Modalità rilassante</string>
     <string name="diff_monochrome_mode">Modalità monocromatica</string>
-    <string name="diff_playback_mode">Modalità di riproduzione</string>
+    <string name="settings_playback_mode">Modalità di riproduzione</string>
     <string name="diff_hold_to_speed">Tieni premuto per accelerare</string>
     <string name="diff_auto_skip_intro">Salta intro automaticamente</string>
     <string name="diff_auto_skip_outro">Salta outro automaticamente</string>

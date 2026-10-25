@@ -468,7 +468,7 @@ fun HeroHeader(
         isVisible = isVisible,
         isProminent = isProminent,
         heroFocusHeld = heroFocusHeld,
-        lifecycleResumed = lifecycleResumed,
+        lifecycleResumed = lifecycleResumed.value,
         isScrolling = isScrolling,
         platformCapable = heroVideoPlatformCapable,
     )

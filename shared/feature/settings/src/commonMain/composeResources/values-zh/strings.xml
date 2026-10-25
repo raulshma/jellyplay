@@ -610,7 +610,7 @@
     <string name="diff_synthwave_mode">Synthwave 模式</string>
     <string name="diff_soothing_mode">舒缓模式</string>
     <string name="diff_monochrome_mode">单色模式</string>
-    <string name="diff_playback_mode">播放模式</string>
+    <string name="settings_playback_mode">播放模式</string>
     <string name="diff_hold_to_speed">长按加速</string>
     <string name="diff_auto_skip_intro">自动跳过片头</string>
     <string name="diff_auto_skip_outro">自动跳过片尾</string>

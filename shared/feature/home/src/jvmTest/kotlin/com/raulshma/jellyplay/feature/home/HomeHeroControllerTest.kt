@@ -438,6 +438,52 @@ class HomeHeroControllerTest {
         assertFalse(controller.shouldTickNow())
     }
 
+    // --- Touch/desktop form factor: focus never gates rotation (Issue #9) ---
+    // On a phone the hero buttons' onFocusChanged fires once with `false` at
+    // attach and focus never enters the hero again — a focus-gated controller
+    // would starve rotation forever.
+
+    @Test
+    fun heroController_rotationCadence_touchFormFactor_attachFocusEventStillTicks() {
+        val controller = HeroController(
+            getBackdropUrl = { "url/$it" },
+            initialAutoRotateEnabled = true,
+            focusGatesRotation = false,
+        )
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+
+        // Exactly what the hero buttons dispatch at composition on touch: one
+        // focus callback carrying the initial (never-focused) state.
+        controller.onFocusChange(false)
+
+        assertEquals(RotationCadence.TickAfter(8000L), controller.rotationCadence(isScrolling = false, lifecycleResumed = true))
+        assertEquals(RotationCadence.RecheckAfter(2000L), controller.rotationCadence(isScrolling = true, lifecycleResumed = true))
+    }
+
+    @Test
+    fun heroController_shouldTickNow_touchFormFactor_ignoresFocus() {
+        val controller = HeroController(
+            getBackdropUrl = { "url/$it" },
+            initialAutoRotateEnabled = true,
+            focusGatesRotation = false,
+        )
+        controller.updateCandidates(
+            listOf(
+                item("m1", MediaType.MOVIE),
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+
+        controller.onFocusChange(false)
+
+        assertTrue(controller.shouldTickNow())
+    }
+
     // --- TV snap-to-top policy (onFocusEffect) ---
 
     @Test

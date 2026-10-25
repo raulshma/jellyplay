@@ -721,7 +721,7 @@
     <string name="diff_synthwave_mode">Synthwave Mode</string>
     <string name="diff_soothing_mode">Soothing Mode</string>
     <string name="diff_monochrome_mode">Monochrome Mode</string>
-    <string name="diff_playback_mode">Playback Mode</string>
+    <string name="settings_playback_mode">Playback Mode</string>
     <string name="diff_hold_to_speed">Hold-To-Speed</string>
     <string name="diff_auto_skip_intro">Auto Skip Intro</string>
     <string name="diff_auto_skip_outro">Auto Skip Outro</string>

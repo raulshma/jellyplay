@@ -6,6 +6,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -242,22 +243,25 @@ internal fun heroVideoShouldPlay(
         !isScrolling
 
 /**
- * Reactive RESUMED read for the hero's clip gate (the rotation cadence reads
- * the same lifecycle state, but non-reactively inside its snapshotFlow
- * collector; the clip gate needs it as composition state so an app
- * backgrounding unmounts the surface).
+ * Reactive RESUMED read for the hero's lifecycle gates. Returns the
+ * [androidx.compose.runtime.State], not a plain Boolean: the state read happens
+ * inside this helper's own recompose scope, so a Boolean return would pin the
+ * value per caller and sever reactivity. The clip gate reads `.value` in
+ * composition (an app backgrounding unmounts the surface) and the rotation
+ * cadence reads it inside its snapshotFlow block (background cancels a pending
+ * tick, foreground re-arms the collector — Issue #9).
  */
 @Composable
-internal fun rememberIsLifecycleResumed(): Boolean {
+internal fun rememberIsLifecycleResumed(): State<Boolean> {
     val lifecycleOwner = LocalLifecycleOwner.current
-    var resumed by remember {
+    val resumed = remember {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
     }
     LaunchedEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> resumed = true
-                Lifecycle.Event.ON_PAUSE -> resumed = false
+                Lifecycle.Event.ON_RESUME -> resumed.value = true
+                Lifecycle.Event.ON_PAUSE -> resumed.value = false
                 else -> Unit
             }
         }
@@ -305,7 +309,11 @@ internal fun rememberHeroController(
     // remembers the lambda per view model, so this re-runs only on a real VM
     // change — never per recomposition.
     val controller = remember(getBackdropUrl) {
-        HeroController(getBackdropUrl, initialAutoRotateEnabled = !isTvForRotation)
+        HeroController(
+            getBackdropUrl,
+            initialAutoRotateEnabled = !isTvForRotation,
+            focusGatesRotation = isTvForRotation,
+        )
     }
 
     // Sync candidates during composition, not in a LaunchedEffect (which runs
@@ -352,26 +360,44 @@ internal fun rememberHeroController(
     }
 
     val isTv = LocalTvMode.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    // Reactive RESUMED read: the cadence's lifecycle gate must re-arm the loop
+    // when the app returns to the foreground, which a one-shot non-reactive
+    // read inside the collector can never do (a None parked the body). The
+    // State is what makes that real — the .value read below sits INSIDE the
+    // snapshotFlow block, so a foreground/background flip is a state change
+    // the flow re-emits; a plain Boolean would be a captured constant the
+    // flow can never observe.
+    val lifecycleResumed = rememberIsLifecycleResumed()
     // Cadence shell: every decision (gates, delays, post-delay re-check) is the
     // controller's [HeroController.rotationCadence]/[shouldTickNow]; this is
-    // just the collector — collectLatest cancels a pending delay on any
-    // scroll-state change. The effect keys are [listState] plus the
-    // candidates epoch, and autoRotateEnabled is read inside the
-    // snapshotFlow instead — a pref or "Surprise Me" flip still re-evaluates
-    // the cadence immediately, while per-emission candidates churn does not
-    // cancel a pending 8 s idle wait.
+    // just the collector. The body LOOPS: after every tick it re-decides the
+    // cadence, so idle time produces tick → wait → tick → … until a gate turns
+    // None and parks the body. A one-shot body (the pre-Issue-#9 shape) could
+    // never re-arm: snapshotFlow only emits on state CHANGES, the tick mutates
+    // state the flow doesn't read, and rotation stalled at one tick per
+    // interaction. The flow reads every state whose flip must re-arm or cancel
+    // instantly (scroll, rotation enable, hero focus, resumed) — collectLatest
+    // drops a pending delay on each emission. [RotationGates] is the flow's
+    // element only; the cadence still reads its own controller state so the
+    // policy stays the single decision point.
     LaunchedEffect(listState, candidatesEpoch, timedAdvanceMs) {
-        snapshotFlow { listState.isScrollInProgress to controller.autoRotateEnabled }
-            .collectLatest { (isScrolling, _) ->
+        snapshotFlow {
+            RotationGates(
+                isScrolling = listState.isScrollInProgress,
+                autoRotate = controller.autoRotateEnabled,
+                focusInHero = controller.focusInHero,
+                lifecycleResumed = lifecycleResumed.value,
+            )
+        }.collectLatest { gates ->
+            while (true) {
                 when (
                     val cadence = controller.rotationCadence(
-                        isScrolling = isScrolling,
-                        lifecycleResumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+                        isScrolling = gates.isScrolling,
+                        lifecycleResumed = gates.lifecycleResumed,
                         advanceMs = timedAdvanceMs ?: HeroController.IDLE_ROTATION_DELAY_MS,
                     )
                 ) {
-                    RotationCadence.None -> Unit
+                    RotationCadence.None -> return@collectLatest
                     is RotationCadence.RecheckAfter -> delay(cadence.delayMs)
                     is RotationCadence.TickAfter -> {
                         delay(cadence.delayMs)
@@ -381,6 +407,7 @@ internal fun rememberHeroController(
                     }
                 }
             }
+        }
     }
 
     // TV snap-to-top shell: the first-emission skip and the focused+TV decision
@@ -439,18 +466,49 @@ internal sealed interface RotationCadence {
     /** No delay may be scheduled; the collector does nothing this emission. */
     data object None : RotationCadence
 
-    /** A pure re-check wait: `collectLatest` restarts it on the next scroll-state change. */
+    /** A pure re-check wait: the collector loop re-decides when it elapses; `collectLatest` cancels it early on the next gate emission. */
     data class RecheckAfter(val delayMs: Long) : RotationCadence
 
     /** Wait, then tick the featured index if [HeroController.shouldTickNow] still passes. */
     data class TickAfter(val delayMs: Long) : RotationCadence
 }
 
+/**
+ * The cadence flow's emission element: every state whose flip must re-arm or
+ * cancel a pending cadence wait (scroll in progress, rotation enabled, hero
+ * focus, lifecycle resumed). Pure emission plumbing — the decisions still
+ * read the controller's own state via [HeroController.rotationCadence].
+ */
+private data class RotationGates(
+    val isScrolling: Boolean,
+    val autoRotate: Boolean,
+    val focusInHero: Boolean,
+    val lifecycleResumed: Boolean,
+)
+
 @Stable
 internal class HeroController(
     private val getBackdropUrl: (String) -> String,
     initialAutoRotateEnabled: Boolean,
+    /**
+     * Whether hero focus participates in the rotation gates. True on TV, where
+     * the D-pad focus model makes "focus outside the hero" a meaningful
+     * user-intent signal; false on touch/desktop, where focus never enters the
+     * hero at all — the Play/Details buttons' `onFocusChanged` fires once with
+     * `false` at attach and nothing ever resets it, so gating on focus there
+     * starves rotation forever (Issue #9's "never ticks on phone").
+     */
+    private val focusGatesRotation: Boolean = true,
 ) {
+    /**
+     * The focus gate as one predicate, so [rotationCadence] and
+     * [shouldTickNow] cannot drift: on a focus-gating form factor (TV) focus
+     * must sit inside the hero, on touch/desktop focus never gates (the
+     * buttons' one-shot false `onFocusChanged` would starve rotation — Issue
+     * #9).
+     */
+    private fun focusAllowsRotation(): Boolean = !focusGatesRotation || focusInHero
+
     /** The index is deliberately not clamped on updates: a shrunk pool yields a null [featuredItem] until it is valid again. */
     var candidates: List<MediaItem> by mutableStateOf(emptyList())
         private set
@@ -553,22 +611,26 @@ internal class HeroController(
      * The rotation-cadence decision behind the composable's snapshotFlow
      * collector — the whole policy, Compose-free and synchronously testable.
      * Returns [RotationCadence.None] when no delay may be scheduled (no
-     * candidates, rotation disabled, focus outside the hero, or lifecycle
-     * below RESUMED — the same gates the inline implementation applied, here
-     * re-evaluated on every scroll emission); [RotationCadence.RecheckAfter]
-     * while scrolling (a pure re-check wait: `collectLatest` cancels it on the
-     * next scroll-state change); or [RotationCadence.TickAfter] when idle —
-     * the tick decision, whose completion the caller gates on
-     * [shouldTickNow], mirroring the inline implementation's post-delay
-     * re-check. The decision carries its kind, so the collector dispatches on
-     * the sealed type instead of comparing raw delay constants.
+     * candidates, rotation disabled, focus outside the hero on a
+     * focus-gating form factor, or lifecycle below RESUMED — the same gates
+     * the inline implementation applied, here re-evaluated on every loop
+     * iteration); [RotationCadence.RecheckAfter] while scrolling (a pure
+     * re-check wait: the collector loop re-decides when it elapses, and
+     * `collectLatest` cancels it early on the next gate emission); or
+     * [RotationCadence.TickAfter] when idle — the tick decision, whose
+     * completion the caller gates on [shouldTickNow], mirroring the inline
+     * implementation's post-delay re-check. The decision carries its kind, so
+     * the collector dispatches on the sealed type instead of comparing raw
+     * delay constants.
      */
     internal fun rotationCadence(
         isScrolling: Boolean,
         lifecycleResumed: Boolean,
         advanceMs: Long = IDLE_ROTATION_DELAY_MS,
     ): RotationCadence {
-        if (candidates.isEmpty() || !autoRotateEnabled || !focusInHero || !lifecycleResumed) return RotationCadence.None
+        if (candidates.isEmpty() || !autoRotateEnabled || !focusAllowsRotation() || !lifecycleResumed) {
+            return RotationCadence.None
+        }
         return if (isScrolling) {
             RotationCadence.RecheckAfter(SCROLL_DEFER_DELAY_MS)
         } else {
@@ -579,10 +641,10 @@ internal class HeroController(
     /**
      * Post-delay re-check for the idle cadence branch, faithful to the inline
      * implementation's guard right before the tick: state flipped while the
-     * delay ran (e.g. "Surprise Me" disabled rotation, or focus left the hero)
-     * suppresses the tick.
+     * delay ran (e.g. "Surprise Me" disabled rotation, or focus left the hero
+     * on a focus-gating form factor) suppresses the tick.
      */
-    internal fun shouldTickNow(): Boolean = autoRotateEnabled && focusInHero
+    internal fun shouldTickNow(): Boolean = autoRotateEnabled && focusAllowsRotation()
 
     /**
      * The TV snap-to-top decision behind the composable's focus effect,

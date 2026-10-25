@@ -608,7 +608,7 @@
     <string name="diff_synthwave_mode">Synthwave-Modus</string>
     <string name="diff_soothing_mode">Beruhigender Modus</string>
     <string name="diff_monochrome_mode">Monochrom-Modus</string>
-    <string name="diff_playback_mode">Wiedergabemodus</string>
+    <string name="settings_playback_mode">Wiedergabemodus</string>
     <string name="diff_hold_to_speed">Halten zum Beschleunigen</string>
     <string name="diff_auto_skip_intro">Intro automatisch überspringen</string>
     <string name="diff_auto_skip_outro">Outro automatisch überspringen</string>

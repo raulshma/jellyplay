@@ -608,7 +608,7 @@
     <string name="diff_synthwave_mode">シンセウェーブモード</string>
     <string name="diff_soothing_mode">落ち着きモード</string>
     <string name="diff_monochrome_mode">モノクロモード</string>
-    <string name="diff_playback_mode">再生モード</string>
+    <string name="settings_playback_mode">再生モード</string>
     <string name="diff_hold_to_speed">長押しで早送り</string>
     <string name="diff_auto_skip_intro">イントロを自動スキップ</string>
     <string name="diff_auto_skip_outro">アウトロを自動スキップ</string>

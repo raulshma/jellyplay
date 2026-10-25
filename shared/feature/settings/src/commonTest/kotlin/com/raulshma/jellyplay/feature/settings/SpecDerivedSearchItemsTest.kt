@@ -67,9 +67,9 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `advanced video list keeps its 25-row order with the residuals in place`() {
+    fun `advanced video list keeps its 26-row order with the residuals in place`() {
         val items = PlaybackAdvancedVideoSearchItems
-        assertEquals(25, items.size)
+        assertEquals(26, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DialogueBoost.id,
@@ -87,6 +87,7 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.SpatialAudioOnlyHeadphones.id,
                 PlaybackRows.FrameRateMatching.id,
                 PlaybackRows.OfflinePlayback.id,
+                PlaybackRows.PlaybackMode.id,
                 PlaybackRows.StreamingQuality.id,
                 PlaybackRows.HdrFormatPreference.id,
                 PlaybackRows.ForceTranscodeAboveHeight.id,

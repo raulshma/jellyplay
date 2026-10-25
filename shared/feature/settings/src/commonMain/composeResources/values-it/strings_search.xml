@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">Sincronizza la frequenza di aggiornamento del display con i fotogrammi video (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Qualità streaming</string>
     <string name="ss_streaming_quality_subtitle">Imposta la qualità video predefinita per lo streaming: 1080p, 4K, SD, Auto</string>
+    <string name="ss_playback_mode_title">Modalità di riproduzione</string>
+    <string name="ss_playback_mode_subtitle">Automatico, forzza riproduzione diretta o forzza la transcodifica — il metodo di consegna degli stream</string>
     <string name="ss_audio_delay_title">Ritardo sincronia audio</string>
     <string name="ss_audio_delay_subtitle">Regola l'offset di latenza di sincronia audio (ms)</string>
     <string name="ss_live_stream_option_title">Stream TV in diretta</string>

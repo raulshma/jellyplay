@@ -126,6 +126,7 @@ internal data class PlaybackCoreBundle(
         pauseScreensaverAfterMinutes = video.pauseScreensaverAfterMinutes,
         pauseDetailsEnabled = video.pauseDetailsEnabled,
         streamingQuality = playback.streamingQuality,
+        playbackMode = playback.playbackMode,
         hdrFormatPreference = playback.hdrFormatPreference,
         forceTranscodeAboveHeight = playback.forceTranscodeAboveHeight,
         preferredTranscodeVideoCodec = playback.preferredTranscodeVideoCodec,

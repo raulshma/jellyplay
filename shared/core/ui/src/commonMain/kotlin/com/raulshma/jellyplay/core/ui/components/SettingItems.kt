@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.Icon
@@ -65,6 +66,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * + [tvFocusIndicator]; callers do NOT pass focus modifiers. Pass `highlighted = true` to grab
  * focus and scroll the item into view (used by deep-link/highlight flows).
  */
+
+private val TrailingTextMaxWidth = 160.dp
 
 /**
  * Drives the one-shot highlight glow used by [SettingListItemImpl] / [SettingToggleItemImpl]:
@@ -261,6 +264,15 @@ private fun SettingListItemImpl(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        // The trailing slot is a value chip, not a second text
+                        // column: an unconstrained long value (the worst case
+                        // being the Track-Selection preset's
+                        // "Manual (per-series overrides only)" — Issue #7)
+                        // claims most of the row's width inside M3 ListItem's
+                        // unweighted trailing measure and squeezes the
+                        // headline/supporting text into compressed slivers.
+                        // Cap the chip and let the ellipsis carry the rest.
+                        modifier = Modifier.widthIn(max = TrailingTextMaxWidth),
                     )
                 }
                 if (showChevron) {

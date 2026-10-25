@@ -198,6 +198,8 @@
     <string name="ss_frame_rate_matching_subtitle">Synchronize display refresh rate to video frames (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Streaming Quality</string>
     <string name="ss_streaming_quality_subtitle">Set default video quality for streaming: 1080p, 4K, SD, Auto</string>
+    <string name="ss_playback_mode_title">Playback Mode</string>
+    <string name="ss_playback_mode_subtitle">Auto, Force Direct Play, or Force Transcode — the delivery method for streams</string>
     <string name="ss_offline_playback_subtitle">Choose the downloaded copy or the server stream when both are available</string>
     <string name="ss_audio_delay_title">Audio Sync Delay</string>
     <string name="ss_audio_delay_subtitle">Adjust audio sync latency offset (ms)</string>

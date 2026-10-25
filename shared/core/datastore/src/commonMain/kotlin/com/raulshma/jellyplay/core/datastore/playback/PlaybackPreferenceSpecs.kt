@@ -271,11 +271,19 @@ object PlaybackPreferenceSpecs {
     private val playbackMethod: List<PreferenceSpec<*>> = listOf(
         /*
          * Reads [PlaybackSlice.playbackMode]. Migrates the legacy boolean
-         * `force_direct_play` key when the new enum key is absent: a legacy value
-         * of `true` (the historical default) maps to
-         * [PlaybackMode.FORCE_DIRECT_PLAY] to preserve the prior behaviour of
-         * always requesting a static stream; `false` maps to [PlaybackMode.AUTO]
-         * so the server negotiates the best method.
+         * `force_direct_play` key when the new enum key is absent: an explicit
+         * legacy `true` maps to [PlaybackMode.FORCE_DIRECT_PLAY] (preserving
+         * that install's chosen posture), anything else maps to
+         * [PlaybackMode.AUTO] so the server negotiates the best method. The
+         * absent-legacy default is deliberately FALSE: the historical `true`
+         * default here migrated every fresh install into FORCE_DIRECT_PLAY,
+         * which sends the `directPlayAll` profile and silently defeats the
+         * quality cap + bitrate ladder (Issue #1) — the enum owns the posture
+         * now, and its default is AUTO.
+         *
+         * The search spec surfaces the row in the settings catalog (title,
+         * category, search) — without it the delivery method was reachable
+         * only through the in-player Playback Options sheet.
          */
         PreferenceSpec.derived(
             keyName = "playback_mode",
@@ -287,12 +295,21 @@ object PlaybackPreferenceSpecs {
                         prefs,
                         FORCE_DIRECT_PLAY.typedKey(),
                         FORCE_DIRECT_PLAY.keyName,
-                        default = true,
+                        default = false,
                     )
                     if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
                 }
             },
             encode = { it.name },
+            search = PreferenceSearchSpec(
+                id = "playback_mode",
+                titleKey = "ss_playback_mode_title",
+                subtitleKey = "ss_playback_mode_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("delivery", "direct play", "transcode", "force", "streaming method", "auto", "playback mode"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
         ),
         /*
          * The legacy `force_direct_play` boolean surface. Not a [PlaybackSlice]

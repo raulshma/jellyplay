@@ -608,7 +608,7 @@
     <string name="diff_synthwave_mode">신스웨이브 모드</string>
     <string name="diff_soothing_mode">차분한 모드</string>
     <string name="diff_monochrome_mode">모노크롬 모드</string>
-    <string name="diff_playback_mode">재생 모드</string>
+    <string name="settings_playback_mode">재생 모드</string>
     <string name="diff_hold_to_speed">길게 눌러 배속</string>
     <string name="diff_auto_skip_intro">인트로 자동 건너뛰기</string>
     <string name="diff_auto_skip_outro">아웃트로 자동 건너뛰기</string>

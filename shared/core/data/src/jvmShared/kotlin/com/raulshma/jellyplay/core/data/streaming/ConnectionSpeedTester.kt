@@ -2,12 +2,15 @@ package com.raulshma.jellyplay.core.data.streaming
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.TimeUnit
 
 /**
  * The connection-speed probe behind the settings screen's "Test connection
@@ -106,43 +109,53 @@ class ConnectionSpeedTester(
 object SpeedSampleExecutors {
 
     fun okHttp(client: OkHttpClient): ConnectionSpeedTester.SpeedSampleExecutor =
-        ConnectionSpeedTester.SpeedSampleExecutor { url, maxBytes, _ ->
-            // The probe deadline is enforced by the caller's withTimeoutOrNull;
-            // the client's own timeouts stay as the transport-level backstop.
-            sampleOnce(client, url, maxBytes)
+        ConnectionSpeedTester.SpeedSampleExecutor { url, maxBytes, deadlineMs ->
+            sampleOnce(client, url, maxBytes, deadlineMs)
         }
 
     private suspend fun sampleOnce(
         client: OkHttpClient,
         url: String,
         maxBytes: Long,
-    ): ConnectionSpeedTester.SpeedSample? = runCatchingRethrowingCancellation {
-        client.newCall(
-            Request.Builder()
-                .url(url)
-                .header("Cache-Control", "no-cache, no-store")
-                .build(),
-        ).execute().use { response ->
-            if (!response.isSuccessful) return@use null
-            val body = response.body ?: return@use null
-            val startedAt = System.nanoTime()
-            val source = body.source()
-            var read = 0L
-            val buffer = ByteArray(BUFFER_SIZE)
-            while (read < maxBytes) {
-                val toRead = minOf(buffer.size.toLong(), maxBytes - read).toInt()
-                val n = source.inputStream().read(buffer, 0, toRead)
-                if (n < 0) break
-                read += n
+        deadlineMs: Long,
+    ): ConnectionSpeedTester.SpeedSample? = withContext(Dispatchers.IO) {
+        // The whole transfer — connect, headers and the byte-drain loop below —
+        // is blocking I/O and must stay off the caller's (main) dispatcher, or
+        // the settings screen ANRs for the full transfer length.
+        runCatchingRethrowingCancellation {
+            client.newCall(
+                Request.Builder()
+                    .url(url)
+                    .header("Cache-Control", "no-cache, no-store")
+                    .build(),
+            ).apply {
+                // The probe deadline rides the per-call timeout: it interrupts
+                // the blocking reads via the client's watchdog, which the
+                // caller's withTimeoutOrNull alone cannot do against a read()
+                // parked in the socket.
+                timeout().timeout(deadlineMs, TimeUnit.MILLISECONDS)
+            }.execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val body = response.body ?: return@use null
+                val startedAt = System.nanoTime()
+                val source = body.source()
+                var read = 0L
+                val buffer = ByteArray(BUFFER_SIZE)
+                while (read < maxBytes) {
+                    val toRead = minOf(buffer.size.toLong(), maxBytes - read).toInt()
+                    val n = source.inputStream().read(buffer, 0, toRead)
+                    if (n < 0) break
+                    read += n
+                }
+                val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L
+                if (read == 0L) return@use null
+                ConnectionSpeedTester.SpeedSample(
+                    bytes = read,
+                    elapsedMs = elapsedMs.coerceAtLeast(1L),
+                )
             }
-            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L
-            if (read == 0L) return@use null
-            ConnectionSpeedTester.SpeedSample(
-                bytes = read,
-                elapsedMs = elapsedMs.coerceAtLeast(1L),
-            )
-        }
-    }.getOrNull()
+        }.getOrNull()
+    }
 
     private const val BUFFER_SIZE = 64 * 1024
 }

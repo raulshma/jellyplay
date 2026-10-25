@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
@@ -50,6 +51,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spat
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_only_headphones_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_matching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_downloaded
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_streaming
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_desc_downloaded
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_desc_streaming
@@ -287,6 +289,28 @@ internal fun PlaybackAdvancedVideoGroup(
                                 subtitle = { offlineDescs[it] ?: it.displayName },
                                 isSelected = { it == preferences.offlinePlaybackPreference },
                                 onSelect = { viewModel.edit { scope -> scope.playback.setOfflinePlaybackPreference(it) } },
+                            )
+                        },
+                    )
+                    // The delivery-method row (Issue #1): the same posture the
+                    // in-player Playback Options sheet's Delivery picker edits,
+                    // now reachable from Settings — it governs whether the
+                    // quality row below applies at all (forced direct play
+                    // ignores the cap).
+                    val playbackModeTitle = rowTitle(PlaybackRows.PlaybackMode)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.PlaybackMode),
+                        title = playbackModeTitle,
+                        subtitle = stringResource(Res.string.ss_playback_mode_subtitle),
+                        trailingText = preferences.playbackMode.displayName,
+                        highlighted = highlightSettingId == PlaybackRows.PlaybackMode.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = playbackModeTitle,
+                                items = PlaybackMode.entries,
+                                label = { it.displayName },
+                                isSelected = { it == preferences.playbackMode },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setPlaybackMode(it) } },
                             )
                         },
                     )

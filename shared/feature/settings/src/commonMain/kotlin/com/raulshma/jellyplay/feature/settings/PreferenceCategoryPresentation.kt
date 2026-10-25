@@ -262,7 +262,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_player_engine_title, { it.playback.preferredPlayer }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_streaming_quality_title, { it.playback.streamingQuality }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_cellular_streaming_quality_title, { it.playback.cellularStreamingQuality }, { v -> v.enumDisplay() }),
-    DiffField(Res.string.diff_playback_mode, { it.playback.playbackMode }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_playback_mode_title, { it.playback.playbackMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_decoder_title, { it.playback.decoderMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_audio_passthrough_title, { it.playback.audioPassthrough }, Boolean::onOff),
     // The spatial toggle folds its search title onto the settings row face

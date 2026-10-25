@@ -1330,6 +1330,45 @@ class ExoPlayerEngine(
                 refreshSubtitlesForOffsetChange()
             }
         }
+
+        if (delta.sharedPairsChanged) {
+            // The HDR delivery posture's preferred-MIME ordering — the one
+            // shared pair a RUNNING Exo session can honor (Issue #11 / test
+            // 3.18). Without this arm the delta was recorded and silently
+            // dropped, so the posture only ever reached the engine on the
+            // next load.
+            applyHdrMimePreference()
+        }
+    }
+
+    /**
+     * Live re-push of the HDR posture's preferred video MIME ordering: the
+     * same fold [applyRequestTrackSelection] stamps at load, rewritten through
+     * the running track selector (the [setMaxVideoBitrate] live-selector
+     * shape). The posture's GL tone-mapping engagement half is deliberately
+     * NOT re-evaluated here — it is load-time and sticky per rebuild
+     * ([LoadRebuildInputs.hdrGlEngaged]); the MIME ordering is the part a
+     * running session can adopt without one.
+     */
+    private fun applyHdrMimePreference() {
+        runOnPlayerThread {
+            // Read on the player thread: a config flip racing the hop must not
+            // stamp a stale snapshot into the running selector.
+            val exoCfg = currentExoConfig
+            val selector = trackSelector ?: return@runOnPlayerThread
+            val mimeOrder = ExoPassthroughOffload.preferredMimeTypes(
+                pref = exoCfg.hdrFormatPreference,
+                base = exoCfg.preferredVideoMimeTypes,
+            )
+            val params = selector.buildUponParameters()
+            // Empty order = CLEAR the preference (AUTO / SDR_ONLY fall back to
+            // the engine's default negotiation). The load path skips when
+            // empty because a fresh builder holds no preference; the running
+            // selector may still carry one stamped at load, so flipping back
+            // must remove it.
+            params.setPreferredVideoMimeTypes(*mimeOrder.toTypedArray())
+            selector.setParameters(params)
+        }
     }
 
     /**

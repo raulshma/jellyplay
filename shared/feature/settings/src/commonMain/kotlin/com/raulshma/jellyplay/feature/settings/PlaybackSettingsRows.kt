@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_deco
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_aspect
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_aspect_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_brightness_level
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_brightness_level_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_subtitle
@@ -285,6 +286,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_on_f
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_on_focus_loss_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_subtitle
@@ -1100,6 +1103,19 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Download,
         titleRes = Res.string.settings_offline_playback,
         searchSubtitleRes = Res.string.ss_offline_playback_subtitle,
+    )
+
+    // The delivery-method row (Issue #1): the `playback_mode` spec was declared
+    // with no search entry, so the settings catalog never rendered it and the
+    // Auto/Force-Direct-Play/Force-Transcode posture was reachable only from
+    // the in-player Playback Options sheet — while the legacy migrated default
+    // silently defeated the quality cap below.
+    val PlaybackMode = SettingsRow(
+        id = "playback_mode",
+        icon = Tabler.Outline.ArrowsHorizontal,
+        titleRes = Res.string.settings_playback_mode,
+        searchTitleRes = Res.string.ss_playback_mode_title,
+        searchSubtitleRes = Res.string.ss_playback_mode_subtitle,
     )
 
     val StreamingQuality = SettingsRow(
@@ -1987,6 +2003,7 @@ internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.SpatialAudioOnlyHeadphones,
     PlaybackRows.FrameRateMatching,
     PlaybackRows.OfflinePlayback,
+    PlaybackRows.PlaybackMode,
     PlaybackRows.StreamingQuality,
     PlaybackRows.HdrFormatPreference,
     PlaybackRows.ForceTranscodeAboveHeight,
