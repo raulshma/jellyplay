@@ -106,6 +106,19 @@ crosses test seams far more often than hot loops. The protocol essays
 shrank to the type's KDoc.
 Status: implemented 2026-10-19.
 
+**Library feed seam** — the library/browse family of the media
+repository as its own interface (the HomeFeed family-seam pattern): the
+folders, latest-media, search (incl. paged), paged-browse, genres and
+studios reads. Browse-only consumers (library screens, search, the music
+collection family, photo albums, the settings library views) inject the
+seam alone; mixed browse+detail consumers keep the union. No member
+carries a default argument — the family-seam rule (a dual-declaring
+override cannot take defaults from both superinterfaces), so seam-typed
+callers pass the union's former defaults explicitly.
+Status: implemented 2026-10-26 (`LibraryFeed` beside HomeFeed /
+MusicCatalogue / UserDataWriteOperations / UserDataChanges, all aliasing
+the one MediaRepositoryImpl single; stage 1 — the union is not dissolved).
+
 ## Details
 
 **Detail section module** — everything one detail section knows about itself:
@@ -204,6 +217,35 @@ Status: implemented 2026-10-18 (`PlayerUiCommands` owned by `PlaybackSession`; `
 
 **Config delta** — one decision half for all four engines: `EngineConfigDelta.of(old, new)` computes which config slices moved, and every adapter's `onConfigChanged` switches on flags instead of hand-rolled `old != new` ladders. The subtitle carve-out (style change excluding the delay that rides `SubtitleStyle.offsetMs`) is computed inside `of()` from the raw configs — never derived from the other flags.
 Status: implemented 2026-10-18 (`subtitleStyleChangedExcludingDelay`; Exo and VLC consume the delta, joining the two mpv hosts).
+
+**Session position ledger** — the position/report family of the playback
+session as one module: the play-session id resolution (one id per session
+lifecycle for every report and persist), the seek latch and report
+position (fresh seek < 3 s over engine position), the stop-report pair
+with its incognito gate and stopReportedForSession dedup, the
+process-death persistence (wall-clock throttle, store snapshot, coalesced
+offline-mirror write), and the per-item reset hooks the session's
+initialize/release chain calls in its pinned order (snapshot BEFORE any
+teardown statement). Constructed inside the session root — the
+composition-root stance survives; the session keeps thin delegates.
+Status: implemented 2026-10-26 (`SessionPositionLedger`; PlaybackSession
+3014 → 2697 lines; the lifecycle/reporting suites poke the ledger's state
+directly).
+
+**Player preference leaf table** — ONE home for "which preference feeds
+which player uiState leaf": typed rows (aggregate read, optional state
+read, write lens, engine-config rebuild flag), plain data + lambdas, no
+reflection. The three execution strategies read it: the seed (load-time,
+unguarded fold of every row), the projector (change-time, guarded diff of
+the projected rows, one uiState copy per changed leaf), the fanout (the
+rebuild-reaction diffs). The former "nineteen leaves mapped in both
+places, update both or drop one side deliberately" prose invariant died
+with the second home. Non-rows stay hand-written in their strategy: the
+network-slice adaptiveBitrateEnabled leaf, the HDR-aware subtitle-style
+resolution, the PIN pair's one-copy double write, and every reaction that
+is not a uiState leaf (controller seeds, autoplay flip, focus push).
+Status: implemented 2026-10-26 (`PLAYER_PREF_LEAVES`; PlayerPrefsSeed /
+SettingsProjector / PlayerPrefsFanout are strategies over it).
 
 **Player sheet module** — everything one player sheet knows about
 itself: its entry points (chip, overflow, gear, cross-sheet links),
