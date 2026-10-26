@@ -131,4 +131,12 @@
     <string name="downloads_force_resync_in_progress">Sincronizando %1$d de %2$d…</string>
     <string name="downloads_force_resync_done">Sincronizados %1$d de %2$d.</string>
     <string name="downloads_force_resync_no_data">Selecciona al menos un tipo de datos para sincronizar.</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="downloads_cancel_all">Cancelar todo</string>
+    <string name="downloads_cancel_all_message">Esto detiene todas las transferencias activas y quita de la cola las descargas en pausa. Los archivos parciales se eliminan.</string>
+    <string name="downloads_cancel_all_title">¿Cancelar todas las descargas?</string>
+    <string name="downloads_resume_all">Reanudar todo</string>
+    <string name="downloads_status_active">Activas</string>
+    <string name="downloads_status_completed">Completadas</string>
 </resources>

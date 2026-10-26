@@ -126,4 +126,12 @@
     <string name="downloads_force_resync_in_progress">%1$d / %2$d 동기화 중…</string>
     <string name="downloads_force_resync_done">%1$d / %2$d 동기화 완료.</string>
     <string name="downloads_force_resync_no_data">하나 이상의 데이터 유형을 선택하세요.</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="downloads_cancel_all">모두 취소</string>
+    <string name="downloads_cancel_all_message">활성 전송을 모두 중지하고 일시중지된 다운로드를 대기열에서 제거합니다. 부분 파일은 삭제됩니다.</string>
+    <string name="downloads_cancel_all_title">모든 다운로드를 취소할까요?</string>
+    <string name="downloads_resume_all">모두 재개</string>
+    <string name="downloads_status_active">활성</string>
+    <string name="downloads_status_completed">완료</string>
 </resources>

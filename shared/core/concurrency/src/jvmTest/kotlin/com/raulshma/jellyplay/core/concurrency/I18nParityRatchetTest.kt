@@ -98,14 +98,8 @@ class I18nParityRatchetTest {
         "shared/feature/home:ko" to 6,
         "shared/feature/home:pt" to 6,
         "shared/feature/home:zh" to 6,
-        "shared/feature/settings:de" to 98,
-        "shared/feature/settings:es" to 98,
-        "shared/feature/settings:fr" to 98,
-        "shared/feature/settings:it" to 98,
-        "shared/feature/settings:ja" to 98,
-        "shared/feature/settings:ko" to 98,
-        "shared/feature/settings:pt" to 98,
-        "shared/feature/settings:zh" to 98,
+        // 98-baseline gap translated 2026-10-26 (259 settings keys x8 locales
+        // landed with it) — entries deleted per the lower-a-baseline rule.
     )
 
     /**

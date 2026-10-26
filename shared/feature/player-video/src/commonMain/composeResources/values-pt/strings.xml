@@ -401,4 +401,32 @@
     <string name="player_video_transcode_switched">Mudou para stream transcodificado — a armazenar no buffer novamente</string>
     <string name="player_video_direct_play_unavailable">Reprodução direta indisponível para este item — a usar transcodificação</string>
     <string name="player_video_vlc_client_cert_unsupported">O certificado de cliente não é suportado pelo motor VLC — mude para ExoPlayer ou mpv em servidores mTLS</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="pause_details_starring">Elenco</string>
+    <string name="player_video_curve_auto">Automática (padrão do mpv)</string>
+    <string name="player_video_curve_bt2390">BT.2390</string>
+    <string name="player_video_curve_bt2446a">BT.2446A</string>
+    <string name="player_video_curve_clip">Corte</string>
+    <string name="player_video_curve_hable">Hable</string>
+    <string name="player_video_curve_linear">Linear</string>
+    <string name="player_video_curve_spline">Spline</string>
+    <string name="player_video_deband_heavy">Forte</string>
+    <string name="player_video_deband_light">Leve</string>
+    <string name="player_video_deband_medium">Médio</string>
+    <string name="player_video_deband_off">Desativado</string>
+    <string name="player_video_delete_offer_delete">Excluir</string>
+    <string name="player_video_delete_offer_failed">Não foi possível excluir “%1$s” — ele ainda está no servidor</string>
+    <string name="player_video_delete_offer_keep">Manter</string>
+    <string name="player_video_delete_offer_title">Excluir “%1$s” do servidor?</string>
+    <string name="player_video_hdr_format_auto">Automático</string>
+    <string name="player_video_hdr_format_dv_only">Somente Dolby Vision</string>
+    <string name="player_video_hdr_format_hdr10_only">Somente HDR10</string>
+    <string name="player_video_hdr_format_prefer_dv">Preferir Dolby Vision</string>
+    <string name="player_video_hdr_format_preference_caption">Qual formato HDR chega à sua tela quando o item oferece mais de um. Vale a partir da próxima reprodução.</string>
+    <string name="player_video_hdr_format_preference_section">Formato HDR preferido</string>
+    <string name="player_video_hdr_format_sdr_only">Somente SDR</string>
+    <string name="player_video_render_deband">Redução de banding</string>
+    <string name="player_video_render_motion_interpolation">Interpolação de movimento</string>
+    <string name="player_video_render_tone_curve">Curva de mapeamento tonal (HDR → SDR)</string>
 </resources>

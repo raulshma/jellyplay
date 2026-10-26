@@ -126,4 +126,12 @@
     <string name="downloads_force_resync_in_progress">正在同步 %1$d / %2$d…</string>
     <string name="downloads_force_resync_done">已同步 %1$d / %2$d。</string>
     <string name="downloads_force_resync_no_data">请至少选择一种要同步的数据。</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="downloads_cancel_all">全部取消</string>
+    <string name="downloads_cancel_all_message">这将停止所有正在进行的传输，并从队列中移除已暂停的下载。部分下载的文件将被删除。</string>
+    <string name="downloads_cancel_all_title">取消所有下载？</string>
+    <string name="downloads_resume_all">全部继续</string>
+    <string name="downloads_status_active">进行中</string>
+    <string name="downloads_status_completed">已完成</string>
 </resources>

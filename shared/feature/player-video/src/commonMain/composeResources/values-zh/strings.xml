@@ -400,4 +400,32 @@
     <string name="player_video_transcode_switched">已切换到转码流 — 正在重新缓冲</string>
     <string name="player_video_direct_play_unavailable">此项目不支持直接播放 — 将回退到转码</string>
     <string name="player_video_vlc_client_cert_unsupported">VLC 引擎不支持客户端证书 — mTLS 服务器请改用 ExoPlayer 或 mpv</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="pause_details_starring">主演</string>
+    <string name="player_video_curve_auto">自动（mpv 默认）</string>
+    <string name="player_video_curve_bt2390">BT.2390</string>
+    <string name="player_video_curve_bt2446a">BT.2446A</string>
+    <string name="player_video_curve_clip">裁剪</string>
+    <string name="player_video_curve_hable">Hable</string>
+    <string name="player_video_curve_linear">线性</string>
+    <string name="player_video_curve_spline">样条</string>
+    <string name="player_video_deband_heavy">强</string>
+    <string name="player_video_deband_light">弱</string>
+    <string name="player_video_deband_medium">中</string>
+    <string name="player_video_deband_off">关闭</string>
+    <string name="player_video_delete_offer_delete">删除</string>
+    <string name="player_video_delete_offer_failed">无法删除“%1$s”——它仍在服务器上</string>
+    <string name="player_video_delete_offer_keep">保留</string>
+    <string name="player_video_delete_offer_title">从服务器删除“%1$s”？</string>
+    <string name="player_video_hdr_format_auto">自动</string>
+    <string name="player_video_hdr_format_dv_only">仅 Dolby Vision</string>
+    <string name="player_video_hdr_format_hdr10_only">仅 HDR10</string>
+    <string name="player_video_hdr_format_prefer_dv">优先 Dolby Vision</string>
+    <string name="player_video_hdr_format_preference_caption">当内容提供多种 HDR 格式时，选择输出到显示器的格式。下次播放时生效。</string>
+    <string name="player_video_hdr_format_preference_section">首选 HDR 格式</string>
+    <string name="player_video_hdr_format_sdr_only">仅 SDR</string>
+    <string name="player_video_render_deband">去色带</string>
+    <string name="player_video_render_motion_interpolation">运动插值</string>
+    <string name="player_video_render_tone_curve">色调映射曲线（HDR → SDR）</string>
 </resources>
