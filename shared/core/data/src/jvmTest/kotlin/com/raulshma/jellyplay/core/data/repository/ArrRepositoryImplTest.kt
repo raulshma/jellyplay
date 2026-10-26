@@ -645,6 +645,39 @@ class ArrRepositoryImplTest {
         assertFalse(result.isComplete)
     }
 
+    @Test
+    fun `refreshCalendar dedups identical rows fetched from two servers`() = runTest {
+        // Two Radarr instances tracking the same movie: both yield a
+        // byte-identical calendar row, and the Upcoming calendar keys on
+        // rowKey — the merge must collapse them to one.
+        val r1 = ArrServerConfig(
+            id = "manual-r-1", baseUrl = "https://radarr1.local", apiKey = "k",
+            name = "Radarr One", kind = ArrServiceKind.RADARR, isManual = true,
+        )
+        val r2 = ArrServerConfig(
+            id = "manual-r-2", baseUrl = "https://radarr2.local", apiKey = "k",
+            name = "Radarr Two", kind = ArrServiceKind.RADARR, isManual = true,
+        )
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(r1, r2)),
+        )
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+
+        val movie = com.raulshma.jellyplay.core.model.arr.ArrCalendarItem(
+            tmdbId = 123, title = "Dune", mediaType = com.raulshma.jellyplay.core.model.arr.ArrMediaType.MOVIE,
+            airDateUtc = "2026-11-01T00:00:00Z",
+        )
+        coEvery { radarrApiClient.getCalendar(any(), any(), any()) } returns Result.success(listOf(movie, movie.copy()))
+
+        val from = kotlinx.datetime.LocalDate.parse("2026-11-01")
+        val to = kotlinx.datetime.LocalDate.parse("2026-11-30")
+        repository.refreshCalendar(from, to).getOrThrow()
+        val rows = repository.calendar(from, to).first()
+
+        assertEquals(1, rows.size, "identical rows across servers must collapse to one")
+        assertEquals("Dune", rows.single().title)
+    }
+
     private fun radarrSettings(id: Int, hostname: String, apiKey: String, baseUrl: String? = null) =
         SeerrRadarrSettings(
             id = id, name = "Radarr $id", hostname = hostname, port = 7878, apiKey = apiKey,

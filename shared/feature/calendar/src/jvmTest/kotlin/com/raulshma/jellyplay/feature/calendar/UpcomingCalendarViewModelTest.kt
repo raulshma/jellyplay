@@ -350,16 +350,38 @@ class UpcomingCalendarViewModelTest {
         assertEquals(vm.stableRowId(a), vm.stableRowId(same))
 
         // Every field participates: differing mediaType / tvdbId / tmdbId /
-        // title / airDateUtc each shift the id.
+        // episodeId / title / airDateUtc each shift the id.
         val variants = listOf(
             a.copy(mediaType = com.raulshma.jellyplay.core.model.arr.ArrMediaType.SERIES),
             a.copy(tvdbId = 99),
             a.copy(tmdbId = 8),
+            a.copy(episodeId = 77),
             a.copy(title = "Other"),
             a.copy(airDateUtc = null),
         )
         val ids = variants.map { vm.stableRowId(it) } + vm.stableRowId(a)
         assertEquals(ids.size, ids.toSet().size, "row ids must be pairwise distinct across field variations")
+    }
+
+    @Test
+    fun stableRowIdDistinguishesSameSlotEpisodesOfOneSeries() = runTest {
+        val vm = newViewModel()
+        advanceUntilIdle()
+
+        // Sonarr double premiere: two episodes of one series share one air
+        // slot. The mapper emits series-level tvdbId + title and no tmdbId, so
+        // the two rows differ only by episode identity — the exact shape that
+        // crashed the Upcoming LazyColumn with duplicate keys mid-scroll.
+        val first = ArrCalendarItem(
+            tvdbId = 42,
+            title = "Series",
+            mediaType = com.raulshma.jellyplay.core.model.arr.ArrMediaType.SERIES,
+            airDateUtc = "2026-10-26T00:00:00Z",
+            episodeId = 1001,
+        )
+        val second = first.copy(episodeId = 1002)
+
+        assertEquals(2, setOf(vm.stableRowId(first), vm.stableRowId(second)).size)
     }
 }
 

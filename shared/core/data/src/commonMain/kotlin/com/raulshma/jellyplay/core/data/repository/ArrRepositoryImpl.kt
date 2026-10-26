@@ -186,6 +186,13 @@ class ArrRepositoryImpl(
             val combined = resolveSemaphore.mapConcurrent(summary.radarrServers + summary.sonarrServers) { srv ->
                 clientFor(srv).getCalendar(startStr, endStr).getOrElse { emptyList() }
             }.flatten()
+            // Two *arr instances tracking the same title (or one instance
+            // reachable under two canonical base URLs) yield byte-identical
+            // rows; without this the merged list carries them twice and the
+            // Upcoming calendar crashes on duplicate LazyColumn keys. The
+            // identity is ArrCalendarItem.rowKey — the same tuple the list
+            // keys on.
+            .distinctBy { it.rowKey() }
             _calendar.value = CalendarCache(key, combined)
             Result.success(Unit)
         }

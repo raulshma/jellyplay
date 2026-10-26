@@ -206,6 +206,10 @@ internal fun SonarrEpisodeResource.toCalendarItem(): ArrCalendarItem {
     val series = series
     return ArrCalendarItem(
         tvdbId = series?.tvdbId,
+        // The episode's own id: with series-level tvdbId/title, this is the
+        // only field that separates two episodes airing in the same slot
+        // (see ArrCalendarItem.rowKey).
+        episodeId = id,
         title = series?.title ?: title.ifBlank { "Unknown" },
         mediaType = ArrMediaType.SERIES,
         airDateUtc = airDateUtc,

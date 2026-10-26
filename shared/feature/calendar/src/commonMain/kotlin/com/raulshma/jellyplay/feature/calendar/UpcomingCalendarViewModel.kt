@@ -241,13 +241,14 @@ private fun ArrMediaType.toSeerrKind(): SeerrMediaKind = when (this) {
     }
 
     /**
-     * Stable per-row id for LazyColumn `key = { ... }`. Mirrors the
-     * synthetic-id rationale in `ArrCalendarItem.syntheticId`: a tvdbId alone
-     * collides across episodes of one series, and `tmdbId ?: 0` collapses
-     * every id-less row onto 0 (which crashes Compose on duplicate keys).
+     * Stable per-row id for LazyColumn `key = { ... }`. Delegates to
+     * [ArrCalendarItem.rowKey] — the same identity tuple the repository's
+     * cross-server de-duplication keys on, so a row that survives the merge
+     * is guaranteed a unique list key (the duplicate-key crash this replaces
+     * came from two sources: same-series same-slot episodes and the same
+     * title fetched from two *arr servers).
      */
-    fun stableRowId(item: ArrCalendarItem): String =
-        "${item.mediaType}|${item.tvdbId ?: "_"}|${item.tmdbId ?: "_"}|${item.title}|${item.airDateUtc ?: "_"}"
+    fun stableRowId(item: ArrCalendarItem): String = item.rowKey()
 }
 
 /**

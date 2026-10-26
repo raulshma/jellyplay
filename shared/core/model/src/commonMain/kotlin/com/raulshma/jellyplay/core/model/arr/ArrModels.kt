@@ -245,6 +245,12 @@ data class ArrQueueMessage(
 data class ArrCalendarItem(
     val tmdbId: Int? = null,
     val tvdbId: Int? = null,
+    // Sonarr-only: the airing episode's own id. Series-level fields (tvdbId,
+    // title) are shared by every episode of one series, so a double premiere
+    // — two episodes in one air slot — is otherwise indistinguishable row
+    // from row, which both crashed LazyColumn duplicate keys and defeated
+    // cross-server de-duplication.
+    val episodeId: Int? = null,
     val title: String,
     val mediaType: ArrMediaType,
     val airDateUtc: String? = null,
@@ -253,6 +259,16 @@ data class ArrCalendarItem(
     val overview: String? = null,
     val posterPath: String? = null,
 ) {
+    /**
+     * The row-identity tuple shared by every consumer that must tell rows
+     * apart: the Upcoming calendar's LazyColumn keys (via the view model's
+     * `stableRowId`) and the repository's cross-server merge, which
+     * de-duplicates rows fetched byte-identical from two *arr instances.
+     * Both read this one method so the two can never drift apart.
+     */
+    fun rowKey(): String =
+        "$mediaType|${tvdbId ?: "_"}|${tmdbId ?: "_"}|${episodeId ?: "_"}|$title|${airDateUtc ?: "_"}"
+
     /**
      * Adapts to [SeerrSearchItem] so Home's calendar row reuses the existing
      * TMDB-image rendering. Fields absent from *arr (voteAverage, genreIds)
@@ -280,11 +296,13 @@ data class ArrCalendarItem(
     /**
      * Stable synthetic id for rows with no tmdbId. tvdbId alone may collide
      * (multiple episodes share one series tvdbId), and `tvdbId ?: 0` collapses
-     * every id-less row onto 0. Hashing kind + tvdbId + title gives a stable,
-     * distinct value; mapping off zero avoids the all-zero collision.
+     * every id-less row onto 0. Hashing kind + tvdbId + episodeId + title
+     * gives a stable, distinct value — the episodeId is what keeps a series'
+     * same-slot double premiere from collapsing onto one Home row id;
+     * mapping off zero avoids the all-zero collision.
      */
     private fun syntheticId(): Int {
-        val raw = "$mediaType|$tvdbId|$title".hashCode()
+        val raw = "$mediaType|$tvdbId|$episodeId|$title".hashCode()
         return if (raw == 0) -1 else if (raw > 0) -raw else raw
     }
 }

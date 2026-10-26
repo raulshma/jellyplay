@@ -224,6 +224,24 @@ class ArrWireMapperTest {
     }
 
     @Test
+    fun `sonarr calendar rows keep episode identity for same-slot episodes`() {
+        // A double premiere: two episodes of one series share one air slot,
+        // so the mapped rows are identical in every series-level field and
+        // the episode id is the only discriminator (see ArrCalendarItem.rowKey).
+        val rows = json.decodeFromString<List<SonarrEpisodeResource>>(
+            """
+            [{"id":60,"title":"Pilot","airDateUtc":"2026-01-20T05:00:00Z",
+              "series":{"id":4,"title":"Breaking Bad","tvdbId":81189}},
+             {"id":61,"title":"Episode 2","airDateUtc":"2026-01-20T05:00:00Z",
+              "series":{"id":4,"title":"Breaking Bad","tvdbId":81189}}]
+            """.trimIndent(),
+        ).map { it.toCalendarItem() }
+        assertEquals(60, rows[0].episodeId)
+        assertEquals(61, rows[1].episodeId)
+        assertEquals(2, rows.map { it.rowKey() }.toSet().size, "same-slot episodes must key apart")
+    }
+
+    @Test
     fun `sonarr wanted hardcodes monitored true like the JVM mapper`() {
         val row = json.decodeFromString<ArrRecords<SonarrEpisodeResource>>(
             """{"records":[{"id":61,"title":"","airDateUtc":"2026-01-27T00:00:00Z",
