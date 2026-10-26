@@ -481,6 +481,65 @@ class DownloadsViewModelTest {
     }
 
     @Test
+    fun rows_carry_series_poster_with_episode_still_fallback() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.rows.collect {} }
+        coEvery { offlineRepository.getOfflineItem("s1") } answers {
+            OfflineMediaItem(
+                id = "s1",
+                name = "Show",
+                mediaType = MediaType.SERIES,
+                posterPath = "/art/s1.jpg",
+                blurHashPrimary = "poster-bh",
+            )
+        }
+        coEvery { offlineRepository.getOfflineItem("s2") } answers { null }
+        pushItems(
+            listOf(
+                item("ep1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1)
+                    .copy(imageUrl = "still-ep1", imageBlurHash = "still-bh1", status = DownloadStatus.COMPLETED),
+                item("ep2", mediaType = MediaType.EPISODE, seriesId = "s2", seriesName = "Other", seasonNumber = 1, episodeNumber = 1)
+                    .copy(imageUrl = "still-ep2", status = DownloadStatus.COMPLETED),
+            ),
+        )
+        awaitRows(listOf("series:s1", "series:s2"))
+
+        val headers = viewModel.rows.value.orEmpty().filterIsInstance<DownloadListRow.SeriesHeader>()
+        assertEquals("/art/s1.jpg", headers.first { it.key == "series:s1" }.imageUrl)
+        assertEquals("poster-bh", headers.first { it.key == "series:s1" }.imageBlurHash)
+        // No saved poster → the first completed episode's still, blurhash included.
+        assertEquals("still-ep2", headers.first { it.key == "series:s2" }.imageUrl)
+        assertNull(headers.first { it.key == "series:s2" }.imageBlurHash)
+    }
+
+    // ── Selection hint persistence ─────────────────────────────────────────
+
+    @Test
+    fun entering_selection_marks_the_hint_seen_and_persists_it() = runTest(mainDispatcher) {
+        pushItems(listOf(item("d1", status = DownloadStatus.DOWNLOADING)))
+        advanceUntilIdle()
+        assertFalse(viewModel.selectionHintSeen.value)
+
+        viewModel.toggleSelection(item("d1", status = DownloadStatus.DOWNLOADING))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.selectionHintSeen.value)
+        coVerify(exactly = 1) { downloadsStore.setSelectionHintSeen(true) }
+    }
+
+    @Test
+    fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcher) {
+        storeSliceFlow.value = DownloadsSlice(selectionHintSeen = true)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        advanceUntilIdle()
+        assertTrue(seeded.selectionHintSeen.value)
+
+        // Already seen: further selection activity must not rewrite the pref.
+        seeded.toggleSelection(item("d1", status = DownloadStatus.DOWNLOADING))
+        advanceUntilIdle()
+        coVerify(exactly = 0) { downloadsStore.setSelectionHintSeen(any()) }
+    }
+
+    @Test
     fun expandAll_expands_every_group_and_collapseAll_clears() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
         pushItems(

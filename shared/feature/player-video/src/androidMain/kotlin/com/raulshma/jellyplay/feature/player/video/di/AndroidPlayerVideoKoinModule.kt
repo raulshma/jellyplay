@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
+import com.raulshma.jellyplay.feature.player.video.session.dismissalFingerprint
 import com.raulshma.jellyplay.feature.player.video.session.latestResumeVideoSnapshot
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -164,6 +165,10 @@ fun androidPlayerVideoModule(context: Context): Module = module {
                         .getOrThrow(),
                 )
             },
+            readDismissal = { get<PlaybackStore>().sessionRestoreDismissalNow().takeIf { it.isNotEmpty() } },
+            persistDismissal = { snapshot ->
+                get<PlaybackStore>().setSessionRestoreDismissal(dismissalFingerprint(snapshot))
+            },
         )
     }
     viewModel { params ->
@@ -221,6 +226,14 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             userDataMutator = get(),
             nowPlayingReporter = get(),
             nextStreamByteWarmer = get(),
+            // Swipe-from-recents mid-playback finishes the activity behind
+            // the player: the VM's onCleared teardown must NOT persist the
+            // restore prompt's handled-offer marker then (an interrupted
+            // session prompts on the next launch). The flag rides the shell
+            // (see PlayerHostExitState).
+            isAppExiting = {
+                com.raulshma.jellyplay.feature.player.video.PlayerHostExitState.isHostFinishing
+            },
             // #14 offer-delete-after-playback: the existing server delete
             // path (MediaInfoApiClient.deleteItem — the recordings/cleanup
             // arm), the signed-in user's delete permission, and the

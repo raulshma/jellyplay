@@ -47,6 +47,15 @@ internal class SessionPositionLedger(
     private val playerSessionManager: PlayerSessionManager,
     private val getIncognitoModeEnabled: () -> Boolean,
     private val seedDisplayedPositionMs: (Long) -> Unit,
+    /**
+     * The teardown arm of the cold-start restore marker (see
+     * [com.raulshma.jellyplay.feature.player.video.session.SessionRestoreDismissal]):
+     * a deliberate close has PLAYED THROUGH the row's current state, so the
+     * next cold start must not re-offer it. The session root wires this to
+     * the PlaybackStore write; the no-op default keeps bare constructions
+     * (tests) marker-free.
+     */
+    private val persistHandledOffer: suspend (itemId: String, finalPositionMs: Long) -> Unit = { _, _ -> },
 ) {
 
     /**
@@ -60,6 +69,23 @@ internal class SessionPositionLedger(
      */
     @Volatile
     internal var stopReportedForSession: String? = null
+
+    /**
+     * Set by the owner right before the teardown release: TRUE when the
+     * release is caused by the HOST ITSELF going away (the activity finishing
+     * behind the player — the user swiped the app from recents mid-playback,
+     * or the system tore the task down), FALSE for an in-app player close.
+     * The distinction IS the restore feature: an in-app close is a deliberate
+     * "done for now" and persists the handled-offer marker
+     * ([persistHandledOffer]); a host exit is an INTERRUPTED session — the
+     * cold-start prompt must fire on the next launch, so the marker is
+     * skipped. Default FALSE (persist) keeps bare constructions and the
+     * desktop shell (whose in-app closes are the only teardowns it sees — a
+     * window close kills the process before any teardown runs) on the
+     * persist side.
+     */
+    @Volatile
+    internal var suppressHandledOfferOnRelease: Boolean = false
 
     /** Position (ms) of the last explicit seek; feeds [getReportPositionMs]. */
     internal var lastSeekPositionMs: Long? = null
@@ -431,7 +457,9 @@ internal class SessionPositionLedger(
      * resume/progress bookkeeping. The reporter's stalled-finish stop (sent
      * at the FULL duration) dedups the same way: a teardown stop at the
      * stalled position would only downgrade the position the server already
-     * resolved.
+     * resolved. A delivered Stop also persists the restore prompt's
+     * teardown marker ([persistHandledOffer]) — the deliberate close has
+     * handled this row state.
      */
     fun finalStopReport(inputs: TeardownStopInputs) {
         val itemId = inputs.itemId
@@ -462,6 +490,23 @@ internal class SessionPositionLedger(
                     // re-resolve (requestRevalidate) and the auto-advance path
                     // already evicts via markPlayed inside the repository — the
                     // old invalidateUserDataCaches call duplicated both.
+                    // The restore-prompt teardown marker rides the same
+                    // best-effort window: an in-app deliberate close has
+                    // handled this row state, so the next cold start's
+                    // evaluation must not re-offer it. A HOST exit (the flag
+                    // the owner set) is an interrupted session instead — the
+                    // marker is skipped so the prompt fires. Incognito never
+                    // wrote the row; a failed session leaves the offer
+                    // standing (the user could not actually watch it). A
+                    // dropped write degrades to the prompt appearing once
+                    // more.
+                    if (!suppressHandledOfferOnRelease && !failed && !getIncognitoModeEnabled()) {
+                        runCatchingRethrowingCancellation {
+                            withTimeoutOrNull(5_000) {
+                                persistHandledOffer(itemId, positionTicks / 10_000)
+                            }
+                        }
+                    }
                 }
             }
         }

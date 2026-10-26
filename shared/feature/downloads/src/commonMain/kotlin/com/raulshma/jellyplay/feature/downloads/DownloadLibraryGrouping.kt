@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.ui.state.ToggleableState
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -182,6 +183,13 @@ internal fun <T> downloadedSeasons(
             },
     )
 
+/**
+ * Locally-resolved series artwork for a group header: the series poster saved
+ * with the offline metadata at download time (a local file path — the
+ * `OfflineMediaCard` rendering seam), keyed by raw series id.
+ */
+internal data class SeriesArt(val posterPath: String?, val blurHash: String?)
+
 /** One rendered row of the grouped downloads list. */
 internal sealed interface DownloadListRow {
     val key: String
@@ -202,6 +210,9 @@ internal sealed interface DownloadListRow {
      * in the group's numeric playback order — the order the header's Play
      * action walks when hunting the next unwatched episode. [totalBytes] and
      * [completedCount] feed the header's size/progress summary line.
+     * [imageUrl]/[imageBlurHash] prefer the series poster from the caller's
+     * [SeriesArt] map, falling back to a group episode's still, so the header
+     * carries artwork like every other row on the screen.
      */
     data class SeriesHeader(
         override val key: String,
@@ -211,6 +222,8 @@ internal sealed interface DownloadListRow {
         override val episodeIds: List<String>,
         val totalBytes: Long,
         val completedCount: Int,
+        val imageUrl: String? = null,
+        val imageBlurHash: String? = null,
     ) : GroupHeader
 
     /** Season sub-header — only emitted while a series spans 2+ seasons. */
@@ -224,8 +237,13 @@ internal sealed interface DownloadListRow {
         val completedCount: Int,
     ) : GroupHeader
 
-    /** A single download row — exactly the flat-list entry the screen always had. */
-    data class Item(val download: DownloadItem) : DownloadListRow {
+    /**
+     * A single download row — exactly the flat-list entry the screen always
+     * had. [insideGroup] marks an episode disclosed under an expanded group
+     * header (series or season) so the screen can indent it under that header;
+     * flat rows — movies and episodes with no series identity — stay false.
+     */
+    data class Item(val download: DownloadItem, val insideGroup: Boolean = false) : DownloadListRow {
         override val key = "download:${download.id}"
     }
 }
@@ -236,6 +254,8 @@ internal sealed interface DownloadListRow {
  */
 private data class SeriesGroup(
     val key: String,
+    /** Raw server series id, when the episodes carry one — the [seriesArt] lookup key. */
+    val seriesId: String?,
     val name: String,
     val seasons: List<DownloadSeason<DownloadItem>>,
     val totalBytes: Long,
@@ -275,13 +295,17 @@ private sealed interface TopLevel {
  * downloaded season lists its episodes straight under the series); episodes
  * with no series identity at all, and every non-episode media type, stay flat
  * rows. Series groups and flat rows merge into one sequence under [sort];
- * [expandedKeys] decides which groups disclose their episodes.
+ * [expandedKeys] decides which groups disclose their episodes. [seriesArt]
+ * supplies locally-saved series posters for the group headers; a group whose
+ * series has no saved poster (or whose episodes carry only stills) falls back
+ * to the first completed episode's still art inside the emission itself.
  */
 internal fun downloadListRows(
     downloads: List<DownloadItem>,
     filter: DownloadListFilter,
     sort: DownloadListSort,
     expandedKeys: Set<String>,
+    seriesArt: Map<String, SeriesArt> = emptyMap(),
 ): List<DownloadListRow> {
     // Positions for the RECENT sort must live in ONE space — the DAO list's
     // createdAt-DESC order — so episodes and flat rows are indexed here,
@@ -311,6 +335,7 @@ internal fun downloadListRows(
                 val groupEpisodes = indexed.map { it.third }
                 SeriesGroup(
                     key = key,
+                    seriesId = groupEpisodes.firstNotNullOfOrNull { it.seriesId?.takeIf(String::isNotBlank) },
                     name = groupEpisodes.firstNotNullOfOrNull { it.seriesName?.takeIf(String::isNotBlank) }
                         ?: groupEpisodes.first().name,
                     seasons = downloadedSeasons(groupEpisodes) { it.episodePosition },
@@ -336,20 +361,32 @@ internal fun downloadListRows(
                 is TopLevel.Flat -> add(DownloadListRow.Item(unit.item))
                 is TopLevel.Group -> {
                     val group = unit.group
+                    // Header artwork: the locally-saved series poster when one
+                    // exists, else the first completed episode's still (then
+                    // any episode's still) so the header matches the artwork
+                    // every flat row carries. Blurhash follows whichever
+                    // source won.
+                    val art = group.seriesId?.let(seriesArt::get)
+                    val episodes = group.seasons.flatMap { it.episodes }
+                    val still = episodes.firstOrNull {
+                        it.status == DownloadStatus.COMPLETED && !it.imageUrl.isNullOrBlank()
+                    } ?: episodes.firstOrNull { !it.imageUrl.isNullOrBlank() }
                     add(
                         DownloadListRow.SeriesHeader(
                             key = group.key,
                             name = group.name,
                             episodeCount = group.episodeCount,
                             seasonCount = group.seasons.size,
-                            episodeIds = group.seasons.flatMap { it.episodes }.map { it.id },
+                            episodeIds = episodes.map { it.id },
                             totalBytes = group.totalBytes,
                             completedCount = group.completedCount,
+                            imageUrl = art?.posterPath ?: still?.imageUrl,
+                            imageBlurHash = if (art?.posterPath != null) art.blurHash else still?.imageBlurHash,
                         ),
                     )
                     if (group.key !in expandedKeys) continue
                     if (group.seasons.size <= 1) {
-                        group.seasons.firstOrNull()?.episodes?.forEach { add(DownloadListRow.Item(it)) }
+                        group.seasons.firstOrNull()?.episodes?.forEach { add(DownloadListRow.Item(it, insideGroup = true)) }
                     } else {
                         for (season in group.seasons) {
                             val seasonKey = seasonRowKey(group.key, season.key)
@@ -365,7 +402,7 @@ internal fun downloadListRows(
                                 ),
                             )
                             if (seasonKey in expandedKeys) {
-                                season.episodes.forEach { add(DownloadListRow.Item(it)) }
+                                season.episodes.forEach { add(DownloadListRow.Item(it, insideGroup = true)) }
                             }
                         }
                     }
@@ -380,6 +417,60 @@ internal fun groupSelectionState(ids: Collection<String>, selectedIds: Set<Strin
     ids.isEmpty() || ids.none { it in selectedIds } -> ToggleableState.Off
     ids.all { it in selectedIds } -> ToggleableState.On
     else -> ToggleableState.Indeterminate
+}
+
+/**
+ * The COLLAPSED group header's whole-group transfer fraction: Σ downloaded /
+ * Σ totalSizeBytes over EVERY episode in the group — completed ones count as
+ * landed, in-flight ones read their live bytes from [liveProgressById] — so
+ * the bar reads as "how far along is this series' download set" next to the
+ * meta line's "N of M downloaded". Null unless at least one episode is
+ * actively DOWNLOADING (nothing in flight → no bar; the group's incomplete
+ * rows in paused/queued/failed states alone don't light it). Episodes whose
+ * total size is still unknown (0 — a PENDING row before its size probe)
+ * contribute to neither sum, so an unprobed row can't drag the fraction; the
+ * result is clamped to 0..1 and a gate-passing group with no known bytes is
+ * a 0 fraction.
+ */
+internal fun downloadGroupProgressFraction(
+    episodes: List<DownloadItem>,
+    liveProgressById: Map<String, DownloadProgress>,
+): Float? {
+    if (episodes.none { it.status == DownloadStatus.DOWNLOADING }) return null
+    var downloaded = 0L
+    var total = 0L
+    for (episode in episodes) {
+        downloaded += liveProgressById[episode.id]?.downloadedBytes ?: episode.downloadedBytes
+        total += episode.totalSizeBytes
+    }
+    return if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else 0f
+}
+
+/**
+ * The whole-batch transfer fraction over [items] whose status is in
+ * [statuses] — Σ downloaded / Σ totalSizeBytes, with every in-flight row's
+ * bytes overridden by its live value from [liveProgressById] — or null when
+ * NO item qualifies (the app bar's accumulated ring hides entirely then; it
+ * gates on the Active set so finished history can't pin it at 100%). Items
+ * whose total size is still unknown contribute to neither sum; the result is
+ * clamped to 0..1 and a qualifying batch with no known bytes is a 0 fraction.
+ */
+internal fun aggregateProgressFraction(
+    items: List<DownloadItem>,
+    statuses: Set<DownloadStatus>,
+    liveProgressById: Map<String, DownloadProgress>,
+): Float? {
+    var downloaded = 0L
+    var total = 0L
+    var qualifying = 0
+    for (item in items) {
+        if (item.status !in statuses) continue
+        qualifying++
+        downloaded += liveProgressById[item.id]?.downloadedBytes ?: item.downloadedBytes
+        total += item.totalSizeBytes
+    }
+    if (qualifying == 0) return null
+    return if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else 0f
 }
 
 /**

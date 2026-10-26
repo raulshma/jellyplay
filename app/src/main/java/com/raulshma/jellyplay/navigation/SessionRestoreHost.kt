@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
@@ -14,6 +15,7 @@ import com.raulshma.jellyplay.feature.player.video.session.LaunchContext
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationDecision
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
+import kotlinx.coroutines.launch
 
 /**
  * The Android shell's cold-start session-restoration host (feature: "resume
@@ -43,8 +45,9 @@ import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSna
  * the same register).
  *
  * INCOGNITO: an incognito session reports no progress to the server, so the
- * resume query finds nothing to offer for it — no new local record is written
- * anywhere in this feature (see [SessionRestorationSnapshot]).
+ * resume query finds nothing to offer for it — no resume DATA is ever stored
+ * locally (see [SessionRestorationSnapshot]); the feature's one local write is
+ * the prompt's dismissal marker (see [SessionRestorationController.onAskDismissed]).
  */
 @Composable
 internal fun SessionRestorePromptHost(
@@ -54,6 +57,11 @@ internal fun SessionRestorePromptHost(
 ) {
     var prompt by remember { mutableStateOf<SessionRestorationSnapshot?>(null) }
     val explicitLaunch = remember { launchedWithExplicitDestination }
+    // Host-level ON PURPOSE: the dismissal write launches on this scope, and
+    // a scope declared inside the prompt block below is CANCELLED the moment
+    // `prompt = null` removes that block from composition — the DataStore
+    // write died with the dialog and the marker never landed.
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(controller, explicitLaunch) {
         val launchContext = if (explicitLaunch) LaunchContext.DeepLink else LaunchContext.ColdStart
@@ -68,19 +76,25 @@ internal fun SessionRestorePromptHost(
     }
 
     prompt?.let { snapshot ->
+        // ConfirmDialog invokes the host's onDismiss after the confirm arm
+        // too, so the prompt state clears itself on both exits — and this
+        // flag splits the arms: only a REAL dismiss persists the marker.
+        var confirmed by remember(snapshot) { mutableStateOf(false) }
         ConfirmDialog(
             title = "Resume \"${snapshot.title}\"?",
             message = "Continue where you left off.",
             confirmText = "Resume",
             dismissText = "Dismiss",
             tone = ConfirmTone.PRIMARY,
-            // ConfirmDialog invokes the host's onDismiss after the confirm arm,
-            // so the prompt state clears itself on both exits.
             onConfirm = {
+                confirmed = true
                 controller.onRestoreHandled()
                 navigator.navigate(snapshot.toPlayerRoute())
             },
-            onDismiss = { prompt = null },
+            onDismiss = {
+                prompt = null
+                if (!confirmed) scope.launch { controller.onAskDismissed(snapshot) }
+            },
         )
     }
 }

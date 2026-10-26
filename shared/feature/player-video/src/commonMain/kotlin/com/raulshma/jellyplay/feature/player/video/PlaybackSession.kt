@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.session.playbackHandledFingerprint
 import com.raulshma.jellyplay.feature.player.video.state.InputBindingToggleController
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
@@ -791,6 +792,9 @@ internal class PlaybackSession(
         playerSessionManager = playerSessionManager,
         getIncognitoModeEnabled = getIncognitoModeEnabled,
         seedDisplayedPositionMs = { seed -> seedDisplayedPositionMs(seed) },
+        persistHandledOffer = { itemId, finalPositionMs ->
+            stores.playback.setSessionRestoreDismissal(playbackHandledFingerprint(itemId, finalPositionMs))
+        },
     )
 
     internal val syncPlay = SyncPlayBridge(

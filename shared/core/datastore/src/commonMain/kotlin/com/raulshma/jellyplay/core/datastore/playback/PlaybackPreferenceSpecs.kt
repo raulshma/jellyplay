@@ -659,6 +659,26 @@ object PlaybackPreferenceSpecs {
             ),
         ),
         /*
+         * The cold-start restore prompt's dismissal marker (NOT a setting —
+         * deliberately search-less): the fingerprint of the exact offer the
+         * user dismissed, so the next cold start suppresses the same offer
+         * instead of re-asking. Self-invalidating — the fingerprint rides the
+         * server row's stamp, so any new playback on the item changes it and
+         * fresh sessions prompt again. No [PlaybackSlice] property: the marker
+         * is per-device ephemeral state, so it stays out of the serialized
+         * backup envelope, restore(), the sync wire and the admin catalog
+         * (see [perDeviceRowNames]). Direct read/write lives on
+         * [PlaybackStore] (not the slice) — the cold-start evaluation must not
+         * race the slice's seeded flow.
+         */
+        PreferenceSpec.derived(
+            keyName = "session_restore_dismissed",
+            default = "",
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            read = { _, raw -> raw ?: "" },
+            encode = { it },
+        ),
+        /*
          * Offer to delete the watched movie file after playback finishes
          * (downloads hygiene). Default off.
          */
@@ -765,6 +785,22 @@ object PlaybackPreferenceSpecs {
             frameRatePair +
             lifecycleToggles +
             subtitleSyncToggles
+
+    /**
+     * The store's per-device rows — spec rows that are real rows (reset
+     * coverage + the derivation-integrity reflection) but describe user state
+     * that is meaningless on any other device: the cold-start prompt's
+     * dismissal latch. [PreferenceSyncPolicy] consumes this face so the rows
+     * stay out of the sync wire AND out of the admin settings catalog,
+     * mirroring the home store's global-marker derivation. Kept as a
+     * name-derived set (the accessor names the row and fails fast on an
+     * undeclared name) so a rename cannot orphan the exclusion — `by lazy`
+     * because the accessor's `rowsByName` memo is declared after `all` and a
+     * class-init-order access would NPE the delegate.
+     */
+    val perDeviceRowNames: Set<String> by lazy {
+        setOf(SESSION_RESTORE_DISMISSED.keyName)
+    }
 
     /**
      * Category reset participation, derived as the rows whose declared
@@ -892,6 +928,8 @@ object PlaybackPreferenceSpecs {
         row("preferred_transcode_audio_codec")
 
     val SESSION_RESTORE_MODE: PreferenceSpec<SessionRestoreMode> get() = row("session_restore_mode")
+
+    val SESSION_RESTORE_DISMISSED: PreferenceSpec<String> get() = row("session_restore_dismissed")
 
     val OFFER_DELETE_AFTER_PLAYBACK_MOVIES: PreferenceSpec<Boolean> get() = row("offer_delete_after_playback_movies")
 

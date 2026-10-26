@@ -66,8 +66,16 @@ sealed interface SessionRestorationDecision {
  *     boot-time prompt. A missing/zero stamp is treated FRESH, mirroring
  *     `resolveResumeTicks`'s missing-timestamp rule (a server that omits
  *     `lastPlayedDate` must not silently disable the feature).
- *  5. [SessionRestoreMode.AUTO] → `AutoRestore`; [SessionRestoreMode.ASK] →
- *     `Ask`.
+ *  5. [SessionRestoreMode.AUTO] → `AutoRestore` (before the dismissal rule:
+ *     the marker is an ASK-arm concern only — an AUTO user never saw a prompt
+ *     to dismiss).
+ *  6. Handled offer: the EXACT offer the user already dismissed, or the row
+ *     state a deliberate player teardown already played through (a stored
+ *     fingerprint match — see [isDismissedOffer]; the teardown arm matches
+ *     within the stop-race tolerance) is never re-offered; the stamp-keyed
+ *     marker is self-invalidating, so genuinely further playback offers
+ *     again.
+ *  7. [SessionRestoreMode.ASK] → `Ask` (the enum is closed: OFF / ASK / AUTO).
  *
  * [nowMs] defaults to the wall clock so the mandated three-argument call shape
  * works; tests pin the table with explicit instants (pure decision otherwise).
@@ -77,12 +85,14 @@ fun decideSessionRestoration(
     snapshot: SessionRestorationSnapshot?,
     launchContext: LaunchContext,
     nowMs: Long = System.currentTimeMillis(),
+    dismissedFingerprint: String? = null,
 ): SessionRestorationDecision = when {
     mode == SessionRestoreMode.OFF -> SessionRestorationDecision.None
     launchContext != LaunchContext.ColdStart -> SessionRestorationDecision.None
     snapshot == null -> SessionRestorationDecision.None
     isSnapshotStale(snapshot, nowMs) -> SessionRestorationDecision.None
     mode == SessionRestoreMode.AUTO -> SessionRestorationDecision.AutoRestore(snapshot)
+    isDismissedOffer(dismissedFingerprint, snapshot) -> SessionRestorationDecision.None
     // ASK is the only mode left (the enum is closed: OFF / ASK / AUTO).
     else -> SessionRestorationDecision.Ask(snapshot)
 }

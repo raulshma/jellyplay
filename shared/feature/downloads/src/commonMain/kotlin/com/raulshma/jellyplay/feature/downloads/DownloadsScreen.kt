@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.downloads
 
+import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
 import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
@@ -56,6 +57,7 @@ import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.ResyncCategory
@@ -126,6 +128,7 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_se
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_selected_count
 import com.raulshma.jellyplay.feature.downloads.sheets.DownloadsResyncSheet
 import com.raulshma.jellyplay.feature.downloads.sheets.ForceResyncSheet
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -150,6 +153,7 @@ fun DownloadsScreen(
     val listStatusFilter by viewModel.statusFilter.collectAsStateWithLifecycle()
     val listSort by viewModel.sort.collectAsStateWithLifecycle()
     val expandedKeys by viewModel.expandedKeys.collectAsStateWithLifecycle()
+    val selectionHintSeen by viewModel.selectionHintSeen.collectAsStateWithLifecycle()
     // Live per-row progress, collected ONCE into a State whose .value is
     // never read at this level. Collecting here subscribes the upstream
     // (that's intended — it keeps the tick hot); only RECOMPOSITION is
@@ -322,6 +326,13 @@ fun DownloadsScreen(
                     )
                 }
             }
+            // Accumulated transfer ring (left of the resync action): one
+            // determinate ring over EVERY in-flight download with the whole
+            // batch's percent inside. Hidden while nothing is in flight.
+            DownloadsAggregateProgressRing(
+                downloads = downloads,
+                progressById = viewModel.progressById,
+            )
             // Resync action: checks every download for available updates and
             // opens the resync sheet. The badge dot appears when any item is
             // flagged, so the user knows updates are waiting without opening
@@ -480,11 +491,12 @@ fun DownloadsScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                     ) {
-                        // Long-press hint: shown only until the user enters selection
-                        // mode for the first time, so the affordance is discoverable
-                        // without lingering on every session.
+                        // Long-press hint: shown until the user enters selection
+                        // mode for the first time (persisted, so it never
+                        // returns) AND never while selecting — the affordance is
+                        // discoverable without lingering on every session.
                         item(key = "selection_hint", contentType = "selectionHint") {
-                            if (!selectionMode) {
+                            if (!selectionMode && !selectionHintSeen) {
                                 SelectionHintRow()
                             }
                         }
@@ -525,6 +537,19 @@ fun DownloadsScreen(
                             val onCancelGroup = header?.let {
                                 groupTransferAction(DownloadBulkAction.CANCEL, groupItems, it.episodeIds, viewModel)
                             }
+                            // Collapsed-group aggregate bar: only groups with an
+                            // actively DOWNLOADING episode read the live progress
+                            // map here — the same deferred hot-read gate the
+                            // DOWNLOADING item rows apply — so idle headers never
+                            // subscribe and a progress tick re-executes just the
+                            // in-flight groups' row scopes.
+                            val groupProgress = header?.let {
+                                if (groupItems.any { item -> item.status == DownloadStatus.DOWNLOADING }) {
+                                    downloadGroupProgressFraction(groupItems, progressById.value)
+                                } else {
+                                    null
+                                }
+                            }
                             when (row) {
                                 is DownloadListRow.SeriesHeader -> {
                                     DownloadListHeaderRow(
@@ -533,6 +558,9 @@ fun DownloadsScreen(
                                         episodeIds = row.episodeIds,
                                         completedCount = row.completedCount,
                                         totalBytes = row.totalBytes,
+                                        groupProgress = groupProgress,
+                                        imageUrl = row.imageUrl,
+                                        imageBlurHash = row.imageBlurHash,
                                         updateCount = headerUpdateCount(row.episodeIds),
                                         expanded = row.key in expandedKeys,
                                         selectionMode = selectionMode,
@@ -554,6 +582,7 @@ fun DownloadsScreen(
                                         episodeIds = row.episodeIds,
                                         completedCount = row.completedCount,
                                         totalBytes = row.totalBytes,
+                                        groupProgress = groupProgress,
                                         updateCount = headerUpdateCount(row.episodeIds),
                                         expanded = row.key in expandedKeys,
                                         selectionMode = selectionMode,
@@ -642,17 +671,25 @@ fun DownloadsScreen(
                                     // SAME confirm dialog the row's delete action uses —
                                     // the destructive step keeps its confirmation. TV rows
                                     // skip the wrapper (D-pad focus, no touch).
+                                    // Disclosed group members sit one indent level in —
+                                    // half the season sub-header's 28dp slot, a visible
+                                    // nesting cue that doesn't crowd the row — so an
+                                    // expanded series reads as a tree, not a flat run of
+                                    // lookalike cards.
+                                    val rowPlacement = entranceModifier.then(
+                                        if (row.insideGroup) Modifier.padding(start = 14.dp) else Modifier,
+                                    )
                                     if (!selectionMode && !isTv) {
                                         SwipeActionBox(
                                             onAction = { viewModel.pendingDelete.show(download) },
                                             actionContentDescription = stringResource(Res.string.downloads_delete),
-                                            modifier = entranceModifier,
+                                            modifier = rowPlacement,
                                             shape = ShapeCache.smooth12,
                                         ) {
                                             itemRow(Modifier)
                                         }
                                     } else {
-                                        itemRow(entranceModifier)
+                                        itemRow(rowPlacement)
                                     }
                                 }
                             }
@@ -773,10 +810,12 @@ fun DownloadsScreen(
 
 /**
  * The [DownloadGroupHeader] wiring shared by the series and season header
- * rows — the branches differ only in title resolution and the season's
- * leading indent; the selection tri-state, update dot, group Play, and group
- * transfer controls are identical. [onPlayTarget] resolves the header's play
- * target (an offline DB read) and is launched off the click path.
+ * rows — the branches differ only in title resolution, the season's leading
+ * indent, and the series' artwork (season sub-headers stay text-only so the
+ * hierarchy reads at a glance); the selection tri-state, update dot, group
+ * Play, and group transfer controls are identical. [onPlayTarget] resolves
+ * the header's play target (an offline DB read) and is launched off the click
+ * path.
  */
 @Composable
 private fun DownloadListHeaderRow(
@@ -785,6 +824,7 @@ private fun DownloadListHeaderRow(
     episodeIds: List<String>,
     completedCount: Int,
     totalBytes: Long,
+    groupProgress: Float?,
     updateCount: Int,
     expanded: Boolean,
     selectionMode: Boolean,
@@ -796,6 +836,8 @@ private fun DownloadListHeaderRow(
     onPlayTarget: suspend () -> DownloadItem?,
     onPlayOffline: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit,
     modifier: Modifier = Modifier,
+    imageUrl: String? = null,
+    imageBlurHash: String? = null,
 ) {
     val groupScope = rememberCoroutineScope()
     DownloadGroupHeader(
@@ -809,7 +851,10 @@ private fun DownloadListHeaderRow(
         completedCount = completedCount,
         totalBytes = totalBytes,
         formatBytes = Long::formatBytes,
+        groupProgress = groupProgress,
         updateCount = updateCount,
+        imageUrl = imageUrl,
+        imageBlurHash = imageBlurHash,
         onPauseGroup = onPauseGroup,
         onCancelGroup = onCancelGroup,
         onPlay = {
@@ -819,6 +864,49 @@ private fun DownloadListHeaderRow(
         },
         modifier = modifier,
     )
+}
+
+/**
+ * The app bar's accumulated-transfer ring (sits left of the resync action):
+ * ONE determinate ring summarizing every in-flight download — the Active
+ * status set (PENDING/QUEUED/DOWNLOADING/PAUSED, the same set the status
+ * filter's Active view folds) as Σ downloaded / Σ total — with the whole
+ * batch's percent rendered inside the ring. Hidden entirely while nothing is
+ * in flight ([aggregateProgressFraction] yields null). The live byte map is
+ * read INSIDE this leaf (the screen's deferred hot-read pattern, same as the
+ * storage header) so a 2 s progress tick re-executes this ring alone, never
+ * the screen body; the structural list arrives as a parameter that only
+ * changes on status transitions.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DownloadsAggregateProgressRing(
+    downloads: List<DownloadItem>,
+    progressById: StateFlow<Map<String, DownloadProgress>>,
+    modifier: Modifier = Modifier,
+) {
+    val liveById by progressById.collectAsStateWithLifecycle()
+    val fraction = aggregateProgressFraction(downloads, DownloadStatusFilter.ACTIVE_STATUSES, liveById) ?: return
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "aggregateDownloadProgress",
+    )
+    Box(
+        modifier = modifier.size(36.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        JellyPlayCircularProgressIndicator(
+            progress = { animatedFraction },
+            modifier = Modifier.fillMaxSize(),
+        )
+        Text(
+            "${(fraction * 100).toInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+        )
+    }
 }
 
 /**

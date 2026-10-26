@@ -16,9 +16,15 @@ import java.util.concurrent.atomic.AtomicReference
  *    (`PlaybackStore.playback.value.sessionRestoreMode` on both shells);
  *  - [fetchLatestSnapshot] — the server-authoritative resume read, ONE
  *    repository/client call mapped through [latestResumeVideoSnapshot] and
- *    cached nowhere (the design keeps this feature free of new local storage;
- *    incognito sessions simply have no server resume data to find — see
- *    [SessionRestorationSnapshot]).
+ *    cached nowhere (the design keeps this feature free of new local storage
+ *    for resume DATA; incognito sessions simply have no server resume data to
+ *    find — see [SessionRestorationSnapshot]);
+ *  - [readDismissal] / [persistDismissal] — the ONE local-storage exception,
+ *    the prompt's handled-offer marker (`PlaybackStore.sessionRestoreDismissalNow`
+ *    / `setSessionRestoreDismissal` on both shells): the fingerprint of the
+ *    exact offer the user dismissed, so the next cold start does not re-ask
+ *    (see [SessionRestoreDismissal]; the player's teardown stop report
+ *    writes the same key for the played-through arm).
  *
  * LATCH: [evaluate] consumes its one shot on the FIRST call — whatever it
  * returns (including `None`), every later call in this process returns `None`.
@@ -37,6 +43,8 @@ import java.util.concurrent.atomic.AtomicReference
 class SessionRestorationController(
     private val restoreMode: () -> SessionRestoreMode,
     private val fetchLatestSnapshot: suspend () -> SessionRestorationSnapshot?,
+    private val readDismissal: suspend () -> String? = { null },
+    private val persistDismissal: suspend (SessionRestorationSnapshot) -> Unit = {},
     private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) {
 
@@ -68,6 +76,7 @@ class SessionRestorationController(
             snapshot = snapshot,
             launchContext = launchContext,
             nowMs = nowMs(),
+            dismissedFingerprint = readDismissal(),
         )
         if (decision is SessionRestorationDecision.Ask) {
             pendingAsk.set(decision.snapshot)
@@ -94,6 +103,19 @@ class SessionRestorationController(
      */
     fun onRestoreHandled() {
         pendingAsk.set(null)
+    }
+
+    /**
+     * The prompt's dismiss arm: persists the offer's fingerprint through
+     * [persistDismissal] so the next cold start's evaluation suppresses the
+     * identical offer (rule 6 of [decideSessionRestoration]). The confirm arm
+     * must NOT route here — a confirmed restore advances the server stamp on
+     * its own; that cycle's next-launch silence is instead the TEARDOWN
+     * marker's job (a deliberate player close persists the played-through
+     * row state — see [SessionRestoreDismissal]).
+     */
+    suspend fun onAskDismissed(snapshot: SessionRestorationSnapshot) {
+        persistDismissal(snapshot)
     }
 
     private companion object {

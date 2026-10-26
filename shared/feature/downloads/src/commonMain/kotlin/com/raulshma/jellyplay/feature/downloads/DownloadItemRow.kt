@@ -576,17 +576,20 @@ private fun CompletedRowOverflowMenu(
 }
 
 /**
- * "Storage used" header line, as a narrow binder (VideoPlayerScreen's
+ * "Storage used" header, as a narrow binder (VideoPlayerScreen's
  * ChapterPickerBinder pattern): the total rides the live download-progress
  * tick — bytes accumulate mid-transfer — so the StateFlow is collected
  * INSIDE this leaf. Only this header recomposes per tick; the downloads screen
  * body that hosts it does not.
  *
- * When a download storage cap is set ([maxStorageBytes] non-null — the same
- * value [com.raulshma.jellyplay.core.data.repository.StoragePolicy] enforces),
- * a slim quota bar renders under the text: fill turns warning-colored at 90%
- * and error-colored at the cap, and the whole row is clickable into the
- * storage settings screen where the cap is adjustable.
+ * One line either way: with a download storage cap set ([maxStorageBytes]
+ * non-null — the same value [com.raulshma.jellyplay.core.data.repository.StoragePolicy]
+ * enforces) the line is the quota bar plus its "X of Y used" label — the
+ * label carries both numbers, so the plain-text line is dropped rather than
+ * saying the same thing twice. Without a cap the "Storage used" text renders
+ * alone. The bar's fill turns warning-colored at 90% and error-colored at the
+ * cap, and the whole row is clickable into the storage settings screen where
+ * the cap is adjustable.
  */
 @Composable
 internal fun DownloadsStorageUsedText(
@@ -599,48 +602,50 @@ internal fun DownloadsStorageUsedText(
     val totalStorage by totalStorageBytes.collectAsStateWithLifecycle()
     val maxStorage by maxStorageBytes.collectAsStateWithLifecycle()
     if (totalStorage > 0) {
-        Column(
-            modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
-        ) {
+        val maxBytes = maxStorage
+        if (maxBytes != null && maxBytes > 0) {
+            val fraction = (totalStorage.toFloat() / maxBytes.toFloat()).coerceIn(0f, 1f)
+            val quotaColor = when {
+                fraction >= 1f -> MaterialTheme.colorScheme.error
+                fraction >= 0.9f -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.primary
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp)
+                    .then(
+                        if (onOpenStorageSettings != null) {
+                            Modifier.clickable(onClick = onOpenStorageSettings)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) {
+                JellyPlayLinearProgressIndicator(
+                    progress = { fraction },
+                    color = quotaColor,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    stringResource(Res.string.downloads_storage_quota, formatBytes(totalStorage), formatBytes(maxBytes)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
             Text(
                 stringResource(Res.string.downloads_storage_used, formatBytes(totalStorage)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
             )
-            val maxBytes = maxStorage
-            if (maxBytes != null && maxBytes > 0) {
-                val fraction = (totalStorage.toFloat() / maxBytes.toFloat()).coerceIn(0f, 1f)
-                val quotaColor = when {
-                    fraction >= 1f -> MaterialTheme.colorScheme.error
-                    fraction >= 0.9f -> MaterialTheme.colorScheme.tertiary
-                    else -> MaterialTheme.colorScheme.primary
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            if (onOpenStorageSettings != null) {
-                                Modifier.clickable(onClick = onOpenStorageSettings)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .padding(top = 4.dp),
-                ) {
-                    JellyPlayLinearProgressIndicator(
-                        progress = { fraction },
-                        color = quotaColor,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        stringResource(Res.string.downloads_storage_quota, formatBytes(totalStorage), formatBytes(maxBytes)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
         }
     }
 }

@@ -225,6 +225,19 @@ class VideoPlayerViewModel(
      * post-playback delete offer never arms without it.
      */
     private val postPlaybackDeleteSources: PostPlaybackDeleteSources? = null,
+    /**
+     * TRUE when the teardown release about to run is caused by the HOST
+     * going away (the Android activity finishing behind the player — the app
+     * was swiped from recents mid-playback) rather than an in-app player
+     * close. That distinction gates the restore prompt's teardown marker
+     * ([SessionPositionLedger.suppressHandledOfferOnRelease]): an in-app
+     * close is "done for now" (persist, next launch stays silent), a host
+     * exit is an INTERRUPTED session (skip, next launch prompts). Default
+     * FALSE — desktop's only VM teardowns are in-app closes (a window close
+     * kills the process before onCleared runs) and test graphs stay on the
+     * persist side.
+     */
+    private val isAppExiting: () -> Boolean = { false },
 ) : JellyPlayViewModel() {
 
     private val castManager: CastManager = castManager
@@ -1419,6 +1432,12 @@ class VideoPlayerViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        // The release this onCleared triggers is either an in-app close (nav
+        // popped the player route, host alive) or the host going away (the
+        // activity finished behind the player — app swiped from recents).
+        // That distinction decides whether the teardown persists the restore
+        // prompt's handled-offer marker (see the ledger flag's KDoc).
+        playbackSession.positionLedger.suppressHandledOfferOnRelease = isAppExiting()
         release()
         // Cancel-after-release ordering: the final stop-report /
         // pending-seek join (launched on the session's release scope by

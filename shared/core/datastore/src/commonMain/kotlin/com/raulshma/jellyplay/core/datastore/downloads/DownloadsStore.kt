@@ -106,6 +106,12 @@ class DownloadsStore constructor(
         val DOWNLOADS_LIST_FILTER = stringPreferencesKey("downloads_list_filter")
         val DOWNLOADS_LIST_SORT = stringPreferencesKey("downloads_list_sort")
         val DOWNLOADS_LIST_STATUS_FILTER = stringPreferencesKey("downloads_list_status_filter")
+        /**
+         * Downloads-screen onboarding: the long-press-to-select hint has been
+         * dismissed once (the user entered selection mode), so the banner
+         * never renders again. `true` is terminal — there is no un-see.
+         */
+        val DOWNLOADS_SELECTION_HINT_SEEN = booleanPreferencesKey("downloads_selection_hint_seen")
     }
 
     val downloads: StateFlow<DownloadsSlice> =
@@ -130,6 +136,7 @@ class DownloadsStore constructor(
         downloadsListFilter = prefs[Keys.DOWNLOADS_LIST_FILTER] ?: "",
         downloadsListSort = prefs[Keys.DOWNLOADS_LIST_SORT] ?: "",
         downloadsListStatusFilter = prefs[Keys.DOWNLOADS_LIST_STATUS_FILTER] ?: "",
+        selectionHintSeen = prefs[Keys.DOWNLOADS_SELECTION_HINT_SEEN] ?: false,
         downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
         autoDeleteAfterWatch = prefs[Keys.AUTO_DELETE_AFTER_WATCH] ?: false,
         cellularDownloadSizeWarningMb = PreferenceCodec.readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
@@ -233,6 +240,11 @@ class DownloadsStore constructor(
         dataStore.edit { it[Keys.DOWNLOADS_LIST_STATUS_FILTER] = value }
     }
 
+    /** Marks the long-press selection hint as seen (terminal; see [Keys.DOWNLOADS_SELECTION_HINT_SEEN]). */
+    suspend fun setSelectionHintSeen(seen: Boolean) {
+        dataStore.edit { it[Keys.DOWNLOADS_SELECTION_HINT_SEEN] = seen }
+    }
+
     suspend fun setDownloadStorageLocation(location: String) {
         dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
     }
@@ -290,6 +302,7 @@ class DownloadsStore constructor(
             Keys.DOWNLOADS_LIST_FILTER,
             Keys.DOWNLOADS_LIST_SORT,
             Keys.DOWNLOADS_LIST_STATUS_FILTER,
+            Keys.DOWNLOADS_SELECTION_HINT_SEEN,
             Keys.AUTO_DELETE_AFTER_WATCH,
             Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
             Keys.DOWNLOAD_SCHEDULE_ENABLED,
@@ -346,6 +359,7 @@ class DownloadsStore constructor(
             it[Keys.DOWNLOADS_LIST_FILTER] = slice.downloadsListFilter
             it[Keys.DOWNLOADS_LIST_SORT] = slice.downloadsListSort
             it[Keys.DOWNLOADS_LIST_STATUS_FILTER] = slice.downloadsListStatusFilter
+            it[Keys.DOWNLOADS_SELECTION_HINT_SEEN] = slice.selectionHintSeen
             it[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
             it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = slice.cellularDownloadSizeWarningMb
             it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
@@ -399,6 +413,8 @@ data class DownloadsSlice(
     val downloadsListSort: String = "",
     /** Downloads-list status filter as an enum name string ("" = feature default). */
     val downloadsListStatusFilter: String = "",
+    /** The long-press selection hint was dismissed once; never show it again. */
+    val selectionHintSeen: Boolean = false,
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,

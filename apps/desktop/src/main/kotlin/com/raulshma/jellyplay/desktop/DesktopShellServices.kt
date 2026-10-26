@@ -34,6 +34,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
+import com.raulshma.jellyplay.feature.player.video.session.dismissalFingerprint
 import com.raulshma.jellyplay.feature.player.video.session.latestResumeVideoSnapshot
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher
@@ -192,14 +193,18 @@ internal class DesktopShellServices(
     /**
      * The cold-start session restoration's seams (the holder constructs the
      * [SessionRestorationController] directly, the sessionController idiom):
-     * the persisted [SessionRestoreMode] read and the ONE server resume fetch
-     * mapped through [latestResumeVideoSnapshot]. The factory passes the real
-     * reads over its PlaybackStore/LibraryApiClient Koin singles; the defaults
-     * are the JVM-test no-ops (the holder's suites construct the holder without
+     * the persisted [SessionRestoreMode] read, the ONE server resume fetch
+     * mapped through [latestResumeVideoSnapshot], and the prompt-dismissal
+     * marker's read/write (the feature's one local-storage exception — see
+     * [SessionRestoreDismissal]). The factory passes the real reads over its
+     * PlaybackStore/LibraryApiClient Koin singles; the defaults are the
+     * JVM-test no-ops (the holder's suites construct the holder without
      * these and must observe nothing).
      */
     val sessionRestoreMode: () -> SessionRestoreMode = { SessionRestoreMode.OFF },
     val fetchResumeSnapshot: suspend () -> SessionRestorationSnapshot? = { null },
+    val readSessionRestoreDismissal: suspend () -> String? = { null },
+    val persistSessionRestoreDismissal: suspend (SessionRestorationSnapshot) -> Unit = {},
 ) {
     /** The shared session-policy wiring — see class KDoc. */
     val sessionController = ShellSessionController(
@@ -230,6 +235,8 @@ internal class DesktopShellServices(
     val sessionRestoration = SessionRestorationController(
         restoreMode = sessionRestoreMode,
         fetchLatestSnapshot = fetchResumeSnapshot,
+        readDismissal = readSessionRestoreDismissal,
+        persistDismissal = persistSessionRestoreDismissal,
     )
 
     /**
@@ -477,6 +484,10 @@ internal fun rememberDesktopShellServices(
                         .getContinueWatching(limit = DESKTOP_RESUME_SNAPSHOT_FETCH_LIMIT)
                         .getOrThrow(),
                 )
+            },
+            readSessionRestoreDismissal = { playbackStore.sessionRestoreDismissalNow().takeIf { it.isNotEmpty() } },
+            persistSessionRestoreDismissal = { snapshot ->
+                playbackStore.setSessionRestoreDismissal(dismissalFingerprint(snapshot))
             },
         )
     }

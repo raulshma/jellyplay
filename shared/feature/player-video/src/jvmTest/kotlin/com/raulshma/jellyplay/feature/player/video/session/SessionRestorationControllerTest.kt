@@ -162,4 +162,50 @@ class SessionRestorationControllerTest {
         val staleController = controller(seam = seam, nowMs = 1_800_000_000_000L + 2 * 60 * 60 * 1000L)
         assertEquals(SessionRestorationDecision.None, staleController.evaluate(LaunchContext.ColdStart))
     }
+
+    // ── the dismissal marker: the persisted "don't ask again" ────────────
+
+    @Test
+    fun evaluate_theDismissedMatchingOffer_isSuppressed() = runTest {
+        val seam = SeamCounter(fresh)
+        val controller = SessionRestorationController(
+            restoreMode = { SessionRestoreMode.ASK },
+            fetchLatestSnapshot = seam::fetch,
+            readDismissal = { dismissalFingerprint(fresh) },
+            nowMs = { 1_800_000_000_000L },
+        )
+
+        assertEquals(SessionRestorationDecision.None, controller.evaluate(LaunchContext.ColdStart))
+        assertNull(controller.consumeAsk(), "a suppressed offer parks no ask")
+        assertEquals(1, seam.calls, "the fetch still ran — the marker only silences the ask")
+    }
+
+    @Test
+    fun evaluate_aStaleDismissalMarker_stillAsks() = runTest {
+        // A marker for some other offer (older session, different item) must
+        // not swallow the current one.
+        val seam = SeamCounter(fresh)
+        val controller = SessionRestorationController(
+            restoreMode = { SessionRestoreMode.ASK },
+            fetchLatestSnapshot = seam::fetch,
+            readDismissal = { "item-9|42" },
+            nowMs = { 1_800_000_000_000L },
+        )
+
+        assertEquals(SessionRestorationDecision.Ask(fresh), controller.evaluate(LaunchContext.ColdStart))
+    }
+
+    @Test
+    fun onAskDismissed_persistsTheSnapshotThroughTheSeam() = runTest {
+        var stored: SessionRestorationSnapshot? = null
+        val controller = SessionRestorationController(
+            restoreMode = { SessionRestoreMode.ASK },
+            fetchLatestSnapshot = { null },
+            persistDismissal = { stored = it },
+            nowMs = { 1_800_000_000_000L },
+        )
+
+        controller.onAskDismissed(fresh)
+        assertEquals(fresh, stored)
+    }
 }

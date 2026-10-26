@@ -230,6 +230,14 @@ class DownloadsViewModel(
     private val _statusFilter = MutableStateFlow(DownloadStatusFilter.ALL)
     val statusFilter: StateFlow<DownloadStatusFilter> = _statusFilter.asStateFlow()
 
+    /**
+     * Whether the long-press selection hint was already dismissed once — the
+     * banner renders only while this is false and no selection is active.
+     * Flips (and persists) the first time a selection becomes active.
+     */
+    private val _selectionHintSeen = MutableStateFlow(false)
+    val selectionHintSeen: StateFlow<Boolean> = _selectionHintSeen.asStateFlow()
+
     fun setFilter(value: DownloadListFilter) {
         _filter.value = value
         launch { downloadsStore.setDownloadsListFilter(value.name) }
@@ -299,14 +307,28 @@ class DownloadsViewModel(
     internal val rows: StateFlow<List<DownloadListRow>?> =
         combine(structuralItems, _filter, _statusFilter, _sort, _expandedKeys) { items, filter, statusFilter, sort, expanded ->
             withContext(Dispatchers.Default) {
-                downloadListRows(
-                    items.filter { statusFilter.accepts(it) },
-                    filter,
-                    sort,
-                    expanded,
-                )
+                val filtered = items.filter { statusFilter.accepts(it) }
+                downloadListRows(filtered, filter, sort, expanded, resolveSeriesArt(filtered))
             }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * The locally-saved series posters for [items]' series groups — one-shot
+     * offline-DB reads keyed by raw series id (the [downloadListRows] lookup
+     * shape). A series without saved artwork is simply absent, and the group
+     * header falls back to an episode still inside the grouping. Runs on every
+     * rows rebuild; a handful of indexed PK lookups off Main per structural
+     * change.
+     */
+    private suspend fun resolveSeriesArt(items: List<DownloadItem>): Map<String, SeriesArt> =
+        items.mapNotNull { it.seriesId?.takeIf(String::isNotBlank) }
+            .distinct()
+            .mapNotNull { seriesId ->
+                offlineRepository.getOfflineItem(seriesId)
+                    ?.takeIf { !it.posterPath.isNullOrBlank() }
+                    ?.let { seriesId to SeriesArt(it.posterPath, it.blurHashPrimary) }
+            }
+            .toMap()
 
     init {
         launch {
@@ -326,6 +348,7 @@ class DownloadsViewModel(
             if (_statusFilter.value == DownloadStatusFilter.ALL) {
                 _statusFilter.value = DownloadStatusFilter.fromName(slice.downloadsListStatusFilter)
             }
+            _selectionHintSeen.value = slice.selectionHintSeen
         }
         launch {
             // Change-filtering lives in two layers. The repository's filter
@@ -458,6 +481,17 @@ class DownloadsViewModel(
 
     fun toggleSelection(item: DownloadItem) {
         _uiState.update { it.copy(selection = it.selection.toggled(item.id)) }
+        maybeMarkSelectionHintSeen()
+    }
+
+    /**
+     * First entry into selection mode dismisses the long-press hint forever
+     * (persisted) — the affordance is discovered, the banner row reclaimed.
+     */
+    private fun maybeMarkSelectionHintSeen() {
+        if (_selectionHintSeen.value || !_uiState.value.selectionMode) return
+        _selectionHintSeen.value = true
+        launch { downloadsStore.setSelectionHintSeen(true) }
     }
 
     fun clearSelection() {
@@ -489,6 +523,7 @@ class DownloadsViewModel(
         _uiState.update { state ->
             state.copy(selection = SelectionState(toggledGroupSelection(state.selectedIds, groupIds)))
         }
+        maybeMarkSelectionHintSeen()
     }
 
     /**

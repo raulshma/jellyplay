@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.StateFlow
 
@@ -118,6 +119,7 @@ class PlaybackStore constructor(
         val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.keyName)
         val AUTO_ENTER_PIP = booleanPreferencesKey(PlaybackPreferenceSpecs.AUTO_ENTER_PIP.keyName)
         val SESSION_RESTORE_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.keyName)
+        val SESSION_RESTORE_DISMISSED = stringPreferencesKey(PlaybackPreferenceSpecs.SESSION_RESTORE_DISMISSED.keyName)
         val OFFER_DELETE_AFTER_PLAYBACK_MOVIES = booleanPreferencesKey(PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.keyName)
         val OFFER_DELETE_AFTER_PLAYBACK_EPISODES = booleanPreferencesKey(PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.keyName)
         val CUSTOM_DEVICE_PROFILE_JSON = stringPreferencesKey(PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.keyName)
@@ -226,6 +228,22 @@ class PlaybackStore constructor(
     /** What happens to an interrupted session on cold start (OFF / ASK / AUTO). */
     suspend fun setSessionRestoreMode(mode: SessionRestoreMode) {
         dataStore.edit { PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.writeTo(it, mode) }
+    }
+
+    /**
+     * The cold-start restore prompt's dismissal marker — the fingerprint of
+     * the exact offer the user dismissed (see the spec row). Deliberately NOT
+     * a [PlaybackSlice] field: the marker is per-device ephemeral state, so it
+     * must stay out of the serialized backup envelope and `restore`, and the
+     * cold-start evaluation reads it here directly — the slice's seeded flow
+     * can still be serving defaults when the read happens.
+     */
+    suspend fun sessionRestoreDismissalNow(): String =
+        PlaybackPreferenceSpecs.SESSION_RESTORE_DISMISSED.readFrom(dataStore.data.first())
+
+    /** Persists the dismissed offer's fingerprint (empty string clears it). */
+    suspend fun setSessionRestoreDismissal(fingerprint: String) {
+        dataStore.edit { PlaybackPreferenceSpecs.SESSION_RESTORE_DISMISSED.writeTo(it, fingerprint) }
     }
 
     /** Offer to delete the watched movie file after playback finishes. */

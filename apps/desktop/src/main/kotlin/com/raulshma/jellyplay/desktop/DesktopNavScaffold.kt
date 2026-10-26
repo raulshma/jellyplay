@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +81,7 @@ import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * The nav scaffold: rail on the left, NavDisplay on the right, snackbar for
@@ -277,6 +279,11 @@ internal fun DesktopNavScaffold(
     // push above owns that boot, and the skip is total for the session (the
     // effect runs once per scaffold composition).
     var restorePrompt by remember { mutableStateOf<SessionRestorationSnapshot?>(null) }
+    // Scaffold-level ON PURPOSE: the dismissal write launches on this scope,
+    // and a scope declared inside the prompt block below is CANCELLED the
+    // moment `restorePrompt = null` removes that block from composition —
+    // the DataStore write died with the dialog and the marker never landed.
+    val promptScope = rememberCoroutineScope()
     LaunchedEffect(services) {
         if (!DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported &&
             !DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported
@@ -637,8 +644,10 @@ internal fun DesktopNavScaffold(
     // The restoration prompt, over everything the scaffold renders (a window
     // dialog — tree placement carries no visual weight; rendered last like the
     // AppRoot About dialog). ConfirmDialog invokes onDismiss after the confirm
-    // arm, so the prompt state clears itself on both exits.
+    // arm, so the prompt state clears itself on both exits — and the flag
+    // splits the arms: only a REAL dismiss persists the marker.
     restorePrompt?.let { snapshot ->
+        var confirmed by remember(snapshot) { mutableStateOf(false) }
         ConfirmDialog(
             title = "Resume \"${snapshot.title}\"?",
             message = "Continue where you left off.",
@@ -646,10 +655,14 @@ internal fun DesktopNavScaffold(
             dismissText = "Dismiss",
             tone = ConfirmTone.PRIMARY,
             onConfirm = {
+                confirmed = true
                 services.sessionRestoration.onRestoreHandled()
                 guardedNavigator.navigate(snapshot.toPlayerRoute())
             },
-            onDismiss = { restorePrompt = null },
+            onDismiss = {
+                restorePrompt = null
+                if (!confirmed) promptScope.launch { services.sessionRestoration.onAskDismissed(snapshot) }
+            },
         )
     }
 }

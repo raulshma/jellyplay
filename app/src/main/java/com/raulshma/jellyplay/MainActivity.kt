@@ -144,6 +144,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // A process that survived a previous exit must not leak the stale
+        // "host finishing" signal into this session (see onDestroy).
+        com.raulshma.jellyplay.feature.player.video.PlayerHostExitState.isHostFinishing = false
         // Clear any orientation lock a previous in-nav player (e.g. Live TV) may
         // have written onto this singleTask activity before the process was
         // killed. Because configChanges includes orientation, MainActivity is
@@ -397,6 +400,21 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * The player VM's teardown reads this (through PlayerHostExitState) to
+     * tell an in-app player close from the host itself going away: only a
+     * genuine exit (finished, not a configuration recreation) suppresses the
+     * cold-start restore prompt's handled-offer marker, so an app swiped
+     * from recents mid-playback still prompts on the next launch. Written
+     * BEFORE super.onDestroy() — the ViewModelStore clear that runs the
+     * player's onCleared teardown follows it.
+     */
+    override fun onDestroy() {
+        com.raulshma.jellyplay.feature.player.video.PlayerHostExitState.isHostFinishing =
+            isFinishing && !isChangingConfigurations
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

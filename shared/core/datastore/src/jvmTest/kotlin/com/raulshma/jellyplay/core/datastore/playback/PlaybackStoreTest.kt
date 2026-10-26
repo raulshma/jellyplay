@@ -71,6 +71,18 @@ class PlaybackStoreTest {
     }
 
     @Test
+    fun `session restore dismissal marker round-trips outside the slice`() = runTest {
+        // Per-device ephemeral state, deliberately NOT a PlaybackSlice field —
+        // the direct accessors are its only surface (and keep it out of the
+        // serialized backup envelope).
+        assertEquals("", store.sessionRestoreDismissalNow())
+        store.setSessionRestoreDismissal("item-1|123")
+        assertEquals("item-1|123", store.sessionRestoreDismissalNow())
+        store.setSessionRestoreDismissal("")
+        assertEquals("", store.sessionRestoreDismissalNow())
+    }
+
+    @Test
     fun `defaults when empty`() = runTest {
         val slice = settledSlice()
         // The raw stored default is EXO_PLAYER; the read clamps it to whatever

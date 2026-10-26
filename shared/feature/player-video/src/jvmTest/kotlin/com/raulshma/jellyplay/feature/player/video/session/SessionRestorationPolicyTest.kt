@@ -147,18 +147,122 @@ class SessionRestorationPolicyTest {
         )
     }
 
-    // ── Rule 5: the ASK / AUTO arms ──────────────────────────────────────
-
-    @Test
-    fun ask_freshColdStart_asksWithTheSnapshot() {
-        val s = snapshot()
-        assertEquals(SessionRestorationDecision.Ask(s), decide(SessionRestoreMode.ASK, s, LaunchContext.ColdStart))
-    }
+    // ── Rule 5: the AUTO arm precedes the dismissal marker ───────────────
 
     @Test
     fun auto_freshColdStart_autoRestoresWithTheSnapshot() {
         val s = snapshot()
         assertEquals(SessionRestorationDecision.AutoRestore(s), decide(SessionRestoreMode.AUTO, s, LaunchContext.ColdStart))
+    }
+
+    @Test
+    fun auto_isNotSuppressedByTheDismissalMarker() {
+        // The marker only silences the ASK arm — an AUTO user never saw a
+        // prompt to dismiss.
+        val s = snapshot()
+        assertEquals(
+            SessionRestorationDecision.AutoRestore(s),
+            decideSessionRestoration(SessionRestoreMode.AUTO, s, LaunchContext.ColdStart, now, dismissalFingerprint(s)),
+        )
+    }
+
+    // ── Rule 6: the dismissed offer is not re-offered ────────────────────
+
+    @Test
+    fun ask_theExactDismissedOffer_isSuppressed() {
+        val s = snapshot()
+        assertEquals(
+            SessionRestorationDecision.None,
+            decideSessionRestoration(SessionRestoreMode.ASK, s, LaunchContext.ColdStart, now, dismissalFingerprint(s)),
+        )
+    }
+
+    @Test
+    fun ask_aNewerStampOnTheDismissedItem_isANewSessionAndOffers() {
+        val dismissed = snapshot()
+        val replayed = snapshot(timestampMs = freshStamp + 1)
+        assertEquals(
+            SessionRestorationDecision.Ask(replayed),
+            decideSessionRestoration(
+                SessionRestoreMode.ASK, replayed, LaunchContext.ColdStart, now, dismissalFingerprint(dismissed),
+            ),
+        )
+    }
+
+    @Test
+    fun ask_aDifferentItemAtTheSameStamp_stillOffers() {
+        val dismissed = snapshot()
+        val other = snapshot(itemId = "item-2")
+        assertEquals(
+            SessionRestorationDecision.Ask(other),
+            decideSessionRestoration(
+                SessionRestoreMode.ASK, other, LaunchContext.ColdStart, now, dismissalFingerprint(dismissed),
+            ),
+        )
+    }
+
+    @Test
+    fun ask_missingStampOffers_fallBackToThePositionFingerprint() {
+        // A server that omits lastPlayedDate still gets a working marker: the
+        // fingerprint rides the position, so a rewatch past it re-arms.
+        val undated = snapshot(timestampMs = null)
+        val advanced = snapshot(timestampMs = null, positionMs = 700_000L)
+        assertEquals(
+            SessionRestorationDecision.None,
+            decideSessionRestoration(
+                SessionRestoreMode.ASK, undated, LaunchContext.ColdStart, now, dismissalFingerprint(undated),
+            ),
+        )
+        assertEquals(
+            SessionRestorationDecision.Ask(advanced),
+            decideSessionRestoration(
+                SessionRestoreMode.ASK, advanced, LaunchContext.ColdStart, now, dismissalFingerprint(undated),
+            ),
+        )
+    }
+
+    @Test
+    fun ask_aNullMarker_changesNothing() {
+        val s = snapshot()
+        assertEquals(
+            SessionRestorationDecision.Ask(s),
+            decideSessionRestoration(SessionRestoreMode.ASK, s, LaunchContext.ColdStart, now, dismissedFingerprint = null),
+        )
+    }
+
+    @Test
+    fun ask_theTeardownHandledPosition_isSuppressed() {
+        // The confirm-then-close cycle: the player's teardown wrote the
+        // played-through position (stamp unknown to it); the next launch's
+        // row carries a NEW stamp at that position — still the handled state.
+        val s = snapshot()
+        assertEquals(
+            SessionRestorationDecision.None,
+            decideSessionRestoration(
+                SessionRestoreMode.ASK, s, LaunchContext.ColdStart, now,
+                playbackHandledFingerprint(s.itemId, s.positionMs),
+            ),
+        )
+    }
+
+    @Test
+    fun auto_isNotSuppressedByTheTeardownMarker() {
+        val s = snapshot()
+        assertEquals(
+            SessionRestorationDecision.AutoRestore(s),
+            decideSessionRestoration(
+                SessionRestoreMode.AUTO, s, LaunchContext.ColdStart, now,
+                playbackHandledFingerprint(s.itemId, s.positionMs),
+            ),
+        )
+    }
+
+    // ── Rule 7: the ASK arm ──────────────────────────────────────────────
+
+    @Test
+    fun ask_freshColdStart_asksWithTheSnapshot() {
+        val s = snapshot()
+        assertEquals(SessionRestorationDecision.Ask(s), decide(SessionRestoreMode.ASK, s, LaunchContext.ColdStart))
     }
 
     // ── the snapshot factory: server rows → candidate ────────────────────

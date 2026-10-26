@@ -451,6 +451,81 @@ class PlaybackSessionReportingTest {
         }
     }
 
+    // ── release: the restore prompt's teardown marker ──────────────────────
+
+    @Test
+    fun release_deliveredStop_persistsTheRestoreTeardownMarker() = runTest {
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        // The stop went out at 60 s → the marker rides the same value in ms,
+        // the fingerprint the next cold start's row (the same ticks ÷ 10 000)
+        // matches (see SessionRestoreDismissal).
+        coVerify(timeout = 5_000L, exactly = 1) {
+            graph.playbackStore.setSessionRestoreDismissal("item-1||60000")
+        }
+    }
+
+    @Test
+    fun release_errorLatched_doesNotPersistTheTeardownMarker() = runTest {
+        // A failed session could not actually be watched — the offer stands.
+        every { progressReporter.isErrorLatched() } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
+    @Test
+    fun release_incognito_doesNotPersistTheTeardownMarker() = runTest {
+        buildSession(incognito = true)
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
+    @Test
+    fun release_hostExitFlag_stopStillReports_butMarkerIsSkipped() = runTest {
+        // The host (activity) went away behind the player — an interrupted
+        // session, not a deliberate close: the cold-start prompt must fire
+        // on the next launch, so the handled-offer marker is skipped while
+        // the stop report itself still goes out.
+        session.positionLedger.suppressHandledOfferOnRelease = true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
+        }
+        coVerify(exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
+    @Test
+    fun release_dedupedStop_doesNotPersistTheTeardownMarker() = runTest {
+        // The stalled-finish path already stop-reported this session at the
+        // FULL duration — the item is watched and the row is gone; the
+        // teardown arm writes nothing on the dedup.
+        every { progressReporter.hasReportedStopFor("server-1") } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
     // ── Fakes ───────────────────────────────────────────────────────────────
 
     // ── reportPlaybackStart: the server start report (moved from the deleted
