@@ -71,6 +71,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -131,6 +132,13 @@ internal class HomeViewModel(
      */
     private val settingsSearchProvider: SettingsSearchProvider,
     /**
+     * The shortcut catalog, injected through the core/ui seam. The binding
+     * lives in feature/shortcuts (its `DefaultShortcutCatalog`) and resolves
+     * at app level — this module keeps no dependency on feature/shortcuts
+     * (the SettingsSearchProvider precedent).
+     */
+    private val shortcutCatalog: com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog,
+    /**
      * The construction seams for the two big sub-modules below: each factory
      * owns its module's pure-DI collaborators so they never surface on this
      * VM's constructor (otherwise a new refresher or sync-holder dependency
@@ -185,6 +193,38 @@ internal class HomeViewModel(
 
     /** The presence chips' source of truth — collected at the chip row (see the KDoc for why this is not [HomeUiState]). */
     val presenceChips: StateFlow<List<HomePresenceChip>> get() = _presenceChips.flow
+
+    /**
+     * The user's resolved header shortcuts (ordered, admin/offline-gated,
+     * icon/label final) — deliberately OUT of [HomeUiState] (the
+     * presence-chips precedent): the shortcuts store's slice + the admin flag
+     * + the offline mode combine into a list only the dock's end capsule
+     * reads, and folding it into the ~45-field state would copy the whole
+     * aggregate on every unrelated shortcuts emission.
+     */
+    val headerShortcuts: StateFlow<List<com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut>> =
+        combine(
+            prefs.shortcuts.shortcuts,
+            authRepository.currentUser,
+            _uiState.flow,
+        ) { slice, user, state ->
+            com.raulshma.jellyplay.core.ui.navigation.resolveShortcuts(
+                definitions = slice.definitions,
+                headerOrder = slice.headerOrder,
+                overflowOrder = slice.overflowOrder,
+                catalog = shortcutCatalog.entries,
+                surface = com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER,
+                isAdmin = user?.isAdmin == true,
+                isOffline = state.offlineMode != OfflineMode.ONLINE,
+                maxSlots = com.raulshma.jellyplay.core.model.ShortcutLimits.HEADER_MAX,
+            )
+        }
+            .distinctUntilChanged()
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList(),
+            )
 
     /**
      * Ids whose quick actions must flip to "Remove download" — completed

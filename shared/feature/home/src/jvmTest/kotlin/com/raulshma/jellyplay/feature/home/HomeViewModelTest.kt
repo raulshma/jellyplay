@@ -141,6 +141,7 @@ class HomeViewModelTest {
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var newsletterTriggerManager: HomeNewsletterGate
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
+    private lateinit var shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var experimentalStore: ExperimentalStore
     private lateinit var playbackStore: PlaybackStore
@@ -188,6 +189,11 @@ class HomeViewModelTest {
      * settingsSearchResults flow exercisable without depending on
      * feature/settings from this suite.
      */
+    /** Empty catalog — the header-shortcuts fold resolves to nothing in these suites. */
+    private val emptyShortcutsCatalog = object : com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog {
+        override val entries = emptyList<com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogEntry>()
+    }
+
     private val fakeSettingsSearchProvider = object : SettingsSearchProvider {
         override val items = listOf(
             SettingsSearchItem(
@@ -241,6 +247,7 @@ class HomeViewModelTest {
     private val experimentalFlow = MutableStateFlow(ExperimentalSlice())
     private val playbackFlow = MutableStateFlow(PlaybackSlice())
     private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
+    private val shortcutsFlow = MutableStateFlow(com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
 
@@ -274,6 +281,7 @@ class HomeViewModelTest {
         newsletterTriggerManager = mockk(relaxed = true)
         homeDiscoveryStore = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
+        shortcutsStore = mockk(relaxed = true)
         experimentalStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
         preferencesEditor = mockk(relaxed = true)
@@ -297,6 +305,7 @@ class HomeViewModelTest {
         every { sessionApiClient.session } returns sessionFlow
         every { userDataChanges.userDataChanges } returns userDataEvents
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
+        every { shortcutsStore.shortcuts } returns shortcutsFlow
         every { appearanceStore.appearance } returns appearanceFlow
         every { experimentalStore.experimental } returns experimentalFlow
         every { playbackStore.playback } returns playbackFlow
@@ -339,6 +348,7 @@ class HomeViewModelTest {
             experimental = experimentalStore,
             playback = playbackStore,
             seerrPreferences = seerrPreferencesStore,
+            shortcuts = shortcutsStore,
         ),
         preferencesEditor = preferencesEditor,
         seerrRequestDelegate = seerrRequestDelegate,
@@ -346,6 +356,7 @@ class HomeViewModelTest {
         homeSession = homeSession,
         userMessageBus = userMessageBus,
         settingsSearchProvider = fakeSettingsSearchProvider,
+        shortcutCatalog = emptyShortcutsCatalog,
         homeRefresherFactory = HomeRefresherFactory(
             clock = fakeTimeSource,
             homeFeed = homeFeed,

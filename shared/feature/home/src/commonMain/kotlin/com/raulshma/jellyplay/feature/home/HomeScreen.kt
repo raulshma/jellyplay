@@ -172,6 +172,15 @@ data class HomeCallbacks(
      * constructor call site compiling.
      */
     val onOpenRoute: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
+    /**
+     * Execute a header shortcut's shell action ([com.raulshma.jellyplay.core.ui.navigation.ShortcutAction])
+     * — Surprise Me / Play On / offline toggle. Screen targets never reach
+     * this (they navigate through [onOpenRoute]); actions dispatch to the
+     * shell-owned handlers (MainViewModel / Play On controller) via the
+     * section builder's shell hook. Default no-op keeps existing constructor
+     * call sites compiling.
+     */
+    val onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit = {},
 )
 
 /**
@@ -1138,6 +1147,24 @@ private fun HomeDockArea(
     val dockOnShowSyncDetails = remember(viewModel) {
         { onShowSyncDetails() }
     }
+    // Header shortcuts: collect the resolved list + fold clicks (screen →
+    // route, action → the shell handler) and long-press → the editor.
+    val headerShortcuts by viewModel.headerShortcuts.collectAsStateWithLifecycle()
+    val dockOnShortcutClick = remember(callbacks) {
+        { shortcut: com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut ->
+            when (val target = shortcut.target) {
+                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen ->
+                    callbacks.onOpenRoute(target.route)
+                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action ->
+                    callbacks.onShortcutAction(target.action)
+            }
+        }
+    }
+    val dockOnShortcutLongClick = remember(callbacks) {
+        { _: com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut ->
+            callbacks.onOpenRoute(com.raulshma.jellyplay.core.ui.navigation.Route.ShortcutsCustomize)
+        }
+    }
 
     HomeTopDockScrim(
         settingsSearch = viewModel::settingsSearchResults,
@@ -1159,6 +1186,7 @@ private fun HomeDockArea(
             homeHeroEnabled = state.homeHeroEnabled,
             hasFeaturedItem = heroHasFeaturedItem,
             hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
+            headerShortcuts = headerShortcuts,
         ),
         dockCallbacks = HomeDockCallbacks(
             onUserSwitch = onUserSwitch,
@@ -1168,6 +1196,8 @@ private fun HomeDockArea(
             onClearSearch = dockOnClearSearch,
             onToggleOffline = dockOnToggleOffline,
             onShowSyncDetails = dockOnShowSyncDetails,
+            onShortcutClick = dockOnShortcutClick,
+            onShortcutLongClick = dockOnShortcutLongClick,
         ),
         onHeroFocusDown = remember(heroFocusRequester) {
             { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }

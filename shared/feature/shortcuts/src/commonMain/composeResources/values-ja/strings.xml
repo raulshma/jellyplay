@@ -45,4 +45,46 @@
     <string name="shortcuts_search_no_results">「%1$s」に一致するショートカットはありません</string>
     <string name="shortcuts_search_clear">検索をクリア</string>
     <string name="shortcuts_admin_badge">管理者</string>
+
+    <!-- Custom shortcuts -->
+    <string name="shortcuts_category_actions">アクション</string>
+    <string name="shortcuts_item_library_title">ライブラリ</string>
+    <string name="shortcuts_item_library_description">すべてのメディアライブラリを閲覧します。</string>
+    <string name="shortcuts_item_search_title">検索</string>
+    <string name="shortcuts_item_search_description">映画、シリーズ、音楽などを検索します。</string>
+    <string name="shortcuts_item_music_title">音楽</string>
+    <string name="shortcuts_item_music_description">アーティスト、アルバム、プレイリスト。</string>
+    <string name="shortcuts_item_shortcuts_title">ショートカット</string>
+    <string name="shortcuts_item_shortcuts_description">画面とアクションの完全なカタログ。</string>
+    <string name="shortcuts_action_surprise_title">おまかせ再生</string>
+    <string name="shortcuts_action_play_on_title">他の画面で再生</string>
+    <string name="shortcuts_action_offline_title">オフラインモード</string>
+    <string name="shortcuts_customize_title">ショートカットのカスタマイズ</string>
+    <string name="shortcuts_customize_header_section">ホームヘッダー</string>
+    <string name="shortcuts_customize_overflow_section">その他メニュー</string>
+    <string name="shortcuts_customize_unpinned_section">未固定</string>
+    <string name="shortcuts_customize_add">ショートカットを追加</string>
+    <string name="shortcuts_customize_empty_header">ホームヘッダーに固定されたものはありません。</string>
+    <string name="shortcuts_customize_empty_overflow">その他メニューに固定されたものはありません。</string>
+    <string name="shortcuts_customize_empty_unpinned">すべてのショートカットが固定されています。</string>
+    <string name="shortcuts_customize_pin_header">ホームヘッダーに固定</string>
+    <string name="shortcuts_customize_pin_overflow">その他メニューに固定</string>
+    <string name="shortcuts_customize_edit">編集</string>
+    <string name="shortcuts_customize_remove">削除</string>
+    <string name="shortcuts_customize_move_up">上へ移動</string>
+    <string name="shortcuts_customize_move_down">下へ移動</string>
+    <string name="shortcuts_customize_reset">デフォルトに戻す</string>
+    <string name="shortcuts_customize_reset_confirm_title">ショートカットをリセットしますか?</string>
+    <string name="shortcuts_customize_reset_confirm_message">カスタムショートカットは削除され、既定のメニューに戻ります。</string>
+    <string name="shortcuts_customize_pick_target">移動先を選択</string>
+    <string name="shortcuts_customize_pick_icon">アイコンを選択</string>
+    <string name="shortcuts_customize_use_default_icon">デフォルトのアイコンを使用</string>
+    <string name="shortcuts_customize_label_hint">カスタム名 (任意)</string>
+    <string name="shortcuts_customize_save">保存</string>
+    <string name="shortcuts_customize_header_full">ホームヘッダーがいっぱいです。先にショートカットの固定を解除してください。</string>
+    <string name="shortcuts_customize_overflow_full">その他メニューがいっぱいです。先にショートカットの固定を解除してください。</string>
+    <string name="shortcuts_customize_header_capacity">%2$d中%1$d件固定</string>
+    <string name="shortcuts_customize_overflow_capacity">%2$d中%1$d件固定</string>
+    <string name="shortcuts_customize_screen_badge">画面</string>
+    <string name="shortcuts_customize_action_badge">アクション</string>
 </resources>

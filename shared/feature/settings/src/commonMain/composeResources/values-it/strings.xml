@@ -1181,4 +1181,8 @@
     <string name="ss_session_restore_title">Ripristino della sessione</string>
     <string name="ss_trickplay_mode_subtitle">Anteprime di scorrimento a bolla, striscia di pellicola o schermo intero</string>
     <string name="ss_trickplay_mode_title">Stile di anteprima</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">Personalizza scorciatoie</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Scorciatoie di intestazione e menu extra</string>
 </resources>

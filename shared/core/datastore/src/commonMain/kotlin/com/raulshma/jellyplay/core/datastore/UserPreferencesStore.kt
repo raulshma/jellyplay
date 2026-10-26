@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
@@ -111,6 +112,7 @@ class UserPreferencesStore constructor(
     private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
     private val navigationStore: com.raulshma.jellyplay.core.datastore.navigation.NavigationStore,
+    private val shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore,
     private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     private val notificationStore: com.raulshma.jellyplay.core.datastore.notification.NotificationStore,
     private val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore,
@@ -418,6 +420,14 @@ class UserPreferencesStore constructor(
             resetKeys = { navigationStore.resetKeysFor(it) },
         ),
         SliceBinding(
+            key = BackupSliceKey.SHORTCUTS,
+            categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
+            read = { shortcutsStore.shortcuts.first() },
+            serializer = ShortcutsSlice.serializer(),
+            restore = { shortcutsStore.restore(it) },
+            resetKeys = { shortcutsStore.resetKeysFor(it) },
+        ),
+        SliceBinding(
             key = BackupSliceKey.NETWORK_OFFLINE,
             categories = setOf(PreferenceResetCategory.DOWNLOADS_NETWORK),
             read = { networkOfflineStore.networkOffline.first() },
@@ -679,6 +689,9 @@ class UserPreferencesStore constructor(
             // Same shape for the downloads store's one namespaced key (the
             // auto-download server allow-list); no-ops for every other category.
             downloadsStore.removeDynamicResetKeys(category, prefs)
+            // Same shape for the shortcuts store (every key is per-user
+            // namespaced); no-ops for every other category.
+            shortcutsStore.removeDynamicResetKeys(category, prefs)
         }
     }
 

@@ -159,6 +159,7 @@ class StorageSettingsViewModelTest {
             audioCache = audioCacheStore,
             library = libraryStore,
             navigation = navigationStore,
+            shortcuts = mockk(relaxed = true),
             networkOffline = networkOfflineStore,
             notification = notificationStore,
             screensaver = screensaverStore,

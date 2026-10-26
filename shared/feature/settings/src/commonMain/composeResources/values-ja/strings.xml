@@ -1177,4 +1177,8 @@
     <string name="ss_session_restore_title">セッションの復元</string>
     <string name="ss_trickplay_mode_subtitle">バブル、フィルムストリップ、全画面のシークプレビュー</string>
     <string name="ss_trickplay_mode_title">トリックプレイのスタイル</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">ショートカットのカスタマイズ</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">ヘッダーとその他メニューのショートカット</string>
 </resources>

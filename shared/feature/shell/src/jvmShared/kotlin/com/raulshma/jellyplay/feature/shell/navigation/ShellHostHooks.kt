@@ -60,6 +60,14 @@ data class ShellHomeHooks(
     val onHomeModeChange: (HomeMode) -> Unit,
     val playOnRedirect: HomePlayOnRedirect?,
     val surpriseRequests: Flow<Unit>,
+    /**
+     * Executes a header shortcut's shell action (Surprise Me / Play On /
+     * offline toggle) — the same handlers the overflow menu's action pills
+     * use, supplied per shell (Android: MainViewModel + the Play On sheet
+     * trigger; desktop: its own equivalents). Default no-op keeps shells
+     * without a handler compiling; the action pill simply does nothing.
+     */
+    val onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit = {},
 )
 
 /**

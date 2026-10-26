@@ -431,6 +431,28 @@ internal fun MainContent(
             // be initiated from the phone layout's Play On device sheet.
             // Remembered on the controller, keyed on playOn.
             val playOnRedirect = remember(playOn) { HomePlayOnRedirect(playOn::flingIfConnected) }
+            // The Play On device sheet's state lives in PhoneContent; header
+            // shortcuts request it through this counter (the sheet-owning
+            // scope observes increments).
+            val playOnOpenRequests = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+            // Header-shortcut shell actions — the same handlers the overflow
+            // menu's action pills run (surprise arm, Play On sheet, offline
+            // toggle), routed through one seam into the hooks.
+            val onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit =
+                remember(model, navigationState) {
+                    { action ->
+                        when (action) {
+                            com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.SURPRISE_ME -> {
+                                navigationState.topLevelRoute.value = Route.Home
+                                model.requestSurprise()
+                            }
+                            com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.PLAY_ON ->
+                                playOnOpenRequests.value += 1
+                            com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE ->
+                                model.toggleOfflineMode()
+                        }
+                    }
+                }
             val shellHost = rememberShellHost(
                 navigator = navigator,
                 home = ShellHomeHooks(
@@ -438,6 +460,7 @@ internal fun MainContent(
                     onHomeModeChange = onModeChange,
                     playOnRedirect = playOnRedirect,
                     surpriseRequests = model.surpriseRequests,
+                    onShortcutAction = onShortcutAction,
                 ),
                 audio = audioClicks,
                 settings = ShellSettingsHooks(
@@ -517,6 +540,31 @@ internal fun MainContent(
                     // second press. The full-screen player is excluded — it
                     // owns its own BackHandler.
                     BackExitHost(navigator = navigator)
+                    // The user's customized overflow menu (shipped defaults
+                    // while unconfigured) — resolved once here with the
+                    // admin/offline/settings-reachability inputs, so the menu
+                    // chrome in PhoneContent only clicks and decorates.
+                    val shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore =
+                        org.koin.compose.koinInject()
+                    val shortcutCatalog: com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog =
+                        org.koin.compose.koinInject()
+                    val shortcutsSlice by shortcutsStore.shortcuts.collectAsStateWithLifecycle()
+                    val isAdminForShortcuts = isAdminState.value
+                    val overflowShortcuts = androidx.compose.runtime.remember(
+                        shortcutsSlice, isAdminForShortcuts, isOffline, activeTopLevelRoutes,
+                    ) {
+                        com.raulshma.jellyplay.core.ui.navigation.resolveShortcuts(
+                            definitions = shortcutsSlice.definitions,
+                            headerOrder = shortcutsSlice.headerOrder,
+                            overflowOrder = shortcutsSlice.overflowOrder,
+                            catalog = shortcutCatalog.entries,
+                            surface = com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW,
+                            isAdmin = isAdminForShortcuts,
+                            isOffline = isOffline,
+                            settingsReachable = Route.Settings in activeTopLevelRoutes,
+                            maxSlots = com.raulshma.jellyplay.core.model.ShortcutLimits.OVERFLOW_MAX,
+                        )
+                    }
                     PhoneContent(
                         shellParams = shellParams,
                         isAudioPlayerScreen = isAudioPlayerScreen,
@@ -540,6 +588,8 @@ internal fun MainContent(
                             model.requestSurprise()
                         },
                         onToggleOffline = { model.toggleOfflineMode() },
+                        overflowShortcuts = overflowShortcuts,
+                        playOnOpenRequests = playOnOpenRequests.value,
                     )
                 } else {
                     FullScreenContent(shellParams = shellParams)

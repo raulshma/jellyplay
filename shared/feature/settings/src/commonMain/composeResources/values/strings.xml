@@ -964,4 +964,6 @@
     <string name="settings_jellyplay_push_state_server_off">Server push disabled</string>
     <string name="settings_jellyplay_feature_analytics">Analytics</string>
     <string name="ss_jellyplay_feature_analytics_subtitle">The play-history dashboard in the admin area (admin only)</string>
+    <string name="settings_nav_customize_shortcuts">Customize shortcuts</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Header and overflow menu shortcuts</string>
 </resources>

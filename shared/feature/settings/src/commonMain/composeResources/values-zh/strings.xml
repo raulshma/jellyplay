@@ -1179,4 +1179,8 @@
     <string name="ss_session_restore_title">会话恢复</string>
     <string name="ss_trickplay_mode_subtitle">气泡、胶片条或全屏的进度预览</string>
     <string name="ss_trickplay_mode_title">进度预览样式</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">自定义快捷方式</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">首页顶栏与更多菜单的快捷方式</string>
 </resources>

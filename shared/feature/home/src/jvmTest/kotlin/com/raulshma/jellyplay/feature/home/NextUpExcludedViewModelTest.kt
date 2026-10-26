@@ -100,6 +100,7 @@ class NextUpExcludedViewModelTest {
                 audioCache = mockk<AudioCacheStore>(relaxed = true),
                 library = mockk<LibraryStore>(relaxed = true),
                 navigation = mockk<NavigationStore>(relaxed = true),
+                shortcuts = mockk(relaxed = true),
                 networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
                 notification = mockk<NotificationStore>(relaxed = true),
                 screensaver = mockk<ScreensaverStore>(relaxed = true),

@@ -42,6 +42,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.PlayOnViewModel
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Wifi
+import com.composables.icons.tabler.outline.WifiOff
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
@@ -242,6 +245,10 @@ internal fun PhoneContent(
     downloadCount: Int = 0,
     onSurpriseClick: () -> Unit = {},
     onToggleOffline: () -> Unit = {},
+    /** The user's resolved overflow shortcuts (MainContent resolves; this wiring clicks). */
+    overflowShortcuts: List<com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut> = emptyList(),
+    /** Increments when a shortcut (or elsewhere) requests the Play On device sheet. */
+    playOnOpenRequests: Int = 0,
 ) {
     val navigationState = shellParams.navigationState
     val currentTopLevel = shellParams.currentTopLevel
@@ -264,7 +271,6 @@ internal fun PhoneContent(
     val playOnState by playOn.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
-    val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
     // Current top-of-stack route — hides the persistent Play On mini bar
     // while its full-screen companion is open (avoid a bar floating over its own
     // expanded view).
@@ -272,6 +278,11 @@ internal fun PhoneContent(
     val isPlayOnCompanionOpen = currentRoute is Route.PlayOnCompanion
     androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
         if (showPlayOnSheet) playOn.startDiscovery(playOnContext)
+    }
+    // Header-shortcut Play On requests land here (the sheet state lives in
+    // this scope; the shell handler only bumps the counter).
+    androidx.compose.runtime.LaunchedEffect(playOnOpenRequests) {
+        if (playOnOpenRequests > 0) showPlayOnSheet = true
     }
 
     // Global "More" overflow — a DotsVertical toggle docked in the nav bar
@@ -288,6 +299,60 @@ internal fun PhoneContent(
     // stops the back-gesture preview indicator from freezing mid-screen when the
     // scrim's full-screen clickable intercepts the edge swipe.
     BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
+
+    // The customized overflow entries: resolved shortcuts folded with this
+    // scope's click wiring + dynamic decoration (offline icon/label/progress,
+    // downloads badge, Surprise highlight). Built per composition on purpose —
+    // the menu is only composed while open, and the closures need this
+    // scope's live state (navigator, sheet toggles).
+    val isOfflineActive = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+    val overflowEntries = overflowShortcuts.map { shortcut ->
+        val closeMenu = { isOverflowExpanded = false }
+        // The two targets whose decoration is dynamic — decode once per row
+        // instead of re-testing the target type in each decoration slot.
+        val action = (shortcut.target as? com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action)?.action
+        val isToggleOffline = action == com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE
+        val isDownloads = (shortcut.target as? com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen)
+            ?.route == com.raulshma.jellyplay.core.ui.navigation.Route.Downloads
+        com.raulshma.jellyplay.navigation.components.OverflowMenuItem(
+            key = shortcut.id,
+            shortcut = shortcut,
+            onClick = when (val target = shortcut.target) {
+                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen -> {
+                    val route = target.route
+                    { closeMenu(); navigator.navigate(route) }
+                }
+                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action -> when (target.action) {
+                    com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.SURPRISE_ME -> {
+                        { closeMenu(); onSurpriseClick() }
+                    }
+                    com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.PLAY_ON -> {
+                        { showPlayOnSheet = true }
+                    }
+                    com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE -> {
+                        // Guard re-taps while the offline→online transition
+                        // is in flight.
+                        { if (!isGoingOnline) onToggleOffline() }
+                    }
+                }
+            },
+            iconOverride = when {
+                isToggleOffline && isOfflineActive -> Tabler.Outline.Wifi
+                isToggleOffline -> Tabler.Outline.WifiOff
+                else -> null
+            },
+            labelOverrideRes = when {
+                isToggleOffline && isGoingOnline -> R.string.menu_going_online
+                isToggleOffline && isOfflineActive -> R.string.menu_go_online
+                isToggleOffline -> R.string.menu_go_offline
+                else -> null
+            },
+            badgeCount = if (isDownloads) downloadCount else 0,
+            isHighlighted = action == com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.SURPRISE_ME ||
+                (isToggleOffline && isOfflineActive),
+            isProgressing = isToggleOffline && isGoingOnline,
+        )
+    }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
@@ -475,37 +540,7 @@ internal fun PhoneContent(
                     // nav toggle) stays here — a compose-side concern.
                     val overflowInsets = overflowMenuInsets(isExpanded = isExpanded, statusBarTop = statusBarTop)
                     com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
-                        onSurpriseClick = {
-                            isOverflowExpanded = false
-                            onSurpriseClick()
-                        },
-                        onSyncPlayClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.SyncPlay)
-                        },
-                        onDownloadsClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.Downloads)
-                        },
-                        onToggleOffline = {
-                            // Guard re-taps while the offline→online transition is in flight.
-                            if (!isGoingOnline) onToggleOffline()
-                        },
-                        onPlayOnClick = {
-                            isOverflowExpanded = false
-                            onPlayOnClick()
-                        },
-                        onShortcutsClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.Shortcuts)
-                        },
-                        onSettingsClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.Settings)
-                        },
-                        offlineMode = offlineMode,
-                        isGoingOnline = isGoingOnline,
-                        downloadCount = downloadCount,
+                        entries = overflowEntries,
                         alignToStart = isExpanded,
                         modifier = if (isExpanded) {
                             // The scaffold body already starts beside the rail, so the

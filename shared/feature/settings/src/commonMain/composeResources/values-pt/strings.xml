@@ -1180,4 +1180,8 @@
     <string name="ss_session_restore_title">Restauração de sessão</string>
     <string name="ss_trickplay_mode_subtitle">Prévias de navegação em bolha, tira de filme ou tela cheia</string>
     <string name="ss_trickplay_mode_title">Estilo de prévia</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">Personalizar atalhos</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Atalhos do cabeçalho e do menu mais</string>
 </resources>

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
@@ -46,6 +47,8 @@ class PreferencesEditScope constructor(
     val audioCache: AudioCacheStore,
     val library: LibraryStore,
     val navigation: NavigationStore,
+    /** User shortcuts: definitions + header/overflow pin orders (per-user namespaced keys). */
+    val shortcuts: ShortcutsStore,
     val networkOffline: NetworkOfflineStore,
     val notification: NotificationStore,
     val screensaver: ScreensaverStore,

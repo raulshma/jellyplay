@@ -1177,4 +1177,8 @@
     <string name="ss_session_restore_title">세션 복원</string>
     <string name="ss_trickplay_mode_subtitle">버블, 필름 스트립 또는 전체 화면 탐색 미리보기</string>
     <string name="ss_trickplay_mode_title">트릭플레이 스타일</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">바로 가기 사용자 지정</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">홈 헤더 및 더보기 메뉴 바로 가기</string>
 </resources>

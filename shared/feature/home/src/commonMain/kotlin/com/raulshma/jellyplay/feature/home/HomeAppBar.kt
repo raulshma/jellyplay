@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +72,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
@@ -128,6 +130,8 @@ internal data class HomeDockState(
     val hasFeaturedItem: Boolean = false,
     /** Scrim-side auto-hide gate; not read by the dock body itself. */
     val hideTopHeaderOnScroll: Boolean = false,
+    /** The user's header shortcuts, resolved (ordered, gated, icon/label final) by the ViewModel. */
+    val headerShortcuts: List<ResolvedShortcut> = emptyList(),
 )
 
 /** The dock's whole interaction surface — see [HomeDockState]. */
@@ -140,6 +144,10 @@ internal data class HomeDockCallbacks(
     val onClearSearch: () -> Unit,
     val onToggleOffline: () -> Unit,
     val onShowSyncDetails: () -> Unit = {},
+    /** Launch a header shortcut (screen → navigate, action → the shell handler). */
+    val onShortcutClick: (ResolvedShortcut) -> Unit = {},
+    /** Long-press a header shortcut (touch) — opens the shortcuts editor. */
+    val onShortcutLongClick: (ResolvedShortcut) -> Unit = {},
 )
 
 @Composable
@@ -440,6 +448,46 @@ private fun SyncStatusIcon(
     }
 }
 
+/**
+ * One user shortcut in the dock's end capsule — the same 38dp/22dp icon-button
+ * grammar as the search button beside it (TV focus glow included). Long-press
+ * (touch only) opens the shortcuts editor; TV uses plain select.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun HeaderShortcutIcon(
+    shortcut: ResolvedShortcut,
+    tint: Color,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val focusState = rememberTvFocusState()
+    val contentDescription = shortcut.labelOverride ?: stringResource(shortcut.labelRes)
+    Box(
+        modifier = Modifier
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, CircleShape)
+            // combinedClickable (not IconButton) so touch long-press can reach
+            // the editor without forking the TV path — select stays onClick.
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(38.dp),
+        ) {
+            Icon(
+                imageVector = shortcut.icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CollapsedDockContent(
@@ -550,6 +598,14 @@ private fun CollapsedDockContent(
                 currentMode = state.homeMode,
                 onModeChange = callbacks.onModeChange,
             )
+            state.headerShortcuts.forEach { shortcut ->
+                HeaderShortcutIcon(
+                    shortcut = shortcut,
+                    tint = appBarIconColorFaded,
+                    onClick = { callbacks.onShortcutClick(shortcut) },
+                    onLongClick = { callbacks.onShortcutLongClick(shortcut) },
+                )
+            }
             val searchFocusState = rememberTvFocusState()
             Box(
                 modifier = Modifier

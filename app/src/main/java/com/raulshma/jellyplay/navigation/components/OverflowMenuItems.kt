@@ -31,26 +31,42 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.stringResource as stringAndroidResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Apps
-import com.composables.icons.tabler.outline.Cast
-import com.composables.icons.tabler.outline.Download
-import com.composables.icons.tabler.outline.Settings
-import com.composables.icons.tabler.outline.Users
-import com.composables.icons.tabler.outline.Wand
-import com.composables.icons.tabler.outline.Wifi
-import com.composables.icons.tabler.outline.WifiOff
-import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
-import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut
+import com.raulshma.jellyplay.core.ui.navigation.resolvedShortcutLabel
+
+/**
+ * One render-ready overflow pill: the resolved shortcut plus the shell-owned
+ * click wiring and dynamic decoration. Built by the shell (PhoneContent /
+ * tablet rail) from [resolveShortcuts]' output — the menu itself knows
+ * nothing about the catalog, the persisted config, or which targets exist
+ * (the `applyNavCustomization` split: policy resolves, chrome renders).
+ */
+data class OverflowMenuItem(
+    /** Stable identity (the resolved shortcut's id) — animation/keys only. */
+    val key: String,
+    val shortcut: ResolvedShortcut,
+    val onClick: () -> Unit,
+    /** State-dependent icon swap (the offline toggle flips Wifi/WifiOff). */
+    val iconOverride: ImageVector? = null,
+    /** State-dependent label swap (going online / go online / go offline) — an app-module resource id. */
+    val labelOverrideRes: Int? = null,
+    /** Downloads badge count. */
+    val badgeCount: Int = 0,
+    /** Primary-tinted pill (Surprise Me; offline-active). */
+    val isHighlighted: Boolean = false,
+    /** Offline→online transition spinner replaces the icon. */
+    val isProgressing: Boolean = false,
+)
 
 /**
  * Animated list of overflow destinations that expands upward from the nav bar's
- * "More" (⋮) 3-dot toggle.
+ * "More" (⋮) 3-dot toggle. The entries are the user's customized shortcut set
+ * (the shipped default layout while unconfigured) — built by the shell.
  *
  * Designed using Material Design 3 Expressive Navigation and Library action chip
  * standards — pills feature interactive press scale, smooth shape morphing,
@@ -69,70 +85,10 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
  */
 @Composable
 fun OverflowMenuItems(
-    onSurpriseClick: () -> Unit,
-    onSyncPlayClick: () -> Unit,
-    onDownloadsClick: () -> Unit,
-    onToggleOffline: () -> Unit,
-    onPlayOnClick: () -> Unit,
-    onShortcutsClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    offlineMode: OfflineMode,
-    isGoingOnline: Boolean,
-    downloadCount: Int = 0,
+    entries: List<OverflowMenuItem>,
     alignToStart: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val isOfflineActive = offlineMode != OfflineMode.ONLINE
-
-    // Declared in display order for the tablet (top-anchored) column. Index
-    // drives the stagger delay so the top-most item enters first; on phone the
-    // bottom-anchored column renders the same order from the toggle upward.
-    val items = listOf(
-        OverflowEntry(
-            icon = Tabler.Outline.Wand,
-            label = R.string.menu_surprise_me,
-            onClick = onSurpriseClick,
-            isHighlighted = true,
-        ),
-        OverflowEntry(
-            icon = Tabler.Outline.Users,
-            label = R.string.menu_syncplay,
-            onClick = onSyncPlayClick,
-        ),
-        OverflowEntry(
-            icon = Tabler.Outline.Download,
-            label = R.string.menu_downloads,
-            onClick = onDownloadsClick,
-            badgeCount = downloadCount,
-        ),
-        OverflowEntry(
-            icon = if (isOfflineActive) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
-            label = when {
-                isGoingOnline -> R.string.menu_going_online
-                isOfflineActive -> R.string.menu_go_online
-                else -> R.string.menu_go_offline
-            },
-            onClick = onToggleOffline,
-            isGoingOnline = isGoingOnline,
-            isHighlighted = isOfflineActive,
-        ),
-        OverflowEntry(
-            icon = Tabler.Outline.Cast,
-            label = R.string.menu_play_on,
-            onClick = onPlayOnClick,
-        ),
-        OverflowEntry(
-            icon = Tabler.Outline.Apps,
-            label = R.string.menu_shortcuts,
-            onClick = onShortcutsClick,
-        ),
-        OverflowEntry(
-            icon = Tabler.Outline.Settings,
-            label = R.string.menu_settings,
-            onClick = onSettingsClick,
-        ),
-    )
-
     Column(
         horizontalAlignment = if (alignToStart) Alignment.Start else Alignment.End,
         verticalArrangement = Arrangement.spacedBy(
@@ -141,7 +97,7 @@ fun OverflowMenuItems(
         ),
         modifier = modifier,
     ) {
-        items.forEachIndexed { index, entry ->
+        entries.forEachIndexed { index, entry ->
             // Mounted fresh each open so the enter transition replays.
             val state = remember { MutableTransitionState(false) }
             state.targetState = true
@@ -166,10 +122,11 @@ fun OverflowMenuItems(
                     ),
             ) {
                 OverflowPill(
-                    icon = entry.icon,
-                    label = stringResource(entry.label),
+                    icon = entry.iconOverride ?: entry.shortcut.icon,
+                    label = entry.labelOverrideRes?.let { stringAndroidResource(it) }
+                        ?: resolvedShortcutLabel(entry.shortcut),
                     onClick = entry.onClick,
-                    isGoingOnline = entry.isGoingOnline,
+                    isGoingOnline = entry.isProgressing,
                     isHighlighted = entry.isHighlighted,
                     badgeCount = entry.badgeCount,
                 )
@@ -177,15 +134,6 @@ fun OverflowMenuItems(
         }
     }
 }
-
-private data class OverflowEntry(
-    val icon: ImageVector,
-    val label: Int,
-    val onClick: () -> Unit,
-    val isGoingOnline: Boolean = false,
-    val isHighlighted: Boolean = false,
-    val badgeCount: Int = 0,
-)
 
 @Composable
 private fun OverflowPill(
@@ -277,4 +225,3 @@ private fun OverflowPill(
         }
     }
 }
-

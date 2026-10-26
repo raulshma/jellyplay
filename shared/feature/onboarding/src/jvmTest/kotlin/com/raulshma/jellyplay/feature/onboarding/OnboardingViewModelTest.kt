@@ -137,6 +137,7 @@ class OnboardingViewModelTest {
             audioCache = mockk(relaxed = true),
             library = mockk(relaxed = true),
             navigation = navigationStore,
+            shortcuts = mockk(relaxed = true),
             networkOffline = mockk(relaxed = true),
             notification = mockk(relaxed = true),
             screensaver = mockk(relaxed = true),

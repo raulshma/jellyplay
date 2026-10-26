@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
@@ -75,6 +76,7 @@ data class PreferenceSliceGraph(
     val audioCacheStore: AudioCacheStore,
     val libraryStore: LibraryStore,
     val navigationStore: NavigationStore,
+    val shortcutsStore: ShortcutsStore,
     val networkOfflineStore: NetworkOfflineStore,
     val notificationStore: NotificationStore,
     val screensaverStore: ScreensaverStore,
@@ -114,6 +116,7 @@ fun createPreferenceSliceGraph(
     val audioCacheStore = AudioCacheStore(dataStore, scope)
     val libraryStore = LibraryStore(dataStore, scope)
     val navigationStore = NavigationStore(dataStore, scope)
+    val shortcutsStore = ShortcutsStore(dataStore, scope, identityStore)
     val networkOfflineStore = NetworkOfflineStore(dataStore, scope)
     val notificationStore = NotificationStore(dataStore, scope)
     val screensaverStore = ScreensaverStore(dataStore, scope)
@@ -136,6 +139,7 @@ fun createPreferenceSliceGraph(
         homeDiscovery = homeDiscoveryStore,
         library = libraryStore,
         navigation = navigationStore,
+        shortcuts = shortcutsStore,
         downloads = downloadsStore,
         networkOffline = networkOfflineStore,
         notification = notificationStore,
@@ -152,7 +156,7 @@ fun createPreferenceSliceGraph(
     return PreferenceSliceGraph(
         playbackStore, appearanceStore, videoPlayerStore, downloadsStore, engineStore,
         identityStore, homeDiscoveryStore, audioStore, audioEffectsStore, audioCacheStore, libraryStore,
-        navigationStore, networkOfflineStore, notificationStore, screensaverStore,
+        navigationStore, shortcutsStore, networkOfflineStore, notificationStore, screensaverStore,
         securityStore, subtitleLanguageStore, syncPlayCastStore, experimentalStore,
         volumeProfileStore, appRuntimeStateStore, preferenceStores, projections,
     )
@@ -197,6 +201,7 @@ fun createUserPreferencesStore(
         g.audioCacheStore,
         g.libraryStore,
         g.navigationStore,
+        g.shortcutsStore,
         g.networkOfflineStore,
         g.notificationStore,
         g.screensaverStore,

@@ -1177,4 +1177,8 @@
     <string name="ss_session_restore_title">Sitzungswiederherstellung</string>
     <string name="ss_trickplay_mode_subtitle">Spulvorschau als Blase, Filmstreifen oder Vollbild</string>
     <string name="ss_trickplay_mode_title">Trickplay-Stil</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">Shortcuts anpassen</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Kopfzeilen- und Übergänge-Shortcuts</string>
 </resources>

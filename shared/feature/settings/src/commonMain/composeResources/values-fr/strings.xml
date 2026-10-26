@@ -1179,4 +1179,8 @@
     <string name="ss_session_restore_title">Restauration de session</string>
     <string name="ss_trickplay_mode_subtitle">Aperçus de progression en bulle, pellicule ou plein écran</string>
     <string name="ss_trickplay_mode_title">Style d’aperçu</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">Personnaliser les raccourcis</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Raccourcis de l’en-tête et du menu plus</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 
@@ -14,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowBarToDown
 import com.composables.icons.tabler.outline.Menu2
+import com.composables.icons.tabler.outline.Wand
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -24,6 +26,8 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_auto_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_bar_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_customize_shortcuts
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_customize_shortcuts_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll_on
@@ -119,6 +123,7 @@ fun NavigationCustomizationGroup(
     preferences: NavigationCustomizationPreferences,
     viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
+    onCustomizeShortcuts: () -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
     val navItems = remember(isTv) {
@@ -183,6 +188,15 @@ fun NavigationCustomizationGroup(
                 onDragEnd = navOrder::onDragEnd,
             )
         }
+
+        // The user-shortcuts editor — the sibling customization surface (the
+        // home header dock + the overflow menu's pinned shortcuts).
+        SettingListItem(
+            icon = Tabler.Outline.Wand,
+            title = stringResource(Res.string.settings_nav_customize_shortcuts),
+            subtitle = stringResource(Res.string.settings_nav_customize_shortcuts_subtitle),
+            onClick = onCustomizeShortcuts,
+        )
         }
     }
 }

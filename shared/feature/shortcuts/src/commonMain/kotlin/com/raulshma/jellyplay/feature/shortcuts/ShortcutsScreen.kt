@@ -58,10 +58,12 @@ import com.composables.icons.tabler.outline.Apps
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.LayoutGrid
+import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Puzzle
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Shield
+import com.composables.icons.tabler.outline.Sparkles
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -98,6 +100,7 @@ import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_fi
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_screen_title
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_search_clear
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_search_no_results
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_title
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_search_placeholder
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.getString
@@ -123,6 +126,10 @@ private val ShortcutFilter.icon: ImageVector
             ShortcutCategory.LIBRARY -> Tabler.Outline.Download
             ShortcutCategory.SERVICES -> Tabler.Outline.Puzzle
             ShortcutCategory.SYSTEM -> Tabler.Outline.Settings
+            // The screen lists destinations only — shell actions never reach
+            // the filter row (the ViewModel projects SCREEN targets only),
+            // but the enum branch is kept exhaustive for the chip renderer.
+            ShortcutCategory.ACTIONS -> Tabler.Outline.Sparkles
         }
     }
 
@@ -133,6 +140,7 @@ private val ShortcutFilter.icon: ImageVector
 fun ShortcutsScreen(
     onBack: () -> Unit,
     onNavigate: (Route) -> Unit,
+    onCustomize: () -> Unit = { onNavigate(Route.ShortcutsCustomize) },
     viewModel: ShortcutsViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -214,6 +222,19 @@ fun ShortcutsScreen(
         topBarStyle = TopBarStyle.Standard,
         backgroundColorState = backgroundColorState,
         actions = {
+            val customizeActionFocus = rememberTvFocusState()
+            IconButton(
+                onClick = onCustomize,
+                modifier = Modifier
+                    .then(customizeActionFocus.focusModifier)
+                    .tvFocusIndicator(customizeActionFocus, CircleShape),
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.Pencil,
+                    contentDescription = stringResource(Res.string.shortcuts_customize_title),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             val searchActionFocus = rememberTvFocusState()
             IconButton(
                 onClick = {

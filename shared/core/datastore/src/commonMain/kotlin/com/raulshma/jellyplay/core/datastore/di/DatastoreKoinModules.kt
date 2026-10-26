@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
@@ -157,6 +158,15 @@ val datastoreCommonModule = module {
         NavigationStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
             get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    single {
+        ShortcutsStore(
+            get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+            // Per-user namespace resolution (u_<userId>::shortcuts_*).
+            get<ServerIdentityStore>(),
         )
     }
 
@@ -316,6 +326,7 @@ val datastoreCommonModule = module {
             homeDiscovery = get<HomeDiscoveryStore>(),
             library = get<LibraryStore>(),
             navigation = get<NavigationStore>(),
+            shortcuts = get<ShortcutsStore>(),
             downloads = get<DownloadsStore>(),
             networkOffline = get<NetworkOfflineStore>(),
             notification = get<NotificationStore>(),
@@ -357,6 +368,7 @@ val datastoreCommonModule = module {
             get<AudioCacheStore>(),
             get<LibraryStore>(),
             get<NavigationStore>(),
+            get<ShortcutsStore>(),
             get<NetworkOfflineStore>(),
             get<NotificationStore>(),
             get<ScreensaverStore>(),
@@ -388,6 +400,7 @@ val datastoreCommonModule = module {
             get<AudioCacheStore>(),
             get<LibraryStore>(),
             get<NavigationStore>(),
+            get<ShortcutsStore>(),
             get<NetworkOfflineStore>(),
             get<NotificationStore>(),
             get<ScreensaverStore>(),

@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
@@ -63,6 +64,7 @@ fun UserPreferencesStore.declaredKeys(): List<Preferences.Key<*>> = buildList {
     addAll(reflectKeys(AudioCacheStore.Keys))
     addAll(reflectKeys(LibraryStore.Keys))
     addAll(reflectKeys(NavigationStore.Keys))
+    addAll(reflectKeys(ShortcutsStore.Keys))
     addAll(reflectKeys(NetworkOfflineStore.Keys))
     addAll(reflectKeys(NotificationStore.Keys))
     addAll(reflectKeys(ScreensaverStore.Keys))

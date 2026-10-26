@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
@@ -47,6 +48,8 @@ class PreferenceStores(
     val homeDiscovery: HomeDiscoveryStore,
     val library: LibraryStore,
     val navigation: NavigationStore,
+    /** User shortcuts — definitions + header/overflow pin orders (read via the store's own flow). */
+    val shortcuts: ShortcutsStore,
     val downloads: DownloadsStore,
     val networkOffline: NetworkOfflineStore,
     val notification: NotificationStore,

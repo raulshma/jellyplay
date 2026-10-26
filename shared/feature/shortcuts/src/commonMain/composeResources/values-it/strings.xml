@@ -45,4 +45,46 @@
     <string name="shortcuts_search_no_results">Nessuna scorciatoia corrisponde a «%1$s»</string>
     <string name="shortcuts_search_clear">Cancella ricerca</string>
     <string name="shortcuts_admin_badge">Admin</string>
+
+    <!-- Custom shortcuts -->
+    <string name="shortcuts_category_actions">Azioni</string>
+    <string name="shortcuts_item_library_title">Libreria</string>
+    <string name="shortcuts_item_library_description">Esplora tutte le librerie multimediali.</string>
+    <string name="shortcuts_item_search_title">Cerca</string>
+    <string name="shortcuts_item_search_description">Cerca film, serie, musica e altro.</string>
+    <string name="shortcuts_item_music_title">Musica</string>
+    <string name="shortcuts_item_music_description">Artisti, album e playlist.</string>
+    <string name="shortcuts_item_shortcuts_title">Scorciatoie</string>
+    <string name="shortcuts_item_shortcuts_description">Il catalogo completo di schermate e azioni.</string>
+    <string name="shortcuts_action_surprise_title">Sorprendimi</string>
+    <string name="shortcuts_action_play_on_title">Riproduci su</string>
+    <string name="shortcuts_action_offline_title">Modalità offline</string>
+    <string name="shortcuts_customize_title">Personalizza scorciatoie</string>
+    <string name="shortcuts_customize_header_section">Intestazione home</string>
+    <string name="shortcuts_customize_overflow_section">Menu extra</string>
+    <string name="shortcuts_customize_unpinned_section">Non fissate</string>
+    <string name="shortcuts_customize_add">Aggiungi scorciatoia</string>
+    <string name="shortcuts_customize_empty_header">Niente fissato nell’intestazione home.</string>
+    <string name="shortcuts_customize_empty_overflow">Niente fissato nel menu extra.</string>
+    <string name="shortcuts_customize_empty_unpinned">Tutte le scorciatoie sono fissate.</string>
+    <string name="shortcuts_customize_pin_header">Fissa nell’intestazione home</string>
+    <string name="shortcuts_customize_pin_overflow">Fissa nel menu extra</string>
+    <string name="shortcuts_customize_edit">Modifica</string>
+    <string name="shortcuts_customize_remove">Rimuovi</string>
+    <string name="shortcuts_customize_move_up">Sposta su</string>
+    <string name="shortcuts_customize_move_down">Sposta giù</string>
+    <string name="shortcuts_customize_reset">Ripristina predefinite</string>
+    <string name="shortcuts_customize_reset_confirm_title">Ripristinare le scorciatoie?</string>
+    <string name="shortcuts_customize_reset_confirm_message">Le tue scorciatoie personalizzate vengono rimosse e tornano i menu predefiniti.</string>
+    <string name="shortcuts_customize_pick_target">Scegli una destinazione</string>
+    <string name="shortcuts_customize_pick_icon">Scegli un’icona</string>
+    <string name="shortcuts_customize_use_default_icon">Usa icona predefinita</string>
+    <string name="shortcuts_customize_label_hint">Nome personalizzato (facoltativo)</string>
+    <string name="shortcuts_customize_save">Salva</string>
+    <string name="shortcuts_customize_header_full">L’intestazione home è piena: rimuovi prima una scorciatoia.</string>
+    <string name="shortcuts_customize_overflow_full">Il menu extra è pieno: rimuovi prima una scorciatoia.</string>
+    <string name="shortcuts_customize_header_capacity">%1$d di %2$d fissate</string>
+    <string name="shortcuts_customize_overflow_capacity">%1$d di %2$d fissate</string>
+    <string name="shortcuts_customize_screen_badge">Schermata</string>
+    <string name="shortcuts_customize_action_badge">Azione</string>
 </resources>

@@ -45,4 +45,46 @@
     <string name="shortcuts_search_no_results">Aucun raccourci ne correspond à « %1$s »</string>
     <string name="shortcuts_search_clear">Effacer la recherche</string>
     <string name="shortcuts_admin_badge">Admin</string>
+
+    <!-- Custom shortcuts -->
+    <string name="shortcuts_category_actions">Actions</string>
+    <string name="shortcuts_item_library_title">Bibliothèque</string>
+    <string name="shortcuts_item_library_description">Parcourir toutes les médiathèques.</string>
+    <string name="shortcuts_item_search_title">Recherche</string>
+    <string name="shortcuts_item_search_description">Rechercher films, séries, musique et plus.</string>
+    <string name="shortcuts_item_music_title">Musique</string>
+    <string name="shortcuts_item_music_description">Artistes, albums et listes de lecture.</string>
+    <string name="shortcuts_item_shortcuts_title">Raccourcis</string>
+    <string name="shortcuts_item_shortcuts_description">Le catalogue complet des écrans et des actions.</string>
+    <string name="shortcuts_action_surprise_title">Surprise</string>
+    <string name="shortcuts_action_play_on_title">Lire sur</string>
+    <string name="shortcuts_action_offline_title">Mode hors ligne</string>
+    <string name="shortcuts_customize_title">Personnaliser les raccourcis</string>
+    <string name="shortcuts_customize_header_section">En-tête d’accueil</string>
+    <string name="shortcuts_customize_overflow_section">Menu plus</string>
+    <string name="shortcuts_customize_unpinned_section">Non épinglés</string>
+    <string name="shortcuts_customize_add">Ajouter un raccourci</string>
+    <string name="shortcuts_customize_empty_header">Rien n’est épinglé dans l’en-tête d’accueil.</string>
+    <string name="shortcuts_customize_empty_overflow">Rien n’est épinglé dans le menu plus.</string>
+    <string name="shortcuts_customize_empty_unpinned">Tous les raccourcis sont épinglés.</string>
+    <string name="shortcuts_customize_pin_header">Épingler à l’en-tête d’accueil</string>
+    <string name="shortcuts_customize_pin_overflow">Épingler au menu plus</string>
+    <string name="shortcuts_customize_edit">Modifier</string>
+    <string name="shortcuts_customize_remove">Retirer</string>
+    <string name="shortcuts_customize_move_up">Monter</string>
+    <string name="shortcuts_customize_move_down">Descendre</string>
+    <string name="shortcuts_customize_reset">Rétablir les valeurs par défaut</string>
+    <string name="shortcuts_customize_reset_confirm_title">Réinitialiser les raccourcis ?</string>
+    <string name="shortcuts_customize_reset_confirm_message">Vos raccourcis personnalisés sont retirés et les menus par défaut reviennent.</string>
+    <string name="shortcuts_customize_pick_target">Choisir une destination</string>
+    <string name="shortcuts_customize_pick_icon">Choisir une icône</string>
+    <string name="shortcuts_customize_use_default_icon">Utiliser l’icône par défaut</string>
+    <string name="shortcuts_customize_label_hint">Nom personnalisé (facultatif)</string>
+    <string name="shortcuts_customize_save">Enregistrer</string>
+    <string name="shortcuts_customize_header_full">L’en-tête d’accueil est plein : détachez d’abord un raccourci.</string>
+    <string name="shortcuts_customize_overflow_full">Le menu plus est plein : détachez d’abord un raccourci.</string>
+    <string name="shortcuts_customize_header_capacity">%1$d sur %2$d épinglés</string>
+    <string name="shortcuts_customize_overflow_capacity">%1$d sur %2$d épinglés</string>
+    <string name="shortcuts_customize_screen_badge">Écran</string>
+    <string name="shortcuts_customize_action_badge">Action</string>
 </resources>

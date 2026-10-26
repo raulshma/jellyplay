@@ -65,6 +65,10 @@ kotlin {
             implementation(compose.desktop.currentOs)
             // runTest/UnconfinedTestDispatcher for the Channel/StateFlow pure-logic tests.
             implementation(libs.coroutines.test)
+            // Catalog fixtures fake StringResource (the compose-resources type
+            // is not constructible in tests) — same pattern as the feature
+            // modules' policy suites.
+            implementation(libs.mockk)
         }
         getByName("androidMain").dependencies {
             // Dominant-color extraction keeps the original Palette pipeline.

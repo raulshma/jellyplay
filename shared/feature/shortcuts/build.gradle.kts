@@ -17,6 +17,10 @@ kotlin {
             // interop at all (calendar/requests shape).
             implementation(project(":shared:core:data"))
             implementation(project(":shared:core:ui"))
+            // The shortcuts-customization editor: ShortcutsStore +
+            // PreferencesEditor/PreferencesEditScope (the write seam) + the
+            // shortcuts projection.
+            implementation(project(":shared:core:datastore"))
             // (The legacy build's lifecycle-viewmodel-navigation3 edge was
             // dropped: no shortcuts file imports it — the navigation entry
             // uses entry<Route> from the nav3 runtime/ui artifacts only,

@@ -10,6 +10,7 @@
     <string name="shortcuts_category_library">Library</string>
     <string name="shortcuts_category_services">Services</string>
     <string name="shortcuts_category_system">System</string>
+    <string name="shortcuts_category_actions">Actions</string>
 
     <!-- Empty state -->
     <string name="shortcuts_empty_title">No shortcuts available</string>
@@ -61,4 +62,47 @@
     <string name="shortcuts_item_setup_wizard_description">Run the initial configuration flow.</string>
     <string name="shortcuts_item_about_title">About</string>
     <string name="shortcuts_item_about_description">Version, licenses, and app information.</string>
+    <string name="shortcuts_item_library_title">Library</string>
+    <string name="shortcuts_item_library_description">Browse all media libraries.</string>
+    <string name="shortcuts_item_search_title">Search</string>
+    <string name="shortcuts_item_search_description">Search movies, shows, music, and more.</string>
+    <string name="shortcuts_item_music_title">Music</string>
+    <string name="shortcuts_item_music_description">Artists, albums, and playlists.</string>
+    <string name="shortcuts_item_shortcuts_title">Shortcuts</string>
+    <string name="shortcuts_item_shortcuts_description">The full catalog of screens and actions.</string>
+
+    <!-- Shell actions -->
+    <string name="shortcuts_action_surprise_title">Surprise Me</string>
+    <string name="shortcuts_action_play_on_title">Play On</string>
+    <string name="shortcuts_action_offline_title">Offline Mode</string>
+
+    <!-- Customization editor -->
+    <string name="shortcuts_customize_title">Customize Shortcuts</string>
+    <string name="shortcuts_customize_header_section">Home Header</string>
+    <string name="shortcuts_customize_overflow_section">Overflow Menu</string>
+    <string name="shortcuts_customize_unpinned_section">Unpinned</string>
+    <string name="shortcuts_customize_add">Add Shortcut</string>
+    <string name="shortcuts_customize_empty_header">Nothing pinned to the home header.</string>
+    <string name="shortcuts_customize_empty_overflow">Nothing pinned to the overflow menu.</string>
+    <string name="shortcuts_customize_empty_unpinned">Every shortcut is pinned.</string>
+    <string name="shortcuts_customize_pin_header">Pin to home header</string>
+    <string name="shortcuts_customize_pin_overflow">Pin to overflow menu</string>
+    <string name="shortcuts_customize_edit">Edit</string>
+    <string name="shortcuts_customize_remove">Remove</string>
+    <string name="shortcuts_customize_move_up">Move up</string>
+    <string name="shortcuts_customize_move_down">Move down</string>
+    <string name="shortcuts_customize_reset">Reset to Defaults</string>
+    <string name="shortcuts_customize_reset_confirm_title">Reset shortcuts?</string>
+    <string name="shortcuts_customize_reset_confirm_message">Your custom shortcuts are removed and the default menus return.</string>
+    <string name="shortcuts_customize_pick_target">Choose a destination</string>
+    <string name="shortcuts_customize_pick_icon">Choose an icon</string>
+    <string name="shortcuts_customize_use_default_icon">Use default icon</string>
+    <string name="shortcuts_customize_label_hint">Custom name (optional)</string>
+    <string name="shortcuts_customize_save">Save</string>
+    <string name="shortcuts_customize_header_full">The home header is full — unpin a shortcut first.</string>
+    <string name="shortcuts_customize_overflow_full">The overflow menu is full — unpin a shortcut first.</string>
+    <string name="shortcuts_customize_header_capacity">%1$d of %2$d pinned</string>
+    <string name="shortcuts_customize_overflow_capacity">%1$d of %2$d pinned</string>
+    <string name="shortcuts_customize_screen_badge">Screen</string>
+    <string name="shortcuts_customize_action_badge">Action</string>
 </resources>

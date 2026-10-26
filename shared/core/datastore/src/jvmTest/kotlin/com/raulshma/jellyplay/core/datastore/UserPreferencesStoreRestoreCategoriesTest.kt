@@ -152,6 +152,7 @@ class UserPreferencesStoreRestoreCategoriesTest {
             PreferenceResetCategory.DOWNLOADS_NETWORK to setOf(BackupSliceKey.DOWNLOADS, BackupSliceKey.NETWORK_OFFLINE),
             PreferenceResetCategory.HOME_DISCOVERY to setOf(
                 BackupSliceKey.HOME_DISCOVERY, BackupSliceKey.LIBRARY, BackupSliceKey.NAVIGATION,
+                BackupSliceKey.SHORTCUTS,
             ),
             PreferenceResetCategory.AUDIO_CACHE to setOf(BackupSliceKey.AUDIO_CACHE),
             PreferenceResetCategory.SECURITY to setOf(BackupSliceKey.SECURITY),

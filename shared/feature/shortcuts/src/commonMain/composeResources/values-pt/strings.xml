@@ -45,4 +45,46 @@
     <string name="shortcuts_search_no_results">Nenhum atalho corresponde a «%1$s»</string>
     <string name="shortcuts_search_clear">Limpar pesquisa</string>
     <string name="shortcuts_admin_badge">Admin</string>
+
+    <!-- Custom shortcuts -->
+    <string name="shortcuts_category_actions">Ações</string>
+    <string name="shortcuts_item_library_title">Biblioteca</string>
+    <string name="shortcuts_item_library_description">Explorar todas as bibliotecas de mídia.</string>
+    <string name="shortcuts_item_search_title">Pesquisar</string>
+    <string name="shortcuts_item_search_description">Pesquisar filmes, séries, música e mais.</string>
+    <string name="shortcuts_item_music_title">Música</string>
+    <string name="shortcuts_item_music_description">Artistas, álbuns e playlists.</string>
+    <string name="shortcuts_item_shortcuts_title">Atalhos</string>
+    <string name="shortcuts_item_shortcuts_description">O catálogo completo de telas e ações.</string>
+    <string name="shortcuts_action_surprise_title">Surpresa</string>
+    <string name="shortcuts_action_play_on_title">Reproduzir em</string>
+    <string name="shortcuts_action_offline_title">Modo offline</string>
+    <string name="shortcuts_customize_title">Personalizar atalhos</string>
+    <string name="shortcuts_customize_header_section">Cabeçalho inicial</string>
+    <string name="shortcuts_customize_overflow_section">Menu mais</string>
+    <string name="shortcuts_customize_unpinned_section">Não fixados</string>
+    <string name="shortcuts_customize_add">Adicionar atalho</string>
+    <string name="shortcuts_customize_empty_header">Nada fixado no cabeçalho inicial.</string>
+    <string name="shortcuts_customize_empty_overflow">Nada fixado no menu mais.</string>
+    <string name="shortcuts_customize_empty_unpinned">Todos os atalhos estão fixados.</string>
+    <string name="shortcuts_customize_pin_header">Fixar no cabeçalho inicial</string>
+    <string name="shortcuts_customize_pin_overflow">Fixar no menu mais</string>
+    <string name="shortcuts_customize_edit">Editar</string>
+    <string name="shortcuts_customize_remove">Remover</string>
+    <string name="shortcuts_customize_move_up">Mover para cima</string>
+    <string name="shortcuts_customize_move_down">Mover para baixo</string>
+    <string name="shortcuts_customize_reset">Restaurar padrões</string>
+    <string name="shortcuts_customize_reset_confirm_title">Redefinir atalhos?</string>
+    <string name="shortcuts_customize_reset_confirm_message">Seus atalhos personalizados são removidos e os menus padrão voltam.</string>
+    <string name="shortcuts_customize_pick_target">Escolha um destino</string>
+    <string name="shortcuts_customize_pick_icon">Escolha um ícone</string>
+    <string name="shortcuts_customize_use_default_icon">Usar ícone padrão</string>
+    <string name="shortcuts_customize_label_hint">Nome personalizado (opcional)</string>
+    <string name="shortcuts_customize_save">Salvar</string>
+    <string name="shortcuts_customize_header_full">O cabeçalho inicial está cheio — remova um atalho primeiro.</string>
+    <string name="shortcuts_customize_overflow_full">O menu mais está cheio — remova um atalho primeiro.</string>
+    <string name="shortcuts_customize_header_capacity">%1$d de %2$d fixados</string>
+    <string name="shortcuts_customize_overflow_capacity">%1$d de %2$d fixados</string>
+    <string name="shortcuts_customize_screen_badge">Tela</string>
+    <string name="shortcuts_customize_action_badge">Ação</string>
 </resources>

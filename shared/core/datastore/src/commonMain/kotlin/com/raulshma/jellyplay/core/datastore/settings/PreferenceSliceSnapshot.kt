@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
@@ -52,6 +53,7 @@ data class PreferenceSliceSnapshot(
     val homeDiscovery: HomeDiscoverySlice,
     val library: LibrarySlice,
     val navigation: NavigationSlice,
+    val shortcuts: ShortcutsSlice,
     val downloads: DownloadsSlice,
     val networkOffline: NetworkOfflineSlice,
     val notification: NotificationSlice,
@@ -82,6 +84,7 @@ data class PreferenceSliceSnapshot(
             homeDiscovery = HomeDiscoverySlice(),
             library = LibrarySlice(),
             navigation = NavigationSlice(),
+            shortcuts = ShortcutsSlice(),
             downloads = DownloadsSlice(),
             networkOffline = NetworkOfflineSlice(),
             notification = NotificationSlice(),
@@ -132,6 +135,7 @@ fun buildPreferenceSliceSnapshotFromBackup(
         audioCache = decodeOrDefault(BackupSliceKey.AUDIO_CACHE, AudioCacheSlice.serializer(), AudioCacheSlice()),
         library = decodeOrDefault(BackupSliceKey.LIBRARY, LibrarySlice.serializer(), LibrarySlice()),
         navigation = decodeOrDefault(BackupSliceKey.NAVIGATION, NavigationSlice.serializer(), NavigationSlice()),
+        shortcuts = decodeOrDefault(BackupSliceKey.SHORTCUTS, ShortcutsSlice.serializer(), ShortcutsSlice()),
         networkOffline = decodeOrDefault(BackupSliceKey.NETWORK_OFFLINE, NetworkOfflineSlice.serializer(), NetworkOfflineSlice()),
         notification = decodeOrDefault(BackupSliceKey.NOTIFICATION, NotificationSlice.serializer(), NotificationSlice()),
         syncPlayCast = decodeOrDefault(BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), SyncPlayCastSlice()),

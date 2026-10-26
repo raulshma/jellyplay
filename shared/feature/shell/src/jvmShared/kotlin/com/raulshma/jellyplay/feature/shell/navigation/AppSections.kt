@@ -57,6 +57,7 @@ fun EntryProviderScope<NavKey>.appSections(
         onModeChange = host.home.onHomeModeChange,
         playOnStrategy = host.home.playOnRedirect,
         surpriseRequests = host.home.surpriseRequests,
+        onShortcutAction = host.home.onShortcutAction,
         musicContent = {
             // Build the facade once per navigator/host lifetime so the music
             // subtree sees a single stable MusicNavActions instance (treated

@@ -45,4 +45,46 @@
     <string name="shortcuts_search_no_results">Ningún atajo coincide con «%1$s»</string>
     <string name="shortcuts_search_clear">Borrar búsqueda</string>
     <string name="shortcuts_admin_badge">Admin</string>
+
+    <!-- Custom shortcuts -->
+    <string name="shortcuts_category_actions">Acciones</string>
+    <string name="shortcuts_item_library_title">Biblioteca</string>
+    <string name="shortcuts_item_library_description">Explora todas las bibliotecas de medios.</string>
+    <string name="shortcuts_item_search_title">Buscar</string>
+    <string name="shortcuts_item_search_description">Busca películas, series, música y más.</string>
+    <string name="shortcuts_item_music_title">Música</string>
+    <string name="shortcuts_item_music_description">Artistas, álbumes y listas de reproducción.</string>
+    <string name="shortcuts_item_shortcuts_title">Accesos directos</string>
+    <string name="shortcuts_item_shortcuts_description">El catálogo completo de pantallas y acciones.</string>
+    <string name="shortcuts_action_surprise_title">Sorpréndeme</string>
+    <string name="shortcuts_action_play_on_title">Reproducir en</string>
+    <string name="shortcuts_action_offline_title">Modo sin conexión</string>
+    <string name="shortcuts_customize_title">Personalizar accesos directos</string>
+    <string name="shortcuts_customize_header_section">Cabecera de inicio</string>
+    <string name="shortcuts_customize_overflow_section">Menú de más opciones</string>
+    <string name="shortcuts_customize_unpinned_section">Sin fijar</string>
+    <string name="shortcuts_customize_add">Añadir acceso directo</string>
+    <string name="shortcuts_customize_empty_header">Nada fijado en la cabecera de inicio.</string>
+    <string name="shortcuts_customize_empty_overflow">Nada fijado en el menú de más opciones.</string>
+    <string name="shortcuts_customize_empty_unpinned">Todos los accesos directos están fijados.</string>
+    <string name="shortcuts_customize_pin_header">Fijar a la cabecera de inicio</string>
+    <string name="shortcuts_customize_pin_overflow">Fijar al menú de más opciones</string>
+    <string name="shortcuts_customize_edit">Editar</string>
+    <string name="shortcuts_customize_remove">Quitar</string>
+    <string name="shortcuts_customize_move_up">Subir</string>
+    <string name="shortcuts_customize_move_down">Bajar</string>
+    <string name="shortcuts_customize_reset">Restablecer a los valores predeterminados</string>
+    <string name="shortcuts_customize_reset_confirm_title">¿Restablecer los accesos directos?</string>
+    <string name="shortcuts_customize_reset_confirm_message">Se eliminarán tus accesos directos personalizados y volverán los menús predeterminados.</string>
+    <string name="shortcuts_customize_pick_target">Elige un destino</string>
+    <string name="shortcuts_customize_pick_icon">Elige un icono</string>
+    <string name="shortcuts_customize_use_default_icon">Usar icono predeterminado</string>
+    <string name="shortcuts_customize_label_hint">Nombre personalizado (opcional)</string>
+    <string name="shortcuts_customize_save">Guardar</string>
+    <string name="shortcuts_customize_header_full">La cabecera de inicio está llena: quita un acceso directo primero.</string>
+    <string name="shortcuts_customize_overflow_full">El menú de más opciones está lleno: quita un acceso directo primero.</string>
+    <string name="shortcuts_customize_header_capacity">%1$d de %2$d fijados</string>
+    <string name="shortcuts_customize_overflow_capacity">%1$d de %2$d fijados</string>
+    <string name="shortcuts_customize_screen_badge">Pantalla</string>
+    <string name="shortcuts_customize_action_badge">Acción</string>
 </resources>

@@ -1179,4 +1179,8 @@
     <string name="ss_session_restore_title">Restauración de sesión</string>
     <string name="ss_trickplay_mode_subtitle">Vistas previas de avance en burbuja, tira de película o pantalla completa</string>
     <string name="ss_trickplay_mode_title">Estilo de previsualización</string>
+
+    <!-- Custom shortcuts -->
+    <string name="settings_nav_customize_shortcuts">Personalizar accesos directos</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Atajos de cabecera y menú de más opciones</string>
 </resources>

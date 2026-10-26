@@ -140,6 +140,7 @@ class RestoreWizardViewModelTest {
     private lateinit var audioCacheStore: AudioCacheStore
     private lateinit var libraryStore: LibraryStore
     private lateinit var navigationStore: NavigationStore
+    private lateinit var shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
     private lateinit var networkOfflineStore: NetworkOfflineStore
     private lateinit var notificationStore: NotificationStore
     private lateinit var screensaverStore: ScreensaverStore
@@ -178,6 +179,7 @@ class RestoreWizardViewModelTest {
         audioCacheStore = mockk(relaxed = true)
         libraryStore = mockk(relaxed = true)
         navigationStore = mockk(relaxed = true)
+        shortcutsStore = mockk(relaxed = true)
         networkOfflineStore = mockk(relaxed = true)
         notificationStore = mockk(relaxed = true)
         screensaverStore = mockk(relaxed = true)
@@ -199,6 +201,7 @@ class RestoreWizardViewModelTest {
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
         every { navigationStore.navigation } returns MutableStateFlow(NavigationSlice())
+        every { shortcutsStore.shortcuts } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice())
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
         every { networkOfflineStore.networkOffline } returns MutableStateFlow(NetworkOfflineSlice())
         every { notificationStore.notification } returns MutableStateFlow(NotificationSlice())
@@ -312,6 +315,7 @@ class RestoreWizardViewModelTest {
             homeDiscovery = homeDiscoveryStore,
             library = libraryStore,
             navigation = navigationStore,
+            shortcuts = shortcutsStore,
             downloads = downloadsStore,
             networkOffline = networkOfflineStore,
             notification = notificationStore,

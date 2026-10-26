@@ -221,6 +221,7 @@ internal fun appearanceThemeScreenRowTotal(
 fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
+    onCustomizeShortcuts: () -> Unit = {},
     viewModel: AppearanceSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -265,6 +266,7 @@ fun AppearanceSettingsScreen(
             NavigationCustomizationGroup(
                 preferences = navPrefs,
                 viewModel = viewModel,
+                onCustomizeShortcuts = onCustomizeShortcuts,
             )
         }
 

@@ -670,6 +670,16 @@ sealed class Route : NavKey {
         override val isModal = true
     }
 
+    /**
+     * The shortcuts-customization editor (the pinned header/overflow lists,
+     * per-shortcut icon + label). Modal like [Shortcuts]; reachable from the
+     * Shortcuts screen's Customize action, the Settings group row, and a
+     * header shortcut's touch long-press.
+     */
+    @Serializable data object ShortcutsCustomize : Route() {
+        override val isModal = true
+    }
+
     @Serializable data object SubtitleTester : Route()
 }
 

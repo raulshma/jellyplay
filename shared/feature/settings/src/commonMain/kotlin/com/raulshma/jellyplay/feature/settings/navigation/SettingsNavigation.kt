@@ -96,6 +96,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
         AppearanceSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+            onCustomizeShortcuts = { navigator.navigate(Route.ShortcutsCustomize) },
         )
     }
 

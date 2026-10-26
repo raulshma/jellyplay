@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shortcuts.ShortcutsScreen
+import com.raulshma.jellyplay.feature.shortcuts.customize.ShortcutsCustomizeScreen
 
 fun EntryProviderScope<NavKey>.shortcutsSection(
     navigator: Navigator,
@@ -15,6 +16,12 @@ fun EntryProviderScope<NavKey>.shortcutsSection(
             onNavigate = { route ->
                 navigator.navigate(route)
             },
+        )
+    }
+
+    entry<Route.ShortcutsCustomize> {
+        ShortcutsCustomizeScreen(
+            onBack = { navigator.goBack() },
         )
     }
 }
