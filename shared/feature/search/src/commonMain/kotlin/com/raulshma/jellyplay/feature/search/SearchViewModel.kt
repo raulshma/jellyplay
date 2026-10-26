@@ -139,7 +139,7 @@ internal class SearchViewModel(
      * this VM keeps only its (debounced query, filters) paged source.
      */
     private val quickActions = pagedGridQuickActions(
-        mediaRepository = mediaRepository,
+        userDataChanges = mediaRepository.userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
     )

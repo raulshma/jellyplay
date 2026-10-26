@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.download
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -121,12 +120,12 @@ class PagedGridQuickActions(
  * strings live nowhere — favorites, studio, search).
  */
 fun pagedGridQuickActions(
-    mediaRepository: MediaRepository,
+    userDataChanges: Flow<UserDataChange>,
     userDataMutator: UserDataMutator,
     quickDownloadActions: QuickDownloadActions,
     messenger: DownloadOutcomeMessenger? = null,
 ): PagedGridQuickActions = PagedGridQuickActions(
-    userDataChanges = mediaRepository.userDataChanges,
+    userDataChanges = userDataChanges,
     downloadedIds = quickDownloadActions.downloadedIds,
     downloadSupported = quickDownloadActions.isSupported,
     setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },

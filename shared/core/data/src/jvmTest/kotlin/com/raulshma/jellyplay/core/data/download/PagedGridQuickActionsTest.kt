@@ -37,9 +37,7 @@ class PagedGridQuickActionsTest {
     private val userDataEvents =
         MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
 
-    private val mediaRepository: MediaRepository = mockk {
-        every { userDataChanges } returns userDataEvents
-    }
+    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val userDataMutator: UserDataMutator = mockk(relaxed = true)
     private val quickDownloadActions: QuickDownloadActions = mockk(relaxed = true)
     private val messenger: DownloadOutcomeMessenger = mockk(relaxed = true)
@@ -58,7 +56,7 @@ class PagedGridQuickActionsTest {
         every { quickDownloadActions.isSupported } returns true
 
         val quickActions = pagedGridQuickActions(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             quickDownloadActions = quickDownloadActions,
         )
@@ -73,7 +71,7 @@ class PagedGridQuickActionsTest {
     @Test
     fun `setPlayedSilently routes through the mutator's silent default`() = runTest {
         val quickActions = pagedGridQuickActions(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             quickDownloadActions = quickDownloadActions,
         )
@@ -90,7 +88,7 @@ class PagedGridQuickActionsTest {
     @Test
     fun `requestDownload pre-binds the factory's messenger`() = runTest {
         val quickActions = pagedGridQuickActions(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             quickDownloadActions = quickDownloadActions,
             messenger = messenger,
@@ -107,7 +105,7 @@ class PagedGridQuickActionsTest {
     @Test
     fun `requestDownload without a messenger passes none - the platform default`() = runTest {
         val quickActions = pagedGridQuickActions(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             quickDownloadActions = quickDownloadActions,
         )
@@ -125,7 +123,7 @@ class PagedGridQuickActionsTest {
     @Test
     fun `removeDownloadItem delegates to the shared remove routing`() {
         val quickActions = pagedGridQuickActions(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             quickDownloadActions = quickDownloadActions,
         )
@@ -141,7 +139,7 @@ class PagedGridQuickActionsTest {
         every { quickDownloadActions.isSupported } returns false
 
         val quickActions = pagedGridQuickActions(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             quickDownloadActions = quickDownloadActions,
         )

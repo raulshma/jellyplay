@@ -108,10 +108,6 @@ interface MediaRepository {
      */
     suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
 
-    fun getFavoritesPaged(
-        mediaTypes: List<MediaType>? = null,
-    ): Flow<PagingData<MediaItem>>
-
     /**
      * Hot stream of server-side user-data changes (played / favorite flips from
      * any client, including this one). Collecting subscribes to the realtime
@@ -460,4 +456,7 @@ interface LibraryFeed {
     suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>>
 
     suspend fun getStudios(parentId: String?): Result<List<Studio>>
+
+    /** The favorites paged read ([mediaTypes] filter, null = all kinds). */
+    fun getFavoritesPaged(mediaTypes: List<MediaType>?): Flow<PagingData<MediaItem>>
 }

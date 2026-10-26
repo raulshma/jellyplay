@@ -37,7 +37,7 @@ internal class StudioDetailViewModel(
      * this VM keeps only its name-sorted studio paged source.
      */
     private val quickActions = pagedGridQuickActions(
-        mediaRepository = mediaRepository,
+        userDataChanges = mediaRepository.userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
     )

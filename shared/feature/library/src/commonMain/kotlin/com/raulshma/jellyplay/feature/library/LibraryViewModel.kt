@@ -266,7 +266,7 @@ internal class LibraryViewModel(
      * routing, the sink).
      */
     private val quickActions = pagedGridQuickActions(
-        mediaRepository = mediaRepository,
+        userDataChanges = mediaRepository.userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
         messenger = downloadOutcomeSink,

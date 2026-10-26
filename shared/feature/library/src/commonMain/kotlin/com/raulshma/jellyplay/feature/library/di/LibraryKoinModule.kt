@@ -50,6 +50,7 @@ val libraryModule: Module = module {
     viewModel {
         FavoritesViewModel(
             mediaRepository = get(),
+            userDataChanges = get<com.raulshma.jellyplay.core.data.repository.UserDataChanges>().userDataChanges,
             userDataMutator = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),

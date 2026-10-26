@@ -115,9 +115,20 @@ seam alone; mixed browse+detail consumers keep the union. No member
 carries a default argument — the family-seam rule (a dual-declaring
 override cannot take defaults from both superinterfaces), so seam-typed
 callers pass the union's former defaults explicitly.
+face: getFavoritesPaged
+had one clean consumer (the favorites grid) and joined the seam; the
+paged-grid quick-actions factory was retyped to the `Flow<UserDataChange>`
+it actually reads (it envied one union member through its
+`MediaRepository` parameter). The rest stays on the union BY CENSUS, not
+by omission: getMediaDetail/getSimilarItems callers are all mixed
+consumers (the detail cluster already has its own `MediaDetailProvider`
+seam), and the collection read/write trio has zero clean consumers
+(CollectionTargets is write-only; the two collection VMs are mixed
+detail+collection) — carving them today would force dual injection
+without narrowing anyone. Re-census when a clean consumer appears.
 Status: implemented 2026-10-26 (`LibraryFeed` beside HomeFeed /
 MusicCatalogue / UserDataWriteOperations / UserDataChanges, all aliasing
-the one MediaRepositoryImpl single; stage 1 — the union is not dissolved).
+the one MediaRepositoryImpl single; the union is not dissolved).
 
 ## Details
 
