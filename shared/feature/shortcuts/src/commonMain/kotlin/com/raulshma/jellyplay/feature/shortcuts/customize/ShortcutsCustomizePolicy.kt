@@ -29,6 +29,10 @@ object ShortcutsCustomizePolicy {
         val overflowRows: List<EditorRow>,
         /** Defined but unpinned rows, in the stored definition order. */
         val unpinnedRows: List<EditorRow>,
+        /** Definitions not pinned to the header, in stored definition order. */
+        val availableHeaderRows: List<EditorRow>,
+        /** Definitions not pinned to the overflow menu, in stored definition order. */
+        val availableOverflowRows: List<EditorRow>,
     ) {
         val headerCapacity: Int get() = ShortcutLimits.HEADER_MAX
         val overflowCapacity: Int get() = ShortcutLimits.OVERFLOW_MAX
@@ -54,8 +58,39 @@ object ShortcutsCustomizePolicy {
         val unpinnedRows = definitions.filter { it.id !in pinnedIds }.map { definition ->
             EditorRow(definition, catalog.entryFor(definition.kind, definition.targetId), pinnedHeader = false, pinnedOverflow = false)
         }
-        return EditorSections(headerRows, overflowRows, unpinnedRows)
+        return EditorSections(
+            headerRows = headerRows,
+            overflowRows = overflowRows,
+            unpinnedRows = unpinnedRows,
+            availableHeaderRows = availableRows(definitions, headerOrder, overflowOrder, ShortcutSurface.HEADER, catalog),
+            availableOverflowRows = availableRows(definitions, overflowOrder, headerOrder, ShortcutSurface.OVERFLOW, catalog),
+        )
     }
+
+    /**
+     * The per-surface "available" fold behind the editor's tabs: every
+     * definition NOT pinned to [surface], in stored definition order — the
+     * quick-pin pool. A definition pinned only to the other surface appears
+     * here (with that pin carried in [EditorRow.pinnedHeader] /
+     * [EditorRow.pinnedOverflow] for the "also in" badge), which is what lets
+     * a header-only pin be added to the menu without editing it.
+     */
+    fun availableRows(
+        definitions: List<ShortcutDefinition>,
+        surfaceOrder: List<String>,
+        otherOrder: List<String>,
+        surface: ShortcutSurface,
+        catalog: ShortcutCatalog,
+    ): List<EditorRow> = definitions
+        .filter { it.id !in surfaceOrder }
+        .map { definition ->
+            EditorRow(
+                definition = definition,
+                entry = catalog.entryFor(definition.kind, definition.targetId),
+                pinnedHeader = surface == ShortcutSurface.OVERFLOW && definition.id in otherOrder,
+                pinnedOverflow = surface == ShortcutSurface.HEADER && definition.id in otherOrder,
+            )
+        }
 
     /**
      * The prune fold: the definitions whose target has no catalog entry (an

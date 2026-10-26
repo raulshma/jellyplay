@@ -1162,7 +1162,11 @@ private fun HomeDockArea(
     }
     val dockOnShortcutLongClick = remember(callbacks) {
         { _: com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut ->
-            callbacks.onOpenRoute(com.raulshma.jellyplay.core.ui.navigation.Route.ShortcutsCustomize)
+            callbacks.onOpenRoute(
+                com.raulshma.jellyplay.core.ui.navigation.Route.ShortcutsCustomize(
+                    com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER,
+                ),
+            )
         }
     }
 

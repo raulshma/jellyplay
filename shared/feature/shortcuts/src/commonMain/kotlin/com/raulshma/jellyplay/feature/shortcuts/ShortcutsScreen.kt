@@ -140,7 +140,9 @@ private val ShortcutFilter.icon: ImageVector
 fun ShortcutsScreen(
     onBack: () -> Unit,
     onNavigate: (Route) -> Unit,
-    onCustomize: () -> Unit = { onNavigate(Route.ShortcutsCustomize) },
+    onCustomize: () -> Unit = {
+        onNavigate(Route.ShortcutsCustomize(com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW))
+    },
     viewModel: ShortcutsViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

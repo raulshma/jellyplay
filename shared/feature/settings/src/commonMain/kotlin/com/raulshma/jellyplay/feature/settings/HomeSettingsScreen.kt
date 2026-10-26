@@ -55,6 +55,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_header_shortcuts
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_header_shortcuts_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_tv_off
@@ -622,6 +624,25 @@ fun HomeSettingsScreen(
                         highlighted = highlightSettingId == HomeRows.DiscoverRows.id,
                         index = 0, count = 1,
                         onClick = { navActions.onNavigate(Route.DiscoverRows()) },
+                    )
+
+                    // The header dock's shortcuts — the sibling customization
+                    // surface. The editor opens on the header tab; the
+                    // Navigation settings row opens the same editor on the
+                    // menu tab. A plain action row (the upload/restore
+                    // precedent — no spec-backed declaration).
+                    SettingListItem(
+                        icon = Tabler.Outline.Pin,
+                        title = stringResource(Res.string.settings_home_header_shortcuts),
+                        subtitle = stringResource(Res.string.settings_home_header_shortcuts_subtitle),
+                        trailingText = "",
+                        highlighted = false,
+                        index = 0, count = 1,
+                        onClick = {
+                            navActions.onNavigate(
+                                Route.ShortcutsCustomize(com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER),
+                            )
+                        },
                     )
 
                     SettingToggleItem(

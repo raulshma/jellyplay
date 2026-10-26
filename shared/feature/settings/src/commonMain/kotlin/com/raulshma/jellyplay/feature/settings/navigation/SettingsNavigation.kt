@@ -96,7 +96,12 @@ fun EntryProviderScope<NavKey>.settingsSection(
         AppearanceSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
-            onCustomizeShortcuts = { navigator.navigate(Route.ShortcutsCustomize) },
+            // This row owns the navigation surface — the editor opens on the
+            // ⋮ menu tab (the Home Screen hub's header-shortcuts row opens
+            // the same editor on the header tab).
+            onCustomizeShortcuts = {
+                navigator.navigate(Route.ShortcutsCustomize(com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW))
+            },
         )
     }
 

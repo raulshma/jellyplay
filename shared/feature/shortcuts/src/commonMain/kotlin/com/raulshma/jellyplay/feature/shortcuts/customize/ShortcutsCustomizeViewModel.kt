@@ -39,7 +39,7 @@ class ShortcutsCustomizeViewModel(
         val slice: ShortcutsSlice = ShortcutsSlice(),
         /** The pinned/unpinned section fold — the screen's list content. */
         val sections: ShortcutsCustomizePolicy.EditorSections =
-            ShortcutsCustomizePolicy.EditorSections(emptyList(), emptyList(), emptyList()),
+            ShortcutsCustomizePolicy.EditorSections(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()),
         /** The target picker's rows, admin-filtered, grouped by category in declaration order. */
         val pickerByCategory: Map<ShortcutCategory, List<PickerItem>> = emptyMap(),
     )

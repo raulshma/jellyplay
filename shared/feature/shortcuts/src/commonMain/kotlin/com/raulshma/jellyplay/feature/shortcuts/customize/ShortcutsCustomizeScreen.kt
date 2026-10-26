@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.shortcuts.customize
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,14 +14,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,57 +56,71 @@ import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Restore
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
+import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ShortcutIconGridPicker
-import com.raulshma.jellyplay.core.ui.icons.ShortcutIconRegistry
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget
+import com.raulshma.jellyplay.core.ui.icons.ShortcutIconRegistry
 import com.raulshma.jellyplay.feature.shortcuts.ShortcutCategory
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.Res
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_action_badge
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_add
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_also_in_header
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_also_in_menu
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_available_section
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_edit
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_overflow
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_unpinned
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_capacity
-import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_overflow_capacity
-import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_section
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_empty_message
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_empty_title
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_label_hint
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_move_down
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_move_up
-import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_overflow_capacity
-import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_overflow_section
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pick_icon
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pick_target
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_header
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_overflow
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pinned_section
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_preview
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_preview_more
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_remove
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_reset
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_reset_confirm_message
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_reset_confirm_title
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_save
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_screen_badge
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_tab_header
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_tab_menu
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_title
-import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_unpinned_section
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_use_default_icon
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The shortcuts-customization editor: the pinned Header / Overflow lists
- * (reorder via the up/down commands — TV-first, dpad-reachable), the unpinned
- * definitions, add/edit through one [TvSafeSheet] (target picker → icon grid
- * → label override → surface pins), and reset-to-defaults. Every command is a
- * [ShortcutsCustomizeViewModel] one-liner over the store's atomic write.
+ * The shortcuts-customization editor: two tabs, one per surface (the home
+ * header dock, the overflow menu — the Settings entry points land on their
+ * own tab via the route's [initialSurface]). Each tab is self-sufficient: a
+ * live preview of the surface, the pinned list (reorder via the up/down
+ * commands — TV-first, dpad-reachable), the add flow through one
+ * [TvSafeSheet] (target picker → icon grid → label override → surface pins),
+ * and the quick-pin pool of definitions not yet on this surface. Every
+ * command is a [ShortcutsCustomizeViewModel] one-liner over the store's
+ * atomic write.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ShortcutsCustomizeScreen(
     onBack: () -> Unit,
+    initialSurface: ShortcutSurface = ShortcutSurface.OVERFLOW,
     viewModel: ShortcutsCustomizeViewModel = org.koin.compose.viewmodel.koinViewModel(),
 ) {
-    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.pruneUnknownTargets() }
+    LaunchedEffect(Unit) { viewModel.pruneUnknownTargets() }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var surface by rememberSaveable { mutableStateOf(initialSurface) }
     var draft by remember { mutableStateOf<EditorDraft?>(null) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
 
@@ -115,79 +136,116 @@ fun ShortcutsCustomizeScreen(
             }
         },
     ) { padding ->
-        val headerTitle = stringResource(Res.string.shortcuts_customize_header_section)
-        val headerCapacity = stringResource(
-            Res.string.shortcuts_customize_header_capacity,
-            state.sections.headerRows.size,
-            state.sections.headerCapacity,
-        )
-        val overflowTitle = stringResource(Res.string.shortcuts_customize_overflow_section)
-        val overflowCapacity = stringResource(
-            Res.string.shortcuts_customize_overflow_capacity,
-            state.sections.overflowRows.size,
-            state.sections.overflowCapacity,
-        )
-        val unpinnedTitle = stringResource(Res.string.shortcuts_customize_unpinned_section)
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding(),
-                bottom = padding.calculateBottomPadding() + 24.dp,
-                start = 16.dp,
-                end = 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            sectionHeader(title = headerTitle, capacity = headerCapacity)
-            items(state.sections.headerRows, key = { "h:" + it.definition.id }) { row ->
-                EditorListRow(
-                    row = row,
-                    surfacePinned = true,
-                    onMoveUp = { viewModel.move(row.definition.id, com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER, up = true) },
-                    onMoveDown = { viewModel.move(row.definition.id, com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER, up = false) },
-                    onEdit = { draft = EditorDraft.of(row.definition, headerPinned = true, overflowPinned = row.pinnedOverflow) },
-                    onRemove = { viewModel.remove(row.definition.id) },
-                )
-            }
+        Column(modifier = Modifier.padding(padding)) {
+            ShortcutsSurfaceTabs(
+                selected = surface,
+                onSelect = { surface = it },
+            )
 
-            sectionHeader(title = overflowTitle, capacity = overflowCapacity)
-            items(state.sections.overflowRows, key = { "o:" + it.definition.id }) { row ->
-                EditorListRow(
-                    row = row,
-                    surfacePinned = true,
-                    onMoveUp = { viewModel.move(row.definition.id, com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW, up = true) },
-                    onMoveDown = { viewModel.move(row.definition.id, com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW, up = false) },
-                    onEdit = { draft = EditorDraft.of(row.definition, headerPinned = row.pinnedHeader, overflowPinned = true) },
-                    onRemove = { viewModel.remove(row.definition.id) },
-                )
-            }
+            val pinnedRows = if (surface == ShortcutSurface.HEADER) state.sections.headerRows else state.sections.overflowRows
+            val availableRows = if (surface == ShortcutSurface.HEADER) state.sections.availableHeaderRows else state.sections.availableOverflowRows
+            val surfaceCapacity = if (surface == ShortcutSurface.HEADER) state.sections.headerCapacity else state.sections.overflowCapacity
+            val surfaceFull = if (surface == ShortcutSurface.HEADER) state.sections.headerFull else state.sections.overflowFull
+            val capacityText = stringResource(
+                Res.string.shortcuts_customize_header_capacity,
+                pinnedRows.size,
+                surfaceCapacity,
+            )
+            val pinnedSectionTitle = stringResource(Res.string.shortcuts_customize_pinned_section)
+            val availableSectionTitle = stringResource(Res.string.shortcuts_customize_available_section)
+            val pinCd = stringResource(
+                if (surface == ShortcutSurface.HEADER) Res.string.shortcuts_customize_pin_header else Res.string.shortcuts_customize_pin_overflow,
+            )
 
-            sectionHeader(title = unpinnedTitle, capacity = null)
-            items(state.sections.unpinnedRows, key = { "u:" + it.definition.id }) { row ->
-                EditorListRow(
-                    row = row,
-                    surfacePinned = false,
-                    pinHeaderEnabled = !state.sections.headerFull,
-                    pinOverflowEnabled = !state.sections.overflowFull,
-                    onPinHeader = {
-                        viewModel.setSurfaces(row.definition.id, header = true, overflow = row.pinnedOverflow)
-                    },
-                    onPinOverflow = {
-                        viewModel.setSurfaces(row.definition.id, header = row.pinnedHeader, overflow = true)
-                    },
-                    onEdit = { draft = EditorDraft.of(row.definition, headerPinned = false, overflowPinned = false) },
-                    onRemove = { viewModel.remove(row.definition.id) },
-                )
-            }
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                item(key = "preview") {
+                    SurfacePreviewCard(surface = surface, rows = pinnedRows)
+                }
 
-            item(key = "add") {
-                Button(
-                    onClick = { draft = EditorDraft.new() },
-                    modifier = Modifier.padding(top = 12.dp),
-                ) {
-                    Icon(Tabler.Outline.Plus, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.shortcuts_customize_add))
+                sectionHeader(
+                    title = pinnedSectionTitle,
+                    capacity = capacityText,
+                )
+
+                if (pinnedRows.isEmpty()) {
+                    item(key = "pinned-empty") {
+                        PinnedEmptyState(
+                            surface = surface,
+                            surfaceCapacity = surfaceCapacity,
+                            onAdd = { draft = EditorDraft.new() },
+                        )
+                    }
+                } else {
+                    items(pinnedRows, key = { "p:" + it.definition.id }) { row ->
+                        val index = pinnedRows.indexOf(row)
+                        PinnedShortcutRow(
+                            row = row,
+                            isFirst = index == 0,
+                            isLast = index == pinnedRows.lastIndex,
+                            onMoveUp = { viewModel.move(row.definition.id, surface, up = true) },
+                            onMoveDown = { viewModel.move(row.definition.id, surface, up = false) },
+                            onEdit = {
+                                draft = EditorDraft.of(
+                                    row.definition,
+                                    headerPinned = row.pinnedHeader,
+                                    overflowPinned = row.pinnedOverflow,
+                                )
+                            },
+                            onRemove = { viewModel.remove(row.definition.id) },
+                        )
+                    }
+                }
+
+                item(key = "add") {
+                    FilledTonalButton(
+                        onClick = { draft = EditorDraft.new() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    ) {
+                        Icon(Tabler.Outline.Plus, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(Res.string.shortcuts_customize_add))
+                    }
+                }
+
+                sectionHeader(
+                    title = availableSectionTitle,
+                    capacity = null,
+                )
+
+                if (availableRows.isEmpty()) {
+                    item(key = "available-empty") {
+                        AvailableEmptyState()
+                    }
+                } else {
+                    items(availableRows, key = { "a:" + it.definition.id }) { row ->
+                        AvailableShortcutRow(
+                            row = row,
+                            surface = surface,
+                            pinEnabled = !surfaceFull,
+                            pinContentDescription = pinCd,
+                            onPin = {
+                                viewModel.setSurfaces(
+                                    row.definition.id,
+                                    header = surface == ShortcutSurface.HEADER,
+                                    overflow = surface == ShortcutSurface.OVERFLOW,
+                                )
+                            },
+                            onEdit = {
+                                draft = EditorDraft.of(
+                                    row.definition,
+                                    headerPinned = row.pinnedHeader,
+                                    overflowPinned = row.pinnedOverflow,
+                                )
+                            },
+                            onRemove = { viewModel.remove(row.definition.id) },
+                        )
+                    }
                 }
             }
         }
@@ -199,6 +257,7 @@ fun ShortcutsCustomizeScreen(
             pickerByCategory = state.pickerByCategory,
             headerFull = state.sections.headerFull,
             overflowFull = state.sections.overflowFull,
+            editingLabel = editingRowLabel(state, current),
             onDismiss = { draft = null },
             onSave = { saved ->
                 if (saved.originalId == null && saved.kind != null && saved.targetId != null) {
@@ -233,6 +292,421 @@ fun ShortcutsCustomizeScreen(
         )
     }
 }
+
+/** The label shown in the edit sheet's summary line: the definition's resolved face. */
+@Composable
+private fun editingRowLabel(
+    state: ShortcutsCustomizeViewModel.UiState,
+    draft: EditorDraft,
+): String? {
+    val id = draft.originalId ?: return null
+    val row = state.sections.headerRows.firstOrNull { it.definition.id == id }
+        ?: state.sections.overflowRows.firstOrNull { it.definition.id == id }
+        ?: state.sections.availableHeaderRows.firstOrNull { it.definition.id == id }
+        ?: state.sections.availableOverflowRows.firstOrNull { it.definition.id == id }
+        ?: state.sections.unpinnedRows.firstOrNull { it.definition.id == id }
+    return row?.let { editorRowLabel(it) }
+}
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ShortcutsSurfaceTabs(
+    selected: ShortcutSurface,
+    onSelect: (ShortcutSurface) -> Unit,
+) {
+    TabRow(
+        selectedTabIndex = if (selected == ShortcutSurface.HEADER) 0 else 1,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+    ) {
+        Tab(
+            selected = selected == ShortcutSurface.HEADER,
+            onClick = { onSelect(ShortcutSurface.HEADER) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Tabler.Outline.Pin, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(Res.string.shortcuts_customize_tab_header))
+                }
+            },
+        )
+        Tab(
+            selected = selected == ShortcutSurface.OVERFLOW,
+            onClick = { onSelect(ShortcutSurface.OVERFLOW) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Tabler.Outline.DotsVertical, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(Res.string.shortcuts_customize_tab_menu))
+                }
+            },
+        )
+    }
+}
+
+// ─── Live previews (read-only mirrors of the real surfaces) ─────────────────
+
+@Composable
+private fun SurfacePreviewCard(
+    surface: ShortcutSurface,
+    rows: List<ShortcutsCustomizePolicy.EditorRow>,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                text = stringResource(Res.string.shortcuts_customize_preview),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.size(12.dp))
+            if (surface == ShortcutSurface.HEADER) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    HeaderDockPreview(rows)
+                }
+            } else {
+                MenuPreview(rows)
+            }
+        }
+    }
+}
+
+/** The header dock's capsule: the pinned icons, in order, in one rounded pill. */
+@Composable
+private fun HeaderDockPreview(rows: List<ShortcutsCustomizePolicy.EditorRow>) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (rows.isEmpty()) {
+                Icon(
+                    imageVector = Tabler.Outline.Pin,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            } else {
+                rows.forEach { row ->
+                    Icon(
+                        imageVector = editorRowIcon(row),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The overflow menu's stacked pills (icon + label), at most six of them so
+ * the preview stays a glance, not a scroll — a muted pill counts the rest.
+ */
+@Composable
+private fun MenuPreview(rows: List<ShortcutsCustomizePolicy.EditorRow>) {
+    val shown = rows.take(6)
+    val hidden = rows.size - shown.size
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (rows.isEmpty()) {
+            MenuPreviewPill(
+                icon = Tabler.Outline.DotsVertical,
+                label = stringResource(Res.string.shortcuts_customize_empty_overflow),
+                isPlaceholder = true,
+            )
+        } else {
+            shown.forEach { row ->
+                MenuPreviewPill(icon = editorRowIcon(row), label = editorRowLabel(row))
+            }
+            if (hidden > 0) {
+                MenuPreviewPill(
+                    icon = Tabler.Outline.Plus,
+                    label = stringResource(Res.string.shortcuts_customize_preview_more, hidden),
+                    isPlaceholder = true,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuPreviewPill(
+    icon: ImageVector,
+    label: String,
+    isPlaceholder: Boolean = false,
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isPlaceholder) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isPlaceholder) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+// ─── List sections ─────────────────────────────────────────────────────────
+
+private fun androidx.compose.foundation.lazy.LazyListScope.sectionHeader(title: String, capacity: String?) {
+    item(key = "header:$title") {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            capacity?.let {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+        HorizontalDivider()
+    }
+}
+
+@Composable
+private fun PinnedEmptyState(
+    surface: ShortcutSurface,
+    surfaceCapacity: Int,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = if (surface == ShortcutSurface.HEADER) Tabler.Outline.Pin else Tabler.Outline.DotsVertical,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outlineVariant,
+                modifier = Modifier.size(36.dp),
+            )
+            Spacer(Modifier.size(12.dp))
+            Text(
+                text = if (surface == ShortcutSurface.HEADER) {
+                    stringResource(Res.string.shortcuts_customize_header_empty_title)
+                } else {
+                    stringResource(Res.string.shortcuts_customize_empty_overflow)
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+            if (surface == ShortcutSurface.HEADER) {
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    text = stringResource(Res.string.shortcuts_customize_header_empty_message, surfaceCapacity),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Spacer(Modifier.size(12.dp))
+            Button(onClick = onAdd) {
+                Icon(Tabler.Outline.Plus, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(Res.string.shortcuts_customize_add))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AvailableEmptyState(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(Res.string.shortcuts_customize_empty_unpinned),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+    )
+}
+
+/** A pinned row: resolved face + up/down (TV-first reorder), edit, remove. */
+@Composable
+private fun PinnedShortcutRow(
+    row: ShortcutsCustomizePolicy.EditorRow,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onEdit: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = editorRowIcon(row),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = editorRowLabel(row),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = rowKindBadge(row),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            RowEditorAction(Tabler.Outline.ChevronUp, stringResource(Res.string.shortcuts_customize_move_up), enabled = !isFirst, onClick = onMoveUp)
+            RowEditorAction(Tabler.Outline.ChevronDown, stringResource(Res.string.shortcuts_customize_move_down), enabled = !isLast, onClick = onMoveDown)
+            RowEditorAction(Tabler.Outline.Pencil, stringResource(Res.string.shortcuts_customize_edit), onClick = onEdit)
+            RowEditorAction(Tabler.Outline.Trash, stringResource(Res.string.shortcuts_customize_remove), onClick = onRemove)
+        }
+    }
+}
+
+/**
+ * A quick-pin pool row: the definition isn't on this surface — one tap pins
+ * it (the "also in" badge carries its other-surface pin), or edit/remove.
+ */
+@Composable
+private fun AvailableShortcutRow(
+    row: ShortcutsCustomizePolicy.EditorRow,
+    surface: ShortcutSurface,
+    pinEnabled: Boolean,
+    pinContentDescription: String,
+    onPin: () -> Unit,
+    onEdit: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val alsoInRes: StringResource? = when {
+        surface == ShortcutSurface.HEADER && row.pinnedOverflow -> Res.string.shortcuts_customize_also_in_menu
+        surface == ShortcutSurface.OVERFLOW && row.pinnedHeader -> Res.string.shortcuts_customize_also_in_header
+        else -> null
+    }
+    val alsoInText: String? = if (alsoInRes != null) stringResource(alsoInRes) else null
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = editorRowIcon(row),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = editorRowLabel(row),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = listOfNotNull(rowKindBadge(row), alsoInText)
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            RowEditorAction(Tabler.Outline.Pin, contentDescription = pinContentDescription, enabled = pinEnabled, onClick = onPin)
+            RowEditorAction(Tabler.Outline.Pencil, stringResource(Res.string.shortcuts_customize_edit), onClick = onEdit)
+            RowEditorAction(Tabler.Outline.Trash, stringResource(Res.string.shortcuts_customize_remove), onClick = onRemove)
+        }
+    }
+}
+
+// ─── Row faces ─────────────────────────────────────────────────────────────
+
+/**
+ * The icon the surfaces render: the user's picked icon when it resolves, else
+ * the catalog default — the row never lies about the pin's appearance.
+ */
+private fun editorRowIcon(row: ShortcutsCustomizePolicy.EditorRow): ImageVector =
+    ShortcutIconRegistry.resolve(row.definition.iconId)
+        ?: row.entry?.defaultIcon
+        ?: Tabler.Outline.DotsVertical
+
+@Composable
+private fun editorRowLabel(row: ShortcutsCustomizePolicy.EditorRow): String =
+    row.definition.labelOverride
+        ?: row.entry?.let { stringResource(it.labelRes) }
+        ?: row.definition.targetId
+
+@Composable
+private fun rowKindBadge(row: ShortcutsCustomizePolicy.EditorRow): String =
+    when {
+        row.entry == null -> row.definition.targetId
+        row.entry.isAction -> stringResource(Res.string.shortcuts_customize_action_badge)
+        else -> stringResource(Res.string.shortcuts_customize_screen_badge)
+    }
 
 // ─── Editor draft (the sheet's state) ──────────────────────────────────────
 
@@ -272,6 +746,7 @@ private fun ShortcutEditorSheet(
     pickerByCategory: Map<ShortcutCategory, List<ShortcutsCustomizeViewModel.PickerItem>>,
     headerFull: Boolean,
     overflowFull: Boolean,
+    editingLabel: String?,
     onDismiss: () -> Unit,
     onSave: (EditorDraft) -> Unit,
 ) {
@@ -279,7 +754,9 @@ private fun ShortcutEditorSheet(
 
     TvSafeSheet(
         onDismissRequest = onDismiss,
-        title = stringResource(Res.string.shortcuts_customize_title),
+        title = stringResource(
+            if (draft.originalId == null) Res.string.shortcuts_customize_add else Res.string.shortcuts_customize_edit,
+        ),
     ) {
         if (draft.originalId == null) {
             Text(
@@ -295,6 +772,13 @@ private fun ShortcutEditorSheet(
                 onSelect = { kind, targetId -> current = current.copy(kind = kind, targetId = targetId) },
             )
             Spacer(Modifier.size(16.dp))
+        } else if (editingLabel != null) {
+            Text(
+                text = editingLabel,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.size(8.dp))
         }
 
         Text(
@@ -395,14 +879,13 @@ private fun ShortcutTargetPicker(
                         modifier = Modifier.size(22.dp),
                     )
                     Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(item.entry.labelRes),
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Text(
+                        text = stringResource(item.entry.labelRes),
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (item.alreadyDefined) {
                         Text(
                             text = stringResource(Res.string.shortcuts_customize_screen_badge),
@@ -438,106 +921,17 @@ private fun SurfacePinToggle(
     }
 }
 
-// ─── List sections ─────────────────────────────────────────────────────────
-
-private fun androidx.compose.foundation.lazy.LazyListScope.sectionHeader(title: String, capacity: String?) {
-    item(key = "header:$title") {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            capacity?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        HorizontalDivider()
-    }
-}
-
-@Composable
-private fun EditorListRow(
-    row: ShortcutsCustomizePolicy.EditorRow,
-    surfacePinned: Boolean,
-    pinHeaderEnabled: Boolean = true,
-    pinOverflowEnabled: Boolean = true,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null,
-    onPinHeader: (() -> Unit)? = null,
-    onPinOverflow: (() -> Unit)? = null,
-    onEdit: () -> Unit,
-    onRemove: () -> Unit,
-) {
-    val entry = row.entry
-    Surface(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                // The icon the surfaces render: the user's picked icon when it
-                // resolves, else the catalog default — the row never lies
-                // about the pin's appearance.
-                imageVector = ShortcutIconRegistry.resolve(row.definition.iconId)
-                    ?: entry?.defaultIcon
-                    ?: Tabler.Outline.Trash,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = row.definition.labelOverride
-                        ?: entry?.let { stringResource(it.labelRes) }
-                        ?: row.definition.targetId,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = when {
-                        entry == null -> row.definition.targetId
-                        entry.isAction -> stringResource(Res.string.shortcuts_customize_action_badge)
-                        else -> stringResource(Res.string.shortcuts_customize_screen_badge)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (surfacePinned) {
-                RowEditorAction(Tabler.Outline.ChevronUp, Res.string.shortcuts_customize_move_up, enabled = onMoveUp != null, onClick = { onMoveUp?.invoke() })
-                RowEditorAction(Tabler.Outline.ChevronDown, Res.string.shortcuts_customize_move_down, enabled = onMoveDown != null, onClick = { onMoveDown?.invoke() })
-            } else {
-                RowEditorAction(Tabler.Outline.Pin, Res.string.shortcuts_customize_pin_header, enabled = pinHeaderEnabled, onClick = { onPinHeader?.invoke() })
-                RowEditorAction(Tabler.Outline.DotsVertical, Res.string.shortcuts_customize_pin_overflow, enabled = pinOverflowEnabled, onClick = { onPinOverflow?.invoke() })
-            }
-            RowEditorAction(Tabler.Outline.Pencil, Res.string.shortcuts_customize_edit, onClick = onEdit)
-            RowEditorAction(Tabler.Outline.Trash, Res.string.shortcuts_customize_remove, onClick = onRemove)
-        }
-    }
-}
-
 @Composable
 private fun RowEditorAction(
     icon: ImageVector,
-    contentDescriptionRes: org.jetbrains.compose.resources.StringResource,
+    contentDescription: String,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(34.dp)) {
         Icon(
             imageVector = icon,
-            contentDescription = stringResource(contentDescriptionRes),
+            contentDescription = contentDescription,
             modifier = Modifier.size(18.dp),
         )
     }

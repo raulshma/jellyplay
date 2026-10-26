@@ -62,6 +62,31 @@ class ShortcutsCustomizePolicyTest {
     }
 
     @Test
+    fun `available rows are the definitions not pinned to the surface, carrying the other surface's pin`() {
+        val definitions = listOf(
+            screenDef("a", "Downloads"),
+            screenDef("b", "Favorites"),
+            screenDef("c", "Settings"),
+            screenDef("d", "Playlists"),
+        )
+        val sections = ShortcutsCustomizePolicy.sections(
+            definitions = definitions,
+            headerOrder = listOf("b"),
+            overflowOrder = listOf("a", "c"),
+            catalog = catalog,
+        )
+        // The header tab's pool: everything NOT on the header, in definition
+        // order; the menu pins ride along for the "also in" badge.
+        assertEquals(listOf("a", "c", "d"), sections.availableHeaderRows.map { it.definition.id })
+        assertTrue(sections.availableHeaderRows.all { !it.pinnedHeader })
+        assertEquals(listOf(true, true, false), sections.availableHeaderRows.map { it.pinnedOverflow })
+        // The menu tab's pool mirrors it: the header pin rides along.
+        assertEquals(listOf("b", "d"), sections.availableOverflowRows.map { it.definition.id })
+        assertTrue(sections.availableOverflowRows.all { !it.pinnedOverflow })
+        assertEquals(listOf(true, false), sections.availableOverflowRows.map { it.pinnedHeader })
+    }
+
+    @Test
     fun `capacity gates reflect the surface caps`() {
         val many = (1..13).map { screenDef("s$it", "Downloads$it") }
         val sections = ShortcutsCustomizePolicy.sections(

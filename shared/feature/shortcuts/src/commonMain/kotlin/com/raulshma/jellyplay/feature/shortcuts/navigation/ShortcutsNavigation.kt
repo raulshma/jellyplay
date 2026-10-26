@@ -19,9 +19,10 @@ fun EntryProviderScope<NavKey>.shortcutsSection(
         )
     }
 
-    entry<Route.ShortcutsCustomize> {
+    entry<Route.ShortcutsCustomize> { entry ->
         ShortcutsCustomizeScreen(
             onBack = { navigator.goBack() },
+            initialSurface = entry.initialSurface,
         )
     }
 }

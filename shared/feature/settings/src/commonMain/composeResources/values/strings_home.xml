@@ -227,6 +227,8 @@
     <string name="settings_home_layout_restore_title">Restore Layout from Server?</string>
     <string name="settings_home_layout_restore_message">The server copy (saved %1$s) has %2$s sections enabled. This device has %3$s sections enabled. Restoring replaces the layout on this device.</string>
     <string name="settings_home_layout_presets_server_note">The current layout also syncs to your Jellyfin server</string>
+    <string name="settings_home_header_shortcuts">Header Shortcuts</string>
+    <string name="settings_home_header_shortcuts_subtitle">Customize the shortcuts in the top header's dock</string>
     <string name="settings_home_trickplay_preview">Trickplay Preview</string>
     <string name="settings_home_trickplay_preview_subtitle">Android TV: show a preview frame on focused Continue Watching cards</string>
     <string name="settings_home_trickplay_preview_on">Preview frames shown on focus</string>
