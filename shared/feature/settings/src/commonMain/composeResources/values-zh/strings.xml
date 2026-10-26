@@ -936,7 +936,7 @@
     <string name="settings_custom_device_profile_helper">叠加在内置配置文件之上的自定义设备配置文件 JSON</string>
     <string name="settings_custom_device_profile_json">自定义设备配置文件</string>
     <string name="settings_custom_device_profile_json_subtitle">合并到转码决策中的自定义 JSON 设备配置文件</string>
-    <string name="settings_custom_device_profile_placeholder">{ “MaxStreamingBitrate”: 40000000 }</string>
+    <string name="settings_custom_device_profile_placeholder">{ "MaxStreamingBitrate": 40000000 }</string>
     <string name="settings_deband_mode_heavy">强</string>
     <string name="settings_deband_mode_light">弱</string>
     <string name="settings_deband_mode_medium">中</string>
@@ -1011,7 +1011,7 @@
     <string name="settings_max_cache_applies_after_restart">将在下次启动应用时生效</string>
     <string name="settings_mpv_custom_buttons">自定义播放器按钮</string>
     <string name="settings_mpv_custom_buttons_helper">按钮定义的 JSON 数组</string>
-    <string name="settings_mpv_custom_buttons_placeholder">[ { “id”: “mybutton”, “command”: “seek 10” } ]</string>
+    <string name="settings_mpv_custom_buttons_placeholder">[ { "id": "mybutton", "command": "seek 10" } ]</string>
     <string name="settings_mpv_custom_buttons_subtitle">自定义播放器按钮的 JSON 列表（mpv）</string>
     <string name="settings_mpv_deband">去色带级别</string>
     <string name="settings_mpv_deband_subtitle">mpv 的去色带强度</string>

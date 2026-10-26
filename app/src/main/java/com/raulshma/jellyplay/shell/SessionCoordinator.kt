@@ -51,7 +51,7 @@ class SessionCoordinator(
     private val remoteControlReceiver: RemoteControlReceiver,
     private val widgetWorkScheduler: WidgetWorkScheduler,
     private val cacheMaintenanceInitializer: CacheMaintenanceInitializer,
-    private val mediaRepository: LibraryFeed,
+    private val libraryFeed: LibraryFeed,
 ) : ShellCoordinator() {
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
@@ -185,7 +185,7 @@ class SessionCoordinator(
     /** Re-fetches library folders for the TV navigation drawer. */
     fun refreshLibraryFolders() {
         commandScope.launch {
-            mediaRepository.getLibraryFolders(force = false)
+            libraryFeed.getLibraryFolders(force = false)
                 .onSuccess { _libraryFolders.value = it }
         }
     }

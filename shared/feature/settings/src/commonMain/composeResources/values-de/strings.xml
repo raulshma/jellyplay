@@ -934,7 +934,7 @@
     <string name="settings_custom_device_profile_helper">Benutzerdefiniertes Geräteprofil-JSON, das über das integrierte Profil gelegt wird</string>
     <string name="settings_custom_device_profile_json">Benutzerdefiniertes Geräteprofil</string>
     <string name="settings_custom_device_profile_json_subtitle">Benutzerdefiniertes JSON-Geräteprofil, das in die Transcoding-Entscheidung einfließt</string>
-    <string name="settings_custom_device_profile_placeholder">{ “MaxStreamingBitrate”: 40000000 }</string>
+    <string name="settings_custom_device_profile_placeholder">{ "MaxStreamingBitrate": 40000000 }</string>
     <string name="settings_deband_mode_heavy">Stark</string>
     <string name="settings_deband_mode_light">Leicht</string>
     <string name="settings_deband_mode_medium">Mittel</string>
@@ -1009,7 +1009,7 @@
     <string name="settings_max_cache_applies_after_restart">Wird beim nächsten Start der App angewendet</string>
     <string name="settings_mpv_custom_buttons">Benutzerdefinierte Player-Schaltflächen</string>
     <string name="settings_mpv_custom_buttons_helper">Ein JSON-Array mit Schaltflächendefinitionen</string>
-    <string name="settings_mpv_custom_buttons_placeholder">[ { “id”: “mybutton”, “command”: “seek 10” } ]</string>
+    <string name="settings_mpv_custom_buttons_placeholder">[ { "id": "mybutton", "command": "seek 10" } ]</string>
     <string name="settings_mpv_custom_buttons_subtitle">JSON-Liste benutzerdefinierter Player-Schaltflächen (mpv)</string>
     <string name="settings_mpv_deband">Debanding-Stufe</string>
     <string name="settings_mpv_deband_subtitle">Die Debanding-Stärke von mpv</string>

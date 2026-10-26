@@ -20,14 +20,14 @@ import kotlinx.coroutines.flow.StateFlow
  * type would leak sort state across the three routes.
  */
 class AlbumsViewModel(
-    mediaRepository: LibraryFeed,
+    libraryFeed: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the albums grid renders through. */
     val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     /** Sorted paged albums — sort state, pager and declared sort set live in the collection. */
-    private val collection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.ALBUMS)
+    private val collection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.ALBUMS)
 
     val selectedSort: StateFlow<MusicSortOption> = collection.selectedSort
 

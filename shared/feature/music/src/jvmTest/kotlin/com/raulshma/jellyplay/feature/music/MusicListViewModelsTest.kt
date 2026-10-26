@@ -267,7 +267,7 @@ class MusicBrowseViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: LibraryFeed = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val playlistRepository: PlaylistRepository = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
@@ -276,12 +276,12 @@ class MusicBrowseViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
+        every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
-        coEvery { mediaRepository.getGenres(null, false) } returns
+        coEvery { libraryFeed.getGenres(null, false) } returns
             Result.success(listOf(Genre(id = "g1", name = "Rock")))
         coEvery { playlistRepository.getPlaylists() } returns Result.success(emptyList())
-        viewModel = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        viewModel = MusicBrowseViewModel(libraryFeed, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @AfterTest
@@ -336,7 +336,7 @@ class MusicBrowseViewModelTest {
         viewModel.tracks.first()
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 com.raulshma.jellyplay.core.model.LibraryFilters(
                     mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ARTIST),
@@ -347,7 +347,7 @@ class MusicBrowseViewModelTest {
             )
         }
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 com.raulshma.jellyplay.core.model.LibraryFilters(
                     mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ALBUM),
@@ -358,7 +358,7 @@ class MusicBrowseViewModelTest {
             )
         }
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 com.raulshma.jellyplay.core.model.LibraryFilters(
                     mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
@@ -378,7 +378,7 @@ class MusicBrowseViewModelTest {
         viewModel.tracks.first()
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 com.raulshma.jellyplay.core.model.LibraryFilters(
                     mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
@@ -401,8 +401,8 @@ class MusicBrowseViewModelTest {
 
     @Test
     fun genresFailure_surfacesTheFailureAndClearsLoading() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getGenres(null, false) } returns Result.failure(RuntimeException())
-        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        coEvery { libraryFeed.getGenres(null, false) } returns Result.failure(RuntimeException())
+        val failing = MusicBrowseViewModel(libraryFeed, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         // Message-less failures surface the Throwable itself; the ladder
@@ -416,7 +416,7 @@ class MusicBrowseViewModelTest {
     @Test
     fun playlistsFailure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
         coEvery { playlistRepository.getPlaylists() } returns Result.failure(RuntimeException("no pl"))
-        val failing = MusicBrowseViewModel(mediaRepository, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        val failing = MusicBrowseViewModel(libraryFeed, playlistRepository, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         assertEquals("no pl", failing.playlistsError.value?.message)
@@ -426,12 +426,12 @@ class MusicBrowseViewModelTest {
     @Test
     fun refreshGenres_forcesTheServerRead() = runTest(mainDispatcher) {
         advanceUntilIdle()
-        coEvery { mediaRepository.getGenres(null, true) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(null, true) } returns Result.success(emptyList())
 
         viewModel.refreshGenres()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getGenres(null, true) }
+        coVerify(exactly = 1) { libraryFeed.getGenres(null, true) }
         assertFalse(viewModel.genresLoading.value)
         assertNull(viewModel.genresError.value)
     }
@@ -455,7 +455,7 @@ class AlbumsViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: LibraryFeed = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
     private lateinit var viewModel: AlbumsViewModel
@@ -463,9 +463,9 @@ class AlbumsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
+        every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
-        viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        viewModel = AlbumsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @AfterTest
@@ -497,7 +497,7 @@ class ArtistsViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: LibraryFeed = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
     private lateinit var viewModel: ArtistsViewModel
@@ -505,9 +505,9 @@ class ArtistsViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
+        every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
-        viewModel = ArtistsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        viewModel = ArtistsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @AfterTest
@@ -539,7 +539,7 @@ class GenresViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: LibraryFeed = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
 
     private lateinit var viewModel: GenresViewModel
 
@@ -561,8 +561,8 @@ class GenresViewModelTest {
      * be recorded before construction.
      */
     private fun createViewModel(getGenres: Result<List<Genre>>) {
-        coEvery { mediaRepository.getGenres(null, false) } returns getGenres
-        viewModel = GenresViewModel(mediaRepository)
+        coEvery { libraryFeed.getGenres(null, false) } returns getGenres
+        viewModel = GenresViewModel(libraryFeed)
     }
 
     @Test
@@ -592,11 +592,11 @@ class GenresViewModelTest {
     fun refresh_forcesReload() = runTest(mainDispatcher) {
         createViewModel(Result.success(genres))
         advanceUntilIdle()
-        coEvery { mediaRepository.getGenres(null, true) } returns Result.success(genres)
+        coEvery { libraryFeed.getGenres(null, true) } returns Result.success(genres)
 
         viewModel.refresh()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getGenres(null, true) }
+        coVerify(exactly = 1) { libraryFeed.getGenres(null, true) }
     }
 }

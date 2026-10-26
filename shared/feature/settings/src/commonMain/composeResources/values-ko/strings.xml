@@ -934,7 +934,7 @@
     <string name="settings_custom_device_profile_helper">내장 프로필 위에 적용되는 사용자 지정 기기 프로필 JSON</string>
     <string name="settings_custom_device_profile_json">사용자 지정 기기 프로필</string>
     <string name="settings_custom_device_profile_json_subtitle">트랜스코딩 결정에 병합되는 사용자 지정 JSON 기기 프로필</string>
-    <string name="settings_custom_device_profile_placeholder">{ “MaxStreamingBitrate”: 40000000 }</string>
+    <string name="settings_custom_device_profile_placeholder">{ "MaxStreamingBitrate": 40000000 }</string>
     <string name="settings_deband_mode_heavy">강함</string>
     <string name="settings_deband_mode_light">약함</string>
     <string name="settings_deband_mode_medium">중간</string>
@@ -1009,7 +1009,7 @@
     <string name="settings_max_cache_applies_after_restart">다음에 앱이 시작될 때 적용됩니다</string>
     <string name="settings_mpv_custom_buttons">사용자 지정 플레이어 버튼</string>
     <string name="settings_mpv_custom_buttons_helper">버튼 정의의 JSON 배열입니다</string>
-    <string name="settings_mpv_custom_buttons_placeholder">[ { “id”: “mybutton”, “command”: “seek 10” } ]</string>
+    <string name="settings_mpv_custom_buttons_placeholder">[ { "id": "mybutton", "command": "seek 10" } ]</string>
     <string name="settings_mpv_custom_buttons_subtitle">사용자 지정 플레이어 버튼의 JSON 목록(mpv)</string>
     <string name="settings_mpv_deband">디밴딩 레벨</string>
     <string name="settings_mpv_deband_subtitle">mpv의 디밴딩 강도입니다</string>

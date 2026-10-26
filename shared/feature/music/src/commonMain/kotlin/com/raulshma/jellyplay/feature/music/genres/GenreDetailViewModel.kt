@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 
 class GenreDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    private val mediaRepository: LibraryFeed,
+    private val libraryFeed: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the track rows render through. */
     val artworkUrls: ArtworkUrls,
@@ -25,7 +25,7 @@ class GenreDetailViewModel(
     private val genreId: String = savedStateHandle[Route.GenreDetail::genreId.name] ?: ""
     private val genreName: String = savedStateHandle[Route.GenreDetail::genreName.name] ?: ""
 
-    val tracks: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
+    val tracks: Flow<PagingData<MediaItem>> = libraryFeed.getMediaItemsPaged(
         parentId = null,
         filters = com.raulshma.jellyplay.core.model.LibraryFilters(
             mediaTypes = listOf(MediaType.AUDIO),

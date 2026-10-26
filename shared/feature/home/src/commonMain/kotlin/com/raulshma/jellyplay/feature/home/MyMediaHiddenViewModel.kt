@@ -48,7 +48,7 @@ data class MyMediaHiddenUiState(
 class MyMediaHiddenViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: LibraryFeed,
+    private val libraryFeed: LibraryFeed,
 ) : JellyPlayViewModel() {
 
     private val _state = MutableStateFlow(MyMediaHiddenUiState())
@@ -59,7 +59,7 @@ class MyMediaHiddenViewModel(
 
     init {
         scope.launch {
-            mediaRepository.getLibraryFolders(force = false)
+            libraryFeed.getLibraryFolders(force = false)
                 .onSuccess { folders ->
                     foldersById = folders.associateBy { it.id }
                     republish()

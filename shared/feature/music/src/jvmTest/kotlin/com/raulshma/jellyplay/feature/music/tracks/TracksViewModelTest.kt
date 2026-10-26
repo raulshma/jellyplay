@@ -33,7 +33,7 @@ class TracksViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: LibraryFeed = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
 
@@ -49,7 +49,7 @@ class TracksViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         viewModel = TracksViewModel(
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
             imageUrlProvider = imageUrlProvider,
             artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,

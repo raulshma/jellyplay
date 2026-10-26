@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
  * queue) that are genuinely per-collection and stay at the adapter.
  */
 class TracksViewModel(
-    mediaRepository: LibraryFeed,
+    libraryFeed: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the tracks list renders through. */
     val artworkUrls: ArtworkUrls,
@@ -28,7 +28,7 @@ class TracksViewModel(
 ) : JellyPlayViewModel() {
 
     /** Sorted paged tracks — sort state, pager and declared sort set live in the collection. */
-    private val collection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.TRACKS)
+    private val collection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.TRACKS)
 
     val selectedSort: StateFlow<MusicSortOption> = collection.selectedSort
 

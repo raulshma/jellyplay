@@ -39,7 +39,7 @@ class LibraryLayoutViewModelTest {
 
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var editor: PreferencesEditor
-    private lateinit var mediaRepository: LibraryFeed
+    private lateinit var libraryFeed: LibraryFeed
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var playlistRepository: PlaylistRepository
 
@@ -48,11 +48,11 @@ class LibraryLayoutViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         homeDiscoveryStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
-        coEvery { mediaRepository.getLibraryFolders(force = false) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(emptyList())
     }
 
     @AfterTest
@@ -62,13 +62,13 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `loadLibraryFolders exposes non-music libraries`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders(force = false) } returns Result.success(
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(
             listOf(
                 LibraryFolder(id = "movies", name = "Movies", collectionType = "movies"),
                 LibraryFolder(id = "music", name = "Music", collectionType = "music"),
             )
         )
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, libraryApiClient, playlistRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, libraryFeed, libraryApiClient, playlistRepository)
         advanceUntilIdle()
 
         val loaded = viewModel.libraryFolders.value
@@ -78,7 +78,7 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `setLibrarySectionEnabled routes to the store section-prefs command`() = runTest {
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, libraryApiClient, playlistRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, libraryFeed, libraryApiClient, playlistRepository)
 
         viewModel.setLibrarySectionEnabled("movies", HomeSectionType.LATEST_MEDIA, enabled = false)
         advanceUntilIdle()
@@ -96,7 +96,7 @@ class LibraryLayoutViewModelTest {
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(
             HomeDiscoverySlice(libraryHomeSectionOverrides = mapOf("x" to setOf(HomeSectionType.RECENTLY_ADDED)))
         )
-        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository, libraryApiClient, playlistRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, libraryFeed, libraryApiClient, playlistRepository)
 
         val json = viewModel.exportCurrentLayoutJson()
 

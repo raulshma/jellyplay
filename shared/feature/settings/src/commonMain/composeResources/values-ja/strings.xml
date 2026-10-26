@@ -934,7 +934,7 @@
     <string name="settings_custom_device_profile_helper">組み込みプロファイルの上に適用されるカスタムデバイスプロファイルの JSON</string>
     <string name="settings_custom_device_profile_json">カスタムデバイスプロファイル</string>
     <string name="settings_custom_device_profile_json_subtitle">トランスコードの判定に組み込まれるカスタム JSON デバイスプロファイル</string>
-    <string name="settings_custom_device_profile_placeholder">{ “MaxStreamingBitrate”: 40000000 }</string>
+    <string name="settings_custom_device_profile_placeholder">{ "MaxStreamingBitrate": 40000000 }</string>
     <string name="settings_deband_mode_heavy">強</string>
     <string name="settings_deband_mode_light">弱</string>
     <string name="settings_deband_mode_medium">中</string>
@@ -1009,7 +1009,7 @@
     <string name="settings_max_cache_applies_after_restart">次回アプリの起動時に適用されます</string>
     <string name="settings_mpv_custom_buttons">カスタムプレーヤーボタン</string>
     <string name="settings_mpv_custom_buttons_helper">ボタン定義の JSON 配列</string>
-    <string name="settings_mpv_custom_buttons_placeholder">[ { “id”: “mybutton”, “command”: “seek 10” } ]</string>
+    <string name="settings_mpv_custom_buttons_placeholder">[ { "id": "mybutton", "command": "seek 10" } ]</string>
     <string name="settings_mpv_custom_buttons_subtitle">カスタムプレーヤーボタンの JSON リスト（mpv）</string>
     <string name="settings_mpv_deband">デバンディングレベル</string>
     <string name="settings_mpv_deband_subtitle">mpv のデバンディングの強さ</string>

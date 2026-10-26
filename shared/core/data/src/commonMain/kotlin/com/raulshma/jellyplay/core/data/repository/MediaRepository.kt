@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
+import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -52,7 +53,7 @@ interface MediaRepository {
         parentId: String? = null,
         filters: LibraryFilters = LibraryFilters(),
         studioIds: List<String>? = null,
-        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
+        kindFilter: ItemKindFilter = ItemKindFilter.TOP_LEVEL,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
@@ -444,7 +445,7 @@ interface LibraryFeed {
         parentId: String?,
         filters: LibraryFilters,
         studioIds: List<String>?,
-        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
+        kindFilter: ItemKindFilter,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(

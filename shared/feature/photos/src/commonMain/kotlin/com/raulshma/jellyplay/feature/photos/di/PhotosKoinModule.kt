@@ -22,7 +22,7 @@ import org.koin.dsl.module
 val photosModule: Module = module {
     viewModel {
         PhotoAlbumViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
         )

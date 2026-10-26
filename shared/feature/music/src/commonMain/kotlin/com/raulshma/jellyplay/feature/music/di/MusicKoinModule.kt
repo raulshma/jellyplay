@@ -65,21 +65,21 @@ val musicModule: Module = module {
     }
     viewModel {
         AlbumsViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
         )
     }
     viewModel {
         ArtistsViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
         )
     }
     viewModel {
         MusicBrowseViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
             playlistRepository = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
@@ -87,13 +87,13 @@ val musicModule: Module = module {
     }
     viewModel {
         GenresViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
         )
     }
     viewModel { params ->
         GenreDetailViewModel(
             savedStateHandle = params.get<SavedStateHandle>(),
-            mediaRepository = get(),
+            libraryFeed = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
             audioQueueFacade = get(),
@@ -133,7 +133,7 @@ val musicModule: Module = module {
     }
     viewModel {
         TracksViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
             audioQueueFacade = get(),

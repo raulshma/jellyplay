@@ -936,7 +936,7 @@
     <string name="settings_custom_device_profile_helper">JSON de profil d’appareil personnalisé appliqué par-dessus le profil intégré</string>
     <string name="settings_custom_device_profile_json">Profil d’appareil personnalisé</string>
     <string name="settings_custom_device_profile_json_subtitle">Profil d’appareil JSON personnalisé intégré à la décision de transcodage</string>
-    <string name="settings_custom_device_profile_placeholder">{ “MaxStreamingBitrate”: 40000000 }</string>
+    <string name="settings_custom_device_profile_placeholder">{ "MaxStreamingBitrate": 40000000 }</string>
     <string name="settings_deband_mode_heavy">Fort</string>
     <string name="settings_deband_mode_light">Léger</string>
     <string name="settings_deband_mode_medium">Moyen</string>
@@ -1011,7 +1011,7 @@
     <string name="settings_max_cache_applies_after_restart">S’applique au prochain lancement de l’appli</string>
     <string name="settings_mpv_custom_buttons">Boutons de lecteur personnalisés</string>
     <string name="settings_mpv_custom_buttons_helper">Un tableau JSON de définitions de boutons</string>
-    <string name="settings_mpv_custom_buttons_placeholder">[ { “id”: “mybutton”, “command”: “seek 10” } ]</string>
+    <string name="settings_mpv_custom_buttons_placeholder">[ { "id": "mybutton", "command": "seek 10" } ]</string>
     <string name="settings_mpv_custom_buttons_subtitle">Liste JSON de boutons de lecteur personnalisés (mpv)</string>
     <string name="settings_mpv_deband">Niveau de debanding</string>
     <string name="settings_mpv_deband_subtitle">L’intensité du debanding de mpv</string>

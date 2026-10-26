@@ -46,7 +46,7 @@ class FavoritesViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: LibraryFeed
+    private lateinit var libraryFeed: LibraryFeed
     private lateinit var prefetcherRepo: com.raulshma.jellyplay.core.data.repository.MediaRepository
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var quickDownloadActions: QuickDownloadActions
@@ -62,7 +62,7 @@ class FavoritesViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
         // The photo-folder prefetcher still reads the union (its folder-url
         // read has no LibraryFeed member); the test asserts that seam.
         prefetcherRepo = mockk(relaxed = true)
@@ -73,7 +73,7 @@ class FavoritesViewModelTest {
         // initializer — a stub after would hand it the relaxed default (a
         // dead mock flow that never emits).
         viewModel = FavoritesViewModel(
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
             userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
@@ -100,7 +100,7 @@ class FavoritesViewModelTest {
         coVerify {
             userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
-        // No mediaRepository.markPlayed verify: LibraryFeed has no such
+        // No libraryFeed.markPlayed verify: LibraryFeed has no such
         // member — the narrowing is the type-level guarantee this pin used
         // to assert at runtime.
     }
@@ -134,7 +134,7 @@ class FavoritesViewModelTest {
             prepend = LoadState.NotLoading(endOfPaginationReached = false),
             append = LoadState.NotLoading(endOfPaginationReached = false),
         )
-        every { mediaRepository.getFavoritesPaged(any()) } answers {
+        every { libraryFeed.getFavoritesPaged(any()) } answers {
             flowOf(PagingData.from(emptyList<MediaItem>(), idleStates))
         }
     }
@@ -149,7 +149,7 @@ class FavoritesViewModelTest {
 
         assertTrue(firstPage.isCompleted)
         coVerify(exactly = 1) {
-            mediaRepository.getFavoritesPaged(mediaTypes = listOf(MediaType.MOVIE))
+            libraryFeed.getFavoritesPaged(mediaTypes = listOf(MediaType.MOVIE))
         }
     }
 
@@ -163,7 +163,7 @@ class FavoritesViewModelTest {
         advanceUntilIdle()
 
         assertTrue(firstPage.isCompleted)
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(mediaTypes = null) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(mediaTypes = null) }
     }
 
     // ── Deferred refresh (user-data changes while off-screen) ───────────────
@@ -174,18 +174,18 @@ class FavoritesViewModelTest {
         // Keep the paging pipeline alive for the whole test (cachedIn shares it).
         val collector = launch { viewModel.pagedItems.collect {} }
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
 
         // A write confirmed while the grid is NOT on screen only marks stale.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
 
         // Re-entry fires the single deferred regeneration.
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 2) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -200,7 +200,7 @@ class FavoritesViewModelTest {
         advanceUntilIdle()
 
         // Silent contract: no mid-scroll pager swap for on-screen events.
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -217,13 +217,13 @@ class FavoritesViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 2) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -238,7 +238,7 @@ class FavoritesViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 

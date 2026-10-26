@@ -83,9 +83,9 @@ class MusicCollectionSortTableTest {
 
     @Test
     fun sortedPagedPath_rejectsListSourcedKinds() {
-        val mediaRepository: LibraryFeed = mockk()
+        val libraryFeed: LibraryFeed = mockk()
         val error = assertFailsWith<IllegalStateException> {
-            SortedPagedCollection(mediaRepository, CoroutineScope(Dispatchers.Unconfined), MusicCollectionKind.GENRES)
+            SortedPagedCollection(libraryFeed, CoroutineScope(Dispatchers.Unconfined), MusicCollectionKind.GENRES)
         }
         assertTrue(error.message!!.contains("GENRES"))
     }

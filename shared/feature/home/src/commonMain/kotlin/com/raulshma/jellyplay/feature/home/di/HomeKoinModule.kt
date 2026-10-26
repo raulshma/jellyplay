@@ -162,7 +162,7 @@ val homeModule: Module = module {
         MyMediaHiddenViewModel(
             homeDiscoveryStore = get(),
             editor = get(),
-            mediaRepository = get(),
+            libraryFeed = get(),
         )
     }
 }

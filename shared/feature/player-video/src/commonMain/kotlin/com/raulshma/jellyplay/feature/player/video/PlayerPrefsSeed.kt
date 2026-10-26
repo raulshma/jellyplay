@@ -11,9 +11,9 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
  * [SessionLoadOutputs.onPrefsProjected] applies to the residual uiState.
  *
  * The pref→leaf vocabulary lives in the shared table; this class owns only
- * the apply strategy. Two writes stay hand-written here because they are not
- * table rows: the `adaptiveBitrateEnabled` leaf (its source is the network
- * slice parameter, not the aggregate) and nothing else — every other leaf
+ * the apply strategy. One write stays hand-written here because it is not a
+ * table row: the `adaptiveBitrateEnabled` leaf (its source is the network
+ * slice parameter, not the aggregate) — every other leaf
  * comes from the table, including the aspect-ratio parse and the
  * segment-behaviors fold, which live beside their rows.
  *

@@ -43,14 +43,14 @@ class MusicCollectionAdapterWiringTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: LibraryFeed = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk(relaxed = true)
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
+        every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
     }
 
@@ -61,13 +61,13 @@ class MusicCollectionAdapterWiringTest {
 
     @Test
     fun artistsAdapter_queriesArtistsWithTheKindAndDefaultNameSort() = runTest(mainDispatcher) {
-        val viewModel = ArtistsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        val viewModel = ArtistsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         viewModel.artists.first()
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 LibraryFilters(mediaTypes = listOf(MediaType.ARTIST), sortBy = SortOption.SORT_NAME),
                 any(),
@@ -78,14 +78,14 @@ class MusicCollectionAdapterWiringTest {
 
     @Test
     fun albumsAdapter_setSortRequeriesWithTheMappedJellyfinSort() = runTest(mainDispatcher) {
-        val viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        val viewModel = AlbumsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
         advanceUntilIdle()
 
         viewModel.setSort(MusicSortOption.YEAR)
         viewModel.albums.first()
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 LibraryFilters(mediaTypes = listOf(MediaType.ALBUM), sortBy = SortOption.YEAR_DESC),
                 any(),
@@ -96,13 +96,13 @@ class MusicCollectionAdapterWiringTest {
 
     @Test
     fun tracksAdapter_queriesAudioWithTheKindAndDefaultNameSort() = runTest(mainDispatcher) {
-        val viewModel = TracksViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY, audioQueueFacade)
+        val viewModel = TracksViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY, audioQueueFacade)
         advanceUntilIdle()
 
         viewModel.tracks.first()
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 any(),
                 LibraryFilters(mediaTypes = listOf(MediaType.AUDIO), sortBy = SortOption.SORT_NAME),
                 any(),
@@ -114,7 +114,7 @@ class MusicCollectionAdapterWiringTest {
     @Test
     fun imageUrl_resolvesThroughTheSharedMusicMaxWidthSeam() {
         every { imageUrlProvider.getImageUrl("i1", ImageUrlProvider.MUSIC_MAX_WIDTH) } returns "img"
-        val viewModel = AlbumsViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        val viewModel = AlbumsViewModel(libraryFeed, imageUrlProvider, ArtworkUrls.EMPTY)
 
         assertEquals("img", viewModel.getImageUrl("i1"))
     }

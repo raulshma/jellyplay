@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 
 internal class FavoritesViewModel(
-    private val mediaRepository: LibraryFeed,
+    private val libraryFeed: LibraryFeed,
     /** The user-data change feed the quick actions' watched/download mirrors ride. */
     private val userDataChanges: Flow<UserDataChange>,
     private val userDataMutator: UserDataMutator,
@@ -64,7 +64,7 @@ internal class FavoritesViewModel(
         source = { trigger ->
             combine(_mediaTypeFilter.flow, trigger) { type, _ -> type }
                 .flatMapLatest { type ->
-                    mediaRepository.getFavoritesPaged(
+                    libraryFeed.getFavoritesPaged(
                         mediaTypes = type?.let { listOf(it) },
                     )
                 }

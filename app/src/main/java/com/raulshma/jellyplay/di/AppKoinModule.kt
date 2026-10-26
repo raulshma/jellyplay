@@ -113,7 +113,7 @@ fun androidAppModule(context: Context): Module = module {
             remoteControlReceiver = get(),
             widgetWorkScheduler = get(),
             cacheMaintenanceInitializer = get(),
-            mediaRepository = get(),
+            libraryFeed = get(),
         )
     }
     single {

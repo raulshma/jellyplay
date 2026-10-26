@@ -98,7 +98,7 @@ class DiscoverRowsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
-    private lateinit var mediaRepository: LibraryFeed
+    private lateinit var libraryFeed: LibraryFeed
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var editor: PreferencesEditor
 
@@ -108,12 +108,12 @@ class DiscoverRowsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
-        coEvery { mediaRepository.getLibraryFolders(force = false) } returns Result.success(emptyList())
-        coEvery { mediaRepository.getGenres(null, false) } returns Result.success(emptyList())
-        coEvery { mediaRepository.getStudios(parentId = null) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(null, false) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getStudios(parentId = null) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(emptyList())
         editor = PreferencesEditor(
@@ -150,7 +150,7 @@ class DiscoverRowsViewModelTest {
     }
 
     private fun viewModel(): DiscoverRowsViewModel =
-        DiscoverRowsViewModel(homeDiscovery, editor, mediaRepository, catalogueEnrichments, libraryApiClient)
+        DiscoverRowsViewModel(homeDiscovery, editor, libraryFeed, catalogueEnrichments, libraryApiClient)
 
     private fun item(name: String): MediaItem =
         MediaItem(id = name.lowercase().replace(' ', '-'), name = name, mediaType = MediaType.MOVIE)

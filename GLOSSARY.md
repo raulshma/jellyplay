@@ -108,27 +108,29 @@ Status: implemented 2026-10-19.
 
 **Library feed seam** — the library/browse family of the media
 repository as its own interface (the HomeFeed family-seam pattern): the
-folders, latest-media, search (incl. paged), paged-browse, genres and
-studios reads. Browse-only consumers (library screens, search, the music
-collection family, photo albums, the settings library views) inject the
+folders, latest-media, search (incl. paged), paged-browse, genres,
+studios and favorites reads. Browse-only consumers (library screens,
+search, the music collection family, photo albums, the settings library
+views) inject the
 seam alone; mixed browse+detail consumers keep the union. No member
 carries a default argument — the family-seam rule (a dual-declaring
 override cannot take defaults from both superinterfaces), so seam-typed
-callers pass the union's former defaults explicitly.
-face: getFavoritesPaged
-had one clean consumer (the favorites grid) and joined the seam; the
-paged-grid quick-actions factory was retyped to the `Flow<UserDataChange>`
-it actually reads (it envied one union member through its
-`MediaRepository` parameter). The rest stays on the union BY CENSUS, not
-by omission: getMediaDetail/getSimilarItems callers are all mixed
-consumers (the detail cluster already has its own `MediaDetailProvider`
-seam), and the collection read/write trio has zero clean consumers
-(CollectionTargets is write-only; the two collection VMs are mixed
-detail+collection) — carving them today would force dual injection
-without narrowing anyone. Re-census when a clean consumer appears.
+callers pass the union's former defaults explicitly. Stage 2:
+`getFavoritesPaged` had one clean consumer (the favorites grid) and
+joined the seam; the paged-grid quick-actions factory was retyped to the
+`Flow<UserDataChange>` it actually reads (it envied one union member
+through its `MediaRepository` parameter). The rest stays on the union BY
+CENSUS, not by omission: getMediaDetail/getSimilarItems callers are all
+mixed consumers (the detail cluster already has its own
+`MediaDetailProvider` seam), and the collection read/write trio has zero
+clean consumers (CollectionTargets is write-only; the two collection VMs
+are mixed detail+collection) — carving them today would force dual
+injection without narrowing anyone. Re-census when a clean consumer
+appears.
 Status: implemented 2026-10-26 (`LibraryFeed` beside HomeFeed /
 MusicCatalogue / UserDataWriteOperations / UserDataChanges, all aliasing
-the one MediaRepositoryImpl single; the union is not dissolved).
+the one MediaRepositoryImpl single; stages 1+2 — the union is not
+dissolved).
 
 ## Details
 
@@ -301,6 +303,20 @@ the UA extraction + language normalization + blank-skip decisions
 (deliberate parity fixes; `MpvDesktopEngineAndroidParityTest` pins the
 shared ladder).
 Status: implemented 2026-10-19.
+
+**mpv option vocabulary home** — the mpv option vocabulary
+(`MpvConfigMapping`, `MpvConfigApplier`, `MpvErrorTaxonomy`,
+`MpvAudioMappings`, `MpvLoadOptionsPlan`, `MpvProperties`) lives in
+core/player-contract beside `MpvPropertyIntake`/`MpvStyleMapping`; the
+engine choreography (`MpvCore`, `MpvBinding`, both host engines) stays in
+feature/player-video. The moved files KEEP their `feature.player.video`
+package name — a deliberate split package (one package spanning two
+modules, core carrying a `feature.*` namespace) bought zero consumer
+import churn; re-homing the package later is a per-file rename, not an
+API break.
+Status: implemented 2026-10-26 (verbatim move; `MpvAudioMappings`' three
+helpers went public — `internal` was module-scoped to player-video and
+`MpvCore` consumes them across the edge).
 
 **Stats publish guard** — the engines' video-stats change-guard
 (last-value cache, scalar-change predicate, forced periodic full re-read,

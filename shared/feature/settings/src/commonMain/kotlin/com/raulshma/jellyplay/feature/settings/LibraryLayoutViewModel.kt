@@ -36,7 +36,7 @@ data class PinnableOption(
 class LibraryLayoutViewModel(
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: LibraryFeed,
+    private val libraryFeed: LibraryFeed,
     /** The SearchResult-shaped reads (the layout preview's items query — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val playlistRepository: PlaylistRepository,
@@ -76,7 +76,7 @@ class LibraryLayoutViewModel(
     private fun loadLibraryFolders() {
         launch {
             libraryError = null
-            mediaRepository.getLibraryFolders(force = false)
+            libraryFeed.getLibraryFolders(force = false)
                 .onSuccess { folders ->
                     _libraryFolders.value = folders.filter { it.collectionType != "music" }
                 }
@@ -156,11 +156,11 @@ class LibraryLayoutViewModel(
                             .map { PinnableOption(it.id, it.name, "${it.itemCount} items") }
 
                     PinnedSectionType.GENRE ->
-                        mediaRepository.getGenres(parentId = null, force = false).getOrDefault(emptyList())
+                        libraryFeed.getGenres(parentId = null, force = false).getOrDefault(emptyList())
                             .map { PinnableOption(it.id, it.name) }
 
                     PinnedSectionType.STUDIO ->
-                        mediaRepository.getStudios(parentId = null).getOrDefault(emptyList())
+                        libraryFeed.getStudios(parentId = null).getOrDefault(emptyList())
                             .map { PinnableOption(it.id, it.name) }
 
                     PinnedSectionType.FAVORITES ->

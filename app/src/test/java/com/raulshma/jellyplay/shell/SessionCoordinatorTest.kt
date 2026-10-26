@@ -4,7 +4,7 @@ import android.content.Context
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
@@ -89,7 +89,7 @@ class SessionCoordinatorTest {
     private val remoteControlReceiver = mockk<RemoteControlReceiver>(relaxed = true)
     private val widgetWorkScheduler = mockk<WidgetWorkScheduler>(relaxed = true)
     private val cacheMaintenanceInitializer = mockk<CacheMaintenanceInitializer>(relaxed = true)
-    private val mediaRepository = mockk<MediaRepository>(relaxed = true)
+    private val mediaRepository = mockk<LibraryFeed>(relaxed = true)
 
     private val isAuthenticated = MutableStateFlow(false)
     private val isConnected = MutableStateFlow(false)
@@ -112,7 +112,7 @@ class SessionCoordinatorTest {
         every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
         coEvery { serverIdentityStore.ensureDeviceId() } returns "test-device-id"
         every { serverHealthMonitor.serverHealth } returns MutableStateFlow(ServerHealth.Unknown)
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList<LibraryFolder>())
+        coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
 
         coordinator = SessionCoordinator(
             context = context,
@@ -124,7 +124,7 @@ class SessionCoordinatorTest {
             remoteControlReceiver = remoteControlReceiver,
             widgetWorkScheduler = widgetWorkScheduler,
             cacheMaintenanceInitializer = cacheMaintenanceInitializer,
-            mediaRepository = mediaRepository,
+            libraryFeed = mediaRepository,
         )
     }
 
