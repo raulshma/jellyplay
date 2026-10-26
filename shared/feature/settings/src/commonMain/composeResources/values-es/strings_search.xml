@@ -200,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Muestra el tiempo restante en lugar del transcurrido</string>
     <string name="ss_pause_on_focus_loss_title">Pausar al perder el foco</string>
     <string name="ss_pause_on_focus_loss_subtitle">Pausa la reproducción cuando el sistema reporta pérdida de foco de audio</string>
-    <string name="ss_resume_headset_plug_subtitle">Reanuda la reproducción al volver a conectar los auriculares tras la pausa automática</string>
+    <string name="ss_resume_headset_plug_subtitle">Reanuda la reproducción cuando los auriculares se reconecten tras la pausa automática (con cable o Bluetooth)</string>
     <string name="ss_mpv_video_output_title">Salida de vídeo de MPV</string>
     <string name="ss_mpv_video_output_subtitle">Controlador de salida de vídeo de MPV</string>
     <string name="ss_mpv_scaler_title">Escalador de MPV</string>

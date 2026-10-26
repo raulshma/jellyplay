@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">Mettre en pause quand le système signale une perte de focus</string>
     <string name="settings_pause_on_focus_loss_off">Continuer la lecture en cas de perte de focus</string>
     <string name="settings_resume_headset_plug">Reprendre au rebranchement du casque</string>
-    <string name="settings_resume_headset_plug_subtitle">Reprendre la lecture quand le casque est rebranché après la pause automatique</string>
+    <string name="settings_resume_headset_plug_subtitle">Reprendre la lecture quand le casque se reconnecte après la pause automatique (filaire ou Bluetooth)</string>
     <string name="settings_decoder_summary">Décodeur : %1$s</string>
     <string name="settings_decoder">Décodeur</string>
     <string name="settings_refresh_rate_match">Correspondance de fréquence</string>

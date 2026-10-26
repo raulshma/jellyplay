@@ -356,6 +356,22 @@ internal fun tvDpadKeyConfig(
                 true
             }
         }
+        onKeyEvent(DpadAction.Next) { dpadKey ->
+            // Remote / headset NEXT — the MENU shape: no DpadControl row (the
+            // binding editor's catalog has no NEXT control to rebind), the
+            // episode semantics execute where they exist. On a movie (no
+            // sibling, empty queue) or past the last episode the executor
+            // declines, so the key stays unmapped and falls through.
+            if (dpadKey.isKeyDown && dpadKey.repeatCount == 0) {
+                dispatcher.execute(PlayerAction.NEXT_EPISODE)
+            } else false
+        }
+        onKeyEvent(DpadAction.Previous) { dpadKey ->
+            // Same shape; unavailable before the first episode of a run.
+            if (dpadKey.isKeyDown && dpadKey.repeatCount == 0) {
+                dispatcher.execute(PlayerAction.PREVIOUS_EPISODE)
+            } else false
+        }
     }
 }
 

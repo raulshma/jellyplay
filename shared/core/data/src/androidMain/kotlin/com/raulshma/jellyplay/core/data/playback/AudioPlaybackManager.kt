@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.MusicFocusPolicyInput
 import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -466,6 +467,14 @@ class AudioPlaybackManager(
                 isPlaying = isPlaying,
                 onDenied = { pause() },
             )
+            // The play edge doubles as the session-reclaim edge: when this
+            // session was refused at creation (the manager's priority guard
+            // releases an idle challenger against a then-playing video) the
+            // granted claim has since paused that holder — without a rebuild
+            // music would play sessionless (no notification, media buttons
+            // routing to the paused video session). The video twin rides
+            // PlaybackSession.onVideoPlayEdge.
+            if (isPlaying) reclaimAudioSessionIfDisplaced()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -547,7 +556,18 @@ class AudioPlaybackManager(
             }
         }
         scope.launch {
-            playbackStore.playback.collect { playback -> currentPlayback = playback }
+            playbackStore.playback.collect { playback ->
+                currentPlayback = playback
+                // The music half of the shared "Duck on Phone Call" pref:
+                // every emission pushes the MUSIC row's loss ruling into the
+                // process-singleton policy holder (latest write wins), so a
+                // phone call ducks the music instead of pausing it whenever
+                // this manager owns the floor. Video pushes its own policy
+                // from the video session's prefs fanout; read-aloud has no
+                // duck upgrade.
+                (playbackFocus as? MusicFocusPolicyInput)
+                    ?.onMusicDuckPolicy(playback.duckOnTransientFocusLoss)
+            }
         }
         // Poll-cadence governor: 250 ms only while a position collector exists
         // (subscriptionCount rises on every subscribe — mini-player, now-
@@ -735,6 +755,30 @@ class AudioPlaybackManager(
         effectsProcessor.attachAudioEffects(player.audioSessionId)
 
         return player
+    }
+
+    /**
+     * The session-reclaim half of the music play edge. [createPlayer]'s
+     * session can be refused at birth: the manager's priority guard releases
+     * an idle challenger against a then-playing holder (the mini-player video
+     * still playing when the user starts a track). The granted focus claim
+     * has paused that holder by the time the is-playing edge fires, so the
+     * floor is free — without this rebuild music would play sessionless (no
+     * now-playing notification, media buttons routing to the paused video
+     * session). Identity-checks the active session's player, so an already
+     * ours-and-active session is never rebuilt.
+     */
+    private fun reclaimAudioSessionIfDisplaced() {
+        val player = exoPlayer ?: return
+        val current = sessionManager.currentSession
+        if (current != null && current.player === player) return
+        mediaSession?.release()
+        // Same shared audio-session builder as createPlayer / the crossfade
+        // rebuild — the MediaLibrarySession requirement is the onGetSession
+        // cast documented at the crossfade site.
+        val session = libraryBrowser.buildMediaSession(context, player, playSessionId)
+        mediaSession = session
+        sessionManager.setActiveSession(session)
     }
 
     private fun restorePersistedQueue() {
@@ -1376,6 +1420,9 @@ class AudioPlaybackManager(
      */
     private var preMuteVolume: Float = 1f
 
+    /** The level captured at [duck] time, restored by [restoreFromDuck]. */
+    private var preDuckVolume: Float? = null
+
     fun setMuted(muted: Boolean) {
         assertMainThread("setMuted")
         val current = exoPlayer?.volume ?: 1f
@@ -1391,6 +1438,37 @@ class AudioPlaybackManager(
         assertMainThread("toggleMute")
         val current = exoPlayer?.volume ?: 1f
         setMuted(current > 0f)
+    }
+
+    /**
+     * The transient-focus-loss duck — the [focus.AudioPlaybackManagerSurface]
+     * command when the shared "Duck on Phone Call" pref upgrades the MUSIC
+     * row. Software gain only (the same `isUserChange = false` write the
+     * sleep-timer fade uses, so the level never lands in user-volume
+     * memory); a muted player stays silent (volume ≤ 0 is never re-raised —
+     * the video surface's mute rule); re-ducks are idempotent and re-capture
+     * only a level louder than the duck target, so a stale marker from a
+     * suspended-then-resumed session can never store the duck level itself.
+     */
+    fun duck(volume: Float) {
+        assertMainThread("duck")
+        val player = exoPlayer ?: return
+        val target = volume.coerceIn(0f, 1f)
+        if (player.volume <= 0f) return
+        if (player.volume > target) preDuckVolume = player.volume
+        setVolume(target, isUserChange = false)
+    }
+
+    /**
+     * The regain half of the duck: restore the level captured at [duck]
+     * time. No marker (never ducked, or the loss was permanent and no regain
+     * ever followed) is a no-op — resume stays manual either way.
+     */
+    fun restoreFromDuck() {
+        assertMainThread("restoreFromDuck")
+        val pre = preDuckVolume ?: return
+        preDuckVolume = null
+        setVolume(pre.coerceIn(0f, 1f), isUserChange = false)
     }
 
     override fun playFromQueue(index: Int) {

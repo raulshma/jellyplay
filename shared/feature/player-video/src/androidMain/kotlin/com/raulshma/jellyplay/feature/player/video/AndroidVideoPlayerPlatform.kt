@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.provider.OpenableColumns
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.BecomingNoisyPauseReceiver
+import com.raulshma.jellyplay.core.data.playback.HeadsetAudioDeviceWatcher
 import com.raulshma.jellyplay.core.data.playback.HeadsetPlugReceiver
 import com.raulshma.jellyplay.core.data.playback.HeadsetResumePolicy
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
@@ -135,11 +136,15 @@ private class AndroidOfflineMediaProbe : OfflineMediaProbe {
  * `setHandleAudioBecomingNoisy(true)` keeps running alongside it, exactly
  * the dual coverage the shared lifecycle had) — plus the
  * resume-on-headset-insert twin: when the opt-in pref is on, a headset
- * re-plug within core:data's [HeadsetResumePolicy] freshness window resumes
- * the engine the becoming-noisy event itself paused (the unplug pause path
- * marks the session-scoped holder ONLY when the engine was actually playing
- * at broadcast time, so a user-initiated pause never auto-resumes; the plug
- * consumer additionally requires the engine to be paused right now).
+ * reconnection within core:data's [HeadsetResumePolicy] freshness window
+ * resumes the engine the becoming-noisy event itself paused (the unplug
+ * pause path marks the session-scoped holder ONLY when the engine was
+ * actually playing at broadcast time, so a user-initiated pause never
+ * auto-resumes; the connect consumers additionally require the engine to
+ * be paused right now). The connected edge arrives over TWO chassis — the
+ * wired-only `ACTION_HEADSET_PLUG` broadcast and the [HeadsetAudioDeviceWatcher]
+ * (Bluetooth / BLE / USB-C reconnects never produce a plug event) — sharing
+ * one decision body, so the marker is consumed exactly once per cycle.
  *
  * The broadcast chassis live in core:data ([BecomingNoisyPauseReceiver] —
  * one home shared with the live player — and [HeadsetPlugReceiver]); this
@@ -172,7 +177,11 @@ internal class AndroidVideoPlayerBecomingNoisy(
         }
     }
 
-    private val headsetPlug = HeadsetPlugReceiver(context) {
+    // One resume decision shared by both connect edges: the wired
+    // HEADSET_PLUG broadcast and the AudioDeviceCallback watcher (Bluetooth
+    // / BLE / USB-C reconnects never produce a plug event). The first edge
+    // to fire consumes the one-shot marker; the second is a no-op.
+    private val onHeadsetConnected = {
         val resumed = HeadsetResumePolicy.shouldResumeOnHeadsetPlug(
             nowMs = SystemClock.elapsedRealtime(),
             noisyPauseAtMs = noisyPauseAtMs,
@@ -185,15 +194,22 @@ internal class AndroidVideoPlayerBecomingNoisy(
             val engine = getEngine()
             if (engine != null && !engine.isPlaying.value) engine.play()
         }
+        Unit
     }
+
+    private val headsetPlug = HeadsetPlugReceiver(context, onHeadsetConnected)
+
+    private val audioDeviceWatcher = HeadsetAudioDeviceWatcher(context, onHeadsetConnected)
 
     override fun register() {
         becomingNoisy.register()
         headsetPlug.register()
+        audioDeviceWatcher.register()
     }
 
     override fun release() {
         becomingNoisy.release()
         headsetPlug.release()
+        audioDeviceWatcher.release()
     }
 }

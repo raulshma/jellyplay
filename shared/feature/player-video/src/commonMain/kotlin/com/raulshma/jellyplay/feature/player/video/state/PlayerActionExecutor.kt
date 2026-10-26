@@ -78,6 +78,11 @@ internal class PlayerActionExecutor(
     private val getSupportsAudioDelay: () -> Boolean,
     private val getAudioDelayMs: () -> Long,
     private val getSeekStepMs: () -> Long,
+    // Episode-navigation availability (the "where they exist, unmapped
+    // otherwise" rule): next folds the sibling + queue mirror (queue-first,
+    // incl. movies), previous reads the adjacent-episode snapshot.
+    private val getHasNextEpisode: () -> Boolean,
+    private val getHasPreviousEpisode: () -> Boolean,
     // ── The D-pad seek chip's engine reads + commit funnel (pass-through) ──
     getCurrentPositionMs: () -> Long,
     getDurationMs: () -> Long,
@@ -321,12 +326,23 @@ internal class PlayerActionExecutor(
                 true
             }
             PlayerAction.NEXT_EPISODE -> {
-                onUiEvent(VideoPlayerUiEvent.PlayNextEpisode)
-                true
+                // No next episode (movie with an empty queue, end of season
+                // run): the key is UNMAPPED — returning false lets the event
+                // fall through instead of being swallowed by a no-op.
+                if (getHasNextEpisode()) {
+                    onUiEvent(VideoPlayerUiEvent.PlayNextEpisode)
+                    true
+                } else {
+                    false
+                }
             }
             PlayerAction.PREVIOUS_EPISODE -> {
-                onUiEvent(VideoPlayerUiEvent.PlayPreviousEpisode)
-                true
+                if (getHasPreviousEpisode()) {
+                    onUiEvent(VideoPlayerUiEvent.PlayPreviousEpisode)
+                    true
+                } else {
+                    false
+                }
             }
             // The continuous-class behaviors keep their own sites: the
             // swipe-class drags (SWIPE_*) belong to the drag detector, ZOOM

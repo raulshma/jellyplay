@@ -200,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Afficher le temps restant au lieu du temps écoulé</string>
     <string name="ss_pause_on_focus_loss_title">Pause en cas de perte de focus</string>
     <string name="ss_pause_on_focus_loss_subtitle">Mettre en pause la lecture quand le système signale une perte de focus audio</string>
-    <string name="ss_resume_headset_plug_subtitle">Reprend la lecture quand le casque est rebranché après la pause automatique</string>
+    <string name="ss_resume_headset_plug_subtitle">Reprend la lecture quand le casque se reconnecte après la pause automatique (filaire ou Bluetooth)</string>
     <string name="ss_mpv_video_output_title">Sortie vidéo MPV</string>
     <string name="ss_mpv_video_output_subtitle">Pilote de sortie vidéo MPV</string>
     <string name="ss_mpv_scaler_title">Scaling MPV</string>

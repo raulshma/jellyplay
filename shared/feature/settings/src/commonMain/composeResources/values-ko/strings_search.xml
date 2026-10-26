@@ -200,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">경과 시간 대신 남은 시간을 표시합니다</string>
     <string name="ss_pause_on_focus_loss_title">포커스 상실 시 일시 정지</string>
     <string name="ss_pause_on_focus_loss_subtitle">시스템이 오디오 포커스 상실을 알리면 재생을 일시 정지합니다</string>
-    <string name="ss_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰을 다시 연결하면 재생을 재개합니다</string>
+    <string name="ss_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰이 다시 연결되면 재생을 재개합니다(유선 또는 블루투스)</string>
     <string name="ss_mpv_video_output_title">MPV 비디오 출력</string>
     <string name="ss_mpv_video_output_subtitle">MPV 비디오 출력 드라이버입니다</string>
     <string name="ss_mpv_scaler_title">MPV 스케일러</string>

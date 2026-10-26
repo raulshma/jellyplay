@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
@@ -30,9 +31,19 @@ class PreferencesEditor constructor(
     private val editScope: PreferencesEditScope,
     // Retained for the reset / clear machinery that still lives on the facade.
     private val store: UserPreferencesStore,
+    private val onEditFailure: PreferencesEditFailureReporter? = null,
 ) {
-    /** Fire-and-forget launch over the application scope. */
-    private fun run(block: suspend () -> Unit) = scope.launch { block() }
+    /**
+     * Fire-and-forget launch over the application scope. A rejected write
+     * (IO error, corruption) must neither kill the process the way an
+     * unhandled launch exception would nor vanish (the toggling user would
+     * just see the switch never flip): cancellation passes through, every
+     * other failure reports through [onEditFailure].
+     */
+    private fun run(operation: String, block: suspend () -> Unit) = scope.launch {
+        runCatchingRethrowingCancellation { block() }
+            .onFailure { failure -> onEditFailure?.onEditFailure(operation, failure) }
+    }
 
     private val securityStore: SecurityStore get() = editScope.security
 
@@ -41,7 +52,7 @@ class PreferencesEditor constructor(
      * Use this for any store mutation that does not need a post-write side
      * effect. Reach the owning store directly: `appearance.setThemeMode(mode)`.
      */
-    fun edit(block: suspend PreferencesEditScope.() -> Unit) = run { editScope.block() }
+    fun edit(block: suspend PreferencesEditScope.() -> Unit) = run("PreferencesEditor.edit") { editScope.block() }
 
     // ----- Security / PIN: composite ops live in SecurityStore, which owns
     // hashing + verification (PinHasher) and rate-limit escalation
@@ -50,11 +61,13 @@ class PreferencesEditor constructor(
     suspend fun verifyPin(pin: String): Boolean = securityStore.verifyPinOffMainThread(pin)
 
     /** Resets all preferences in a specific category to their default values. */
-    fun resetCategory(category: PreferenceResetCategory) = run { store.resetCategory(category) }
+    fun resetCategory(category: PreferenceResetCategory) =
+        run("PreferencesEditor.resetCategory") { store.resetCategory(category) }
 
     /**
      * Clears the preferences DataStore only (preferences reset to defaults).
      * Does **not** sign out the user or delete downloaded media, cache, or DB.
      */
-    fun clearAllPreferences() = run { store.clearAllPreferencesOnly() }
+    fun clearAllPreferences() =
+        run("PreferencesEditor.clearAllPreferences") { store.clearAllPreferencesOnly() }
 }

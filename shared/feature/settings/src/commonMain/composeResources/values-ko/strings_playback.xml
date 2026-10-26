@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">시스템이 포커스 상실을 보고할 때 재생 일시 정지</string>
     <string name="settings_pause_on_focus_loss_off">포커스 상실 시 재생 계속</string>
     <string name="settings_resume_headset_plug">헤드폰 다시 연결 시 재생 재개</string>
-    <string name="settings_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰을 다시 연결하면 재생을 재개합니다</string>
+    <string name="settings_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰이 다시 연결되면 재생을 재개합니다(유선 또는 블루투스)</string>
     <string name="settings_decoder_summary">디코더: %1$s</string>
     <string name="settings_decoder">디코더</string>
     <string name="settings_refresh_rate_match">주사율 일치</string>

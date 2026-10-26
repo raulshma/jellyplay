@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.datastore.di
 
 import com.raulshma.jellyplay.core.datastore.ArrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.ArrSecureCredentialsStore
+import com.raulshma.jellyplay.core.datastore.PreferencesEditFailureReporter
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -404,6 +405,9 @@ val datastoreCommonModule = module {
             get(DatastoreQualifiers.applicationScope),
             get<PreferencesEditScope>(),
             get<UserPreferencesStore>(),
+            // Optional: bound by core:data on both JVM shells (log-backed);
+            // absent → failures swallow without report.
+            getOrNull<PreferencesEditFailureReporter>(),
         )
     }
 

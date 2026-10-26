@@ -200,6 +200,12 @@ internal class AndroidMediaSessionController(
         session = null
     }
 
+    override fun ensureActiveForItem(itemId: String, title: String, subtitle: String) {
+        val current = sessionManager.currentSession
+        if (current != null && current === session) return
+        createForItem(itemId, title, subtitle)
+    }
+
     /**
      * Releases the held session ahead of a rebuild without vacating the
      * [PlaybackSessionManager] slot (the slot swap stays atomic in [activate]).

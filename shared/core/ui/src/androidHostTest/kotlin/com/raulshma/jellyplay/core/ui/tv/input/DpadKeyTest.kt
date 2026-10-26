@@ -95,6 +95,31 @@ class DpadKeyTest {
     }
 
     @Test
+    fun headsetHook_mapsToPlayPause() {
+        // The wired single-button headset's hook code — devices that route it
+        // as a window key must read it as the remote's play/pause.
+        assertEquals(DpadAction.PlayPause, composeKeyEvent(NativeKeyEvent.KEYCODE_HEADSETHOOK).toDpadAction())
+    }
+
+    @Test
+    fun mediaNext_mapsToNext() {
+        assertEquals(DpadAction.Next, composeKeyEvent(NativeKeyEvent.KEYCODE_MEDIA_NEXT).toDpadAction())
+    }
+
+    @Test
+    fun mediaPrevious_mapsToPrevious() {
+        assertEquals(DpadAction.Previous, composeKeyEvent(NativeKeyEvent.KEYCODE_MEDIA_PREVIOUS).toDpadAction())
+    }
+
+    @Test
+    fun mediaSkipAndStep_aliasesFoldOntoNextAndPrevious() {
+        assertEquals(DpadAction.Next, composeKeyEvent(NativeKeyEvent.KEYCODE_MEDIA_SKIP_FORWARD).toDpadAction())
+        assertEquals(DpadAction.Next, composeKeyEvent(NativeKeyEvent.KEYCODE_MEDIA_STEP_FORWARD).toDpadAction())
+        assertEquals(DpadAction.Previous, composeKeyEvent(NativeKeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD).toDpadAction())
+        assertEquals(DpadAction.Previous, composeKeyEvent(NativeKeyEvent.KEYCODE_MEDIA_STEP_BACKWARD).toDpadAction())
+    }
+
+    @Test
     fun unmappedKey_returnsNull() {
         assertNull(composeKeyEvent(NativeKeyEvent.KEYCODE_A).toDpadAction())
     }

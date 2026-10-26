@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">Pausar la reproducción cuando el sistema informa de pérdida de foco</string>
     <string name="settings_pause_on_focus_loss_off">Continuar la reproducción al perder el foco</string>
     <string name="settings_resume_headset_plug">Reanudar al reconectar los auriculares</string>
-    <string name="settings_resume_headset_plug_subtitle">Reanudar la reproducción al volver a conectar los auriculares tras la pausa automática</string>
+    <string name="settings_resume_headset_plug_subtitle">Reanudar la reproducción cuando los auriculares se reconecten tras la pausa automática (con cable o Bluetooth)</string>
     <string name="settings_decoder_summary">Descodificador: %1$s</string>
     <string name="settings_decoder">Descodificador</string>
     <string name="settings_refresh_rate_match">Coincidencia de tasa de refresco</string>

@@ -574,4 +574,70 @@ class PlaybackFocusTest {
             assertEquals(PlaybackSurfaceId.MUSIC, it.holder)
         }
     }
+
+    // ------------------------------------------------------------------
+    // Music slice: the shared "Duck on Phone Call" pref upgrades MUSIC
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `music duck pref on - transient loss ducks music and keeps the claim held`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.onMusicDuckPolicy(duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        arbiter.loseTransient()
+
+        assertEquals(0.2f, music.duckVolume, "the shared duck level — music lowers instead of stopping")
+        assertEquals(0, music.pauses, "duck, never pause — the call no longer stops the music")
+        val held = assertIs<FocusClaimState.Held>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.MUSIC, held.holder, "the claim stays HELD through the duck")
+    }
+
+    @Test
+    fun `music duck pref on - regain restores the volume`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.onMusicDuckPolicy(duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+        arbiter.loseTransient()
+
+        arbiter.regain()
+
+        assertEquals(1, music.restores, "the duck/restore round-trip on the music row")
+    }
+
+    @Test
+    fun `music duck pref on - permanent loss still suspends and pauses`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.onMusicDuckPolicy(duckOnTransientLoss = true)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        arbiter.losePermanent()
+
+        assertEquals(1, music.pauses, "duck is transient-only vocabulary — a permanent loss suspends")
+        val suspended = assertIs<FocusClaimState.Suspended>(focus.claimState.value)
+        assertEquals(PlaybackSurfaceId.MUSIC, suspended.holder)
+        assertEquals(FocusLossReason.Permanent, suspended.reason)
+        assertEquals(null, music.duckVolume, "no duck precedes the pause")
+    }
+
+    @Test
+    fun `music duck pref off - transient keeps the pause ruling even with the video pref on`() {
+        val arbiter = FakeArbiter()
+        val music = FakeSurface(PlaybackSurfaceId.MUSIC)
+        val focus = focus(arbiter, music)
+        focus.onVideoFocusPolicy(osLegEnabled = true, duckOnTransientLoss = true)
+        focus.onMusicDuckPolicy(duckOnTransientLoss = false)
+        focus.acquire(PlaybackSurfaceId.MUSIC)
+
+        arbiter.loseTransient()
+
+        assertEquals(null, music.duckVolume, "the music pref is its own input — video's pref never leaks onto music")
+        assertEquals(1, music.pauses)
+    }
 }

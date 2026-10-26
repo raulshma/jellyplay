@@ -2313,6 +2313,20 @@ internal class PlaybackSession(
             isPlaying = isPlaying,
             onDenied = { playerSessionManager.engine?.pause() },
         )
+        // The session-reclaim twin of the audio manager's
+        // reclaimAudioSessionIfDisplaced: a video session refused at birth
+        // (the manager guard releases an idle challenger against a then-
+        // playing music session) is rebuilt here — the granted claim has
+        // paused the music holder, so the floor is free and the evictor's
+        // session is not ours. Identity-checked in the controller: an
+        // already-ours-and-active session never rebuilds.
+        if (isPlaying) {
+            val sessionState = playerSessionManager.sessionState.value
+            val itemId = sessionState.currentItemId
+            if (itemId != null) {
+                mediaSessionController.ensureActiveForItem(itemId, sessionState.title, sessionState.subtitle)
+            }
+        }
     }
 
     // ── SessionLoadOutputs (the load pipeline's uiState-shaped outputs) ─────

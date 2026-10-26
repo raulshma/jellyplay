@@ -219,7 +219,7 @@
     <string name="ss_show_time_remaining_subtitle">Display remaining time instead of elapsed time</string>
     <string name="ss_pause_on_focus_loss_title">Pause on Focus Loss</string>
     <string name="ss_pause_on_focus_loss_subtitle">Pause playback when system reports audio focus loss</string>
-    <string name="ss_resume_headset_plug_subtitle">Resume when headphones are plugged back in after the unplug auto-pause</string>
+    <string name="ss_resume_headset_plug_subtitle">Resume when headphones reconnect after the unplug auto-pause (wired or Bluetooth)</string>
     <string name="ss_mpv_video_output_title">MPV Video Output</string>
     <string name="ss_mpv_video_output_subtitle">MPV video output driver</string>
     <string name="ss_mpv_scaler_title">MPV Scaler</string>

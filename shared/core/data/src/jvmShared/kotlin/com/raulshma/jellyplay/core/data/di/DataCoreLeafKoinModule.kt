@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
 import com.raulshma.jellyplay.core.data.download.sniffContainerFile
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
@@ -10,6 +11,7 @@ import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
+import com.raulshma.jellyplay.core.datastore.PreferencesEditFailureReporter
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.database.migration.ContainerProbe
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -72,6 +74,17 @@ internal val dataCoreLeafModule: Module = module {
     single { RemoteNavigationBridge() }
 
     single { UiRemoteControlDispatcher() }
+
+    // Preference writes flow through the datastore editor fire-and-forget;
+    // its failures report here so a rejected write (IO error, corruption) is
+    // at least in the logs instead of the toggle silently never flipping.
+    // This module owns the binding because the datastore leaf has no logger
+    // (see PreferencesEditFailureReporter).
+    single<PreferencesEditFailureReporter> {
+        PreferencesEditFailureReporter { operation, failure ->
+            Log.e("PreferencesEditor", "$operation failed", failure)
+        }
+    }
 
     // The active-engine registry moved to commonMain with the desktop
     // receiver port — both JVM shells bind the one shared single (the video

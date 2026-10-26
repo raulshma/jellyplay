@@ -917,6 +917,8 @@ fun VideoPlayerScreen(
             getSupportsAudioDelay = { uiState.engineCapabilities.supportsAudioDelay },
             getAudioDelayMs = { viewModel.sessionSlices.controls.effectsState.value.audioDelayMs },
             getSeekStepMs = { currentSeekDurationMs },
+            getHasNextEpisode = { uiState.episodes.nextEpisode != null || uiState.hasQueuedNext },
+            getHasPreviousEpisode = { uiState.episodes.previousEpisode != null },
             getCurrentPositionMs = { viewModel.sessionSlices.controls.engine?.currentPositionMs ?: 0L },
             getDurationMs = { viewModel.sessionSlices.controls.engine?.durationMs ?: 0L },
             onSeekCommit = { doSeekTo(it) },

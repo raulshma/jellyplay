@@ -139,6 +139,26 @@ class JellyPlayPlaybackServiceTest {
         verify(exactly = 1) { audioPlaybackManager.ensureAudioSession() }
     }
 
+    /**
+     * The dead-buttons regression pin: a controller connecting while a
+     * session is already active (the VIDEO player's own startup hits this —
+     * its session activates the slot, which starts the service, whose first
+     * connection re-enters onGetSession) must NOT force the audio session
+     * into existence. The unconditional ensure built an idle audio session
+     * mid-video-load, whose setActiveSession then evicted the not-yet-playing
+     * video session (the manager guard protects only a playing holder) — and
+     * media buttons routed to the empty audio session for the whole video.
+     */
+    @Test
+    fun `onGetSession with an active session never ensures the audio session`() {
+        val active = activeSession(isPlaying = true)
+
+        val handed = active.service.onGetSession(mockk<ControllerInfo>(relaxed = true))
+
+        assertSame(active.session, handed)
+        verify(exactly = 0) { audioPlaybackManager.ensureAudioSession() }
+    }
+
     @Test
     fun `clearing the session stops the service`() {
         val active = activeSession(isPlaying = true)

@@ -200,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">経過時間の代わりに残り時間を表示します</string>
     <string name="ss_pause_on_focus_loss_title">フォーカス喪失時に一時停止</string>
     <string name="ss_pause_on_focus_loss_subtitle">システムがオーディオフォーカスの喪失を通知したときに再生を一時停止します</string>
-    <string name="ss_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンを再接続すると再生を再開します</string>
+    <string name="ss_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンが再接続されると再生を再開します（有線・Bluetooth）</string>
     <string name="ss_mpv_video_output_title">MPV 動画出力</string>
     <string name="ss_mpv_video_output_subtitle">MPV の動画出力ドライバー</string>
     <string name="ss_mpv_scaler_title">MPV スケーラー</string>

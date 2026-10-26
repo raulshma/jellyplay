@@ -32,4 +32,18 @@ internal class AudioPlaybackManagerSurface(
     override fun pause() {
         manager.value.pause()
     }
+
+    /**
+     * The "Duck on Phone Call" upgrade on the MUSIC row: the manager's
+     * software-gain duck (mute-guarded, never user-volume memory) with the
+     * regain restore. Only reached when the injected music duck pref is on —
+     * the default pause ruling never calls these.
+     */
+    override fun duck(volume: Float) {
+        manager.value.duck(volume)
+    }
+
+    override fun restore() {
+        manager.value.restoreFromDuck()
+    }
 }

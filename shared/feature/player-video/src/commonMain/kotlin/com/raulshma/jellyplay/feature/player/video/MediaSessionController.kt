@@ -41,6 +41,18 @@ interface MediaSessionController {
      */
     fun createForBackgroundCast(sessionId: String)
 
+    /**
+     * Rebuilds + activates the session for the current item ONLY when the
+     * manager's active session is not ours — the video twin of the audio
+     * session reclaim (the play-edge fix for the priority guard's
+     * refused-at-birth case: a video session refused against a then-playing
+     * music session is released, and the granted claim that paused the music
+     * must give video its session back). No-op when the held session is
+     * already the active one. Default no-op — the jvmMain controller has no
+     * system session to reclaim.
+     */
+    fun ensureActiveForItem(itemId: String, title: String, subtitle: String) {}
+
     /** Tears down the active session. Idempotent. */
     fun release()
 }

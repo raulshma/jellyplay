@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">Wiedergabe pausieren, wenn das System Fokusverlust meldet</string>
     <string name="settings_pause_on_focus_loss_off">Wiedergabe bei Fokusverlust fortsetzen</string>
     <string name="settings_resume_headset_plug">Fortsetzen bei erneut angeschlossenen Kopfhörern</string>
-    <string name="settings_resume_headset_plug_subtitle">Wiedergabe fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
+    <string name="settings_resume_headset_plug_subtitle">Wiedergabe fortsetzen, wenn Kopfhörer nach der automatischen Unplug-Pause wieder verbunden werden (kabelgebunden oder Bluetooth)</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Bildwiederholraten-Anpassung</string>

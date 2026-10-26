@@ -39,6 +39,28 @@ interface VideoFocusPolicyInput {
 }
 
 /**
+ * The write-side input for the MUSIC claim's pref-derived loss policy — the
+ * music twin of [VideoFocusPolicyInput], same narrow-seam shape (user prefs
+ * ride into the executor through this seam, never through the
+ * [PlaybackFocus] interface). The shared "Duck on Phone Call" pref
+ * (`duckOnTransientFocusLoss`) upgrades the MUSIC row's loss ruling from
+ * the matrix's pause-and-suspend to duck-and-hold: a phone call lowers the
+ * music instead of stopping it, and the regain restores — the claim never
+ * left Held, so playback continues through the call. The AUDIO manager
+ * pushes on every playback-slice emission (latest write wins), so the
+ * policy is live whenever music playback is possible.
+ */
+interface MusicFocusPolicyInput {
+
+    /**
+     * @param duckOnTransientLoss whether a transient loss DUCKS a held music
+     *   claim (claim stays Held; a regain restores) instead of the matrix's
+     *   default pause-and-suspend with manual resume.
+     */
+    fun onMusicDuckPolicy(duckOnTransientLoss: Boolean)
+}
+
+/**
  * The commonMain executor behind [PlaybackFocus]: the phase machine
  * (Idle / Held / Suspended), synchronous directive dispatch, and the OS
  * bookkeeping through the [FocusArbiter] port. Main-thread confined — the
@@ -56,7 +78,7 @@ class DefaultPlaybackFocus(
     private val arbiter: FocusArbiter,
     private val surfaces: List<PlaybackSurface>,
     private val osLegClaimants: Set<PlaybackSurfaceId> = PlaybackFocusMatrix.DEFAULT_OS_LEG_CLAIMANTS,
-) : PlaybackFocus, FocusListener, VideoFocusPolicyInput {
+) : PlaybackFocus, FocusListener, VideoFocusPolicyInput, MusicFocusPolicyInput {
 
     private val _claimState = MutableStateFlow<FocusClaimState>(FocusClaimState.Idle)
     override val claimState: StateFlow<FocusClaimState> = _claimState.asStateFlow()
@@ -67,9 +89,16 @@ class DefaultPlaybackFocus(
     @Volatile private var videoOsLegEnabled: Boolean = true
     @Volatile private var videoLossDirective: FocusLossDirective? = null
 
+    /** The injected music duck pref (off = the matrix's pause ruling). */
+    @Volatile private var musicDuckOnTransientLoss: Boolean = false
+
     override fun onVideoFocusPolicy(osLegEnabled: Boolean, duckOnTransientLoss: Boolean) {
         videoOsLegEnabled = osLegEnabled
         videoLossDirective = if (duckOnTransientLoss) FocusLossDirective.Duck(DUCK_VOLUME) else null
+    }
+
+    override fun onMusicDuckPolicy(duckOnTransientLoss: Boolean) {
+        musicDuckOnTransientLoss = duckOnTransientLoss
     }
 
     override fun acquire(claimant: PlaybackSurfaceId): FocusOutcome {
@@ -173,13 +202,20 @@ class DefaultPlaybackFocus(
     private fun inOsLeg(claimant: PlaybackSurfaceId): Boolean =
         claimant in osLegClaimants && (claimant != PlaybackSurfaceId.VIDEO || videoOsLegEnabled)
 
-    /** The matrix ruling, overridden on the VIDEO row by the injected pref. */
-    private fun effectiveLossDirective(holder: PlaybackSurfaceId): FocusLossDirective =
-        if (holder == PlaybackSurfaceId.VIDEO) {
+    /**
+     * The matrix ruling, overridden per-claim by the injected prefs: VIDEO's
+     * duck directive (the video-pref seat semantics) and MUSIC's duck
+     * upgrade (the shared "Duck on Phone Call" pref) — every other row takes
+     * the table's pause ruling untouched.
+     */
+    private fun effectiveLossDirective(holder: PlaybackSurfaceId): FocusLossDirective = when (holder) {
+        PlaybackSurfaceId.VIDEO ->
             videoLossDirective ?: PlaybackFocusMatrix.lossDirectiveOf(holder)
-        } else {
-            PlaybackFocusMatrix.lossDirectiveOf(holder)
-        }
+        PlaybackSurfaceId.MUSIC ->
+            if (musicDuckOnTransientLoss) FocusLossDirective.Duck(DUCK_VOLUME)
+            else PlaybackFocusMatrix.lossDirectiveOf(holder)
+        PlaybackSurfaceId.READ_ALOUD -> PlaybackFocusMatrix.lossDirectiveOf(holder)
+    }
 
     private companion object {
         /**

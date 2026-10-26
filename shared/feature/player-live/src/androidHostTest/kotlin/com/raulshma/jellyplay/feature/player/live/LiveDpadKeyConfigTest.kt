@@ -27,6 +27,7 @@ class LiveDpadKeyConfigTest {
         var backLadderSteps = mutableListOf<String>()
         var menuCalls = 0
         var channelUps = 0
+        var playPauseCalls = 0
     }
 
     private fun fixture(isSheetOpen: Boolean = false, overlayVisible: Boolean = false): Pair<(DpadKeyEvent) -> Boolean, Probe> {
@@ -49,6 +50,7 @@ class LiveDpadKeyConfigTest {
                 dispatcher = dispatcher,
                 onChannelUp = { probe.channelUps++ },
                 onChannelDown = {},
+                onPlayPause = { probe.playPauseCalls++ },
                 onSelect = {
                     probe.selectCalls++
                     true
@@ -135,5 +137,23 @@ class LiveDpadKeyConfigTest {
 
         assertFalse(handler(key(DpadAction.Up, KeyEventType.KeyUp)))
         assertEquals(0, probe.channelUps)
+    }
+
+    @Test
+    fun `one PLAY PAUSE press toggles exactly once - repeats and KeyUp inert`() {
+        val (handler, probe) = fixture()
+
+        assertTrue(handler(key(DpadAction.PlayPause, KeyEventType.KeyDown)), "KeyDown must consume")
+        assertFalse(handler(key(DpadAction.PlayPause, KeyEventType.KeyUp)), "KeyUp must be unconsumed")
+        assertFalse(handler(key(DpadAction.PlayPause, KeyEventType.KeyDown, repeatCount = 1)), "KeyRepeat must not re-toggle")
+        assertEquals(1, probe.playPauseCalls)
+    }
+
+    @Test
+    fun `open sheet silences the play pause arm`() {
+        val (handler, probe) = fixture(isSheetOpen = true)
+
+        assertFalse(handler(key(DpadAction.PlayPause, KeyEventType.KeyDown)))
+        assertEquals(0, probe.playPauseCalls)
     }
 }

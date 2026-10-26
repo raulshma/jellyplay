@@ -55,7 +55,21 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
         // is created lazily on first play). Ensure it exists — an idle player
         // with no media items, no autoplay — so the car gets a browsable
         // library instead of a null session ("app unavailable" on the screen).
-        audioPlaybackManager.ensureAudioSession()
+        //
+        // ONLY when the floor is free. Fired unconditionally, the VIDEO
+        // player's own startup hits this: its session activates the manager
+        // slot, which starts this service, whose first controller connection
+        // re-enters here and builds an idle AUDIO session — and
+        // setActiveSession then lets that idle challenger EVICT the
+        // not-yet-playing video session (the manager's priority guard
+        // protects only a playing holder). The empty audio session becomes
+        // the media-button session and every headset / Bluetooth / lock-screen
+        // press routes nowhere for the whole video ("dead buttons during
+        // video"). With a session already active the answer below is that
+        // session, exactly what a connecting controller should get.
+        if (sessionManager.currentSession == null) {
+            audioPlaybackManager.ensureAudioSession()
+        }
         return sessionManager.currentSession as? MediaLibrarySession
     }
 

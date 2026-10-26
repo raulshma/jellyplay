@@ -200,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Verbleibende statt vergangene Zeit anzeigen</string>
     <string name="ss_pause_on_focus_loss_title">Bei Fokusverlust pausieren</string>
     <string name="ss_pause_on_focus_loss_subtitle">Wiedergabe pausieren, wenn das System Audio-Fokusverlust meldet</string>
-    <string name="ss_resume_headset_plug_subtitle">Fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
+    <string name="ss_resume_headset_plug_subtitle">Fortsetzen, wenn Kopfhörer nach der automatischen Unplug-Pause wieder verbunden werden (kabelgebunden oder Bluetooth)</string>
     <string name="ss_mpv_video_output_title">MPV-Videoausgabe</string>
     <string name="ss_mpv_video_output_subtitle">MPV-Videoausgabetreiber</string>
     <string name="ss_mpv_scaler_title">MPV-Scaler</string>
