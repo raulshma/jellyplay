@@ -94,7 +94,7 @@ fun EntryProviderScope<NavKey>.appSections(
     audioPlayerSection(navigator)
     bookReaderSection(navigator)
     downloadsSection(navigator)
-    authSection(navigator) { navigator.goBack() }
+    authSection(navigator, onAuthenticated = { navigator.goBack() })
     settingsSection(
         navigator = navigator,
         onLogout = host.settings.onLogout,

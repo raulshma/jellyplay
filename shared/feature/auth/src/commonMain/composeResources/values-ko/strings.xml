@@ -72,6 +72,7 @@
     <string name="auth_loading">불러오는 중…</string>
     <string name="auth_no_servers_added_title">추가된 서버가 없음</string>
     <string name="auth_no_servers_added_desc">Jellyfin 서버를 추가하여 시작하세요</string>
+    <string name="auth_restore_backup">백업에서 복원</string>
     <string name="auth_remove_server">서버 제거</string>
     <string name="auth_remove_server_title">서버를 제거하시겠어요?</string>
     <string name="auth_remove_server_message">이 작업은 "%1$s" 및 저장된 모든 사용자를 제거합니다. 되돌릴 수 없습니다.</string>

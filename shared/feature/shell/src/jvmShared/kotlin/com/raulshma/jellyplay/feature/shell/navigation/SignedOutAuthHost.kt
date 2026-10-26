@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.shell.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavKey
@@ -8,17 +9,22 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.savedstate.serialization.SavedStateConfiguration
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.feature.auth.navigation.authSection
+import com.raulshma.jellyplay.feature.settings.RestoreWizardScreen
 
 /**
  * The signed-out half of the shell session gate, SHARED by both shells —
  * one composable beside the rest of the shared shell wiring ([appSections],
  * [ShellHostHooks]). One top-level route, [Route.ServerList], with
  * authSection's five entries
- * (ServerList/AddServer/Login/QuickConnect/UserSelection) stacked on it.
+ * (ServerList/AddServer/Login/QuickConnect/UserSelection) stacked on it, plus
+ * [Route.RestoreWizard] — the ServerList's restore-from-backup affordances
+ * open the settings wizard here so a fresh install can restore a backup
+ * before any sign-in.
  *
  * The seed is deliberately ServerList, NOT a Login prefilled with the last
  * server address: landing on the picker is strictly stronger for the common
@@ -78,6 +84,16 @@ fun SignedOutAuthHost(
     // depend on.
     val saveableStateHolder = rememberSaveableStateHolder()
 
+    // This branch has no snackbar surface, but the restore wizard (reachable
+    // from the ServerList affordances below) posts its summaries to the
+    // app-wide bus — a buffered Channel. Left uncollected they would sit
+    // undelivered and replay as a stale snackbar the moment the user signs in
+    // and the authenticated scaffold starts collecting. Drain while composed.
+    val userMessageBus = LocalUserMessageBus.current
+    LaunchedEffect(userMessageBus) {
+        userMessageBus.messages.collect { }
+    }
+
     content(navigator, { backStack.size }) {
         NavDisplay(
             backStack = backStack,
@@ -86,7 +102,18 @@ fun SignedOutAuthHost(
                 rememberSaveableStateHolderNavEntryDecorator(saveableStateHolder),
             ),
             entryProvider = entryProvider {
-                authSection(navigator, onAuthenticated)
+                authSection(
+                    navigator,
+                    onAuthenticated,
+                    onRestoreBackup = { navigator.navigate(Route.RestoreWizard()) },
+                )
+                entry<Route.RestoreWizard> { entry ->
+                    RestoreWizardScreen(
+                        onBack = { navigator.goBack() },
+                        uri = entry.uri,
+                        snapshotId = entry.snapshotId,
+                    )
+                }
             },
         )
     }
