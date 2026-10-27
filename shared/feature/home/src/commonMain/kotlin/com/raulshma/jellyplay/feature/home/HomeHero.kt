@@ -272,7 +272,12 @@ fun AnimatedHeroHeader(
     val onChromeRevealRequest = remember { { slideshowRevealed = true } }
 
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
-    val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    // Symmetric crossfade: the outgoing slide fades out over the SAME slow
+    // spec the incoming one fades in with, so both stay partially visible for
+    // the whole transition (the outgoing used to finish 150ms before the
+    // incoming reached full opacity, dimpling the content behind the hero
+    // mid-swap). The subtle scale keeps a whisper of depth without reading as
+    // a zoom.
     AnimatedContent(
         targetState = featuredItem,
         transitionSpec = {
@@ -282,10 +287,10 @@ fun AnimatedHeroHeader(
                 initialScale = 1.02f,
                 animationSpec = slowEffects,
             ) togetherWith fadeOut(
-                animationSpec = defaultEffects,
+                animationSpec = slowEffects,
             ) + scaleOut(
                 targetScale = 0.985f,
-                animationSpec = defaultEffects,
+                animationSpec = slowEffects,
             )
         },
         label = "heroRotation",
