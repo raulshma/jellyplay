@@ -28,7 +28,7 @@ import com.raulshma.jellyplay.feature.player.audio.components.PlayerSpeedSlider
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_speed_title
 
-private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 5.0f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -206,7 +206,7 @@ fun AudioSettingsScreen(
                         trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
                         highlighted = highlightSettingId == AudioRows.AudioDefaultSpeed.id,
                         onClick = {
-                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 5.0f)
                 activePicker.value = pickerChip(
                     title = audioDefaultSpeedTitle,
                     values = speeds,

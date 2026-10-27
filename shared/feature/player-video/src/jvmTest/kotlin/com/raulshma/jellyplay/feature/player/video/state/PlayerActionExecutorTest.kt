@@ -370,6 +370,11 @@ class PlayerActionExecutorTest {
         inputs.playbackSpeed = 2.0f
         probe.events.clear()
         assertTrue(ex.executeAction(PlayerAction.CYCLE_SPEED))
+        assertEquals(listOf<VideoPlayerUiEvent>(VideoPlayerUiEvent.SetPlaybackSpeed(3.0f)), probe.events)
+
+        inputs.playbackSpeed = 5.0f
+        probe.events.clear()
+        assertTrue(ex.executeAction(PlayerAction.CYCLE_SPEED))
         assertEquals(listOf<VideoPlayerUiEvent>(VideoPlayerUiEvent.SetPlaybackSpeed(1.0f)), probe.events)
     }
 

@@ -77,14 +77,14 @@ class PlaybackSpeedChangeTest {
 
     @Test
     fun speedChange_valuesAreDistinct() {
-        val speeds = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+        val speeds = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 5.0f)
         val distinct = speeds.distinct().size
         assertEquals(speeds.size, distinct)
     }
 
     @Test
     fun speedChange_sortedAscending() {
-        val speeds = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+        val speeds = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 5.0f)
         for (i in 1 until speeds.size) {
             assertTrue(speeds[i] > speeds[i - 1])
         }

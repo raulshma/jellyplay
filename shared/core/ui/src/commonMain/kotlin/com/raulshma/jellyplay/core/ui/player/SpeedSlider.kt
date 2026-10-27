@@ -21,8 +21,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import org.jetbrains.compose.resources.stringResource
 
-private val SPEED_RANGE = 0.25f..2.0f
-private const val SPEED_STEPS = 34 // ((2.0 - 0.25) / 0.05) - 1
+private val SPEED_RANGE = 0.25f..5.0f
+private const val SPEED_STEPS = 94 // ((5.0 - 0.25) / 0.05) - 1
 private const val DPAD_STEP = 0.05f
 
 /**
