@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 /**
  * The "My ratings" screen's filter tabs — each maps 1:1 onto the plugin's
@@ -60,6 +59,22 @@ class JellyPlayUserRatingsViewModel(
     private val _uiState = MutableStateFlow(JellyPlayUserRatingsState())
     val uiState: StateFlow<JellyPlayUserRatingsState> = _uiState.asStateFlow()
 
+    /**
+     * The tab dance's one holder: the gate, the stale-response guard and the
+     * silent-absence fold live there; this VM keeps only the filter query and
+     * the state shape.
+     */
+    private val tabLoader = PluginTabLoader(
+        scope = scope,
+        gateOpen = { featureGate.isAvailableNowOrProbe(statusStore, JellyPlayPluginFeatures.UserRatings) },
+        selected = { _uiState.value.filter },
+        fetch = { filter -> pluginApiClient.getUserRatings(filter.wire) },
+        isCurrent = { filter -> _uiState.value.filter == filter },
+        land = { ratings -> _uiState.update { it.copy(ratings = ratings, isLoading = false) } },
+        quiet = emptyList(),
+        onGateClosed = { _uiState.update { it.copy(isLoading = false) } },
+    )
+
     /** Selects a filter tab and (re)loads its rows. Same-filter reselect refetches. */
     fun selectFilter(filter: JellyPlayUserRatingsFilter) {
         _uiState.value = JellyPlayUserRatingsState(filter = filter, isLoading = true)
@@ -72,26 +87,6 @@ class JellyPlayUserRatingsViewModel(
      * silent-absence rule; a degraded gate simply never fetches.
      */
     fun refresh() {
-        scope.launch {
-            if (!ratingsGateOpen()) {
-                _uiState.update { it.copy(isLoading = false) }
-                return@launch
-            }
-            val filter = _uiState.value.filter
-            pluginApiClient.getUserRatings(filter.wire)
-                .onSuccess { ratings ->
-                    // Stale-response guard: only the selected filter's fetch may land.
-                    if (_uiState.value.filter != filter) return@onSuccess
-                    _uiState.update { it.copy(ratings = ratings, isLoading = false) }
-                }
-                .onFailure {
-                    if (_uiState.value.filter != filter) return@onFailure
-                    _uiState.update { it.copy(ratings = emptyList(), isLoading = false) }
-                }
-        }
+        tabLoader.refresh()
     }
-
-    /** The ONE gate seam, or the probe-only fallback when the seam is unwired. */
-    private suspend fun ratingsGateOpen(): Boolean =
-        featureGate.isAvailableNowOrProbe(statusStore, JellyPlayPluginFeatures.UserRatings)
 }

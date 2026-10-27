@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.serialization.SavedStateConfiguration
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.NavDestination
+import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.reflect.KClass
 import kotlinx.serialization.KSerializer
@@ -13,15 +14,19 @@ import kotlinx.serialization.serializer
 
 /**
  * The rail renders the shared [NavDestination] registry — label, icon and
- * group come from the one destination-facts table in core/ui. Only the rail's
- * OWN display order stays here; it is per-shell policy, not a destination
- * fact.
+ * group come from the one destination-facts table in core/ui. Two things stay
+ * here; both are per-shell policy, not destination facts: the rail's OWN
+ * display order ([DESKTOP_RAIL_ROUTES]) and nothing else — PRIMARY ELIGIBILITY
+ * is the registry's placement descriptor ([NavDestination.primarySurfaces],
+ * filtered into [DESKTOP_RAIL_ITEMS]).
  *
  * Every listed route MUST have a registry row: resolution below fails loudly
  * at class-init. A silent `mapNotNull` drop would let a route that lost
  * its row vanish off the rail with no failure anywhere.
  * DesktopRailRegistryContractTest pins this (internal visibility exists for
- * that test — nothing else in the module may depend on the rail internals).
+ * that test — nothing else in the module may depend on the rail internals),
+ * and pins the filtered membership against the descriptor's DesktopRail set
+ * both ways, so the eligibility filter cannot silently drop or grow the rail.
  */
 internal val DESKTOP_RAIL_ROUTES: List<Route> = listOf(
     Route.Home,
@@ -41,12 +46,21 @@ internal val DESKTOP_RAIL_ROUTES: List<Route> = listOf(
     Route.AdminDashboard,
 )
 
+/**
+ * The rail's items: the listed routes resolved to their registry rows, kept
+ * only when the registry places them on this surface
+ * ([NavPrimarySurface.DesktopRail]) — the placement eligibility vote is the
+ * registry's; the list above contributes the order. DesktopRailRegistryContractTest
+ * pins the filtered membership equal to the descriptor's DesktopRail set both
+ * ways, so a listed-but-unplaced route drops here (and fails the contract
+ * test) instead of rendering on a surface the registry didn't place it on.
+ */
 internal val DESKTOP_RAIL_ITEMS: List<NavDestination> = DESKTOP_RAIL_ROUTES.map { route ->
     checkNotNull(NAV_DESTINATION_BY_ROUTE[route]) {
         "DESKTOP_RAIL_ROUTES lists ${route::class.simpleName} but the NAV_DESTINATIONS registry " +
             "has no row for it — register the destination or drop it from the rail list."
     }
-}
+}.filter { NavPrimarySurface.DesktopRail in it.primarySurfaces }
 
 /**
  * Rail + tab-switch destinations; Home is the start tab (same as the Android

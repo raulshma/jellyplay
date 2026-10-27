@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.sync
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStartRequest
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.TimeSource
@@ -58,7 +58,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class OfflineSyncManagerResyncTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk()
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
     private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
@@ -78,7 +78,7 @@ class OfflineSyncManagerResyncTest {
         val downloadFile = File(tempDir, "video.mkv")
         downloadFile.createNewFile()
         every { offlineModeManager.isOffline } returns false
-        coEvery { mediaRepository.getMediaDetail(itemId, any()) } returns Result.success(detail())
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.success(detail())
         coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity()
         coEvery { offlineMediaDao.getLocalImagePaths(itemId) } returns null
         coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns
@@ -95,7 +95,7 @@ class OfflineSyncManagerResyncTest {
             )
         coEvery { playbackRepository.getMediaSegments(itemId) } returns Result.success(emptyList())
         manager = OfflineSyncManager(
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             writer = writer,
             downloadRepository = downloadRepository,
             offlineMediaDao = offlineMediaDao,
@@ -283,7 +283,7 @@ class OfflineSyncManagerResyncTest {
 
         val result = manager.checkForUpdates(itemId)
 
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         // Returns the persisted state unchanged.
         assertEquals(SyncStatus.CURRENT, result.state.status)
     }
@@ -295,7 +295,7 @@ class OfflineSyncManagerResyncTest {
             segmentsSignature = "prior-seg-sig",
             lastSyncedAt = 0L, // force TTL expiry
         )
-        coEvery { mediaRepository.getMediaDetail(itemId, any()) } returns Result.success(detail())
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.success(detail())
 
         manager.checkForUpdates(itemId)
 
@@ -445,7 +445,7 @@ class OfflineSyncManagerResyncTest {
             subtitleSignature = comparator.subtitleSignature(detail()),
             subtitlesPending = 1,
         )
-        coEvery { mediaRepository.getMediaDetail(itemId, any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(itemId, any()) } returns Result.success(
             detail().copy(mediaSources = emptyList()),
         )
 

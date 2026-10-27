@@ -40,7 +40,7 @@ class DownloadRepositoryImplSweepTest {
     private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
     private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
 
     /** A wall-clock instant a live clock would never reproduce. */
@@ -58,7 +58,7 @@ class DownloadRepositoryImplSweepTest {
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
         database = database,
-        mediaRepository = MediaRepositoryAccess { mediaRepository },
+        mediaRepository = MediaRepositoryAccess { detailFeed },
         episodeCatalogue = mockk(relaxed = true),
         imageUrlProvider = mockk(relaxed = true),
         downloadsStore = preferencesStore,

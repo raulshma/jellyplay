@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
@@ -48,7 +48,7 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
     // documented throwing-lazy (no desktop definition): downloadSeries
     // failed loudly and episode series-seeding degraded to the minimal
     // parent-row fallback.
-    single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
+    single<MediaRepositoryAccess> { MediaRepositoryAccess { get<DetailFeed>() } }
 
     // The in-process download manager: construction is side-effect free;
     // the composition root resolves + start()s it after startKoin.
@@ -76,7 +76,7 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
         DesktopDownloadIntake(
             delegate = get(),
             downloadRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             downloadsStore = get(),
         )
     }

@@ -42,7 +42,7 @@ class DownloadRepositoryImplResumeTest {
     private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
     private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider = mockk(relaxed = true)
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     // downloadSeries delegates the per-episode bundle here; the resume tests
@@ -69,7 +69,7 @@ class DownloadRepositoryImplResumeTest {
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
         database = database,
-        mediaRepository = MediaRepositoryAccess { mediaRepository },
+        mediaRepository = MediaRepositoryAccess { detailFeed },
         episodeCatalogue = episodeCatalogue,
         imageUrlProvider = imageUrlProvider,
         downloadsStore = preferencesStore,

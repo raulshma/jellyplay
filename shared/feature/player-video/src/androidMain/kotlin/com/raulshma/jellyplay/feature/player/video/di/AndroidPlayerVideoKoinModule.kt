@@ -174,7 +174,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             libraryApiClient = get(),
             lyricsRepository = get(),
             playbackRepository = get(),

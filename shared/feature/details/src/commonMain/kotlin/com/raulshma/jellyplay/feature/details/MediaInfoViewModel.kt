@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,12 +28,12 @@ sealed interface MediaInfoUiState {
 /**
  * Dedicated ViewModel for the technical-info screen.
  *
- * Decoupled from [DetailViewModel] — injects only [MediaRepository] so the
+ * Decoupled from [DetailViewModel] — injects only [DetailFeed] so the
  * technical-info screen no longer pulls in the detail screen's download /
  * Seerr / *arr orchestration graph.
  */
 class MediaInfoViewModel constructor(
-    private val mediaRepository: MediaRepository,
+    private val detailFeed: DetailFeed,
 ) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow<MediaInfoUiState>(MediaInfoUiState.Loading)
@@ -42,7 +42,7 @@ class MediaInfoViewModel constructor(
     fun load(itemId: String) {
         _uiState.value = MediaInfoUiState.Loading
         launch {
-            mediaRepository.getMediaDetail(itemId)
+            detailFeed.getMediaDetail(itemId, force = false)
                 .onSuccess { detail -> _uiState.value = MediaInfoUiState.Success(detail) }
                 .onFailure { err ->
                     _uiState.value = MediaInfoUiState.Error(UserErrorMessages.resolve(err, "Failed to load media info"))

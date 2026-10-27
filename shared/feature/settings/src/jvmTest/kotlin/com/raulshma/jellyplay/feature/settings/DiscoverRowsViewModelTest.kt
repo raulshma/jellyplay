@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -119,26 +120,28 @@ class DiscoverRowsViewModelTest {
         editor = PreferencesEditor(
             scope = CoroutineScope(testDispatcher + Job()),
             editScope = PreferencesEditScope(
-                playback = mockk<PlaybackStore>(relaxed = true),
-                appearance = mockk<AppearanceStore>(relaxed = true),
-                videoPlayer = mockk<VideoPlayerStore>(relaxed = true),
-                downloads = mockk<DownloadsStore>(relaxed = true),
-                engine = mockk<PlayerEngineStore>(relaxed = true),
-                homeDiscovery = homeDiscovery,
-                audio = mockk<AudioStore>(relaxed = true),
-                audioEffects = mockk<AudioEffectsStore>(relaxed = true),
-                audioCache = mockk<AudioCacheStore>(relaxed = true),
-                library = mockk<LibraryStore>(relaxed = true),
-                navigation = mockk<NavigationStore>(relaxed = true),
-                shortcuts = mockk(relaxed = true),
-                networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
-                notification = mockk<NotificationStore>(relaxed = true),
-                screensaver = mockk<ScreensaverStore>(relaxed = true),
-                security = mockk<SecurityStore>(relaxed = true),
-                subtitle = mockk<SubtitleLanguageStore>(relaxed = true),
-                syncPlayCast = mockk<SyncPlayCastStore>(relaxed = true),
-                experimental = mockk<ExperimentalStore>(relaxed = true),
-                volumeProfile = mockk<VolumeProfileStore>(relaxed = true),
+                stores = PreferenceStores(
+                    playback = mockk<PlaybackStore>(relaxed = true),
+                    videoPlayer = mockk<VideoPlayerStore>(relaxed = true),
+                    engine = mockk<PlayerEngineStore>(relaxed = true),
+                    subtitle = mockk<SubtitleLanguageStore>(relaxed = true),
+                    audio = mockk<AudioStore>(relaxed = true),
+                    audioEffects = mockk<AudioEffectsStore>(relaxed = true),
+                    audioCache = mockk<AudioCacheStore>(relaxed = true),
+                    appearance = mockk<AppearanceStore>(relaxed = true),
+                    homeDiscovery = homeDiscovery,
+                    library = mockk<LibraryStore>(relaxed = true),
+                    navigation = mockk<NavigationStore>(relaxed = true),
+                    shortcuts = mockk(relaxed = true),
+                    downloads = mockk<DownloadsStore>(relaxed = true),
+                    networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
+                    notification = mockk<NotificationStore>(relaxed = true),
+                    syncPlayCast = mockk<SyncPlayCastStore>(relaxed = true),
+                    security = mockk<SecurityStore>(relaxed = true),
+                    experimental = mockk<ExperimentalStore>(relaxed = true),
+                    screensaver = mockk<ScreensaverStore>(relaxed = true),
+                    volumeProfile = mockk<VolumeProfileStore>(relaxed = true),
+                ),
                 appRuntimeState = mockk<AppRuntimeStateStore>(relaxed = true),
             ),
             store = mockk<UserPreferencesStore>(relaxed = true),

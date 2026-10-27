@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
@@ -109,7 +109,8 @@ data class WarmNextStream(
 
 internal class PlayerSessionManager(
     private val scope: CoroutineScope,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playbackRepository: PlaybackRepository,
     /** Detail artwork URL for the external-player hand-off (the ImageUrlProvider seam). */
     private val imageUrlProvider: ImageUrlProvider,
@@ -308,10 +309,9 @@ internal class PlayerSessionManager(
     }
 
     /**
-     * Legacy entry point — preserved for binary compatibility with existing
-     * call-sites ([VideoPlayerViewModel.initializeInternal],
-     * [VideoPlayerViewModel.loadCinemaIntro]). Delegates to
-     * [loadMedia] with a [PlaybackSource.Auto].
+     * Convenience overload for [VideoPlayerViewModel.initializeInternal] and
+     * [VideoPlayerViewModel.loadCinemaIntro]: delegates to [loadMedia] with a
+     * [PlaybackSource.Auto].
      */
     suspend fun loadMedia(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         loadMedia(PlaybackSource.Auto(itemId, mediaSourceId), startPositionTicks)
@@ -344,8 +344,8 @@ internal class PlayerSessionManager(
 
         // The download lookup is needed both for Auto resolution and for
         // metadata enrichment during offline playback, so it is performed
-        // unconditionally — identical to the pre-refactor behaviour. The
-        // shared resolver owns the COMPLETED + file-exists predicate.
+        // unconditionally. The shared resolver owns the COMPLETED +
+        // file-exists predicate.
         val download = playbackSourceResolver.resolveUsableDownload(itemId)
 
         val resolved = when (source) {
@@ -526,7 +526,7 @@ internal class PlayerSessionManager(
         // on `mediaStreams` staying empty (see refreshMediaDetail).
         if (!offlineModeManager.isOffline) {
             sidecarCatchUpJob = scope.launch {
-                val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+                val detail = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
                 // The session may have moved on (item switch, release) while the
                 // fetch was in flight — attachNewSubtitleStreams re-checks the
                 // item id, but skip the work entirely when it is no longer ours.
@@ -595,7 +595,7 @@ internal class PlayerSessionManager(
         // (single-flight detail read, session-scoped segments cache), so the
         // warming call is the exact call loadOnline/fetchMediaSegments make —
         // they hit the warm entries with no integration.
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: run {
+        val detail = detailFeed.getMediaDetail(itemId, force = false).getOrNull() ?: run {
             // Offline miss / vanished item: drop the slot so a later trigger
             // can re-attempt, and stay silent (autoplay re-resolves anyway).
             warmNextItemId = null
@@ -693,10 +693,10 @@ internal class PlayerSessionManager(
         mediaSourceId: String?,
         startPositionTicks: Long,
     ) {
-        val detailResult = mediaRepository.getMediaDetail(itemId)
+        val detailResult = detailFeed.getMediaDetail(itemId, force = false)
         val detail = detailResult.getOrElse {
-            // Surface the failure — the old silent bail left the user staring
-            // at a "loading" veil that had lifted over nothing.
+            // Surface the failure rather than leaving the user staring
+            // at a "loading" veil that has lifted over nothing.
             // KMP seam: compose-resources' suspend resolver replaces
             // context.getString (loadOnline is suspend).
             failLoad(getString(Res.string.player_video_error_loading_media))

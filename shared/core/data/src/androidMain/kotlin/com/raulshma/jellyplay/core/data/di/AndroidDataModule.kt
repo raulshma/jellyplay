@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.data.offline.AndroidOfflineModeManager
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaExtractorLocalStreamProbe
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilder
 import com.raulshma.jellyplay.core.data.update.ApkInstallBuilderImpl
@@ -63,12 +63,12 @@ fun androidDataModule(context: Context): Module {
 
         single<LocalStreamProbe> { MediaExtractorLocalStreamProbe() }
 
-        // V3 downloads conveyor: the deferred MediaRepository edge of the
-        // Koin-owned DownloadRepositoryImpl. Since the MediaRepository
-        // cluster flip this resolves Koin's own MediaRepositoryImpl single
-        // (dataJvmModule) — the former Hilt-interop hop is gone, and the
-        // desktop counterpart in desktopDataModule is now real too.
-        single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
+        // V3 downloads conveyor: the deferred detail-read seam of the
+        // Koin-owned DownloadRepositoryImpl. It resolves Koin's own
+        // MediaRepositoryImpl single (dataJvmModule), narrowed to its
+        // DetailFeed family seam. The same seam exists on desktop through
+        // desktopDataModule.
+        single<MediaRepositoryAccess> { MediaRepositoryAccess { get<DetailFeed>() } }
 
         // ── AppUpdate split: Android actuals of the update seams ──
         // AppUpdateRepositoryImpl moved to jvmShared as a plain class whose

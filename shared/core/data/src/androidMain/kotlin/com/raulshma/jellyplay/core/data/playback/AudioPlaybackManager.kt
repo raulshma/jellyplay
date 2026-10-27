@@ -17,7 +17,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
@@ -63,16 +63,15 @@ import kotlin.math.pow
  * [AudioNowPlayingFace] members below are by-reference re-exposures of the
  * same overrides plus the [hasActiveSession] pull, and the remote-session
  * flag the verdict owns is read here only through the [remoteSessionActive]
- * gate lambda (the former manager-local `@Volatile var` — its storage and
- * single-writer contract moved into the verdict; the audio side never
- * writes it). [ShellAudioSurface] — the app shell's narrowed
- * metadata+transport parameter — folds onto the same overrides with no
- * member of its own; the Koin alias binds the same single.
+ * gate lambda; the audio side never writes it. [ShellAudioSurface] - the app
+ * shell's narrowed metadata+transport parameter — folds onto the same
+ * overrides with no member of its own; the Koin alias binds the same single.
  */
 @Stable
 class AudioPlaybackManager(
     private val context: Context,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     /**
      * The library/browse ladder (detail+local resolve, playable-[MediaItem]
      * building, the [androidx.media3.session.MediaLibrarySession] builder) —
@@ -328,9 +327,8 @@ class AudioPlaybackManager(
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
 
     // Crossfade duration lives in the chassis core (one of its eleven cells,
-    // written through AudioQueueStateCore.setCrossfadeDurationMs — the former
-    // manager-local duplicate cell folded so the chassis is the one owner on
-    // both adapters; same 0L initial value, so the fold is unobservable).
+    // written through AudioQueueStateCore.setCrossfadeDurationMs), so the
+    // chassis is the one owner on both adapters; initial value 0L.
     override val crossfadeDurationMs: StateFlow<Long> get() = state.crossfadeDurationMs
 
     private val _isCrossfading = MutableStateFlow(false)
@@ -365,7 +363,7 @@ class AudioPlaybackManager(
         scope = scope,
         context = context,
         effectsProcessor = effectsProcessor,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { state.repeatMode.value },
@@ -733,10 +731,10 @@ class AudioPlaybackManager(
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
             // ADR-0004 music OS-leg migration: the attributes still describe
-            // the stream for routing, but the OS focus seat is NOT taken here
-            // anymore — PlaybackFocus owns it (FocusArbiter, claimed on the
-            // is-playing edge). Built-in handling would fight the module's
-            // seat: two requests for one surface.
+            // the stream for routing, but the OS focus seat is NOT taken here -
+            // PlaybackFocus owns it (FocusArbiter, claimed on the is-playing
+            // edge). Built-in handling would fight the module's seat: two
+            // requests for one surface.
             .setAudioAttributes(audioAttributes, false)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -902,7 +900,7 @@ class AudioPlaybackManager(
      * recorded desktop parity note; resume is server-ticks only).
      */
     private suspend fun resolvePlayTrack(itemId: String): AudioPlayTrack? {
-        val detailResult = mediaRepository.getMediaDetail(itemId)
+        val detailResult = detailFeed.getMediaDetail(itemId, force = false)
         val detail = detailResult.getOrNull()
 
         if (detail != null) {
@@ -1609,7 +1607,7 @@ class AudioPlaybackManager(
                 )
 
                 coroutineScope {
-                    val detailJob = async { mediaRepository.getMediaDetail(nextItem.id) }
+                    val detailJob = async { detailFeed.getMediaDetail(nextItem.id, force = false) }
                     val startJob = async {
                         playbackRepository.reportPlaybackStart(startReportFor(nextItem))
                     }
@@ -1741,14 +1739,11 @@ class AudioPlaybackManager(
         // bounded reactive paused-wait and the player-less exponential
         // backoff; this is only the tick body. Paused ticks still reach
         // [onActive] on a play→pause edge — the body's own gate keeps them
-        // no-ops, exactly as before the unification. The ticker's
-        // synchronous first-tick prime (primeFirstTick) is the fix this
-        // manager was missing: the first position/duration publish now
-        // lands BEFORE startPositionTracking() returns instead of up to one
-        // 250 ms interval later — so a skip in that window no longer
-        // reports the stop position against duration == 0 (the desktop twin
-        // has primed since it adopted the ticker; the regression story is
-        // on EnginePositionTicker's primeFirstTick KDoc).
+        // no-ops. The ticker's synchronous first-tick prime (primeFirstTick)
+        // publishes the first position/duration BEFORE startPositionTracking()
+        // returns instead of up to one 250 ms interval later, so a skip in
+        // that window cannot report the stop position against duration == 0
+        // (see EnginePositionTicker's primeFirstTick KDoc).
         positionJob = EnginePositionTicker(
             scopeProvider = { scope },
             // Mutable on purpose — the init-block governor downgrades/restores

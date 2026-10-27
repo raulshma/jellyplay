@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -177,6 +179,12 @@ internal val dataMediaRepositoryModule: Module = module {
     // The series-notification family (the per-series Next Up diff read).
     single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
+    // The detail-read family (the detail fetch + the similar-items row) and
+    // the collection-operations family (the collection page read + the two
+    // collection edits): the same over-the-impl aliasing, so a detail-read-
+    // only or collections-only consumer injects the seam alone.
+    single<DetailFeed> { get<MediaRepositoryImpl>() }
+    single<CollectionOperations> { get<MediaRepositoryImpl>() }
     // The home-feed family (the sections payload, the single-row edge-pull
     // refetch, the SWR snapshot reads, the discover-row verbs) and the
     // user-data change feed: the same over-the-impl aliasing, so the home
@@ -220,9 +228,8 @@ internal val dataMediaRepositoryModule: Module = module {
         )
     }
     single<PlaylistRepository> { get<PlaylistRepositoryImpl>() }
-    // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
-    // since it left MediaRepositoryImpl — no longer a view of the
-    // media single.
+    // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain),
+    // independent of the media single.
     single {
         LyricsRepositoryImpl(
             apiClient = get(),
@@ -250,7 +257,7 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         MediaSearchEngineImpl(
-            mediaRepository = get(),
+            libraryFeed = get(),
             seerrRepository = get(),
             searchHistoryRepository = get(),
             serverIdentityStore = get(),
@@ -272,7 +279,7 @@ internal val dataMediaRepositoryModule: Module = module {
     single {
         PlaybackSourceResolverImpl(
             downloadRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             playbackRepository = get(),
             offlineRepository = get(),
             offlinePlaybackFacade = get(),
@@ -298,7 +305,7 @@ internal val dataMediaRepositoryModule: Module = module {
     single {
         OfflineFirstItemResolverImpl(
             offlineRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             offlineModeManager = get(),
             imageUrlProvider = get(),
         )

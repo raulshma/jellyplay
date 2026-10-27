@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.music.moodplaylist
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -51,8 +50,6 @@ class MoodPlaylistsViewModelTest {
     // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
-
-        private val mediaRepository: MediaRepository = mockk()
     private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
@@ -69,7 +66,6 @@ class MoodPlaylistsViewModelTest {
         every { moodPlaylistRepository.observeMoodPlaylists() } returns customFlow
         every { moodPlaylistRepository.observePreferences() } returns preferencesFlow
         viewModel = MoodPlaylistsViewModel(
-            mediaRepository = mediaRepository,
             libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
             artworkUrls = ArtworkUrls.EMPTY,

@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.photos
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -14,7 +14,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 class PhotoViewerViewModel(
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     /** The SearchResult-shaped reads (the sibling-photos query — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
@@ -72,7 +73,7 @@ class PhotoViewerViewModel(
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
 
-            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detailResult = detailFeed.getMediaDetail(itemId, force = false)
             val detail = detailResult.getOrNull()
             val item = detail?.item
             if (item == null) {
@@ -121,7 +122,7 @@ class PhotoViewerViewModel(
 
     private fun loadDetailForCurrentPhoto(itemId: String) {
         launch {
-            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detailResult = detailFeed.getMediaDetail(itemId, force = false)
             detailResult.getOrNull()?.let { detail ->
                 _state.value = _state.value.copy(photoDetail = detail)
             }

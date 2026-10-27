@@ -435,24 +435,24 @@ internal fun MainContent(
             // shortcuts request it through this counter (the sheet-owning
             // scope observes increments).
             val playOnOpenRequests = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-            // Header-shortcut shell actions — the same handlers the overflow
-            // menu's action pills run (surprise arm, Play On sheet, offline
-            // toggle), routed through one seam into the hooks.
-            val onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit =
-                remember(model, navigationState) {
-                    { action ->
-                        when (action) {
-                            com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.SURPRISE_ME -> {
-                                navigationState.topLevelRoute.value = Route.Home
-                                model.requestSurprise()
-                            }
-                            com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.PLAY_ON ->
-                                playOnOpenRequests.value += 1
-                            com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE ->
-                                model.toggleOfflineMode()
-                        }
-                    }
-                }
+            // Header-shortcut shell actions — the ONE execution surface behind
+            // every action pill (home dock's header rows, the overflow menu's
+            // action fold): the shared ShortcutActionSurface owns the
+            // capability verdict and the navigate-home-before-arm-surprise
+            // ordering. Android arms all three actions (MainViewModel
+            // + the Play On sheet counter), so the unsupported arm is a
+            // defensive error — it is unreachable from this shell.
+            val shortcutActions = remember(model, navigationState, playOnOpenRequests) {
+                com.raulshma.jellyplay.feature.shell.navigation.ShortcutActionSurface(
+                    focusHome = { navigationState.topLevelRoute.value = Route.Home },
+                    armSurprise = model::requestSurprise,
+                    requestPlayOn = { playOnOpenRequests.value += 1 },
+                    toggleOffline = model::toggleOfflineMode,
+                    onUnsupported = { action ->
+                        error("ShortcutActionSurface: the Android shell arms every action; $action cannot be unsupported")
+                    },
+                )
+            }
             val shellHost = rememberShellHost(
                 navigator = navigator,
                 home = ShellHomeHooks(
@@ -460,7 +460,7 @@ internal fun MainContent(
                     onHomeModeChange = onModeChange,
                     playOnRedirect = playOnRedirect,
                     surpriseRequests = model.surpriseRequests,
-                    onShortcutAction = onShortcutAction,
+                    shortcutActions = shortcutActions,
                 ),
                 audio = audioClicks,
                 settings = ShellSettingsHooks(
@@ -581,13 +581,6 @@ internal fun MainContent(
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
-                        onSurpriseClick = {
-                            // Switch to Home first so the hero controller is
-                            // composed, then fire the surprise signal it collects.
-                            navigationState.topLevelRoute.value = Route.Home
-                            model.requestSurprise()
-                        },
-                        onToggleOffline = { model.toggleOfflineMode() },
                         overflowShortcuts = overflowShortcuts,
                         playOnOpenRequests = playOnOpenRequests.value,
                     )

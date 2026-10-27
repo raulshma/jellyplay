@@ -101,7 +101,6 @@ val musicModule: Module = module {
     }
     viewModel {
         MoodPlaylistsViewModel(
-            mediaRepository = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
@@ -111,7 +110,6 @@ val musicModule: Module = module {
     }
     viewModel {
         SmartPlaylistsViewModel(
-            mediaRepository = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),

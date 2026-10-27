@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.navigation.visibleTopLevelRoutes
@@ -69,6 +70,7 @@ import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSna
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorePromptDialog
 import com.raulshma.jellyplay.feature.player.video.session.toPlayerRoute
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
+import com.raulshma.jellyplay.feature.shell.navigation.ShortcutActionSurface
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
@@ -80,6 +82,7 @@ import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -392,17 +395,47 @@ internal fun DesktopNavScaffold(
     val onConsumeSearchQuery: () -> Unit = remember(pendingSearchQuery) {
         { pendingSearchQuery.value = null }
     }
+    // The shortcut-action surface (ShortcutActionSurface): the shell's one
+    // execution surface for the header shortcut actions. Desktop's real
+    // arms —
+    //  - SURPRISE_ME: the shell-owned buffered channel below, fed into
+    //    ShellHomeHooks.surpriseRequests (the same shape Android's
+    //    MainViewModel flow has; the home hero collects it — the surface's
+    //    focusHome-before-arm invariant keeps Home composed when the signal
+    //    lands);
+    //  - TOGGLE_OFFLINE: the platform OfflineModeManager's manual toggle
+    //    (its documented only path to OFFLINE_MANUAL on desktop);
+    //  - PLAY_ON: NOT armed — this shell has no cast strategy
+    //    (HomePlayOnRedirect stays null), so the action is unsupported: the
+    //    customize editor never offers it, and a stored definition that
+    //    predates the capability surfaces a snackbar instead of silently
+    //    doing nothing (the dead-end-guard philosophy).
+    val shortcutActionScope = rememberCoroutineScope()
+    val surpriseRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val shortcutActions = remember(navigation, services, surpriseRequests) {
+        ShortcutActionSurface(
+            focusHome = { navigation.topLevelRoute.value = Route.Home },
+            armSurprise = { surpriseRequests.tryEmit(Unit) },
+            requestPlayOn = null,
+            toggleOffline = services.offlineModeManager::toggleManualOffline,
+            onUnsupported = { action ->
+                shortcutActionScope.launch {
+                    snackbarHostState.showSnackbar(desktopUnsupportedShortcutActionMessage(action))
+                }
+            },
+        )
+    }
     val shellHost = rememberShellHost(
         navigator = guardedNavigator,
         home = ShellHomeHooks(
             homeMode = homeMode,
             onHomeModeChange = onHomeModeChange,
-            // Android-only slots: no cast strategy and no shortcut-armed
-            // "Surprise Me" flow on desktop; emptyFlow() is an
-            // identity-stable singleton so the factory's remember keys
-            // never churn.
+            // Android-only slot: no cast strategy on desktop — the Play On
+            // redirect stays null (the shortcut-action surface owns the Play
+            // On capability verdict now).
             playOnRedirect = null,
-            surpriseRequests = emptyFlow(),
+            surpriseRequests = surpriseRequests,
+            shortcutActions = shortcutActions,
         ),
         audio = audioClicks,
         settings = ShellSettingsHooks(
@@ -672,4 +705,17 @@ private fun DesktopRailItem(
         icon = { Icon(icon, contentDescription = label) },
         label = { Text(label) },
     )
+}
+
+/**
+ * The unsupported shortcut action's snackbar wording — the last line behind a
+ * stored action definition this shell cannot execute (the customize editor
+ * filters unsupported actions; the editor's open-prune clears the stragglers,
+ * and until then a click says so instead of doing nothing silently). Pure, in
+ * the [desktopDeadEndMessage] idiom.
+ */
+internal fun desktopUnsupportedShortcutActionMessage(action: ShortcutAction): String = when (action) {
+    ShortcutAction.PLAY_ON -> "Play On is not available on desktop."
+    ShortcutAction.SURPRISE_ME -> "Surprise Me is not available on desktop."
+    ShortcutAction.TOGGLE_OFFLINE -> "Offline mode is not available on desktop."
 }

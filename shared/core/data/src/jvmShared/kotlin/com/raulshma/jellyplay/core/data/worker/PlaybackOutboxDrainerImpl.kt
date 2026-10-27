@@ -5,12 +5,13 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.model.isWatchedOffline
 import kotlinx.coroutines.sync.Semaphore
 
@@ -31,18 +32,30 @@ class PlaybackOutboxDrainerImpl(
     private val playedStateSync: PlayedStateSync,
     private val offlineRepository: OfflineRepository,
     /**
-     * The derived watched flips route through [MediaRepository.markPlayed]
-     * (not raw PlayedStateSync.flip) so each flip also drops the detail /
-     * catalogue caches the repository owns — a drain that changes server
-     * state must not leave in-memory caches serving the pre-drain view to an
-     * open detail screen (#153 home/detail coherence).
+     * The derived watched flips route through the write seam's deep
+     * [UserDataWriteOperations.recordDrainedPlays] (not raw
+     * PlayedStateSync.flip) so each flip also drops the detail / catalogue
+     * caches the repository owns — a drain that changes server state must not
+     * leave in-memory caches serving the pre-drain view to an open detail
+     * screen (#153 home/detail coherence) — and announces each delivered flip
+     * from inside the flip. Koin-bound to the same MediaRepositoryImpl single
+     * the union exposes (the family-seam aliasing).
      */
-    private val mediaRepository: MediaRepository,
+    private val userDataWrites: UserDataWriteOperations,
+    /**
+     * The drain-tail synthetic-push fan-out: the announcer carries its own
+     * guards, re-checked inside it, so naming this leaf directly is the
+     * repository's user-data fan-out without the passthrough. Names the
+     * drain's replayed entries and adopted rows exactly once; a delivered
+     * derived flip is excluded via [selfAnnouncedItemIds] (its own flip
+     * announced it — the exactly-once contract).
+     */
+    private val userDataAnnouncer: UserDataAnnouncer,
     /**
      * The post-drain wholesale cache drop. Deliberately off the public
      * [MediaRepository] interface — it arrives through the narrow
      * [MediaCacheInvalidator] port, Koin-bound to the same
-     * MediaRepositoryImpl single as [mediaRepository].
+     * MediaRepositoryImpl single as [userDataWrites].
      */
     private val cacheInvalidator: MediaCacheInvalidator,
     private val userDataSyncTrigger: PlaybackOutboxDrainer.UserDataSyncTrigger,
@@ -142,7 +155,7 @@ class PlaybackOutboxDrainerImpl(
             // inner flip (excluded via [selfAnnouncedItemIds]), and heal
             // flips (pushUnsyncedIntent) stay silent inside reconcile so
             // this tail is their single announcement.
-            mediaRepository.notifyUserDataChanged(
+            userDataAnnouncer.notifyUserDataChanged(
                 ((reconciledItems + adoptedItemIds) - selfAnnouncedItemIds).distinct(),
             )
             runCatchingRethrowingCancellation { userDataSyncTrigger.enqueueNow() }
@@ -289,15 +302,18 @@ class PlaybackOutboxDrainerImpl(
 
     /**
      * Pushes the derived watched flips last, after telemetry has settled, so
-     * the server's final state for these items is played (#153). markPlayed
-     * wraps PlayedStateSync.flip with the repository's cache invalidation; on
-     * failure the flip stages a PLAYED outbox row itself, so the intent
-     * survives for the next drain. Delivery is detected via the outbox probe
+     * the server's final state for these items is played (#153). The flips
+     * ride the write seam's ONE deep [UserDataWriteOperations.recordDrainedPlays]
+     * call — the per-item markPlayed + cache invalidation + announce-on-
+     * delivery pairing the drain requires.
+     * Delivery is detected via the outbox probe
      * ([PlaybackOutboxRepository.isPlayedStateIntentDelivered] — candidates
-     * have no pre-existing intent rows to confuse the check). Returns whether
-     * any flip did not land. A DELIVERED flip's inner PlayedStateSync.flip
-     * announces the id itself, so it is recorded in [selfAnnouncedItemIds] —
-     * the drain-tail announce skips those (exactly-once).
+     * have no pre-existing intent rows to confuse the check), probed per item
+     * after the batch flips (a flip touches only its own item's rows, so the
+     * batch order is equivalent). Returns whether any flip did not land.
+     * A DELIVERED flip announced itself from inside its flip, so it is
+     * recorded in [selfAnnouncedItemIds] — the drain-tail announce skips
+     * those (exactly-once).
      */
     private suspend fun pushDerivedWatchedFlips(
         derivedWatchedItemIds: Set<String>,
@@ -305,10 +321,14 @@ class PlaybackOutboxDrainerImpl(
         selfAnnouncedItemIds: MutableSet<String>,
     ): Boolean {
         var anyFailure = false
+        if (derivedWatchedItemIds.isNotEmpty()) {
+            runCatchingRethrowingCancellation { userDataWrites.recordDrainedPlays(derivedWatchedItemIds.toList()) }
+                .onFailure { anyFailure = true }
+        }
         for (itemId in derivedWatchedItemIds) {
-            val push = runCatchingRethrowingCancellation { mediaRepository.markPlayed(itemId) }
-            val delivered = push.isSuccess &&
-                runCatchingRethrowingCancellation { outbox.isPlayedStateIntentDelivered(itemId, played = true) }.getOrDefault(false)
+            val delivered = runCatchingRethrowingCancellation {
+                outbox.isPlayedStateIntentDelivered(itemId, played = true)
+            }.getOrDefault(false)
             if (delivered) {
                 reconciledItems.add(itemId)
                 selfAnnouncedItemIds.add(itemId)

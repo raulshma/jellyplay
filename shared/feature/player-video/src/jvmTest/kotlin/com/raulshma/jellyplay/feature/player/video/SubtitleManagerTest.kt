@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.repository.MergedSubtitleSearch
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.CultureInfo
@@ -51,7 +51,7 @@ import org.junit.Test
  * stream-management state machine. After state ownership moved into the manager
  * the test surface is the manager's [SubtitleState] flow — no
  * [VideoPlayerUiState], no ViewModel. Tests verify state transitions and
- * interaction with [PlaybackRepository] / [MediaRepository], an
+ * interaction with [PlaybackRepository] / [DetailFeed], an
  * [UnconfinedTestDispatcher] scope so the collaborator's `scope.launch` blocks
  * run to completion synchronously, and mockk for the repositories. The
  * media-detail refresh coupling is captured via an instrumentation flag on the
@@ -84,7 +84,7 @@ class SubtitleManagerTest {
     }
 
     private lateinit var playbackRepository: PlaybackRepository
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var subtitleProviderRepository: SubtitleProviderRepository
     private lateinit var userMessageBus: RecordingMessageBus
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
@@ -102,7 +102,7 @@ class SubtitleManagerTest {
     @Before
     fun setUp() {
         playbackRepository = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
         userMessageBus = RecordingMessageBus()
         addedSubtitles = mutableListOf()
@@ -114,13 +114,13 @@ class SubtitleManagerTest {
         // Default detail stub: the offline snapshot seed reads this on every
         // downloadSubtitle call, so an unstubbed relaxed mock would leak a
         // failing coroutine into the next test. Individual tests override.
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns
             Result.failure(RuntimeException("no detail seeded"))
 
         manager = SubtitleManager(
             contentGateway = contentGateway,
             playbackRepository = playbackRepository,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             subtitleProviderRepository = subtitleProviderRepository,
             streamingSubtitleStore = noOpStreamingSubtitleStore(),
             userMessageBus = userMessageBus,
@@ -273,7 +273,7 @@ class SubtitleManagerTest {
         // it rather than re-fetching, so a transient server outage mid-search
         // never reaches getMediaDetail.
         currentDetail = mediaDetail("item-1")
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("offline"))
         coEvery {
             subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
         } returns MergedSubtitleSearch(results = emptyList(), errors = emptyMap())
@@ -281,7 +281,7 @@ class SubtitleManagerTest {
         manager.searchAllProviders("eng")
 
         // Network detail fetch never happens when the in-memory snapshot exists.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         assertTrue(manager.state.value.hasSearchedSubtitles)
         assertFalse(manager.state.value.isSearchingSubtitles)
     }
@@ -295,7 +295,7 @@ class SubtitleManagerTest {
         // providers run; the Jellyfin failure surfaces only as an empty merge,
         // never as a hard abort.
         currentDetail = null
-        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery { detailFeed.getMediaDetail("item-1", any()) } returns Result.failure(RuntimeException("offline"))
         val wyzieResult = SubtitleSearchResult(
             provider = SubtitleProviderKind.WYZIE,
             id = "w1",
@@ -335,7 +335,7 @@ class SubtitleManagerTest {
             language = "eng",
             displayName = "Wyzie EN",
         )
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("offline"))
         coEvery {
             subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
         } coAnswers {
@@ -404,7 +404,7 @@ class SubtitleManagerTest {
             // reads then return the post-download detail.
             val detail = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), detail)
+            detailFeed.stubDetailReads("item-1", mediaDetail("item-1"), detail)
 
             val m = managerInScope(this)
             m.downloadSubtitle(
@@ -414,7 +414,7 @@ class SubtitleManagerTest {
             coVerify(exactly = 1) { playbackRepository.downloadSubtitle("item-1", "s1") }
             // The poll must bypass the stale detail cache on every fetch (the
             // force-read freshness seam).
-            io.mockk.coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1", force = true) }
+            io.mockk.coVerify(atLeast = 1) { detailFeed.getMediaDetail("item-1", force = true) }
             assertEquals(listOf(detail), refreshedDetails)
             // The new stream's index rides along so the VM can select it.
             assertEquals(listOf<Int?>(2), refreshedIndexes)
@@ -436,7 +436,7 @@ class SubtitleManagerTest {
             val fresh = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             var calls = 0
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1", any()) } coAnswers {
+            coEvery { detailFeed.getMediaDetail("item-1", any()) } coAnswers {
                 calls++
                 if (calls <= 8) Result.success(mediaDetail("item-1")) else Result.success(fresh)
             }
@@ -459,7 +459,7 @@ class SubtitleManagerTest {
         runTest(UnconfinedTestDispatcher()) {
             // The stream never surfaces (server still queued) → soft DELAYED.
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
+            coEvery { detailFeed.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
 
             val m = managerInScope(this)
             m.downloadSubtitle(
@@ -504,7 +504,7 @@ class SubtitleManagerTest {
             )
             val detail = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
+            coEvery { detailFeed.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
             val m = managerInScope(this)
             m.downloadSubtitle(
@@ -543,7 +543,7 @@ class SubtitleManagerTest {
                 listOf(stream(index = 7, language = "eng"), stream(index = 3, language = "eng")),
             )
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            mediaRepository.stubDetailReads("item-1", preDownload, postDownload)
+            detailFeed.stubDetailReads("item-1", preDownload, postDownload)
 
             val m = managerInScope(this)
             m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
@@ -568,7 +568,7 @@ class SubtitleManagerTest {
             mediaStreams = emptyList()
             val postDownload = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), postDownload)
+            detailFeed.stubDetailReads("item-1", mediaDetail("item-1"), postDownload)
 
             val m = managerInScope(this, isSubtitleTrackAttached = { false })
             m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
@@ -594,7 +594,7 @@ class SubtitleManagerTest {
             mediaStreams = emptyList()
             val postDownload = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), postDownload)
+            detailFeed.stubDetailReads("item-1", mediaDetail("item-1"), postDownload)
             var attachPolls = 0
             val m = managerInScope(this) {
                 attachPolls++
@@ -621,7 +621,7 @@ class SubtitleManagerTest {
             mediaStreams = emptyList()
             val detailWithSub = mediaDetailWithSubtitle("item-1", streamIndex = 2, language = "eng")
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            mediaRepository.stubDetailReads("item-1", mediaDetail("item-1"), detailWithSub)
+            detailFeed.stubDetailReads("item-1", mediaDetail("item-1"), detailWithSub)
 
             val m = managerInScope(this)
             m.downloadSubtitle(RemoteSubtitleInfo(id = "s1", threeLetterISOLanguageName = "eng"))
@@ -647,7 +647,7 @@ class SubtitleManagerTest {
             // point is that a status entry exists for the id (DOWNLOADING was set
             // synchronously on entry, then transitioned through the poll).
             coEvery { playbackRepository.downloadSubtitle("item-1", "s1") } returns Result.success(Unit)
-            coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
+            coEvery { detailFeed.getMediaDetail("item-1", any()) } returns Result.success(mediaDetail("item-1"))
 
             val m = managerInScope(this)
             m.downloadSubtitle(
@@ -673,8 +673,9 @@ class SubtitleManagerTest {
     // ─── Hub-open cascade (openSubtitleHub) ────────────────────────────────────
     // The single command behind the sheet's open: (resetFirst → reset) then
     // the three loads in the screen's historical order. The router's
-    // LaunchedEffect is the sheet's only production trigger — the former
-    // hand-copied click cascades double-fetched the server-default list.
+    // LaunchedEffect is the sheet's only production trigger, so the three
+    // loads run exactly once per open (no per-click cascade to double-fetch
+    // the server-default list).
 
     @Test
     fun openSubtitleHub_withReset_cancelsStaleWorkClearsSliceThenLoads() =
@@ -830,7 +831,7 @@ class SubtitleManagerTest {
     ): SubtitleManager = SubtitleManager(
         contentGateway = contentGateway,
         playbackRepository = playbackRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         subtitleProviderRepository = subtitleProviderRepository,
         streamingSubtitleStore = noOpStreamingSubtitleStore(),
         userMessageBus = userMessageBus,
@@ -859,7 +860,7 @@ class SubtitleManagerTest {
     ): SubtitleManager = SubtitleManager(
         contentGateway = contentGateway,
         playbackRepository = playbackRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         subtitleProviderRepository = subtitleProviderRepository,
         streamingSubtitleStore = noOpStreamingSubtitleStore(),
         userMessageBus = userMessageBus,

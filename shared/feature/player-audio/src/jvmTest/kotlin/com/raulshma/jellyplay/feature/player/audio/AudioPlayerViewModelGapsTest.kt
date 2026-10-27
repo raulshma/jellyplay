@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
@@ -83,7 +83,7 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var projections: PreferenceProjections
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
@@ -131,7 +131,7 @@ class AudioPlayerViewModelGapsTest {
         projections = mockk(relaxed = true)
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
@@ -200,7 +200,7 @@ class AudioPlayerViewModelGapsTest {
             projections = projections,
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloads = downloads,
@@ -515,7 +515,7 @@ class AudioPlayerViewModelGapsTest {
 
     @Test
     fun blurHash_isFetchedOncePerItem_andReusedAcrossReplays() {
-        coEvery { mediaRepository.getMediaDetail("track-1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("track-1", any()) } returns
             Result.success(detail("track-1", blurHash = "L6PZfSi_.AyE"))
 
         viewModel.onEvent(AudioPlayerUiEvent.Play("track-1"))
@@ -524,13 +524,13 @@ class AudioPlayerViewModelGapsTest {
         // A replay (e.g. after the queue wraps) must not re-fetch the detail.
         viewModel.onEvent(AudioPlayerUiEvent.Play("track-1"))
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("track-1", any()) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("track-1", any()) }
         assertEquals("L6PZfSi_.AyE", viewModel.uiState.value.albumArtBlurHash)
     }
 
     @Test
     fun blurHash_nullResult_isCachedViaTheSentinel_soItStillFetchesOnce() {
-        coEvery { mediaRepository.getMediaDetail("track-2", any()) } returns
+        coEvery { detailFeed.getMediaDetail("track-2", any()) } returns
             Result.success(detail("track-2", blurHash = null))
 
         viewModel.onEvent(AudioPlayerUiEvent.Play("track-2"))
@@ -538,7 +538,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.Play("track-2"))
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("track-2", any()) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("track-2", any()) }
     }
 
     @Test

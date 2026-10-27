@@ -70,6 +70,8 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
+            detailFeed = get(),
+            collectionOperations = get(),
             mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             collectionApiClient = get(),
@@ -85,17 +87,21 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             themeMusicPlayer = get(),
             actionFactories = get(),
             mediaDownloadActions = get(),
-            bookTocCacheRepository = get(),
-            readerAnnotationsRepository = getOrNull(),
-            bookTocProber = getOrNull(),
+            bookArms = DetailBookArms(
+                tocCacheRepository = get(),
+                readerAnnotationsRepository = getOrNull(),
+                tocProber = getOrNull(),
+            ),
             // ADR 0010 companion-plugin seams — registered core:data /
             // core:network singles (DataSessionPlaybackKoinModule /
-            // NetworkKoinModules); the VM null-guards everything anyway.
-            pluginStatusStore = get(),
-            pluginRatingsApi = get(),
-            pluginRecommendationsApi = get(),
-            pluginMarkersApi = get(),
-            jellyPlayFeatureGate = get(),
+            // NetworkKoinModules); the bundle null-folds everything anyway.
+            pluginArms = DetailPluginArms(
+                statusStore = get(),
+                featureGate = get(),
+                ratingsApi = get(),
+                recommendationsApi = get(),
+                markersApi = get(),
+            ),
             // The direct-TMDB details fallback behind the externalRatings
             // enrichment (core:network single, NetworkKoinModules).
             tmdbApiClient = get(),

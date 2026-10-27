@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
@@ -14,13 +14,15 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_no_
  * Collection adapter over [AddToTargetActions]: fetches the collection list
  * and maps the generic add/create calls onto the collection endpoints. The
  * Jellyfin create endpoint takes only a name (+ seed ids) — no overview, no
- * media-type tagging — so both fold away here.
+ * media-type tagging — so both fold away here. Injects only
+ * [CollectionOperations] — the two collection edits are this adapter's whole
+ * repository need.
  */
 internal class CollectionAddTarget(
     private val strings: DetailStrings,
     /** The picker's uncached list read (the client family's collection seam). */
     private val collectionApiClient: CollectionApiClient,
-    private val mediaRepository: MediaRepository,
+    private val collectionOperations: CollectionOperations,
 ) : AddTargetAdapter<CollectionSummary> {
     override suspend fun fetchTargets(): Result<List<CollectionSummary>> =
         collectionApiClient.getCollections(limit = 100)
@@ -30,14 +32,14 @@ internal class CollectionAddTarget(
     override fun idOf(target: CollectionSummary): String = target.id
 
     override suspend fun addToTarget(targetId: String, ids: List<String>): Result<Unit> =
-        mediaRepository.addItemsToCollection(targetId, ids)
+        collectionOperations.addItemsToCollection(targetId, ids)
 
     override suspend fun createTarget(
         name: String,
         overview: String?,
         ids: List<String>,
         itemType: MediaType,
-    ): Result<Unit> = mediaRepository.createCollection(name = name, itemIds = ids).map { }
+    ): Result<Unit> = collectionOperations.createCollection(name = name, itemIds = ids).map { }
 
     override suspend fun addedMessage(targetName: String): String =
         strings.get(Res.string.detail_msg_added_to_collection, targetName)

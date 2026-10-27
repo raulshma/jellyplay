@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -46,7 +46,7 @@ class ManageSeriesViewModelTest {
     }
 
     private lateinit var strings: DetailStrings
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var arrRepository: SonarrSeriesOperations
     private lateinit var viewModel: ManageSeriesViewModel
 
@@ -58,9 +58,9 @@ class ManageSeriesViewModelTest {
         strings = DetailStrings { res, _ ->
             if (res == Res.string.detail_manage_series_load_error) "Couldn't load series from Jellyfin." else "res#$res"
         }
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
-        viewModel = ManageSeriesViewModel(strings, mediaRepository, arrRepository)
+        viewModel = ManageSeriesViewModel(strings, detailFeed, arrRepository)
     }
 
     private fun ep(
@@ -86,7 +86,7 @@ class ManageSeriesViewModelTest {
     )
 
     private fun stubSeriesDetail(seriesId: String, providerIds: Map<String, String> = mapOf("tvdb" to "123")) {
-        coEvery { mediaRepository.getMediaDetail(seriesId) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(seriesId, any()) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = seriesId, name = "Show", mediaType = MediaType.SERIES),
                 providerIds = providerIds,
@@ -133,7 +133,7 @@ class ManageSeriesViewModelTest {
     @Test
     fun `load detail failure surfaces error`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.failure(RuntimeException("boom"))
+        coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.failure(RuntimeException("boom"))
 
         viewModel.onEvent(ManageSeriesUiEvent.Load("s1"))
         advanceUntilIdle()
@@ -181,7 +181,7 @@ class ManageSeriesViewModelTest {
         viewModel.onEvent(ManageSeriesUiEvent.Load("s1")) // deduped while first is in flight
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("s1") }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("s1", any()) }
     }
 
     // ── season grouping & default expansion ─────────────────────────────

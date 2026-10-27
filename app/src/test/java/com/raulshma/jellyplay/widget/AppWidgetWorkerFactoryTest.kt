@@ -5,7 +5,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -38,7 +38,7 @@ class AppWidgetWorkerFactoryTest {
     private val workerParameters: WorkerParameters = mockk(relaxed = true)
 
     private val widgetDataStore: WidgetDataStore = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val homeFeed: HomeFeed = mockk(relaxed = true)
     private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -52,7 +52,7 @@ class AppWidgetWorkerFactoryTest {
             modules(
                 module {
                     single { widgetDataStore }
-                    single { mediaRepository }
+                    single { detailFeed }
                     single { homeFeed }
                     single { libraryApiClient }
                     single { imageUrlProvider }

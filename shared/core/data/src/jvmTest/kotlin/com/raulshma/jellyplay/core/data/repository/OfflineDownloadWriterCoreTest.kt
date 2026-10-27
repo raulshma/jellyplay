@@ -49,7 +49,7 @@ class OfflineDownloadWriterCoreTest {
     private val imagePreloader: OfflineImagePreloader = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
 
     private fun writer() = OfflineDownloadWriterCore(
         downloadDao = downloadDao,
@@ -69,7 +69,7 @@ class OfflineDownloadWriterCoreTest {
         httpClient = OkHttpClient(),
         json = Json,
         timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
-        mediaRepository = MediaRepositoryAccess { mediaRepository },
+        mediaRepository = MediaRepositoryAccess { detailFeed },
     )
 
     private fun stubLayout(filePath: String) {

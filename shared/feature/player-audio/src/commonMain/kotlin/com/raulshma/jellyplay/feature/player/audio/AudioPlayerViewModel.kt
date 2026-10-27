@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.RadioState
 import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
@@ -38,17 +38,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
 /**
- * Koin-owned (conveyor move from `:feature:player:audio` — the
- * HiltViewModel/@Inject annotations were stripped; see di/PlayerAudioKoin
- * Module.kt). The former concrete [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager]
- * ctor dep is split across the shared playback contracts
- * ([AudioQueueManager], [AudioEffectsManager], [AudioPlayerEngine] — the
- * legacy manager implements all three; the engine contract lives in core/data
- * beside them) plus the module-local [AudioPlayerCast] seam. The track
- * download flip is the shared core:data [TrackDownloadActions] (Koin-bound
- * in di/PlayerAudioKoinModule.kt) — the former inline construction with its
- * own DownloadIntake/MediaRepository pair folded away when the resolve→start
- * leg moved into DownloadIntake.flipTrack.
+ * Koin-owned (see di/PlayerAudioKoinModule.kt). The
+ * [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager] ctor dep is
+ * split across the shared playback contracts
+ * ([AudioQueueManager], [AudioEffectsManager], [AudioPlayerEngine] - the
+ * manager implements all three; the engine contract lives in core/data beside
+ * them) plus the module-local [AudioPlayerCast] seam. The track download flip
+ * is the shared core:data [TrackDownloadActions] (Koin-bound in
+ * di/PlayerAudioKoinModule.kt), so the resolve/start leg exists once, in
+ * DownloadIntake.flipTrack.
  */
 class AudioPlayerViewModel(
     private val queueManager: AudioQueueManager,
@@ -60,7 +58,8 @@ class AudioPlayerViewModel(
     private val projections: PreferenceProjections,
     private val audioStore: AudioStore,
     private val audioEffectsStore: AudioEffectsStore,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playlistRepository: PlaylistRepository,
     private val userDataMutator: UserDataMutator,
     private val downloads: TrackDownloadStatusWindow,
@@ -179,8 +178,7 @@ class AudioPlayerViewModel(
     /**
      * Owns the add-to-playlist picker lifecycle (open guard, editable-playlist
      * fetch, add choreography, success/failure message) as its own
-     * StateFlow snapshot — the five uiState fields it used to hand-sync are
-     * gone from [AudioPlayerUiState].
+     * StateFlow snapshot, outside [AudioPlayerUiState].
      */
     internal val playlistPicker = PlaylistPickerStateHolder(
         scope = scope,
@@ -246,7 +244,7 @@ class AudioPlayerViewModel(
                     // burst of skips coalesces; itemId is captured per fetch and
                     // the write is dropped if another track took over meanwhile.
                     favoriteJob = launch {
-                        mediaRepository.getMediaDetail(itemId)
+                        detailFeed.getMediaDetail(itemId, force = false)
                             .onSuccess { d ->
                                 if (queueManager.currentPlayingItemId.value == itemId) {
                                     _uiState.update { it.copy(isFavorite = d.item.isFavorite) }
@@ -263,13 +261,12 @@ class AudioPlayerViewModel(
     /**
      * The VM's single command surface: every user intent arrives here as an
      * [AudioPlayerUiEvent] (the HomeViewModel precedent). Each arm routes to
-     * the former command fun, now private with its body byte-identical — the
-     * pure-forwarding delegates onto [effects] / [sleepTimer] /
-     * [playlistPicker] keep their one-line shape, and the two funs with
-     * internal callers ([toggleKaraokeMode] → [setKaraokeModeEnabled]) stay
-     * callable. The VM's other public members are flows, sync getters, and
-     * the controller slices — there is no per-action command method to keep
-     * in sync with the screen.
+     * a private command fun, and the pure-forwarding delegates onto [effects]
+     * / [sleepTimer] / [playlistPicker] keep their one-line shape. The two
+     * funs with internal callers ([toggleKaraokeMode] ->
+     * [setKaraokeModeEnabled]) stay callable. The VM's other public members
+     * are flows, sync getters, and the controller slices - there is no
+     * per-action command method to keep in sync with the screen.
      */
     fun onEvent(event: AudioPlayerUiEvent) {
         when (event) {
@@ -355,7 +352,7 @@ class AudioPlayerViewModel(
             return
         }
         launch {
-            mediaRepository.getMediaDetail(itemId)
+            detailFeed.getMediaDetail(itemId, force = false)
                 .onSuccess { detail ->
                     val hash = detail.item.blurHashes.primary
                     if (hash != null) blurHashCache.put(itemId, hash)
@@ -561,14 +558,13 @@ class AudioPlayerViewModel(
     /** Whether this platform carries a download pipeline; gates the track CTA. */
     val isDownloadSupported: Boolean get() = downloads.isSupported
 
-    // ── Track download flip ────────────────────────────────────────────────
-    // The shared core:data TrackDownloadActions choreography (id → intake
-    // flipTrack → resolve detail → start) arrives via Koin like the other
-    // collaborators — the former hand-rolled inline construction (with its
-    // DownloadIntake + MediaRepository pair) is gone: the resolve→start leg
-    // exists once, in DownloadIntake.flipTrack. The REMOVE half stays HERE:
-    // a COMPLETED download flips the CTA to remove only after the screen's
-    // confirm dialog — the module must not swallow that policy.
+    // Track download flip ---------------------------------------------------
+    // The shared core:data TrackDownloadActions choreography (id -> intake ->
+    // flipTrack -> resolve detail -> start) arrives via Koin like the other
+    // collaborators; the resolve/start leg exists once, in
+    // DownloadIntake.flipTrack. The REMOVE half stays HERE: a COMPLETED
+    // download flips the CTA to remove only after the screen's confirm dialog -
+    // the module must not swallow that policy.
 
     private fun downloadCurrentTrack() {
         val itemId = currentPlayingItemId ?: return

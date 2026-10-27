@@ -63,15 +63,17 @@ import kotlinx.serialization.Serializable
  * [HomeDiscoveryPreferenceSpecs] (wire name, default, reset category, encoding
  * where the row carries one) and the machinery below is derived from those
  * rows — each [Keys] member rebuilds its row's typed key from the row's wire
- * name, the per-user read projection delegates each plain knob to its row
- * encoding through the spec-side per-user hook, the setters and [restore]
- * write through the rows' namespace-rebuilt keys, [resetKeysFor] filters the
- * rows by reset category, and the namespace migration's per-type copy lists
- * are the rows filtered by declared storage. The read-modify-write commands,
- * the enabled-set version-union decode (whose per-user parse cache a row
- * encoding cannot carry), the first-user-claims migration and the v3
- * upgrade baseline ([ensureV3UpgradeBaseline]) stay hand-written
- * by decision — see the spec KDoc.
+ * name, the per-user read projection and [restore] FOLD the slice rows (each
+ * slice-bound row carries its namespaced read, restore write and slice lens
+ * on the spec — the namespaced variant of the videoplayer derivation), the
+ * setters write through the rows' namespace-rebuilt keys, [resetKeysFor]
+ * filters the rows by reset category, and the namespace migration's per-type
+ * copy lists are the rows filtered by declared storage. The read-modify-write
+ * commands, the enabled-set version-union decode (whose per-user parse cache
+ * a row encoding cannot carry — it spans two rows and fills three slice
+ * fields, so it stays the fold's one hand-kept decode), the first-user-claims
+ * migration and the v3 upgrade baseline ([ensureV3UpgradeBaseline]) stay
+ * hand-written by decision — see the spec KDoc.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file, but every key
  * this store owns is namespaced per active user as `u_<userId>::<canonical>`
@@ -452,12 +454,15 @@ class HomeDiscoveryStore constructor(
      *
      * Every namespaced key is rebuilt from its
      * [HomeDiscoveryPreferenceSpecs] row through the per-user hook
-     * ([HomeDiscoveryPreferenceSpecs.userKey] / `rawUserKey`); the plain
-     * knobs' reads delegate to the rows' encodings via the per-user read
-     * helpers, and only the JSON blobs keep store-supplied codecs (their
-     * per-user parse caches live here).
+     * ([HomeDiscoveryPreferenceSpecs.userKey] / `rawUserKey`); the slice
+     * itself is the FOLD over [HomeDiscoveryPreferenceSpecs.sliceRows] — each
+     * slice-bound row reads through its declared namespaced hook and lenses
+     * into the slice — and this reader supplies the JSON rows' decodes
+     * ([HomeDiscoveryUserJsonReads], whose per-user parse caches live here).
+     * The one hand-kept decode inside the fold is the enabled-set's
+     * version-union read, which spans two rows and fills three slice fields.
      */
-    private inner class UserReader(private val userId: String) {
+    private inner class UserReader(private val userId: String) : HomeDiscoveryUserJsonReads {
 
         // Parse caches — per-user by construction: one UserReader per user.
         private var cachedEnabledHomeSectionTypes =
@@ -484,61 +489,21 @@ class HomeDiscoveryStore constructor(
             ParsedCache<Set<String>>(null, HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.default)
 
         fun slice(prefs: Preferences): HomeDiscoverySlice {
+            // The hand-kept decode: the version-union fold reads TWO rows (the
+            // enabled set + its version stamp) and fills THREE slice fields —
+            // the set, the stored stamp and the union's contribution — which a
+            // per-row fold cannot express; the pair is therefore absent from
+            // [HomeDiscoveryPreferenceSpecs.sliceRows] by design.
             val enabledTypes = readEnabledHomeSectionTypes(prefs)
-            return HomeDiscoverySlice(
-                homeMode = HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(prefs, userId),
-                homeHeroEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.readBoolForUser(prefs, userId),
-                homeHeroStyle = HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.readEnumForUser(prefs, userId),
-                homeHeroSlideshowIntervalSec = HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC
-                    .readIntForUser(prefs, userId),
-                homeHeroVideoEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.readBoolForUser(prefs, userId),
-                homeHeroVideoTvEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.readBoolForUser(prefs, userId),
-                homeBackdropEnabled = HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.readBoolForUser(prefs, userId),
-                homeFocusBackdrop = HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.readBoolForUser(prefs, userId),
-                homeStatsCard = HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.readBoolForUser(prefs, userId),
-                homeGenreRail = HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.readBoolForUser(prefs, userId),
-                homePresenceChips = HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.readBoolForUser(prefs, userId),
-                homeNewSectionAnnouncements = HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS
-                    .readBoolForUser(prefs, userId),
+            var slice = HomeDiscoverySlice(
                 enabledHomeSectionTypes = enabledTypes.sections,
                 enabledHomeSectionTypesVersion = enabledTypes.storedVersion,
                 sectionsAddedByUnion = enabledTypes.addedByUnion,
-                homeSectionOrder = readHomeSectionOrder(prefs),
-                libraryHomeSectionOverrides = readLibraryHomeSectionOverrides(prefs),
-                pinnedHomeSections = readPinnedHomeSections(prefs),
-                discoverRows = readDiscoverRows(prefs),
-                homeLayoutPresets = readHomeLayoutPresets(prefs),
-                homeLayoutAutopush = HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.readBoolForUser(prefs, userId),
-                continueWatchingClickBehavior = HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR
-                    .readEnumForUser(prefs, userId),
-                showUnwatchedBadge = HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.readBoolForUser(prefs, userId),
-                hideWatchedItems = HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.readBoolForUser(prefs, userId),
-                showWatchedCheckmark = HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.readBoolForUser(prefs, userId),
-                showExternalRatings = HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.readBoolForUser(prefs, userId),
-                showQualityBadges = HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.readBoolForUser(prefs, userId),
-                showNewBadges = HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.readBoolForUser(prefs, userId),
-                homeTrickplayPreview = HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.readBoolForUser(prefs, userId),
-                antiSpoilerHome = HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.readBoolForUser(prefs, userId),
-                mergeContinueWatchingAndNextUp = HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP
-                    .readBoolForUser(prefs, userId),
-                nextUpMaxDays = HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.readIntForUser(prefs, userId),
-                nextUpRewatching = HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.readBoolForUser(prefs, userId),
-                classicRows = HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.readBoolForUser(prefs, userId),
-                excludeActiveSessions = HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.readBoolForUser(prefs, userId),
-                nextUpExcludedSeriesIds = readNextUpExcludedSeriesIds(prefs),
-                hiddenCwItemIds = readHiddenCwItemIds(prefs),
-                lastViewedSeasonBySeries = readLastViewedSeasonBySeries(prefs),
-                myMediaHiddenLibraryIds = readMyMediaHiddenLibraryIds(prefs),
-                themeMusicMutedSeriesIds = readThemeMusicMutedSeriesIds(prefs),
-                homeLastVisitEpochMs = prefs[HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.userKey(userId)]
-                    ?: HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.default,
-                homeAnnouncedVersion = prefs[HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.userKey(userId)]
-                    ?: HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.default,
-                showClockOnHome = HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.readBoolForUser(prefs, userId),
-                showSettingsInHomeSearch = HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH
-                    .readBoolForUser(prefs, userId),
-                hideTopHeaderOnScroll = HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.readBoolForUser(prefs, userId),
             )
+            for (row in HomeDiscoveryPreferenceSpecs.sliceRows) {
+                slice = row.readInto(this, prefs, userId, slice)
+            }
+            return slice
         }
 
         /**
@@ -612,7 +577,7 @@ class HomeDiscoveryStore constructor(
             )
         }
 
-        private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = PreferenceCodec.cachedJson(
+        override fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = PreferenceCodec.cachedJson(
             raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)],
             cache = cachedHomeSectionOrder,
             default = HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.default,
@@ -664,7 +629,7 @@ class HomeDiscoveryStore constructor(
          * and inside [ensureNamespacedMigration]; this read just decodes the
          * typed override map.
          */
-        private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> =
+        override fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)],
                 cache = cachedLibraryHomeSectionOverrides,
@@ -674,7 +639,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> =
+        override fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)],
                 cache = cachedPinnedHomeSections,
@@ -684,7 +649,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readDiscoverRows(prefs: Preferences): List<DiscoverRowConfig> =
+        override fun readDiscoverRows(prefs: Preferences): List<DiscoverRowConfig> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)],
                 cache = cachedDiscoverRows,
@@ -694,7 +659,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> =
+        override fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)],
                 cache = cachedHomeLayoutPresets,
@@ -704,7 +669,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> =
+        override fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)],
                 cache = cachedNextUpExcludedSeriesIds,
@@ -714,7 +679,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readHiddenCwItemIds(prefs: Preferences): Set<String> =
+        override fun readHiddenCwItemIds(prefs: Preferences): Set<String> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)],
                 cache = cachedHiddenCwItemIds,
@@ -724,7 +689,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> =
+        override fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)],
                 cache = cachedLastViewedSeasonBySeries,
@@ -734,7 +699,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readMyMediaHiddenLibraryIds(prefs: Preferences): Set<String> =
+        override fun readMyMediaHiddenLibraryIds(prefs: Preferences): Set<String> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)],
                 cache = cachedMyMediaHiddenLibraryIds,
@@ -744,7 +709,7 @@ class HomeDiscoveryStore constructor(
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
             )
 
-        private fun readThemeMusicMutedSeriesIds(prefs: Preferences): Set<String> =
+        override fun readThemeMusicMutedSeriesIds(prefs: Preferences): Set<String> =
             PreferenceCodec.cachedJson(
                 raw = prefs[HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)],
                 cache = cachedThemeMusicMutedSeriesIds,
@@ -1265,70 +1230,20 @@ class HomeDiscoveryStore constructor(
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore — into the CURRENT active user's namespace — through the
-     * rows' namespace-rebuilt keys, using the same encoding as
-     * `restorePreferences` (section types and order encoded as name-string
-     * sets/lists via [json]).
+     * DataStore — into the CURRENT active user's namespace — by FOLDING the
+     * slice rows ([HomeDiscoveryPreferenceSpecs.sliceRows], each row writing
+     * through its declared namespaced write: typed slots, enum-by-name
+     * strings, JSON blobs via [json]), plus the ONE hand-kept line beside the
+     * fold — the enabled-set write, whose version stamp must land in the same
+     * edit as the set ([writeEnabledHomeSectionTypes]; a per-row write cannot
+     * stamp two keys), which is also why that row pair takes no slice row.
      */
     suspend fun restore(slice: HomeDiscoverySlice) {
         editLayoutForUser { prefs, userId ->
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_MODE.rawUserKey(userId)] = slice.homeMode.name
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = slice.homeHeroEnabled
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_STYLE.rawUserKey(userId)] = slice.homeHeroStyle.name
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC.userKey(userId)] =
-                slice.homeHeroSlideshowIntervalSec.coerceIn(HomeDiscoveryPreferenceSpecs.HOME_HERO_SLIDESHOW_INTERVAL_SEC_BOUNDS)
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_ENABLED.userKey(userId)] = slice.homeHeroVideoEnabled
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = slice.homeHeroVideoTvEnabled
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = slice.homeBackdropEnabled
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_FOCUS_BACKDROP.userKey(userId)] = slice.homeFocusBackdrop
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_STATS_CARD.userKey(userId)] = slice.homeStatsCard
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_GENRE_RAIL.userKey(userId)] = slice.homeGenreRail
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_PRESENCE_CHIPS.userKey(userId)] = slice.homePresenceChips
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_NEW_SECTION_ANNOUNCEMENTS.userKey(userId)] =
-                slice.homeNewSectionAnnouncements
+            for (row in HomeDiscoveryPreferenceSpecs.sliceRows) {
+                row.writeFrom(slice, prefs, userId)
+            }
             writeEnabledHomeSectionTypes(prefs, userId, slice.enabledHomeSectionTypes)
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
-                json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)] =
-                json.encodeToString(slice.libraryHomeSectionOverrides)
-            prefs[HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)] =
-                json.encodeToString(slice.pinnedHomeSections)
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)] =
-                json.encodeToString(slice.discoverRows)
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)] =
-                json.encodeToString(slice.homeLayoutPresets)
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_AUTOPUSH.userKey(userId)] = slice.homeLayoutAutopush
-            prefs[HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.rawUserKey(userId)] =
-                slice.continueWatchingClickBehavior.name
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.userKey(userId)] = slice.showUnwatchedBadge
-            prefs[HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.userKey(userId)] = slice.hideWatchedItems
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.userKey(userId)] = slice.showWatchedCheckmark
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.userKey(userId)] = slice.showExternalRatings
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_QUALITY_BADGES.userKey(userId)] = slice.showQualityBadges
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_NEW_BADGES.userKey(userId)] = slice.showNewBadges
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_TRICKPLAY_PREVIEW.userKey(userId)] = slice.homeTrickplayPreview
-            prefs[HomeDiscoveryPreferenceSpecs.ANTI_SPOILER_HOME.userKey(userId)] = slice.antiSpoilerHome
-            prefs[HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.userKey(userId)] =
-                slice.mergeContinueWatchingAndNextUp
-            prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.userKey(userId)] = slice.nextUpMaxDays
-            prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.userKey(userId)] = slice.nextUpRewatching
-            prefs[HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.userKey(userId)] = slice.classicRows
-            prefs[HomeDiscoveryPreferenceSpecs.EXCLUDE_ACTIVE_SESSIONS.userKey(userId)] = slice.excludeActiveSessions
-            prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)] =
-                json.encodeToString(slice.nextUpExcludedSeriesIds)
-            prefs[HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)] =
-                json.encodeToString(slice.hiddenCwItemIds)
-            prefs[HomeDiscoveryPreferenceSpecs.MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)] =
-                json.encodeToString(slice.myMediaHiddenLibraryIds)
-            prefs[HomeDiscoveryPreferenceSpecs.THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)] =
-                json.encodeToString(slice.themeMusicMutedSeriesIds)
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_LAST_VISIT_EPOCH_MS.userKey(userId)] = slice.homeLastVisitEpochMs
-            prefs[HomeDiscoveryPreferenceSpecs.HOME_ANNOUNCED_VERSION.userKey(userId)] = slice.homeAnnouncedVersion
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.userKey(userId)] = slice.showClockOnHome
-            prefs[HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.userKey(userId)] = slice.showSettingsInHomeSearch
-            prefs[HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = slice.hideTopHeaderOnScroll
-            prefs[HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)] =
-                json.encodeToString(slice.lastViewedSeasonBySeries)
         }
     }
 

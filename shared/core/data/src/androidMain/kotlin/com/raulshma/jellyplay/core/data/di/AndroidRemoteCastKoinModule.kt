@@ -38,7 +38,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
     single<AudioRemoteControlDispatcher> {
         AndroidAudioRemoteControlDispatcher(
             audioPlaybackManager = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             remoteNavigationBridge = get(),
         )
     }
@@ -54,7 +54,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
         RemoteControlReceiver(
             webSocketClient = get(),
             authRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             videoDispatcher = get(),
             audioDispatcher = get(),
             uiDispatcher = get(),

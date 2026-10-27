@@ -151,7 +151,7 @@ class VideoPlayerResetEquivalenceTest : VideoPlayerViewModelHarness() {
     @Test
     fun itemSwitch_goldenSnapshot() {
         setExternalPlayer()
-        coEvery { mediaRepository.getMediaDetail("item-2") } returns Result.failure(RuntimeException("no detail"))
+        coEvery { detailFeed.getMediaDetail("item-2", force = false) } returns Result.failure(RuntimeException("no detail"))
         viewModel.onEvent(VideoPlayerUiEvent.Initialize("item-1"))
         driveSessionMutations()
 

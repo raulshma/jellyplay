@@ -4,7 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -70,7 +70,7 @@ class ExternalPlayerReportsTest {
     private val dispatcher = StandardTestDispatcher()
 
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataWrites: UserDataWriteOperations = mockk(relaxed = true)
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk(relaxed = true)
 
@@ -91,7 +91,7 @@ class ExternalPlayerReportsTest {
 
     private fun createReports() = ExternalPlayerReports(
         playbackRepository = playbackRepository,
-        mediaRepository = mediaRepository,
+        userDataWrites = userDataWrites,
         playbackSourceResolver = playbackSourceResolver,
         playbackStore = playbackStore,
     )
@@ -273,7 +273,7 @@ class ExternalPlayerReportsTest {
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "session-1", 300_000_000L)
         }
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        coVerify(exactly = 0) { userDataWrites.markPlayed(any()) }
     }
 
     @Test
@@ -284,7 +284,7 @@ class ExternalPlayerReportsTest {
         reports.reportExternalPlaybackStopped(launch, ExternalPlaybackOutcome.Completed(9_000_000_000L))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        coVerify(exactly = 1) { userDataWrites.markPlayed("item-1") }
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "session-1", 9_000_000_000L)
         }
@@ -299,7 +299,7 @@ class ExternalPlayerReportsTest {
         reports.reportExternalPlaybackStopped(launch, ExternalPlaybackOutcome.Completed(0L))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        coVerify(exactly = 1) { userDataWrites.markPlayed("item-1") }
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "session-1", 120_000_000L)
         }
@@ -316,7 +316,7 @@ class ExternalPlayerReportsTest {
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "session-1", 120_000_000L)
         }
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        coVerify(exactly = 0) { userDataWrites.markPlayed(any()) }
     }
 
     // ── helpers ────────────────────────────────────────────────────────────

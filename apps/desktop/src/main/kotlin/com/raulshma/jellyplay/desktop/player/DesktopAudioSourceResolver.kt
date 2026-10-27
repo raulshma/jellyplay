@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.desktop.player
 import com.raulshma.jellyplay.core.data.playback.AudioTrackResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.ResolvedAudioTrack
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -39,7 +39,8 @@ import kotlinx.coroutines.coroutineScope
  * outcome.
  */
 class DesktopAudioSourceResolver(
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playbackRepository: PlaybackRepository,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val adaptiveBitrateSelector: AdaptiveBitrateSelector,
@@ -48,7 +49,7 @@ class DesktopAudioSourceResolver(
 
     override suspend fun resolve(itemId: String, startPositionMs: Long): ResolvedAudioTrack? =
         coroutineScope {
-            val detailJob = async { mediaRepository.getMediaDetail(itemId).getOrNull() }
+            val detailJob = async { detailFeed.getMediaDetail(itemId, force = false).getOrNull() }
             val localJob = async { playbackSourceResolver.resolveLocalSource(itemId) }
             val detail = detailJob.await()
             val local = localJob.await()

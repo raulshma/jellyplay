@@ -33,7 +33,7 @@ import org.koin.dsl.module
 val playerBookModule: Module = module {
     viewModel {
         BookReaderViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
             playbackRepository = get(),
             playbackIdentity = get(),
             preferences = ReaderPreferences(store = get(), scope = get(DatastoreQualifiers.applicationScope)),

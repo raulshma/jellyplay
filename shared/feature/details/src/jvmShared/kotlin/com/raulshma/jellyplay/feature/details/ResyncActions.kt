@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +22,8 @@ internal class ResyncActions(
     private val scope: CoroutineScope,
     private val session: StateFlow<DetailSession?>,
     private val offlineSyncManager: OfflineSyncManager,
-    private val mediaRepository: MediaRepository,
+    /** The forced detail re-read is this helper's whole repository need. */
+    private val detailFeed: DetailFeed,
     private val offlineRepository: OfflineRepository,
     private val downloadIntake: DownloadIntake,
 ) {
@@ -39,13 +40,13 @@ internal class ResyncActions(
         fun create(
             scope: CoroutineScope,
             session: StateFlow<DetailSession?>,
-            mediaRepository: MediaRepository,
+            detailFeed: DetailFeed,
             offlineRepository: OfflineRepository,
         ): ResyncActions = ResyncActions(
             scope = scope,
             session = session,
             offlineSyncManager = offlineSyncManager,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             offlineRepository = offlineRepository,
             downloadIntake = downloadIntake,
         )
@@ -117,7 +118,7 @@ internal class ResyncActions(
             _state.value = ResyncUiState.Working
             val newState = try {
                 // Force read: fetch fresh detail, bypassing the TTL cache.
-                val detail = mediaRepository.getMediaDetail(id, force = true).getOrNull()
+                val detail = detailFeed.getMediaDetail(id, force = true).getOrNull()
                 if (detail == null) {
                     ResyncUiState.Error("Couldn't load latest details")
                 } else {

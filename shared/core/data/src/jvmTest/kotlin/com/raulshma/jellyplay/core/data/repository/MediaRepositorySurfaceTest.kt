@@ -30,62 +30,20 @@ class MediaRepositorySurfaceTest {
 
     /**
      * The maximum allowed member count of [MediaRepository] (see class KDoc).
-     * 44 as of the custom Discover rows feature (getDiscoverRowItems +
-     * invalidateDiscoverRowCache — the home-sections family's row-scoped
-     * members; a collaborator would have to re-expose the identity/session
-     * seam the family already owns). 45 adds getPeople — same feature, same
-     * seam reasoning: the People picker rides the discover editor, which
-     * already reaches the catalog through this repository. 46 adds
-     * seedDiscoverRowCache — the dice roll's commit half of the same
-     * row-scoped pair (invalidate drops, seed republishes). 45 again after
-     * the reroll deep operation: rerollDiscoverRow took over the
-     * invalidate → fetch → seed ordering, and the two protocol primitives it
-     * composed (invalidateDiscoverRowCache, seedDiscoverRowCache) retired to
-     * impl-private machinery — a seam that only worked when callers
-     * hand-sequenced its members in one order was the caller-side convention
-     * the deep operation exists to kill. 40 after the family-seam split:
-     * the music-catalogue family (MusicCatalogue) and the user-data-write
-     * family (UserDataWriteOperations) got their own seams over the same
-     * impl; getMusicVideos (zero callers repo-wide) plus the four writes
-     * whose sole union caller (UserDataMutator) now injects the seam
-     * (toggleFavorite, markUnplayed, markSeasonPlayed, markSeasonUnplayed)
-     * retired off the union. 31 after the uncached browse-read split: the nine
-     * members the impl never cached moved to their own seams over the
-     * the MediaUncachedReadsImpl single — LibraryApiClient (getIntros,
-     * getSpecialFeatures), LibraryApiClient (getPeople, getItemsByPerson,
-     * getTags) and LibraryApiClient (getMediaItems, getFavorites,
-     * getSearchSuggestions) — and getItemsByStudio retired outright (zero
-     * repo-typed callers; the network layer's own HomeSectionsFetcher keeps
-     * its private studio drill-down). The repository's paged projections
-     * (getMediaItemsPaged / getFavoritesPaged) stayed on the union. 28 after
-     * the music-catalogue consumer migration completed: every clean music
-     * consumer (the audio playback stack — AudioLibraryBrowser /
-     * AudioQueueFacade / ThemeMusicPlayer — and feature:music's artist/album/
-     * home ViewModels) injects the [MusicCatalogue] seam for the catalogue
-     * reads, so getArtistAlbums / getInstantMix / getThemeSongs retired from
-     * the union into the seam (zero remaining union-typed callers). The one
-     * music member left on the union is getAlbumTracks: the detail provider's
-     * session resolves detail + album tracks together and is a mixed consumer,
-     * so its read rides the union. getMusicVideos (already seam-only, zero
-     * callers) retired from the seam outright at the same time. 29 added
-     * refreshHomeSection — the home-sections family's single-row refetch (the
-     * home screen's edge-pull refresh), the same row-scoped reasoning as the
-     * discover-row trio. 23 after the home-feed split: the whole home family
-     * (getHomeSections, refreshHomeSection, getDiscoverRowItems,
-     * rerollDiscoverRow, getCachedHomeSections, getOfflineHomeLayout) lives on
-     * the HomeFeed seam over the same impl, and the user-data change feed's
-     * read val gained the UserDataChanges seam beside it — the home feature's
-     * refresh stack injects the seam alone, and the mixed consumers (the
-     * background home-sections refetchers, the widget, the discover-row
-     * editor) keep the union for their non-home members. 18 after the
-     * series-reads diet: getSeasons / getEpisodes / getAllEpisodesGrouped had
-     * ZERO repo-typed production callers (EpisodeCatalogueImpl reads its
-     * client family directly; the DownloadRepositoryImpl mention is a
-     * comment), so the three catalogue pass-throughs retired off the union
-     * and the impl both — the catalogue stays the read seam, the impl keeps
-     * only the invalidation edge into it.
+     * Current count: 16. The union keeps only members its mixed consumers
+     * share; the row-scoped discover operations (rerollDiscoverRow owning the
+     * invalidate -> fetch -> seed ordering), the home-feed family (HomeFeed),
+     * the music catalogue (MusicCatalogue), the user-data writes
+     * (UserDataWriteOperations), the uncached browse reads
+     * (MediaUncachedReadsImpl), the detail/similar reads (DetailFeed) and the
+     * collection verbs (CollectionOperations) all live on their own seams over
+     * the same impl. markPlayed lives on UserDataWriteOperations for the
+     * outbox drainer's batched recordDrainedPlays and the external-player
+     * completion path; getAlbumTracks stays on the union because the detail
+     * provider's session resolves detail + album tracks together and is a
+     * mixed consumer.
      */
-    private val maxInterfaceMembers = 18
+    private val maxInterfaceMembers = 16
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

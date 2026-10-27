@@ -2,12 +2,12 @@ package com.raulshma.jellyplay.core.data.repository
 
 /**
  * Platform seams the portable download engine calls out through (V3 downloads
- * conveyor). The moved [DownloadRepositoryImpl] previously reached Android
- * surfaces directly — WorkManager enqueue/cancel, the notification group
- * summary, and Coil's image cache — which kept it welded to the legacy module.
- * Each seam below covers exactly one of those call-site clusters; the Android
- * actuals live in this module's androidMain (bound into Koin by the app
- * composition root), and the desktop actuals in :shared:core:data jvmMain.
+ * conveyor). [DownloadRepositoryImpl] must not reach Android surfaces
+ * directly - WorkManager enqueue/cancel, the notification group summary, and
+ * Coil's image cache would weld it to the Android module. Each seam below
+ * covers exactly one of those call-site clusters; the Android actuals live in
+ * this module's androidMain (bound into Koin by the app composition root), and
+ * the desktop actuals in :shared:core:data jvmMain.
  */
 
 /**
@@ -76,11 +76,12 @@ fun interface OfflineImagePreloader {
 }
 
 /**
- * Deferred accessor for [MediaRepository] — the construction-cycle-shaped edge
- * of the download repository. Every use of MediaRepository inside
- * [DownloadRepositoryImpl] lives on the series paths (`downloadSeries` and the
- * episode series-seeding in `saveOfflineMediaItem`); a single-item
- * `startDownload` never touches it. Resolving the repository lazily breaks the
+ * Deferred accessor for [DetailFeed] — the construction-cycle-shaped edge
+ * of the download repository. Every use inside [DownloadRepositoryImpl] is a
+ * detail read on the series paths (`downloadSeries` and the episode
+ * series-seeding in `saveOfflineMediaItem`); a single-item `startDownload`
+ * never touches it, so the accessor narrows to the detail-read family seam
+ * (the family-seam flip). Resolving the seam lazily breaks the
  * DownloadRepository ↔ MediaRepository construction cycle.
  *
  * Since the cluster flip both platform defs (androidDataModule,
@@ -89,6 +90,6 @@ fun interface OfflineImagePreloader {
  */
 fun interface MediaRepositoryAccess {
 
-    /** Returns the MediaRepository. May throw on platforms without a definition. */
-    operator fun invoke(): MediaRepository
+    /** Returns the detail-read seam. May throw on platforms without a definition. */
+    operator fun invoke(): DetailFeed
 }

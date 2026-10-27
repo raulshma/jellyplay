@@ -55,7 +55,7 @@ open class VideoPlayerViewModelHarness {
 
     val testDispatcher = UnconfinedTestDispatcher()
 
-    lateinit var mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository
+    lateinit var detailFeed: com.raulshma.jellyplay.core.data.repository.DetailFeed
     lateinit var playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository
     lateinit var aggregateStore: VideoPlayerAggregateStore
     lateinit var aggregateFlow: MutableStateFlow<VideoPlayerAggregate>
@@ -70,7 +70,7 @@ open class VideoPlayerViewModelHarness {
     fun setUpHarness() {
         Dispatchers.setMain(testDispatcher)
 
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository =
             mockk<com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository>(relaxed = true)
@@ -95,7 +95,7 @@ open class VideoPlayerViewModelHarness {
         // poisons whichever sibling test class runs next (the
         // SyncPlayTestSupport precedent). Resolve to failure: the sidecar's
         // null guard skips the work entirely.
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns
             Result.failure(RuntimeException("no sidecar refresh in the harness"))
 
         // Every store: relaxed mock over REAL slice flows — the collaborator
@@ -163,7 +163,7 @@ open class VideoPlayerViewModelHarness {
 
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             libraryApiClient = mockk(relaxed = true),
             lyricsRepository = mockk(relaxed = true),
             playbackRepository = playbackRepository,

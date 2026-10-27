@@ -15,26 +15,33 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * The session's position ledger — the position/report family carved out of
- * [PlaybackSession] as a module constructed inside the session root (the
- * composition-root stance and the cycles-dissolved-by-ownership map of the
- * session survive intact; this class is never injected from outside).
+ * The session's position ledger - the position/report family as a module
+ * constructed inside the session root (this class is never injected from
+ * outside).
  *
- * Owns, verbatim from the session body:
- *  - the play-session id resolution ([currentPlaySessionId],
- *    [restoreOrAllocatePlaySessionId]) — one id per session lifecycle for
- *    every report and persist;
+ * Owns:
+ *  - the play-session id resolution ([currentPlaySessionId]) — one id per
+ *    session lifecycle for every report and persist;
  *  - the seek latch + report position ([getReportPositionMs]) — the last
  *    explicit seek while still fresh (< 3 s), else the engine position;
  *  - the stop-report pair ([reportPlaybackStart],
- *    [reportCurrentPlaybackStopped], [finalStopReport]) with the
- *    incognito gate and the [stopReportedForSession] dedup;
+ *    [reportCurrentPlaybackStopped] + the private final teardown report)
+ *    with the incognito gate and the Stop dedup latch;
  *  - the process-death persistence ([seekPersisted],
  *    [persistPlaybackPosition], [resolveStartTicksAfterProcessDeath],
  *    [preSeedPlayhead]) — the wall-clock throttle, the store snapshot and
  *    the coalesced offline-mirror write;
- *  - the per-item reset hooks the session's initialize/release chain calls
- *    in its pinned order.
+ *  - the lifecycle phase verbs the session's initialize/release chain calls:
+ *    [resetForNewItem] (the pre-gate new-item intent), [onItemLoaded] (the
+ *    new session's bookkeeping, after the per-item teardown),
+ *    [resetSeekLatch] (the teardown half's latch drop — it runs on BOTH
+ *    teardown paths) and [onTeardown] (the full-release bracket whose
+ *    pinned order is private implementation).
+ *
+ * Every field behind those verbs is private: the ordering constraints (the
+ * snapshot BEFORE any teardown statement, the restore/allocate before the
+ * persistence-window reset) are enforced by the verbs' bodies, not by
+ * call-site discipline.
  */
 internal class SessionPositionLedger(
     private val scope: CoroutineScope,
@@ -48,7 +55,25 @@ internal class SessionPositionLedger(
     private val getIncognitoModeEnabled: () -> Boolean,
     private val seedDisplayedPositionMs: (Long) -> Unit,
     /**
-     * The teardown arm of the cold-start restore marker (see
+     * The teardown arm of the cold-start restore marker: TRUE when the
+     * release about to run is caused by the HOST ITSELF going away (the
+     * activity finishing behind the player — the user swiped the app from
+     * recents mid-playback, or the system tore the task down), FALSE for an
+     * in-app player close. The distinction IS the restore feature: an
+     * in-app close is a deliberate "done for now" and persists the
+     * handled-offer marker ([persistHandledOffer]); a host exit is an
+     * INTERRUPTED session — the cold-start prompt must fire on the next
+     * launch, so the marker is skipped. A probe wired at construction (the
+     * owner owns the answer's timing; the ledger owns WHEN to ask — the
+     * final stop report), not a mutable flag the owner must remember to set
+     * before every release. Default FALSE (persist) keeps bare
+     * constructions and the desktop shell (whose in-app closes are the only
+     * teardowns it sees — a window close kills the process before any
+     * teardown runs) on the persist side.
+     */
+    private val isHostTeardown: () -> Boolean = { false },
+    /**
+     * The teardown arm of the cold-start restore marker's write side (see
      * [com.raulshma.jellyplay.feature.player.video.session.SessionRestoreDismissal]):
      * a deliberate close has PLAYED THROUGH the row's current state, so the
      * next cold start must not re-offer it. The session root wires this to
@@ -68,36 +93,19 @@ internal class SessionPositionLedger(
      * latch.
      */
     @Volatile
-    internal var stopReportedForSession: String? = null
-
-    /**
-     * Set by the owner right before the teardown release: TRUE when the
-     * release is caused by the HOST ITSELF going away (the activity finishing
-     * behind the player — the user swiped the app from recents mid-playback,
-     * or the system tore the task down), FALSE for an in-app player close.
-     * The distinction IS the restore feature: an in-app close is a deliberate
-     * "done for now" and persists the handled-offer marker
-     * ([persistHandledOffer]); a host exit is an INTERRUPTED session — the
-     * cold-start prompt must fire on the next launch, so the marker is
-     * skipped. Default FALSE (persist) keeps bare constructions and the
-     * desktop shell (whose in-app closes are the only teardowns it sees — a
-     * window close kills the process before any teardown runs) on the
-     * persist side.
-     */
-    @Volatile
-    internal var suppressHandledOfferOnRelease: Boolean = false
+    private var stopReportedForSession: String? = null
 
     /** Position (ms) of the last explicit seek; feeds [getReportPositionMs]. */
-    internal var lastSeekPositionMs: Long? = null
+    private var lastSeekPositionMs: Long? = null
 
     /** Wall clock of the last explicit seek; bounds the seek-latch's validity. */
-    internal var lastSeekTimestamp: Long = 0L
+    private var lastSeekTimestamp: Long = 0L
 
     /**
      * Last position (ms) written to the process-death persistence; feeds the
      * stop-report fallback when the engine reports 0 after STATE_ENDED.
      */
-    internal var lastPersistedPositionMs: Long = Long.MIN_VALUE
+    private var lastPersistedPositionMs: Long = Long.MIN_VALUE
 
     /**
      * Wall clock of the last process-death persist; the throttle key for
@@ -106,14 +114,15 @@ internal class SessionPositionLedger(
      * [POSITION_PERSIST_MIN_WALL_CLOCK_INTERVAL_MS] regardless of playback speed —
      * a position delta made 2× speed halve the interval between writes.
      */
-    internal var lastPersistedAtMs: Long = 0L
+    private var lastPersistedAtMs: Long = 0L
 
     /**
      * Locally-allocated UUID play-session id — the fallback used until (and
      * unless) the server issues its own id through the PlaybackInfo endpoint
      * (see [PlayerSessionState.playSessionId] on the session manager).
+     * Rebound by [onItemLoaded]; read only through [currentPlaySessionId].
      */
-    internal var playSessionId: String = java.util.UUID.randomUUID().toString()
+    private var playSessionId: String = java.util.UUID.randomUUID().toString()
 
     /** The pending coalesced seek-mirror write, if a quiet window is running. */
     private var seekProgressJob: Job? = null
@@ -369,25 +378,21 @@ internal class SessionPositionLedger(
         }
     }
 
-    /**
-     * Restores the server play-session id after process death (when this is
-     * the same item) so the eventual stop-report pairs with the start-report
-     * instead of orphaning it; otherwise allocates a fresh session id.
-     */
-    fun restoreOrAllocatePlaySessionId(itemId: String): String {
-        val restoredSessionId = positionStore.savedPlaySessionId()
-        val savedItemId = positionStore.savedItemId()
-        return if (savedItemId == itemId && !restoredSessionId.isNullOrEmpty()) {
-            restoredSessionId
-        } else {
-            java.util.UUID.randomUUID().toString()
-        }
-    }
+    // ── Lifecycle phase verbs ────────────────────────────────────────────────
+    //
+    //    The reset/teardown choreography the session's initialize/release
+    //    chain runs across six call sites. Each verb
+    //    owns one lifecycle moment; the field-level ordering inside it is
+    //    private implementation.
 
     /**
-     * New item = new session: initialize's early reset — drop the seek latch
-     * and clear the Stop dedup latch so the upcoming session's Stop can be
-     * reported.
+     * New item = new session: the pre-gate new-item reset. Runs at the START
+     * of [PlaybackSession.initialize] — BEFORE the routing and same-item
+     * early-return gates, so even an intent that never loads (a "Play On"
+     * routing, a short-circuited same-item pick) drops the seek latch and
+     * clears the Stop dedup latch. It deliberately does NOT touch the
+     * play-session id or the persistence window: those belong to
+     * [onItemLoaded], which only a load that actually proceeds may run.
      */
     fun resetForNewItem() {
         lastSeekPositionMs = null
@@ -395,19 +400,27 @@ internal class SessionPositionLedger(
         stopReportedForSession = null
     }
 
-    /** Drop the seek latch only — releaseInternalsSessionPart's reset. */
-    fun resetSeekLatch() {
-        lastSeekPositionMs = null
-        lastSeekTimestamp = 0L
-    }
-
     /**
-     * The post-teardown persistence reset of initialize: the never-persisted
-     * sentinel back in place, the throttle window re-armed and any pending
-     * coalesced seek-mirror write dropped (a same-item reload re-seeds from
-     * the resolved ticks).
+     * The new session's bookkeeping, once a load has cleared the gates and
+     * torn the previous item down — the session calls this directly after
+     * the per-item teardown halves and before trickplay clears. Restores the
+     * server play-session id after process death (when this is the same
+     * item, so the eventual stop-report pairs with the start-report instead
+     * of orphaning it), otherwise allocates a fresh session id, then resets
+     * the persistence window: the never-persisted sentinel back in place,
+     * the throttle window re-armed and any pending coalesced seek-mirror
+     * write dropped (a same-item reload re-seeds from the resolved ticks).
+     * The restore-before-reset order is private implementation.
      */
-    fun resetPersistenceWindow() {
+    fun onItemLoaded(itemId: String) {
+        val restoredSessionId = positionStore.savedPlaySessionId()
+        val savedItemId = positionStore.savedItemId()
+        playSessionId =
+            if (savedItemId == itemId && !restoredSessionId.isNullOrEmpty()) {
+                restoredSessionId
+            } else {
+                java.util.UUID.randomUUID().toString()
+            }
         lastPersistedPositionMs = Long.MIN_VALUE
         lastPersistedAtMs = 0L
         seekProgressJob?.cancel()
@@ -415,13 +428,44 @@ internal class SessionPositionLedger(
     }
 
     /**
-     * The stop-report inputs snapshot the session's release() takes BEFORE
-     * any teardown statement runs — releaseInternalsSessionPart calls the
-     * session-manager release, which clears the session state these values
-     * read; nothing between the snapshot and the teardown touches these
-     * values.
+     * Drop the seek latch only — the session-owned teardown half's reset
+     * ([PlaybackSession.releaseInternalsSessionPart]). Its own verb because
+     * it runs on BOTH teardown paths (the per-item re-initialization AND the
+     * full release), while [onItemLoaded] runs on neither.
      */
-    class TeardownStopInputs(
+    fun resetSeekLatch() {
+        lastSeekPositionMs = null
+        lastSeekTimestamp = 0L
+    }
+
+    /**
+     * The full-release bracket: the session's ENTIRE teardown body runs
+     * between the ledger's snapshot and its flush+final-report, which pins
+     * the order by construction instead of by call-site discipline —
+     *
+     * 1. snapshot the stop-report inputs BEFORE any teardown statement runs
+     *    (the body's session-manager release clears the session state these
+     *    values read);
+     * 2. run [teardown] (the per-item teardown halves + the caller's
+     *    post-internals steps — one synchronous chain, no dispatch hop);
+     * 3. flush a pending coalesced seek-mirror write (on the release
+     *    scope, IO + NonCancellable, so it survives the viewModelScope being
+     *    cancelled on clear());
+     * 4. the final Stop report, deduped through [stopReportedForSession].
+     */
+    fun onTeardown(teardown: () -> Unit) {
+        val stopInputs = snapshotTeardownInputs()
+        teardown()
+        flushPendingSeekOnRelease()
+        finalStopReport(stopInputs)
+    }
+
+    /**
+     * The stop-report inputs snapshot [onTeardown] takes before the teardown
+     * body runs — an opaque receipt: the caller hands it back by returning
+     * from the body, nothing else.
+     */
+    private data class TeardownStopInputs(
         val itemId: String?,
         val sessionId: String,
         val positionTicks: Long,
@@ -429,7 +473,7 @@ internal class SessionPositionLedger(
     )
 
     /** The pre-teardown snapshot — see [TeardownStopInputs]. */
-    fun snapshotTeardownInputs(): TeardownStopInputs =
+    private fun snapshotTeardownInputs(): TeardownStopInputs =
         TeardownStopInputs(
             itemId = playerSessionManager.sessionState.value.currentItemId,
             sessionId = currentPlaySessionId,
@@ -443,7 +487,7 @@ internal class SessionPositionLedger(
      * moved onto the release scope (IO + NonCancellable) so it survives the
      * viewModelScope being cancelled on clear().
      */
-    fun flushPendingSeekOnRelease() {
+    private fun flushPendingSeekOnRelease() {
         val pendingSeek = seekProgressJob ?: return
         releaseScope.launch(NonCancellable) {
             pendingSeek.join()
@@ -461,7 +505,7 @@ internal class SessionPositionLedger(
      * teardown marker ([persistHandledOffer]) — the deliberate close has
      * handled this row state.
      */
-    fun finalStopReport(inputs: TeardownStopInputs) {
+    private fun finalStopReport(inputs: TeardownStopInputs) {
         val itemId = inputs.itemId
         val sessionId = inputs.sessionId
         val positionTicks = inputs.positionTicks
@@ -493,14 +537,14 @@ internal class SessionPositionLedger(
                     // The restore-prompt teardown marker rides the same
                     // best-effort window: an in-app deliberate close has
                     // handled this row state, so the next cold start's
-                    // evaluation must not re-offer it. A HOST exit (the flag
-                    // the owner set) is an interrupted session instead — the
-                    // marker is skipped so the prompt fires. Incognito never
-                    // wrote the row; a failed session leaves the offer
-                    // standing (the user could not actually watch it). A
-                    // dropped write degrades to the prompt appearing once
-                    // more.
-                    if (!suppressHandledOfferOnRelease && !failed && !getIncognitoModeEnabled()) {
+                    // evaluation must not re-offer it. A HOST exit (the
+                    // [isHostTeardown] probe) is an interrupted session
+                    // instead — the marker is skipped so the prompt fires.
+                    // Incognito never wrote the row; a failed session leaves
+                    // the offer standing (the user could not actually watch
+                    // it). A dropped write degrades to the prompt appearing
+                    // once more.
+                    if (!isHostTeardown() && !failed && !getIncognitoModeEnabled()) {
                         runCatchingRethrowingCancellation {
                             withTimeoutOrNull(5_000) {
                                 persistHandledOffer(itemId, positionTicks / 10_000)

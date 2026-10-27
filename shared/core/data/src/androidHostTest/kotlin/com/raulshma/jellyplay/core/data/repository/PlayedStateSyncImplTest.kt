@@ -35,7 +35,6 @@ class PlayedStateSyncImplTest {
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val userDataAnnouncer: UserDataAnnouncer = mockk(relaxed = true)
     private val downloadsStore: DownloadsStore = mockk()
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)

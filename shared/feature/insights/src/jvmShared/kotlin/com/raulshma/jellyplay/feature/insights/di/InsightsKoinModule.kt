@@ -19,7 +19,7 @@ val insightsModule: Module = module {
     viewModel {
         WatchProgressHeatmapViewModel(
             watchHistoryRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             artworkUrls = get(),
         )
     }

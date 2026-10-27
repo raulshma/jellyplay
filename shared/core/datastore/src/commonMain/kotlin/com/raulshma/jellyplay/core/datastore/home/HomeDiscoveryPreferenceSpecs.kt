@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.home
 
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
@@ -26,11 +27,13 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
  * category, and the read/write encoding where the row carries one.
  *
  * `HomeDiscoveryStore` is derived from these rows: the `Keys` members rebuild
- * each row's typed key from its wire name, the per-user read projection
- * delegates each plain knob to its row encoding through the per-user hook
- * below, the single-key setters and `restore` write through the rows'
- * namespace-rebuilt keys, and `resetKeysFor` filters the rows by reset
- * category — so a row cannot drift from the machinery that reads or writes it.
+ * each row's typed key from its wire name, the per-user read projection and
+ * `restore` FOLD the slice rows below (each slice-bound row carries its
+ * namespaced read, its inverse namespaced write and its [HomeDiscoverySlice]
+ * lens — the namespaced variant of the videoplayer derivation), the single-key
+ * setters write through the rows' namespace-rebuilt keys, and `resetKeysFor`
+ * filters the rows by reset category — so a row cannot drift from the
+ * machinery that reads or writes it.
  *
  * **The per-user namespacing is the one home-domain wrinkle**: every key this
  * store owns persists as `u_<userId>::<canonical>` (see [UserNamespacedKeys]).
@@ -41,8 +44,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
  * canonical declaration. [readBoolForUser] / [readIntForUser] /
  * [readEnumForUser] route the plain rows' reads (with their legacy string
  * fallback, consulted at the NAMESPACED name — the fallback name is the
- * namespaced slot, exactly as the hand-written per-user reads did) through the
- * same rows.
+ * namespaced slot) through the same rows.
  *
  * The JSON-blob rows ([HOME_ENABLED_SECTION_TYPES], [HOME_SECTION_ORDER],
  * [HOME_LIBRARY_SECTION_OVERRIDES], [PINNED_HOME_SECTIONS],
@@ -63,10 +65,11 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
  * namespace migration stay hand-written in the store.
  *
  * Adding a preference: one row here, one [HomeDiscoverySlice] property, one
- * `slice()` read row, one `restore()` row (and its setter) — plus one
- * write-through test line; the derivation covers key identity, encodings,
- * reset lists and the migration copy lists, not the slice plumbing or its
- * coverage.
+ * slice row in [sliceRows] (the namespaced read, the restore write and the
+ * slice lens — the three bindings the store's folds iterate), and its setter —
+ * plus one write-through test line; the derivation covers key identity,
+ * encodings, the read/restore folds, reset lists and the migration copy
+ * lists, not the slice plumbing or its coverage.
  *
  * Public (the [com.raulshma.jellyplay.core.datastore.experimental
  * .ExperimentalPreferenceSpecs] precedent): the settings feature derives its
@@ -1046,6 +1049,363 @@ object HomeDiscoveryPreferenceSpecs {
         migrationRows.filter { it.storage == PreferenceStorage.STRING } as List<PreferenceSpec<String>>
 
     /**
+     * The slice-bound rows — the ONE registration of the per-user read rows
+     * and restore rows, in [all] order: every row whose value projects into a
+     * [HomeDiscoverySlice] field, each carrying its namespaced read
+     * ([HomeDiscoverySliceRow.readInto]), its inverse namespaced restore
+     * write ([HomeDiscoverySliceRow.writeFrom]) and the slice lens. The
+     * store's read projection and restore FOLD these (the namespaced variant
+     * of the videoplayer derivation), so a slice field cannot drift the row
+     * that reads or writes it. Excluded by design — each documented on its
+     * row above:
+     *  - [HOME_ENABLED_SECTION_TYPES] + [HOME_ENABLED_SECTION_TYPES_VERSION]:
+     *    the version-union decode (and its restore-side version stamp) reads
+     *    and writes BOTH keys as one fold, and feeds THREE slice fields (the
+     *    set, its stored stamp, the union's contribution);
+     *  - [HOME_HIDDEN_LIBRARY_SECTION_IDS]: the migration source, never a knob;
+     *  - [HOME_NS_MIGRATED] / [HOME_V3_UPGRADE_BASELINE_DONE]: global
+     *    markers, outside every namespace, never slice fields.
+     *
+     * The JVM `HomeDiscoverySpecDerivationTest` pins this list to exactly
+     * `all` minus those exclusions, in `all` order — a row added to [all]
+     * without a slice row (or vice versa) fails there.
+     */
+    internal val sliceRows: List<HomeDiscoverySliceRow<*>> = listOf(
+        HomeDiscoverySliceRow(
+            spec = HOME_MODE,
+            get = { it.homeMode },
+            set = { s, v -> s.copy(homeMode = v) },
+            readForUser = { _, prefs, userId -> HOME_MODE.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_MODE.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_ENABLED,
+            get = { it.homeHeroEnabled },
+            set = { s, v -> s.copy(homeHeroEnabled = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_ENABLED.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HERO_ENABLED.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_STYLE,
+            get = { it.homeHeroStyle },
+            set = { s, v -> s.copy(homeHeroStyle = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_STYLE.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HERO_STYLE.rawUserKey(userId)] = v.name },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_SLIDESHOW_INTERVAL_SEC,
+            get = { it.homeHeroSlideshowIntervalSec },
+            set = { s, v -> s.copy(homeHeroSlideshowIntervalSec = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_SLIDESHOW_INTERVAL_SEC.readIntForUser(prefs, userId) },
+            // The restore-side clamp (the setter keeps its own — each
+            // remains the clamp owner at its site).
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_HERO_SLIDESHOW_INTERVAL_SEC.userKey(userId)] =
+                    v.coerceIn(HOME_HERO_SLIDESHOW_INTERVAL_SEC_BOUNDS)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_VIDEO_ENABLED,
+            get = { it.homeHeroVideoEnabled },
+            set = { s, v -> s.copy(homeHeroVideoEnabled = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_VIDEO_ENABLED.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HERO_VIDEO_ENABLED.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_HERO_VIDEO_TV_ENABLED,
+            get = { it.homeHeroVideoTvEnabled },
+            set = { s, v -> s.copy(homeHeroVideoTvEnabled = v) },
+            readForUser = { _, prefs, userId -> HOME_HERO_VIDEO_TV_ENABLED.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_HERO_VIDEO_TV_ENABLED.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_BACKDROP_ENABLED,
+            get = { it.homeBackdropEnabled },
+            set = { s, v -> s.copy(homeBackdropEnabled = v) },
+            readForUser = { _, prefs, userId -> HOME_BACKDROP_ENABLED.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_BACKDROP_ENABLED.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_FOCUS_BACKDROP,
+            get = { it.homeFocusBackdrop },
+            set = { s, v -> s.copy(homeFocusBackdrop = v) },
+            readForUser = { _, prefs, userId -> HOME_FOCUS_BACKDROP.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_FOCUS_BACKDROP.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_STATS_CARD,
+            get = { it.homeStatsCard },
+            set = { s, v -> s.copy(homeStatsCard = v) },
+            readForUser = { _, prefs, userId -> HOME_STATS_CARD.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_STATS_CARD.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_GENRE_RAIL,
+            get = { it.homeGenreRail },
+            set = { s, v -> s.copy(homeGenreRail = v) },
+            readForUser = { _, prefs, userId -> HOME_GENRE_RAIL.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_GENRE_RAIL.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_PRESENCE_CHIPS,
+            get = { it.homePresenceChips },
+            set = { s, v -> s.copy(homePresenceChips = v) },
+            readForUser = { _, prefs, userId -> HOME_PRESENCE_CHIPS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_PRESENCE_CHIPS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_NEW_SECTION_ANNOUNCEMENTS,
+            get = { it.homeNewSectionAnnouncements },
+            set = { s, v -> s.copy(homeNewSectionAnnouncements = v) },
+            readForUser = { _, prefs, userId -> HOME_NEW_SECTION_ANNOUNCEMENTS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_NEW_SECTION_ANNOUNCEMENTS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_SECTION_ORDER,
+            get = { it.homeSectionOrder },
+            set = { s, v -> s.copy(homeSectionOrder = v) },
+            readForUser = { reads, prefs, _ -> reads.readHomeSectionOrder(prefs) },
+            // Verbatim name-list encode — restore does NOT normalize; that is
+            // the setter's job.
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_SECTION_ORDER.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v.map { it.name })
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_LIBRARY_SECTION_OVERRIDES,
+            get = { it.libraryHomeSectionOverrides },
+            set = { s, v -> s.copy(libraryHomeSectionOverrides = v) },
+            readForUser = { reads, prefs, _ -> reads.readLibraryHomeSectionOverrides(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = PINNED_HOME_SECTIONS,
+            get = { it.pinnedHomeSections },
+            set = { s, v -> s.copy(pinnedHomeSections = v) },
+            readForUser = { reads, prefs, _ -> reads.readPinnedHomeSections(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[PINNED_HOME_SECTIONS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_DISCOVER_ROWS,
+            get = { it.discoverRows },
+            set = { s, v -> s.copy(discoverRows = v) },
+            readForUser = { reads, prefs, _ -> reads.readDiscoverRows(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_DISCOVER_ROWS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_LAYOUT_PRESETS,
+            get = { it.homeLayoutPresets },
+            set = { s, v -> s.copy(homeLayoutPresets = v) },
+            readForUser = { reads, prefs, _ -> reads.readHomeLayoutPresets(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[HOME_LAYOUT_PRESETS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_LAYOUT_AUTOPUSH,
+            get = { it.homeLayoutAutopush },
+            set = { s, v -> s.copy(homeLayoutAutopush = v) },
+            readForUser = { _, prefs, userId -> HOME_LAYOUT_AUTOPUSH.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_LAYOUT_AUTOPUSH.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = CONTINUE_WATCHING_CLICK_BEHAVIOR,
+            get = { it.continueWatchingClickBehavior },
+            set = { s, v -> s.copy(continueWatchingClickBehavior = v) },
+            readForUser = { _, prefs, userId -> CONTINUE_WATCHING_CLICK_BEHAVIOR.readEnumForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v ->
+                prefs[CONTINUE_WATCHING_CLICK_BEHAVIOR.rawUserKey(userId)] = v.name
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_UNWATCHED_BADGE,
+            get = { it.showUnwatchedBadge },
+            set = { s, v -> s.copy(showUnwatchedBadge = v) },
+            readForUser = { _, prefs, userId -> SHOW_UNWATCHED_BADGE.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_UNWATCHED_BADGE.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HIDE_WATCHED_ITEMS,
+            get = { it.hideWatchedItems },
+            set = { s, v -> s.copy(hideWatchedItems = v) },
+            readForUser = { _, prefs, userId -> HIDE_WATCHED_ITEMS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HIDE_WATCHED_ITEMS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_WATCHED_CHECKMARK,
+            get = { it.showWatchedCheckmark },
+            set = { s, v -> s.copy(showWatchedCheckmark = v) },
+            readForUser = { _, prefs, userId -> SHOW_WATCHED_CHECKMARK.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_WATCHED_CHECKMARK.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_EXTERNAL_RATINGS,
+            get = { it.showExternalRatings },
+            set = { s, v -> s.copy(showExternalRatings = v) },
+            readForUser = { _, prefs, userId -> SHOW_EXTERNAL_RATINGS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_EXTERNAL_RATINGS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_QUALITY_BADGES,
+            get = { it.showQualityBadges },
+            set = { s, v -> s.copy(showQualityBadges = v) },
+            readForUser = { _, prefs, userId -> SHOW_QUALITY_BADGES.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_QUALITY_BADGES.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_NEW_BADGES,
+            get = { it.showNewBadges },
+            set = { s, v -> s.copy(showNewBadges = v) },
+            readForUser = { _, prefs, userId -> SHOW_NEW_BADGES.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_NEW_BADGES.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_TRICKPLAY_PREVIEW,
+            get = { it.homeTrickplayPreview },
+            set = { s, v -> s.copy(homeTrickplayPreview = v) },
+            readForUser = { _, prefs, userId -> HOME_TRICKPLAY_PREVIEW.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HOME_TRICKPLAY_PREVIEW.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = ANTI_SPOILER_HOME,
+            get = { it.antiSpoilerHome },
+            set = { s, v -> s.copy(antiSpoilerHome = v) },
+            readForUser = { _, prefs, userId -> ANTI_SPOILER_HOME.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[ANTI_SPOILER_HOME.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = MERGE_CONTINUE_WATCHING_NEXT_UP,
+            get = { it.mergeContinueWatchingAndNextUp },
+            set = { s, v -> s.copy(mergeContinueWatchingAndNextUp = v) },
+            readForUser = { _, prefs, userId -> MERGE_CONTINUE_WATCHING_NEXT_UP.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[MERGE_CONTINUE_WATCHING_NEXT_UP.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = NEXT_UP_MAX_DAYS,
+            get = { it.nextUpMaxDays },
+            set = { s, v -> s.copy(nextUpMaxDays = v) },
+            readForUser = { _, prefs, userId -> NEXT_UP_MAX_DAYS.readIntForUser(prefs, userId) },
+            // Verbatim on restore (no clamp) — the setter owns the `0` floor.
+            writeForUser = { prefs, userId, v -> prefs[NEXT_UP_MAX_DAYS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = NEXT_UP_REWATCHING,
+            get = { it.nextUpRewatching },
+            set = { s, v -> s.copy(nextUpRewatching = v) },
+            readForUser = { _, prefs, userId -> NEXT_UP_REWATCHING.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[NEXT_UP_REWATCHING.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = CLASSIC_ROWS,
+            get = { it.classicRows },
+            set = { s, v -> s.copy(classicRows = v) },
+            readForUser = { _, prefs, userId -> CLASSIC_ROWS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[CLASSIC_ROWS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = EXCLUDE_ACTIVE_SESSIONS,
+            get = { it.excludeActiveSessions },
+            set = { s, v -> s.copy(excludeActiveSessions = v) },
+            readForUser = { _, prefs, userId -> EXCLUDE_ACTIVE_SESSIONS.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[EXCLUDE_ACTIVE_SESSIONS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = NEXT_UP_EXCLUDED_SERIES_IDS,
+            get = { it.nextUpExcludedSeriesIds },
+            set = { s, v -> s.copy(nextUpExcludedSeriesIds = v) },
+            readForUser = { reads, prefs, _ -> reads.readNextUpExcludedSeriesIds(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HIDDEN_CW_ITEM_IDS,
+            get = { it.hiddenCwItemIds },
+            set = { s, v -> s.copy(hiddenCwItemIds = v) },
+            readForUser = { reads, prefs, _ -> reads.readHiddenCwItemIds(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[HIDDEN_CW_ITEM_IDS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = LAST_VIEWED_SEASON_BY_SERIES,
+            get = { it.lastViewedSeasonBySeries },
+            set = { s, v -> s.copy(lastViewedSeasonBySeries = v) },
+            readForUser = { reads, prefs, _ -> reads.readLastViewedSeasonBySeries(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = MY_MEDIA_HIDDEN_LIBRARY_IDS,
+            get = { it.myMediaHiddenLibraryIds },
+            set = { s, v -> s.copy(myMediaHiddenLibraryIds = v) },
+            readForUser = { reads, prefs, _ -> reads.readMyMediaHiddenLibraryIds(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[MY_MEDIA_HIDDEN_LIBRARY_IDS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = THEME_MUSIC_MUTED_SERIES_IDS,
+            get = { it.themeMusicMutedSeriesIds },
+            set = { s, v -> s.copy(themeMusicMutedSeriesIds = v) },
+            readForUser = { reads, prefs, _ -> reads.readThemeMusicMutedSeriesIds(prefs) },
+            writeForUser = { prefs, userId, v ->
+                prefs[THEME_MUSIC_MUTED_SERIES_IDS.rawUserKey(userId)] = PreferenceCodec.json.encodeToString(v)
+            },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_LAST_VISIT_EPOCH_MS,
+            get = { it.homeLastVisitEpochMs },
+            set = { s, v -> s.copy(homeLastVisitEpochMs = v) },
+            // Plain typed slot, no legacy-string fallback — a brand-new key
+            // with no pre-typed-era value on disk (it rides no migration copy
+            // list either).
+            readForUser = { _, prefs, userId ->
+                prefs[HOME_LAST_VISIT_EPOCH_MS.userKey(userId)] ?: HOME_LAST_VISIT_EPOCH_MS.default
+            },
+            writeForUser = { prefs, userId, v -> prefs[HOME_LAST_VISIT_EPOCH_MS.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HOME_ANNOUNCED_VERSION,
+            get = { it.homeAnnouncedVersion },
+            set = { s, v -> s.copy(homeAnnouncedVersion = v) },
+            // Plain typed slot — same spelling as the visit stamp above.
+            readForUser = { _, prefs, userId ->
+                prefs[HOME_ANNOUNCED_VERSION.userKey(userId)] ?: HOME_ANNOUNCED_VERSION.default
+            },
+            writeForUser = { prefs, userId, v -> prefs[HOME_ANNOUNCED_VERSION.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_CLOCK_ON_HOME,
+            get = { it.showClockOnHome },
+            set = { s, v -> s.copy(showClockOnHome = v) },
+            readForUser = { _, prefs, userId -> SHOW_CLOCK_ON_HOME.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_CLOCK_ON_HOME.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = SHOW_SETTINGS_IN_HOME_SEARCH,
+            get = { it.showSettingsInHomeSearch },
+            set = { s, v -> s.copy(showSettingsInHomeSearch = v) },
+            readForUser = { _, prefs, userId -> SHOW_SETTINGS_IN_HOME_SEARCH.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[SHOW_SETTINGS_IN_HOME_SEARCH.userKey(userId)] = v },
+        ),
+        HomeDiscoverySliceRow(
+            spec = HIDE_TOP_HEADER_ON_SCROLL,
+            get = { it.hideTopHeaderOnScroll },
+            set = { s, v -> s.copy(hideTopHeaderOnScroll = v) },
+            readForUser = { _, prefs, userId -> HIDE_TOP_HEADER_ON_SCROLL.readBoolForUser(prefs, userId) },
+            writeForUser = { prefs, userId, v -> prefs[HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = v },
+        ),
+    )
+
+    /**
      * Category reset participation, derived as the rows whose declared
      * [PreferenceSpec.resetCategory] is [category] — every key owned here
      * sits in the single `HOME_DISCOVERY` bucket. The facade aggregates these
@@ -1164,3 +1524,78 @@ internal inline fun <reified E : Enum<E>> PreferenceSpec<E>.readEnumForUser(
     prefs: Preferences,
     userId: String,
 ): E = prefs[rawUserKey(userId)].toEnumOrNull() ?: default
+
+// ----------------------------------------------------------------------
+// The slice rows: the per-user read rows + restore rows the store's
+// projection and restore fold. The namespaced variant of the videoplayer
+// derivation — no reflection, every binding is a declared lambda, and the
+// JVM `HomeDiscoverySpecDerivationTest` pins the row list to the spec rows.
+// ----------------------------------------------------------------------
+
+/**
+ * The per-user JSON decode surface the slice-bound JSON rows read through —
+ * implemented by the store's per-user reader ([HomeDiscoveryStore]'s
+ * `UserReader`), which owns the parse caches (one reader instance per active
+ * user, so a user switch can never serve another user's cached parse). The
+ * spec tier depends on this interface, not the store, so the slice rows stay
+ * store-blind.
+ */
+internal interface HomeDiscoveryUserJsonReads {
+    fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType>
+
+    fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>>
+
+    fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection>
+
+    fun readDiscoverRows(prefs: Preferences): List<DiscoverRowConfig>
+
+    fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset>
+
+    fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String>
+
+    fun readHiddenCwItemIds(prefs: Preferences): Set<String>
+
+    fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String>
+
+    fun readMyMediaHiddenLibraryIds(prefs: Preferences): Set<String>
+
+    fun readThemeMusicMutedSeriesIds(prefs: Preferences): Set<String>
+}
+
+/**
+ * One slice-bound row ([HomeDiscoveryPreferenceSpecs.sliceRows]): the
+ * [PreferenceSpec] plus the plain-data bindings the store's read projection
+ * and restore iterate — the namespaced read, its inverse namespaced restore
+ * write, and the [HomeDiscoverySlice] lens. The lambda bodies spell the
+ * per-row bindings — the per-user hooks [readBoolForUser] /
+ * [readIntForUser] / [readEnumForUser], plain typed slots, the reader's JSON
+ * decodes and the restore-side clamps — and folding over the rows applies
+ * them in order. The class closes over [T] — the fold
+ * steps ([readInto] / [writeFrom]) are the star-projection-safe entry points,
+ * so the folds need no cast (the no-reflection rule keeps its no-cast
+ * corollary).
+ */
+internal class HomeDiscoverySliceRow<T>(
+    val spec: PreferenceSpec<T>,
+    private val get: (HomeDiscoverySlice) -> T,
+    private val set: (HomeDiscoverySlice, T) -> HomeDiscoverySlice,
+    private val readForUser: (reads: HomeDiscoveryUserJsonReads, prefs: Preferences, userId: String) -> T,
+    private val writeForUser: (prefs: MutablePreferences, userId: String, value: T) -> Unit,
+) {
+    /** Fold step for the read projection: reads the row under [userId]'s namespace and lenses it into [slice]. */
+    fun readInto(
+        reads: HomeDiscoveryUserJsonReads,
+        prefs: Preferences,
+        userId: String,
+        slice: HomeDiscoverySlice,
+    ): HomeDiscoverySlice = set(slice, readForUser(reads, prefs, userId))
+
+    /** Fold step for restore: writes the row's [slice] value under [userId]'s namespace. */
+    fun writeFrom(
+        slice: HomeDiscoverySlice,
+        prefs: MutablePreferences,
+        userId: String,
+    ) {
+        writeForUser(prefs, userId, get(slice))
+    }
+}

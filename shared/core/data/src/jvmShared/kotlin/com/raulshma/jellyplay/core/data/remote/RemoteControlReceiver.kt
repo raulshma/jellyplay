@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.remote
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
@@ -54,7 +54,8 @@ import org.json.JSONObject
 class RemoteControlReceiver(
     private val webSocketClient: JellyfinWebSocketClient,
     private val authRepository: AuthRepository,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val videoDispatcher: VideoRemoteControlDispatcher,
     private val audioDispatcher: AudioRemoteControlDispatcher,
     private val uiDispatcher: UiRemoteControlDispatcher,
@@ -177,8 +178,8 @@ class RemoteControlReceiver(
      * failed.
      */
     private suspend fun fetchFirstItemDetail(id: String) =
-        mediaRepository.getMediaDetail(id).getOrNull()
-            ?: mediaRepository.getMediaDetail(id).getOrNull()
+        detailFeed.getMediaDetail(id, force = false).getOrNull()
+            ?: detailFeed.getMediaDetail(id, force = false).getOrNull()
 
     // ── Play ──────────────────────────────────────────────────────────────
 
@@ -200,8 +201,8 @@ class RemoteControlReceiver(
         )
 
         // The dispatcher pick and the banner title both derive from the first
-        // item's detail — one getMediaDetail fetch serves both (the old shape
-        // issued two sequential calls) on the remote-command latency path.
+        // item's detail - one getMediaDetail fetch serves both on the
+        // remote-command latency path.
         val firstItemId = request.itemIds.firstOrNull()
         val firstDetail = firstItemId?.let { fetchFirstItemDetail(it) }
         val bannerTitle = firstDetail?.item?.name.orEmpty()

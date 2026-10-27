@@ -85,6 +85,14 @@ internal class PlaybackSessionTestGraph private constructor(
     /** The injected wall clock's current reading; reset per build. */
     var nowMs: Long = 1_000_000L
 
+    /**
+     * The session's host-teardown probe's current answer (the graph's
+     * flip-the-gate seam for the ledger's restore-marker suppression):
+     * flip BEFORE [PlaybackSession.release] — the ledger reads the probe at
+     * the final stop report.
+     */
+    var hostTeardown: Boolean = false
+
     val engine = FakeMediaEngine().apply {
         durationValue = 100_000L
         advanceTo(30_000L)
@@ -117,7 +125,7 @@ internal class PlaybackSessionTestGraph private constructor(
     }
     val progressReporter = mockk<PlaybackProgressReporter>(relaxed = true)
     val mediaSessionController = mockk<MediaSessionController>(relaxed = true)
-    val mediaRepository = mockk<com.raulshma.jellyplay.core.data.repository.MediaRepository>(relaxed = true)
+    val detailFeed = mockk<com.raulshma.jellyplay.core.data.repository.DetailFeed>(relaxed = true)
     val pipeline = mockk<SessionLoadPipeline>(relaxed = true)
     val positionStore = FakePositionStore()
 
@@ -233,6 +241,7 @@ internal class PlaybackSessionTestGraph private constructor(
     val session = PlaybackSession(
         scope = sessionScope,
         clock = { nowMs },
+        isHostTeardown = { hostTeardown },
         playerSessionManagerOverride = playerSessionManager,
         progressReporterOverride = progressReporter,
         sessionLoadPipelineOverride = pipeline,
@@ -290,7 +299,7 @@ internal class PlaybackSessionTestGraph private constructor(
         playbackStore = playbackStore,
         playbackRepository = playbackRepository,
         offlinePlaybackFacade = offlinePlaybackFacade,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         positionStoreOverride = positionStore,
     )
 

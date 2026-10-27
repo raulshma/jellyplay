@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.TimeSource
@@ -79,7 +79,8 @@ import java.io.File
  * dataJvmModule over this single.
  */
 class OfflineSyncManager(
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val writer: OfflineDownloadWriter,
     private val downloadRepository: DownloadRepository,
     private val offlineMediaDao: OfflineMediaDao,
@@ -165,7 +166,7 @@ class OfflineSyncManager(
         try {
             // Force read: bypass the TTL detail cache so we get a fresh fetch,
             // not a stale read.
-            val fresh = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+            val fresh = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
             if (fresh == null) {
                 recordError(itemId, baseline)
                 checkingFlagCleared = true
@@ -252,7 +253,7 @@ class OfflineSyncManager(
                 return@withContext ResyncResult(itemId, steps, mediaFileChanged)
             }
             // Force read: fetch fresh detail, bypassing the TTL cache.
-            val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+            val detail = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
             if (detail == null) {
                 steps += ResyncStepResult(itemId, ResyncStep.FETCH_DETAIL, success = false, message = "Fetch failed")
                 setProgress(itemId, ResyncPhase.ERROR, null)

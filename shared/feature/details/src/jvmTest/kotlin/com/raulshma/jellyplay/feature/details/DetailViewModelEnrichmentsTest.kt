@@ -205,18 +205,18 @@ class DetailViewModelEnrichmentsTest {
      * The setUp construction, extractable so a single test can flip a
      * pre-construction stub (the Seerr connection flags — the combine captures
      * the preferences flow at construction time) or inject the TMDB
-     * fallback seam before building.
+     * fallback / plugin-arm seams before building.
      */
     private fun buildViewModel(
         tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
-        pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
-        jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
-        pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
+        pluginArms: DetailPluginArms = DetailPluginArms(),
         appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore? = null,
     ): DetailViewModel = DetailViewModel(
         storageProbe = mockk<DetailStorageProbe>(relaxed = true),
         strings = strings,
         mediaRepository = mediaRepository,
+        detailFeed = mockk(relaxed = true),
+        collectionOperations = mockk(relaxed = true),
         mediaCatalogueEnrichments = catalogueEnrichments,
         libraryApiClient = libraryApiClient,
         collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
@@ -282,9 +282,7 @@ class DetailViewModelEnrichmentsTest {
         mediaDownloadActions = mockk<MediaDownloadActions>(relaxed = true),
         smartPlayDispatcher = mainDispatcher,
         tmdbApiClient = tmdbApiClient,
-        pluginStatusStore = pluginStatusStore,
-        pluginRatingsApi = pluginRatingsApi,
-        jellyPlayFeatureGate = jellyPlayFeatureGate,
+        pluginArms = pluginArms,
         appearanceStore = appearanceStore,
     )
 
@@ -754,8 +752,10 @@ class DetailViewModelEnrichmentsTest {
         coEvery { featureGate.isAvailableNow(JellyPlayPluginFeatures.Ratings) } returns true
         viewModel = buildViewModel(
             tmdbApiClient = tmdbApiClient,
-            pluginStatusStore = pluginStatusStore,
-            jellyPlayFeatureGate = featureGate,
+            pluginArms = DetailPluginArms(
+                statusStore = pluginStatusStore,
+                featureGate = featureGate,
+            ),
         )
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { tmdbApiClient.getDetails(123, MediaType.MOVIE) } returns Result.success(
@@ -849,9 +849,11 @@ class DetailViewModelEnrichmentsTest {
         coEvery { featureGate.isAvailableNow(any()) } returns false
         coEvery { featureGate.isAvailableNow(JellyPlayPluginFeatures.Ratings) } returns true
         return buildViewModel(
-            pluginStatusStore = pluginStatusStore,
-            jellyPlayFeatureGate = featureGate,
-            pluginRatingsApi = ratingsApi,
+            pluginArms = DetailPluginArms(
+                statusStore = pluginStatusStore,
+                featureGate = featureGate,
+                ratingsApi = ratingsApi,
+            ),
         )
     }
 
@@ -987,9 +989,11 @@ class DetailViewModelEnrichmentsTest {
         val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
         coEvery { featureGate.isAvailableNow(any()) } returns false
         viewModel = buildViewModel(
-            pluginStatusStore = mockk(relaxed = true),
-            jellyPlayFeatureGate = featureGate,
-            pluginRatingsApi = gatedApi,
+            pluginArms = DetailPluginArms(
+                statusStore = mockk(relaxed = true),
+                featureGate = featureGate,
+                ratingsApi = gatedApi,
+            ),
         )
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider(
@@ -1089,9 +1093,11 @@ class DetailViewModelEnrichmentsTest {
         )
         return buildViewModel(
             tmdbApiClient = tmdbApiClient,
-            pluginStatusStore = pluginStatusStore,
-            jellyPlayFeatureGate = featureGate,
-            pluginRatingsApi = ratingsApi,
+            pluginArms = DetailPluginArms(
+                statusStore = pluginStatusStore,
+                featureGate = featureGate,
+                ratingsApi = ratingsApi,
+            ),
             appearanceStore = appearanceStore,
         )
     }
@@ -1130,7 +1136,10 @@ class DetailViewModelEnrichmentsTest {
         val ratingsApi = AwardsRatingsApi(JellyPlayPluginOmdbAwards(awards = "Won 4 Oscars."))
         // The DEFAULT wiring: no plugin status store → the pluginFeature gate
         // answers false without consulting the fetch role.
-        viewModel = buildViewModel(tmdbApiClient = tmdbApiClient, pluginRatingsApi = ratingsApi)
+        viewModel = buildViewModel(
+            tmdbApiClient = tmdbApiClient,
+            pluginArms = DetailPluginArms(ratingsApi = ratingsApi),
+        )
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         stubProvider("oa2", snapshot(DetailOrigin.REMOTE, imdbRatedMovie("oa2"), remoteDiscoveryAllowed = true))
 

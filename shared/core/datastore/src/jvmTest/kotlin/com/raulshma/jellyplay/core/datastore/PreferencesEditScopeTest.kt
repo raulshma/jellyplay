@@ -22,10 +22,8 @@ import kotlin.test.Test
  * Verifies [PreferencesEditor] — the single auditable write seam. Its surface
  * is deliberately minimal: the [PreferencesEditor.edit] block routes to the
  * owning store via [PreferencesEditScope], the PIN ops delegate to
- * SecurityStore, and the reset/clear machinery delegates to the facade. (The
- * former ~50 one-line named setters had test-only callers and were deleted —
- * their routing is now pinned where it actually lives, on the stores
- * themselves.)
+ * SecurityStore, and the reset/clear machinery delegates to the facade. Store
+ * routing is pinned where it actually lives, on the stores themselves.
  *
  * The scope runs on [Dispatchers.Unconfined] so the editor's fire-and-forget
  * `scope.launch` completes inline within each `runTest` block.
@@ -49,16 +47,7 @@ class PreferencesEditScopeTest {
             dataStore.edit { it.clear() }
             graph = createPreferenceSliceGraph(scope, dataStore)
             store = createUserPreferencesStore(scope, dataStore)
-            val editScope = PreferencesEditScope(
-                graph.playbackStore, graph.appearanceStore, graph.videoPlayerStore,
-                graph.downloadsStore, graph.engineStore, graph.homeDiscoveryStore,
-                graph.audioStore, graph.audioEffectsStore, graph.audioCacheStore,
-                graph.libraryStore, graph.navigationStore, graph.shortcutsStore, graph.networkOfflineStore,
-                graph.notificationStore, graph.screensaverStore, graph.securityStore,
-                graph.subtitleLanguageStore, graph.syncPlayCastStore, graph.experimentalStore,
-                graph.volumeProfileStore, graph.appRuntimeStateStore,
-            )
-            editor = PreferencesEditor(scope, editScope, store)
+            editor = PreferencesEditor(scope, editScope(), store)
             // Drain cached slice flows so the cleared state is observed first.
             graph.appearanceStore.appearance.first()
             graph.playbackStore.playback.first()
@@ -162,12 +151,7 @@ class PreferencesEditScopeTest {
 
     /** A fresh edit scope over the shared graph (the ctor's stores are singletons per graph). */
     private fun editScope(): PreferencesEditScope = PreferencesEditScope(
-        graph.playbackStore, graph.appearanceStore, graph.videoPlayerStore,
-        graph.downloadsStore, graph.engineStore, graph.homeDiscoveryStore,
-        graph.audioStore, graph.audioEffectsStore, graph.audioCacheStore,
-        graph.libraryStore, graph.navigationStore, graph.shortcutsStore, graph.networkOfflineStore,
-        graph.notificationStore, graph.screensaverStore, graph.securityStore,
-        graph.subtitleLanguageStore, graph.syncPlayCastStore, graph.experimentalStore,
-        graph.volumeProfileStore, graph.appRuntimeStateStore,
+        stores = graph.preferenceStores,
+        appRuntimeState = graph.appRuntimeStateStore,
     )
 }

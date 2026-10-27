@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
@@ -42,7 +42,7 @@ class DesktopDownloadIntakeTest {
 
     private val delegate: DownloadDelegate = mockk()
     private val downloadRepository: DownloadRepository = mockk()
-    private val mediaRepository: MediaRepository = mockk()
+    private val detailFeed: DetailFeed = mockk()
     private val downloadsStore: DownloadsStore = mockk {
         every { downloads } returns MutableStateFlow(
             DownloadsSlice(downloadQuality = DownloadQuality.HIGH_1080P),
@@ -51,7 +51,7 @@ class DesktopDownloadIntakeTest {
     private val intake = DesktopDownloadIntake(
         delegate = delegate,
         downloadRepository = downloadRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         downloadsStore = downloadsStore,
     )
 
@@ -65,7 +65,7 @@ class DesktopDownloadIntakeTest {
     @Test
     fun `flipTrack starts the resolved detail at the default quality`() = runTest {
         val detail = trackDetail()
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("track-1", force = false) } returns Result.success(detail)
         coEvery { delegate.startOne(detail, 8_000_000, null, null) } returns
             DownloadResult(downloadItem = mockk(), error = null)
 
@@ -77,7 +77,7 @@ class DesktopDownloadIntakeTest {
 
     @Test
     fun `flipTrack skips without starting when the detail cannot be resolved`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns
+        coEvery { detailFeed.getMediaDetail("track-1", force = false) } returns
             Result.failure(RuntimeException("offline"))
 
         val result = intake.flipTrack("track-1")
@@ -89,7 +89,7 @@ class DesktopDownloadIntakeTest {
     @Test
     fun `flipTrack folds a start with no usable media source into Skipped`() = runTest {
         val detail = trackDetail()
-        coEvery { mediaRepository.getMediaDetail("track-1") } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("track-1", force = false) } returns Result.success(detail)
         coEvery { delegate.startOne(detail, 8_000_000, null, null) } returns
             DownloadResult(downloadItem = null, error = "No media source available for download")
 

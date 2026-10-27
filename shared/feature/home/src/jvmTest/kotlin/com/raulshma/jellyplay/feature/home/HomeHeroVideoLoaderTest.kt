@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -34,14 +34,14 @@ class HomeHeroVideoLoaderTest {
 
     private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
     private var nowMs = 1_000_000L
 
     private fun buildLoader(ttlMs: Long = HomeHeroVideoLoader.DEFAULT_TTL_MS) = HomeHeroVideoLoader(
         libraryApiClient = libraryApiClient,
         playbackRepository = playbackRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         seerrRepository = seerrRepository,
         clock = { nowMs },
         ttlMs = ttlMs,
@@ -59,7 +59,7 @@ class HomeHeroVideoLoaderTest {
     }
 
     private fun stubTrailerKey(itemId: String, mediaType: MediaType, tmdbId: Int?, key: String?) {
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns
             Result.success(MediaDetail(item = item(itemId), providerIds = tmdbId?.let { mapOf("tmdb" to it.toString()) } ?: emptyMap()))
         if (tmdbId != null && key != null) {
             coEvery { seerrRepository.getTmdbVideos(tmdbId, mediaType) } returns
@@ -75,7 +75,7 @@ class HomeHeroVideoLoaderTest {
         val clip = loader.heroClip("m1", MediaType.MOVIE)
 
         assertEquals(HomeHeroVideoLoader.HeroClip.ThemeVideo("https://stream/clip1"), clip)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     @Test
@@ -94,13 +94,13 @@ class HomeHeroVideoLoaderTest {
         val loader = buildLoader()
 
         assertNull(loader.heroClip("e1", MediaType.EPISODE))
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     @Test
     fun nonYouTubeVideos_neverYieldAnEmbedKey() = runTest {
         stubClip("m1", clipId = null)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns
+        coEvery { detailFeed.getMediaDetail("m1", force = false) } returns
             Result.success(MediaDetail(item = item("m1"), providerIds = mapOf("tmdb" to "123")))
         coEvery { seerrRepository.getTmdbVideos(123, MediaType.MOVIE) } returns
             Result.success(listOf(SeerrRelatedVideo(key = "v1", site = "Vimeo")))
@@ -147,7 +147,7 @@ class HomeHeroVideoLoaderTest {
         nowMs += HomeHeroVideoLoader.DEFAULT_TTL_MS - 1
         assertNull(loader.heroClip("m1", MediaType.MOVIE))
         coVerify(exactly = 1) { libraryApiClient.getThemeVideos("m1") }
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("m1") }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("m1", force = false) }
     }
 
     @Test

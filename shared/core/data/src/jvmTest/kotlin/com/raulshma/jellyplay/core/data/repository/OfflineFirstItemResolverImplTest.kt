@@ -21,7 +21,7 @@ import kotlin.test.assertNull
  * Pins [OfflineFirstItemResolverImpl]'s three-branch resolution:
  *  1. an offline (downloaded) row always wins, and its stored poster path is
  *     used verbatim (a local file path, not a server URL);
- *  2. an online-only item falls back to `mediaRepository.getMediaDetail` —
+ *  2. an online-only item falls back to `detailFeed.getMediaDetail` —
  *     but ONLY while the device is online (offline, the guaranteed-failing
  *     call is skipped);
  *  3. when nothing resolves anywhere, a null item ref with the server poster
@@ -30,7 +30,7 @@ import kotlin.test.assertNull
 class OfflineFirstItemResolverImplTest {
 
     private lateinit var offlineRepository: OfflineRepository
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var resolver: OfflineFirstItemResolverImpl
@@ -38,14 +38,14 @@ class OfflineFirstItemResolverImplTest {
     @BeforeTest
     fun setup() {
         offlineRepository = mockk()
-        mediaRepository = mockk()
+        detailFeed = mockk()
         offlineModeManager = mockk()
         imageUrlProvider = mockk()
         every { offlineModeManager.offlineMode } returns MutableStateFlow(OfflineMode.ONLINE)
         every { imageUrlProvider.getImageUrl(any()) } returns "https://server/Items/$ITEM_ID/Images/Primary"
         resolver = OfflineFirstItemResolverImpl(
             offlineRepository = offlineRepository,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             offlineModeManager = offlineModeManager,
             imageUrlProvider = imageUrlProvider,
         )
@@ -60,7 +60,7 @@ class OfflineFirstItemResolverImplTest {
 
         assertNotNull(ref.item)
         assertEquals("/data/posters/i1.jpg", ref.posterUrl)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
@@ -77,7 +77,7 @@ class OfflineFirstItemResolverImplTest {
     @Test
     fun `an online-only item resolves through the media repository`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns null
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = false) } returns Result.success(
             detailFixture(),
         )
 
@@ -90,7 +90,7 @@ class OfflineFirstItemResolverImplTest {
     @Test
     fun `a failed online lookup still yields a poster-only ref`() = runTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns null
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID) } returns
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = false) } returns
             Result.failure(java.io.IOException("gone"))
 
         val ref = resolver.resolveMediaRef(ITEM_ID)
@@ -108,7 +108,7 @@ class OfflineFirstItemResolverImplTest {
         val ref = resolver.resolveMediaRef(ITEM_ID)
 
         assertNull(ref.item)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     private fun detailFixture() = com.raulshma.jellyplay.core.model.MediaDetail(

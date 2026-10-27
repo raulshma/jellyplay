@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -41,15 +41,15 @@ class CastAndCrewViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: CastAndCrewViewModel
 
     @BeforeTest
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
-        viewModel = CastAndCrewViewModel(mediaRepository, imageUrlProvider, ArtworkUrls.EMPTY)
+        viewModel = CastAndCrewViewModel(detailFeed, imageUrlProvider, ArtworkUrls.EMPTY)
     }
 
     @Test
@@ -61,7 +61,7 @@ class CastAndCrewViewModelTest {
     fun `load success partitions cast and crew`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val person = MediaItem(id = "m1", name = "Movie 1", mediaType = MediaType.MOVIE)
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(
             MediaDetail(
                 item = person,
                 people = listOf(
@@ -85,20 +85,20 @@ class CastAndCrewViewModelTest {
     @Test
     fun `load failure emits Error and calls the repository exactly once`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(RuntimeException("boom"))
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException("boom"))
 
         viewModel.load("m1")
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value is CastAndCrewUiState.Error)
         // Retry is owned by the data layer; this layer must not re-issue calls.
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("m1") }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("m1", any()) }
     }
 
     @Test
     fun `load failure with null message falls back to the generic error`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(IllegalStateException())
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(IllegalStateException())
 
         viewModel.load("m1")
         advanceUntilIdle()
@@ -111,7 +111,7 @@ class CastAndCrewViewModelTest {
     @Test
     fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "m1", name = "Movie 1", mediaType = MediaType.MOVIE),
                 people = listOf(PersonInfo(id = "p1", name = "Actor", type = "Actor")),
@@ -125,7 +125,7 @@ class CastAndCrewViewModelTest {
         // A second load for another item must flip back to Loading first — the
         // previous title's cast must never bleed into the new screen.
         val gate = kotlinx.coroutines.CompletableDeferred<Result<MediaDetail>>()
-        coEvery { mediaRepository.getMediaDetail("m2") } coAnswers { gate.await() }
+        coEvery { detailFeed.getMediaDetail("m2", any()) } coAnswers { gate.await() }
         viewModel.load("m2")
         advanceUntilIdle()
 

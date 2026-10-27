@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -54,7 +54,8 @@ data class NextUpExcludedUiState(
 class NextUpExcludedViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
@@ -95,7 +96,7 @@ class NextUpExcludedViewModel(
         scope = scope,
         concurrency = 1,
         retry = IdEnricher.Retry.NEVER,
-        fetch = { id -> mediaRepository.getMediaDetail(id).getOrNull()?.item },
+        fetch = { id -> detailFeed.getMediaDetail(id, force = false).getOrNull()?.item },
         merge = { id, item ->
             resolvedItems[id] = item
             publish(publishedIds, loading = false)

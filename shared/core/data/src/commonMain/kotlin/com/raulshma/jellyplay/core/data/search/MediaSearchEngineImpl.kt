@@ -1,13 +1,14 @@
 package com.raulshma.jellyplay.core.data.search
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -34,13 +35,14 @@ import kotlinx.coroutines.flow.map
 // legacy DataModule bridges the remaining Hilt injectors via koin().get()).
 //
 // promotion from jvmShared: every ctor dep is a commonMain interface/store
-// (MediaRepository / SeerrRepository / SearchHistoryRepository /
+// (LibraryFeed / SeerrRepository / SearchHistoryRepository /
 // ServerIdentityStore / ExperimentalStore / OfflineModeManager /
 // OfflineRepository), so the impl crosses verbatim. Its Koin single stays in
 // dataJvmModule.
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class MediaSearchEngineImpl(
-    private val mediaRepository: MediaRepository,
+    /** The browse/search family seam. */
+    private val libraryFeed: LibraryFeed,
     private val seerrRepository: SeerrRepository,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val serverIdentityStore: ServerIdentityStore,
@@ -166,7 +168,14 @@ class MediaSearchEngineImpl(
         swallowErrors {
             coroutineScope {
                 val jellyfinDeferred = async {
-                    swallowErrors { mediaRepository.search(query, limit = limit).getOrNull()?.items }
+                    swallowErrors {
+                        libraryFeed.search(
+                            query = query,
+                            filters = LibraryFilters(),
+                            limit = limit,
+                            startIndex = 0,
+                        ).getOrNull()?.items
+                    }
                         ?: emptyList()
                 }
                 val seerrDeferred = async {

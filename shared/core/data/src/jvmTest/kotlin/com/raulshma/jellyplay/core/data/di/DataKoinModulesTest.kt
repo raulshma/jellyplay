@@ -42,6 +42,8 @@ import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -198,6 +200,14 @@ class DataKoinModulesTest {
                 "UserDataChanges must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
+                koin.get<DetailFeed>() === koin.get<MediaRepository>(),
+                "DetailFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<CollectionOperations>() === koin.get<MediaRepository>(),
+                "CollectionOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
                 koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
                 "SeerrServiceDirectory must alias the SeerrRepositoryImpl single (one impl, two seams)",
             )
@@ -284,11 +294,10 @@ class DataKoinModulesTest {
             assertResolves<ContinueWatchingBroadcaster>(koin)
             assertResolves<LibrarySyncHook>(koin)
 
-            // ──  MediaRepository cluster flip ─────────────────────────
-            // The last Hilt-owned data cluster, now Koin-owned on BOTH
-            // platforms. MediaDetailProvider and its concrete impl resolve
-            // since the playback flips moved PlaybackSourceResolverImpl
-            // into dataJvmModule (Uri-free) — no longer latent on desktop.
+            // MediaRepository cluster: Koin-owned on both platforms.
+            // MediaDetailProvider and its concrete impl resolve through
+            // PlaybackSourceResolverImpl, which lives in dataJvmModule
+            // (Uri-free).
             val mediaRepository = koin.get<MediaRepository>()
             assertTrue(
                 koin.get<MediaRepositoryCacheInvalidation>() === mediaRepository,

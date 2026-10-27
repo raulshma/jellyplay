@@ -102,9 +102,7 @@ public class OfflineDownloadWriterCore(
 
     /**
      * Creates (or dedupes to) the PENDING downloads row for [request]. The
-     * former 15-positional-parameter override + internal forwarding twin
-     * collapsed into the [DownloadStartRequest] value object — the entity
-     * construction below is unchanged semantically.
+     * [DownloadStartRequest] value object carries the per-item inputs.
      */
     override suspend fun startDownload(request: DownloadStartRequest): Result<DownloadItem> =
         runCatchingRethrowingCancellation {
@@ -129,14 +127,13 @@ public class OfflineDownloadWriterCore(
         }
 
         val prefs = downloadsStore.downloads.first()
-        // Storage cap (MB + GB): single owner is StoragePolicy. Previously
-        // duplicated here and in downloadSeries; the two could drift.
+        // Storage cap (MB + GB): single owner is StoragePolicy, so
+        // startDownload and downloadSeries cannot drift.
         storagePolicy.enforce(precomputedCurrentBytes = request.precomputedCurrentBytes)
 
         // Path-layout policy (internal vs external dir, filename sanitize,
-        // container extension, free-space floor) lives in DownloadStorageLayout
-        // — previously inlined ~40 LOC in this method, unreachable from any
-        // other call site and untestable without a full repo construction.
+        // container extension, free-space floor) lives in DownloadStorageLayout,
+        // the one call site for every download.
         val id = UUID.randomUUID().toString()
         val resolved = storageLayout.resolve(
             mediaType = request.mediaType,
@@ -253,10 +250,8 @@ public class OfflineDownloadWriterCore(
      * into [artworkDir] as [DownloadArtifacts]-named sibling files, preferring
      * the local copy; a `null` path (no dir, no such image, or a failed fetch)
      * makes the caller fall back to the remote URL. The one home for the
-     * series-artwork grammar the two series paths previously hand-copied —
-     * the seedEpisodeParents copy even built the filenames from raw
-     * `"${seriesId}_poster.jpg"` literals, leaking the grammar out of
-     * [DownloadArtifacts] (identical strings, so this is a pure fold).
+     * series-artwork grammar both series paths share, so filenames come from
+     * [DownloadArtifacts] rather than raw string literals.
      */
     suspend fun downloadSeriesArtwork(seriesId: String, artworkDir: File?): SeriesArtwork {
         val posterPath = artworkDir?.let {
@@ -303,10 +298,8 @@ public class OfflineDownloadWriterCore(
      */
     suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
         // Metadata, playback, and freshness baseline each live in their own
-        // table now. A metadata re-persist (the resync PERSIST_METADATA step
-        // re-uses this) can no longer clobber the baseline — it's in
-        // `sync_baseline` — so the old "copy the sync columns forward" block is
-        // gone.
+        // table, so a metadata re-persist (the resync PERSIST_METADATA step
+        // re-uses this) cannot clobber the baseline in `sync_baseline`.
         val existingMeta = offlineMediaDao.getById(detail.item.id)
         database.withTransaction {
             offlineMediaDao.upsert(detail.toOfflineMediaEntity(imageUrl, backdropUrl))
@@ -374,7 +367,7 @@ public class OfflineDownloadWriterCore(
             // below — the same shape as a failed detail fetch on Android —
             // so episode downloads still seed their parent series/season
             // rows instead of aborting the whole metadata block.
-            val seriesDetail = runCatchingRethrowingCancellation { mediaRepository().getMediaDetail(seriesId) }
+            val seriesDetail = runCatchingRethrowingCancellation { mediaRepository().getMediaDetail(seriesId, force = false) }
                 .getOrNull()
                 ?.getOrNull()
             if (seriesDetail != null) {

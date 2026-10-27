@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.remote
 import com.raulshma.jellyplay.core.data.playback.AudioNowPlayingFace
 import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
@@ -53,7 +53,7 @@ class RemoteControlReceiverCommandsTest {
 
     private val webSocketClient: JellyfinWebSocketClient = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk()
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val videoDispatcher: VideoRemoteControlDispatcher = mockk(relaxed = true)
     private val audioDispatcher: AudioRemoteControlDispatcher = mockk(relaxed = true)
     private val uiDispatcher: UiRemoteControlDispatcher = mockk(relaxed = true)
@@ -62,8 +62,7 @@ class RemoteControlReceiverCommandsTest {
     private val bridge = RemoteNavigationBridge()
 
     /**
-     * The idle gate is the Now-playing verdict's [NowPlayingVerdict.isIdle]
-     * now (the former `engine == null && audioQueueManager…` restatement),
+     * The idle gate is the Now-playing verdict's [NowPlayingVerdict.isIdle],
      * so the harness drives a REAL verdict over the mocked registry and a
      * mutable audio face — the fold itself is pinned once in
      * NowPlayingVerdictTest, these tests keep pinning the receiver's gating.
@@ -95,13 +94,13 @@ class RemoteControlReceiverCommandsTest {
         // from the same flow the tests toggle via `security.value = …`.
         coEvery { securityStore.firstPersistedSecurity() } answers { security.value }
         every { activePlayerController.engine } returns null
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(IllegalStateException("down"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(IllegalStateException("down"))
     }
 
     private fun receiver() = RemoteControlReceiver(
         webSocketClient = webSocketClient,
         authRepository = authRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         videoDispatcher = videoDispatcher,
         audioDispatcher = audioDispatcher,
         uiDispatcher = uiDispatcher,

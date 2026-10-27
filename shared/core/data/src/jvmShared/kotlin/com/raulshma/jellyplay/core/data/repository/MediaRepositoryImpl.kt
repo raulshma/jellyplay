@@ -160,23 +160,26 @@ class MediaRepositoryImpl internal constructor(
      * flow [userDataChanges] merges beside the WS channel and the
      * [RecentLocalUserDataWrites] record the refresher's echo demotion
      * consults. A leaf single, so the write paths UPSTREAM of this
-     * repository's graph (PlayedStateSyncImpl, PlaybackRepositoryImpl)
-     * announce through it eagerly — the cycle-break the former
-     * `Lazy<MediaRepository>` deferrals performed, now without the lazies.
+     * repository's graph (PlayedStateSyncImpl, PlaybackRepositoryImpl) can
+     * announce through it eagerly, with no `Lazy<MediaRepository>` deferral
+     * needed.
      */
     private val userDataAnnouncer: UserDataAnnouncer,
 ) : MediaRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the music-catalogue and user-data-write families,
-    // the home-feed family, the user-data change feed and the library/browse
-    // family alongside the union — [MusicCatalogue] /
-    // [UserDataWriteOperations] / [HomeFeed] / [UserDataChanges] /
-    // [LibraryFeed].
+    // the home-feed family, the user-data change feed, the library/browse
+    // family, the detail-read family and the collection-verbs family
+    // alongside the union — [MusicCatalogue] / [UserDataWriteOperations] /
+    // [HomeFeed] / [UserDataChanges] / [LibraryFeed] / [DetailFeed] /
+    // [CollectionOperations].
     MusicCatalogue,
     UserDataWriteOperations,
     HomeFeed,
     UserDataChanges,
     LibraryFeed,
+    DetailFeed,
+    CollectionOperations,
     SeriesNotificationReads,
     MediaRepositoryCacheInvalidation,
     MediaCatalogueEnrichments,
@@ -472,13 +475,12 @@ class MediaRepositoryImpl internal constructor(
 
 
     init {
-        // Identity transitions are handled by [SessionCacheRegistry] (the
-        // single subscriber of HomeSession.transitions — previously this
-        // repo, EpisodeCatalogueImpl and HomeViewModel each maintained their
-        // own last-identity mirror over the separate server/user flows).
-        // This closes a privacy + correctness gap where the previous user's
-        // home sections / detail data was served for up to 10 minutes (the
-        // longest TTL) after `switchUser` or `switchServerAddress`.
+        // Identity transitions are handled by [SessionCacheRegistry], the
+        // single subscriber of HomeSession.transitions, so no component keeps
+        // its own last-identity mirror over separate server/user flows. This
+        // closes a privacy + correctness gap: without it the previous user's
+        // home sections / detail data could be served for up to 10 minutes
+        // (the longest TTL) after `switchUser` or `switchServerAddress`.
         //
         // Reaction rules (identical to the observer this replaces):
         //  - SignedIn            : NOTHING — session restore / first login;
@@ -818,8 +820,7 @@ class MediaRepositoryImpl internal constructor(
         }
 
     override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
-        // Collection edits self-invalidate — the detail screen used to
-        // compensate with a manual invalidateCollectionItemsCache call.
+        // Collection edits self-invalidate, so callers never invalidate by hand.
         collectionApiClient.createCollection(name, itemIds)
             .onSuccess { invalidateCollectionItemsCache(it) }
 
@@ -925,6 +926,25 @@ class MediaRepositoryImpl internal constructor(
         }
     }
 
+    /**
+     * The outbox drain's deep write ([UserDataWriteOperations.recordDrainedPlays]):
+     * the exact [markPlayed] per-item body, batched. Each flip keeps its
+     * announce-on-delivery (PlayedStateSync.flip announces the confirmed write
+     * from inside the online-success branch), so the drain-tail announce —
+     * which runs through the [userDataAnnouncer] leaf directly — never names
+     * a delivered derived flip twice (the drainer records the ids whose outbox
+     * probe reports delivery as self-announced). No per-item catch here: the
+     * flip's fallible collaborators are internally caught, so the only
+     * throwable is cancellation, which must propagate (the drain's contract).
+     */
+    override suspend fun recordDrainedPlays(itemIds: List<String>) {
+        for (itemId in itemIds) {
+            withUserDataMutationCacheInvalidation(itemId) {
+                playedStateSync.flip(itemId, played = true)
+            }
+        }
+    }
+
     override suspend fun markSeasonPlayed(seasonId: String, seriesId: String): Result<Unit> {
         // Season ids are never detail-cached, so the series-resolution inside
         // withUserDataMutationCacheInvalidation cannot discover the parent —
@@ -949,13 +969,11 @@ class MediaRepositoryImpl internal constructor(
      * detail-cached at all (e.g. season marks — seasons are never cached, so
      * the caller names the series).
      *
-     * ONE eviction, in the `finally`: the
-     * pre-mutation eviction this wrapper used to also run was redundant — the
-     * post-arm covers the write on BOTH outcomes (success and failure), and
-     * the pre-arm just doubled every invalidation ladder per write. The gap
-     * groups that cannot be evicted by key (album tracks, collection pages —
-     * see [albumTracksStale] / [collectionItemsStale]) arm their markers
-     * BEFORE the mutation — the marker records "a user-data write is in
+     * ONE eviction, in the `finally`: the post-arm covers the write on BOTH
+     * outcomes (success and failure), so no pre-arm eviction is needed. The
+     * gap groups that cannot be evicted by key (album tracks, collection
+     * pages - see [albumTracksStale] / [collectionItemsStale]) arm their
+     * markers BEFORE the mutation — the marker records "a user-data write is in
      * flight", which is true even if the write then fails. Arming is a
      * user-data statement, so it stays with this wrapper (and
      * [invalidateForUserDataChange]), not inside the eviction itself (which
@@ -1098,10 +1116,8 @@ class MediaRepositoryImpl internal constructor(
         // directly via homeSnapshotStore.clearIdentity() — see the init block above.
     }
 
-    //  Facade split: the three newsletter members that used to live here
-    // moved out over the narrow MediaInfoApiClient family seam (one-line
-    // forwards, nothing shared — the pass-through mirror later retired to the
-    // client family entirely).
+    // The three newsletter members delegate over the narrow MediaInfoApiClient
+    // family seam (one-line forwards, nothing shared).
 
     companion object {
         // The cache TTLs this repository used to declare as private literals

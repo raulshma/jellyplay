@@ -123,6 +123,54 @@ class NavDestinationRegistryTest {
     }
 
     @Test
+    fun primarySurfaces_pinPerSurfacePlacement() {
+        // The placement descriptor is what the TV drawer candidates, the
+        // desktop rail eligibility filter and the customization row fork
+        // derive from, so pin every row's effective set against today's
+        // behavior: bar tabs are primary everywhere; rail-only destinations
+        // default to the rail; Shortcuts is the one explicit deviation
+        // (TV-drawer primary, never a phone-bar tab).
+        val everywhere = setOf(
+            NavPrimarySurface.PhoneBar,
+            NavPrimarySurface.TvDrawer,
+            NavPrimarySurface.DesktopRail,
+        )
+        val railOnly = setOf(NavPrimarySurface.DesktopRail)
+        val expectedPlacements = mapOf(
+            Route.Home to everywhere,
+            Route.Library to everywhere,
+            Route.Search to everywhere,
+            Route.LiveTv to everywhere,
+            Route.MusicBrowse to everywhere,
+            Route.Shortcuts to setOf(NavPrimarySurface.TvDrawer, NavPrimarySurface.DesktopRail),
+            Route.Downloads to railOnly,
+            Route.Newsletter to railOnly,
+            Route.WatchProgressHeatmap to railOnly,
+            Route.SyncPlay to railOnly,
+            Route.Requests to railOnly,
+            Route.UpcomingCalendar to railOnly,
+            Route.ArrQueue to railOnly,
+            Route.Settings to railOnly,
+            Route.AdminDashboard to railOnly,
+        )
+        NAV_DESTINATIONS.forEach { row ->
+            assertEquals(
+                expectedPlacements[row.route],
+                row.primarySurfaces,
+                "${row.route::class.simpleName} carries unexpected primarySurfaces",
+            )
+        }
+        // Exactly one row deviates from the derived default — a second
+        // explicit placement must be a conscious registry decision.
+        assertEquals(
+            setOf(Route.Shortcuts),
+            NAV_DESTINATIONS.filter { it.topLevelGroups.isEmpty() && NavPrimarySurface.TvDrawer in it.primarySurfaces }
+                .map { it.route }.toSet(),
+            "only Shortcuts may be TV-drawer primary without being a bar tab",
+        )
+    }
+
+    @Test
     fun everyLabelOverrideTargetsARegisteredRoute() {
         // (b): an override whose key has no registry row would be dead at
         // best and a silent re-label of a route the registry doesn't know at

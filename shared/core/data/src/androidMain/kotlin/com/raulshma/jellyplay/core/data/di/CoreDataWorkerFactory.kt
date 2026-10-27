@@ -83,7 +83,8 @@ class CoreDataWorkerFactory : WorkerFactory() {
                         offlineModeManager = koin().get(),
                         playedStateSync = koin().get(),
                         offlineRepository = koin().get(),
-                        mediaRepository = koin().get(),
+                        userDataWrites = koin().get(),
+                        userDataAnnouncer = koin().get(),
                         cacheInvalidator = koin().get(),
                         userDataSyncTrigger = PlaybackOutboxDrainer.UserDataSyncTrigger {
                             koin().get<UserDataSyncScheduler>().enqueueNow()

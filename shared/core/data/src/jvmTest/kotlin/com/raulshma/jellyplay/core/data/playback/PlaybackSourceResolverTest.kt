@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -29,11 +29,9 @@ import kotlinx.coroutines.test.runTest
  * checks are exercised via `Files.createTempFile`, mirroring the
  * `PlaybackSourceTest` pattern in `:feature:player:video`.
  *
- * Moved from legacy `:core:data` JUnit4/Robolectric to shared kotlin.test
- * with the impl: no Robolectric needed anymore — the local URI is built with
- * `File.toURI()` (platform-free), which also retired the legacy module's
- * stubbed-`Uri` workaround (the old core:data preset stubbed Android
- * framework methods, which would NPE on `Uri.toString()`).
+ * Runs on shared kotlin.test with the impl: no Robolectric needed, because the
+ * local URI is built with `File.toURI()` (platform-free) - the stubbed-`Uri`
+ * workaround would NPE on `Uri.toString()` under a plain JVM preset.
  *
  * Together these cases lock the five inlined predicates the resolver replaces
  * (MainViewModel external-player launch, the audio trio's local-url fallback,
@@ -44,14 +42,14 @@ import kotlinx.coroutines.test.runTest
 class PlaybackSourceResolverTest {
 
     private val downloadRepository: DownloadRepository = mockk()
-    private val mediaRepository: MediaRepository = mockk()
+    private val detailFeed: DetailFeed = mockk()
     private val playbackRepository: PlaybackRepository = mockk()
     private val offlineRepository: OfflineRepository = mockk()
     private val offlinePlaybackFacade: OfflinePlaybackFacade = mockk()
 
     private val resolver = PlaybackSourceResolverImpl(
         downloadRepository,
-        mediaRepository,
+        detailFeed,
         playbackRepository,
         offlineRepository,
         offlinePlaybackFacade,
@@ -77,7 +75,7 @@ class PlaybackSourceResolverTest {
     @Test
     fun `resolvePlaybackSource no download resolves Stream via getMediaDetail`() = runTest {
         coEvery { downloadRepository.getDownloadByMediaItemId("item1") } returns null
-        coEvery { mediaRepository.getMediaDetail("item1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item1", force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "item1", name = "Movie Title", mediaType = MediaType.MOVIE),
                 mediaSources = listOf(MediaSource(id = "src1", name = "source")),
@@ -115,7 +113,7 @@ class PlaybackSourceResolverTest {
         // android.net.Uri.fromFile) — see the impl's URI-shape note.
         assertEquals(tempFile.toURI().toString(), local.uri)
         assertTrue(local.uri.startsWith("file:"))
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
         coVerify(exactly = 0) { playbackRepository.getStreamUrl(any(), any(), any()) }
     }
 
@@ -125,7 +123,7 @@ class PlaybackSourceResolverTest {
         // returns null → falls through to the server path (MainViewModel semantics).
         coEvery { downloadRepository.getDownloadByMediaItemId("item1") } returns
             downloadItem("/nonexistent/path/file.mp4")
-        coEvery { mediaRepository.getMediaDetail("item1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item1", force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE),
                 mediaSources = listOf(MediaSource(id = "src1", name = "s")),
@@ -144,7 +142,7 @@ class PlaybackSourceResolverTest {
         tempFile.deleteOnExit()
         coEvery { downloadRepository.getDownloadByMediaItemId("item1") } returns
             downloadItem(tempFile.absolutePath, status = DownloadStatus.DOWNLOADING)
-        coEvery { mediaRepository.getMediaDetail("item1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item1", force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE),
                 mediaSources = emptyList(),
@@ -160,7 +158,7 @@ class PlaybackSourceResolverTest {
     @Test
     fun `resolvePlaybackSource getMediaDetail failure returns null`() = runTest {
         coEvery { downloadRepository.getDownloadByMediaItemId("item1") } returns null
-        coEvery { mediaRepository.getMediaDetail("item1") } returns Result.failure(RuntimeException("boom"))
+        coEvery { detailFeed.getMediaDetail("item1", force = false) } returns Result.failure(RuntimeException("boom"))
 
         val resolved = resolver.resolvePlaybackSource("item1", null, 0L)
 
@@ -170,7 +168,7 @@ class PlaybackSourceResolverTest {
     @Test
     fun `resolvePlaybackSource prefers explicit mediaSourceId over first`() = runTest {
         coEvery { downloadRepository.getDownloadByMediaItemId("item1") } returns null
-        coEvery { mediaRepository.getMediaDetail("item1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item1", force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE),
                 mediaSources = listOf(
@@ -250,7 +248,7 @@ class PlaybackSourceResolverTest {
         assertEquals(tempFile.toURI().toString(), local.uri)
         assertTrue(local.uri.startsWith("file:"))
         // No server round-trip on the local-only path.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     // ── resolveStartPositionTicks ───────────────────────────────────────────

@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.download
 import android.content.Context
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 
@@ -17,12 +17,12 @@ class DownloadIntakeImpl(
     context: Context,
     delegate: DownloadDelegate,
     downloadRepository: DownloadRepository,
-    mediaRepository: MediaRepository,
+    detailFeed: DetailFeed,
     downloadsStore: DownloadsStore,
 ) : DownloadIntakeBody(
     delegate = delegate,
     downloadRepository = downloadRepository,
-    mediaRepository = mediaRepository,
+    detailFeed = detailFeed,
     downloadsStore = downloadsStore,
     noSourceError = { context.getString(R.string.data_no_media_source_download) },
 )

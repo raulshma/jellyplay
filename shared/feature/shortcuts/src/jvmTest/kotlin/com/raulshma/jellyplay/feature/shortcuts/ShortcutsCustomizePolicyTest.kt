@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.shortcuts
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.feature.shortcuts.customize.ShortcutsCustomizePolicy
 import io.mockk.mockk
 import org.jetbrains.compose.resources.StringResource
@@ -127,8 +128,36 @@ class ShortcutsCustomizePolicyTest {
         val kept = ShortcutsCustomizePolicy.prune(
             definitions = listOf(screenDef("a", "Downloads"), screenDef("x", "NotARealScreen")),
             catalog = catalog,
+            supportedActions = ShortcutAction.entries.toSet(),
         )
         assertEquals(listOf("a"), kept.map { it.id })
+    }
+
+    @Test
+    fun `capability prune drops unsupported action definitions, never screen ones`() {
+        val definitions = listOf(
+            ShortcutDefinition("s", ShortcutTargetKind.ACTION, ShortcutAction.SURPRISE_ME.id),
+            ShortcutDefinition("p", ShortcutTargetKind.ACTION, ShortcutAction.PLAY_ON.id),
+            ShortcutDefinition("o", ShortcutTargetKind.ACTION, ShortcutAction.TOGGLE_OFFLINE.id),
+            screenDef("a", "Downloads"),
+        )
+        val kept = ShortcutsCustomizePolicy.prune(
+            definitions = definitions,
+            catalog = catalog,
+            supportedActions = setOf(ShortcutAction.SURPRISE_ME, ShortcutAction.TOGGLE_OFFLINE),
+        )
+        // PLAY_ON is outside the set (the desktop shell's shape); screens never gate.
+        assertEquals(listOf("s", "o", "a"), kept.map { it.id })
+        assertEquals(definitions, ShortcutsCustomizePolicy.prune(definitions, catalog, ShortcutAction.entries.toSet()))
+    }
+
+    @Test
+    fun `executable gates only action entries outside the supported set`() {
+        val surpriseEntry = catalog.entries.first { it.isAction }
+        val screenEntry = catalog.entries.first { !it.isAction }
+        assertTrue(ShortcutsCustomizePolicy.executable(surpriseEntry, setOf(ShortcutAction.SURPRISE_ME)))
+        assertFalse(ShortcutsCustomizePolicy.executable(surpriseEntry, setOf(ShortcutAction.TOGGLE_OFFLINE)))
+        assertTrue(ShortcutsCustomizePolicy.executable(screenEntry, emptySet()))
     }
 
     @Test

@@ -13,7 +13,15 @@ import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
 import com.raulshma.jellyplay.core.datastore.cancelGraphInitCollectors
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeHeroStyle
+import com.raulshma.jellyplay.core.model.HomeLayoutConfig
+import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -324,6 +332,86 @@ class HomeDiscoverySpecDerivationTest {
         corrupt[stringPreferencesKey("u_u::home_mode")] = "nonsense"
         assertEquals(HomeMode.VIDEO, HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(corrupt, "u"))
         assertEquals(HomeMode.VIDEO, HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(emptyPreferences(), "u"))
+    }
+
+    // ------------------------------------------------------------------
+    // The slice rows (the read-projection + restore derivation)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `the slice rows are exactly the slice-bound rows, in all order`() {
+        // The five rows a per-row fold cannot serve, each documented on its
+        // row: the enabled-set pair (the version-union decode and its
+        // restore-side stamp read/write BOTH keys as one fold and fill THREE
+        // slice fields), the hidden-library migration source, and the two
+        // global markers (outside every namespace, never slice fields).
+        val nonSliceRows = setOf(
+            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES,
+            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_VERSION,
+            HomeDiscoveryPreferenceSpecs.HOME_HIDDEN_LIBRARY_SECTION_IDS,
+            HomeDiscoveryPreferenceSpecs.HOME_NS_MIGRATED,
+            HomeDiscoveryPreferenceSpecs.HOME_V3_UPGRADE_BASELINE_DONE,
+        )
+        assertEquals(
+            HomeDiscoveryPreferenceSpecs.all.filterNot { it in nonSliceRows },
+            HomeDiscoveryPreferenceSpecs.sliceRows.map { it.spec },
+        )
+    }
+
+    @Test
+    fun `restore writes and the projection reads every slice row`() = runTest {
+        // Whole-derivation pin: restore → re-read must reproduce the slice
+        // field-for-field over every derived row (non-default probe values
+        // everywhere). The enabled-set stamp fields carry their defaults —
+        // restore stamps CURRENT through the write fold, so a re-read serves
+        // the persisted set at the current stamp with no union contribution.
+        activate("userA")
+        val probe = HomeDiscoverySlice(
+            homeMode = HomeMode.MUSIC,
+            homeHeroEnabled = false,
+            homeHeroStyle = HomeHeroStyle.SLIDESHOW,
+            homeHeroSlideshowIntervalSec = 42,
+            homeHeroVideoEnabled = true,
+            homeHeroVideoTvEnabled = true,
+            homeBackdropEnabled = false,
+            homeFocusBackdrop = true,
+            homeStatsCard = true,
+            homeGenreRail = true,
+            homePresenceChips = true,
+            homeNewSectionAnnouncements = false,
+            homeSectionOrder = HomeSectionType.CONFIGURABLE.reversed(),
+            libraryHomeSectionOverrides = mapOf("lib1" to setOf(HomeSectionType.LATEST_MEDIA)),
+            pinnedHomeSections = listOf(PinnedHomeSection(PinnedSectionType.COLLECTION, "col1", "Movies")),
+            discoverRows = listOf(DiscoverRowConfig(id = "dr1", title = "Space")),
+            homeLayoutPresets = listOf(HomeLayoutPreset(id = "p1", name = "Preset", config = HomeLayoutConfig())),
+            homeLayoutAutopush = true,
+            continueWatchingClickBehavior = ContinueWatchingClickBehavior.PLAY,
+            showUnwatchedBadge = false,
+            hideWatchedItems = true,
+            showWatchedCheckmark = false,
+            showExternalRatings = false,
+            showQualityBadges = false,
+            showNewBadges = false,
+            homeTrickplayPreview = false,
+            antiSpoilerHome = true,
+            mergeContinueWatchingAndNextUp = true,
+            nextUpMaxDays = 7,
+            nextUpRewatching = true,
+            classicRows = true,
+            excludeActiveSessions = true,
+            nextUpExcludedSeriesIds = setOf("s1"),
+            hiddenCwItemIds = setOf("i1"),
+            lastViewedSeasonBySeries = mapOf("se1" to "sn1"),
+            myMediaHiddenLibraryIds = setOf("lib1"),
+            themeMusicMutedSeriesIds = setOf("se1"),
+            homeLastVisitEpochMs = 1234L,
+            homeAnnouncedVersion = 2,
+            showClockOnHome = true,
+            showSettingsInHomeSearch = false,
+            hideTopHeaderOnScroll = true,
+        )
+        store.restore(probe)
+        assertEquals(probe, store.read(raw()))
     }
 
     // ------------------------------------------------------------------

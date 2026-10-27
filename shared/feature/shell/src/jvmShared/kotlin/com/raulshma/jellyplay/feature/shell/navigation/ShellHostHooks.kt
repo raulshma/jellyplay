@@ -52,22 +52,25 @@ class ShellHostHooks(
  *   Only the Android shell has a cast strategy to adapt; shells without one
  *   keep null (no redirect offered).
  * @param surpriseRequests homeSection's "Surprise Me" signal flow, armed from
- *   the Android launcher-shortcut intent. Shells without the seam pass
+ *   the Android launcher-shortcut intent and the desktop's own Surprise Me
+ *   shell action. Shells without the seam pass
  *   [kotlinx.coroutines.flow.emptyFlow] (an identity-stable singleton).
+ * @param shortcutActions the shell's shortcut-action execution surface
+ *   ([ShortcutActionSurface]) — the ONE dispatcher for the header shortcut
+ *   actions (Surprise Me / Play On / offline toggle) behind every action
+ *   surface: the home dock's header pills, the Android overflow menu's action
+ *   fold, and — through [ShortcutActionSurface.supportedActions] — the
+ *   shortcuts-customize editor's picker. Required, with no default: a shell
+ *   that cannot run an action arms the surface accordingly (null arm) instead
+ *   of passing a silent no-op lambda — a shell must never make a pinned
+ *   action click do nothing.
  */
 data class ShellHomeHooks(
     val homeMode: HomeMode,
     val onHomeModeChange: (HomeMode) -> Unit,
     val playOnRedirect: HomePlayOnRedirect?,
     val surpriseRequests: Flow<Unit>,
-    /**
-     * Executes a header shortcut's shell action (Surprise Me / Play On /
-     * offline toggle) — the same handlers the overflow menu's action pills
-     * use, supplied per shell (Android: MainViewModel + the Play On sheet
-     * trigger; desktop: its own equivalents). Default no-op keeps shells
-     * without a handler compiling; the action pill simply does nothing.
-     */
-    val onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit = {},
+    val shortcutActions: ShortcutActionSurface,
 )
 
 /**

@@ -165,6 +165,13 @@ internal data class ArtworkCallbacks(
     val urls: ArtworkUrls = ArtworkUrls.EMPTY,
     /** Resolves a chapter thumbnail URL (imageType = Chapter) by list index + tag. */
     val getChapterImageUrl: (itemId: String, imageIndex: Int, tag: String?) -> String = { _, _, _ -> "" },
+    /**
+     * The RAW untagged backdrop getter (the VM's `getBackdropUrl` read) — the
+     * parent-series leg of the backdrop fold (an id this scope holds no
+     * MediaItem for, so [urls] cannot resolve it) and the pre-load window.
+     * Item-backed ids go through [urls]; only bare ids land here.
+     */
+    val getBackdropUrl: (itemId: String) -> String = { _ -> "" },
 )
 
 /**

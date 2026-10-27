@@ -51,7 +51,7 @@ class AudioPlaybackManagerDuckTest {
 
     private val manager: AudioPlaybackManager = AudioPlaybackManager(
         context = ApplicationProvider.getApplicationContext(),
-        mediaRepository = mockk(relaxed = true),
+        detailFeed = mockk(relaxed = true),
         libraryBrowser = mockk(relaxed = true),
         playbackRepository = mockk(relaxed = true),
         imageUrlProvider = mockk(relaxed = true),

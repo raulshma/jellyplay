@@ -120,21 +120,17 @@ internal val dataSessionPlaybackModule: Module = module {
 
     single { QueuePersistenceHelper(get()) }
 
-    // Playback flips: the sleep-timer countdown (then SleepTimerManager) moved
-    // from the legacy :core:data shim — SystemClock.elapsedRealtime became the
-    // TimeSource seam above, and the sleep-timer fold later collapsed that
-    // manager into the commonMain [SleepCountdown] core (the alias
-    // AudioSleepTimerManager interface died with it: every host — video VM,
-    // audio VM, both queue managers, the reader — resolves THIS single, whose
-    // clock binds the same TimeSource single, so the wall-clock timing model
-    // is unchanged). The audio/live player VMs resolve this single through
-    // Koin directly since their migrations; legacy core:data's
-    // AudioPlaybackManager resolves this single from androidCoreDataModule.
+    // Playback flips: the sleep-timer countdown lives in the commonMain
+    // [SleepCountdown] core; every host - video VM, audio VM, both queue
+    // managers, the reader - resolves THIS single, whose clock binds the same
+    // TimeSource single, so one wall-clock timing model covers all of them. The
+    // audio/live player VMs resolve this single through Koin directly; the
+    // androidMain AudioPlaybackManager resolves it from androidCoreDataModule.
     single {
         SleepCountdown(
             clock = SleepCountdownClock { get<TimeSource>().nowElapsedRealtimeMillis() },
             // Explicit scope injection, the same applicationScope the sibling
-            // singles here receive: the production single no longer falls
+            // singles here receive, so the production single never falls
             // back to the class's self-created scope (the reader and the
             // tests keep that default-parameter behavior). The countdown's
             // expiry/ramp callbacks only call engine methods, and the engines
@@ -202,7 +198,7 @@ internal val dataSessionPlaybackModule: Module = module {
     // graph is pure Koin from OfflineSyncManager down.
     single {
         OfflineSyncManager(
-            mediaRepository = get(),
+            detailFeed = get(),
             writer = get<DownloadRepository>(),
             downloadRepository = get(),
             offlineMediaDao = get(),

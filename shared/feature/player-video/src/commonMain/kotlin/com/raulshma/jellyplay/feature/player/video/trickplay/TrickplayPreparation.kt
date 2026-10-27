@@ -1,14 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video.trickplay
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import java.io.File
 
 /**
- * Owns the trickplay three-way selection for the session load spine (formerly
- * ~45 inline lines in the ViewModel's `initializeTrickplayForItem`):
+ * Owns the trickplay three-way selection for the session load spine:
  *
  *  1. The resolved [MediaSource] carries the server manifest → stream tiles
  *     from the server, or cache them next to the download when the item plays
@@ -21,31 +20,29 @@ import java.io.File
  *
  * [prepare] returns the [TrickplayInfo] the [controller] was initialized
  * with (null when no arm produced one), so the caller surfaces exactly one
- * uiState write per successful arm. The arms are mutually exclusive, so the
- * former three inline writes collapse into that single conditional write
- * with the same observable outcome.
+ * uiState write per successful arm; the arms are mutually exclusive, so one
+ * conditional write covers all three.
  *
- * **Directory derivation** — the three former derivations disagreed; this
- * class is now their single home:
+ * **Directory derivation** - this class is the single home:
  *  - The cache arms (1 and 3) derive the download's trickplay dir once,
  *    un-scoped: `<download file's parent>/trickplay`
- *    ([downloadTrickplayDir]) — the exact path the former inline VM code
- *    used for both cache dispatches.
- *  - The local-bundle arm (2) keeps
+ *    ([downloadTrickplayDir]), used for both cache dispatches.
+ *  - The local-bundle arm (2) uses
  *    [OfflineTrickplayHelper.getLocalTrickplayDir]'s scoped-aware resolution
- *    (`trickplay_<itemId>` preferred, legacy un-scoped fallback), and its
- *    read ([OfflineTrickplayHelper.loadLocalTrickplayInfo]) uses the same
- *    resolution. That IS the former effective behavior: the download
- *    pipeline ([com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
- *    .trickplayDir]) writes the item-scoped dir for every modern download,
- *    so read and dispatch must agree on it. The un-scoped path remains the
- *    legacy fallback and the target arm 3 caches into (which arm 2 then
- *    finds via that same fallback on the next session).
+ *    (`trickplay_<itemId>` preferred, un-scoped fallback), and its read
+ *    ([OfflineTrickplayHelper.loadLocalTrickplayInfo]) uses the same
+ *    resolution. The download pipeline
+ *    ([com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
+ *    .trickplayDir]) writes the item-scoped dir for every download,
+ *    so read and dispatch must agree on it. The un-scoped path is the
+ *    fallback and the target arm 3 caches into (which arm 2 then finds on
+ *    the next session).
  */
 internal class TrickplayPreparation(
     private val controller: TrickplayController,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
 ) {
 
     /**
@@ -83,7 +80,7 @@ internal class TrickplayPreparation(
         // fetch failed or the server had none). Fetch the server's manifest
         // and cache fetched tiles into the download's trickplay dir so the
         // next offline session reads them locally via arm 2.
-        val serverInfo = mediaRepository.getMediaDetail(itemId)
+        val serverInfo = detailFeed.getMediaDetail(itemId, force = false)
             .getOrNull()
             ?.mediaSources
             ?.firstOrNull()

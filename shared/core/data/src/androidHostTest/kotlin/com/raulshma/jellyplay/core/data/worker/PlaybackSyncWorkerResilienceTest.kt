@@ -13,7 +13,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -61,7 +62,8 @@ class PlaybackSyncWorkerResilienceTest {
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val userDataSyncScheduler: UserDataSyncScheduler = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataWrites: UserDataWriteOperations = mockk(relaxed = true)
+    private val userDataAnnouncer: UserDataAnnouncer = mockk(relaxed = true)
     private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
 
     @Before
@@ -79,8 +81,7 @@ class PlaybackSyncWorkerResilienceTest {
         coEvery { outbox.hasUnsyncedUnplayedIntent(any()) } returns false
         coEvery { offlineRepository.getOfflineItem(any()) } returns null
         coEvery { outbox.isPlayedStateIntentDelivered(any(), any()) } returns true
-        coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
-        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
+                coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
             PlayedStateSync.ReconcileOutcome.NoChange
     }
 
@@ -106,7 +107,8 @@ class PlaybackSyncWorkerResilienceTest {
                             offlineModeManager = offlineModeManager,
                             playedStateSync = playedStateSync,
                             offlineRepository = offlineRepository,
-                            mediaRepository = mediaRepository,
+                            userDataWrites = userDataWrites,
+                            userDataAnnouncer = userDataAnnouncer,
                             cacheInvalidator = cacheInvalidator,
                             userDataSyncTrigger = PlaybackOutboxDrainer.UserDataSyncTrigger {
                                 userDataSyncScheduler.enqueueNow()

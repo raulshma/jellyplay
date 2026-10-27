@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -148,26 +149,28 @@ class StorageSettingsViewModelTest {
     private fun realEditor(): PreferencesEditor = PreferencesEditor(
         scope = CoroutineScope(testDispatcher + Job()),
         editScope = PreferencesEditScope(
-            playback = playbackStore,
-            appearance = appearanceStore,
-            videoPlayer = videoPlayerStore,
-            downloads = downloadsStore,
-            engine = engineStore,
-            homeDiscovery = homeDiscoveryStore,
-            audio = audioStore,
-            audioEffects = audioEffectsStore,
-            audioCache = audioCacheStore,
-            library = libraryStore,
-            navigation = navigationStore,
-            shortcuts = mockk(relaxed = true),
-            networkOffline = networkOfflineStore,
-            notification = notificationStore,
-            screensaver = screensaverStore,
-            security = securityStore,
-            subtitle = subtitleLanguageStore,
-            syncPlayCast = syncPlayCastStore,
-            experimental = experimentalStore,
-            volumeProfile = mockk(relaxed = true),
+            stores = PreferenceStores(
+                playback = playbackStore,
+                videoPlayer = videoPlayerStore,
+                engine = engineStore,
+                subtitle = subtitleLanguageStore,
+                audio = audioStore,
+                audioEffects = audioEffectsStore,
+                audioCache = audioCacheStore,
+                appearance = appearanceStore,
+                homeDiscovery = homeDiscoveryStore,
+                library = libraryStore,
+                navigation = navigationStore,
+                shortcuts = mockk(relaxed = true),
+                downloads = downloadsStore,
+                networkOffline = networkOfflineStore,
+                notification = notificationStore,
+                syncPlayCast = syncPlayCastStore,
+                security = securityStore,
+                experimental = experimentalStore,
+                screensaver = screensaverStore,
+                volumeProfile = mockk(relaxed = true),
+            ),
             appRuntimeState = appRuntimeStateStore,
         ),
         store = userPreferencesStore,

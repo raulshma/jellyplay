@@ -291,7 +291,7 @@ class AudioStateProjectionTest {
     private fun newViewModel(): AudioPlayerViewModel {
         val projections = mockk<com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections>(relaxed = true)
         val audioEffectsStore = mockk<com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore>(relaxed = true)
-        val mediaRepository = mockk<com.raulshma.jellyplay.core.data.repository.MediaRepository>(relaxed = true)
+        val detailFeed = mockk<com.raulshma.jellyplay.core.data.repository.DetailFeed>(relaxed = true)
         val playlistRepository = mockk<com.raulshma.jellyplay.core.data.repository.PlaylistRepository>(relaxed = true)
         val userDataMutator = mockk<com.raulshma.jellyplay.core.data.repository.UserDataMutator>(relaxed = true)
         val downloads = mockk<com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow>(relaxed = true)
@@ -311,7 +311,7 @@ class AudioStateProjectionTest {
             projections = projections,
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloads = downloads,

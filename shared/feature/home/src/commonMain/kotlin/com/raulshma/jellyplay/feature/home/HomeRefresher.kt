@@ -28,7 +28,6 @@ import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -38,7 +37,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -54,7 +52,8 @@ import kotlin.time.TimeSource
  * Holding this policy in one module keeps interleaved machinery — a [Mutex]
  * plus a replaceable refresh [Job], the `lastRefreshTime` clock shared by the
  * throttle/staleness rules, a foreground/background-jittered `while(true)`
- * loop, a debounced server-push collector, a discover TTL gate, and the
+ * loop, the debounced server-push reaction (since delegated to
+ * [HomeUserDataReactor]), a discover TTL gate, and the
  * `_uiState` writes of the fetch fan-out — from re-spreading across
  * [HomeViewModel]: testing any of it there would need the whole VM
  * (Robolectric, ProcessLifecycleOwner, a `while(true)` loop leaking past test
@@ -68,7 +67,7 @@ import kotlin.time.TimeSource
  *    patches cross the seam through [patchItems], never a direct write),
  *    the refresh clock (one clock, one owner — failed/offline attempts
  *    still count as fresh), job choreography, cadence + jitter, discover
- *    TTL, the user-data-push debounce/throttle/deferral chain, and the
+ *    TTL, the fetch arm of the user-data-push reaction, and the
  *    offline transitions (the offline-mode mirror plus the offline→online
  *    reconnect handshake: full-screen loader, outbox drain, capped fetch.
  *    The going-online busy flag itself is NOT here —
@@ -80,7 +79,14 @@ import kotlin.time.TimeSource
  *    discover/arr side-fetch BODIES are delegated to [HomeDiscoverSources]
  *    (a factory-owned collaborator — a new side-effect dependency widens
  *    that class and the factory, not this constructor); the refresher keeps
- *    the fetch-group schedule and await points that call them.
+ *    the fetch-group schedule and await points that call them. The
+ *    user-data-push REACTION CHAIN (the debounced collector, the
+ *    pending-flush latch, the throttle deferral, the echo/push demotion) is
+ *    delegated to [HomeUserDataReactor] (constructed inside — same scope,
+ *    change feed and write-log this class already holds; the refresher
+ *    keeps the flush's fetch — the replaced refresh job, the epoch bump and
+ *    the raced-sync flag the handshake arms — behind the reactor's narrow
+ *    port).
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
  *    changes and manual refresh (pure VM state the refresher cannot see),
@@ -128,10 +134,10 @@ internal class HomeRefresher(
      * The write-log of this device's recent user-data writes (the same
      * single MediaRepositoryImpl's local-notify path records into). A
      * `UserDataChanged` push names only user + item ids, so this is what
-     * lets the user-data chain below tell a socket echo of THIS device's
-     * own write burst from an external push and run the echo non-forced.
-     * Defaults to the neutral no-op (tests, no recorder wired): every echo
-     * stays forced, the pre-demotion behavior.
+     * lets the user-data reaction chain ([HomeUserDataReactor]) tell a
+     * socket echo of THIS device's own write burst from an external push
+     * and run the echo non-forced. Defaults to the neutral no-op (tests, no
+     * recorder wired): every echo stays forced, the pre-demotion behavior.
      */
     private val recentLocalWrites: RecentLocalUserDataWrites = NoopRecentLocalUserDataWrites(),
     /** Offline gate consulted inside the fetch (plus the loop's skip check), and the source of the offline-mode mirror below. */
@@ -215,9 +221,9 @@ internal class HomeRefresher(
 
     /**
      * The dice-roll machinery (registry, roll jobs, in-place patches, the
-     * min-spin floor) — extracted so the generation invariant lives beside
-     * the jobs it orders. Constructed here (not injected) with the refresher's
-     * own scope/repository/state so every construction surface that already
+     * min-spin floor), so the generation invariant lives beside the jobs it
+     * orders. Constructed here (not injected) with the refresher's own
+     * scope/repository/state so every construction surface that already
      * builds a refresher keeps building a working one.
      */
     private val discoverRows = DiscoverRowsCoordinator(scope, homeFeed, _state)
@@ -242,32 +248,32 @@ internal class HomeRefresher(
     private val sectionRefreshJobs = LinkedHashMap<String, Job>()
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
-    // Set when a user-data change lands while backgrounded; consumed by [start].
-    private var pendingUserDataRefresh = false
     /**
-     * The item ids of the most recent (debounced) [UserDataChange] —
-     * overwritten on every push, consumed by [flushPendingUserDataChange]:
-     * consulting the write-log with them is what demotes an echo of
-     * this device's own writes to a non-forced fetch. Cleared once that
-     * fetch lands, alongside [pendingUserDataRefresh]; empty makes
-     * [RecentLocalUserDataWrites.wereAllRecentlyWritten] answer false, so a
-     * flush reached without a named change stays forced.
+     * The user-data reaction chain (see [HomeUserDataReactor] for the
+     * protocol invariant) — the debounced server-push collector, the
+     * pending-flush latch, the throttle deferral and the echo/push
+     * demotion, owned in one place so the invariant lives with it.
+     * Constructed here (not injected) with this class's own
+     * scope/clock/change feed/write-log so every construction surface that
+     * already builds a refresher keeps building a working one; the flush's
+     * fetch crosses back through the port as [launchUserDataRefresh].
+     * Declared ahead of the init block so the collector launches first.
      */
-    private var pendingUserDataChangeItemIds: List<String> = emptyList()
-    /**
-     * The trailing-edge deferral timer of [refreshAfterUserDataChange], on its
-     * OWN job — deliberately not [refreshJob]. Installing the delay by
-     * replacing [refreshJob] would cancel whatever that job is doing: a
-     * Manual / PullToRefresh fetch mid-flight, whose spinners the cancelled
-     * body then never clears (the fetch's finally skips the flag clear on
-     * cancellation), leaving the loader stuck until the deferred fetch landed
-     * up to a minute later. With the timer here, an echo arriving during a
-     * fetch only re-arms the delay; the in-flight fetch finishes and clears
-     * its own spinners. [stop], [RefreshTrigger.SignedOut] and
-     * [refreshForUserSwitch] cancel it alongside [refreshJob] — the pending
-     * flag stays armed and the next [start] flushes it.
-     */
-    private var userDataRefreshJob: Job? = null
+    private val userDataReactor = HomeUserDataReactor(
+        scope = scope,
+        clock = clock,
+        userDataChanges = userDataChanges,
+        recentLocalWrites = recentLocalWrites,
+        port = object : HomeUserDataReactor.Port {
+            override fun isAppInForeground(): Boolean = this@HomeRefresher.isAppInForeground
+            override fun isOffline(): Boolean = offlineModeManager.isOffline
+            override fun lastRefreshTimeMillis(): Long = this@HomeRefresher.lastRefreshTime
+            override fun lastFetchRacedPendingSync(): Boolean = this@HomeRefresher.lastFetchRacedPendingSync
+            override fun launchUserDataRefresh(decideForce: () -> Boolean, onLanded: () -> Unit) {
+                this@HomeRefresher.launchUserDataRefresh(decideForce, onLanded)
+            }
+        },
+    )
     // Discover-sections TTL gate: lives on [discoverSources] now — this
     // class's WHAT/WHEN voice for the custom Seerr rows is the query it
     // hands to getHomeSections (they ride the home-sections fetch itself;
@@ -285,12 +291,12 @@ internal class HomeRefresher(
      *
      * A plain var on purpose: every reader and writer runs on [scope]'s
      * main-confined dispatcher (the offline-mode and user-data collectors,
-     * [start], [flushPendingUserDataChange]) — there is no cross-thread
-     * access.
+     * [start], [HomeUserDataReactor.flushPendingUserDataChange] through its
+     * port) — there is no cross-thread access.
      *
      * Cleared only when a post-sync fetch runs to completion — the
      * handshake's [cappedForcedFetch] or the flush job's fetch in
-     * [flushPendingUserDataChange]; a cancelled fetch leaves it armed so the
+     * [launchUserDataRefresh]; a cancelled fetch leaves it armed so the
      * next echo retries. Reset by the identity transitions and
      * [dropOnlineContent], which stop showing the sections that raced — a
      * stale flag must not hand the next identity's echoes a throttle bypass
@@ -310,7 +316,6 @@ internal class HomeRefresher(
     private var identityEpoch = 0
 
     init {
-        observeUserDataChanges()
         observeOfflineMode()
     }
 
@@ -539,7 +544,7 @@ internal class HomeRefresher(
      *    it with every other trigger.
      *  * [UserDataChanged]: throttled silent refresh — forced for external
      *    pushes, non-forced for echoes of this device's own writes —
-     *    see [refreshAfterUserDataChange].
+     *    see [HomeUserDataReactor.refreshAfterUserDataChange].
      *  * [UserSwitched] / [SignedOut]: identity-transition choreography —
      *    the SWR snapshot paint + outside-the-job fetch below, and the
      *    sign-out reset respectively.
@@ -565,7 +570,7 @@ internal class HomeRefresher(
                 fetchOnce()
                 periodicRefreshLoop()
             }
-            RefreshTrigger.UserDataChanged -> refreshAfterUserDataChange()
+            RefreshTrigger.UserDataChanged -> userDataReactor.refreshAfterUserDataChange()
             RefreshTrigger.UserSwitched -> replaceTransitionJob { refreshForUserSwitch() }
             RefreshTrigger.SignedOut -> {
                 // Sign-out is synchronous (no fetch): cancel the in-flight
@@ -574,7 +579,7 @@ internal class HomeRefresher(
                 transitionJob?.cancel()
                 transitionJob = null
                 refreshJob?.cancel()
-                userDataRefreshJob?.cancel()
+                userDataReactor.cancelDeferralTimer()
                 discoverJob?.cancel()
                 discoverRows.cancelForIdentityChange()
                 cancelSectionRefreshes()
@@ -654,7 +659,7 @@ internal class HomeRefresher(
         refreshJob?.cancel()
         // Same for the user-data deferral timer — a pending flag armed for the
         // previous identity stays armed for the next start flush.
-        userDataRefreshJob?.cancel()
+        userDataReactor.cancelDeferralTimer()
         // The raced-sync bypass is void here too: the snapshot painted below
         // belongs to the incoming identity, not the sections that raced the
         // drain.
@@ -768,26 +773,24 @@ internal class HomeRefresher(
         // before the fetch lands, so a stop() mid-fetch re-arms the flush for
         // the next onStart. Runs AFTER startPeriodicRefresh so the deferred
         // refresh's job (fetch + loop) replaces the bare periodic loop
-        // instead of being cancelled by it.
-        if (pendingUserDataRefresh) {
-            flushPendingUserDataChange()
-        }
+        // instead of being cancelled by it. The reactor's flush is
+        // latch-gated: without an armed pending change it is a no-op.
+        userDataReactor.flushPendingUserDataChange()
     }
 
     /**
      * onStop: cancel the refresh job (forced fetch and/or loop), the
-     * user-data deferral timer, and the standalone discover fetch, and drop
-     * them. The identity-transition job is deliberately NOT cancelled here —
-     * the sign-in fetch must survive an immediate backgrounding (see
-     * [refreshForUserSwitch]); it dies with the scope / is replaced by the
-     * next transition instead.
+     * reactor's user-data deferral timer, and the standalone discover fetch,
+     * and drop them. The identity-transition job is deliberately NOT
+     * cancelled here — the sign-in fetch must survive an immediate
+     * backgrounding (see [refreshForUserSwitch]); it dies with the scope /
+     * is replaced by the next transition instead.
      */
     fun stop() {
         isAppInForeground = false
         refreshJob?.cancel()
         refreshJob = null
-        userDataRefreshJob?.cancel()
-        userDataRefreshJob = null
+        userDataReactor.cancelDeferralTimer()
         discoverJob?.cancel()
         discoverJob = null
         // stop() cancels with NO replacement fetch, so the cancelled fetch's
@@ -811,10 +814,9 @@ internal class HomeRefresher(
     /**
      * Discover-only fetch (pref- and TTL-gated), used when the user enables
      * Discover so rows appear before the next full refresh would pick them
-     * up. Runs in [scope] outside the refresh mutex — same as before
-     * extraction — but in a tracked, replaceable [discoverJob] so [stop] and
-     * the identity transitions cancel an in-flight fan-out instead of letting
-     * it run to completion abandoned.
+     * up. Runs in [scope] outside the refresh mutex, but in a tracked,
+     * replaceable [discoverJob] so [stop] and the identity transitions cancel
+     * an in-flight fan-out instead of letting it run to completion abandoned.
      */
     private fun fetchDiscover() {
         discoverJob?.cancel()
@@ -1115,131 +1117,26 @@ internal class HomeRefresher(
     }
 
     /**
-     * Live home refresh on server `UserDataChanged` pushes (played /
-     * favorite flips from any client, including this one). Bursts are
-     * debounced into a single silent refresh; a change that lands while
-     * backgrounded (or offline) is deferred to the next [start] instead of
-     * refreshing into the void. Whether the refresh runs forced is decided
-     * at the flush: an echo of this device's own recent writes runs
-     * non-forced, an external push stays forced.
+     * The port half of the reactor's flush (see
+     * [HomeUserDataReactor.Port.launchUserDataRefresh]): replaces
+     * [refreshJob] with the silent user-data fetch — the forced-fetch epoch
+     * bump, [fetchOnce] with the reactor's at-execution-time force verdict
+     * (the echo/push demotion + raced-sync override), the raced-sync bypass
+     * clear at land ([lastFetchRacedPendingSync] — land-only, so a
+     * cancelled fetch leaves it armed for the next echo), the reactor's
+     * latch clears, then the periodic loop — ONE job so [stop] cancels them
+     * together.
      */
-    @OptIn(FlowPreview::class)
-    private fun observeUserDataChanges() {
-        scope.launch {
-            userDataChanges.userDataChanges
-                .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
-                .collect { change ->
-                    // Remember what the (debounced) change named — the
-                    // flush consults the write-log with these ids.
-                    pendingUserDataChangeItemIds = change.itemIds
-                    when {
-                        // Offline behaves like backgrounded: arm the pending
-                        // flag rather than swallowing the change — a push that
-                        // lands during a brief disconnect is then applied on
-                        // the next onStart instead of waiting for the periodic
-                        // loop to happen across it.
-                        isAppInForeground && !offlineModeManager.isOffline ->
-                            refreshAfterUserDataChange()
-                        else -> pendingUserDataRefresh = true
-                    }
-                }
-        }
-    }
-
-    /**
-     * Silent refresh after a user-data change. FORCE remains the rule for
-     * external pushes: server-side changes must bypass the TtlCache'd home
-     * sections. An echo of THIS device's own writes — every item id of the
-     * pushed change recently recorded by [recentLocalWrites] — demotes
-     * to a non-forced fetch (TTL semantics): forcing a full
-     * cache-bypassing refetch behind the player for every playback-save
-     * burst is wasted when only this device's own state moved. The
-     * demotion decision itself lives at the flush; this function owns the
-     * throttle either way, guarded by
-     * [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
-     * [lastRefreshTime] (same clock the refresh path writes) so a push
-     * arriving right after a regular refresh doesn't re-fetch — UNLESS the
-     * last fetch raced a still-pending outbox drain
-     * ([lastFetchRacedPendingSync]): the drain-completion echo is then the
-     * sync-complete signal, the one notice that the painted snapshot is
-     * pre-sync, and must refresh regardless of the clock. No spinner:
-     * isRefreshing/isLoading stay untouched.
-     *
-     * A change that lands inside the throttle window is DEFERRED, not
-     * dropped: it arms [pendingUserDataRefresh] and schedules the fetch at
-     * throttle expiry (each further echo re-arms the timer on
-     * [userDataRefreshJob] — trailing edge, so a playback session's ~10s
-     * position saves collapse into one fetch after the last save). Dropping
-     * instead strands the final echo of a session — the position save
-     * or markPlayed that lands <60s after the last refresh, exactly the
-     * state the user sees when they leave the player: Continue Watching /
-     * Next Up stay mid-playback stale until the periodic loop's non-forced
-     * fetch works through the cache TTLs, or a pull-to-refresh forces it.
-     */
-    private fun refreshAfterUserDataChange() {
-        pendingUserDataRefresh = true
-        val sinceLastRefresh = clock.nowEpochMillis() - lastRefreshTime
-        if (!lastFetchRacedPendingSync &&
-            sinceLastRefresh < HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS
-        ) {
-            // Trailing-edge deferral on its own timer job (see
-            // [userDataRefreshJob] for why it must not live in refreshJob).
-            // The periodic loop keeps running underneath — deferral only
-            // adds the guaranteed TTL-bypassing fetch at expiry.
-            userDataRefreshJob?.cancel()
-            userDataRefreshJob = scope.launch {
-                delay(HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS - sinceLastRefresh)
-                flushPendingUserDataChange()
-            }
-            return
-        }
-        flushPendingUserDataChange()
-    }
-
-    /**
-     * The shared tail of [refreshAfterUserDataChange]: the armed pending
-     * flag becomes an immediate fetch — forced for external pushes,
-     * non-forced when the change was an echo of this device's own recent
-     * writes (the [recentLocalWrites] consult below). Also called
-     * directly as the [start] flush (the pending change predates the return
-     * to the screen, the user is looking at it now, and the throttle's
-     * anti-spam rationale — don't refetch behind the player for every
-     * position save — does not apply) and as the
-     * [lastFetchRacedPendingSync] consumer (the sync-complete echo must
-     * refresh regardless of the clock — and stays forced regardless of the
-     * demotion, since a TTL-semantics fetch could serve the pre-drain
-     * cache).
-     *
-     * Tracked in refreshJob so onStop cancels the fetch with it;
-     * the periodic loop continues in the same job once the fetch lands
-     * (a separate startPeriodicRefresh() call here would either be
-     * cancelled by its own refreshJob hand-off or restart the loop while
-     * backgrounded). The pending flag stays armed until the fetch lands:
-     * if onStop cancels mid-fetch the change isn't lost — the next
-     * onStart retries it. The raced-sync bypass is cleared by the same
-     * land-only rule (matching the handshake's refetch): a cancellation
-     * mid-fetch leaves it armed so the next echo retries.
-     */
-    private fun flushPendingUserDataChange() {
-        // Cancelling the timer from inside its own fired body is harmless:
-        // nothing suspends in this function after that point, and the refresh
-        // job below is launched on the scope, not as the timer's child.
-        userDataRefreshJob?.cancel()
-        userDataRefreshJob = null
+    private fun launchUserDataRefresh(
+        decideForce: () -> Boolean,
+        onLanded: () -> Unit,
+    ) {
         replaceRefreshJob {
             bumpImageReloadEpoch()
-            // An echo whose every named item was recently written by THIS
-            // device runs non-forced (TTL semantics — still debounced,
-            // throttled and chained exactly as before); the forced path stays
-            // reserved for external pushes. The raced-sync bypass overrides
-            // the demotion: that echo is the sync-complete signal, and a
-            // non-forced fetch could serve the pre-drain cache — exactly what
-            // the going-online handshake's forced fetch exists to prevent.
-            val echoOfOwnWrites = recentLocalWrites.wereAllRecentlyWritten(pendingUserDataChangeItemIds)
-            fetchOnce(force = !echoOfOwnWrites || lastFetchRacedPendingSync)
+            val force = decideForce()
+            fetchOnce(force = force)
             lastFetchRacedPendingSync = false
-            pendingUserDataRefresh = false
-            pendingUserDataChangeItemIds = emptyList()
+            onLanded()
             periodicRefreshLoop()
         }
     }
@@ -1503,8 +1400,9 @@ internal data class HomeRefreshState(
     /**
      * Monotonic counter bumped once per forced fetch, BEFORE the fetch runs
      * ([bumpImageReloadEpoch]) — entry points: [startForcedRefresh] (Manual,
-     * PullToRefresh), [flushPendingUserDataChange] (the silent user-data
-     * refresh, including the onStart deferred flush) and [cappedForcedFetch]
+     * PullToRefresh), [HomeUserDataReactor.flushPendingUserDataChange]'s
+     * fetch (the silent user-data refresh, including the onStart deferred
+     * flush) and [cappedForcedFetch]
      * (the going-online handshake). Not the per-row edge pulls, the periodic
      * loop, or the stale checks. The screen mirrors it into
      * [HomeUiState.imageReloadEpoch] and provides it as the core-ui

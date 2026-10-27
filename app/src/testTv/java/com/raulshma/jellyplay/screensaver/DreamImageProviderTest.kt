@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.screensaver
 
 import android.content.Context
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -19,8 +18,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DreamImageProviderTest {
-
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val context: Context = mockk(relaxed = true)
 
     /** itemId → backdrop URL; missing entry means "no backdrop" (blank). */
@@ -42,7 +39,7 @@ class DreamImageProviderTest {
 
     private val libraryApiClient: LibraryApiClient = mockk()
 
-    private val provider = DreamImageProvider(mediaRepository, libraryApiClient, imageUrlProvider, context)
+    private val provider = DreamImageProvider(libraryApiClient, imageUrlProvider, context)
 
     private fun item(id: String, name: String, type: MediaType) =
         MediaItem(id = id, name = name, mediaType = type)

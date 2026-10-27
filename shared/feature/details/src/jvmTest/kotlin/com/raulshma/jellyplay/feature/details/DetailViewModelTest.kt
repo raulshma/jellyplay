@@ -250,6 +250,8 @@ class DetailViewModelTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
+            detailFeed = mockk(relaxed = true),
+            collectionOperations = mockk(relaxed = true),
             mediaCatalogueEnrichments = object : MediaCatalogueEnrichments {
                 override suspend fun getTags(parentId: String?) = Result.success(emptyList<String>())
                 override suspend fun getBoxSetsContaining(itemId: String) =

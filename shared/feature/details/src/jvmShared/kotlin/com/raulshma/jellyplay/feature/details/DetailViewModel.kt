@@ -6,11 +6,9 @@ import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
-import com.raulshma.jellyplay.core.data.book.BookTocProber
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -19,7 +17,6 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
-import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
@@ -130,6 +127,17 @@ class DetailViewModel internal constructor(
     private val storageProbe: DetailStorageProbe,
     private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
+    /**
+     * The detail-read and collection-verbs family seams (the same
+     * MediaRepositoryImpl single the union above exposes — the family-seam
+     * aliasing), handed to the resync helper and the Add-to-Collection
+     * adapter respectively: those two helpers each make exactly one family's
+     * calls, so they take the seam, not the union. The VM itself stays on the
+     * union — its own detail/similar/collection reads pair with the
+     * user-data change feed (the mixed-consumer case the union documents).
+     */
+    private val detailFeed: DetailFeed,
+    private val collectionOperations: CollectionOperations,
     private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     /** The item-attached extras + provider-id reads (the detail screen's
      *  special-features row, the Seerr item resolution). */
@@ -165,20 +173,23 @@ class DetailViewModel internal constructor(
     private val remoteDiscovery: RemoteDiscoveryClients,
     private val audioQueueFacade: AudioQueueFacade,
     private val themeMusicPlayer: DetailThemeMusic,
-    /** Hilt factories for the extracted action helpers (see [DetailActionFactories]). */
+    /** Factories for the action helpers (see [DetailActionFactories]). */
     private val actionFactories: DetailActionFactories,
     /** Quick-action download/remove routing shared with the other host screens (#147). */
     private val mediaDownloadActions: MediaDownloadActions,
     /**
-     * Book-only seams (BOOK media type). The TOC cache is the reader's
-     * write-through table (`book_toc_cache`); the marks repo supplies the
-     * bookmark/highlight counts; the prober parses a never-opened book's
-     * LOCAL file (player-book binding) when no cache row exists yet. All
-     * defaulted so existing test constructions compile.
+     * Book-only seams (BOOK media type), one bundle ([DetailBookArms]). The
+     * TOC cache is the reader's write-through table (`book_toc_cache`); the
+     * marks repo supplies the bookmark/highlight counts; the prober parses a
+     * never-opened book's LOCAL file (player-book binding) when no cache row
+     * exists yet. The bundle normalizes the platforms' optional registrations
+     * (a platform without a prober binding passes null) onto the no-op
+     * adapters once, so every read below is a plain call — the silent absence
+     * (no cached TOC, no probe, counts never written) is decided inside the
+     * bundle, not at each call site. Defaulted so existing test constructions
+     * compile.
      */
-    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
-    private val readerAnnotationsRepository: ReaderAnnotationsRepository? = null,
-    private val bookTocProber: BookTocProber? = null,
+    private val bookArms: DetailBookArms = DetailBookArms(),
     /**
      * Dispatcher for the smart-play resolution launches ([computeSeriesSmartPlayTarget]
      * / [computeEpisodeSmartPlayTarget]): production resolves off Main, but the
@@ -191,38 +202,36 @@ class DetailViewModel internal constructor(
     /**
      * The jellyfin-plugin-jellyplay companion-plugin seams (ADR 0010), behind
      * the three plugin-gated detail sections (ratings row, server-scored
-     * "More like this", anime filler/recap badges). The data seams are the
-     * NARROW plugin roles the enrichments read — the ratings role (mdblist
-     * chips + per-season TMDB scores), the recommendations role (similar
-     * items) and the markers role (filler/recap badges) — not the whole
-     * client family. Nullable-with-default keeps the direct-construction test
-     * harnesses compiling — the Settings screen's `jellyPlayStatusStore`
-     * precedent; the Koin factory passes the real singles and every
-     * enrichment degrades to silent absence when either is null (the plugin
-     * contract's never-an-error-surface rule).
+     * "More like this", anime filler/recap badges), one bundle
+     * ([DetailPluginArms]). The data seams are the NARROW plugin roles the
+     * enrichments read — the ratings role (mdblist chips + per-season TMDB
+     * scores), the recommendations role (similar items) and the markers role
+     * (filler/recap badges) — plus the ONE gate seam ([JellyPlayFeatureGate],
+     * one member per ADR 0010 §6), not the whole client family. Every read
+     * goes through the bundle's operations, whose null-arm yields the plugin
+     * contract's silent absence (never an error surface) — decided once
+     * inside the bundle, not at every call site. The unwired default keeps
+     * the direct-construction test harnesses compiling — the Settings
+     * screen's `jellyPlayStatusStore` precedent; the Koin factory passes the
+     * real singles.
      *
      * Gating goes through the status store ONLY ([JellyPlayPluginFeatures]
      * keys, one [JellyPlayPluginStatusStore.refresh] probe per item
      * navigation); data calls ride the roles — never per-endpoint 404
      * handling.
      */
-    private val pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
-    private val pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
-    private val pluginRecommendationsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRecommendationsRoutes? = null,
-    private val pluginMarkersApi: com.raulshma.jellyplay.core.network.api.JellyPlayMarkersRoutes? = null,
-    /**
-     * The per-feature gate (probe AND the user's toggle — the ONE seam).
-     * Nullable-with-default like the two seams above; without it the
-     * probe-only fallback keeps the pre-toggle behavior (tests).
-     */
-    private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
+    private val pluginArms: DetailPluginArms = DetailPluginArms(),
     /**
      * The TMDB-fallback seam: the direct-TMDB details read behind the
      * `externalRatings` enrichment when Seerr is disconnected (or its ratings
-     * fetch failed/returned nothing). Nullable-with-default like the plugin
-     * seams — the Koin defs pass the core:network single and the enrichment
-     * degrades to silent absence (TMDB-only source unavailable) when null,
-     * keeping the direct-construction test harnesses compiling.
+     * fetch failed/returned nothing). Nullable-with-default like the bundles
+     * above — deliberately NOT absorbed into [pluginArms]: this is the stock
+     * TMDB fallback, not a companion-plugin seam (nothing about it gates on
+     * the plugin's capabilities registry), and its single read site reads
+     * silent absence inline without sprawling. The Koin defs pass the
+     * core:network single and the enrichment degrades to silent absence
+     * (TMDB-only source unavailable) when null, keeping the
+     * direct-construction test harnesses compiling.
      */
     private val tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
     /**
@@ -230,9 +239,12 @@ class DetailViewModel internal constructor(
      * (`AppearanceSlice.detailsAwardsBadgesEnabled`): the projection bundle
      * ([DetailPreferences]) cannot carry it (the datastore projection lives
      * outside this feature's edit surface), so the store rides the same
-     * nullable-with-default Koin pattern as the plugin seams — production
-     * passes the core:datastore single; null (unwired tests) suppresses the
-     * badge, the same silent absence an OFF toggle produces.
+     * nullable-with-default pattern — deliberately NOT absorbed into
+     * [pluginArms] or [bookArms]: it is a user-appearance preference, not a
+     * plugin or book seam, and its single read site's silent absence (null
+     * suppresses the badge) is exactly what an OFF toggle produces.
+     * Production passes the core:datastore single; null (unwired tests)
+     * suppresses the badge.
      */
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore? = null,
 ) : JellyPlayViewModel() {
@@ -250,11 +262,11 @@ class DetailViewModel internal constructor(
     private val _uiState = MutableStateFlow(DetailUiState())
 
     /**
-     * The loaded item's session snapshot — what every action helper needs to
+     * The loaded item's session snapshot - what every action helper needs to
      * know about the current screen. Reset to a bare id-only session in
      * [loadItemInternal] and adopted (content sections filled) in
      * [reduceLoaded] on each new resolution; helpers read `.value` at command
-     * time, exactly when the former provider lambdas read the VM.
+     * time.
      */
     private val _session = MutableStateFlow<DetailSession?>(null)
 
@@ -337,8 +349,8 @@ class DetailViewModel internal constructor(
         // sub-flows; snapshotIn gives the group its dedicated StateFlow so its
         // ticks don't re-run the outer combine.
         val seerrRequest = seerrRequestState.snapshotIn(scope)
-        // Group 3 — Seerr connection flags that only gate recommendation visibility
-        // (the two retired repository lenses, derived off the one preferences flow).
+        // Group 3 - Seerr connection flags that only gate recommendation visibility
+        // (both lenses derived off the one preferences flow).
         val seerrFlags = remoteDiscovery.seerrRepository.preferences
             .map { prefs ->
                 SeerrConnectionFlags(
@@ -396,13 +408,13 @@ class DetailViewModel internal constructor(
         }
     }
 
-    // ── Extracted action helpers ────────────────────────────────────────
+    // Action helpers -------------------------------------------------------
     // Each follows the SeerrRequestStateHolder template: a plain, VM-scoped
     // class (constructed here, dies with viewModelScope) that owns its own
-    // coroutines and state. They are the screen's seams — commands go through
+    // coroutines and state. They are the screen's seams - commands go through
     // the properties below, state is collected from the helper's own
-    // StateFlow — so the flat [DetailUiState] bag stays a pure content core
-    // and a tick in one sheet no longer re-copies it.
+    // StateFlow - so the flat [DetailUiState] bag stays a pure content core
+    // and a tick in one sheet never re-copies it.
     private val offlineDeleteActions = OfflineDeleteActions(
         scope = scope,
         offlineRepository = offlineRepository,
@@ -415,7 +427,7 @@ class DetailViewModel internal constructor(
     private val resyncActions = actionFactories.resync.create(
         scope = scope,
         session = _session,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         offlineRepository = offlineRepository,
     )
     private val markSeasonReactor = MarkSeasonReactor(
@@ -436,7 +448,7 @@ class DetailViewModel internal constructor(
         scope = scope,
         session = _session,
         messages = _messages,
-        adapter = CollectionAddTarget(strings, collectionApiClient, mediaRepository),
+        adapter = CollectionAddTarget(strings, collectionApiClient, collectionOperations),
         mediaDetailProvider = mediaDetailProvider,
     )
     private val downloadLifecycleActions = actionFactories.downloads.create(
@@ -547,10 +559,10 @@ class DetailViewModel internal constructor(
     /** The BOOK item whose extras (TOC cache + marks counts) are being observed. */
     private var bookExtrasJob: Job? = null
     /**
-     * The staleness guard owning what used to be `currentItemId` +
-     * `seerrDataGeneration`: navigation publishes the item identity and bumps
-     * one epoch ([DetailLoadGuard.enter]); every suspension-point write below
-     * re-checks [DetailLoadGuard.isCurrent] instead of hand-copying
+     * The staleness guard owning the item identity and the Seerr data
+     * generation: navigation publishes the item identity and bumps one epoch
+     * ([DetailLoadGuard.enter]); every suspension-point write below re-checks
+     * [DetailLoadGuard.isCurrent] instead of hand-copying
      * `if (currentItemId != itemId) return`. See its KDoc for why one epoch
      * covers both lifecycles.
      */
@@ -707,9 +719,9 @@ class DetailViewModel internal constructor(
         _session.value = DetailSession(itemId = itemId)
         loadJob?.cancel()
         loadJob = launch {
-            // Single atomic reset — collapses what used to be ~14 separate
-            // composeState/stateFlow mutations into one emission so observers
-            // see one recomposition, not fourteen. The surviving leaves and
+            // Single atomic reset: one emission replaces ~14 separate
+            // composeState/stateFlow mutations, so observers see one
+            // recomposition. The surviving leaves and
             // the per-flavour load state are declared once in
             // [DetailUiState.clearedForReload]: on refresh the detail stays
             // visible under the Refreshing indicator; every content slice
@@ -914,48 +926,38 @@ class DetailViewModel internal constructor(
     }
 
     /**
-     * The declared enrichment fan-out — the subordinate loads a fresh
-     * resolution triggers, reduced from the former hand-launched blocks
-     * (triggerRemoteSideEffects / triggerLocalSideEffects /
-     * resolveSonarrForSeries / loadCollectionItems) to DATA: each entry is a
+     * The declared enrichment fan-out - the subordinate loads a fresh
+     * resolution triggers, expressed as DATA: each entry is a
      * [DetailEnrichment] whose gate reads the resolved snapshot only
-     * (mediaType × origin × capability) and whose body is the former launch
-     * content verbatim (guards included). Evaluated in declaration order —
-     * the exact order the remote block fired them — by [runEnrichments], so
+     * (mediaType x origin x capability) and whose body carries the load's
+     * guards. Evaluated in declaration order by [runEnrichments], so
      * "snapshot of type X with capabilities Y fires E1..En and not the
      * others" is directly testable (DetailViewModelEnrichmentsTest).
      *
-     * Ordering note: the former sequence ran the collection-items launch
-     * AFTER [loadBookExtras]; both are fire-and-forget, guard-checked
-     * coroutines, so any declaration order that keeps the former remote
-     * block's relative sequence (and [loadBookExtras] after the evaluator)
-     * preserves the observable behavior. Later additions (the ADR 0010
-     * plugin family, franchise `franchise`, upcoming `upcoming`) append after the
-     * original entries for the same reason.
+     * Ordering note: the collection-items load runs AFTER [loadBookExtras];
+     * both are fire-and-forget, guard-checked coroutines, so any declaration
+     * order that keeps that relative order is equivalent.
      *
      * Still inline by design (see reduceLoaded): [loadBookExtras] (lifecycle
      * cancel for every media type) and [maybeComputeSmartPlayTarget] (core
      * resolution, not a side effect).
      *
      * The detail section modules' enrichment arms
-     * ([DetailSectionRegistry.enrichments]) are spliced in at the exact
-     * position the wave-1 migrated hand-written entry occupied (the
-     * pluginRatings fetch, now PluginRatingsSectionModule's arm) — the
-     * externalRatings entry below reads the feature probe that arm latches,
-     * so the splice point is load-bearing. The wave-2 arms (specialFeatures,
-     * collectionItems, franchise, upcoming) joined the registry with their
-     * sections and ride the same spliced list: all entries are independent,
-     * fire-and-forget, guard-checked coroutines (single-writer-per-field),
-     * so the arms' positions within the spliced list preserve the observable
-     * behavior the fan-out order contract documents above.
+     * ([DetailSectionRegistry.enrichments]) are spliced into the list. The
+     * splice point is load-bearing: the externalRatings entry reads the
+     * feature probe that the pluginRatings arm latches. All entries are
+     * independent, fire-and-forget, guard-checked coroutines
+     * (single-writer-per-field), so their positions within the spliced list
+     * preserve the observable behavior the fan-out order contract documents
+     * above.
      */
-    // ── The section modules' enrichment-host seam ([DetailSectionEnrichmentHost]):
-    //    a private adapter over the members the former hand-written enrichment
-    //    bodies read directly — the guard, the state-write funnel, the plugin
-    //    roles. Kept off the ViewModel's member surface: implementing the host
-    //    on the class itself would widen the ownership ratchet's counted
-    //    interface for what is wiring, not new VM behavior. Declared ahead of
-    //    [enrichments], whose initializer splices it in. ──
+    // The section modules' enrichment-host seam ([DetailSectionEnrichmentHost]):
+    //    a private adapter over the members the enrichment bodies read - the
+    //    guard, the state-write funnel, the plugin roles. Kept off the
+    //    ViewModel's member surface: implementing the host on the class itself
+    //    would widen the ownership ratchet's counted interface for what is
+    //    wiring, not new VM behavior. Declared ahead of [enrichments], whose
+    //    initializer splices it in.
 
     private val sectionEnrichmentHost = object : DetailSectionEnrichmentHost {
         override suspend fun pluginFeature(feature: String, itemId: String): Boolean =
@@ -970,10 +972,10 @@ class DetailViewModel internal constructor(
         override suspend fun mdbListRatings(
             imdbId: String,
         ): Result<List<JellyPlayPluginRating>?>? =
-            pluginRatingsApi?.getMdbListRatings(imdbId)
+            pluginArms.mdbListRatings(imdbId)
 
-        // Wave-2 roles: the reads the collection-family/strip arms' former
-        // hand-written bodies made directly on these collaborators.
+        // The collection-family/strip roles: reads the arms make on these
+        // collaborators.
         override suspend fun specialFeatures(itemId: String): Result<List<MediaItem>> =
             libraryApiClient.getSpecialFeatures(itemId)
 
@@ -995,8 +997,8 @@ class DetailViewModel internal constructor(
         override suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R> =
             hydrationSemaphore.mapConcurrentCatching(items, transform)
 
-        // ── Wave-3 roles: the state-arm reads (DetailEnrichmentModules.kt) —
-        //    thin delegations to the collaborators the moved bodies read.
+        // The state-arm roles (DetailEnrichmentModules.kt) - thin delegations
+        //    to the collaborators the arms read.
 
         override fun currentState(): DetailUiState = uiState.value
 
@@ -1034,31 +1036,31 @@ class DetailViewModel internal constructor(
             tmdbApiClient?.getDetails(tmdbId, mediaType)?.getOrNull()
 
         override suspend fun omdbAwards(imdbId: String): JellyPlayPluginOmdbAwards? =
-            pluginRatingsApi?.getOmdbAwards(imdbId)?.getOrNull()
+            pluginArms.omdbAwards(imdbId)
 
         override fun awardsBadgesEnabled(): Boolean =
             appearanceStore?.appearance?.value?.detailsAwardsBadgesEnabled == true
 
         override suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> =
-            pluginRecommendationsApi?.getJellyPlaySimilarItems(itemId, limit)?.getOrNull().orEmpty()
+            pluginArms.pluginSimilarIds(itemId, limit)
 
         override suspend fun mediaDetailItem(itemId: String): MediaItem? =
             mediaRepository.getMediaDetail(itemId).getOrNull()?.item
 
         override fun serverSimilarPipeline(): Boolean =
-            pluginStatusStore?.capabilities?.value?.serverSimilarPipeline == true
+            pluginArms.serverSimilarPipeline()
 
         override suspend fun animeMarkers(
             seriesId: String,
             providerSeriesId: String,
         ): List<JellyPlayEpisodeMarker>? =
-            pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)?.getOrNull()
+            pluginArms.animeMarkers(seriesId, providerSeriesId)
 
         override suspend fun tmdbSeasonRatings(
             tmdbId: String,
             seasonNumber: Int,
         ): Map<Int, JellyPlayEpisodeScore>? =
-            pluginRatingsApi?.getTmdbSeasonRatings(tmdbId, seasonNumber)?.getOrNull()
+            pluginArms.tmdbSeasonRatings(tmdbId, seasonNumber)
 
         override suspend fun localTrailers(itemId: String): Result<List<MediaItem>> =
             libraryApiClient.getLocalTrailers(itemId)
@@ -1095,20 +1097,19 @@ class DetailViewModel internal constructor(
     private var pluginProbedItemId: String? = null
 
     private suspend fun pluginFeature(feature: String, itemId: String): Boolean {
-        val store = pluginStatusStore ?: return false
+        val store = pluginArms.statusStore ?: return false
         if (pluginProbedItemId != itemId) {
             pluginProbedItemId = itemId
             store.refresh()
         }
-        return jellyPlayFeatureGate.isAvailableNowOrProbe(store, feature)
+        return pluginArms.featureGate.isAvailableNowOrProbe(store, feature)
     }
 
     /**
      * The evaluator beside [reduceLoaded]: walks the declaration list in
      * order, launching each gated entry on the VM scope. viewModelScope's
      * Main.immediate keeps the launch bodies in declaration order up to each
-     * body's first suspension point — the former synchronous-then-launched
-     * ordering of the remote block. [DetailLoadGuard] stays the single
+     * body's first suspension point. [DetailLoadGuard] stays the single
      * admission seam: every body re-checks it at its suspension-point writes.
      */
     private fun runEnrichments(itemId: String, snapshot: MediaDetailSnapshot) {
@@ -1151,15 +1152,15 @@ class DetailViewModel internal constructor(
                 }
             }
 
-            val cached = runCatching { bookTocCacheRepository.getToc(itemId) }.getOrNull()
+            val cached = runCatching { bookArms.tocCacheRepository.getToc(itemId) }.getOrNull()
             publish(cached?.entries ?: emptyList(), cached?.pageCount ?: 0)
 
             if (cached == null) {
-                val probe = runCatching { bookTocProber?.probe(downloadPath, format) }.getOrNull()
+                val probe = runCatching { bookArms.tocProber.probe(downloadPath, format) }.getOrNull()
                 if (probe != null && loadGuard.isCurrent(itemId)) {
                     // Write-through: the next detail visit reads the cache.
                     runCatching {
-                        bookTocCacheRepository.putToc(itemId, probe.format, probe.pageCount, probe.entries)
+                        bookArms.tocCacheRepository.putToc(itemId, probe.format, probe.pageCount, probe.entries)
                     }
                     publish(probe.entries, probe.pageCount)
                 }
@@ -1167,11 +1168,13 @@ class DetailViewModel internal constructor(
 
             // Marks counts observe live (the reader edits them on another
             // screen; returning here re-renders the counts). Cancelled with
-            // the job on the next load.
-            val marks = readerAnnotationsRepository ?: return@launch
+            // the job on the next load. The unwired marks repo's observe flows
+            // never emit (NoopReaderAnnotationsRepository), so this collector
+            // parks without writing — the counts stay untouched (silent
+            // absence, never a state write).
             combine(
-                marks.observeBookmarks(itemId),
-                marks.observeAnnotations(itemId),
+                bookArms.readerAnnotationsRepository.observeBookmarks(itemId),
+                bookArms.readerAnnotationsRepository.observeAnnotations(itemId),
             ) { bookmarks, annotations -> bookmarks.size to annotations.size }
                 .collect { (bookmarkCount, highlightCount) ->
                     if (!loadGuard.isCurrent(itemId)) return@collect
@@ -1379,11 +1382,11 @@ class DetailViewModel internal constructor(
      * The Detail screen's container adapter: applies a resolved mutation to
      * every visible projection of an item. Detail actions can target the
      * current item, a related/collection card, or an episode card; keeping
-     * these projections together prevents one card from replaying the old
-     * state until the next full detail load. Folds the former
-     * `updatePlayedStateInUi` / `updateFavoriteStateInUi` pair — the patch
-     * (resume-zeroing on played flips, favorite-only flips) is derived from
-     * the [com.raulshma.jellyplay.core.data.repository.AppliedMutation] the
+     * these projections together prevents one card from replaying stale
+     * state until the next full detail load. One patch covers both played and
+     * favorite flips (resume-zeroing on played flips, favorite-only flips),
+     * derived from the
+     * [com.raulshma.jellyplay.core.data.repository.AppliedMutation] the
      * mutator resolved.
      *
      * Membership is checked before rebuilding: a projection that cannot
@@ -1563,17 +1566,16 @@ class DetailViewModel internal constructor(
 
     /**
      * The discovery-pref write funnel: every item-keyed preference write on
-     * this screen is the same row — resolve the key off the current item (an
-     * episode keys to its parent series, a series to itself — the
+     * this screen is the same row - resolve the key off the current item (an
+     * episode keys to its parent series, a series to itself - the
      * hideFromNextUp keying), run the store write, then optionally surface
-     * the snackbar once the write has landed. Five handlers used to restate
-     * that skeleton by hand; only the three terms differed. The event
-     * funnel's entries stay; their bodies collapsed onto this one.
+     * the snackbar once the write has landed. The event funnel's entries stay;
+     * their bodies all delegate here.
      *
      * [setLastViewedSeason] and [setShowDetailUpNext] stay hand-written: the
-     * first is event-keyed (its series+season pair arrives with the event —
+     * first is event-keyed (its series+season pair arrives with the event -
      * no item resolution, no message, a silent background write), the second
-     * has no key at all; neither has a skeleton to collapse.
+     * has no key at all; neither follows the item-keyed skeleton.
      */
     private fun writeDiscoveryPref(
         /** The write's identity off the current item — [seriesKey] or the item id. */
@@ -1738,11 +1740,11 @@ class DetailViewModel internal constructor(
         storageProbe.availableBytes(isAudio)
 
     /**
-     * The TMDB-companion choreography shared with [SeerrDetailViewModel]
-     * (formerly hand-copied here): the holder owns the movie/tv videos fork,
-     * the connected × recommendations-enabled × staleness gate, the bounded
-     * fan-out, per-leg error tolerance, and the take-limits. Built on the
-     * [SeerrRequestStateHolder] template — constructor-lambda fetch seams
+     * The TMDB-companion choreography shared with [SeerrDetailViewModel]: the
+     * holder owns the movie/tv videos fork, the connected x
+     * recommendations-enabled x staleness gate, the bounded fan-out, per-leg
+     * error tolerance, and the take-limits. Built on the
+     * [SeerrRequestStateHolder] template - constructor-lambda fetch seams
      * straight onto [RemoteDiscoveryClients.seerrRepository], a single
      * snapshot surface, landings folded into this screen's bag below.
      */

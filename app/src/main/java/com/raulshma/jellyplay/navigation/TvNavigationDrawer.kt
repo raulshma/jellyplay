@@ -58,6 +58,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
+import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization
 import com.raulshma.jellyplay.core.ui.navigation.navKey
@@ -126,29 +128,50 @@ internal fun isExcludedTvDrawerFolder(folder: LibraryFolder): Boolean {
 /**
  * TV-drawer primary destinations in display order.
  *
- * The drawer has no overflow menu, so Shortcuts rides as an explicit primary
- * item — but its *position* still comes from the stored nav customization like
- * every other item. [baseRoutes] arrive pre-customized (hidden items dropped,
- * survivors in stored relative order) from the shared [applyNavCustomization]
- * pass, so Shortcuts is appended to the candidates and the union is ranked by
+ * The drawer has no overflow menu, so the registry's bolt-on TV-drawer
+ * placements ([tvDrawerPlacementExtras] — Shortcuts today; the phone bar parks
+ * it in its ⋮ overflow instead) ride as explicit primary candidates:
+ * [baseRoutes] arrive pre-customized (hidden items dropped, survivors in
+ * stored relative order) from the shared [applyNavCustomization] pass, the
+ * bolt-ons are appended to the candidates and the union is ranked by
  * [navItemOrder] through the same contract: unknown order entries are ignored
  * and routes missing from the order keep their input relative order (which
  * puts a never-reordered Shortcuts last, preserving the legacy layout).
+ *
+ * [hiddenNavItems] rides through the same pass so a customization-hidden
+ * placement (the TV settings row toggles Shortcuts) drops off the drawer; the
+ * pre-customized [baseRoutes] never contain a hidden key, so the re-filter is
+ * a no-op for them.
  *
  * Keys are [navKey] literals on both sides — never `simpleName`, which R8
  * obfuscates in release builds.
  */
 internal fun tvPrimaryRoutes(
     baseRoutes: List<Route>,
-    includeShortcuts: Boolean,
+    hiddenNavItems: Set<String>,
     navItemOrder: List<String>,
 ): List<Route> = applyNavCustomization(
-    items = baseRoutes + listOfNotNull(Route.Shortcuts.takeIf { includeShortcuts }),
+    items = baseRoutes + tvDrawerPlacementExtras(),
     keyOf = { it.navKey },
-    // Hiding was already applied upstream (that's why baseRoutes are
-    // "pre-customized"), so hiddenNavItems stays at its empty default.
+    hiddenNavItems = hiddenNavItems,
     navItemOrder = navItemOrder,
 )
+
+/**
+ * The registry rows placed on the TV drawer beyond the phone-bar vocabulary —
+ * [NavPrimarySurface.TvDrawer] WITHOUT [NavPrimarySurface.PhoneBar] (Shortcuts
+ * today), in registry row order. The bar tabs themselves must NOT ride the
+ * extras: the drawer shows the active home mode's tabs only (a video-mode
+ * drawer has no MusicBrowse), and that mode selection is the base set's job —
+ * the extras are exactly the descriptor's [tvPrimaryRoutes] bolt-ons.
+ */
+private fun tvDrawerPlacementExtras(): List<Route> =
+    NAV_DESTINATIONS
+        .filter {
+            NavPrimarySurface.TvDrawer in it.primarySurfaces &&
+                NavPrimarySurface.PhoneBar !in it.primarySurfaces
+        }
+        .map { it.route }
 
 private fun libraryIcon(collectionType: String?): ImageVector = when (collectionType?.lowercase()) {
     "movies" -> Tabler.Outline.Movie

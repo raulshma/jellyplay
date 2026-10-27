@@ -468,7 +468,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
             WizardCheckboxRow(
                 title = stringResource(Res.string.settings_import_preview_security_option),
                 checked = file.restoreSecuritySensitive,
-                onToggle = { viewModel.toggleRestoreSecuritySensitive(!file.restoreSecuritySensitive) },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.SecuritySensitive) },
             )
         }
     }
@@ -488,7 +488,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
                 allSelected = selection.allCategoriesSelected(file.categories.map { it.category }),
                 noneSelected = selection.categories.isEmpty(),
             ),
-            onToggle = { viewModel.toggleAllCategories() },
+            onToggle = { viewModel.toggle(WizardSelectionTarget.AllCategories) },
         )
     }
     file.categories.forEach { group ->
@@ -498,7 +498,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
                 title = group.title,
                 subtitle = GroupSubtitle.FileStyle(group.changed.size, group.total),
                 checked = group.category.toToggleableState(selection.categories),
-                onToggle = { viewModel.toggleCategory(group.category) },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.Category(group.category)) },
                 indent = true,
                 rows = group.changed.map { WizardDiffRow(it.label, it.currentValue, it.factoryValue) },
             )
@@ -513,7 +513,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
                 title = stringResource(Res.string.factory_reset_cat_app_state),
                 subtitle = GroupSubtitle.FileStyle(extras.changed.size, extras.total),
                 checked = if (selection.extras) ToggleableState.On else ToggleableState.Off,
-                onToggle = { viewModel.toggleExtras() },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.Extras) },
                 rows = extras.changed.map { WizardDiffRow(it.label, it.currentValue, it.factoryValue) },
             )
         }
@@ -533,7 +533,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
                     allSelected = selection.allSlicesSelected(file.externalSlices.map { it.key }),
                     noneSelected = selection.slices.isEmpty(),
                 ),
-                onToggle = { viewModel.toggleAllSlices() },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.AllSlices) },
             )
         }
     }
@@ -544,7 +544,7 @@ private fun LazyListScope.fileDiffStep(viewModel: RestoreWizardViewModel, callba
                 title = slice.title,
                 subtitle = GroupSubtitle.FileStyle(slice.changed.size, slice.total),
                 checked = slice.key.toToggleableState(selection.slices),
-                onToggle = { viewModel.toggleSlice(slice.key) },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.Slice(slice.key)) },
                 indent = true,
                 rows = slice.changed.map { WizardDiffRow(it.label, it.currentValue, it.factoryValue) },
             )
@@ -605,7 +605,7 @@ private fun LazyListScope.snapshotDiffStep(viewModel: RestoreWizardViewModel, ca
                 title = group.title,
                 subtitle = GroupSubtitle.Counts(group.changed, group.added, group.removed),
                 checked = group.id.toToggleableState(state.selection.namespaces),
-                onToggle = { viewModel.toggleNamespace(group.id) },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.Namespace(group.id)) },
                 rows = group.rows.map { it.toWizardRow() },
             )
         }
@@ -626,7 +626,7 @@ private fun LazyListScope.snapshotDiffStep(viewModel: RestoreWizardViewModel, ca
                     allSelected = state.selection.allDomainsSelected(state.groups.prefDomains),
                     noneSelected = state.selection.domains.isEmpty(),
                 ),
-                onToggle = { viewModel.togglePrefs() },
+                onToggle = { viewModel.toggle(WizardSelectionTarget.Prefs) },
             )
         }
         state.groups.prefDomains.forEach { domain ->
@@ -636,7 +636,7 @@ private fun LazyListScope.snapshotDiffStep(viewModel: RestoreWizardViewModel, ca
                     title = domain.title,
                     subtitle = GroupSubtitle.Counts(domain.changed, domain.added, domain.removed),
                     checked = domain.id.toToggleableState(state.selection.domains),
-                    onToggle = { viewModel.togglePrefDomain(domain.id) },
+                    onToggle = { viewModel.toggle(WizardSelectionTarget.PrefDomain(domain.id)) },
                     indent = true,
                     rows = domain.rows.map { it.toWizardRow() },
                 )

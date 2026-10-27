@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.DesktopOfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
@@ -22,6 +23,7 @@ import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
@@ -277,6 +279,10 @@ class DesktopShellServicesTest {
             navigationStore = NavigationStore(dataStore, storeScope),
             appRuntimeStateStore = AppRuntimeStateStore(dataStore, storeScope),
             appearanceStore = AppearanceStore(dataStore, storeScope),
+            offlineModeManager = DesktopOfflineModeManager(
+                networkMonitor = FakeNetworkMonitor(),
+                networkOfflineStore = NetworkOfflineStore(dataStore, storeScope),
+            ),
         )
         return Harness(services, state, auth, identityStore, homeStore, messages, focusDirections)
     }

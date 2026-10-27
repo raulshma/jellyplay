@@ -8,7 +8,6 @@ import coil3.request.allowHardware
 import coil3.size.Size
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
@@ -20,7 +19,6 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 class DreamImageProvider(
-    private val mediaRepository: MediaRepository,
     /** The SearchResult-shaped reads (the random-items query — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,

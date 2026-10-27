@@ -22,7 +22,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DetailPreferences
@@ -151,15 +152,14 @@ internal interface DetailSectionEnrichmentHost {
      */
     suspend fun mdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>?
 
-    // ── Wave 2: the collection-family / strip roles (specialFeatures,
-    //    collectionItems, franchise, upcoming) — the reads their former
-    //    hand-written bodies made directly on the VM's collaborators.
+    // The collection-family / strip roles (specialFeatures,
+    //    collectionItems, franchise, upcoming).
 
     /** The item-attached extras read ([LibraryApiClient.getSpecialFeatures]) — the SPECIAL_FEATURES arm. */
     suspend fun specialFeatures(itemId: String): Result<List<MediaItem>>
 
     /**
-     * The collection-members page read ([MediaRepository.getCollectionItems]) —
+     * The collection-members page read ([CollectionOperations.getCollectionItems]) —
      * the COLLECTION_ITEMS arm, and the franchise rows' per-BoxSet members.
      */
     suspend fun collectionItems(collectionId: String, startIndex: Int = 0, limit: Int): Result<SearchResult>
@@ -202,7 +202,7 @@ internal interface DetailSectionEnrichmentHost {
     /** The ARR servers resolve ([ArrRepository.resolveServers]) — the arrServerResolve arm. */
     suspend fun resolveArrServers(): Result<ArrServiceSummary> = Result.success(ArrServiceSummary())
 
-    /** The stock similar read ([MediaRepository.getSimilarItems]) — the similarItems arm. */
+    /** The stock similar read ([DetailFeed.getSimilarItems]) — the similarItems arm. */
     suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> = Result.success(emptyList())
 
     /** The media-segments pre-warm ([PlaybackRepository.getMediaSegments]) — the mediaSegments arm. */
@@ -235,7 +235,7 @@ internal interface DetailSectionEnrichmentHost {
     /** The plugin-scored similar ids ([JellyPlayPluginApiRoles.getJellyPlaySimilarItems]). Empty when unwired. */
     suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> = emptyList()
 
-    /** The per-item detail hydration ([MediaRepository.getMediaDetail]) — the pluginSimilarItems arm. Null on failure. */
+    /** The per-item detail hydration ([DetailFeed.getMediaDetail]) — the pluginSimilarItems arm. Null on failure. */
     suspend fun mediaDetailItem(itemId: String): MediaItem? = null
 
     /** The capabilities' server-similar-pipeline flag ([JellyPlayCapabilities.serverSimilarPipeline]). */

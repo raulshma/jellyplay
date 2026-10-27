@@ -4,7 +4,7 @@ package com.raulshma.jellyplay.core.data.remote
 import com.raulshma.jellyplay.core.data.playback.AudioNowPlayingFace
 import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -66,7 +66,7 @@ class RemoteControlReceiverTest {
 
     private val webSocketClient: JellyfinWebSocketClient = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk()
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val videoDispatcher: VideoRemoteControlDispatcher = mockk(relaxed = true)
     private val audioDispatcher: AudioRemoteControlDispatcher = mockk(relaxed = true)
     private val uiDispatcher: UiRemoteControlDispatcher = mockk(relaxed = true)
@@ -75,8 +75,7 @@ class RemoteControlReceiverTest {
     private val bridge = RemoteNavigationBridge()
 
     /**
-     * The idle gate is the Now-playing verdict's [NowPlayingVerdict.isIdle]
-     * now (the former `engine == null && audioQueueManager…` restatement),
+     * The idle gate is the Now-playing verdict's [NowPlayingVerdict.isIdle],
      * so the harness drives a REAL verdict over the mocked registry and a
      * mutable audio face — the fold itself is pinned once in
      * NowPlayingVerdictTest.
@@ -109,13 +108,13 @@ class RemoteControlReceiverTest {
         // DisplayContent's opt-in) go through firstPersistedSecurity — answer
         // from the same flow the tests toggle via `security.value = …`.
         coEvery { securityStore.firstPersistedSecurity() } answers { security.value }
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(IOException("down"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(IOException("down"))
     }
 
     private fun receiver() = RemoteControlReceiver(
         webSocketClient = webSocketClient,
         authRepository = authRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         videoDispatcher = videoDispatcher,
         audioDispatcher = audioDispatcher,
         uiDispatcher = uiDispatcher,
@@ -158,7 +157,7 @@ class RemoteControlReceiverTest {
         events.tryEmit(playEvent(listOf("i1")))
 
         Thread.sleep(300)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         coVerify(exactly = 0) { videoDispatcher.play(any()) }
         coVerify(exactly = 0) { audioDispatcher.play(any()) }
         r.stop()
@@ -173,7 +172,7 @@ class RemoteControlReceiverTest {
         events.tryEmit(playEvent(listOf("i1")))
 
         Thread.sleep(300)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         r.stop()
     }
 
@@ -204,7 +203,7 @@ class RemoteControlReceiverTest {
         assertEquals("i1", banner.itemId)
         assertEquals("", banner.title)
         assertEquals(123L, banner.startPositionTicks)
-        coVerify(timeout = 3_000, exactly = 2) { mediaRepository.getMediaDetail("i1", any()) } // one silent retry
+        coVerify(timeout = 3_000, exactly = 2) { detailFeed.getMediaDetail("i1", any()) } // one silent retry
         coVerify(timeout = 3_000) {
             videoDispatcher.play(
                 match<PlayRequest> {
@@ -224,7 +223,7 @@ class RemoteControlReceiverTest {
     @Test
     fun `an audio first item routes play to the audio dispatcher with the banner title`() {
         val r = receiver()
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns audioDetail("i1")
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns audioDetail("i1")
         startAndAwaitSubscription(r)
 
         val banner = receiveFirst(r.playEvents) {

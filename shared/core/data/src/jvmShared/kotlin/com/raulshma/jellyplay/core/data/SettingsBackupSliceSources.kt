@@ -167,9 +167,9 @@ internal class PlaylistsBackupSliceSource(
         val moodPrefs = moodPlaylistDao.getAllPreferences()
         if (smart.isEmpty() && mood.isEmpty() && moodPrefs.isEmpty()) return null
         return buildJsonObject {
-            for (row in smart) put("smart/${row.id}", SliceJson.encodeToJsonElement(row.toPayload()))
-            for (row in mood) put("mood/${row.id}", SliceJson.encodeToJsonElement(row.toPayload()))
-            for (row in moodPrefs) put("moodpref/${row.playlistId}", SliceJson.encodeToJsonElement(row.toPayload()))
+            for (row in smart) put(row.backupKey(), SliceJson.encodeToJsonElement(row.toPayload()))
+            for (row in mood) put(row.backupKey(), SliceJson.encodeToJsonElement(row.toPayload()))
+            for (row in moodPrefs) put(row.backupKey(), SliceJson.encodeToJsonElement(row.toPayload()))
         }
     }
 
@@ -277,7 +277,10 @@ internal class WidgetBackupSliceSource(
 // Shared helpers (slash keying + lenient payload decode + the Wave-1
 // payload <-> Room entity mappers; these live beside the DAO-backed sources
 // that consume them, and the sync adapters in core.data.repository share
-// them instead of keeping private copies).
+// them instead of keeping private copies). The PLAYLIST families' mappers
+// live in the shared payload tier (commonMain's PlaylistRowCodec.kt — the
+// repositories delegate to the same codec); this file keeps the itemprefs
+// mappers and every family's KEY grammar.
 // ----------------------------------------------------------------------
 
 /** The `smart/` key family (playlist definitions). */
@@ -288,6 +291,20 @@ internal const val FAMILY_MOOD = "mood"
 
 /** The `moodpref/` key family (per-playlist user preferences). */
 internal const val FAMILY_MOODPREF = "moodpref"
+
+// The playlist families' KEY GRAMMAR (`"{family}/{id}"`) — one home, beside
+// [parseSlashKey] and the FAMILY_* constants it splits on. The backup slice
+// source and the playlists sync adapter both build keys through the
+// backupKey() extensions below, so the grammar cannot drift between them.
+// (The row VALUES ride the shared payload tier — the one-row codec in
+// commonMain's PlaylistRowCodec.kt, whose entity↔payload mappers both
+// consumers decode through.)
+
+internal fun SmartPlaylistEntity.backupKey(): String = "$FAMILY_SMART/$id"
+
+internal fun MoodPlaylistEntity.backupKey(): String = "$FAMILY_MOOD/$id"
+
+internal fun MoodPlaylistPreferenceEntity.backupKey(): String = "$FAMILY_MOODPREF/$playlistId"
 
 /** `"{scope}/{key}"` → pair; anything without exactly one leading segment is malformed (the sync adapters' rule). */
 internal fun parseSlashKey(key: String): Pair<String, String>? {
@@ -408,70 +425,3 @@ internal fun entityFrom(payload: ItemPlaybackPreferencePayload, scope: String, k
         preferredMediaSourceId = payload.preferredMediaSourceId,
         updatedAt = payload.updatedAt,
     )
-
-internal fun SmartPlaylistEntity.toPayload(): SmartPlaylistPayload = SmartPlaylistPayload(
-    id = id,
-    name = name,
-    criteriaJson = criteriaJson,
-    maxItems = maxItems,
-    sortBy = sortBy,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-)
-
-internal fun entityFrom(payload: SmartPlaylistPayload) = SmartPlaylistEntity(
-    id = payload.id,
-    name = payload.name,
-    criteriaJson = payload.criteriaJson,
-    maxItems = payload.maxItems,
-    sortBy = payload.sortBy,
-    createdAt = payload.createdAt,
-    updatedAt = payload.updatedAt,
-)
-
-internal fun MoodPlaylistEntity.toPayload(): MoodPlaylistPayload = MoodPlaylistPayload(
-    id = id,
-    name = name,
-    emoji = emoji,
-    description = description,
-    genreKeywordsJson = genreKeywordsJson,
-    excludedGenresJson = excludedGenresJson,
-    minRating = minRating,
-    sortBy = sortBy,
-    maxItems = maxItems,
-    themeColorHex = themeColorHex,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-)
-
-internal fun entityFrom(payload: MoodPlaylistPayload) = MoodPlaylistEntity(
-    id = payload.id,
-    name = payload.name,
-    emoji = payload.emoji,
-    description = payload.description,
-    genreKeywordsJson = payload.genreKeywordsJson,
-    excludedGenresJson = payload.excludedGenresJson,
-    minRating = payload.minRating,
-    sortBy = payload.sortBy,
-    maxItems = payload.maxItems,
-    themeColorHex = payload.themeColorHex,
-    createdAt = payload.createdAt,
-    updatedAt = payload.updatedAt,
-)
-
-internal fun MoodPlaylistPreferenceEntity.toPayload(): MoodPlaylistPreferencePayload =
-    MoodPlaylistPreferencePayload(
-        playlistId = playlistId,
-        isEnabled = isEnabled,
-        isFavorite = isFavorite,
-        lastPlayedAt = lastPlayedAt,
-        updatedAt = updatedAt,
-    )
-
-internal fun entityFrom(payload: MoodPlaylistPreferencePayload) = MoodPlaylistPreferenceEntity(
-    playlistId = payload.playlistId,
-    isEnabled = payload.isEnabled,
-    isFavorite = payload.isFavorite,
-    lastPlayedAt = payload.lastPlayedAt,
-    updatedAt = payload.updatedAt,
-)

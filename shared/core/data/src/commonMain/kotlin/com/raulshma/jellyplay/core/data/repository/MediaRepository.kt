@@ -23,7 +23,10 @@ interface MediaRepository {
     // The home-feed family (the sections payload, the single-row edge-pull
     // refetch, the SWR snapshot reads and the discover-row verbs) lives on
     // [HomeFeed]; the user-data change feed's read val lives on
-    // [UserDataChanges].
+    // [UserDataChanges]; the detail/similar reads live on [DetailFeed]; the
+    // collection verbs live on [CollectionOperations]; the user-data writes
+    // (every toggle/mark, [markPlayed] included) live on
+    // [UserDataWriteOperations].
 
     /** Library folders. [force] bypasses the folders cache for this read. */
     suspend fun getLibraryFolders(force: Boolean = false): Result<List<LibraryFolder>>
@@ -39,6 +42,14 @@ interface MediaRepository {
      * pull-to-refresh and re-fetch-after-write flows): the repository drops
      * the cached entry for [itemId] first, then fetches — exactly the
      * drop-then-read sequence callers used to run by hand.
+     *
+     * Also sits on [DetailFeed] (dual-declared; one impl override satisfies
+     * both) — clean detail-read consumers inject the seam. The union member
+     * remains for the mixed consumers: detail + browse (the library browser,
+     * the new-media worker), detail + the user-data change feed (the
+     * Collection/Person detail VMs), detail + the album-tracks family (the
+     * detail resolver) — see [LibraryFeed] / [UserDataChanges] /
+     * [MusicCatalogue].
      */
     suspend fun getMediaDetail(itemId: String, force: Boolean = false): Result<MediaDetail>
 
@@ -79,6 +90,12 @@ interface MediaRepository {
      */
     suspend fun getAlbumTracks(albumId: String, force: Boolean = false): Result<List<MediaItem>>
 
+    /**
+     * Also sits on [DetailFeed] (dual-declared; one impl override satisfies
+     * both) — clean detail-read consumers inject the seam. The union member
+     * remains for the union's mixed consumers (the details module's
+     * DetailViewModel pairs it with detail and collection reads).
+     */
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
 
     /**
@@ -88,6 +105,11 @@ interface MediaRepository {
      * needs: a member item's user-data flip evicts `detail_<itemId>`, never
      * the collection's `collection_<collectionId>_<startIndex>_<limit>` page
      * key, so the post-flip rows can only be served by an explicit force).
+     *
+     * Also sits on [CollectionOperations] (dual-declared; one impl override
+     * satisfies both). The union member remains for the details module's
+     * mixed consumers (CollectionDetailViewModel / DetailViewModel pair
+     * collection reads with detail reads).
      */
     suspend fun getCollectionItems(
         collectionId: String,
@@ -100,12 +122,16 @@ interface MediaRepository {
      * Creates a new collection seeded with the given item ids and returns the
      * new collection's id. Used by the detail screen's Create-Collection flow.
      * Remote-only.
+     *
+     * Also sits on [CollectionOperations] (dual-declared).
      */
     suspend fun createCollection(name: String, itemIds: List<String> = emptyList()): Result<String>
 
     /**
      * Adds the given item ids to an existing collection. Used by the detail
      * screen's Add-to-Collection picker. Remote-only.
+     *
+     * Also sits on [CollectionOperations] (dual-declared).
      */
     suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
 
@@ -127,15 +153,6 @@ interface MediaRepository {
      * push. No-op with no ids or before login.
      */
     fun notifyUserDataChanged(itemIds: List<String>)
-
-    /**
-     * The one user-data write left on the union: the offline outbox drainer
-     * calls it alongside [notifyUserDataChanged] (its synthetic-push partner),
-     * so it cannot narrow to [UserDataWriteOperations] alone yet. Its four
-     * siblings moved to that seam — their sole union caller ([UserDataMutator])
-     * injects the seam now.
-     */
-    suspend fun markPlayed(itemId: String): Result<Unit>
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }
@@ -231,11 +248,10 @@ interface SeriesNotificationReads {
 
 /**
  * The user-data WRITE family seam of [MediaRepository]: the five toggle/mark
- * endpoints every user-data mutation funnels through. Its clean sole
- * consumer is [UserDataMutatorImpl] — the protocol facade every feature
- * consumes — which now ctor-injects this seam instead of the 40-member
- * union. [markPlayed] additionally stays on [MediaRepository] (the offline
- * outbox drainer pairs it with the synthetic-push fan-out member), and the
+ * endpoints every user-data mutation funnels through, plus the offline
+ * outbox drain's deep write. Its clean consumers are [UserDataMutatorImpl] —
+ * the protocol facade every feature consumes — and the offline outbox
+ * drainer (whose drain-tail fan-out lands in [recordDrainedPlays]). The
  * impl's overrides satisfy both declarations.
  *
  * Not to be confused with [UserDataMutator]: THAT interface is the
@@ -264,6 +280,19 @@ interface UserDataWriteOperations {
 
     /** Unplayed mirror of [markSeasonPlayed]. */
     suspend fun markSeasonUnplayed(seasonId: String, seriesId: String): Result<Unit>
+
+    /**
+     * The offline outbox drain's deep write: marks every id in [itemIds]
+     * played and pairs each flip with its confirmed-write fan-out — the exact
+     * [markPlayed] per-item body (PlayedStateSync flip + the repository's
+     * cache-invalidation wrapper), whose delivered flips announce themselves
+     * on the synthetic-push flow from inside the flip, batched so the drain's
+     * derived-watched-flip pass is ONE call into this seam. The drain
+     * announces its remaining delivered ids (replayed entries, adopted rows)
+     * once at the tail through the announcer, never naming a delivered
+     * derived flip twice.
+     */
+    suspend fun recordDrainedPlays(itemIds: List<String>)
 }
 
 /**
@@ -419,9 +448,10 @@ interface UserDataChanges {
  * photos and settings screens consume. [MediaRepositoryImpl] implements this
  * seam alongside the wide interface (the [MusicCatalogue] over-the-impl
  * pattern — one override satisfies both declarations), so a browse-only
- * consumer narrows without a second repository instance. Detail/similar and
- * the collection verbs stay on the union (their consumers are mixed); mixed
- * browse+detail consumers keep [MediaRepository].
+ * consumer narrows without a second repository instance. The detail/similar
+ * and collection verbs have their own family seams ([DetailFeed] /
+ * [CollectionOperations]); mixed browse+detail consumers keep
+ * [MediaRepository].
  *
  * No member here carries a default argument — the family-seam rule recorded
  * on [MusicCatalogue]: an override whose two superinterfaces both declare
@@ -460,4 +490,76 @@ interface LibraryFeed {
 
     /** The favorites paged read ([mediaTypes] filter, null = all kinds). */
     fun getFavoritesPaged(mediaTypes: List<MediaType>?): Flow<PagingData<MediaItem>>
+}
+
+/**
+ * The detail-read family seam of [MediaRepository]: the detail fetch and the
+ * similar-items row — the two detail-cluster reads whose consumers are clean
+ * detail-read consumers (nothing else on the wide surface they need).
+ * [MediaRepositoryImpl] implements this seam alongside the wide interface
+ * (the [LibraryFeed] over-the-impl pattern — one override satisfies both
+ * declarations), so a detail-read-only consumer narrows off the union
+ * without a second repository instance. Both members are served by the
+ * impl's [com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals]
+ * detail-cache cluster (single-flight, the [force] freshness lever,
+ * epoch-guarded writes); the album-tracks/theme-song/franchise siblings stay
+ * on their own families ([MusicCatalogue], [MediaCatalogueEnrichments]) —
+ * a consumer needing those beside the detail read is a mixed consumer and
+ * keeps [MediaRepository].
+ *
+ * No member here carries a default argument — the family-seam rule recorded
+ * on [MusicCatalogue]: an override whose two superinterfaces both declare
+ * default arguments is forbidden, so seam-typed callers pass explicit values.
+ */
+interface DetailFeed {
+
+    /**
+     * Fetches the detail for [itemId]. Pass [force] to bypass the in-memory
+     * detail cache for this read (the sanctioned freshness lever for
+     * pull-to-refresh and re-fetch-after-write flows).
+     */
+    suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail>
+
+    /** The similar-items row for [itemId] ([limit]-capped; the cache key includes the limit). */
+    suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>>
+}
+
+/**
+ * The collection-operations family seam of [MediaRepository]: the collection
+ * page read and the two collection edits — the three BoxSet verbs the
+ * detail screen's collection flows consume. [MediaRepositoryImpl] implements
+ * this seam alongside the wide interface (the [LibraryFeed] over-the-impl
+ * pattern — one override satisfies both declarations), so a
+ * collections-only consumer narrows off the union. The reads route through
+ * the collection page cache (the announced-staleness lever — a member item's
+ * user-data flip arms the marker the next non-forced read consumes); the
+ * edits self-invalidate the collection's page family on success.
+ *
+ * No member here carries a default argument — the family-seam rule recorded
+ * on [MusicCatalogue]: an override whose two superinterfaces both declare
+ * default arguments is forbidden, so seam-typed callers pass explicit values.
+ */
+interface CollectionOperations {
+
+    /**
+     * The collection's member page ([startIndex]/[limit] window). Pass
+     * [force] to drop every cached page for the collection first — the
+     * prefix evict spans all pages, so forcing one page heals the earlier
+     * ones too.
+     */
+    suspend fun getCollectionItems(
+        collectionId: String,
+        startIndex: Int,
+        limit: Int,
+        force: Boolean,
+    ): Result<SearchResult>
+
+    /**
+     * Creates a new collection seeded with the given item ids and returns the
+     * new collection's id. Remote-only.
+     */
+    suspend fun createCollection(name: String, itemIds: List<String>): Result<String>
+
+    /** Adds the given item ids to an existing collection. Remote-only. */
+    suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
 }

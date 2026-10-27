@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.platform.LocalFocusManager
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
@@ -183,12 +184,17 @@ internal class DesktopShellServices(
      *  - [appRuntimeStateStore] — the first-run onboarding gate's one-shot
      *    `onboarding_completed` read;
      *  - [appearanceStore] — the stored manual layout override behind the
-     *    adaptive shell wiring.
+     *    adaptive shell wiring;
+     *  - [offlineModeManager] — the shortcut-action surface's TOGGLE_OFFLINE
+     *    arm (the same platform single the home VM reads its offline
+     *    state through; the manual toggle is the desktop manager's
+     *    documented only path to OFFLINE_MANUAL).
      */
     val networkMonitor: NetworkMonitor,
     val navigationStore: NavigationStore,
     val appRuntimeStateStore: AppRuntimeStateStore,
     val appearanceStore: AppearanceStore,
+    val offlineModeManager: OfflineModeManager,
 
     /**
      * The cold-start session restoration's seams (the holder constructs the
@@ -365,6 +371,7 @@ internal val desktopShellServicePrewarms: List<(Koin) -> Any> = listOf(
     { it.get<NavigationStore>() },
     { it.get<AppRuntimeStateStore>() },
     { it.get<AppearanceStore>() },
+    { it.get<OfflineModeManager>() },
     // The session-restoration seams' Koin reads (factory koinInject order below).
     { it.get<PlaybackStore>() },
     { it.get<LibraryApiClient>() },
@@ -423,6 +430,7 @@ internal fun rememberDesktopShellServices(
     val navigationStore: NavigationStore = koinInject()
     val appRuntimeStateStore: AppRuntimeStateStore = koinInject()
     val appearanceStore: AppearanceStore = koinInject()
+    val offlineModeManager: OfflineModeManager = koinInject()
     // The cold-start session restoration's collaborators (holder seam lambdas
     // below): the persisted restore mode and the ONE resume fetch, mapped once
     // and cached nowhere (server-authoritative — incognito histories simply
@@ -452,6 +460,7 @@ internal fun rememberDesktopShellServices(
         navigationStore,
         appRuntimeStateStore,
         appearanceStore,
+        offlineModeManager,
         playbackStore,
         libraryApiClient,
     ) {
@@ -477,6 +486,7 @@ internal fun rememberDesktopShellServices(
             navigationStore = navigationStore,
             appRuntimeStateStore = appRuntimeStateStore,
             appearanceStore = appearanceStore,
+            offlineModeManager = offlineModeManager,
             sessionRestoreMode = { playbackStore.playback.value.sessionRestoreMode },
             fetchResumeSnapshot = {
                 latestResumeVideoSnapshot(

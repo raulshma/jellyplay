@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.sync
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
@@ -61,7 +61,7 @@ import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
  */
 class OfflineSyncManagerTest {
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var writer: com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineMediaDao: OfflineMediaDao
@@ -80,7 +80,7 @@ class OfflineSyncManagerTest {
 
     @BeforeTest
     fun setup() {
-        mediaRepository = mockk()
+        detailFeed = mockk()
         writer = mockk()
         downloadRepository = mockk()
         offlineMediaDao = mockk()
@@ -97,7 +97,7 @@ class OfflineSyncManagerTest {
         coEvery { syncBaselineDao.clearAllCheckingFlags() } returns Unit
         coEvery { syncBaselineDao.upsert(any()) } returns Unit
         manager = OfflineSyncManager(
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             writer = writer,
             downloadRepository = downloadRepository,
             offlineMediaDao = offlineMediaDao,
@@ -185,7 +185,7 @@ class OfflineSyncManagerTest {
         val result = manager.checkForUpdates(ITEM_ID)
 
         assertEquals(SyncStatus.UNKNOWN, result.state.status)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         coVerify(exactly = 0) { syncBaselineDao.setSyncChecking(any(), any()) }
     }
 
@@ -198,7 +198,7 @@ class OfflineSyncManagerTest {
 
         assertEquals(SyncStatus.CURRENT, result.state.status)
         assertFalse(result.state.needsResync)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
@@ -206,11 +206,11 @@ class OfflineSyncManagerTest {
         val fresh = detail()
         val baseline = comparator.baseline(fresh)
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns entityFor(baseline, lastSyncedAt = System.currentTimeMillis())
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
 
         manager.checkForUpdates(ITEM_ID, force = true)
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail(ITEM_ID, force = true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail(ITEM_ID, force = true) }
     }
 
     @Test
@@ -218,7 +218,7 @@ class OfflineSyncManagerTest {
         val fresh = detail()
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns
             entityFor(comparator.baseline(fresh), lastSyncedAt = System.currentTimeMillis() - OfflineSyncManager.SYNC_TTL_MS * 2)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
 
         val result = manager.checkForUpdates(ITEM_ID)
 
@@ -234,7 +234,7 @@ class OfflineSyncManagerTest {
     fun `changed server metadata flags UPDATE_AVAILABLE with per-axis flags`() = runTest {
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns
             entityFor(comparator.baseline(detail()), lastSyncedAt = System.currentTimeMillis() - OfflineSyncManager.SYNC_TTL_MS * 2)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns
             Result.success(detail(overview = "rewritten plot"))
 
         val result = manager.checkForUpdates(ITEM_ID)
@@ -253,7 +253,7 @@ class OfflineSyncManagerTest {
         val baseline = comparator.baseline(detail())
         val row = entityFor(baseline, lastSyncedAt = System.currentTimeMillis() - OfflineSyncManager.SYNC_TTL_MS * 2)
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns row
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns
             Result.failure(java.io.IOException("server unreachable"))
 
         val result = manager.checkForUpdates(ITEM_ID)
@@ -275,7 +275,7 @@ class OfflineSyncManagerTest {
         val result = manager.checkForUpdates(ITEM_ID)
 
         assertEquals(SyncStatus.CURRENT, result.state.status)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         coVerify(exactly = 0) { syncBaselineDao.setSyncChecking(any(), any()) }
     }
 
@@ -286,7 +286,7 @@ class OfflineSyncManagerTest {
         // diff flags the null→known image/source transitions, but the
         // first-contact projection clears them before persisting).
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns SyncBaselineEntity(id = ITEM_ID)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(detail())
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(detail())
 
         manager.checkForUpdates(ITEM_ID)
 
@@ -305,7 +305,7 @@ class OfflineSyncManagerTest {
             entityFor(baseline, lastSyncedAt = System.currentTimeMillis()).copy(id = "a"),
             entityFor(baseline, lastSyncedAt = System.currentTimeMillis()).copy(id = "b"),
         )
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(fresh)
 
         val results = manager.checkForUpdatesBatch(listOf("a", "b"))
 
@@ -330,13 +330,13 @@ class OfflineSyncManagerTest {
         assertEquals(1, result.steps.size)
         assertEquals(ResyncStep.FETCH_DETAIL, result.steps.single().step)
         assertEquals("Offline", result.steps.single().message)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
     fun `a failed detail fetch produces a failed FETCH_DETAIL step`() = runTest {
         everyIsOffline(false)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns
             Result.failure(java.io.IOException("boom"))
 
         val result = manager.resyncItem(ITEM_ID)
@@ -350,7 +350,7 @@ class OfflineSyncManagerTest {
     fun `a metadata-only resync persists the row and clears the update flag`() = runTest {
         everyIsOffline(false)
         val fresh = detail()
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns
             entityFor(comparator.baseline(fresh), lastSyncedAt = System.currentTimeMillis())
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM_ID) } returns null
@@ -375,7 +375,7 @@ class OfflineSyncManagerTest {
         // empty prior signature; the server now advertises a subtitle.
         val prior = comparator.baseline(detail()).copy(subtitleSignature = "prior-sig", subtitlesPending = true)
         val fresh = detail(withSubtitle = true)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns entityFor(prior, lastSyncedAt = System.currentTimeMillis())
             .copy(syncSubtitlesPending = 1)
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM_ID) } returns downloadRow()
@@ -402,7 +402,7 @@ class OfflineSyncManagerTest {
         val prior = comparator.baseline(detail()).copy(subtitleSignature = "", subtitlesPending = true)
         val fresh = detail(withSubtitle = true)
         val freshSig = comparator.subtitleSignature(fresh)
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns entityFor(prior, lastSyncedAt = System.currentTimeMillis())
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM_ID) } returns downloadRow()
         coEvery { writer.downloadExternalSubtitles(ITEM_ID, any(), any(), any()) } returns true
@@ -418,7 +418,7 @@ class OfflineSyncManagerTest {
     fun `a media source change is surfaced as mediaFileChanged`() = runTest {
         everyIsOffline(false)
         val fresh = detail(sourceId = "src-CHANGED")
-        coEvery { mediaRepository.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(ITEM_ID, force = true) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(ITEM_ID) } returns
             entityFor(comparator.baseline(detail(sourceId = "src-1")), lastSyncedAt = System.currentTimeMillis())
         coEvery { downloadRepository.getDownloadByMediaItemId(ITEM_ID) } returns null
@@ -434,7 +434,7 @@ class OfflineSyncManagerTest {
     @Test
     fun `resyncBatch drives every item through batchProgress to DONE`() = runBlocking {
         val fresh = detail()
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.success(fresh)
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(fresh)
         coEvery { syncBaselineDao.getBaseline(any()) } returns null
         coEvery { downloadRepository.getDownloadByMediaItemId(any()) } returns null
         coEvery { writer.saveOfflineMediaDetail(any(), any(), any()) } returns Unit
@@ -444,7 +444,7 @@ class OfflineSyncManagerTest {
         // withTimeoutOrNull below in real time.
         val batchScope = CoroutineScope(Dispatchers.Unconfined)
         val batchManager = OfflineSyncManager(
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             writer = writer,
             downloadRepository = downloadRepository,
             offlineMediaDao = offlineMediaDao,

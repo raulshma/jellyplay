@@ -6,7 +6,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
@@ -53,7 +53,7 @@ class LibraryRecommendationsWidgetWorkerTest {
     private val context: Context = org.robolectric.RuntimeEnvironment.getApplication()
     private val workerParameters: WorkerParameters = mockk(relaxed = true)
     private val widgetDataStore: WidgetDataStore = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val homeFeed: HomeFeed = mockk(relaxed = true)
     private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -77,7 +77,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         appContext = context,
         params = workerParameters,
         widgetDataStore = widgetDataStore,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         homeFeed = homeFeed,
         libraryApiClient = libraryApiClient,
         imageUrlProvider = imageUrlProvider,
@@ -188,7 +188,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.SIMILAR_TO_RECENT)
         continueWatching.value = listOf(mediaItem("seed-1"))
         coEvery {
-            mediaRepository.getSimilarItems(eq("seed-1"), any())
+            detailFeed.getSimilarItems(eq("seed-1"), any())
         } returns Result.success(listOf(mediaItem("similar-1"), mediaItem("similar-2")))
 
         val result = createWorker().doWork()

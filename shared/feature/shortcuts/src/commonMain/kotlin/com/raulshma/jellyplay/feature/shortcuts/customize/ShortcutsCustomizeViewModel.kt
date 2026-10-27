@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.shortcuts.DefaultShortcutCatalog
@@ -136,15 +137,17 @@ class ShortcutsCustomizeViewModel(
     }
 
     /**
-     * Drops definitions whose target left the catalog — run once when the
-     * editor opens so stale rows (an app update removed/renamed a
-     * destination) never resurface, without blocking the read path.
+     * Drops definitions whose target left the catalog — or targets a shell
+     * action outside [supportedActions] (this shell cannot execute it) — run
+     * once when the editor opens so stale rows (an app update removed/renamed
+     * a destination; a pin predating a capability change) never resurface,
+     * without blocking the read path.
      */
-    fun pruneUnknownTargets() {
+    fun pruneUnknownTargets(supportedActions: Set<ShortcutAction> = ShortcutAction.entries.toSet()) {
         viewModelScope.launch {
             val slice = shortcutsStore.shortcuts.value
             if (slice.definitions.isEmpty()) return@launch
-            val kept = ShortcutsCustomizePolicy.prune(slice.definitions, catalog)
+            val kept = ShortcutsCustomizePolicy.prune(slice.definitions, catalog, supportedActions)
             if (kept.size != slice.definitions.size) {
                 editor.edit {
                     shortcuts.setShortcutsConfig(

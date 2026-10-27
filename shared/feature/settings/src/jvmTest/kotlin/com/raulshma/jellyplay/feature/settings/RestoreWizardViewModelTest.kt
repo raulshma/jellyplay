@@ -605,17 +605,17 @@ class RestoreWizardViewModelTest {
         // The "All" affordance over the external-slice cards: a full restore
         // of every offered slice stays one tap (partial → all → clear).
         val offered = listOf(BackupSliceKey.INTEGRATIONS, BackupSliceKey.PLAYLISTS)
-        vm.toggleSlice(BackupSliceKey.INTEGRATIONS)
+        vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.INTEGRATIONS))
         var selection = vm.uiState.file!!.selection
         assertEquals(setOf(BackupSliceKey.INTEGRATIONS), selection.slices)
         assertFalse(selection.allSlicesSelected(offered))
 
-        vm.toggleAllSlices()
+        vm.toggle(WizardSelectionTarget.AllSlices)
         selection = vm.uiState.file!!.selection
         assertTrue(selection.allSlicesSelected(offered))
         assertEquals(offered.toSet(), selection.slices)
 
-        vm.toggleAllSlices()
+        vm.toggle(WizardSelectionTarget.AllSlices)
         assertTrue(vm.uiState.file!!.selection.slices.isEmpty())
     }
 
@@ -638,26 +638,26 @@ class RestoreWizardViewModelTest {
         val declared = PreferenceCategoryViews.map { it.category }
 
         // Child toggle lands in the selection…
-        vm.toggleCategory(PreferenceResetCategory.APPEARANCE)
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
         var selection = vm.uiState.file!!.selection
         assertTrue(PreferenceResetCategory.APPEARANCE in selection.categories)
         assertFalse(selection.allCategoriesSelected(declared))
 
         // …the parent toggle selects ALL children from a partial state…
-        vm.toggleAllCategories()
+        vm.toggle(WizardSelectionTarget.AllCategories)
         selection = vm.uiState.file!!.selection
         assertTrue(selection.allCategoriesSelected(declared))
         assertEquals(declared.toSet(), selection.categories)
 
         // …and clears them all from the fully-selected state.
-        vm.toggleAllCategories()
+        vm.toggle(WizardSelectionTarget.AllCategories)
         selection = vm.uiState.file!!.selection
         assertTrue(selection.categories.isEmpty())
 
         // Extras + slices toggle independently; the confirm count follows.
-        vm.toggleExtras()
-        vm.toggleSlice(BackupSliceKey.WIDGET)
-        vm.toggleSlice(BackupSliceKey.WIDGET)
+        vm.toggle(WizardSelectionTarget.Extras)
+        vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.WIDGET))
+        vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.WIDGET))
         selection = vm.uiState.file!!.selection
         assertTrue(selection.extras)
         assertTrue(BackupSliceKey.WIDGET !in selection.slices)
@@ -668,20 +668,20 @@ class RestoreWizardViewModelTest {
     fun `snapshot selection keeps the prefs parent aligned with its domains`() = runTest(testDispatcher) {
         val vm = openSnapshotVm()
 
-        vm.togglePrefDomain("appearance")
+        vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
         var selection = vm.uiState.snapshot!!.selection
         assertTrue("appearance" in selection.domains)
         assertFalse(selection.allDomainsSelected(vm.uiState.snapshot!!.groups.prefDomains))
 
-        vm.togglePrefs()
+        vm.toggle(WizardSelectionTarget.Prefs)
         selection = vm.uiState.snapshot!!.selection
         assertTrue(selection.allDomainsSelected(vm.uiState.snapshot!!.groups.prefDomains))
 
-        vm.togglePrefs()
+        vm.toggle(WizardSelectionTarget.Prefs)
         selection = vm.uiState.snapshot!!.selection
         assertTrue(selection.domains.isEmpty())
 
-        vm.toggleNamespace("search")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
         assertTrue("search" in vm.uiState.snapshot!!.selection.namespaces)
     }
 
@@ -693,9 +693,9 @@ class RestoreWizardViewModelTest {
         val vm = loadedWithFile(appearanceBackupJson())
         collectBus()
 
-        vm.toggleCategory(PreferenceResetCategory.APPEARANCE)
-        vm.toggleSlice(BackupSliceKey.WIDGET)
-        vm.toggleExtras()
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
+        vm.toggle(WizardSelectionTarget.Slice(BackupSliceKey.WIDGET))
+        vm.toggle(WizardSelectionTarget.Extras)
         vm.restoreSelected()
         awaitUntil("the file apply completes") { vm.uiState.completed }
 
@@ -738,7 +738,7 @@ class RestoreWizardViewModelTest {
         val vm = loadedWithFile(appearanceBackupJson())
         collectBus()
 
-        vm.toggleCategory(PreferenceResetCategory.APPEARANCE)
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
         vm.restoreSelected()
         awaitUntil("the apply still completes") { vm.uiState.completed }
 
@@ -756,7 +756,7 @@ class RestoreWizardViewModelTest {
     fun `closed gate skips the capture entirely`() = runTest(testDispatcher) {
         // Defaults: probe UNAVAILABLE — the gate is closed.
         val vm = loadedWithFile(appearanceBackupJson())
-        vm.toggleCategory(PreferenceResetCategory.APPEARANCE)
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.APPEARANCE))
 
         vm.restoreSelected()
         awaitUntil("the apply completes") { vm.uiState.completed }
@@ -777,8 +777,8 @@ class RestoreWizardViewModelTest {
         )
         val vm = loadedWithFile(json)
 
-        vm.toggleCategory(PreferenceResetCategory.SECURITY)
-        vm.toggleRestoreSecuritySensitive(true)
+        vm.toggle(WizardSelectionTarget.Category(PreferenceResetCategory.SECURITY))
+        vm.toggle(WizardSelectionTarget.SecuritySensitive)
         vm.restoreSelected()
         awaitUntil("the apply completes") { vm.uiState.completed }
 
@@ -1073,8 +1073,8 @@ class RestoreWizardViewModelTest {
         val vm = openSnapshotVm()
         collectBus()
 
-        vm.toggleNamespace("search")
-        vm.togglePrefDomain("appearance")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
+        vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
         vm.restoreSelected()
         awaitUntil("the snapshot apply completes") { vm.uiState.completed }
 
@@ -1130,7 +1130,7 @@ class RestoreWizardViewModelTest {
             vm.uiState.snapshot!!.groups.namespaces.single().rows.size,
             "base and overlay rows sharing an ns/key stay distinct diff rows",
         )
-        vm.toggleNamespace("search")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
         awaitUntil("the snapshot apply completes") { vm.uiState.completed }
 
@@ -1171,7 +1171,7 @@ class RestoreWizardViewModelTest {
         awaitUntil("the big diff stages") { vm.uiState.snapshot != null }
         collectBus()
 
-        vm.toggleNamespace("search")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
         awaitUntil("the chunked apply completes") { vm.uiState.completed }
 
@@ -1190,7 +1190,7 @@ class RestoreWizardViewModelTest {
         coEvery { pluginApi.applySettings(any(), any(), any()) } returns Result.failure(RuntimeException("socket boom"))
         val vm = openSnapshotVm()
 
-        vm.toggleNamespace("search")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
         awaitUntil("the failure surfaces") { vm.uiState.applyError != null }
 
@@ -1211,7 +1211,7 @@ class RestoreWizardViewModelTest {
             )
         }
         val vm = openSnapshotVm()
-        vm.toggleNamespace("search")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
 
         vm.restoreSelected()
         vm.restoreSelected() // the first apply is still parked — refused synchronously
@@ -1268,7 +1268,7 @@ class RestoreWizardViewModelTest {
             JellyPlaySettingsBatchResult(applied = listOf(JellyPlayAppliedSetting("prefs", "theme_mode", 1, 1))),
         )
         // Only "appearance" is selected — the removed live keys live in Other.
-        vm.togglePrefDomain("appearance")
+        vm.toggle(WizardSelectionTarget.PrefDomain("appearance"))
         vm.restoreSelected()
         awaitUntil("the snapshot apply completes") { vm.uiState.completed }
 
@@ -1343,7 +1343,7 @@ class RestoreWizardViewModelTest {
         awaitUntil("the snapshot diff stages") { vm.uiState.snapshot != null }
         collectBus()
 
-        vm.toggleNamespace("search")
+        vm.toggle(WizardSelectionTarget.Namespace("search"))
         vm.restoreSelected()
         awaitUntil("the apply completes") { vm.uiState.completed }
 

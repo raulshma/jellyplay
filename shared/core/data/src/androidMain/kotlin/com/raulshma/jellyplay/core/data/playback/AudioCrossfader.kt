@@ -13,7 +13,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -25,7 +25,8 @@ class AudioCrossfader(
     private val scope: CoroutineScope,
     private val context: Context,
     private val effectsProcessor: AudioEffectsProcessor,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     /** Artwork URL for the incoming crossfade row (the ImageUrlProvider seam). */
     private val imageUrlProvider: ImageUrlProvider,
     private val playbackSourceResolver: PlaybackSourceResolver,
@@ -194,7 +195,7 @@ class AudioCrossfader(
         isCrossfadingSetter(true)
 
         crossfadeJob = scope.launch {
-            val detail = mediaRepository.getMediaDetail(nextItem.id)
+            val detail = detailFeed.getMediaDetail(nextItem.id, force = false)
             detail.onSuccess { d ->
                 val source = d.mediaSources.firstOrNull()
                 // The download-vs-stream fork lives once in PlaybackSourceResolver:

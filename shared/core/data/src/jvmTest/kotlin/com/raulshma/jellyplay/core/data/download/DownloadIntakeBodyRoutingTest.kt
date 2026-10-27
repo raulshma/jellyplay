@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
@@ -49,7 +49,7 @@ class DownloadIntakeBodyRoutingTest {
 
     private val delegate: DownloadDelegate = mockk()
     private val downloadRepository: DownloadRepository = mockk()
-    private val mediaRepository: MediaRepository = mockk()
+    private val detailFeed: DetailFeed = mockk()
     private val downloadsStore: DownloadsStore = mockk {
         every { downloads } returns MutableStateFlow(
             DownloadsSlice(downloadQuality = DownloadQuality.HIGH_1080P),
@@ -61,7 +61,7 @@ class DownloadIntakeBodyRoutingTest {
     private fun body() = DownloadIntakeBody(
         delegate = delegate,
         downloadRepository = downloadRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         downloadsStore = downloadsStore,
         noSourceError = { noSourceCopy },
     )
@@ -78,7 +78,7 @@ class DownloadIntakeBodyRoutingTest {
             DownloadRequestResult.SeriesSelectionRequired("series-1"),
             result,
         )
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
         coVerify(exactly = 0) { delegate.startOne(any(), any(), any(), any()) }
     }
 
@@ -92,7 +92,7 @@ class DownloadIntakeBodyRoutingTest {
                 result,
             )
         }
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
         coVerify(exactly = 0) { delegate.startOne(any(), any(), any(), any()) }
     }
 
@@ -101,7 +101,7 @@ class DownloadIntakeBodyRoutingTest {
         for (type in listOf(MediaType.MOVIE, MediaType.EPISODE, MediaType.MUSIC_VIDEO, MediaType.AUDIO)) {
             val inline = item("inline-1", type)
             val detail = detailOf(inline)
-            coEvery { mediaRepository.getMediaDetail("inline-1") } returns Result.success(detail)
+            coEvery { detailFeed.getMediaDetail("inline-1", force = false) } returns Result.success(detail)
             coEvery { delegate.startOne(detail, 8_000_000, null, null) } returns
                 DownloadResult(downloadItem = mockk(), error = null)
 
@@ -114,7 +114,7 @@ class DownloadIntakeBodyRoutingTest {
 
     @Test
     fun `an unresolvable detail fails without attempting a start`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("movie-1") } returns
+        coEvery { detailFeed.getMediaDetail("movie-1", force = false) } returns
             Result.failure(RuntimeException("offline"))
 
         val result = body().startFromItem(item("movie-1", MediaType.MOVIE))
@@ -127,7 +127,7 @@ class DownloadIntakeBodyRoutingTest {
     @Test
     fun `a null start request fails with the noSourceError copy`() = runTest {
         val detail = detailOf(item("movie-1", MediaType.MOVIE))
-        coEvery { mediaRepository.getMediaDetail("movie-1") } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("movie-1", force = false) } returns Result.success(detail)
         // No usable media source = startOne yields NO request (null), which
         // the body maps to a Failed carrying the platform's no-source copy.
         coEvery { delegate.startOne(detail, 8_000_000, null, null) } returns null

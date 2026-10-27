@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.trickplay
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -33,7 +33,7 @@ class TrickplayPreparationTest {
 
     private lateinit var controller: RecordingTrickplayController
     private lateinit var offlinePlaybackFacade: OfflinePlaybackFacade
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var preparation: TrickplayPreparation
 
     /** Downloads root — the parent dir every derivation starts from. */
@@ -45,11 +45,11 @@ class TrickplayPreparationTest {
     fun setUp() {
         controller = RecordingTrickplayController()
         offlinePlaybackFacade = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         preparation = TrickplayPreparation(
             controller = controller,
             offlinePlaybackFacade = offlinePlaybackFacade,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
         )
         downloadsDir = File(tempFolder.root, "downloads").apply { mkdirs() }
         coEvery { offlinePlaybackFacade.getDownloadPath(itemId) } answers { downloadPath }
@@ -75,11 +75,11 @@ class TrickplayPreparationTest {
         val source = MediaSource(id = "ms-2", name = "srv", trickplayInfo = info)
         val detail = mockk<MediaDetail>()
         every { detail.mediaSources } returns listOf(source)
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns Result.success(detail)
     }
 
     private fun serverFails() {
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.failure(IllegalStateException("offline"))
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns Result.failure(IllegalStateException("offline"))
     }
 
     /** Writes a parseable meta.json into [dir] (the download bundle layout). */
@@ -110,7 +110,7 @@ class TrickplayPreparationTest {
         assertEquals(listOf("initialize"), controller.ops)
         // The streaming arm never derives or touches a filesystem dir.
         assertTrue(controller.initializedDirs.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     @Test
@@ -125,7 +125,7 @@ class TrickplayPreparationTest {
         assertEquals(sourceInfo(), result)
         assertEquals(listOf("initializeWithCache"), controller.ops)
         assertEquals(File(downloadsDir, "trickplay"), controller.initializedDirs.single())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     // ─── arm 2: local bundle shipped with the download ────────────────────────
@@ -138,7 +138,7 @@ class TrickplayPreparationTest {
 
         assertNull(result)
         assertTrue(controller.ops.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     @Test
@@ -152,7 +152,7 @@ class TrickplayPreparationTest {
         assertEquals(listOf("initializeLocal"), controller.ops)
         assertEquals(File(downloadsDir, "trickplay_$itemId"), controller.initializedDirs.single())
         // A local bundle means no server round-trip.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     @Test
@@ -165,7 +165,7 @@ class TrickplayPreparationTest {
         assertEquals(320, result?.width)
         assertEquals(listOf("initializeLocal"), controller.ops)
         assertEquals(File(downloadsDir, "trickplay"), controller.initializedDirs.single())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     // ─── arm 3: live server fetch cached for the next offline session ─────────

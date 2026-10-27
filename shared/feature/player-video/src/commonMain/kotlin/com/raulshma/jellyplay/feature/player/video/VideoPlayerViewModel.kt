@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -124,7 +124,8 @@ class VideoPlayerViewModel(
      * androidMain trickplay/cast-controller/becoming-noisy/focus collaborators.
      */
     private val platform: VideoPlayerPlatform,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     /** The item-attached extras seam (Cinema Mode intros for the session-load pipeline). */
     private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val lyricsRepository: LyricsRepository,
@@ -188,7 +189,7 @@ class VideoPlayerViewModel(
      * androidMain factory alongside the Context the controller needs.
      */
     private val mediaSessionFactory: VideoMediaSessionFactory,
-    // Bare ctor parameter (DI passes it by name) — the public castManager val is retired.
+    // Bare ctor parameter; DI passes it by name and no public val exposes it.
     castManager: CastManager,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
@@ -229,8 +230,8 @@ class VideoPlayerViewModel(
      * TRUE when the teardown release about to run is caused by the HOST
      * going away (the Android activity finishing behind the player — the app
      * was swiped from recents mid-playback) rather than an in-app player
-     * close. That distinction gates the restore prompt's teardown marker
-     * ([SessionPositionLedger.suppressHandledOfferOnRelease]): an in-app
+     * close. That distinction decides the restore prompt's teardown marker
+     * (the ledger's [SessionPositionLedger] host-teardown probe): an in-app
      * close is "done for now" (persist, next launch stays silent), a host
      * exit is an INTERRUPTED session (skip, next launch prompts). Default
      * FALSE — desktop's only VM teardowns are in-app closes (a window close
@@ -392,9 +393,9 @@ class VideoPlayerViewModel(
      * (see [PlaybackSession]'s KDoc for the construction contract): its class
      * body constructs every collaborator ONCE with the six mutual-recursion
      * construction cycles dissolved by ownership (no lateinit back-reference
-     * slots remain), and its arm phase — [PlaybackSession.arm], called from
-     * `init` below — registers the collectors this class's former init block
-     * launched inline. The session owns the collaborator graph, the load
+     * slots remain), and its arm phase - [PlaybackSession.arm], called from
+     * `init` below - registers the collectors the VM's state holders and
+     * event funnel need. The session owns the collaborator graph, the load
      * sequence, the engine-swap choreography, the reporting + release surface
      * and the session-event forwarder; this VM keeps the constructor
      * dependencies, the state holders, the [onEvent] funnel + its handlers
@@ -440,7 +441,7 @@ class VideoPlayerViewModel(
         playbackStore = stores.playback,
         playbackRepository = playbackRepository,
         offlinePlaybackFacade = offlinePlaybackFacade,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         // The construction bundles (the PlayerStores pattern): each groups
         // the pass-throughs that feed ONE internally-built module cluster.
         subtitleSources = PlayerSubtitleSources(
@@ -470,6 +471,11 @@ class VideoPlayerViewModel(
         // arm raises the same notice); the session-side local seek fires it
         // through this narrow seam.
         onSegmentSkippedNotice = { segmentType -> showSkippedSegmentNotice(segmentType) },
+        // The host-exit probe rides the session's position ledger as a
+        // constructor input (the probe, not a per-release flag write): the
+        // ledger reads it at the final stop report to decide the restore
+        // prompt's handled-offer marker (see [isAppExiting]).
+        isHostTeardown = isAppExiting,
     )
 
     /**
@@ -837,8 +843,7 @@ class VideoPlayerViewModel(
     }
 
     // The SyncPlay slice the screen drives lives on the session's slices
-    // ([sessionSlices].controls / .sheets — built by the session; the former
-    // per-slice VM pass-throughs are gone with the wiring builder).
+    // ([sessionSlices].controls / .sheets), built by the session.
 
     // ── Session load pipeline ────────────────────────────────────────────────
     // The pipeline owns the ORDER of the load stages; the outputs and hook
@@ -882,8 +887,7 @@ class VideoPlayerViewModel(
     // The engine handle the screen composes with (reactive flow + one-shot
     // reads) lives on the controls session slice
     // ([com.raulshma.jellyplay.feature.player.video.session.ControlsSessionSlice.engineFlow]
-    // / `.engine`) — the former playerEngineRef / playerEngineFlow
-    // pass-throughs are gone with the slice seam.
+    // / `.engine`).
 
     // The load funnel lives on [playbackSession] (`initialize(itemId, …)` —
     // the PiP event-flag clear + the process-death tick resolution are
@@ -1436,8 +1440,9 @@ class VideoPlayerViewModel(
         // popped the player route, host alive) or the host going away (the
         // activity finished behind the player — app swiped from recents).
         // That distinction decides whether the teardown persists the restore
-        // prompt's handled-offer marker (see the ledger flag's KDoc).
-        playbackSession.positionLedger.suppressHandledOfferOnRelease = isAppExiting()
+        // prompt's handled-offer marker; the session's position ledger reads
+        // it through the constructor-wired [isAppExiting] probe at the final
+        // stop report — no per-release flag write here.
         release()
         // Cancel-after-release ordering: the final stop-report /
         // pending-seek join (launched on the session's release scope by

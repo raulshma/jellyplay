@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
@@ -29,13 +29,13 @@ class DownloadIntakeTest {
 
     private val delegate: DownloadDelegate = mockk()
     private val downloadRepository: DownloadRepository = mockk()
-    private val mediaRepository: MediaRepository = mockk()
+    private val detailFeed: DetailFeed = mockk()
     private val downloadsStore: DownloadsStore = mockk {
         every { downloads } returns MutableStateFlow(DownloadsSlice())
     }
     private val context: android.content.Context = mockk()
     private val intake = DownloadIntakeImpl(
-        context, delegate, downloadRepository, mediaRepository, downloadsStore,
+        context, delegate, downloadRepository, detailFeed, downloadsStore,
     )
 
     private fun mediaDetail(): MediaDetail {
@@ -154,7 +154,7 @@ class DownloadIntakeTest {
         every { downloadsStore.downloads } returns MutableStateFlow(
             DownloadsSlice(downloadQuality = DownloadQuality.HIGH_1080P)
         )
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(detail)
         coEvery { delegate.startOne(detail, 8_000_000, null, null) } returns
             DownloadResult(mockk(), null)
 
@@ -167,7 +167,7 @@ class DownloadIntakeTest {
     @Test
     fun `startFromItem maps a null recipe to Failed for a music track`() = runTest {
         val detail = mediaDetail()
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(detail)
         every { context.getString(R.string.data_no_media_source_download) } returns "no source"
         coEvery { delegate.startOne(detail, null, null, null) } returns null
 
@@ -178,7 +178,7 @@ class DownloadIntakeTest {
 
     @Test
     fun `startFromItem surfaces detail-resolution failure as Failed`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns
             Result.failure(IllegalStateException("server unreachable"))
 
         val result = intake.startFromItem(browseItem(MediaType.EPISODE))
@@ -191,7 +191,7 @@ class DownloadIntakeTest {
         val result = intake.startFromItem(browseItem(MediaType.SERIES, "series-1"))
 
         assertEquals(DownloadRequestResult.SeriesSelectionRequired("series-1"), result)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test

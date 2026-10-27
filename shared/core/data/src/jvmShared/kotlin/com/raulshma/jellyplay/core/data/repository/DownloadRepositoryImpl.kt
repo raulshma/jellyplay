@@ -43,35 +43,29 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// V3 downloads conveyor: moved verbatim from the legacy :core:data shim (same
-// package/name) minus its Android-only surfaces. Ctor-level transforms only —
-// method bodies are byte-identical except where a seam call replaces a direct
-// platform call (documented inline):
-//  - `@ApplicationContext context` dropped; its three uses became constructor
-//    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator] and Coil
-//    preloading → [OfflineImagePreloader] (now on [OfflineDownloadWriterCore]
-//    with the offline-metadata cluster). The third — the notification group summary →
-//    [DownloadProgressNotifier] — has since left entirely: the summary surface
-//    (DownloadSummarySurface) observes the in-flight count flow and posts on
-//    transitions, so this repository's state changes reach the shade through
-//    its own DAO writes and the seam dep is gone.
-//  - concrete `DownloadStorageLayout` → the [DownloadStorageLayoutContract]
-//    interface (Android impl keeps its Context/StatFs logic verbatim) — the
-//    contract is now a dependency of the writer core only.
-//  - `mediaRepository: MediaRepository` → a deferred [MediaRepositoryAccess]
+// V3 downloads conveyor. This repository takes constructor seams instead of
+// Android handles, and no method body calls a platform API directly
+// (documented inline):
+//  - WorkManager enqueue/cancel -> [DownloadEnqueueCoordinator]; Coil
+//    preloading -> [OfflineImagePreloader] (on [OfflineDownloadWriterCore]
+//    with the offline-metadata cluster). The notification group summary is
+//    not a dependency at all: the summary surface (DownloadSummarySurface)
+//    observes the in-flight count flow and posts on transitions, so this
+//    repository's state changes reach the shade through its own DAO writes.
+//  - `DownloadStorageLayout` -> the [DownloadStorageLayoutContract]
+//    interface (Android impl keeps its Context/StatFs logic); the contract is
+//    a dependency of the writer core only.
+//  - `mediaRepository: MediaRepository` -> a deferred [MediaRepositoryAccess]
 //    provider: every use sits on the series paths (downloadSeries + episode
 //    series-seeding in the writer core); startDownload never touches it, so
 //    desktop single-item downloads work with a throwing provider.
-//  - `dagger.Lazy<DownloadDelegate>` → kotlin `Lazy<DownloadDelegate>` and
-//    now a plain [DownloadDelegate]: the artifact-write half moved to
-//    [OfflineDownloadWriterCore] — a standalone single over the same DAOs and
-//    seams with NO back-reference to this repository — so the former
-//    construction cycle `DownloadRepositoryImpl → DownloadDelegate →
-//    OfflineDownloadWriter → DownloadRepositoryImpl` is gone and the `Lazy`
-//    deferral with it. This class keeps the [DownloadRepository] surface
-//    (which extends [OfflineDownloadWriter]) and forwards those members
-//    one-to-one to the same writer-core single the delegate writes through.
-//  - `android.util.Log` → the module's Log facade.
+//  - [DownloadDelegate] is a plain dependency (no `dagger.Lazy`): the
+//    artifact-write half lives in [OfflineDownloadWriterCore], a standalone
+//    single over the same DAOs and seams with NO back-reference to this
+//    repository. This class keeps the [DownloadRepository] surface (which
+//    extends [OfflineDownloadWriter]) and forwards those members one-to-one
+//    to the same writer-core single the delegate writes through.
+//  - `android.util.Log` -> the module's Log facade.
 // Koin (dataJvmModule) owns construction; the legacy DataModule bridges the
 // remaining Hilt injectors via koin().get().
 
@@ -101,7 +95,7 @@ class DownloadRepositoryImpl(
      */
     private val timeSource: TimeSource,
     /**
-     * The extracted artifact-write cluster ([OfflineDownloadWriterCore]): row
+     * The artifact-write cluster ([OfflineDownloadWriterCore]): row
      * creation, offline metadata + baseline seeding, parent hierarchy seeding,
      * worker enqueue, and the sidecar/artifact surface — over its own DAO and
      * seam dependencies, with no reference back to this repository. The
@@ -112,22 +106,17 @@ class DownloadRepositoryImpl(
     private val writer: OfflineDownloadWriterCore,
     /**
      * The per-item download recipe (prepare + execute + artifact bundle).
-     * Resolved eagerly: no construction cycle remains, so the former
-     * `Lazy` deferral is gone.
      */
     private val downloadDelegate: DownloadDelegate,
 ) : DownloadRepository,
     // The promoted feature-facing read seams (DownloadQueue,
     // TrackDownloadStatusWindow, ActiveDownloadCount, SeriesEpisodeDownloads)
-    // — the DownloadIntake precedent: their surfaces cross commonMain
+    // - the DownloadIntake precedent: their surfaces cross commonMain
     // verbatim, so the engine implements them DIRECTLY instead of behind
-    // per-read verbatim-forward adapters (the deleted JvmDownloadQueue /
-    // JvmTrackDownloadStatusWindow / JvmActiveDownloadCount /
-    // JvmSeriesEpisodeDownloads). Their members carry this class's own
-    // repository vocabulary, so the repository overrides in this file ARE
-    // the seam implementations — the former differently-named one-line
-    // forwarders are gone; only [isSupported], which no repository member
-    // spells, is declared down with the seam section.
+    // per-read adapters. Their members carry this class's own repository
+    // vocabulary, so the repository overrides in this file ARE the seam
+    // implementations; only [isSupported], which no repository member spells,
+    // is declared down with the seam section.
     DownloadQueue,
     TrackDownloadStatusWindow,
     ActiveDownloadCount,
@@ -422,7 +411,7 @@ class DownloadRepositoryImpl(
             // Detail fetch and episode catalogue are independent round-trips —
             // start both before awaiting either so series download setup pays
             // max(detail, catalogue) instead of detail + catalogue.
-            val detailDeferred = async { mediaRepository().getMediaDetail(seriesId).getOrThrow() }
+            val detailDeferred = async { mediaRepository().getMediaDetail(seriesId, force = false).getOrThrow() }
             val snapshotDeferred = async { episodeCatalogue.loadSeriesEpisodes(seriesId) }
 
             val detail = detailDeferred.await()
@@ -476,7 +465,7 @@ class DownloadRepositoryImpl(
                 // surviving list still carries.
                 val episodeResults = downloadPermits.mapConcurrentCatching(episodes) { episode ->
                     try {
-                        val episodeDetail = mediaRepository().getMediaDetail(episode.id).getOrNull()
+                        val episodeDetail = mediaRepository().getMediaDetail(episode.id, force = false).getOrNull()
                         // Single per-episode recipe shared with DownloadIntake.start
                         // via DownloadDelegate.startOne — no inline prepare/execute to
                         // drift out of sync. Series downloads bundle every external
@@ -539,11 +528,10 @@ class DownloadRepositoryImpl(
 
     // ── Sidecar/artifact + write surface (forwards one-to-one) ─────────────
     // The inherited OfflineDownloadWriter members and the local reads forward
-    // to [writer] — the extracted OfflineDownloadWriterCore single the
-    // DownloadDelegate also writes through (bodies moved verbatim there;
-    // the behavioral contracts are pinned by
+    // to [writer], the OfflineDownloadWriterCore single the DownloadDelegate
+    // also writes through. The behavioral contracts are pinned by
     // DownloadRepositoryImplSubtitlesTest (androidHostTest),
-    // OfflineDownloadWriterCoreTest and DownloadSidecarCoreTest (jvmTest)).
+    // OfflineDownloadWriterCoreTest and DownloadSidecarCoreTest (jvmTest).
 
     override suspend fun downloadTrickplayData(
         itemId: String,
@@ -652,21 +640,18 @@ class DownloadRepositoryImpl(
         }
     }
 
-    // The entity ⟷ domain mappers this class used to carry as private members
-    // (MediaItem/MediaDetail → OfflineMediaEntity, MediaItem → PlaybackStateEntity,
-    // DownloadEntity → DownloadItem, DownloadProgressRow → DownloadProgress) live
-    // in OfflineMediaMappers.kt — the single owner of the offline/download column
-    // semantics, shared with OfflineRepositoryImpl's read side.
+    // The entity/domain mappers (MediaItem/MediaDetail to OfflineMediaEntity,
+    // MediaItem to PlaybackStateEntity, DownloadEntity to DownloadItem,
+    // DownloadProgressRow to DownloadProgress) live in OfflineMediaMappers.kt -
+    // the single owner of the offline/download column semantics, shared with
+    // OfflineRepositoryImpl's read side.
 
     /**
-     * Declared delta vs the former inline body, adopted from the majority
-     * choreography: the orphan prune now runs as the core's post-transaction
-     * step (the old body pruned inside the same transaction — the difference
-     * is observable only as transiently un-pruned orphan rows between the two
-     * transactions), and the cast-image prune the old body skipped now runs —
-     * its reference scan only deletes files no surviving offline row
-     * references, so the former skip leaked cast images rather than
-     * protecting them.
+     * The orphan prune runs as the core's post-transaction step (transiently
+     * un-pruned orphan rows are observable between the two transactions), and
+     * the cast-image prune runs too - its reference scan only deletes files no
+     * surviving offline row references, so it never removes a referenced cast
+     * image.
      */
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
         deletionCore.delete(

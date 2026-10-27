@@ -57,7 +57,10 @@ fun EntryProviderScope<NavKey>.appSections(
         onModeChange = host.home.onHomeModeChange,
         playOnStrategy = host.home.playOnRedirect,
         surpriseRequests = host.home.surpriseRequests,
-        onShortcutAction = host.home.onShortcutAction,
+        // The home dock's action pills dispatch through the shell's execution
+        // surface; the home module's `onShortcutAction` lambda keeps its
+        // `(ShortcutAction) -> Unit` shape.
+        onShortcutAction = host.home.shortcutActions::execute,
         musicContent = {
             // Build the facade once per navigator/host lifetime so the music
             // subtree sees a single stable MusicNavActions instance (treated
@@ -116,7 +119,13 @@ fun EntryProviderScope<NavKey>.appSections(
     requestsSection(navigator)
     arrQueueSection(navigator)
     calendarSection(navigator)
-    shortcutsSection(navigator)
+    // The editor's target picker filters its action rows to the shell's
+    // supported actions (ShortcutActionSurface.supportedActions) — an action
+    // this shell cannot execute is never offered for pinning.
+    shortcutsSection(
+        navigator = navigator,
+        supportedActions = host.home.shortcutActions.supportedActions,
+    )
 }
 
 /**

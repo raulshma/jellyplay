@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.search
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
@@ -47,7 +47,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class MediaSearchEngineTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val libraryFeed: LibraryFeed = mockk(relaxed = true)
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
     private val searchHistoryRepository: SearchHistoryRepository = mockk(relaxed = true)
     private val serverIdentityStore: ServerIdentityStore = mockk(relaxed = true)
@@ -73,7 +73,7 @@ class MediaSearchEngineTest {
         every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
         stubJellyfinSearch(emptyList())
         engine = MediaSearchEngineImpl(
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
             seerrRepository = seerrRepository,
             searchHistoryRepository = searchHistoryRepository,
             serverIdentityStore = serverIdentityStore,
@@ -84,7 +84,7 @@ class MediaSearchEngineTest {
     }
 
     private fun stubJellyfinSearch(items: List<MediaItem>) {
-        coEvery { mediaRepository.search(any(), limit = any()) } returns
+        coEvery { libraryFeed.search(any(), any(), any(), any()) } returns
             Result.success(SearchResult(items, items.size, 0))
     }
 
@@ -111,9 +111,9 @@ class MediaSearchEngineTest {
         advanceTimeBy(301)
         runCurrent()
 
-        coVerify(exactly = 1) { mediaRepository.search("batman", limit = any()) }
-        coVerify(exactly = 0) { mediaRepository.search("bat", limit = any()) }
-        coVerify(exactly = 0) { mediaRepository.search("batm", limit = any()) }
+        coVerify(exactly = 1) { libraryFeed.search("batman", any(), any(), any()) }
+        coVerify(exactly = 0) { libraryFeed.search("bat", any(), any(), any()) }
+        coVerify(exactly = 0) { libraryFeed.search("batm", any(), any(), any()) }
         assertEquals("batman", states.last().query)
         job.cancel()
     }
@@ -129,11 +129,11 @@ class MediaSearchEngineTest {
         queries.value = "matrix"
         advanceTimeBy(299)
         runCurrent()
-        coVerify(exactly = 0) { mediaRepository.search(any(), limit = any()) }
+        coVerify(exactly = 0) { libraryFeed.search(any(), any(), any(), any()) }
 
         advanceTimeBy(2)
         runCurrent()
-        coVerify(exactly = 1) { mediaRepository.search("matrix", limit = any()) }
+        coVerify(exactly = 1) { libraryFeed.search("matrix", any(), any(), any()) }
         job.cancel()
     }
 
@@ -149,7 +149,7 @@ class MediaSearchEngineTest {
         // The first query's search never completes on its own; only the
         // cancel-and-replace semantics (flatMapLatest) let the pipeline move on.
         // (Registered last so mockk gives it priority over setUp's catch-all.)
-        coEvery { mediaRepository.search("slow", limit = any()) } coAnswers {
+        coEvery { libraryFeed.search("slow", any(), any(), any()) } coAnswers {
             CompletableDeferred<Result<SearchResult>>().await()
         }
 
@@ -187,7 +187,7 @@ class MediaSearchEngineTest {
         assertTrue(last.jellyfin.isEmpty())
         assertTrue(last.seerr.isEmpty())
         assertFalse(last.isSearching)
-        coVerify(exactly = 0) { mediaRepository.search(any(), limit = any()) }
+        coVerify(exactly = 0) { libraryFeed.search(any(), any(), any(), any()) }
         coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
         job.cancel()
     }
@@ -217,7 +217,7 @@ class MediaSearchEngineTest {
 
     @Test
     fun `repository failures degrade to empty results instead of throwing`() = runTest {
-        coEvery { mediaRepository.search(any(), limit = any()) } returns Result.failure(RuntimeException("net"))
+        coEvery { libraryFeed.search(any(), any(), any(), any()) } returns Result.failure(RuntimeException("net"))
         coEvery { seerrRepository.search(any(), any()) } returns Result.failure(RuntimeException("seerr"))
         val queries = MutableStateFlow("")
         val states = mutableListOf<MediaSearchPreviewState>()
@@ -358,7 +358,7 @@ class MediaSearchEngineTest {
 
         // The round never touches the server pair; offline matches land in the
         // Jellyfin slot so the shared result rows render them unchanged.
-        coVerify(exactly = 0) { mediaRepository.search(any(), limit = any()) }
+        coVerify(exactly = 0) { libraryFeed.search(any(), any(), any(), any()) }
         coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
         coVerify(exactly = 1) { offlineRepository.searchOffline("matrix", 8) }
         assertEquals(listOf("d1"), states.last().jellyfin.map { it.id })

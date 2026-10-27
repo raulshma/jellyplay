@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.book
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
@@ -37,7 +37,8 @@ import okio.Path
 internal class BookSessionLoader(
     /** Coroutine scope for TOC-cache writes and the outline parse hop. */
     private val scope: CoroutineScope,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playbackRepository: PlaybackRepository,
     private val playbackIdentity: PlaybackIdentity,
     private val contentResolver: BookContentResolver,
@@ -69,7 +70,7 @@ internal class BookSessionLoader(
      */
     suspend fun open(itemId: String, jump: PendingJump?): BookSessionOutcome {
         onSessionReset()
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
+        val detail = detailFeed.getMediaDetail(itemId, force = false).getOrNull()
             ?: return BookSessionOutcome.Failed(BookOpenError.CannotOpen)
         val downloadUrl = playbackRepository.getBookDownloadUrl(itemId)
         // Header auth for the probe + streaming fetch: Jellyfin 12 401s the

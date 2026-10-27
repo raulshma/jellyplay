@@ -69,6 +69,7 @@ import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.matchesPickerQuery
@@ -129,17 +130,31 @@ import org.jetbrains.compose.resources.stringResource
  * and the quick-pin pool of definitions not yet on this surface. Every
  * command is a [ShortcutsCustomizeViewModel] one-liner over the store's
  * atomic write.
+ *
+ * @param supportedActions the shell's executable shortcut actions — the
+ *   target picker never offers an action outside the set (pinning a pill the
+ *   shell cannot execute is the silent-no-op defect), and a stored definition
+ *   predating a capability change is pruned on open.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ShortcutsCustomizeScreen(
     onBack: () -> Unit,
     initialSurface: ShortcutSurface = ShortcutSurface.OVERFLOW,
+    supportedActions: Set<ShortcutAction> = ShortcutAction.entries.toSet(),
     viewModel: ShortcutsCustomizeViewModel = org.koin.compose.viewmodel.koinViewModel(),
 ) {
-    LaunchedEffect(Unit) { viewModel.pruneUnknownTargets() }
+    LaunchedEffect(Unit) { viewModel.pruneUnknownTargets(supportedActions) }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Capability-filter the picker rows (the VM's admin filter is store-side;
+    // the shell's executable-action set is this screen's input) — an action
+    // row outside the set never renders.
+    val pickerByCategory = remember(state.pickerByCategory, supportedActions) {
+        state.pickerByCategory.mapValues { (_, rows) ->
+            rows.filter { ShortcutsCustomizePolicy.executable(it.entry, supportedActions) }
+        }
+    }
     var surface by rememberSaveable { mutableStateOf(initialSurface) }
     var draft by remember { mutableStateOf<EditorDraft?>(null) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
@@ -277,7 +292,7 @@ fun ShortcutsCustomizeScreen(
     draft?.let { current ->
         ShortcutEditorSheet(
             draft = current,
-            pickerByCategory = state.pickerByCategory,
+            pickerByCategory = pickerByCategory,
             headerFull = state.sections.headerFull,
             overflowFull = state.sections.overflowFull,
             defaultSurface = surface,

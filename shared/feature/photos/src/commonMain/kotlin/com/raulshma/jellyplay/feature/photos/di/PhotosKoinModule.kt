@@ -29,7 +29,7 @@ val photosModule: Module = module {
     }
     viewModel {
         PhotoViewerViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),

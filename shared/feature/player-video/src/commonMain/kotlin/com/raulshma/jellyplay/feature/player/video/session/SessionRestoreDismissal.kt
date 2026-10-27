@@ -12,7 +12,7 @@ import kotlin.math.abs
  *    surfaced and refused. This used to clear only in-memory state, so the
  *    same fresh (≤ 1 h) offer re-asked on every cold start.
  *  - the player's TEARDOWN stop report ([playbackHandledFingerprint], wired
- *    through the `SessionPositionLedger`'s `finalStopReport`) — the row's
+ *    through the `SessionPositionLedger`'s `onTeardown` bracket) — the row's
  *    state was played through and deliberately closed. Without this arm the
  *    confirm-then-close cycle (resume → watch → close player → close app →
  *    relaunch) re-asked too: the confirm never wrote a marker, and the

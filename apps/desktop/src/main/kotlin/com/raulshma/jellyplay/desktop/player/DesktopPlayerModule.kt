@@ -119,7 +119,7 @@ val desktopPlayerModule: Module = module {
     single<AudioTrackResolver> {
         val playbackStore = get<PlaybackStore>()
         DesktopAudioSourceResolver(
-            mediaRepository = get(),
+            detailFeed = get(),
             playbackRepository = get(),
             playbackSourceResolver = get(),
             adaptiveBitrateSelector = get(),

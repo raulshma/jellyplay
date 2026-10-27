@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -30,7 +30,8 @@ import com.raulshma.jellyplay.core.model.maxBitrate
 open class DownloadIntakeBody(
     private val delegate: DownloadDelegate,
     private val downloadRepository: DownloadRepository,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val downloadsStore: DownloadsStore,
     /** Resolved no-source error copy — the twins' single real platform delta. */
     private val noSourceError: () -> String,
@@ -64,7 +65,7 @@ open class DownloadIntakeBody(
                 else -> DownloadRequestResult.NeedsDetailScreen(item.id)
             }
         }
-        val detail = mediaRepository.getMediaDetail(item.id)
+        val detail = detailFeed.getMediaDetail(item.id, force = false)
             .getOrElse { return DownloadRequestResult.Failed(it.message) }
         val result = start(detail, downloadsStore.downloads.value.downloadQuality.maxBitrate)
         return if (result.error == null) {

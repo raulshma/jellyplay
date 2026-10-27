@@ -95,37 +95,19 @@ import kotlinx.serialization.json.Json
 class UserPreferencesStore constructor(
     private val externalScope: CoroutineScope,
     private val dataStore: DataStore<Preferences>,
-    // Domain stores: the facade forwards invariant-bearing setters to these so
-    // the cross-key mutex / coerce / LRU / migration logic has a single owner.
-    // All stores share the same `"user_prefs"` DataStore, so writes are
-    // consistent regardless of which entry point a consumer uses.
+    // The domain stores arrive as the ONE [PreferenceStores] aggregate — the
+    // same bundle the settings read lanes consume — instead of a positional
+    // re-enumeration that every new domain store widened twice (here + the
+    // edit scope). All stores share the same `"user_prefs"` DataStore, so
+    // writes are consistent regardless of which entry point a consumer uses.
     // (The Widget / ServerIdentity / PinRateLimiter collaborators were pruned
     // — those consumers now inject those stores directly.)
-    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
-    private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
-    private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
-    private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
-    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
-    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
-    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
-    private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
-    private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
-    private val navigationStore: com.raulshma.jellyplay.core.datastore.navigation.NavigationStore,
-    private val shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore,
-    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
-    private val notificationStore: com.raulshma.jellyplay.core.datastore.notification.NotificationStore,
-    private val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore,
-    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
-    private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
-    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
-    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
-    // Per-content-type volume memory (two keys; rides PLAYBACK for
-    // reset and its own backup slice).
-    private val volumeProfileStore: com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore,
+    stores: com.raulshma.jellyplay.core.datastore.settings.PreferenceStores,
     // Owns the 5 app-runtime-state keys (favorite channels, last live-TV channel,
     // watch-later playlist, onboarding flag, recent DLNA devices). Injected here
     // so backup export/import can fan out to it alongside the 19 domain stores.
+    // Deliberately NOT inside the aggregate — it is the backup-extras store,
+    // not a settings-read-lane slice (same split as PreferencesEditScope's).
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
     // Backup slices contributed OUTSIDE the domain-store fan-out (Room
     // config, integration settings, widget config) — see
@@ -136,6 +118,27 @@ class UserPreferencesStore constructor(
     private val externalSlices: List<com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice> = emptyList(),
 ) {
     private val scope = externalScope
+
+    private val playbackStore = stores.playback
+    private val appearanceStore = stores.appearance
+    private val videoPlayerStore = stores.videoPlayer
+    private val downloadsStore = stores.downloads
+    private val engineStore = stores.engine
+    private val homeDiscoveryStore = stores.homeDiscovery
+    private val audioStore = stores.audio
+    private val audioEffectsStore = stores.audioEffects
+    private val audioCacheStore = stores.audioCache
+    private val libraryStore = stores.library
+    private val navigationStore = stores.navigation
+    private val shortcutsStore = stores.shortcuts
+    private val networkOfflineStore = stores.networkOffline
+    private val notificationStore = stores.notification
+    private val screensaverStore = stores.screensaver
+    private val securityStore = stores.security
+    private val subtitleLanguageStore = stores.subtitle
+    private val syncPlayCastStore = stores.syncPlayCast
+    private val experimentalStore = stores.experimental
+    private val volumeProfileStore = stores.volumeProfile
 
     /**
      * Keys the facade itself owns — runtime / per-account / one-time state that
@@ -319,9 +322,10 @@ class UserPreferencesStore constructor(
     /**
      * The 19 domain slices in [BackupSliceKey] order — snapshot keys, restore
      * fan-out and reset-key flattening all follow this order. Adding a domain
-     * store means adding one row here (plus its constructor parameter); every
-     * fan-out below picks it up. Extras (`AppRuntimeState`) stay orthogonal:
-     * they have no category and are written by the restore entry points.
+     * store means adding one row here (plus its [com.raulshma.jellyplay.core.datastore.settings.PreferenceStores]
+     * field); every fan-out below picks it up. Extras (`AppRuntimeState`) stay
+     * orthogonal: they have no category and are written by the restore entry
+     * points.
      */
     private val sliceBindings: List<SliceBinding<*>> = listOf(
         SliceBinding(

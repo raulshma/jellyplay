@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.desktop.player
 import com.raulshma.jellyplay.core.data.playback.ResolvedAudioTrack
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
 import com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor
@@ -49,7 +49,7 @@ import kotlinx.coroutines.test.runTest
  *    local wins even when the detail fetch failed (the queue-only fallback).
  *
  * Hand-rolled fakes per module convention (no mocking library here). The one
- * reflective fake is [DetailMediaRepository]: [MediaRepository] aggregates
+ * reflective fake is the [DetailFeedFake]: [DetailFeed] aggregates
  * five parent interfaces (100+ members) for a single exercised method — a
  * literal hand fake would be hundreds of lines of stub noise, so a
  * `java.lang.reflect.Proxy` answers `getMediaDetail` and errors on anything
@@ -68,16 +68,16 @@ class DesktopAudioSourceResolverTest {
     // ── fakes ─────────────────────────────────────────────────────────────
 
     /**
-     * Proxy-backed [MediaRepository] answering only `getMediaDetail`.
+     * Proxy-backed [DetailFeed] answering only `getMediaDetail`.
      * `detail == null` scripts a FAILED detail fetch (the resolver surfaces
      * failures via `.getOrNull()`, so the fake must return a Result, not throw).
      */
-    private class DetailMediaRepository(private val detail: Result<MediaDetail>?) {
+    private class DetailFeedFake(private val detail: Result<MediaDetail>?) {
         val requestedItemIds = mutableListOf<String>()
 
-        val proxy: MediaRepository = Proxy.newProxyInstance(
-            MediaRepository::class.java.classLoader,
-            arrayOf(MediaRepository::class.java),
+        val proxy: DetailFeed = Proxy.newProxyInstance(
+            DetailFeed::class.java.classLoader,
+            arrayOf(DetailFeed::class.java),
         ) { _, method, args ->
             // Kotlin mangles suspend fun names on the JVM interface
             // ("getMediaDetail-0E7RQCE") — match on the prefix. AND: a
@@ -90,9 +90,9 @@ class DesktopAudioSourceResolverTest {
                     requestedItemIds += args[0] as String
                     detail?.getOrNull()
                 }
-                else -> error("unexpected MediaRepository call: ${method.name}")
+                else -> error("unexpected DetailFeed call: ${method.name}")
             }
-        } as MediaRepository
+        } as DetailFeed
     }
 
     /** Scripted [PlaybackSourceResolver.resolveLocalSource]; everything else errors. */
@@ -158,14 +158,14 @@ class DesktopAudioSourceResolverTest {
         quality: StreamingQuality,
         playbackRepository: PlaybackRepository = RecordingStreamUrlRepository(),
     ): DesktopAudioSourceResolver = DesktopAudioSourceResolver(
-        mediaRepository = DetailMediaRepository(detail).also { detailRepo = it }.proxy,
+        detailFeed = DetailFeedFake(detail).also { detailRepo = it }.proxy,
         playbackRepository = playbackRepository,
         playbackSourceResolver = FakeLocalSource(local).also { localSource = it },
         adaptiveBitrateSelector = newBitrateSelector(),
         streamingQualityProvider = { quality },
     )
 
-    private lateinit var detailRepo: DetailMediaRepository
+    private lateinit var detailRepo: DetailFeedFake
     private lateinit var localSource: FakeLocalSource
 
     private fun streamRepo(repo: PlaybackRepository): RecordingStreamUrlRepository {

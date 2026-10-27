@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput
 import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -164,6 +164,22 @@ internal class PlaybackSession(
      */
     private val clock: () -> Long = { System.currentTimeMillis() },
 
+    /**
+     * TRUE when the teardown release about to run is caused by the HOST ITSELF
+     * going away (the activity finishing behind the player — the user swiped
+     * the app from recents mid-playback, or the system tore the task down),
+     * FALSE for an in-app player close. The ledger reads it at the final stop
+     * report to decide the restore prompt's handled-offer marker: an in-app
+     * close is a deliberate "done for now" (persist, next launch stays
+     * silent), a host exit is an INTERRUPTED session (skip, next launch
+     * prompts). A probe, not a flag: the session is constructed once while
+     * the answer belongs to the teardown moment, so the owner wires the
+     * read. Default FALSE (persist) keeps bare constructions and the desktop
+     * shell (whose in-app closes are the only teardowns it sees — a window
+     * close kills the process before any teardown runs) on the persist side.
+     */
+    private val isHostTeardown: () -> Boolean = { false },
+
     /** Manual up-next queue (details screen "play next/last"); drained by the Up Next controller's queue-first advance. */
     val videoQueue: VideoQueueController = VideoQueueController(),
 
@@ -245,8 +261,8 @@ internal class PlaybackSession(
     private val playbackRepository: PlaybackRepository,
     /** Offline-mirror writes for the seek-coalesced + throttled position persists. */
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
-    /** Media-detail fetch for the mini-player reclaim body. */
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam — the mini-player reclaim body's media-detail fetch. */
+    private val detailFeed: DetailFeed,
     /** The process-death resume-position persistence; production: the SavedStateHandle store. */
     positionStoreOverride: SessionPositionStore? = null,
 ) : SessionLoadOutputs, SessionLifecycleHooks {
@@ -373,7 +389,7 @@ internal class PlaybackSession(
     internal val playerSessionManager: PlayerSessionManager = playerSessionManagerOverride
         ?: PlayerSessionManager(
             scope = scope,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             playbackIdentity = sessionStack.playbackIdentity,
@@ -502,13 +518,13 @@ internal class PlaybackSession(
     private val trickplayPreparation = TrickplayPreparation(
         controller = trickplayManager,
         offlinePlaybackFacade = offlinePlaybackFacade,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
     )
 
     internal val subtitles = SubtitleManager(
         contentGateway = platform,
         playbackRepository = playbackRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         subtitleProviderRepository = subtitleSources.subtitleProviderRepository,
         streamingSubtitleStore = subtitleSources.streamingSubtitleStore,
         userMessageBus = userMessageBus,
@@ -777,9 +793,10 @@ internal class PlaybackSession(
      * session root (the composition-root stance; never injected). Owns the
      * play-session id resolution, the seek latch and report position, the
      * stop-report pair with its dedup, the process-death persistence and the
-     * per-item reset hooks this session's initialize/release chain calls in
-     * its pinned order. The members below on the session are thin delegates
-     * so the load pipeline, the transports and the tests keep their surface.
+     * lifecycle phase verbs (new-item reset, item-loaded bookkeeping, the
+     * teardown bracket) whose pinned orders are private to it. The members
+     * below on the session are thin delegates so the load pipeline, the
+     * transports and the tests keep their surface.
      */
     internal val positionLedger = SessionPositionLedger(
         scope = scope,
@@ -792,6 +809,7 @@ internal class PlaybackSession(
         playerSessionManager = playerSessionManager,
         getIncognitoModeEnabled = getIncognitoModeEnabled,
         seedDisplayedPositionMs = { seed -> seedDisplayedPositionMs(seed) },
+        isHostTeardown = isHostTeardown,
         persistHandledOffer = { itemId, finalPositionMs ->
             stores.playback.setSessionRestoreDismissal(playbackHandledFingerprint(itemId, finalPositionMs))
         },
@@ -908,7 +926,7 @@ internal class PlaybackSession(
         )
 
     /**
-     * Up Next — the extracted module behind the queue-first advance, the
+     * Up Next - the session module behind the queue-first advance, the
      * manual queue-row activation, the card + has-queued-next projections,
      * the season/episode browsing, adjacent discovery, previous/next
      * choreography with the single-flight latch, the "mark watched &
@@ -1213,8 +1231,8 @@ internal class PlaybackSession(
     /**
      * The aggregate-prefs collector's side-effecting half: the seeds, the
      * engine-config rebuild triggers, the autoplay flip and the video
-     * focus-policy push — extracted beside [settingsProjector] (whose
-     * `project` stays the pure-projection half). Declared after every
+     * focus-policy push - the side-effecting half beside [settingsProjector]
+     * (whose `project` stays the pure-projection half). Declared after every
      * collaborator its wiring reads; the lambdas run only from the collector
      * registered in [arm], long after construction. The rebuild trigger
      * routes through this session's [markEngineConfigDirty] funnel (cycle 6).
@@ -1331,6 +1349,28 @@ internal class PlaybackSession(
                 artworkUrls.posterFor(playerSessionManager.sessionState.value.mediaDetail?.item, itemId, maxWidth)
             },
         )
+
+    /**
+     * The reload family's module ([PlaybackReload]): ONE `reload(variant)`
+     * verb carrying the five reload shapes' shared swap choreography.
+     * Constructed like [positionLedger] — inside the session
+     * root, never injected. The rebind tail stays session-owned (wired in as
+     * a self-reference lambda, cycle 2's pattern): the cinema pre-rolls and
+     * the mini-player reclaim adopt engines without going through
+     * [PlaybackReload.reload] and still share it.
+     */
+    private val reloadCoordinator = PlaybackReload(
+        scope = scope,
+        playerSessionManager = playerSessionManager,
+        positionLedger = positionLedger,
+        progressReporter = progressReporter,
+        mediaSessionController = mediaSessionController,
+        playbackStore = playbackStore,
+        adaptiveBitrateManager = adaptiveBitrateManager,
+        setPendingStreams = setPendingStreams,
+        setUiPlaybackMode = setUiPlaybackMode,
+        rebindSessionTracking = { itemId -> rebindSessionTracking(itemId) },
+    )
 
 
     /**
@@ -1481,14 +1521,14 @@ internal class PlaybackSession(
      * 3. [SessionLifecycleHooks.resetForNewItem] (autoplay reset,
      *    autoplay-cancelled clear, coordinator new-item latch, pending stream
      *    indices);
-     * 4. seek-latch + Stop-dedup latch resets (the writes keep their relative
-     *    order; the three field resets run here as one block);
+     * 4. the ledger's new-item reset ([SessionPositionLedger.resetForNewItem]:
+     *     the seek latch + the Stop-dedup latch drop, one verb);
      * 5. remote-routing early-return via
-     *    [SessionLifecycleHooks.routeToRemotePlaySession];
+     *     [SessionLifecycleHooks.routeToRemotePlaySession];
      * 6. same-item short-circuit via [shouldShortCircuitSameItemReload];
      * 7. [SessionLifecycleHooks.wasInSyncPlay] (SyncPlay flag read) followed
-     *    by the outgoing session's stop-report ([reportCurrentPlaybackStopped],
-     *    session-side, directly after the flag read);
+     *     by the outgoing session's stop-report ([reportCurrentPlaybackStopped],
+     *     session-side, directly after the flag read);
      * 8. cancel any in-flight the load task slot;
      * 9. mini-player reclaim early-return: the GATE stays a hook
      *    ([SessionLifecycleHooks.tryReclaimMiniPlayer] — mini-player state
@@ -1505,10 +1545,12 @@ internal class PlaybackSession(
      *     in-flight load cancel, reporter jobs, media-session release, PSM
      *     release, seek latches) FIRST, then
      *     [SessionLifecycleHooks.releaseInternalsVmPart] (loading-veil raise +
-     *     the controller/ui-state teardown), followed by the process-death
-     *     play-session restore ([restoreOrAllocatePlaySessionId]);
-     * 12. persistence-latch resets ([lastPersistedPositionMs],
-     *     [lastPersistedAtMs], the seek-progress task slot);
+     *     the controller/ui-state teardown);
+     * 12. the ledger's item-loaded verb ([SessionPositionLedger.onItemLoaded]):
+     *     the process-death play-session restore/allocate, then the
+     *     persistence-latch resets (the never-persisted sentinel back in
+     *     place, the throttle window re-armed, the pending coalesced
+     *     seek-mirror write dropped);
      * 13. [SessionLifecycleHooks.clearTrickplay];
      * 14. [SessionLifecycleHooks.reattachSyncPlay] (conditional on step 7);
      * 15. start the [SessionLoadPipeline] and track it as the load task slot.
@@ -1523,8 +1565,10 @@ internal class PlaybackSession(
                 subtitleStreamIndex = request.subtitleStreamIndex,
             ),
         )
-        // New item = new session: drop the seek latch and clear the Stop
-        // dedup latch so the upcoming session's Stop can be reported.
+        // New item = new session: the ledger's new-item reset (the seek
+        // latch + the Stop dedup latch, so the upcoming session's Stop can
+        // be reported). Runs BEFORE the gates below on purpose — a routed
+        // away or short-circuited intent still cleared the latches.
         positionLedger.resetForNewItem()
 
         // "Play On" routing: a connected Jellyfin remote session takes the
@@ -1564,11 +1608,13 @@ internal class PlaybackSession(
         // chain. The play-session restore runs right after the teardown.
         releaseInternalsSessionPart()
         lifecycleHooks.releaseInternalsVmPart()
-        positionLedger.playSessionId = positionLedger.restoreOrAllocatePlaySessionId(request.itemId)
+        // New session bookkeeping — the ledger's item-loaded verb: the
+        // process-death play-session restore/allocate, then the
+        // persistence-latch resets (the pinned order is the ledger's now).
+        positionLedger.onItemLoaded(request.itemId)
         // The playhead is seeded by the load pipeline from the RESOLVED start
         // ticks (see onPlayheadSeeded) — seeding from the raw request ticks
         // missed the offline-mirror resume that resolution produces.
-        positionLedger.resetPersistenceWindow()
         lifecycleHooks.clearTrickplay()
 
         if (wasInSyncPlay) {
@@ -1669,9 +1715,8 @@ internal class PlaybackSession(
      * Re-binds the system media session and the position/progress tracking to
      * the engine that just (re)loaded — the ONE funnel for every path that
      * swaps or adopts an engine without running the [SessionLoadPipeline]:
-     * the reload/retry family ([reloadForMode], [launchFallbackToTranscode],
-     * [retryWithEngine], [retryPlayback]) and the mini-player reclaim
-     * ([loadReclaimedEngine]).
+     * the reload/retry family ([reloadForMode], the [PlaybackReload]
+     * coordinator's arms) and the mini-player reclaim ([loadReclaimedEngine]).
      *
      * [itemId] is the item the media session is created for — the reload
      * family passes the session state's current item, the reclaim path its
@@ -1705,20 +1750,7 @@ internal class PlaybackSession(
         quality: StreamingQuality,
         selection: MediaStreamSelection? = null,
     ) {
-        setUiPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
-        scope.launch {
-            playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
-            reportCurrentPlaybackStopped()
-            progressReporter.cancelJobs()
-            setPendingStreams(selection)
-            playerSessionManager.reloadPlayback(
-                PlaybackMode.FORCE_TRANSCODE,
-                quality,
-                fromPositionMs,
-                selection,
-            )
-            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
-        }
+        reloadCoordinator.reload(ReloadVariant.FallbackToTranscode(fromPositionMs, quality, selection))
     }
 
     /**
@@ -1726,7 +1758,10 @@ internal class PlaybackSession(
      * [sessionOnly] is true (preserving pause state and the saved default).
      * [playbackSpeed] and [streamingQuality] are supplied by the caller
      * wrapper from its ui-state mirror; the error-dialog clear stays
-     * caller-side (a synchronous ui-state write).
+     * caller-side (a synchronous ui-state write). The choreography is the
+     * reload module's ([PlaybackReload], the [ReloadVariant.RetryWithEngine]
+     * arm); the sessionOnly → persist/restore delta folds in
+     * [engineRetryVariant].
      */
     fun retryWithEngine(
         playerType: PlayerType,
@@ -1734,17 +1769,15 @@ internal class PlaybackSession(
         streamingQuality: StreamingQuality,
         sessionOnly: Boolean = false,
     ) {
-        val wasPaused = playerSessionManager.engine?.isPlaying?.value == false
-        val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
-        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(streamingQuality)?.toInt()
-        progressReporter.cancelJobs()
-        mediaSessionController.release()
-        scope.launch {
-            if (!sessionOnly) playbackStore.setPreferredPlayer(playerType)
-            playerSessionManager.reloadWithEngine(playerType, currentPos, playbackSpeed, maxBitrate)
-            if (sessionOnly && wasPaused) playerSessionManager.engine?.pause()
-            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
-        }
+        reloadCoordinator.reload(
+            engineRetryVariant(
+                playerType = playerType,
+                streamingQuality = streamingQuality,
+                playbackSpeed = playbackSpeed,
+                sessionOnly = sessionOnly,
+                enginePaused = playerSessionManager.engine?.isPlaying?.value == false,
+            ),
+        )
     }
 
     /**
@@ -1752,26 +1785,18 @@ internal class PlaybackSession(
      * buffering watchdog timeout). Reloads the current engine at the current
      * position, mirroring [retryWithEngine] without changing engine.
      * [preferredPlayerType] selects the engine (the ui-state mirror of the
-     * last-chosen engine, supplied by the caller wrapper).
+     * last-chosen engine, supplied by the caller wrapper) — the
+     * [ReloadVariant.RetrySameEngine] arm never persists it and never
+     * touches the pause state.
      */
     fun retryPlayback(
         playbackSpeed: Float,
         streamingQuality: StreamingQuality,
         preferredPlayerType: PlayerType,
     ) {
-        val currentPos = playerSessionManager.engine?.currentPositionMs ?: 0L
-        val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(streamingQuality)?.toInt()
-        progressReporter.cancelJobs()
-        mediaSessionController.release()
-        scope.launch {
-            playerSessionManager.reloadWithEngine(
-                preferredPlayerType,
-                currentPos,
-                playbackSpeed,
-                maxBitrate,
-            )
-            rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
-        }
+        reloadCoordinator.reload(
+            ReloadVariant.RetrySameEngine(preferredPlayerType, streamingQuality, playbackSpeed),
+        )
     }
 
     /**
@@ -1780,15 +1805,10 @@ internal class PlaybackSession(
      * server-origin audio or subtitle track during transcoded playback — mpv
      * cannot switch audio in-place on an HLS manifest, and embedded subs aren't
      * in the transcode, so the server must re-issue the stream with the chosen
-     * index.
+     * index. The [ReloadVariant.StreamChange] arm.
      */
     fun reloadForStreamChange(selection: MediaStreamSelection) {
-        if (playerSessionManager.engine == null) return
-        val positionMs = getReportPositionMs()
-        scope.launch {
-            setPendingStreams(selection)
-            playerSessionManager.reloadForStreamChange(selection, positionMs)
-        }
+        reloadCoordinator.reload(ReloadVariant.StreamChange(selection))
     }
 
     /**
@@ -1797,15 +1817,10 @@ internal class PlaybackSession(
      * hints are CLEARED first: indices of the previous version are
      * meaningless server-side (and would bake the old audio/sub choice into
      * the new version's re-POST), so the new version starts on its own
-     * defaults.
+     * defaults. The [ReloadVariant.SourceSwitch] arm.
      */
     fun switchMediaSource(mediaSourceId: String) {
-        if (playerSessionManager.engine == null) return
-        val positionMs = getReportPositionMs()
-        scope.launch {
-            setPendingStreams(null)
-            playerSessionManager.switchMediaSource(mediaSourceId, positionMs)
-        }
+        reloadCoordinator.reload(ReloadVariant.SourceSwitch(mediaSourceId))
     }
 
     // ── Mini-player reclaim ───────────────────────────────────────────────────
@@ -1831,7 +1846,7 @@ internal class PlaybackSession(
         // fullscreen — playback is continuous, so no load screen.
         lifecycleHooks.onMiniPlayerReclaimed()
         return scope.launch {
-            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detailResult = detailFeed.getMediaDetail(itemId, force = false)
             val detail = detailResult.getOrNull()
             if (detail != null) {
                 playerSessionManager.bindReclaimedEngine(reclaimed, itemId, detail)
@@ -1970,35 +1985,32 @@ internal class PlaybackSession(
         progressReporter.cancelJobs()
         mediaSessionController.release()
         playerSessionManager.release()
-        // New item / released session: drop the seek latch.
+        // New item / released session: drop the seek latch — the ledger's
+        // teardown-half reset (runs on BOTH teardown paths, so it is its own
+        // verb, not part of onItemLoaded/onTeardown).
         positionLedger.resetSeekLatch()
     }
 
     /**
-     * Full session teardown — the session-owned half:
-     *
-     * 1. snapshot the stop-report inputs BEFORE any teardown statement runs
-     *    ([releaseInternalsSessionPart] calls PSM release, which clears the
-     *    session state these values read; nothing between the snapshot and
-     *    the teardown touches these values);
-     * 2. [releaseInternalsSessionPart] + the teardown callback
-     *    ([vmTeardownAfterInternals] runs the post-internals release
-     *    steps: PiP transport reset, cast consumer release, engine-controller
-     *    clear) — the order is preserved;
-     * 3. flush a pending coalesced seek-mirror write (joined on the release
-     *    scope so it survives the viewModelScope cancellation on clear());
-     * 4. the final Stop report, deduped through the ledger's
-     *    stopReportedForSession latch.
+     * Full session teardown — the session-owned half inside the ledger's
+     * teardown bracket ([SessionPositionLedger.onTeardown]): the ledger
+     * snapshots the stop-report inputs FIRST (its bracket's opening
+     * statement — [releaseInternalsSessionPart] calls PSM release, which
+     * clears the session state those values read), then runs this body:
+     * [releaseInternalsSessionPart] + the teardown callback
+     * ([vmTeardownAfterInternals] runs the post-internals release steps:
+     * PiP transport reset, cast consumer release, engine-controller clear)
+     * — the order is preserved. When the body returns, the ledger flushes
+     * the pending coalesced seek-mirror write (joined on the release scope
+     * so it survives the viewModelScope cancellation on clear()) and issues
+     * the final Stop report, deduped through the ledger's stop latch.
      */
     fun release(vmTeardownAfterInternals: () -> Unit) {
-        val stopInputs = positionLedger.snapshotTeardownInputs()
-
-        releaseInternalsSessionPart()
-        lifecycleHooks.releaseInternalsVmPart()
-        vmTeardownAfterInternals()
-
-        positionLedger.flushPendingSeekOnRelease()
-        positionLedger.finalStopReport(stopInputs)
+        positionLedger.onTeardown {
+            releaseInternalsSessionPart()
+            lifecycleHooks.releaseInternalsVmPart()
+            vmTeardownAfterInternals()
+        }
     }
 
     /**

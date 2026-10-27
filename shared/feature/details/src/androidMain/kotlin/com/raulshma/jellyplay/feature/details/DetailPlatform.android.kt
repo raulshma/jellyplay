@@ -33,9 +33,9 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android actual of the detail share seam — the legacy
- * `Intent.createChooser(ACTION_SEND)` body verbatim (NEW_TASK included),
- * with the chooser title pre-resolved in composition by the caller.
+ * Android actual of the detail share seam: `Intent.createChooser(ACTION_SEND)`
+ * (NEW_TASK included), with the chooser title pre-resolved in composition by
+ * the caller.
  */
 @Composable
 internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: String): () -> Unit {
@@ -53,9 +53,8 @@ internal actual fun rememberShareMediaAction(itemId: String, chooserTitle: Strin
 }
 
 /**
- * Android storage probe — the legacy DetailViewModel body verbatim
- * (DIRECTORY_MUSIC/DIRECTORY_MOVIES external volume, filesDir fallback,
- * StatFs block math), extracted behind the common seam.
+ * Android storage probe: DIRECTORY_MUSIC/DIRECTORY_MOVIES external volume,
+ * filesDir fallback, StatFs block math - behind the common seam.
  */
 class AndroidDetailStorageProbe(
     private val context: Context,
@@ -87,6 +86,8 @@ fun androidDetailsModule(context: Context): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
+            detailFeed = get(),
+            collectionOperations = get(),
             mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             collectionApiClient = get(),
@@ -102,17 +103,21 @@ fun androidDetailsModule(context: Context): Module = module {
             themeMusicPlayer = get(),
             actionFactories = get(),
             mediaDownloadActions = get(),
-            bookTocCacheRepository = get(),
-            readerAnnotationsRepository = getOrNull(),
-            bookTocProber = getOrNull(),
+            bookArms = DetailBookArms(
+                tocCacheRepository = get(),
+                readerAnnotationsRepository = getOrNull(),
+                tocProber = getOrNull(),
+            ),
             // ADR 0010 companion-plugin seams — registered core:data /
             // core:network singles (DataSessionPlaybackKoinModule /
-            // NetworkKoinModules); the VM null-guards everything anyway.
-            pluginStatusStore = get(),
-            pluginRatingsApi = get(),
-            pluginRecommendationsApi = get(),
-            pluginMarkersApi = get(),
-            jellyPlayFeatureGate = get(),
+            // NetworkKoinModules); the bundle null-folds everything anyway.
+            pluginArms = DetailPluginArms(
+                statusStore = get(),
+                featureGate = get(),
+                ratingsApi = get(),
+                recommendationsApi = get(),
+                markersApi = get(),
+            ),
             // The direct-TMDB details fallback behind the externalRatings
             // enrichment (core:network single, NetworkKoinModules).
             tmdbApiClient = get(),

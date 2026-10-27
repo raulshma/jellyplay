@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -36,13 +36,13 @@ class MediaInfoViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var viewModel: MediaInfoViewModel
 
     @BeforeTest
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
-        viewModel = MediaInfoViewModel(mediaRepository)
+        detailFeed = mockk(relaxed = true)
+        viewModel = MediaInfoViewModel(detailFeed)
     }
 
     @Test
@@ -54,7 +54,7 @@ class MediaInfoViewModelTest {
     fun `load success emits Success with detail`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(detail)
 
         viewModel.load("m1")
         advanceUntilIdle()
@@ -67,7 +67,7 @@ class MediaInfoViewModelTest {
     @Test
     fun `load failure emits Error with message`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(RuntimeException("boom"))
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException("boom"))
 
         viewModel.load("m1")
         advanceUntilIdle()
@@ -80,7 +80,7 @@ class MediaInfoViewModelTest {
     @Test
     fun `load failure with null message falls back to generic error`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(RuntimeException())
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException())
 
         viewModel.load("m1")
         advanceUntilIdle()
@@ -92,10 +92,10 @@ class MediaInfoViewModelTest {
     @Test
     fun `load resets prior Success state to Loading then resolves`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
         )
-        coEvery { mediaRepository.getMediaDetail("m2") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("m2", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "m2", name = "Movie 2", mediaType = MediaType.MOVIE)),
         )
 

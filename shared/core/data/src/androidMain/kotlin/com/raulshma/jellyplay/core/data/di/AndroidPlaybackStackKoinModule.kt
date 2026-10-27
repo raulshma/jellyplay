@@ -70,7 +70,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
         AudioPlaybackManager(
             context = context,
             playbackFocus = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             libraryBrowser = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),

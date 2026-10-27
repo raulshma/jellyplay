@@ -54,7 +54,6 @@ import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.navigation.NavigationState
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.core.ui.navigation.navIcon
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
@@ -160,20 +159,26 @@ internal fun TvContent(
             // player). Re-running .map{} here would allocate a fresh list + N
             // fresh TvNavItem instances each time, invalidating the drawer.
             // Shortcuts is not a top-level tab on phone (it lives in the
-            // ⋮ overflow). The TV drawer has no overflow menu, so keep Shortcuts
-            // reachable here as an explicit primary item — positioned by the
-            // stored nav order like every other item.
+            // ⋮ overflow); the TV drawer has no overflow, so tvPrimaryRoutes
+            // derives it from the registry's placement descriptor
+            // (NavPrimarySurface.TvDrawer) and ranks it by the stored nav
+            // order like every other item.
             val shortcutsLabel = stringResource(R.string.menu_shortcuts)
             val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel, hiddenNavItems, navItemOrder) {
                 tvPrimaryRoutes(
                     baseRoutes = activeTopLevelRoutes.keys.toList(),
-                    includeShortcuts = SHORTCUTS_NAV_KEY !in hiddenNavItems,
+                    hiddenNavItems = hiddenNavItems,
                     navItemOrder = navItemOrder,
                 ).map { route ->
-                    // Shortcuts's label is a real string resource; the other
-                    // routes carry their display label in activeTopLevelRoutes.
                     TvNavItem(
                         route = route,
+                        // The base routes' labels arrive pre-resolved inside
+                        // activeTopLevelRoutes; the placement extras ride
+                        // outside that map, so Shortcuts resolves its label
+                        // HERE — per-destination presentation (a localized
+                        // resource; the registry railLabels are English
+                        // constants), not placement eligibility, which is why
+                        // it stays at the call site instead of the registry.
                         label = if (route == Route.Shortcuts) {
                             shortcutsLabel
                         } else {
@@ -243,8 +248,6 @@ internal fun PhoneContent(
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
     isGoingOnline: Boolean = false,
     downloadCount: Int = 0,
-    onSurpriseClick: () -> Unit = {},
-    onToggleOffline: () -> Unit = {},
     /** The user's resolved overflow shortcuts (MainContent resolves; this wiring clicks). */
     overflowShortcuts: List<com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut> = emptyList(),
     /** Increments when a shortcut (or elsewhere) requests the Play On device sheet. */
@@ -301,56 +304,54 @@ internal fun PhoneContent(
     BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
 
     // The customized overflow entries: resolved shortcuts folded with this
-    // scope's click wiring + dynamic decoration (offline icon/label/progress,
-    // downloads badge, Surprise highlight). Built per composition on purpose —
-    // the menu is only composed while open, and the closures need this
-    // scope's live state (navigator, sheet toggles).
+    // scope's click wiring + the shared decoration fold (OverflowShortcutDecoration
+    // — the offline icon/label/progress trio, downloads badge, highlight and
+    // menu-dismiss policy). Built per composition on purpose — the menu is
+    // only composed while open, and the closures need this scope's live state
+    // (navigator, sheet toggles). The action EXECUTION is the shell's
+    // ShortcutActionSurface (shellHost.home.shortcutActions) — the same
+    // dispatcher the header dock uses; the only per-action nuance left here is
+    // the going-online re-tap guard, which reads presentation state this scope
+    // owns.
     val isOfflineActive = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+    val shortcutActions = shellParams.shellHost.home.shortcutActions
     val overflowEntries = overflowShortcuts.map { shortcut ->
         val closeMenu = { isOverflowExpanded = false }
-        // The two targets whose decoration is dynamic — decode once per row
-        // instead of re-testing the target type in each decoration slot.
-        val action = (shortcut.target as? com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action)?.action
-        val isToggleOffline = action == com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE
-        val isDownloads = (shortcut.target as? com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen)
-            ?.route == com.raulshma.jellyplay.core.ui.navigation.Route.Downloads
+        val decoration = overflowShortcutDecoration(
+            target = shortcut.target,
+            isOfflineActive = isOfflineActive,
+            isGoingOnline = isGoingOnline,
+            downloadCount = downloadCount,
+        )
         com.raulshma.jellyplay.navigation.components.OverflowMenuItem(
             key = shortcut.id,
             shortcut = shortcut,
-            onClick = when (val target = shortcut.target) {
-                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen -> {
-                    val route = target.route
-                    { closeMenu(); navigator.navigate(route) }
-                }
-                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action -> when (target.action) {
-                    com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.SURPRISE_ME -> {
-                        { closeMenu(); onSurpriseClick() }
-                    }
-                    com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.PLAY_ON -> {
-                        { showPlayOnSheet = true }
-                    }
-                    com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE -> {
-                        // Guard re-taps while the offline→online transition
-                        // is in flight.
-                        { if (!isGoingOnline) onToggleOffline() }
+            onClick = {
+                if (decoration.closesMenu) closeMenu()
+                when (val target = shortcut.target) {
+                    is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen ->
+                        navigator.navigate(target.route)
+                    is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action -> {
+                        // Guard re-taps while the offline→online transition is
+                        // in flight (the spinner pill is already up — a second
+                        // tap would flip the direction mid-flight).
+                        if (target.action != com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE ||
+                            !isGoingOnline
+                        ) {
+                            shortcutActions.execute(target.action)
+                        }
                     }
                 }
             },
-            iconOverride = when {
-                isToggleOffline && isOfflineActive -> Tabler.Outline.Wifi
-                isToggleOffline -> Tabler.Outline.WifiOff
-                else -> null
+            iconOverride = when (decoration.iconSlot) {
+                OverflowOfflineIcon.Wifi -> Tabler.Outline.Wifi
+                OverflowOfflineIcon.WifiOff -> Tabler.Outline.WifiOff
+                null -> null
             },
-            labelOverrideRes = when {
-                isToggleOffline && isGoingOnline -> R.string.menu_going_online
-                isToggleOffline && isOfflineActive -> R.string.menu_go_online
-                isToggleOffline -> R.string.menu_go_offline
-                else -> null
-            },
-            badgeCount = if (isDownloads) downloadCount else 0,
-            isHighlighted = action == com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.SURPRISE_ME ||
-                (isToggleOffline && isOfflineActive),
-            isProgressing = isToggleOffline && isGoingOnline,
+            labelOverrideRes = decoration.labelOverrideRes,
+            badgeCount = decoration.badgeCount,
+            isHighlighted = decoration.isHighlighted,
+            isProgressing = decoration.isProgressing,
         )
     }
 

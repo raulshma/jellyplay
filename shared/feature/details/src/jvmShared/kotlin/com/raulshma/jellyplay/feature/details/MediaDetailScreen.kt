@@ -254,8 +254,7 @@ fun MediaDetailScreen(
      * double-fire structurally impossible and leaves the machine's in-flight
      * guard arm unreachable here (dismiss/confirm are called with
      * `inFlight = false`). Settle arm: an explicit [PendingConfirmation.clear]
-     * at confirm — these dialogs previously never cleared (the pending item
-     * died with navigation).
+     * at confirm, so the pending item never outlives the dialog.
      */
     var pendingDelete by remember { mutableStateOf(PendingConfirmation<PendingDelete>()) }
     /** Pending delete of a downloaded episode from the seasons section. */
@@ -264,9 +263,9 @@ fun MediaDetailScreen(
     // Series/season mark-played cascades recurse into every episode and clear
     // all resume positions, so they're gated behind a confirm. ONE machine:
     // the shared [ConfirmState] holds the deferred call, and the ONE pending
-    // [MarkPlayedConfirmRequest] carries what the dialog must say (scope ×
-    // direction) — the former four hand-synced vars (series/season confirm ×
-    // their toWatched mirrors) folded into a single value.
+    // [MarkPlayedConfirmRequest] carries what the dialog must say (scope x
+    // direction) - one value covers series/season confirm and the watched
+    // mirror.
     val markPlayedConfirm = rememberConfirmState()
     var markPlayedRequest by remember { mutableStateOf<MarkPlayedConfirmRequest?>(null) }
 
@@ -521,12 +520,17 @@ fun MediaDetailScreen(
                     ArtworkCallbacks(
                         urls = viewModel.artwork,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
+                        // The raw untagged backdrop getter — the parent-series
+                        // leg of the content tree's backdrop fold (an id with
+                        // no MediaItem in scope). The same read the screen's
+                        // own backdropUrl fold makes below.
+                        getBackdropUrl = viewModel::getBackdropUrl,
                     )
                 }
 
                 // The process-wide playback seams arrive as ONE constructor
-                // bundle ([MediaDetailPlaybackSeams]) — the former mid-body
-                // koinInject pulls, hoisted to the screen's signature.
+                // bundle ([MediaDetailPlaybackSeams]), hoisted to the screen's
+                // signature.
                 val playbackCallbacks = remember(viewModel, seams, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
@@ -860,6 +864,11 @@ fun MediaDetailScreen(
                             state = state,
                             callbacks = callbacks,
                             availableStorageProvider = availableStorageProvider,
+                            // The process-wide playback seams ride the screen's
+                            // one bundle down to the content tree (the queue
+                            // seeding + SyncPlay veto reads) — no mid-body
+                            // koinInject pulls below the screen signature.
+                            seams = seams,
                         )
                     }
                 }

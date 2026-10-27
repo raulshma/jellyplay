@@ -96,7 +96,7 @@ val homeModule: Module = module {
         HomeHeroVideoLoader(
             libraryApiClient = get(),
             playbackRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             seerrRepository = get(),
             clock = { get<HomeClock>().nowEpochMillis() },
         )
@@ -156,7 +156,7 @@ val homeModule: Module = module {
         NextUpExcludedViewModel(
             homeDiscoveryStore = get(),
             editor = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             artworkUrls = get(),
         )
     }

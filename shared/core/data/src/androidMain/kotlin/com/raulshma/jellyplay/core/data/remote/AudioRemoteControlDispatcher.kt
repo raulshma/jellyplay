@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.remote
 import android.util.Log
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
@@ -31,7 +31,8 @@ import kotlinx.coroutines.withContext
  */
 class AndroidAudioRemoteControlDispatcher(
     private val audioPlaybackManager: AudioPlaybackManager,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val remoteNavigationBridge: RemoteNavigationBridge,
 ) : AudioRemoteControlDispatcher {
 
@@ -139,7 +140,7 @@ class AndroidAudioRemoteControlDispatcher(
     private suspend fun buildQueueItems(itemIds: List<String>): List<AudioQueueItem> = coroutineScope {
         itemIds.map { id ->
             async {
-                mediaRepository.getMediaDetail(id).getOrNull()?.let { detail ->
+                detailFeed.getMediaDetail(id, force = false).getOrNull()?.let { detail ->
                     AudioQueueItem(
                         id = id,
                         name = detail.item.name,

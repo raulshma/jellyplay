@@ -3,7 +3,10 @@ package com.raulshma.jellyplay.feature.shortcuts.customize
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutLimits
 import com.raulshma.jellyplay.core.model.ShortcutSurface
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogEntry
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget
 import com.raulshma.jellyplay.feature.shortcuts.ShortcutCategory
 
 /**
@@ -106,14 +109,33 @@ object ShortcutsCustomizePolicy {
         }
 
     /**
-     * The prune fold: the definitions whose target has no catalog entry (an
-     * app update removed/renamed a destination) — dropped on the editor's
-     * next write so stale rows never resurface.
+     * The capability-aware prune: drops definitions whose target has no
+     * catalog entry (an app update removed/renamed a destination) and
+     * definitions pointing at a shell action outside [supportedActions]
+     * (the shell cannot execute them — a stored pin predating a capability
+     * change must not resurface). Screen targets are never capability-gated.
      */
-    fun prune(definitions: List<ShortcutDefinition>, catalog: ShortcutCatalog): List<ShortcutDefinition> =
-        definitions.filter { catalog.entryFor(it.kind, it.targetId) != null }
+    fun prune(
+        definitions: List<ShortcutDefinition>,
+        catalog: ShortcutCatalog,
+        supportedActions: Set<ShortcutAction>,
+    ): List<ShortcutDefinition> = definitions.filter { definition ->
+        val entry = catalog.entryFor(definition.kind, definition.targetId) ?: return@filter false
+        val action = (entry.target as? ShortcutCatalogTarget.Action)?.action ?: return@filter true
+        action in supportedActions
+    }
 
     /** Whether the target picker may offer [entry] — admin entries hide for non-admins. */
-    fun pickable(entry: com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogEntry, isAdmin: Boolean): Boolean =
+    fun pickable(entry: ShortcutCatalogEntry, isAdmin: Boolean): Boolean =
         !entry.requiresAdmin || isAdmin
+
+    /**
+     * Whether the target picker may offer [entry] on this shell: an ACTION
+     * entry whose action is outside [supportedActions] never renders — the
+     * shell cannot execute it, and a pinned pill that dead-ends is the exact
+     * defect the capability surface exists to prevent. Screen entries are
+     * always offerable.
+     */
+    fun executable(entry: ShortcutCatalogEntry, supportedActions: Set<ShortcutAction>): Boolean =
+        (entry.target as? ShortcutCatalogTarget.Action)?.action?.let { it in supportedActions } ?: true
 }
