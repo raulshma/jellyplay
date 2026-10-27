@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">%2$d개 중 %1$d개 고정됨</string>
     <string name="shortcuts_customize_screen_badge">화면</string>
     <string name="shortcuts_customize_action_badge">작업</string>
+    <string name="shortcuts_customize_pin_section">고정 대상</string>
+    <string name="shortcuts_customize_clear_search">검색 지우기</string>
 </resources>

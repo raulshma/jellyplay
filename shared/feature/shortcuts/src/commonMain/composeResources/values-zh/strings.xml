@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">已固定 %1$d / %2$d</string>
     <string name="shortcuts_customize_screen_badge">页面</string>
     <string name="shortcuts_customize_action_badge">操作</string>
+    <string name="shortcuts_customize_pin_section">固定到</string>
+    <string name="shortcuts_customize_clear_search">清除搜索</string>
 </resources>

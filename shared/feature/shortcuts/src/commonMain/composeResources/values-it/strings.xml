@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">%1$d di %2$d fissate</string>
     <string name="shortcuts_customize_screen_badge">Schermata</string>
     <string name="shortcuts_customize_action_badge">Azione</string>
+    <string name="shortcuts_customize_pin_section">Fissa in</string>
+    <string name="shortcuts_customize_clear_search">Cancella ricerca</string>
 </resources>

@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">%1$d sur %2$d épinglés</string>
     <string name="shortcuts_customize_screen_badge">Écran</string>
     <string name="shortcuts_customize_action_badge">Action</string>
+    <string name="shortcuts_customize_pin_section">Épingler à</string>
+    <string name="shortcuts_customize_clear_search">Effacer la recherche</string>
 </resources>

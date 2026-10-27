@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.shortcuts.customize
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,8 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,8 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,7 +63,9 @@ import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Pin
 import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Restore
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
@@ -78,20 +85,24 @@ import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_cu
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_edit
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_overflow
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_cancel
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_clear_search
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_no_definitions
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_unpinned
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_capacity
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_empty_message
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_empty_title
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_full
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_label_hint
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_move_down
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_move_up
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_no_matches
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_overflow_full
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pick_icon
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pick_target
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_search_targets
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_header
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_overflow
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_section
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pinned_section
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_preview
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_preview_more
@@ -114,7 +125,7 @@ import org.jetbrains.compose.resources.stringResource
  * own tab via the route's [initialSurface]). Each tab is self-sufficient: a
  * live preview of the surface, the pinned list (reorder via the up/down
  * commands — TV-first, dpad-reachable), the add flow through one
- * [TvSafeSheet] (target picker → icon grid → label override → surface pins),
+ * [TvSafeSheet] (target picker → surface pins → icon grid → label override),
  * and the quick-pin pool of definitions not yet on this surface. Every
  * command is a [ShortcutsCustomizeViewModel] one-liner over the store's
  * atomic write.
@@ -269,6 +280,7 @@ fun ShortcutsCustomizeScreen(
             pickerByCategory = state.pickerByCategory,
             headerFull = state.sections.headerFull,
             overflowFull = state.sections.overflowFull,
+            defaultSurface = surface,
             editingLabel = editingRowLabel(state, current),
             onDismiss = { draft = null },
             onSave = { saved ->
@@ -760,6 +772,7 @@ private fun ShortcutEditorSheet(
     pickerByCategory: Map<ShortcutCategory, List<ShortcutsCustomizeViewModel.PickerItem>>,
     headerFull: Boolean,
     overflowFull: Boolean,
+    defaultSurface: ShortcutSurface,
     editingLabel: String?,
     onDismiss: () -> Unit,
     onSave: (EditorDraft) -> Unit,
@@ -777,83 +790,141 @@ private fun ShortcutEditorSheet(
             if (draft.originalId == null) Res.string.shortcuts_customize_add else Res.string.shortcuts_customize_edit,
         ),
     ) {
-        if (draft.originalId == null) {
-            Text(
-                text = stringResource(Res.string.shortcuts_customize_pick_target),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.size(8.dp))
-            ShortcutTargetPicker(
-                pickerByCategory = pickerByCategory,
-                selectedKind = current.kind,
-                selectedTargetId = current.targetId,
-                onSelect = { kind, targetId -> current = current.copy(kind = kind, targetId = targetId) },
-            )
-            Spacer(Modifier.size(16.dp))
-        } else if (editingLabel != null) {
-            Text(
-                text = editingLabel,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.size(8.dp))
-        }
-
-        Text(
-            text = stringResource(Res.string.shortcuts_customize_pick_icon),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.size(8.dp))
-        ShortcutIconGridPicker(
-            selectedIconId = current.iconId,
-            onIconSelected = { id -> current = current.copy(iconId = id) },
-        )
-        if (current.iconId.isNotEmpty()) {
-            TextButton(onClick = { current = current.copy(iconId = "") }) {
-                Text(stringResource(Res.string.shortcuts_customize_use_default_icon))
-            }
-        }
-
-        Spacer(Modifier.size(8.dp))
-        OutlinedTextField(
-            value = current.labelOverride,
-            onValueChange = { current = current.copy(labelOverride = it) },
-            label = { Text(stringResource(Res.string.shortcuts_customize_label_hint)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(Modifier.size(8.dp))
-        // The capacity gates the store's write clamp enforces — pinned rows
-        // don't consume extra slots, so a checked toggle always stays
-        // enabled (unchecking must never lock); checking needs a free slot.
-        SurfacePinToggle(
-            label = stringResource(Res.string.shortcuts_customize_pin_header),
-            icon = Tabler.Outline.Pin,
-            checked = current.pinHeader,
-            enabled = current.pinHeader || !headerFull,
-            onChecked = { current = current.copy(pinHeader = it) },
-        )
-        SurfacePinToggle(
-            label = stringResource(Res.string.shortcuts_customize_pin_overflow),
-            icon = Tabler.Outline.DotsVertical,
-            checked = current.pinOverflow,
-            enabled = current.pinOverflow || !overflowFull,
-            onChecked = { current = current.copy(pinOverflow = it) },
-        )
-
-        Spacer(Modifier.size(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+        // Horizontal breathing room: TvSafeSheet's mobile column is edge-to-edge
+        // by design (sheets add their own inset — same 16dp as the section
+        // config sheet), so the editor carries its own gutter.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Button(
-                onClick = { onSave(current) },
-                enabled = current.kind != null && current.targetId != null,
+            // ── 1 · Destination (add) / resolved face (edit) ─────────────
+            if (draft.originalId == null) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(Res.string.shortcuts_customize_pick_target),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    ShortcutTargetPicker(
+                        pickerByCategory = pickerByCategory,
+                        selectedKind = current.kind,
+                        selectedTargetId = current.targetId,
+                        onSelect = { kind, targetId ->
+                            // Picking under the Header tab suggests the header pin:
+                            // the first pick auto-checks the tab's own surface so a
+                            // new shortcut lands where the user started. Toggling a
+                            // pin off is respected — the suggestion only fires while
+                            // both are unchecked, i.e. on a fresh destination pick.
+                            val suggest =
+                                if (!current.pinHeader && !current.pinOverflow) defaultSurface else null
+                            current = current.copy(
+                                kind = kind,
+                                targetId = targetId,
+                                pinHeader = current.pinHeader || suggest == ShortcutSurface.HEADER,
+                                pinOverflow = current.pinOverflow || suggest == ShortcutSurface.OVERFLOW,
+                            )
+                        },
+                    )
+                }
+            } else if (editingLabel != null) {
+                Text(
+                    text = editingLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            // ── 2 · Surface pins: where it lives outranks how it looks ────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(Res.string.shortcuts_customize_pin_section),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SurfacePinCard(
+                        icon = Tabler.Outline.Pin,
+                        label = stringResource(Res.string.shortcuts_customize_pin_header),
+                        checked = current.pinHeader,
+                        enabled = current.pinHeader || !headerFull,
+                        onChecked = { current = current.copy(pinHeader = it) },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                    SurfacePinCard(
+                        icon = Tabler.Outline.DotsVertical,
+                        label = stringResource(Res.string.shortcuts_customize_pin_overflow),
+                        checked = current.pinOverflow,
+                        enabled = current.pinOverflow || !overflowFull,
+                        onChecked = { current = current.copy(pinOverflow = it) },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
+                // The capacity gates the store's write clamp enforces — pinned
+                // rows don't consume extra slots, so a checked toggle always
+                // stays enabled (unchecking must never lock); checking needs a
+                // free slot, and a full+unchecked card gets the why here.
+                val fullNote = when {
+                    headerFull && !current.pinHeader -> stringResource(Res.string.shortcuts_customize_header_full)
+                    overflowFull && !current.pinOverflow -> stringResource(Res.string.shortcuts_customize_overflow_full)
+                    else -> null
+                }
+                fullNote?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // ── 3 · Icon ──────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(Res.string.shortcuts_customize_pick_icon),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                ShortcutIconGridPicker(
+                    selectedIconId = current.iconId,
+                    onIconSelected = { id -> current = current.copy(iconId = id) },
+                )
+                if (current.iconId.isNotEmpty()) {
+                    TextButton(onClick = { current = current.copy(iconId = "") }) {
+                        Text(stringResource(Res.string.shortcuts_customize_use_default_icon))
+                    }
+                }
+            }
+
+            // ── 4 · Label ─────────────────────────────────────────────────
+            OutlinedTextField(
+                value = current.labelOverride,
+                onValueChange = { current = current.copy(labelOverride = it) },
+                label = { Text(stringResource(Res.string.shortcuts_customize_label_hint)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // ── 5 · Actions: explicit Cancel (swipe/back also dismiss) ────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
-                Text(stringResource(Res.string.shortcuts_customize_save))
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(Res.string.shortcuts_customize_cancel))
+                }
+                Button(
+                    onClick = { onSave(current) },
+                    enabled = current.kind != null && current.targetId != null,
+                ) {
+                    Text(stringResource(Res.string.shortcuts_customize_save))
+                }
             }
         }
     }
@@ -872,6 +943,20 @@ private fun ShortcutTargetPicker(
         value = query,
         onValueChange = { query = it },
         singleLine = true,
+        leadingIcon = {
+            Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { query = "" }) {
+                    Icon(
+                        imageVector = Tabler.Outline.X,
+                        contentDescription = stringResource(Res.string.shortcuts_customize_clear_search),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        },
         placeholder = { Text(stringResource(Res.string.shortcuts_customize_search_targets)) },
         modifier = Modifier.fillMaxWidth(),
     )
@@ -923,7 +1008,7 @@ private fun ShortcutTargetPicker(
                                 item.entry.targetId,
                             )
                         }
-                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                        .padding(vertical = 8.dp, horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -968,25 +1053,79 @@ private fun ShortcutTargetPicker(
     }
 }
 
+/**
+ * One pin surface as a selectable card — the sheet's primary decision gets
+ * the icon tile's selection grammar (primary border + secondary container)
+ * instead of two stray checkboxes. Disabled = that surface is full and the
+ * shortcut isn't on it yet; the sheet's capacity note below the pair
+ * explains why.
+ */
 @Composable
-private fun SurfacePinToggle(
-    label: String,
+private fun SurfacePinCard(
     icon: ImageVector,
+    label: String,
     checked: Boolean,
     enabled: Boolean,
     onChecked: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, role = Role.Checkbox) { onChecked(!checked) },
-        verticalAlignment = Alignment.CenterVertically,
+    val shape = RoundedCornerShape(14.dp)
+    Surface(
+        modifier = modifier.toggleable(
+            value = checked,
+            enabled = enabled,
+            role = Role.Checkbox,
+            onValueChange = onChecked,
+        ),
+        shape = shape,
+        color = if (checked) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        border = if (checked) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+        },
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Checkbox(checked = checked, onCheckedChange = if (enabled) { { onChecked(it) } } else null)
+        Box(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 14.dp)
+                    // A full surface the shortcut isn't pinned to yet reads dimmed;
+                    // the note under the pair carries the explanation.
+                    .alpha(if (enabled || checked) 1f else 0.5f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (checked) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (checked) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
+        }
     }
 }
 

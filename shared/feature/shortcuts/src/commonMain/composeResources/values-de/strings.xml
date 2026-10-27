@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">%1$d von %2$d angeheftet</string>
     <string name="shortcuts_customize_screen_badge">Bildschirm</string>
     <string name="shortcuts_customize_action_badge">Aktion</string>
+    <string name="shortcuts_customize_pin_section">Anheften an</string>
+    <string name="shortcuts_customize_clear_search">Suche löschen</string>
 </resources>

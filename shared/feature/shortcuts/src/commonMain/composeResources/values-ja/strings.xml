@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">%2$d中%1$d件固定</string>
     <string name="shortcuts_customize_screen_badge">画面</string>
     <string name="shortcuts_customize_action_badge">アクション</string>
+    <string name="shortcuts_customize_pin_section">固定先</string>
+    <string name="shortcuts_customize_clear_search">検索をクリア</string>
 </resources>

@@ -94,6 +94,7 @@
     <string name="shortcuts_customize_also_in_menu">In overflow menu</string>
     <string name="shortcuts_customize_pin_header">Pin to home header</string>
     <string name="shortcuts_customize_pin_overflow">Pin to overflow menu</string>
+    <string name="shortcuts_customize_pin_section">Pin to</string>
     <string name="shortcuts_customize_edit">Edit</string>
     <string name="shortcuts_customize_remove">Remove</string>
     <string name="shortcuts_customize_move_up">Move up</string>
@@ -102,6 +103,7 @@
     <string name="shortcuts_customize_reset_confirm_title">Reset shortcuts?</string>
     <string name="shortcuts_customize_reset_confirm_message">Your custom shortcuts are removed and the default menus return.</string>
     <string name="shortcuts_customize_search_targets">Search destinations</string>
+    <string name="shortcuts_customize_clear_search">Clear search</string>
     <string name="shortcuts_customize_no_matches">Nothing matches.</string>
     <string name="shortcuts_customize_pick_target">Choose a destination</string>
     <string name="shortcuts_customize_pick_icon">Choose an icon</string>

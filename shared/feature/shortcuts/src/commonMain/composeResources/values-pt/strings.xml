@@ -89,4 +89,6 @@
     <string name="shortcuts_customize_overflow_capacity">%1$d de %2$d fixados</string>
     <string name="shortcuts_customize_screen_badge">Tela</string>
     <string name="shortcuts_customize_action_badge">Ação</string>
+    <string name="shortcuts_customize_pin_section">Fixar em</string>
+    <string name="shortcuts_customize_clear_search">Limpar pesquisa</string>
 </resources>
