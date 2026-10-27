@@ -1,9 +1,18 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.util.DownloadResult
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+
+/**
+ * The series download sheet's (AutoDownloadMode?, confirmed) pair folded
+ * into the intake's [DownloadIntake.SeriesPolicyChoice]: `null` is an
+ * explicit Default (clear the override), a mode is a Set.
+ */
+fun AutoDownloadMode?.toSeriesPolicyChoice(): DownloadIntake.SeriesPolicyChoice =
+    this?.let { DownloadIntake.SeriesPolicyChoice.Set(it) } ?: DownloadIntake.SeriesPolicyChoice.Inherit
 
 /**
  * Feature-facing intake seam for offline downloads.
@@ -59,9 +68,37 @@ interface DownloadIntake {
     ): DownloadResult
 
     /**
+     * The sheet's per-series new-episode policy outcome (gh-181). A sealed
+     * type because "do nothing" and "explicitly reset to the global default"
+     * are different user intents that `AutoDownloadMode?` cannot spell.
+     */
+    sealed interface SeriesPolicyChoice {
+        /** No policy intent — the caller (e.g. the auto-download check) never touches the stored row. */
+        data object LeaveUnchanged : SeriesPolicyChoice
+
+        /** The user picked "Default": clear any stored override (follow the global setting). */
+        data object Inherit : SeriesPolicyChoice
+
+        /** The user picked a mode: store it as this series' override. */
+        data class Set(val mode: AutoDownloadMode) : SeriesPolicyChoice
+    }
+
+    /**
+     * The series' stored policy override, or null when it follows the global
+     * setting — the download sheet's pre-load read so its chips open on the
+     * stored choice instead of always on Default.
+     */
+    suspend fun seriesPolicy(seriesId: String): AutoDownloadMode?
+
+    /**
      * Starts a batch download for the given episodes of a series. If
      * [episodeIds] is null, every episode of every season of [seriesId] is
      * downloaded; otherwise only the listed episode ids per season id are.
+     *
+     * [policyChoice] persists the series' new-episode auto-download outcome
+     * (gh-181) alongside the batch. The sheet always sends an explicit arm —
+     * its chips pre-load the stored choice, so re-confirming re-stores the
+     * same value harmlessly.
      *
      * Returns the list of started download ids (may be empty if nothing
      * matched), or a failure if the series lookup or per-episode start
@@ -70,6 +107,7 @@ interface DownloadIntake {
     suspend fun startSeries(
         seriesId: String,
         episodeIds: Map<String, List<String>>? = null,
+        policyChoice: SeriesPolicyChoice = SeriesPolicyChoice.LeaveUnchanged,
     ): Result<List<String>>
 
     /**

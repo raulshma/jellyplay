@@ -24,6 +24,7 @@ internal fun androidIntakeStorageModule(context: Context): Module = module {
             context = context,
             delegate = get(),
             downloadRepository = get(),
+            policyStore = get(),
             detailFeed = get(),
             downloadsStore = get(),
         )

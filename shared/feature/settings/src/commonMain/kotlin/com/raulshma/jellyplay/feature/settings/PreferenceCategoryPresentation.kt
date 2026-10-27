@@ -408,7 +408,7 @@ private val downloadsNetworkDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_max_concurrent_downloads_title, { it.downloads.maxConcurrentDownloads }, Int::toString),
     DiffField(Res.string.ss_download_quality_title, { it.downloads.downloadQuality }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_smart_downloads_title, { it.downloads.smartDownloadsEnabled }, Boolean::onOff),
-    DiffField(Res.string.ss_auto_download_new_episodes_title, { it.downloads.autoDownloadNewEpisodes }, Boolean::onOff),
+    DiffField(Res.string.ss_auto_download_mode_title, { it.downloads.autoDownloadMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_max_download_storage_limit_title, { it.downloads.maxDownloadStorageGb }, Int::toString),
     DiffField(Res.string.ss_download_storage_location_title, { it.downloads.downloadStorageLocation }, ::identity),
     DiffField(Res.string.ss_max_cache_size_title, { it.networkOffline.maxCacheSizeMb }, Int::toString),

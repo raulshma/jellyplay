@@ -12,9 +12,11 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.isEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -58,6 +60,14 @@ class DownloadsStore constructor(
         val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
         val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
         val SMART_DOWNLOADS_ENABLED = booleanPreferencesKey("smart_downloads_enabled")
+        /**
+         * The tri-state new-episode policy (gh-181): enum name of
+         * [AutoDownloadMode]. Absent → derived from the legacy
+         * [AUTO_DOWNLOAD_NEW_EPISODES] boolean (true → INSTANT, else NEVER),
+         * which the setter keeps in sync so an app downgrade still reads a
+         * sane value.
+         */
+        val AUTO_DOWNLOAD_MODE = stringPreferencesKey("auto_download_mode")
         val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey("auto_download_new_episodes")
         val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey("max_download_storage_gb")
         val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
@@ -124,7 +134,7 @@ class DownloadsStore constructor(
             .coerceIn(1, 6),
         downloadQuality = readDownloadQuality(prefs),
         smartDownloadsEnabled = PreferenceCodec.readBool(prefs, Keys.SMART_DOWNLOADS_ENABLED, "smart_downloads_enabled", false),
-        autoDownloadNewEpisodes = PreferenceCodec.readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
+        autoDownloadMode = readAutoDownloadMode(prefs),
         autoDownloadLookahead = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_LOOKAHEAD, "auto_download_lookahead", DEFAULT_LOOKAHEAD)
             .coerceIn(0, MAX_LOOKAHEAD),
         autoDownloadMaxPerPass = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_MAX_PER_PASS, "auto_download_max_per_pass", 0)
@@ -164,6 +174,18 @@ class DownloadsStore constructor(
     private fun readDownloadQuality(prefs: Preferences): DownloadQuality =
         prefs[Keys.DOWNLOAD_QUALITY].toEnumOrNull() ?: DownloadQuality.ORIGINAL
 
+    /**
+     * The tri-state mode with legacy fallback: the canonical
+     * `auto_download_mode` key wins; absent (or a stale enum name) derives
+     * from the pre-gh-181 boolean — `true` meant auto-download was on, which
+     * maps to INSTANT.
+     */
+    private fun readAutoDownloadMode(prefs: Preferences): AutoDownloadMode {
+        val stored: AutoDownloadMode? = prefs[Keys.AUTO_DOWNLOAD_MODE].toEnumOrNull()
+        if (stored != null) return stored
+        return if (prefs[Keys.AUTO_DOWNLOAD_NEW_EPISODES] == true) AutoDownloadMode.INSTANT else AutoDownloadMode.NEVER
+    }
+
     // ------------------------------------------------------------------
     // Setters
     // ------------------------------------------------------------------
@@ -188,8 +210,16 @@ class DownloadsStore constructor(
         dataStore.edit { it[Keys.SMART_DOWNLOADS_ENABLED] = enabled }
     }
 
-    suspend fun setAutoDownloadNewEpisodes(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
+    /**
+     * Writes the mode to the canonical key and mirrors it onto the legacy
+     * boolean (`mode != NEVER`) so an app downgrade keeps auto-download on
+     * for INSTANT/ASK users rather than silently flipping it off.
+     */
+    suspend fun setAutoDownloadMode(mode: AutoDownloadMode) {
+        dataStore.edit {
+            it[Keys.AUTO_DOWNLOAD_MODE] = mode.name
+            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = mode.isEnabled
+        }
     }
 
     /** Lookahead window in episodes (0 = legacy all-missing behavior). */
@@ -293,6 +323,7 @@ class DownloadsStore constructor(
             Keys.MAX_CONCURRENT_DOWNLOADS,
             Keys.DOWNLOAD_QUALITY,
             Keys.SMART_DOWNLOADS_ENABLED,
+            Keys.AUTO_DOWNLOAD_MODE,
             Keys.AUTO_DOWNLOAD_NEW_EPISODES,
             Keys.AUTO_DOWNLOAD_LOOKAHEAD,
             Keys.AUTO_DOWNLOAD_MAX_PER_PASS,
@@ -350,7 +381,8 @@ class DownloadsStore constructor(
             it[Keys.MAX_CONCURRENT_DOWNLOADS] = slice.maxConcurrentDownloads
             it[Keys.DOWNLOAD_QUALITY] = slice.downloadQuality.name
             it[Keys.SMART_DOWNLOADS_ENABLED] = slice.smartDownloadsEnabled
-            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadNewEpisodes
+            it[Keys.AUTO_DOWNLOAD_MODE] = slice.autoDownloadMode.name
+            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadMode.isEnabled
             it[Keys.AUTO_DOWNLOAD_LOOKAHEAD] = slice.autoDownloadLookahead
             it[Keys.AUTO_DOWNLOAD_MAX_PER_PASS] = slice.autoDownloadMaxPerPass
             it[Keys.AUTO_DOWNLOAD_KEEP_DAYS] = slice.autoDownloadKeepDays
@@ -397,7 +429,12 @@ data class DownloadsSlice(
     val maxConcurrentDownloads: Int = 3,
     val downloadQuality: DownloadQuality = DownloadQuality.ORIGINAL,
     val smartDownloadsEnabled: Boolean = false,
-    val autoDownloadNewEpisodes: Boolean = false,
+    /**
+     * The tri-state new-episode policy (gh-181). A pre-gh-181 settings backup
+     * carries only the legacy boolean, so restoring one lands on the NEVER
+     * default — the toggle must be re-set after such a restore.
+     */
+    val autoDownloadMode: AutoDownloadMode = AutoDownloadMode.NEVER,
     /** Episodes past the highest downloaded/watched per season (0 = all missing). */
     val autoDownloadLookahead: Int = DownloadsStore.DEFAULT_LOOKAHEAD,
     /** Global per-pass enqueue budget across series (0 = unlimited). */

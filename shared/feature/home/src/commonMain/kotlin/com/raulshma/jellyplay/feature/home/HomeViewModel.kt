@@ -1039,7 +1039,7 @@ internal class HomeViewModel(
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
             is HomeUiEvent.RequestSeriesDownload -> seriesDownloadStateHolder.requestSeriesDownload(event.series)
             is HomeUiEvent.LoadSeriesDownloadEpisodes -> seriesDownloadStateHolder.loadSeasonEpisodes(event.seasonId)
-            is HomeUiEvent.DownloadSeries -> seriesDownloadStateHolder.downloadSeries(event.selectedEpisodes)
+            is HomeUiEvent.DownloadSeries -> seriesDownloadStateHolder.downloadSeries(event.selectedEpisodes, event.policy)
             is HomeUiEvent.DismissSeriesDownload -> seriesDownloadStateHolder.dismiss()
             is HomeUiEvent.RequestSeriesDelete -> seriesDeleteStateHolder.requestSeriesDelete(event.series)
             is HomeUiEvent.DismissSeriesDelete -> seriesDeleteStateHolder.dismiss()

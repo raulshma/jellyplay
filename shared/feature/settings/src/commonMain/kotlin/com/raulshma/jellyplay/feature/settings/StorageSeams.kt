@@ -49,6 +49,14 @@ data class StorageSizeEstimate(
  */
 fun interface AutoDownloadSync {
     fun sync()
+
+    /**
+     * The storage screen's "Check for new episodes now" action: an immediate
+     * one-shot discovery pass. Defaults to [sync] (both platform schedules
+     * run a check as part of it) so the SAM-conversion bindings keep working;
+     * Android overrides it with the distinct `enqueueNow()` one-shot.
+     */
+    fun checkNow() = sync()
 }
 
 /** What one keep-days retention pass reclaimed — the "Clean up now" summary. */

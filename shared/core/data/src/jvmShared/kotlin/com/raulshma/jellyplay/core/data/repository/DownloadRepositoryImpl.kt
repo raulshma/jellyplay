@@ -12,13 +12,18 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.PlayedFlagRow
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
+import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -120,7 +125,8 @@ class DownloadRepositoryImpl(
     DownloadQueue,
     TrackDownloadStatusWindow,
     ActiveDownloadCount,
-    SeriesEpisodeDownloads {
+    SeriesEpisodeDownloads,
+    SeriesDownloadPolicyStore {
 
     // Caps the number of episodes processed concurrently when queueing a series
     // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
@@ -137,6 +143,11 @@ class DownloadRepositoryImpl(
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
     )
+
+    // The gh-181 policy + suggestion tables, resolved from the already-injected
+    // database handle so the constructor surface (and every test/Koin call
+    // site) stays put.
+    private val downloadPolicyDao: DownloadPolicyDao = database.downloadPolicyDao()
 
     // Room re-runs download queries on every 2 s progress tick, and a full
     // structural `distinctUntilChanged` over up to 500 x ~25-field items is
@@ -635,8 +646,83 @@ class DownloadRepositoryImpl(
                 },
             )
         } ?: return AutoDownloadSweepResult.EMPTY
+        // The sweep can delete a series' last remaining download — drop the
+        // now-dead policy override and any stale Ask-mode prompts with it.
+        deletable.mapNotNull { it.seriesId }.distinct().forEach { seriesId ->
+            runCatchingRethrowingCancellation { maybeClearSeriesAutoDownloadState(seriesId) }
+        }
         return AutoDownloadSweepResult(deletable.size, bytesReclaimed).also {
             Log.i(TAG, "Retention sweep deleted ${it.deletedCount} downloads (${it.bytesReclaimed} bytes)")
+        }
+    }
+
+    override suspend fun seriesPolicy(seriesId: String): AutoDownloadMode? =
+        downloadPolicyDao.getPolicyBySeriesId(seriesId)?.mode?.toEnumOrNull()
+
+    override suspend fun hasSeriesPolicies(): Boolean = downloadPolicyDao.countPolicies() > 0
+
+    override suspend fun seriesPolicies(seriesIds: List<String>): Map<String, AutoDownloadMode> =
+        if (seriesIds.isEmpty()) {
+            emptyMap()
+        } else {
+            val policies = mutableMapOf<String, AutoDownloadMode>()
+            downloadPolicyDao.getPoliciesBySeriesIds(seriesIds).forEach { row ->
+                val mode: AutoDownloadMode? = row.mode.toEnumOrNull()
+                if (mode != null) policies[row.seriesId] = mode
+            }
+            policies
+        }
+
+    override suspend fun setSeriesPolicy(seriesId: String, mode: AutoDownloadMode?) {
+        if (mode == null) {
+            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
+        } else {
+            downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity(seriesId = seriesId, mode = mode.name))
+        }
+        // NEVER and inherit both invalidate the series' pending prompts —
+        // they were recorded under an override that no longer wants them.
+        if (mode == null || mode == AutoDownloadMode.NEVER) {
+            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
+        }
+    }
+
+    override fun observeAutoDownloadSuggestions(): Flow<List<AutoDownloadSuggestion>> =
+        downloadPolicyDao.observePendingSuggestions().map { rows -> rows.map { it.toSuggestion() } }
+
+    override suspend fun recordAutoDownloadSuggestions(suggestions: List<AutoDownloadSuggestion>): Int {
+        if (suggestions.isEmpty()) return 0
+        val knownIds = downloadPolicyDao.getKnownSuggestionIds(suggestions.map { it.episodeId }).toSet()
+        val fresh = suggestions.filter { it.episodeId !in knownIds }
+        if (fresh.isNotEmpty()) {
+            downloadPolicyDao.upsertSuggestions(fresh.map { it.toEntity() })
+        }
+        return fresh.size
+    }
+
+    override suspend fun autoDownloadSuggestionsByIds(episodeIds: List<String>): List<AutoDownloadSuggestion> =
+        if (episodeIds.isEmpty()) {
+            emptyList()
+        } else {
+            downloadPolicyDao.getPendingSuggestionsByIds(episodeIds).map { it.toSuggestion() }
+        }
+
+    override suspend fun dismissAutoDownloadSuggestions(episodeIds: List<String>) {
+        if (episodeIds.isNotEmpty()) {
+            downloadPolicyDao.dismissSuggestions(episodeIds, timeSource.nowEpochMillis())
+        }
+    }
+
+    /**
+     * When a series' last download row is gone, its policy override and any
+     * pending Ask-mode prompts are dead state — an override on a series with
+     * nothing downloaded never joins the check's coverage universe, and a
+     * prompt for a removed series has nothing to anchor to. Internal for the
+     * host test (the deletion choreography it rides is mock-hostile).
+     */
+    internal suspend fun maybeClearSeriesAutoDownloadState(seriesId: String) {
+        if (downloadDao.getDownloadsForSeries(seriesId).isEmpty()) {
+            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
+            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
         }
     }
 
@@ -662,6 +748,7 @@ class DownloadRepositoryImpl(
                 syncBaselineDao.deleteById(entity.mediaItemId)
             },
         )
+        entity.seriesId?.let { maybeClearSeriesAutoDownloadState(it) }
     }
 
     /**

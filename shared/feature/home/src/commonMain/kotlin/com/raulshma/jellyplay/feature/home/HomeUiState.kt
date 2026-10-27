@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.runtime.Immutable
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -308,6 +309,8 @@ data class HomeSeriesDownloadState(
     val episodesBySeason: Map<String, List<MediaItem>>,
     val loadingSeasons: Set<String>,
     val downloadedEpisodeIds: Set<String>,
+    /** The series' stored policy override (null = Default), pre-loaded so the sheet's chips open on it. */
+    val storedPolicy: AutoDownloadMode? = null,
 )
 
 @Immutable

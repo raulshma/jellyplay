@@ -28,7 +28,9 @@ import androidx.compose.foundation.layout.Arrangement
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
+import com.raulshma.jellyplay.core.model.isEnabled
 import com.raulshma.jellyplay.core.model.CACHE_SIZE_DISABLED
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -85,6 +87,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_metered_network_behavior
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_offline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_timeouts
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_ask
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_instant
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_never
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_online
@@ -139,7 +144,7 @@ fun StorageSettingsScreen(
         showAdvanced = showAdvanced,
         parentsOn = rowParentsOn(
             StorageRows.DownloadSchedule.id to preferences.downloadScheduleEnabled,
-            StorageRows.AutoDownloadNewEpisodes.id to preferences.autoDownloadNewEpisodes,
+            StorageRows.AutoDownloadMode.id to preferences.autoDownloadMode.isEnabled,
             StorageRows.AutoDownloadKeepDays.id to (preferences.autoDownloadKeepDays > 0),
         ),
     )
@@ -571,14 +576,41 @@ fun StorageSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setSmartDownloadsEnabled(it) } }
                     )
 
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Download,
-                        title = rowTitle(StorageRows.AutoDownloadNewEpisodes),
-                        subtitle = rowSubtitle(StorageRows.AutoDownloadNewEpisodes),
-                        checked = preferences.autoDownloadNewEpisodes,
-                        highlighted = highlightSettingId == StorageRows.AutoDownloadNewEpisodes.id,
-                        onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
+                    // The tri-state new-episode policy (gh-181): the old on/off
+                    // toggle became Instantly / Ask / Never.
+                    val autoDownloadModeTitle = rowTitle(StorageRows.AutoDownloadMode)
+                    val modeLabels = mapOf(
+                        AutoDownloadMode.INSTANT to stringResource(Res.string.settings_auto_download_mode_instant),
+                        AutoDownloadMode.ASK to stringResource(Res.string.settings_auto_download_mode_ask),
+                        AutoDownloadMode.NEVER to stringResource(Res.string.settings_auto_download_mode_never),
                     )
+                    SettingListItem(
+                        icon = Tabler.Outline.Download,
+                        title = autoDownloadModeTitle,
+                        subtitle = rowSubtitle(StorageRows.AutoDownloadMode),
+                        trailingText = modeLabels.getValue(preferences.autoDownloadMode),
+                        highlighted = highlightSettingId == StorageRows.AutoDownloadMode.id,
+                        onClick = {
+                            val modes = listOf(AutoDownloadMode.INSTANT, AutoDownloadMode.ASK, AutoDownloadMode.NEVER)
+                            activePicker.value = PickerState.List(
+                                title = autoDownloadModeTitle,
+                                items = modes,
+                                label = { modeLabels.getValue(it) },
+                                isSelected = { it == preferences.autoDownloadMode },
+                                onSelect = { viewModel.setAutoDownloadMode(it) },
+                            )
+                        }
+                    )
+
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadCheckNow.id, rowFlags)) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = rowTitle(StorageRows.AutoDownloadCheckNow),
+                            subtitle = rowSubtitle(StorageRows.AutoDownloadCheckNow),
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadCheckNow.id,
+                            onClick = { viewModel.checkForNewEpisodesNow() },
+                        )
+                    }
 
                     // The auto-download retention-policy cluster: every row
                     // rides the toggle (their declared WhenOn gate, which

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
@@ -29,13 +30,14 @@ class DownloadIntakeTest {
 
     private val delegate: DownloadDelegate = mockk()
     private val downloadRepository: DownloadRepository = mockk()
+    private val policyStore: SeriesDownloadPolicyStore = mockk(relaxed = true)
     private val detailFeed: DetailFeed = mockk()
     private val downloadsStore: DownloadsStore = mockk {
         every { downloads } returns MutableStateFlow(DownloadsSlice())
     }
     private val context: android.content.Context = mockk()
     private val intake = DownloadIntakeImpl(
-        context, delegate, downloadRepository, detailFeed, downloadsStore,
+        context, delegate, downloadRepository, policyStore, detailFeed, downloadsStore,
     )
 
     private fun mediaDetail(): MediaDetail {

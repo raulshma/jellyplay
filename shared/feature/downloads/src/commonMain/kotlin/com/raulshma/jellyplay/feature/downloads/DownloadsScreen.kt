@@ -79,6 +79,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_clear_selection
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_suggestions_queued
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_pause
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_resume
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_select_all
@@ -179,10 +180,12 @@ fun DownloadsScreen(
     // post each emitted message through the app-wide UserMessageBus.
     val bus = LocalUserMessageBus.current
     val deletedText = stringResource(Res.string.downloads_deleted_message)
+    val suggestionsQueuedText = stringResource(Res.string.downloads_suggestions_queued)
     LaunchedEffect(bus) {
         viewModel.messages.collect { message ->
             when (message) {
                 DownloadsUserMessage.Deleted -> bus.info(deletedText)
+                DownloadsUserMessage.SuggestionsQueued -> bus.info(suggestionsQueuedText)
                 is DownloadsUserMessage.Raw -> bus.error(message.text)
             }
         }
@@ -498,6 +501,24 @@ fun DownloadsScreen(
                         item(key = "selection_hint", contentType = "selectionHint") {
                             if (!selectionMode && !selectionHintSeen) {
                                 SelectionHintRow()
+                            }
+                        }
+                        // Ask-mode suggestions (gh-181): the pending
+                        // "ask before download" prompts, above every list state
+                        // (empty included — answering them is the screen's most
+                        // urgent action).
+                        item(key = "auto_download_suggestions", contentType = "suggestions") {
+                            val suggestionList by viewModel.suggestions.collectAsStateWithLifecycle()
+                            if (suggestionList.isNotEmpty()) {
+                                AutoDownloadSuggestionsCard(
+                                    suggestions = suggestionList,
+                                    onDownloadAll = {
+                                        viewModel.downloadSuggestions(suggestionList.map { it.episodeId })
+                                    },
+                                    onDownload = { viewModel.downloadSuggestions(listOf(it)) },
+                                    onDismiss = { viewModel.dismissSuggestions(listOf(it)) },
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
                             }
                         }
                         items(

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 
 /**
  * The dialog/sheet SESSION half of the media-detail screen: the seven
@@ -91,10 +92,12 @@ internal class DetailDialogSession(
     /**
      * Opening the sheet ALWAYS prefetches the downloaded-ids + per-season
      * episodes (the sheet re-resolves on every open — all three former open
-     * sites repeated this pair).
+     * sites repeated this pair). The policy choice resets to Default here;
+     * the host re-loads the stored override into it once the read lands.
      */
     fun openSeriesDownloadSheet() {
         showSeriesDownloadSheet = true
+        seriesDownloadPolicy = null
         cascades.prepareSeriesDownloadSheet()
     }
 
@@ -114,6 +117,25 @@ internal class DetailDialogSession(
         showSeriesDownloadSheet = false
         download()
         cascades.resetSeriesDownloadSheetState()
+        seriesDownloadPolicy = null
+    }
+
+    /**
+     * The sheet's pending per-series new-episode policy choice (gh-181):
+     * `null` = "Default" (follow the global setting — clears any stored
+     * override on confirm). Reset to null on open/confirm/dismiss, like the
+     * sheet's other caches; the host seeds it from the stored override.
+     */
+    var seriesDownloadPolicy by mutableStateOf<AutoDownloadMode?>(null)
+        private set
+
+    fun selectSeriesDownloadPolicy(policy: AutoDownloadMode?) {
+        seriesDownloadPolicy = policy
+    }
+
+    /** Seeds the sheet's policy chips from the series' stored override (the pre-load). */
+    fun seedSeriesDownloadPolicy(policy: AutoDownloadMode?) {
+        seriesDownloadPolicy = policy
     }
 
     // ── Download-details sheet ──────────────────────────────────────────

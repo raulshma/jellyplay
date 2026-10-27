@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
@@ -49,6 +50,7 @@ class DownloadIntakeBodyRoutingTest {
 
     private val delegate: DownloadDelegate = mockk()
     private val downloadRepository: DownloadRepository = mockk()
+    private val policyStore: SeriesDownloadPolicyStore = mockk(relaxed = true)
     private val detailFeed: DetailFeed = mockk()
     private val downloadsStore: DownloadsStore = mockk {
         every { downloads } returns MutableStateFlow(
@@ -61,6 +63,7 @@ class DownloadIntakeBodyRoutingTest {
     private fun body() = DownloadIntakeBody(
         delegate = delegate,
         downloadRepository = downloadRepository,
+        policyStore = policyStore,
         detailFeed = detailFeed,
         downloadsStore = downloadsStore,
         noSourceError = { noSourceCopy },

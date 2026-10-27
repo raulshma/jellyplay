@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.toSeriesPolicyChoice
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -77,6 +79,10 @@ internal class SeriesDownloadStateHolder(
             try {
                 val snapshot = episodeCatalogue.loadSeriesEpisodes(series.id).getOrThrow()
                 val downloadedIds = seriesDownloads.episodeIdsForSeries(series.id)
+                // Pre-load the stored policy so the sheet's chips open on it
+                // instead of always on Default (a re-confirm of the stored
+                // value re-stores it harmlessly).
+                val storedPolicy = downloadIntake.seriesPolicy(series.id)
                 if (_state.value?.seriesId != series.id) return@launch
                 _state.value = HomeSeriesDownloadState(
                     seriesId = series.id,
@@ -84,6 +90,7 @@ internal class SeriesDownloadStateHolder(
                     episodesBySeason = snapshot.episodesBySeason,
                     loadingSeasons = emptySet(),
                     downloadedEpisodeIds = downloadedIds,
+                    storedPolicy = storedPolicy,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -138,14 +145,16 @@ internal class SeriesDownloadStateHolder(
      * Queues the selected episodes and closes the sheet. Mirrors the detail
      * screen's flow: the sheet dismisses immediately and the batch runs in the
      * background, surfacing a success/failure message once the intake resolves.
+     * [policy] persists the sheet's per-series new-episode override (null =
+     * follow the global setting, nothing stored).
      */
-    fun downloadSeries(selectedEpisodes: Map<String, List<String>>) {
+    fun downloadSeries(selectedEpisodes: Map<String, List<String>>, policy: AutoDownloadMode?) {
         val current = _state.value ?: return
         val nonEmpty = selectedEpisodes.filterValues { it.isNotEmpty() }
         if (nonEmpty.isEmpty()) return
         _state.value = null
         scope.launch {
-            val result = downloadIntake.startSeries(current.seriesId, nonEmpty)
+            val result = downloadIntake.startSeries(current.seriesId, nonEmpty, policy.toSeriesPolicyChoice())
             // Any success is a success: the intake legitimately enqueues
             // nothing when its internal catalogue fallback comes back empty
             // (nothing matched), and the detail screen's flow treats that the

@@ -31,6 +31,22 @@ class DownloadSummaryRefresher(
 }
 
 /**
+ * Posts the gh-181 Ask-mode suggestion shade summary onto the shared
+ * [com.raulshma.jellyplay.core.data.worker.AutoDownloadSuggestionNotifier]
+ * seam — the one consumer is [com.raulshma.jellyplay.core.data.worker.AutoDownloadWorker]
+ * after a pass records fresh prompts. The helper's permission/channel handling
+ * stays behind the port.
+ */
+class AndroidSuggestionNotifier(
+    private val context: Context,
+) : com.raulshma.jellyplay.core.data.worker.AutoDownloadSuggestionNotifier {
+    override fun notifyNewSuggestions(count: Int) {
+        com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper
+            .postSuggestionsNotification(context, count)
+    }
+}
+
+/**
  * Preloads offline images into Coil's cache (decoded at 384² to match
  * MediaImage's default decode size — decoding at a different size produces a
  * separate memory-cache key, so the display path would re-decode and the

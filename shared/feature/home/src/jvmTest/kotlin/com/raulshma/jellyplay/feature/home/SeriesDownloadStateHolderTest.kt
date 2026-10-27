@@ -244,18 +244,18 @@ class SeriesDownloadStateHolderTest {
     @Test
     fun downloadSeries_dismissesImmediately_andQueuesSelectionInBackground() = runTest {
         stubLoad("s1", mapOf("season1" to listOf(episode("e1"))))
-        coEvery { downloadIntake.startSeries("s1", mapOf("season1" to listOf("e1"))) } returns
+        coEvery { downloadIntake.startSeries("s1", mapOf("season1" to listOf("e1")), any()) } returns
             Result.success(listOf("e1"))
         val holder = buildHolder()
         holder.requestSeriesDownload(series())
         advanceUntilIdle()
 
-        holder.downloadSeries(mapOf("season1" to listOf("e1")))
+        holder.downloadSeries(mapOf("season1" to listOf("e1")), null)
 
         // The sheet dismisses immediately; the queueing runs in background.
         assertNull(holder.state.value)
         advanceUntilIdle()
-        coVerify(exactly = 1) { downloadIntake.startSeries("s1", mapOf("season1" to listOf("e1"))) }
+        coVerify(exactly = 1) { downloadIntake.startSeries("s1", mapOf("season1" to listOf("e1")), any()) }
         verify(exactly = 1) { userMessageBus.info(any<com.raulshma.jellyplay.core.ui.message.UiText>()) }
     }
 
@@ -266,7 +266,7 @@ class SeriesDownloadStateHolderTest {
         holder.requestSeriesDownload(series())
         advanceUntilIdle()
 
-        holder.downloadSeries(mapOf("season1" to emptyList()))
+        holder.downloadSeries(mapOf("season1" to emptyList()), null)
 
         // Nothing selected: the sheet stays open, nothing is queued.
         assertTrue(holder.state.value != null)
@@ -277,7 +277,7 @@ class SeriesDownloadStateHolderTest {
     fun downloadSeries_withoutOpenSheet_isNoOp() = runTest {
         val holder = buildHolder()
 
-        holder.downloadSeries(mapOf("season1" to listOf("e1")))
+        holder.downloadSeries(mapOf("season1" to listOf("e1")), null)
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }

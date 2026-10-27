@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_cancel
@@ -51,6 +53,11 @@ import com.raulshma.jellyplay.core.ui.generated.resources.detail_episodes_select
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_no_episodes_available
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_queuing
 import com.raulshma.jellyplay.core.ui.generated.resources.detail_select_all
+import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_new_episodes
+import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_policy_ask
+import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_policy_default
+import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_policy_instant
+import com.raulshma.jellyplay.core.ui.generated.resources.download_sheet_policy_never
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.SeasonEpisodeRowTints
 import com.raulshma.jellyplay.core.ui.components.SeasonHeaderRow
@@ -82,7 +89,9 @@ fun SeriesDownloadSheet(
     downloadedEpisodeIds: Set<String>,
     onLoadEpisodes: (seasonId: String) -> Unit,
     isDownloading: Boolean,
-    onDownload: (selectedEpisodes: Map<String, List<String>>) -> Unit,
+    selectedPolicy: AutoDownloadMode?,
+    onPolicySelect: (AutoDownloadMode?) -> Unit,
+    onDownload: (selectedEpisodes: Map<String, List<String>>, policy: AutoDownloadMode?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val selection = rememberMultiEpisodeSelectionForDownload(seasons, episodes, downloadedEpisodeIds)
@@ -111,6 +120,47 @@ fun SeriesDownloadSheet(
             icon = Tabler.Outline.Download,
             onClose = onDismiss,
         )
+
+        Spacer(Modifier.height(12.dp))
+
+        // The series' new-episode auto-download policy (gh-181): chips are
+        // Default (no override — follow the global setting) plus the three
+        // modes, persisted with the batch by the host's intake call.
+        Text(
+            text = stringResource(Res.string.download_sheet_new_episodes),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            PolicyChip(
+                label = stringResource(Res.string.download_sheet_policy_default),
+                selected = selectedPolicy == null,
+                onClick = { onPolicySelect(null) },
+                modifier = Modifier.weight(1f),
+            )
+            PolicyChip(
+                label = stringResource(Res.string.download_sheet_policy_instant),
+                selected = selectedPolicy == AutoDownloadMode.INSTANT,
+                onClick = { onPolicySelect(AutoDownloadMode.INSTANT) },
+                modifier = Modifier.weight(1f),
+            )
+            PolicyChip(
+                label = stringResource(Res.string.download_sheet_policy_ask),
+                selected = selectedPolicy == AutoDownloadMode.ASK,
+                onClick = { onPolicySelect(AutoDownloadMode.ASK) },
+                modifier = Modifier.weight(1f),
+            )
+            PolicyChip(
+                label = stringResource(Res.string.download_sheet_policy_never),
+                selected = selectedPolicy == AutoDownloadMode.NEVER,
+                onClick = { onPolicySelect(AutoDownloadMode.NEVER) },
+                modifier = Modifier.weight(1f),
+            )
+        }
 
         Spacer(Modifier.height(12.dp))
 
@@ -308,7 +358,7 @@ fun SeriesDownloadSheet(
                 Text(stringResource(Res.string.detail_cancel))
             }
             Button(
-                onClick = { onDownload(selection.toSelectedMap()) },
+                onClick = { onDownload(selection.toSelectedMap(), selectedPolicy) },
                 enabled = totalSelectedCount > 0 && !isDownloading,
                 shape = ShapeCache.smoothPill,
             ) {
@@ -331,4 +381,26 @@ fun SeriesDownloadSheet(
             }
         }
     }
+}
+
+/** The policy row's chip: a compact [FilterChip] filling its lane in the row. */
+@Composable
+private fun PolicyChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+        },
+        modifier = modifier,
+    )
 }

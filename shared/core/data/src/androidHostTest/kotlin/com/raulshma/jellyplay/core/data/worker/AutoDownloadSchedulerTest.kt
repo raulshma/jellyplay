@@ -6,8 +6,11 @@ import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,10 +48,12 @@ class AutoDownloadSchedulerTest {
 
     @Test
     fun `enqueues tagged periodic work when preference enabled`() = runTest {
-        val prefsFlow = MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        val prefsFlow = MutableStateFlow(DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT))
         val preferencesStore = mockk<DownloadsStore>()
         every { preferencesStore.downloads } returns prefsFlow
-        val scheduler = AutoDownloadScheduler(context, preferencesStore, this@runTest)
+        val policyStore = mockk<SeriesDownloadPolicyStore>(relaxed = true)
+        coEvery { policyStore.hasSeriesPolicies() } returns false
+        val scheduler = AutoDownloadScheduler(context, preferencesStore, policyStore, this@runTest)
 
         scheduler.sync()
         testScheduler.advanceUntilIdle()
@@ -60,10 +65,12 @@ class AutoDownloadSchedulerTest {
 
     @Test
     fun `cancels periodic work when preference disabled`() = runTest {
-        val prefsFlow = MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        val prefsFlow = MutableStateFlow(DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT))
         val preferencesStore = mockk<DownloadsStore>()
         every { preferencesStore.downloads } returns prefsFlow
-        val scheduler = AutoDownloadScheduler(context, preferencesStore, this@runTest)
+        val policyStore = mockk<SeriesDownloadPolicyStore>(relaxed = true)
+        coEvery { policyStore.hasSeriesPolicies() } returns false
+        val scheduler = AutoDownloadScheduler(context, preferencesStore, policyStore, this@runTest)
 
         // First, enqueue while enabled.
         scheduler.sync()
@@ -71,7 +78,7 @@ class AutoDownloadSchedulerTest {
         assertEquals(1, workManager.getWorkInfosForUniqueWork(AutoDownloadWorker.UNIQUE_PERIODIC_NAME).get().size)
 
         // Then disable — sync() must cancel the periodic work.
-        prefsFlow.value = DownloadsSlice(autoDownloadNewEpisodes = false)
+        prefsFlow.value = DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER)
         scheduler.sync()
         testScheduler.advanceUntilIdle()
 

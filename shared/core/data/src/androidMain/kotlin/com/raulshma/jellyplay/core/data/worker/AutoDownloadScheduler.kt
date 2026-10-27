@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import androidx.work.WorkManager
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.isEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -10,15 +12,26 @@ import java.time.Duration
 
 /**
  * Schedules the periodic background auto-download worker that fetches new
- * episodes of series the user has already downloaded. The schedule is only
- * active while the `autoDownloadNewEpisodes` preference is enabled; disabling
- * it cancels the periodic work.
+ * episodes of series the user has already downloaded. The schedule stays
+ * active while the `autoDownloadMode` preference is enabled **or** any series
+ * carries a per-series override (gh-181) — a global NEVER with one INSTANT
+ * series must not cancel the pass that series rides; only when both are dead
+ * is the periodic work cancelled.
  */
 class AutoDownloadScheduler(
     private val context: Context,
     private val downloadsStore: DownloadsStore,
+    private val policyStore: SeriesDownloadPolicyStore,
     private val applicationScope: CoroutineScope,
 ) {
+    /**
+     * The keep-alive predicate both triggers share: the global mode, or any
+     * per-series override, keeps the machinery alive.
+     */
+    private suspend fun shouldStayScheduled(): Boolean {
+        if (downloadsStore.downloads.first().autoDownloadMode.isEnabled) return true
+        return runCatching { policyStore.hasSeriesPolicies() }.getOrDefault(false)
+    }
     companion object {
         private val CHECK_INTERVAL: Duration = Duration.ofHours(6)
         private val CHECK_FLEX: Duration = Duration.ofHours(1)
@@ -35,8 +48,7 @@ class AutoDownloadScheduler(
      */
     fun sync() {
         applicationScope.launch {
-            val enabled = downloadsStore.downloads.first().autoDownloadNewEpisodes
-            if (enabled) {
+            if (shouldStayScheduled()) {
                 enqueue()
             } else {
                 cancel()
@@ -57,8 +69,7 @@ class AutoDownloadScheduler(
      */
     fun enqueueNow() {
         applicationScope.launch {
-            val enabled = downloadsStore.downloads.first().autoDownloadNewEpisodes
-            if (!enabled) return@launch
+            if (!shouldStayScheduled()) return@launch
 
             UniqueWorkSchedules.uniqueOnce<AutoDownloadWorker>(
                 context = context,

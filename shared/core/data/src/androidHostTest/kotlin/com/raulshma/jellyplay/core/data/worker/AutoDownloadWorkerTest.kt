@@ -12,11 +12,13 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
@@ -37,7 +39,7 @@ import org.robolectric.annotation.Config
  * Pins the [AutoDownloadWorker] behaviour around the [EpisodeCatalogue]
  * consolidated snapshot (seasons + episodes in one load per series):
  *
- *  - No-op successes: `autoDownloadNewEpisodes`
+ *  - No-op successes: `autoDownloadMode`
  *    disabled, or zero downloaded series — the repository/catalogue/intake are
  *    never touched.
  *  - An enabled run loads each downloaded series' snapshot **online**
@@ -53,9 +55,11 @@ class AutoDownloadWorkerTest {
     private lateinit var context: Context
     private val episodeCatalogue: EpisodeCatalogue = mockk()
     private val downloadRepository: DownloadRepository = mockk()
+    private val policyStore: SeriesDownloadPolicyStore = mockk(relaxed = true)
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
+    private val suggestionNotifier: AutoDownloadSuggestionNotifier = mockk()
 
     @Before
     fun setup() {
@@ -65,12 +69,14 @@ class AutoDownloadWorkerTest {
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
         every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
+            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
+        coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
+        coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
     }
@@ -112,9 +118,11 @@ class AutoDownloadWorkerTest {
                     workerParameters,
                     episodeCatalogue,
                     downloadRepository,
+                    policyStore,
                     downloadIntake,
                     downloadsStore,
                     serverIdentityStore,
+                    suggestionNotifier,
                 )
             })
             .setRunAttemptCount(runAttemptCount)
@@ -123,13 +131,17 @@ class AutoDownloadWorkerTest {
     // ── No-op gates ───────────────────────────────────────────────────
 
     @Test
-    fun `auto-download disabled short-circuits success`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = false))
+    fun `auto-download disabled loads no catalogue`() = runTest {
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER))
 
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { downloadRepository.downloadCoverage() }
+        // No global gate any more (per-series overrides survive a global
+        // NEVER), but with no override rows every series resolves to NEVER
+        // and is skipped BEFORE its catalogue load.
+        coVerify(exactly = 0) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any(), any()) }
     }
 
     @Test

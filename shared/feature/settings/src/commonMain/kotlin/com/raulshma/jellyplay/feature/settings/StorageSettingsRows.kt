@@ -15,6 +15,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_check_now
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_max_per_pass
@@ -75,6 +78,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delet
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delete_after_watch_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delete_cache_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delete_cache_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_check_now_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_clean_up_now_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_keep_days_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_lookahead_subtitle
@@ -386,15 +392,25 @@ internal object StorageRows {
         route = Route.StorageSettings(),
     )
 
-    val AutoDownloadNewEpisodes = SettingsRow(
-        id = "auto_download_new_episodes",
+    val AutoDownloadMode = SettingsRow(
+        id = "auto_download_mode",
         icon = Tabler.Outline.Download,
-        titleRes = Res.string.settings_auto_download_new,
-        subtitleRes = Res.string.settings_auto_download_new_subtitle,
-        searchTitleRes = Res.string.ss_auto_download_new_episodes_title,
-        searchSubtitleRes = Res.string.ss_auto_download_new_episodes_subtitle,
-        keywords = listOf("auto download", "new episodes", "automatic", "next", "series"),
+        titleRes = Res.string.settings_auto_download_mode,
+        subtitleRes = Res.string.settings_auto_download_mode_subtitle,
+        searchTitleRes = Res.string.ss_auto_download_mode_title,
+        searchSubtitleRes = Res.string.ss_auto_download_mode_subtitle,
+        keywords = listOf("auto download", "new episodes", "automatic", "next", "series", "instant", "ask", "never"),
         route = Route.StorageSettings(),
+    )
+
+    val AutoDownloadCheckNow = SettingsRow(
+        id = "auto_download_check_now",
+        icon = Tabler.Outline.Refresh,
+        titleRes = Res.string.settings_auto_download_check_now,
+        searchSubtitleRes = Res.string.ss_auto_download_check_now_subtitle,
+        keywords = listOf("auto download", "check now", "run", "sync", "new episodes"),
+        route = Route.StorageSettings(),
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadMode.id),
     )
 
     val AutoDownloadLookahead = SettingsRow(
@@ -405,7 +421,7 @@ internal object StorageRows {
         searchSubtitleRes = Res.string.ss_auto_download_lookahead_subtitle,
         keywords = listOf("auto download", "lookahead", "ahead", "episodes", "next up"),
         route = Route.StorageSettings(),
-        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadMode.id),
     )
 
     val AutoDownloadMaxPerPass = SettingsRow(
@@ -416,7 +432,7 @@ internal object StorageRows {
         searchSubtitleRes = Res.string.ss_auto_download_max_per_pass_subtitle,
         keywords = listOf("auto download", "max per pass", "budget", "limit", "check"),
         route = Route.StorageSettings(),
-        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadMode.id),
     )
 
     val AutoDownloadKeepDays = SettingsRow(
@@ -427,7 +443,7 @@ internal object StorageRows {
         searchSubtitleRes = Res.string.ss_auto_download_keep_days_subtitle,
         keywords = listOf("keep downloads", "retention", "days", "delete old", "cleanup", "space"),
         route = Route.StorageSettings(),
-        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadMode.id),
     )
 
     val AutoDownloadServers = SettingsRow(
@@ -438,7 +454,7 @@ internal object StorageRows {
         searchSubtitleRes = Res.string.ss_auto_download_servers_subtitle,
         keywords = listOf("auto download", "servers", "allow list", "restrict", "which server"),
         route = Route.StorageSettings(),
-        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadMode.id),
     )
 
     val AutoDownloadCleanUpNow = SettingsRow(
@@ -578,7 +594,8 @@ internal val StorageNetworkRows: List<SettingsRow> = listOf(
 internal val StorageDownloadsRows: List<SettingsRow> = listOf(
     StorageRows.DownloadQuality,
     StorageRows.SmartDownloads,
-    StorageRows.AutoDownloadNewEpisodes,
+    StorageRows.AutoDownloadMode,
+    StorageRows.AutoDownloadCheckNow,
     StorageRows.AutoDownloadLookahead,
     StorageRows.AutoDownloadMaxPerPass,
     StorageRows.AutoDownloadKeepDays,

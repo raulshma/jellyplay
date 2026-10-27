@@ -55,8 +55,9 @@ class SettingsSearchCatalogTest {
     fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
         // +1: the playback_mode row (Issue #1 — the delivery method gained its
-        // Settings row + search entry).
-        assertEquals(395, items.size)
+        // Settings row + search entry). +1: the auto_download_check_now row
+        // (gh-181 — the tri-state policy gained its check-now action row).
+        assertEquals(396, items.size)
         // Curated flat order starts with the account/session pair, and the
         // aggregation is a pure concatenation of the decorated per-screen
         // groups (no dedup, no reordering).

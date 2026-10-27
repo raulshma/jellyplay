@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -1265,7 +1266,7 @@ private fun HomeTailSheets(
         HomeSeriesDownloadSheet(
             state = sd,
             onLoadEpisodes = remember(viewModel) { { seasonId: String -> viewModel.onEvent(HomeUiEvent.LoadSeriesDownloadEpisodes(seasonId)) } },
-            onDownload = remember(viewModel) { { selection: Map<String, List<String>> -> viewModel.onEvent(HomeUiEvent.DownloadSeries(selection)) } },
+            onDownload = remember(viewModel) { { selection: Map<String, List<String>>, policy: AutoDownloadMode? -> viewModel.onEvent(HomeUiEvent.DownloadSeries(selection, policy)) } },
             onDismiss = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissSeriesDownload) } },
         )
     }
@@ -1375,10 +1376,14 @@ private data class SectionConfigTarget(
 private fun HomeSeriesDownloadSheet(
     state: HomeSeriesDownloadState,
     onLoadEpisodes: (seasonId: String) -> Unit,
-    onDownload: (selectedEpisodes: Map<String, List<String>>) -> Unit,
+    onDownload: (selectedEpisodes: Map<String, List<String>>, policy: AutoDownloadMode?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // The sheet-scoped policy chip state, SEEDED from the series' stored
+    // override (null = Default): leaving the sheet's composition resets it,
+    // same "close means reset" rule as the detail screen's session flag.
+    var selectedPolicy by remember(state.seriesId) { mutableStateOf(state.storedPolicy) }
     TvSafeSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         SeriesDownloadSheet(
             seasons = state.seasons,
@@ -1387,6 +1392,8 @@ private fun HomeSeriesDownloadSheet(
             downloadedEpisodeIds = state.downloadedEpisodeIds,
             onLoadEpisodes = onLoadEpisodes,
             isDownloading = false,
+            selectedPolicy = selectedPolicy,
+            onPolicySelect = { selectedPolicy = it },
             onDownload = onDownload,
             onDismiss = onDismiss,
         )

@@ -30,6 +30,7 @@ internal fun androidWorkSchedulersModule(context: Context): Module = module {
         AutoDownloadScheduler(
             context = context,
             downloadsStore = get(),
+            policyStore = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }

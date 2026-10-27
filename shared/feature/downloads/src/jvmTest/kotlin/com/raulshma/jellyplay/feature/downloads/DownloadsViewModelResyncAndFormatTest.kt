@@ -54,6 +54,9 @@ class DownloadsViewModelResyncAndFormatTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var downloadRepository: DownloadQueue
+    /** The gh-181 suggestion/policy seam (a separate mock from the queue view of the repository). */
+    private lateinit var policyRepository: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+    private lateinit var intake: com.raulshma.jellyplay.core.data.download.DownloadIntake
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
@@ -67,6 +70,8 @@ class DownloadsViewModelResyncAndFormatTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
+        policyRepository = mockk(relaxed = true)
+        intake = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
@@ -78,7 +83,7 @@ class DownloadsViewModelResyncAndFormatTest {
         every { offlineRepository.getItemsWithUpdates() } returns updateRows
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
     }
 
     @AfterTest

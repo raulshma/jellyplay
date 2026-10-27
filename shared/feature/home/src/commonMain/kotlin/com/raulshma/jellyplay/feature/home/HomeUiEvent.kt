@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -63,7 +64,11 @@ sealed interface HomeUiEvent {
     data class LoadSeriesDownloadEpisodes(val seasonId: String) : HomeUiEvent
 
     /** Queues the series download sheet's selected episodes and closes it. */
-    data class DownloadSeries(val selectedEpisodes: Map<String, List<String>>) : HomeUiEvent
+    data class DownloadSeries(
+        val selectedEpisodes: Map<String, List<String>>,
+        /** Per-series new-episode override from the sheet's policy chips (null = Default). */
+        val policy: AutoDownloadMode? = null,
+    ) : HomeUiEvent
 
     /** Closes the series download sheet. */
     data object DismissSeriesDownload : HomeUiEvent

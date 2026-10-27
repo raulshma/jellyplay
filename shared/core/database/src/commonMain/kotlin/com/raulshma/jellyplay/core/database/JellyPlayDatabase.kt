@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.database.dao.BookAnnotationDao
 import com.raulshma.jellyplay.core.database.dao.BookBookmarkDao
 import com.raulshma.jellyplay.core.database.dao.BookTocCacheDao
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
@@ -31,6 +32,7 @@ import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.database.entity.BookAnnotationEntity
 import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import com.raulshma.jellyplay.core.database.entity.BookTocCacheEntity
+import com.raulshma.jellyplay.core.database.entity.AutoDownloadSuggestionEntity
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
@@ -46,6 +48,7 @@ import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
 import com.raulshma.jellyplay.core.database.entity.SearchHistoryEntity
 import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
+import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
 import com.raulshma.jellyplay.core.database.entity.SmartPlaylistEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 
@@ -55,13 +58,15 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
  * the previous version in [com.raulshma.jellyplay.core.database.migration.allMigrations];
  * `allMigrations_coversContiguousRange` enforces that chain.
  */
-const val JELLY_PLAY_DATABASE_VERSION: Int = 61
+const val JELLY_PLAY_DATABASE_VERSION: Int = 62
 
 @Database(
     entities = [
         ServerEntity::class,
         UserEntity::class,
         DownloadEntity::class,
+        SeriesDownloadPolicyEntity::class,
+        AutoDownloadSuggestionEntity::class,
         LyricsCacheEntity::class,
         OfflineMediaEntity::class,
         PlaybackStateEntity::class,
@@ -92,6 +97,7 @@ abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun userDao(): UserDao
     abstract fun downloadDao(): DownloadDao
+    abstract fun downloadPolicyDao(): DownloadPolicyDao
     abstract fun lyricsCacheDao(): LyricsCacheDao
     abstract fun offlineMediaDao(): OfflineMediaDao
     abstract fun playbackStateDao(): PlaybackStateDao

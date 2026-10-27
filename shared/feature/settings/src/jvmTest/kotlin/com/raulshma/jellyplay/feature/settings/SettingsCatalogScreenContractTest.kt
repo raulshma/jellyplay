@@ -348,7 +348,7 @@ class SettingsCatalogScreenContractTest {
         // …the auto-download retention cluster rides the auto-download toggle
         // the same way, and the "Clean up now" action additionally rides the
         // keep-days picker being non-zero (the screen feeds the > 0 state).
-        val autoDownloadOn = RowAdmissionFlags(parentsOn = setOf(StorageRows.AutoDownloadNewEpisodes.id))
+        val autoDownloadOn = RowAdmissionFlags(parentsOn = setOf(StorageRows.AutoDownloadMode.id))
         listOf(
             StorageRows.AutoDownloadLookahead.id,
             StorageRows.AutoDownloadMaxPerPass.id,
@@ -359,7 +359,7 @@ class SettingsCatalogScreenContractTest {
             assertFalse(SettingsScreenGroups.storageDownloads.rowAdmitted(it, RowAdmissionFlags()), "$it drops when auto-download is off")
         }
         val keepDaysOn = RowAdmissionFlags(
-            parentsOn = setOf(StorageRows.AutoDownloadNewEpisodes.id, StorageRows.AutoDownloadKeepDays.id),
+            parentsOn = setOf(StorageRows.AutoDownloadMode.id, StorageRows.AutoDownloadKeepDays.id),
         )
         assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadCleanUpNow.id, keepDaysOn))
         assertFalse(
@@ -867,34 +867,34 @@ class SettingsCatalogScreenContractTest {
         assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
 
         // Downloads: the three download_schedule_* window rows only when
-        // scheduling is on (their declared WhenOn gate); the four auto-download
-        // retention rows only when auto-download is on; clean-up-now only when
-        // the keep-days window is set; every other record renders
-        // unconditionally (its non-advanced base).
+        // scheduling is on (their declared WhenOn gate); the five auto-download
+        // rows (check-now included) only when the policy mode is not NEVER;
+        // clean-up-now only when the keep-days window is set; every other
+        // record renders unconditionally (its non-advanced base).
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 8,
+            SettingsScreenGroups.storageDownloads.items.size - 9,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 5,
+            SettingsScreenGroups.storageDownloads.items.size - 6,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 8, // minus the three schedule windows, the four auto-download retention rows, and the clean-up action — every parent-gated row
+            SettingsScreenGroups.storageDownloads.items.size - 9, // minus the three schedule windows, the five auto-download rows, and the clean-up action — every parent-gated row
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false))),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 5, // minus the four auto-download retention rows and the clean-up action
+            SettingsScreenGroups.storageDownloads.items.size - 6, // minus the five auto-download rows and the clean-up action
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true))),
         )
-        // The auto-download retention cluster: the four policy rows ride the
-        // auto-download toggle, and clean-up-now additionally rides the
+        // The auto-download retention cluster: the five policy rows ride the
+        // mode picker, and clean-up-now additionally rides the
         // keep-days picker being non-zero — with the schedule and
         // auto-download windows on, only the clean-up action stays gated
         // off; turning the keep-days window on admits every declared row.
@@ -902,7 +902,7 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.storageDownloads.items.size - 1, // minus the clean-up action (the keep-days window is still off)
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
-                RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true, StorageRows.AutoDownloadNewEpisodes.id to true)),
+                RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true, StorageRows.AutoDownloadMode.id to true)),
             ),
         )
         assertEquals(
@@ -912,7 +912,7 @@ class SettingsCatalogScreenContractTest {
                 RowAdmissionFlags(
                     parentsOn = rowParentsOn(
                         StorageRows.DownloadSchedule.id to true,
-                        StorageRows.AutoDownloadNewEpisodes.id to true,
+                        StorageRows.AutoDownloadMode.id to true,
                         StorageRows.AutoDownloadKeepDays.id to true,
                     ),
                 ),

@@ -28,6 +28,8 @@ val downloadsModule: Module = module {
             offlineRepository = get(),
             resync = get(),
             downloadsStore = get(),
+            policyStore = get(),
+            intake = get(),
         )
     }
     viewModel {

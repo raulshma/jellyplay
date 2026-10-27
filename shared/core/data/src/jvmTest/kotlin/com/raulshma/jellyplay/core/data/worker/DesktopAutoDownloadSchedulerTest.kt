@@ -6,11 +6,13 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -42,6 +44,7 @@ class DesktopAutoDownloadSchedulerTest {
 
     private val episodeCatalogue: EpisodeCatalogue = mockk()
     private val downloadRepository: DownloadRepository = mockk()
+    private val policyStore: SeriesDownloadPolicyStore = mockk()
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
@@ -51,12 +54,14 @@ class DesktopAutoDownloadSchedulerTest {
         // Legacy-behavior slice (lookahead 0 = take every missing episode); the
         // lookahead-enabled desktop-parity case below overrides the slice.
         every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
+            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
+        coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
+        coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
     }
@@ -89,6 +94,7 @@ class DesktopAutoDownloadSchedulerTest {
     private fun TestScope.buildScheduler(): DesktopAutoDownloadScheduler = DesktopAutoDownloadScheduler(
         downloadsStore = downloadsStore,
         downloadRepository = downloadRepository,
+        policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
         serverIdentityStore = serverIdentityStore,
@@ -99,15 +105,18 @@ class DesktopAutoDownloadSchedulerTest {
 
     @Test
     fun `auto-download disabled fetches nothing`() = runTest {
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = false))
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadMode = AutoDownloadMode.NEVER))
         val scheduler = buildScheduler()
 
         scheduler.start()
         testScheduler.runCurrent()
         scheduler.stop()
 
-        coVerify(exactly = 0) { downloadRepository.downloadCoverage() }
+        // No global gate any more (per-series overrides survive a global
+        // NEVER), but with no override rows every series resolves to the
+        // global NEVER and is skipped BEFORE its catalogue load.
         coVerify(exactly = 0) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any(), any()) }
     }
 
     // ── Gate-on pass: per-season intake ───────────────────────────────
@@ -139,7 +148,7 @@ class DesktopAutoDownloadSchedulerTest {
         // missing one. Episodes carry explicit numbers because the playback
         // order falls back to name comparison when they are unset.
         every { downloadsStore.downloads } returns MutableStateFlow(
-            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 1),
+            DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 1),
         )
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-1"))
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(

@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRecoveryCore
 import com.raulshma.jellyplay.core.data.repository.DownloadRecoveryPort
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
@@ -109,6 +110,7 @@ internal val dataDownloadsConveyorModule: Module = module {
         )
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
+    single<SeriesDownloadPolicyStore> { get<DownloadRepositoryImpl>() }
 
     // The download summary surface (glossary: Download summary surface) — ONE
     // collector over the in-flight count flow, posting through the

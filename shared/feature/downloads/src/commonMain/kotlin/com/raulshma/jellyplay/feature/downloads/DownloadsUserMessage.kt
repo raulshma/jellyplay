@@ -15,6 +15,15 @@ sealed interface DownloadsUserMessage {
      * Emitted by both the per-item delete and the bulk selection delete.
      */
     data object Deleted : DownloadsUserMessage
+
+    /**
+     * Ask-mode suggestions were confirmed (gh-181) — the episodes were queued
+     * through the normal series/season intake. Fixed copy (the pluralized
+     * count needs the @Composable resolver; see the SnackbarQueue note in
+     * MediaDetailScreen for why collect-time plurals don't resolve here).
+     */
+    data object SuggestionsQueued : DownloadsUserMessage
+
     /** Raw failure text (exception message or fixed fallback). */
     data class Raw(val text: String) : DownloadsUserMessage
 }

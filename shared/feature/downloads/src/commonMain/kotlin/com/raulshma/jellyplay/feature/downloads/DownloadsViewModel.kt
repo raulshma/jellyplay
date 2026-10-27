@@ -1,12 +1,15 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
@@ -75,6 +78,10 @@ class DownloadsViewModel(
     private val offlineRepository: OfflineRepository,
     private val resync: OfflineResync,
     private val downloadsStore: DownloadsStore,
+    /** The gh-181 Ask-mode suggestion surface (observe/confirm/dismiss). */
+    private val policyStore: SeriesDownloadPolicyStore,
+    /** The confirm path: confirmed prompts enqueue through the normal series intake (no policy write). */
+    private val intake: DownloadIntake,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
@@ -130,6 +137,65 @@ class DownloadsViewModel(
 
     /** Live batch resync progress (per-item phase + aggregate counts). */
     val resyncProgress: StateFlow<ResyncBatchProgress> = resync.batchProgress
+
+    /**
+     * The pending Ask-mode prompts (gh-181), newest first — the suggestion
+     * card's content. Empty when the user has nothing to answer.
+     */
+    val suggestions: StateFlow<List<AutoDownloadSuggestion>> =
+        policyStore.observeAutoDownloadSuggestions()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Confirms suggestions: groups the prompts by series → season (episodes
+     * in numeric order), enqueues each season's batch through the normal
+     * series download path, then clears the answered rows. [episodeIds] is
+     * the confirmed selection — a per-row Download passes one id, the card's
+     * Download all passes every id. A failed batch is surfaced (Raw message)
+     * instead of silently reporting success; its prompts stay pending so the
+     * user can retry.
+     */
+    fun downloadSuggestions(episodeIds: List<String>) {
+        if (episodeIds.isEmpty()) return
+        launch {
+            val rows = policyStore.autoDownloadSuggestionsByIds(episodeIds)
+            if (rows.isEmpty()) return@launch
+            val confirmed = mutableListOf<AutoDownloadSuggestion>()
+            rows.groupBy { it.seriesId }
+                .forEach { (_, seriesEpisodes) ->
+                    seriesEpisodes.groupBy { it.seasonId }
+                        .forEach { (seasonId, seasonEpisodes) ->
+                            val result = intake.startSeries(
+                                seriesId = seriesEpisodes.first().seriesId,
+                                episodeIds = mapOf(
+                                    seasonId to seasonEpisodes
+                                        .sortedBy { it.episodeNumber }
+                                        .map { it.episodeId },
+                                ),
+                            )
+                            if (result.isSuccess) {
+                                confirmed += seasonEpisodes
+                            } else {
+                                messageChannel.trySend(
+                                    DownloadsUserMessage.Raw(
+                                        result.exceptionOrNull()?.message ?: "Download failed",
+                                    ),
+                                )
+                            }
+                        }
+                }
+            if (confirmed.isNotEmpty()) {
+                policyStore.dismissAutoDownloadSuggestions(confirmed.map { it.episodeId })
+                messageChannel.trySend(DownloadsUserMessage.SuggestionsQueued)
+            }
+        }
+    }
+
+    /** Dismisses suggestions without downloading. */
+    fun dismissSuggestions(episodeIds: List<String>) {
+        if (episodeIds.isEmpty()) return
+        launch { policyStore.dismissAutoDownloadSuggestions(episodeIds) }
+    }
 
     /** True while a batch freshness check is running. */
     private val _checking = MutableStateFlow(false)

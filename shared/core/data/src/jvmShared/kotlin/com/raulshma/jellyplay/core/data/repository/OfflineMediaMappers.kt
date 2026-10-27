@@ -3,9 +3,11 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.dao.DownloadProgressRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
+import com.raulshma.jellyplay.core.database.entity.AutoDownloadSuggestionEntity
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
+import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -280,4 +282,32 @@ internal fun DownloadProgressRow.toDownloadProgress() = DownloadProgress(
     // derive the 0..1 fraction (see DownloadProgress.progressFraction).
     mediaItemId = mediaItemId,
     totalSizeBytes = totalSizeBytes,
+)
+
+// gh-181 Ask-mode suggestion pair — same boundary convention as the pair
+// above: the DAO row stays in core:database, the feature-facing model leaves
+// the repository.
+
+internal fun AutoDownloadSuggestionEntity.toSuggestion() = AutoDownloadSuggestion(
+    episodeId = episodeId,
+    seriesId = seriesId,
+    seriesName = seriesName,
+    seasonId = seasonId,
+    seasonName = seasonName,
+    seasonNumber = seasonNumber,
+    episodeNumber = episodeNumber,
+    name = name,
+    suggestedAt = suggestedAt,
+)
+
+internal fun AutoDownloadSuggestion.toEntity() = AutoDownloadSuggestionEntity(
+    episodeId = episodeId,
+    seriesId = seriesId,
+    seriesName = seriesName,
+    seasonId = seasonId,
+    seasonName = seasonName,
+    seasonNumber = seasonNumber,
+    episodeNumber = episodeNumber,
+    name = name,
+    suggestedAt = suggestedAt,
 )

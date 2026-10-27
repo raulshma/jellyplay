@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.StoragePreferences
 import io.mockk.coEvery
@@ -317,10 +318,10 @@ class StorageSettingsViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.setAutoDownloadNewEpisodes(true)
+        vm.setAutoDownloadMode(AutoDownloadMode.INSTANT)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadsStore.setAutoDownloadNewEpisodes(true) }
+        coVerify(exactly = 1) { downloadsStore.setAutoDownloadMode(AutoDownloadMode.INSTANT) }
         assertEquals(1, autoDownloadSyncs.size, "the WorkManager sync must fire with the preference write")
     }
 

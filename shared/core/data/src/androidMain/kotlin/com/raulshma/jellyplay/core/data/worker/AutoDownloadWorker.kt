@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 
@@ -30,14 +31,18 @@ class AutoDownloadWorker(
     params: WorkerParameters,
     episodeCatalogue: EpisodeCatalogue,
     downloadRepository: DownloadRepository,
+    policyStore: SeriesDownloadPolicyStore,
     downloadIntake: DownloadIntake,
     downloadsStore: DownloadsStore,
     serverIdentityStore: ServerIdentityStore,
+    /** gh-181: the Ask-mode suggestion shade summary (Android posts, desktop no-op). */
+    private val suggestionNotifier: AutoDownloadSuggestionNotifier,
 ) : CoroutineWorker(context, params) {
 
     private val check = AutoDownloadCheck(
         downloadsStore = downloadsStore,
         downloadRepository = downloadRepository,
+        policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
         serverIdentityStore = serverIdentityStore,
@@ -45,8 +50,16 @@ class AutoDownloadWorker(
     )
 
     override suspend fun doWork(): Result =
-        when (check.checkOnce(attempt = runAttemptCount)) {
-            AutoDownloadCheck.Outcome.Complete -> Result.success()
+        when (val outcome = check.checkOnce(attempt = runAttemptCount)) {
+            is AutoDownloadCheck.Outcome.Complete -> {
+                // Best-effort: a failed post never fails the pass (the
+                // suggestion card on the Downloads screen is the source of
+                // truth either way).
+                runCatching {
+                    if (outcome.newSuggestions > 0) suggestionNotifier.notifyNewSuggestions(outcome.newSuggestions)
+                }
+                Result.success()
+            }
             AutoDownloadCheck.Outcome.RetriesPending -> Result.retry()
             AutoDownloadCheck.Outcome.Exhausted -> Result.failure()
         }

@@ -633,8 +633,13 @@
     <string name="settings_downloads_summary">Quality: %1$s</string>
     <string name="settings_download_quality">Download Quality</string>
     <string name="settings_download_quality_subtitle">Preferred video quality for downloads</string>
-    <string name="settings_auto_download_new">Auto-Download New Episodes</string>
-    <string name="settings_auto_download_new_subtitle">Automatically download next episode of active series</string>
+    <string name="settings_auto_download_mode">Auto-Download New Episodes</string>
+    <string name="settings_auto_download_mode_subtitle">What to do when a downloaded series gets new episodes</string>
+    <string name="settings_auto_download_mode_instant">Instantly</string>
+    <string name="settings_auto_download_mode_ask">Ask before download</string>
+    <string name="settings_auto_download_mode_never">Never</string>
+    <string name="settings_auto_download_check_now">Check for New Episodes Now</string>
+    <string name="settings_auto_download_check_now_subtitle">Run an auto-download pass immediately</string>
     <string name="settings_auto_download_lookahead">Download Lookahead</string>
     <string name="settings_auto_download_lookahead_subtitle">Episodes kept ahead of the newest watched or downloaded one</string>
     <string name="settings_auto_download_max_per_pass">Max Downloads Per Check</string>

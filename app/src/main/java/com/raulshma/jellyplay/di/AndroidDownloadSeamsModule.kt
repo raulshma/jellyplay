@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.di
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.repository.AndroidSuggestionNotifier
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
@@ -9,6 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.DownloadSummaryRefresher
 import com.raulshma.jellyplay.core.data.repository.CoilOfflineImagePreloader
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadSuggestionNotifier
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -41,6 +43,8 @@ fun androidDownloadSeamsModule(context: Context): Module = module {
     single<DownloadStorageLayoutContract> { get<DownloadStorageLayout>() }
 
     single<DownloadProgressNotifier> { DownloadSummaryRefresher(context) }
+
+    single<AutoDownloadSuggestionNotifier> { AndroidSuggestionNotifier(context) }
 
     single<OfflineImagePreloader> { CoilOfflineImagePreloader(context) }
 }

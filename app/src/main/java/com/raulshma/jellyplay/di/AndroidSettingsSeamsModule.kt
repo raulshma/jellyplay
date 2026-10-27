@@ -24,8 +24,10 @@ import org.koin.dsl.module
  * Each single is lazy — the target is only resolved when the corresponding
  * settings screen first resolves its ViewModel, so there is no cold-start
  * cost and resolution failure surfaces only on that screen.
- *  - [AutoDownloadSync] delegates to the legacy
- *    [AutoDownloadScheduler.sync] WorkManager enqueue/cancel;
+ *  - [AutoDownloadSync] delegates to the legacy [AutoDownloadScheduler]:
+ *    `sync` wraps the WorkManager enqueue/cancel pair, `checkNow` fires the
+ *    distinct `enqueueNow()` one-shot (the storage screen's
+ *    "Check for new episodes now" action);
  *  - [AutoDownloadCleanup] delegates to the download repository's
  *    keep-days retention sweep (the "Clean up now" action);
  *  - [NotificationSync] delegates to the legacy [NotificationScheduler]'s
@@ -35,7 +37,11 @@ import org.koin.dsl.module
  */
 fun androidSettingsSeamsModule(): Module = module {
     single<AutoDownloadSync> {
-        AutoDownloadSync { get<AutoDownloadScheduler>().sync() }
+        val scheduler = get<AutoDownloadScheduler>()
+        object : AutoDownloadSync {
+            override fun sync() = scheduler.sync()
+            override fun checkNow() = scheduler.enqueueNow()
+        }
     }
     single<AutoDownloadCleanup> {
         AutoDownloadCleanup {

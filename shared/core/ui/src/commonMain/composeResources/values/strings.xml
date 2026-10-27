@@ -240,6 +240,11 @@
     <string name="detail_no_episodes_available">No episodes available</string>
     <string name="detail_downloaded_status">Downloaded</string>
     <string name="detail_queuing">Queuing…</string>
+    <string name="download_sheet_new_episodes">New episodes:</string>
+    <string name="download_sheet_policy_default">Default</string>
+    <string name="download_sheet_policy_instant">Instant</string>
+    <string name="download_sheet_policy_ask">Ask</string>
+    <string name="download_sheet_policy_never">Never</string>
 
     <!-- Transcode-reason surfacing ("Why am I transcoding?"). Explanations
          map 1:1 to server TranscodeReasons tokens; hints point at in-app

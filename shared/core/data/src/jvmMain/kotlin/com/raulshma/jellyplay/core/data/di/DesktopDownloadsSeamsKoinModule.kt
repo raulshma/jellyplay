@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadSuggestionNotifier
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -38,6 +39,12 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
     single<DownloadStorageLayoutContract> { DesktopDownloadStorageLayout(dataDir) }
 
     single<DownloadProgressNotifier> { DownloadProgressNotifier { /* no summary surface on desktop */ } }
+
+    // gh-181: no system-notification path for Ask-mode suggestions on desktop
+    // — the Downloads screen's suggestion card is the only surface there.
+    single<AutoDownloadSuggestionNotifier> {
+        AutoDownloadSuggestionNotifier { /* in-app card only */ }
+    }
 
     single<OfflineImagePreloader> { OfflineImagePreloader { /* no shared preload cache on desktop */ } }
 
@@ -76,6 +83,7 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
         DesktopDownloadIntake(
             delegate = get(),
             downloadRepository = get(),
+            policyStore = get(),
             detailFeed = get(),
             downloadsStore = get(),
         )
@@ -106,6 +114,7 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
         DesktopAutoDownloadScheduler(
             downloadsStore = get(),
             downloadRepository = get(),
+            policyStore = get(),
             downloadIntake = get(),
             episodeCatalogue = get(),
             serverIdentityStore = get(),

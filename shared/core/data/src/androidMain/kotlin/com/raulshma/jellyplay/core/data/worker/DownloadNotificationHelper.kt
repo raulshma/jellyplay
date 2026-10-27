@@ -150,6 +150,32 @@ internal object DownloadNotificationHelper {
     }
 
     /**
+     * Posts the Ask-mode suggestion summary (gh-181): N fresh "ask before
+     * download" prompts were recorded and the user should answer them on the
+     * Downloads screen. No remote actions — the card owns Download/dismiss.
+     * Silent when auto-download ASK ran with the app in the foreground is
+     * fine too: the card is visible there anyway. Best-effort (permission
+     * revoked → skip).
+     */
+    fun postSuggestionsNotification(context: Context, count: Int) {
+        if (!canPostNotifications(context)) return
+        createNotificationChannel(context)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(
+                context.resources.getQuantityString(R.plurals.data_auto_download_suggestions, count, count)
+            )
+            .setContentText(context.getString(R.string.data_auto_download_suggestions_text))
+            .setContentIntent(openDownloadsPendingIntent(context))
+            .setGroup(GROUP_KEY)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        NotificationManagerCompat.from(context).notify(SUGGESTIONS_NOTIFICATION_ID, notification)
+    }
+
+    /**
      * Last count handed to [refreshSummary] (null = never posted this process).
      * The count only changes on download lifecycle transitions, but the 2 s
      * progress ticks re-invoke [refreshSummary] with the same value — the memo
@@ -439,6 +465,13 @@ internal object DownloadNotificationHelper {
     // Fixed summary id — strictly greater than every possible progress and
     // paused id by construction (only the SUMMARY bit is set).
     const val SUMMARY_NOTIFICATION_ID = SUMMARY_BIT
+
+    /**
+     * Fixed Ask-mode suggestion id: the SUMMARY bit plus 1, so it can never
+     * alias the summary (the two are posted independently and one must not
+     * overwrite the other).
+     */
+    const val SUGGESTIONS_NOTIFICATION_ID = SUMMARY_BIT or 1
 }
 
 /**

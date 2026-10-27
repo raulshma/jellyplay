@@ -11,6 +11,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.data.download.toSeriesPolicyChoice
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -958,6 +959,12 @@ fun MediaDetailScreen(
             // sheet cache, not the slim root projection; this subscription
             // lives only while the sheet is composed.
             val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+            // Seed the policy chips from the series' stored override (the
+            // open reset put them on Default; the stored value wins once the
+            // read lands).
+            LaunchedEffect(detailItem.id) {
+                dialogSession.seedSeriesDownloadPolicy(viewModel.downloads.seriesPolicy())
+            }
             TvSafeSheet(
                 onDismissRequest = { dialogSession.dismissSeriesDownloadSheet() },
                 sheetState = downloadSheetState,
@@ -971,10 +978,12 @@ fun MediaDetailScreen(
                         viewModel.downloads.loadDownloadSheetEpisodes(seasonId)
                     },
                     isDownloading = sheetDownloads.isDownloadingSeries,
-                    onDownload = { selectedEpisodes ->
+                    selectedPolicy = dialogSession.seriesDownloadPolicy,
+                    onPolicySelect = { dialogSession.selectSeriesDownloadPolicy(it) },
+                    onDownload = { selectedEpisodes, policy ->
                         val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
                         dialogSession.seriesDownloadConfirmed {
-                            viewModel.downloads.downloadSeries(nonEmpty)
+                            viewModel.downloads.downloadSeries(nonEmpty, policy.toSeriesPolicyChoice())
                         }
                     },
                     onDismiss = { dialogSession.dismissSeriesDownloadSheet() },

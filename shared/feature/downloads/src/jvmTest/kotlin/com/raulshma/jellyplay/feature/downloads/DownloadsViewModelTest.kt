@@ -46,6 +46,9 @@ class DownloadsViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var downloadRepository: DownloadQueue
+    /** The gh-181 suggestion/policy seam (a separate mock from the queue view of the repository). */
+    private lateinit var policyRepository: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+    private lateinit var intake: com.raulshma.jellyplay.core.data.download.DownloadIntake
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
@@ -67,6 +70,8 @@ class DownloadsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
+        policyRepository = mockk(relaxed = true)
+        intake = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
@@ -89,7 +94,7 @@ class DownloadsViewModelTest {
         every { offlineRepository.getOfflineEpisodes() } returns offlineEpisodesFlow
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns storeSliceFlow
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
     }
 
     @AfterTest
@@ -176,7 +181,7 @@ class DownloadsViewModelTest {
         every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
-        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
 
         // Throwable.message == null must hit the fallback literal.
@@ -473,7 +478,7 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcher) {
         storeSliceFlow.value = DownloadsSlice(downloadsListFilter = "SERIES", downloadsListSort = "SIZE")
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
 
         assertEquals(DownloadListFilter.SERIES, seeded.filter.value)
@@ -529,7 +534,7 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcher) {
         storeSliceFlow.value = DownloadsSlice(selectionHintSeen = true)
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
         assertTrue(seeded.selectionHintSeen.value)
 

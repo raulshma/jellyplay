@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -24,7 +25,7 @@ import kotlin.random.Random
  * a server in lockstep.
  *
  * The check itself is the shared [AutoDownloadCheck] (same
- * `autoDownloadNewEpisodes` prefs gate, same single-query
+ * `autoDownloadMode` prefs gate, same single-query
  * getDownloadedEpisodeIdsBySeries index, same per-season
  * DownloadIntake.startSeries call, same transient-failure escalation);
  * `AutoDownloadScheduler.runCheck` used to port that body verbatim and is
@@ -44,6 +45,7 @@ import kotlin.random.Random
 class DesktopAutoDownloadScheduler(
     downloadsStore: DownloadsStore,
     downloadRepository: DownloadRepository,
+    policyStore: SeriesDownloadPolicyStore,
     downloadIntake: DownloadIntake,
     episodeCatalogue: EpisodeCatalogue,
     /** Active-server identity for the check's per-user allow-list gate. */
@@ -54,6 +56,7 @@ class DesktopAutoDownloadScheduler(
     private val check = AutoDownloadCheck(
         downloadsStore = downloadsStore,
         downloadRepository = downloadRepository,
+        policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
         serverIdentityStore = serverIdentityStore,
