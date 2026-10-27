@@ -58,6 +58,7 @@ import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.PlayerStop
+import com.composables.icons.tabler.outline.Photo
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
@@ -350,8 +351,21 @@ internal fun DownloadGroupHeader(
                         // The DownloadItemRow thumb size — the header's artwork
                         // reads as the same row face, one rank up.
                         .size(56.dp)
-                        .clip(ShapeCache.smooth8),
+                        .clip(ShapeCache.smooth8)
+                        // The placeholder's backdrop: a failed/unloaded image must
+                        // read as an intentional slot, not a hole in the card.
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center,
                 ) {
+                    // Drawn UNDER the MediaImage: a load that fails (or a blurHash
+                    // that decodes blank) leaves this visible instead of an empty
+                    // rectangle; a successful load covers it completely.
+                    Icon(
+                        imageVector = Tabler.Outline.Photo,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.size(24.dp),
+                    )
                     MediaImage(
                         url = imageUrl,
                         contentDescription = null,

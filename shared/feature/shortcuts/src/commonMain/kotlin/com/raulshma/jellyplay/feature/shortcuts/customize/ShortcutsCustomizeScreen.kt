@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.shortcuts.customize
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.ChevronUp
 import com.composables.icons.tabler.outline.DotsVertical
@@ -73,6 +77,8 @@ import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_cu
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_available_section
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_edit
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_overflow
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_cancel
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_no_definitions
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_empty_unpinned
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_capacity
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_header_empty_message
@@ -223,7 +229,10 @@ fun ShortcutsCustomizeScreen(
 
                 if (availableRows.isEmpty()) {
                     item(key = "available-empty") {
-                        AvailableEmptyState()
+                        // "Every shortcut is pinned." is only true when something
+                        // exists to pin; a fresh user (zero definitions) needs the
+                        // add-first nudge instead.
+                        AvailableEmptyState(hasDefinitions = state.slice.definitions.isNotEmpty())
                     }
                 } else {
                     items(availableRows, key = { "a:" + it.definition.id }, contentType = { "availableRow" }) { row ->
@@ -287,6 +296,7 @@ fun ShortcutsCustomizeScreen(
             title = stringResource(Res.string.shortcuts_customize_reset_confirm_title),
             message = stringResource(Res.string.shortcuts_customize_reset_confirm_message),
             confirmText = stringResource(Res.string.shortcuts_customize_reset),
+            dismissText = stringResource(Res.string.shortcuts_customize_cancel),
             onConfirm = {
                 viewModel.resetAll()
                 confirmReset = false
@@ -561,9 +571,15 @@ private fun PinnedEmptyState(
 }
 
 @Composable
-private fun AvailableEmptyState(modifier: Modifier = Modifier) {
+private fun AvailableEmptyState(hasDefinitions: Boolean, modifier: Modifier = Modifier) {
     Text(
-        text = stringResource(Res.string.shortcuts_customize_empty_unpinned),
+        text = stringResource(
+            if (hasDefinitions) {
+                Res.string.shortcuts_customize_empty_unpinned
+            } else {
+                Res.string.shortcuts_customize_empty_no_definitions
+            },
+        ),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
@@ -752,6 +768,11 @@ private fun ShortcutEditorSheet(
 
     TvSafeSheet(
         onDismissRequest = onDismiss,
+        // Scrollable: an unfiltered destination picker + the icon grid + the
+        // form tail overflow the sheet on phones, clipping Save. Both inner
+        // scrollers carry bounded heights (picker 220dp, icon grid 264dp), so
+        // the opt-in scroll is measurement-safe.
+        scrollable = true,
         title = stringResource(
             if (draft.originalId == null) Res.string.shortcuts_customize_add else Res.string.shortcuts_customize_edit,
         ),
@@ -889,6 +910,13 @@ private fun ShortcutTargetPicker(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        // Tint is the selection face; the tinted icon alone read as
+                        // hover noise, so the whole row carries the container color
+                        // and a trailing check anchors it.
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                        )
                         .clickable(enabled = !item.alreadyDefined, role = Role.Button) {
                             onSelect(
                                 if (item.entry.isAction) ShortcutTargetKind.ACTION else ShortcutTargetKind.SCREEN,
@@ -901,7 +929,7 @@ private fun ShortcutTargetPicker(
                     Icon(
                         imageVector = item.entry.defaultIcon,
                         contentDescription = null,
-                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp),
                     )
                     Spacer(Modifier.width(12.dp))
@@ -914,9 +942,24 @@ private fun ShortcutTargetPicker(
                     )
                     if (item.alreadyDefined) {
                         Text(
-                            text = stringResource(Res.string.shortcuts_customize_screen_badge),
+                            text = stringResource(
+                                if (item.entry.isAction) {
+                                    Res.string.shortcuts_customize_action_badge
+                                } else {
+                                    Res.string.shortcuts_customize_screen_badge
+                                },
+                            ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                    }
+                    if (selected) {
+                        Icon(
+                            imageVector = Tabler.Outline.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }

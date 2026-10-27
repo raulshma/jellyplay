@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -40,6 +42,15 @@ fun TvSafeSheet(
     sheetState: SheetState = rememberModalBottomSheetState(),
     /** False hides the mobile sheet's drag handle (e.g. while a search field owns the header). */
     showDragHandle: Boolean = true,
+    /**
+     * Makes the mobile sheet's content column vertically scrollable so tall
+     * content (unfiltered pickers, long forms) keeps its trailing actions
+     * reachable. Opt-in because it feeds children infinite max height: every
+     * lazy list/grid inside the content must carry its own bounded height
+     * (`heightIn(max = …)`), or measurement crashes. Defaults off — most
+     * sheets hold unbounded lazy content and never grow past the screen.
+     */
+    scrollable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
@@ -57,6 +68,7 @@ fun TvSafeSheet(
             modifier = modifier,
             sheetState = sheetState,
             showDragHandle = showDragHandle,
+            scrollable = scrollable,
             content = content,
         )
     }
@@ -141,6 +153,7 @@ private fun MobileBottomSheet(
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
     showDragHandle: Boolean = true,
+    scrollable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -180,9 +193,16 @@ private fun MobileBottomSheet(
             // Edge-to-edge: the sheet's own window does not inset its content, so
             // callers must not add navigationBars/IME padding themselves — it is
             // applied once here (sheet background still draws behind the bars).
+            // [scrollable] opt-in: content taller than the sheet must stay
+            // reachable — without it the trailing actions clip past the screen
+            // edge and can never be tapped. Inner lazy lists keep scroll
+            // priority through nested scroll (they must be height-bounded —
+            // see the [TvSafeSheet.scrollable] KDoc).
+            val scrollState = rememberScrollState()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
                     .navigationBarsPadding()
                     .imePadding(),
             ) {

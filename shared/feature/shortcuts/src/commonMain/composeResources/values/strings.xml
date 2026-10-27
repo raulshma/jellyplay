@@ -87,6 +87,7 @@
     <string name="shortcuts_customize_add">Add Shortcut</string>
     <string name="shortcuts_customize_empty_overflow">Nothing pinned to the overflow menu.</string>
     <string name="shortcuts_customize_empty_unpinned">Every shortcut is pinned.</string>
+    <string name="shortcuts_customize_empty_no_definitions">No shortcuts yet — add one above.</string>
     <string name="shortcuts_customize_header_empty_title">No header shortcuts</string>
     <string name="shortcuts_customize_header_empty_message">Pin up to %1$d shortcuts to the capsule at the top of the home screen.</string>
     <string name="shortcuts_customize_also_in_header">In home header</string>
@@ -112,4 +113,5 @@
     <string name="shortcuts_customize_header_capacity">%1$d of %2$d pinned</string>
     <string name="shortcuts_customize_screen_badge">Screen</string>
     <string name="shortcuts_customize_action_badge">Action</string>
+    <string name="shortcuts_customize_cancel">Cancel</string>
 </resources>

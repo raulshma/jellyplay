@@ -463,28 +463,27 @@ private fun HeaderShortcutIcon(
 ) {
     val focusState = rememberTvFocusState()
     val contentDescription = shortcut.labelOverride ?: stringResource(shortcut.labelRes)
+    // One combinedClickable surface for both arms. An IconButton here (the
+    // original shape) is its own clickable and consumes every touch, so the
+    // Box's long-press never fires — the icon must be a bare child instead.
     Box(
         modifier = Modifier
+            .size(38.dp)
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, CircleShape)
-            // combinedClickable (not IconButton) so touch long-press can reach
-            // the editor without forking the TV path — select stays onClick.
+            .clip(CircleShape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
+        contentAlignment = Alignment.Center,
     ) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier.size(38.dp),
-        ) {
-            Icon(
-                imageVector = shortcut.icon,
-                contentDescription = contentDescription,
-                tint = tint,
-                modifier = Modifier.size(22.dp),
-            )
-        }
+        Icon(
+            imageVector = shortcut.icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
