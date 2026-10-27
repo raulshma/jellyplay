@@ -17,13 +17,17 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ShortcutLimits
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
+import com.raulshma.jellyplay.core.model.ShortcutSurface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.AtomicReference
 
@@ -60,12 +64,6 @@ class ShortcutsStore constructor(
     private val identityStore: ServerIdentityStore,
 ) {
     private val json get() = PreferenceCodec.json
-
-    internal object Keys {
-        val SHORTCUTS_DEFINITIONS = stringPreferencesKey(ShortcutsPreferenceSpecs.DEFINITIONS.keyName)
-        val SHORTCUTS_HEADER_ORDER = stringPreferencesKey(ShortcutsPreferenceSpecs.HEADER_ORDER.keyName)
-        val SHORTCUTS_OVERFLOW_ORDER = stringPreferencesKey(ShortcutsPreferenceSpecs.OVERFLOW_ORDER.keyName)
-    }
 
     /**
      * Surface caps live on [ShortcutLimits] (shared with the editor UI); the
@@ -120,44 +118,46 @@ class ShortcutsStore constructor(
         private var cachedOverflowOrder = ParsedCache<List<String>>(null, emptyList())
 
         fun read(prefs: Preferences): ShortcutsSlice = ShortcutsSlice(
-            definitions = readDefinitions(prefs),
-            headerOrder = readOrder(prefs, ShortcutsPreferenceSpecs.HEADER_ORDER, cachedHeaderOrder) { cachedHeaderOrder = it },
-            overflowOrder = readOrder(prefs, ShortcutsPreferenceSpecs.OVERFLOW_ORDER, cachedOverflowOrder) { cachedOverflowOrder = it },
+            definitions = readJsonList(
+                prefs,
+                ShortcutsPreferenceSpecs.DEFINITIONS,
+                ShortcutDefinition.serializer(),
+                cachedDefinitions,
+            ) { cachedDefinitions = it },
+            headerOrder = readJsonList(
+                prefs,
+                ShortcutsPreferenceSpecs.HEADER_ORDER,
+                String.serializer(),
+                cachedHeaderOrder,
+            ) { cachedHeaderOrder = it },
+            overflowOrder = readJsonList(
+                prefs,
+                ShortcutsPreferenceSpecs.OVERFLOW_ORDER,
+                String.serializer(),
+                cachedOverflowOrder,
+            ) { cachedOverflowOrder = it },
         )
 
         /**
-         * Lenient decode: an undecodable blob (hand-edited, newer-version shape
-         * drift) degrades to the default instead of wedging the read — the same
-         * tolerance `decodeOrDefault` applies on the write side.
+         * Lenient decode of one JSON-list row: an undecodable blob (hand-edited,
+         * newer-version shape drift) degrades to the default instead of wedging
+         * the read — the same tolerance `decodeOrDefault` applies on the write
+         * side. The three rows share this one decode shape; only the element
+         * serializer and the parse cache differ.
          */
-        private fun readDefinitions(prefs: Preferences): List<ShortcutDefinition> =
-            PreferenceCodec.cachedJson(
-                raw = prefs[rawShortcutsUserKey(userId, ShortcutsPreferenceSpecs.DEFINITIONS)],
-                cache = cachedDefinitions,
-                default = emptyList(),
-                parse = { encoded ->
-                    try {
-                        json.decodeFromString<List<ShortcutDefinition>>(encoded)
-                    } catch (_: Exception) {
-                        emptyList()
-                    }
-                },
-                cacheRef = { cachedDefinitions = it },
-                nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-            )
-
-        private fun readOrder(
+        private fun <T> readJsonList(
             prefs: Preferences,
-            row: PreferenceSpec<List<String>>,
-            cache: ParsedCache<List<String>>,
-            cacheRef: (ParsedCache<List<String>>) -> Unit,
-        ): List<String> = PreferenceCodec.cachedJson(
+            row: PreferenceSpec<List<T>>,
+            elementSerializer: KSerializer<T>,
+            cache: ParsedCache<List<T>>,
+            cacheRef: (ParsedCache<List<T>>) -> Unit,
+        ): List<T> = PreferenceCodec.cachedJson(
             raw = prefs[rawShortcutsUserKey(userId, row)],
             cache = cache,
             default = emptyList(),
             parse = { encoded ->
                 try {
-                    json.decodeFromString<List<String>>(encoded)
+                    json.decodeFromString(ListSerializer(elementSerializer), encoded)
                 } catch (_: Exception) {
                     emptyList()
                 }
@@ -372,9 +372,6 @@ class ShortcutsStore constructor(
             .forEach { prefs.remove(it) }
     }
 }
-
-/** Which surface a shortcut is pinned to — declared in `core.model` (shared with core:ui). */
-typealias ShortcutSurface = com.raulshma.jellyplay.core.model.ShortcutSurface
 
 /**
  * The normalized write shape — [ShortcutsStore]'s commands read current state

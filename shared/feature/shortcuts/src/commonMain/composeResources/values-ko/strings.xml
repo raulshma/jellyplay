@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">기본값으로 재설정</string>
     <string name="shortcuts_customize_reset_confirm_title">바로 가기를 재설정할까요?</string>
     <string name="shortcuts_customize_reset_confirm_message">사용자 지정 바로 가기가 제거되고 기본 메뉴로 돌아갑니다.</string>
+    <string name="shortcuts_customize_search_targets">대상 검색</string>
+    <string name="shortcuts_customize_no_matches">일치하는 항목이 없습니다.</string>
     <string name="shortcuts_customize_pick_target">대상 선택</string>
     <string name="shortcuts_customize_pick_icon">아이콘 선택</string>
     <string name="shortcuts_customize_use_default_icon">기본 아이콘 사용</string>

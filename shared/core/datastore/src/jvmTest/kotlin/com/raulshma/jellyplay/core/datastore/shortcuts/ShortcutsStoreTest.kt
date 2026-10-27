@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
 import com.raulshma.jellyplay.core.model.ShortcutLimits
+import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

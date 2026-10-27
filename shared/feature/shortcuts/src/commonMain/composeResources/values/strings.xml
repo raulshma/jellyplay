@@ -100,6 +100,8 @@
     <string name="shortcuts_customize_reset">Reset to Defaults</string>
     <string name="shortcuts_customize_reset_confirm_title">Reset shortcuts?</string>
     <string name="shortcuts_customize_reset_confirm_message">Your custom shortcuts are removed and the default menus return.</string>
+    <string name="shortcuts_customize_search_targets">Search destinations</string>
+    <string name="shortcuts_customize_no_matches">Nothing matches.</string>
     <string name="shortcuts_customize_pick_target">Choose a destination</string>
     <string name="shortcuts_customize_pick_icon">Choose an icon</string>
     <string name="shortcuts_customize_use_default_icon">Use default icon</string>

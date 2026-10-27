@@ -7,14 +7,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
-import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.player.video.session.LaunchContext
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationDecision
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorePromptDialog
+import com.raulshma.jellyplay.feature.player.video.session.toPlayerRoute
 import kotlinx.coroutines.launch
 
 /**
@@ -34,15 +33,10 @@ import kotlinx.coroutines.launch
  *    Watching tap takes; the server resume point is the source, so nothing new
  *    is persisted).
  *  - `Ask` parks the snapshot in a local dialog state and renders the shared
- *    [ConfirmDialog] — the app's dialog language (tone PRIMARY: an affirmative
- *    forward action), here styled "Resume '<title>'?" with Resume / Dismiss.
- *    The prompt lives in the SHELL, not the player screen, so no
+ *    [SessionRestorePromptDialog] — the app's dialog language (tone PRIMARY:
+ *    an affirmative forward action), styled "Resume '<title>'?" with Resume /
+ *    Dismiss. The prompt lives in the SHELL, not the player screen, so no
  *    VideoPlayerScreen surface changes.
- *
- * The strings are literal English deliberately: the shells' one-shot texts have
- * no shared resource home (desktop has no Android res — the
- * DesktopLinkOpenMessages precedent; the Android MainViewModel's bus posts are
- * the same register).
  *
  * INCOGNITO: an incognito session reports no progress to the server, so the
  * resume query finds nothing to offer for it — no resume DATA is ever stored
@@ -76,29 +70,14 @@ internal fun SessionRestorePromptHost(
     }
 
     prompt?.let { snapshot ->
-        // ConfirmDialog invokes the host's onDismiss after the confirm arm
-        // too, so the prompt state clears itself on both exits — and this
-        // flag splits the arms: only a REAL dismiss persists the marker.
-        var confirmed by remember(snapshot) { mutableStateOf(false) }
-        ConfirmDialog(
-            title = "Resume \"${snapshot.title}\"?",
-            message = "Continue where you left off.",
-            confirmText = "Resume",
-            dismissText = "Dismiss",
-            tone = ConfirmTone.PRIMARY,
-            onConfirm = {
-                confirmed = true
+        SessionRestorePromptDialog(
+            snapshot = snapshot,
+            onResume = {
                 controller.onRestoreHandled()
                 navigator.navigate(snapshot.toPlayerRoute())
             },
-            onDismiss = {
-                prompt = null
-                if (!confirmed) scope.launch { controller.onAskDismissed(snapshot) }
-            },
+            onDismissed = { scope.launch { controller.onAskDismissed(snapshot) } },
+            onDismiss = { prompt = null },
         )
     }
 }
-
-/** The snapshot's player entry point: the resume position as route ticks. */
-private fun SessionRestorationSnapshot.toPlayerRoute(): Route =
-    Route.VideoPlayer(itemId = itemId, startPositionTicks = positionMs * 10_000)

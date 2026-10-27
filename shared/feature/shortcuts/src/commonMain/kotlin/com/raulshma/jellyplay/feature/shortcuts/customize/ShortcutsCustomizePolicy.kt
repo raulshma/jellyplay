@@ -38,6 +38,19 @@ object ShortcutsCustomizePolicy {
         val overflowCapacity: Int get() = ShortcutLimits.OVERFLOW_MAX
         val headerFull: Boolean get() = headerRows.size >= headerCapacity
         val overflowFull: Boolean get() = overflowRows.size >= overflowCapacity
+
+        /**
+         * The row with [id], wherever it currently sits (pinned, unpinned,
+         * either surface's available pool) — the edit sheet's summary-line
+         * lookup. A definition's face is identical in every section, so the
+         * first hit is the answer.
+         */
+        fun rowFor(id: String): EditorRow? =
+            headerRows.firstOrNull { it.definition.id == id }
+                ?: overflowRows.firstOrNull { it.definition.id == id }
+                ?: unpinnedRows.firstOrNull { it.definition.id == id }
+                ?: availableHeaderRows.firstOrNull { it.definition.id == id }
+                ?: availableOverflowRows.firstOrNull { it.definition.id == id }
     }
 
     /** The sections fold: order lists drive the pinned rows; the remainder is unpinned. */

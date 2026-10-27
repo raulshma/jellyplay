@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">Ripristina predefinite</string>
     <string name="shortcuts_customize_reset_confirm_title">Ripristinare le scorciatoie?</string>
     <string name="shortcuts_customize_reset_confirm_message">Le tue scorciatoie personalizzate vengono rimosse e tornano i menu predefiniti.</string>
+    <string name="shortcuts_customize_search_targets">Cerca destinazioni</string>
+    <string name="shortcuts_customize_no_matches">Nessun risultato.</string>
     <string name="shortcuts_customize_pick_target">Scegli una destinazione</string>
     <string name="shortcuts_customize_pick_icon">Scegli un’icona</string>
     <string name="shortcuts_customize_use_default_icon">Usa icona predefinita</string>

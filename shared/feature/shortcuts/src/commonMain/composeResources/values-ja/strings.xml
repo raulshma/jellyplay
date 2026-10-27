@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">デフォルトに戻す</string>
     <string name="shortcuts_customize_reset_confirm_title">ショートカットをリセットしますか?</string>
     <string name="shortcuts_customize_reset_confirm_message">カスタムショートカットは削除され、既定のメニューに戻ります。</string>
+    <string name="shortcuts_customize_search_targets">移動先を検索</string>
+    <string name="shortcuts_customize_no_matches">一致する項目はありません。</string>
     <string name="shortcuts_customize_pick_target">移動先を選択</string>
     <string name="shortcuts_customize_pick_icon">アイコンを選択</string>
     <string name="shortcuts_customize_use_default_icon">デフォルトのアイコンを使用</string>

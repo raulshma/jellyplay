@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.matchesPickerQuery
 import com.raulshma.jellyplay.core.ui.components.ShortcutIconGridPicker
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.icons.ShortcutIconRegistry
@@ -79,8 +80,10 @@ import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_cu
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_label_hint
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_move_down
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_move_up
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_no_matches
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pick_icon
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pick_target
+import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_search_targets
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_header
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pin_overflow
 import com.raulshma.jellyplay.feature.shortcuts.generated.resources.shortcuts_customize_pinned_section
@@ -180,7 +183,7 @@ fun ShortcutsCustomizeScreen(
                         )
                     }
                 } else {
-                    items(pinnedRows, key = { "p:" + it.definition.id }) { row ->
+                    items(pinnedRows, key = { "p:" + it.definition.id }, contentType = { "pinnedRow" }) { row ->
                         val index = pinnedRows.indexOf(row)
                         PinnedShortcutRow(
                             row = row,
@@ -223,7 +226,7 @@ fun ShortcutsCustomizeScreen(
                         AvailableEmptyState()
                     }
                 } else {
-                    items(availableRows, key = { "a:" + it.definition.id }) { row ->
+                    items(availableRows, key = { "a:" + it.definition.id }, contentType = { "availableRow" }) { row ->
                         AvailableShortcutRow(
                             row = row,
                             surface = surface,
@@ -300,12 +303,7 @@ private fun editingRowLabel(
     draft: EditorDraft,
 ): String? {
     val id = draft.originalId ?: return null
-    val row = state.sections.headerRows.firstOrNull { it.definition.id == id }
-        ?: state.sections.overflowRows.firstOrNull { it.definition.id == id }
-        ?: state.sections.availableHeaderRows.firstOrNull { it.definition.id == id }
-        ?: state.sections.availableOverflowRows.firstOrNull { it.definition.id == id }
-        ?: state.sections.unpinnedRows.firstOrNull { it.definition.id == id }
-    return row?.let { editorRowLabel(it) }
+    return state.sections.rowFor(id)?.let { editorRowLabel(it) }
 }
 
 // ─── Tabs ──────────────────────────────────────────────────────────────────
@@ -848,9 +846,37 @@ private fun ShortcutTargetPicker(
     onSelect: (ShortcutTargetKind, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var query by rememberSaveable { mutableStateOf("") }
+    OutlinedTextField(
+        value = query,
+        onValueChange = { query = it },
+        singleLine = true,
+        placeholder = { Text(stringResource(Res.string.shortcuts_customize_search_targets)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    // The matcher runs on resolved strings — labels (and their category, so a
+    // category word like "Services" finds every entry under it) — and a
+    // category whose entries all miss drops out of the grouped list.
+    val visibleByCategory = pickerByCategory.mapNotNull { (category, items) ->
+        val categoryName = stringResource(category.displayNameRes)
+        val visible = items.filter { item ->
+            matchesPickerQuery(query, stringResource(item.entry.labelRes), categoryName)
+        }
+        if (visible.isEmpty()) null else category to visible
+    }
+    if (visibleByCategory.isEmpty()) {
+        Text(
+            text = stringResource(Res.string.shortcuts_customize_no_matches),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        )
+        return
+    }
     LazyColumn(modifier = modifier.fillMaxWidth().heightIn(max = 220.dp)) {
-        pickerByCategory.forEach { (category, items) ->
-            item(key = "cat:" + category.name) {
+        visibleByCategory.forEach { (category, items) ->
+            item(key = "cat:" + category.name, contentType = "categoryHeader") {
                 Text(
                     text = stringResource(category.displayNameRes),
                     style = MaterialTheme.typography.labelMedium,
@@ -858,7 +884,7 @@ private fun ShortcutTargetPicker(
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                 )
             }
-            items(items, key = { it.entry.targetId }) { item ->
+            items(items, key = { it.entry.targetId }, contentType = { "pickerRow" }) { item ->
                 val selected = item.entry.targetId == selectedTargetId && selectedKind != null
                 Row(
                     modifier = Modifier

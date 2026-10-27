@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">Rétablir les valeurs par défaut</string>
     <string name="shortcuts_customize_reset_confirm_title">Réinitialiser les raccourcis ?</string>
     <string name="shortcuts_customize_reset_confirm_message">Vos raccourcis personnalisés sont retirés et les menus par défaut reviennent.</string>
+    <string name="shortcuts_customize_search_targets">Rechercher des destinations</string>
+    <string name="shortcuts_customize_no_matches">Aucun résultat.</string>
     <string name="shortcuts_customize_pick_target">Choisir une destination</string>
     <string name="shortcuts_customize_pick_icon">Choisir une icône</string>
     <string name="shortcuts_customize_use_default_icon">Utiliser l’icône par défaut</string>

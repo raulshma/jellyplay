@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">恢复默认</string>
     <string name="shortcuts_customize_reset_confirm_title">重置快捷方式?</string>
     <string name="shortcuts_customize_reset_confirm_message">您的自定义快捷方式将被移除,并恢复默认菜单。</string>
+    <string name="shortcuts_customize_search_targets">搜索目标</string>
+    <string name="shortcuts_customize_no_matches">无匹配项。</string>
     <string name="shortcuts_customize_pick_target">选择目标</string>
     <string name="shortcuts_customize_pick_icon">选择图标</string>
     <string name="shortcuts_customize_use_default_icon">使用默认图标</string>

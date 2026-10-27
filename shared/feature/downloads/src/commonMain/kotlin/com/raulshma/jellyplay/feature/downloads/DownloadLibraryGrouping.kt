@@ -420,57 +420,59 @@ internal fun groupSelectionState(ids: Collection<String>, selectedIds: Set<Strin
 }
 
 /**
+ * The shared arithmetic behind both transfer fractions — Σ live-overridden
+ * downloaded / Σ totalSizeBytes over exactly [items]: in-flight rows read
+ * their live bytes from [liveProgressById], completed ones count as landed,
+ * rows whose total size is still unknown (0 — a PENDING row before its size
+ * probe) contribute to neither sum so an unprobed row can't drag the
+ * fraction, and the result is clamped to 0..1 (no known bytes → 0).
+ */
+private fun summedTransferFraction(
+    items: List<DownloadItem>,
+    liveProgressById: Map<String, DownloadProgress>,
+): Float {
+    var downloaded = 0L
+    var total = 0L
+    for (item in items) {
+        downloaded += liveProgressById[item.id]?.downloadedBytes ?: item.downloadedBytes
+        total += item.totalSizeBytes
+    }
+    return if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else 0f
+}
+
+/**
  * The COLLAPSED group header's whole-group transfer fraction: Σ downloaded /
  * Σ totalSizeBytes over EVERY episode in the group — completed ones count as
  * landed, in-flight ones read their live bytes from [liveProgressById] — so
  * the bar reads as "how far along is this series' download set" next to the
  * meta line's "N of M downloaded". Null unless at least one episode is
  * actively DOWNLOADING (nothing in flight → no bar; the group's incomplete
- * rows in paused/queued/failed states alone don't light it). Episodes whose
- * total size is still unknown (0 — a PENDING row before its size probe)
- * contribute to neither sum, so an unprobed row can't drag the fraction; the
- * result is clamped to 0..1 and a gate-passing group with no known bytes is
- * a 0 fraction.
+ * rows in paused/queued/failed states alone don't light it).
  */
 internal fun downloadGroupProgressFraction(
     episodes: List<DownloadItem>,
     liveProgressById: Map<String, DownloadProgress>,
 ): Float? {
     if (episodes.none { it.status == DownloadStatus.DOWNLOADING }) return null
-    var downloaded = 0L
-    var total = 0L
-    for (episode in episodes) {
-        downloaded += liveProgressById[episode.id]?.downloadedBytes ?: episode.downloadedBytes
-        total += episode.totalSizeBytes
-    }
-    return if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else 0f
+    return summedTransferFraction(episodes, liveProgressById)
 }
 
 /**
  * The whole-batch transfer fraction over [items] whose status is in
  * [statuses] — Σ downloaded / Σ totalSizeBytes, with every in-flight row's
- * bytes overridden by its live value from [liveProgressById] — or null when
- * NO item qualifies (the app bar's accumulated ring hides entirely then; it
- * gates on the Active set so finished history can't pin it at 100%). Items
- * whose total size is still unknown contribute to neither sum; the result is
- * clamped to 0..1 and a qualifying batch with no known bytes is a 0 fraction.
+ * bytes overridden by its live value from [liveProgressById] ([summedTransferFraction]'s
+ * fold over the qualifying subset) — or null when NO item qualifies (the app
+ * bar's accumulated ring hides entirely then; it gates on the Active set so
+ * finished history can't pin it at 100%).
  */
 internal fun aggregateProgressFraction(
     items: List<DownloadItem>,
     statuses: Set<DownloadStatus>,
     liveProgressById: Map<String, DownloadProgress>,
 ): Float? {
-    var downloaded = 0L
-    var total = 0L
-    var qualifying = 0
-    for (item in items) {
-        if (item.status !in statuses) continue
-        qualifying++
-        downloaded += liveProgressById[item.id]?.downloadedBytes ?: item.downloadedBytes
-        total += item.totalSizeBytes
-    }
-    if (qualifying == 0) return null
-    return if (total > 0) (downloaded.toFloat() / total).coerceIn(0f, 1f) else 0f
+    val qualifying = items.filter { it.status in statuses }
+    if (qualifying.isEmpty()) return null
+    return summedTransferFraction(qualifying, liveProgressById)
 }
 
 /**

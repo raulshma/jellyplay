@@ -347,7 +347,9 @@ internal fun DownloadGroupHeader(
             if (imageUrl != null) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        // The DownloadItemRow thumb size — the header's artwork
+                        // reads as the same row face, one rank up.
+                        .size(56.dp)
                         .clip(ShapeCache.smooth8),
                 ) {
                     MediaImage(

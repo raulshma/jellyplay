@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">Restablecer a los valores predeterminados</string>
     <string name="shortcuts_customize_reset_confirm_title">¿Restablecer los accesos directos?</string>
     <string name="shortcuts_customize_reset_confirm_message">Se eliminarán tus accesos directos personalizados y volverán los menús predeterminados.</string>
+    <string name="shortcuts_customize_search_targets">Buscar destinos</string>
+    <string name="shortcuts_customize_no_matches">Sin resultados.</string>
     <string name="shortcuts_customize_pick_target">Elige un destino</string>
     <string name="shortcuts_customize_pick_icon">Elige un icono</string>
     <string name="shortcuts_customize_use_default_icon">Usar icono predeterminado</string>

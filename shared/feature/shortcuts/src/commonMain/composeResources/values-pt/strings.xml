@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">Restaurar padrões</string>
     <string name="shortcuts_customize_reset_confirm_title">Redefinir atalhos?</string>
     <string name="shortcuts_customize_reset_confirm_message">Seus atalhos personalizados são removidos e os menus padrão voltam.</string>
+    <string name="shortcuts_customize_search_targets">Pesquisar destinos</string>
+    <string name="shortcuts_customize_no_matches">Sem resultados.</string>
     <string name="shortcuts_customize_pick_target">Escolha um destino</string>
     <string name="shortcuts_customize_pick_icon">Escolha um ícone</string>
     <string name="shortcuts_customize_use_default_icon">Usar ícone padrão</string>

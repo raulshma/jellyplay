@@ -76,6 +76,8 @@
     <string name="shortcuts_customize_reset">Auf Standard zurücksetzen</string>
     <string name="shortcuts_customize_reset_confirm_title">Shortcuts zurücksetzen?</string>
     <string name="shortcuts_customize_reset_confirm_message">Deine benutzerdefinierten Shortcuts werden entfernt und die Standardmenüs kehren zurück.</string>
+    <string name="shortcuts_customize_search_targets">Ziele durchsuchen</string>
+    <string name="shortcuts_customize_no_matches">Keine Treffer.</string>
     <string name="shortcuts_customize_pick_target">Ziel auswählen</string>
     <string name="shortcuts_customize_pick_icon">Symbol auswählen</string>
     <string name="shortcuts_customize_use_default_icon">Standardsymbol verwenden</string>

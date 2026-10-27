@@ -102,6 +102,27 @@ class ShortcutsCustomizePolicyTest {
     }
 
     @Test
+    fun `rowFor finds a definition wherever it sits`() {
+        val definitions = listOf(
+            screenDef("a", "Downloads"),
+            screenDef("b", "Favorites"),
+            screenDef("c", "Settings"),
+            screenDef("d", "Playlists"),
+        )
+        val sections = ShortcutsCustomizePolicy.sections(
+            definitions = definitions,
+            headerOrder = listOf("b"),
+            overflowOrder = listOf("a"),
+            catalog = catalog,
+        )
+        // Pinned header, pinned overflow, unpinned, and the available pools.
+        assertEquals("b", sections.rowFor("b")?.definition?.id)
+        assertEquals("a", sections.rowFor("a")?.definition?.id)
+        assertEquals("d", sections.rowFor("d")?.definition?.id)
+        assertNull(sections.rowFor("ghost"))
+    }
+
+    @Test
     fun `prune drops definitions whose target left the catalog`() {
         val kept = ShortcutsCustomizePolicy.prune(
             definitions = listOf(screenDef("a", "Downloads"), screenDef("x", "NotARealScreen")),

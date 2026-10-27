@@ -48,8 +48,6 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
 import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalPullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
@@ -68,6 +66,8 @@ import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.player.video.session.LaunchContext
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationDecision
 import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorePromptDialog
+import com.raulshma.jellyplay.feature.player.video.session.toPlayerRoute
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
@@ -643,33 +643,20 @@ internal fun DesktopNavScaffold(
 
     // The restoration prompt, over everything the scaffold renders (a window
     // dialog — tree placement carries no visual weight; rendered last like the
-    // AppRoot About dialog). ConfirmDialog invokes onDismiss after the confirm
-    // arm, so the prompt state clears itself on both exits — and the flag
-    // splits the arms: only a REAL dismiss persists the marker.
+    // AppRoot About dialog). The shared prompt dialog owns the arm-splitting
+    // choreography: only a REAL dismiss persists the marker.
     restorePrompt?.let { snapshot ->
-        var confirmed by remember(snapshot) { mutableStateOf(false) }
-        ConfirmDialog(
-            title = "Resume \"${snapshot.title}\"?",
-            message = "Continue where you left off.",
-            confirmText = "Resume",
-            dismissText = "Dismiss",
-            tone = ConfirmTone.PRIMARY,
-            onConfirm = {
-                confirmed = true
+        SessionRestorePromptDialog(
+            snapshot = snapshot,
+            onResume = {
                 services.sessionRestoration.onRestoreHandled()
                 guardedNavigator.navigate(snapshot.toPlayerRoute())
             },
-            onDismiss = {
-                restorePrompt = null
-                if (!confirmed) promptScope.launch { services.sessionRestoration.onAskDismissed(snapshot) }
-            },
+            onDismissed = { promptScope.launch { services.sessionRestoration.onAskDismissed(snapshot) } },
+            onDismiss = { restorePrompt = null },
         )
     }
 }
-
-/** The snapshot's player entry point: the resume position as route ticks. */
-private fun SessionRestorationSnapshot.toPlayerRoute(): Route =
-    Route.VideoPlayer(itemId = itemId, startPositionTicks = positionMs * 10_000)
 
 @Composable
 private fun DesktopRailItem(
