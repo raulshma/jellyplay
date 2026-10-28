@@ -406,4 +406,10 @@
          (ADR 0010 wave), translated together with the default file. -->
     <string name="core_action_hide_from_continue_watching">「視聴を続ける」から削除</string>
     <string name="core_action_show_from_continue_watching">「視聴を続ける」に表示</string>
+
+    <string name="download_sheet_new_episodes">新エピソード:</string>
+    <string name="download_sheet_policy_default">デフォルト</string>
+    <string name="download_sheet_policy_instant">今すぐ</string>
+    <string name="download_sheet_policy_ask">確認</string>
+    <string name="download_sheet_policy_never">しない</string>
 </resources>

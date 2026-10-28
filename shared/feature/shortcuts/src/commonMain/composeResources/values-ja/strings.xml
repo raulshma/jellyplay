@@ -91,4 +91,17 @@
     <string name="shortcuts_customize_action_badge">アクション</string>
     <string name="shortcuts_customize_pin_section">固定先</string>
     <string name="shortcuts_customize_clear_search">検索をクリア</string>
+
+    <string name="shortcuts_customize_tab_header">ヘッダードック</string>
+    <string name="shortcuts_customize_tab_menu">メニュー</string>
+    <string name="shortcuts_customize_pinned_section">ピン留め済み</string>
+    <string name="shortcuts_customize_available_section">利用可能</string>
+    <string name="shortcuts_customize_preview">プレビュー</string>
+    <string name="shortcuts_customize_preview_more">ほか %1$d 件</string>
+    <string name="shortcuts_customize_cancel">キャンセル</string>
+    <string name="shortcuts_customize_also_in_header">ホームヘッダー</string>
+    <string name="shortcuts_customize_also_in_menu">オーバーフローメニュー</string>
+    <string name="shortcuts_customize_empty_no_definitions">ショートカットはまだありません。上から追加してください。</string>
+    <string name="shortcuts_customize_header_empty_title">ヘッダーショートカットなし</string>
+    <string name="shortcuts_customize_header_empty_message">ホーム画面上部のカプセルには最大 %1$d 件のショートカットをピン留めできます。</string>
 </resources>

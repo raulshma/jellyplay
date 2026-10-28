@@ -168,4 +168,7 @@
     <string name="settings_next_up_hidden_brief">Ver y restaurar series quitadas de la fila A continuación</string>
     <string name="settings_hidden_libraries">Bibliotecas ocultas</string>
     <string name="settings_hidden_libraries_brief">Ver y restaurar bibliotecas ocultas de la fila Mi contenido</string>
+
+    <string name="settings_home_header_shortcuts">Atajos del encabezado</string>
+    <string name="settings_home_header_shortcuts_subtitle">Personaliza los atajos del dock del encabezado superior</string>
 </resources>

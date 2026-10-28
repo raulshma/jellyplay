@@ -1185,4 +1185,12 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">Personalizza scorciatoie</string>
     <string name="settings_nav_customize_shortcuts_subtitle">Scorciatoie di intestazione e menu extra</string>
+
+    <string name="settings_auto_download_mode">Scarica automaticamente i nuovi episodi</string>
+    <string name="settings_auto_download_mode_subtitle">Cosa fare quando una serie scaricata riceve nuovi episodi</string>
+    <string name="settings_auto_download_mode_instant">Immediatamente</string>
+    <string name="settings_auto_download_mode_ask">Chiedi prima di scaricare</string>
+    <string name="settings_auto_download_mode_never">Mai</string>
+    <string name="settings_auto_download_check_now">Cerca nuovi episodi adesso</string>
+    <string name="settings_auto_download_check_now_subtitle">Esegui subito un passaggio di download automatico</string>
 </resources>

@@ -1183,4 +1183,12 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">自定义快捷方式</string>
     <string name="settings_nav_customize_shortcuts_subtitle">首页顶栏与更多菜单的快捷方式</string>
+
+    <string name="settings_auto_download_mode">自动下载新剧集</string>
+    <string name="settings_auto_download_mode_subtitle">已下载的剧集有新剧集时的处理方式</string>
+    <string name="settings_auto_download_mode_instant">立即</string>
+    <string name="settings_auto_download_mode_ask">下载前询问</string>
+    <string name="settings_auto_download_mode_never">从不</string>
+    <string name="settings_auto_download_check_now">立即检查新剧集</string>
+    <string name="settings_auto_download_check_now_subtitle">立即执行一次自动下载</string>
 </resources>

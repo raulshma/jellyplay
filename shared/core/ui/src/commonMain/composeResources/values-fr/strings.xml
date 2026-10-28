@@ -409,4 +409,10 @@
          (ADR 0010 wave), translated together with the default file. -->
     <string name="core_action_hide_from_continue_watching">Retirer de « Reprendre le visionnage »</string>
     <string name="core_action_show_from_continue_watching">Afficher dans « Reprendre le visionnage »</string>
+
+    <string name="download_sheet_new_episodes">Nouveaux épisodes :</string>
+    <string name="download_sheet_policy_default">Par défaut</string>
+    <string name="download_sheet_policy_instant">Immédiat</string>
+    <string name="download_sheet_policy_ask">Demander</string>
+    <string name="download_sheet_policy_never">Jamais</string>
 </resources>

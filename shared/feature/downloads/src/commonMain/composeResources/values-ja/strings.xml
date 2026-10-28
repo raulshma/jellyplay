@@ -134,4 +134,14 @@
     <string name="downloads_resume_all">すべて再開</string>
     <string name="downloads_status_active">アクティブ</string>
     <string name="downloads_status_completed">完了</string>
+
+    <plurals name="downloads_suggestions_count">
+        <item quantity="other">ダウンロードできる新エピソードが %1$d 件あります</item>
+    </plurals>
+    <string name="downloads_suggestions_title">ダウンロードできる新エピソード</string>
+    <string name="downloads_suggestions_subtitle">自動ダウンロードは「ダウンロード前に確認」に設定されています。</string>
+    <string name="downloads_suggestions_download">ダウンロード</string>
+    <string name="downloads_suggestions_download_all">すべてダウンロード</string>
+    <string name="downloads_suggestions_dismiss">閉じる</string>
+    <string name="downloads_suggestions_queued">新エピソードをキューに追加しました</string>
 </resources>

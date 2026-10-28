@@ -134,4 +134,14 @@
     <string name="downloads_resume_all">모두 재개</string>
     <string name="downloads_status_active">활성</string>
     <string name="downloads_status_completed">완료</string>
+
+    <plurals name="downloads_suggestions_count">
+        <item quantity="other">다운로드할 새 에피소드 %1$d개</item>
+    </plurals>
+    <string name="downloads_suggestions_title">다운로드할 수 있는 새 에피소드</string>
+    <string name="downloads_suggestions_subtitle">자동 다운로드가 다운로드 전에 묻도록 설정되어 있습니다.</string>
+    <string name="downloads_suggestions_download">다운로드</string>
+    <string name="downloads_suggestions_download_all">모두 다운로드</string>
+    <string name="downloads_suggestions_dismiss">닫기</string>
+    <string name="downloads_suggestions_queued">새 에피소드 대기 중</string>
 </resources>

@@ -91,4 +91,17 @@
     <string name="shortcuts_customize_action_badge">操作</string>
     <string name="shortcuts_customize_pin_section">固定到</string>
     <string name="shortcuts_customize_clear_search">清除搜索</string>
+
+    <string name="shortcuts_customize_tab_header">顶栏停靠区</string>
+    <string name="shortcuts_customize_tab_menu">菜单</string>
+    <string name="shortcuts_customize_pinned_section">已固定</string>
+    <string name="shortcuts_customize_available_section">可用</string>
+    <string name="shortcuts_customize_preview">预览</string>
+    <string name="shortcuts_customize_preview_more">+%1$d 个</string>
+    <string name="shortcuts_customize_cancel">取消</string>
+    <string name="shortcuts_customize_also_in_header">在主页顶栏</string>
+    <string name="shortcuts_customize_also_in_menu">在溢出菜单中</string>
+    <string name="shortcuts_customize_empty_no_definitions">还没有快捷方式——请在上方添加。</string>
+    <string name="shortcuts_customize_header_empty_title">没有顶栏快捷方式</string>
+    <string name="shortcuts_customize_header_empty_message">最多可将 %1$d 个快捷方式固定到主页顶部的胶囊栏。</string>
 </resources>

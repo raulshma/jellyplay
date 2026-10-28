@@ -168,4 +168,7 @@
     <string name="settings_next_up_hidden_brief">「次のエピソード」行から削除したシリーズの表示と復元</string>
     <string name="settings_hidden_libraries">非表示のライブラリ</string>
     <string name="settings_hidden_libraries_brief">マイメディア行から隠したライブラリを表示して復元します</string>
+
+    <string name="settings_home_header_shortcuts">ヘッダーショートカット</string>
+    <string name="settings_home_header_shortcuts_subtitle">ホーム画面上部のヘッダードックのショートカットをカスタマイズします</string>
 </resources>

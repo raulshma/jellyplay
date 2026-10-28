@@ -541,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando da eseguire al termine della riproduzione</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando da eseguire quando l'app diventa inattiva</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando da eseguire quando l'app esce dall'inattività</string>
+
+    <string name="ss_auto_download_mode_title">Scarica automaticamente i nuovi episodi</string>
+    <string name="ss_auto_download_mode_subtitle">Scarica immediatamente, chiedi prima di scaricare o non scaricare mai i nuovi episodi delle serie scaricate</string>
+    <string name="ss_auto_download_check_now_subtitle">Esegui subito un passaggio di download automatico</string>
 </resources>

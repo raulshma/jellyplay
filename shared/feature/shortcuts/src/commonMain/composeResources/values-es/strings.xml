@@ -91,4 +91,17 @@
     <string name="shortcuts_customize_action_badge">Acción</string>
     <string name="shortcuts_customize_pin_section">Fijar a</string>
     <string name="shortcuts_customize_clear_search">Borrar búsqueda</string>
+
+    <string name="shortcuts_customize_tab_header">Dock del encabezado</string>
+    <string name="shortcuts_customize_tab_menu">Menú</string>
+    <string name="shortcuts_customize_pinned_section">Fijados</string>
+    <string name="shortcuts_customize_available_section">Disponibles</string>
+    <string name="shortcuts_customize_preview">Vista previa</string>
+    <string name="shortcuts_customize_preview_more">+%1$d más</string>
+    <string name="shortcuts_customize_cancel">Cancelar</string>
+    <string name="shortcuts_customize_also_in_header">En el encabezado de inicio</string>
+    <string name="shortcuts_customize_also_in_menu">En el menú de desbordamiento</string>
+    <string name="shortcuts_customize_empty_no_definitions">Aún no hay atajos: añade uno arriba.</string>
+    <string name="shortcuts_customize_header_empty_title">Sin atajos en el encabezado</string>
+    <string name="shortcuts_customize_header_empty_message">Fija hasta %1$d atajos en la cápsula de la parte superior de la pantalla de inicio.</string>
 </resources>

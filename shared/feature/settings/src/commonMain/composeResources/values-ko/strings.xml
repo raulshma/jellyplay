@@ -1181,4 +1181,12 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">바로 가기 사용자 지정</string>
     <string name="settings_nav_customize_shortcuts_subtitle">홈 헤더 및 더보기 메뉴 바로 가기</string>
+
+    <string name="settings_auto_download_mode">새 에피소드 자동 다운로드</string>
+    <string name="settings_auto_download_mode_subtitle">다운로드한 시리즈에 새 에피소드가 생겼을 때의 동작</string>
+    <string name="settings_auto_download_mode_instant">즉시</string>
+    <string name="settings_auto_download_mode_ask">다운로드 전에 묻기</string>
+    <string name="settings_auto_download_mode_never">안 함</string>
+    <string name="settings_auto_download_check_now">지금 새 에피소드 확인</string>
+    <string name="settings_auto_download_check_now_subtitle">자동 다운로드 지금 실행</string>
 </resources>

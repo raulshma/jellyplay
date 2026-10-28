@@ -91,4 +91,18 @@
     <string name="shortcuts_customize_action_badge">Aktion</string>
     <string name="shortcuts_customize_pin_section">Anheften an</string>
     <string name="shortcuts_customize_clear_search">Suche löschen</string>
+
+    <!-- Customize editor -->
+    <string name="shortcuts_customize_tab_header">Kopfzeilen-Dock</string>
+    <string name="shortcuts_customize_tab_menu">Menü</string>
+    <string name="shortcuts_customize_pinned_section">Angepinnt</string>
+    <string name="shortcuts_customize_available_section">Verfügbar</string>
+    <string name="shortcuts_customize_preview">Vorschau</string>
+    <string name="shortcuts_customize_preview_more">+%1$d weitere</string>
+    <string name="shortcuts_customize_cancel">Abbrechen</string>
+    <string name="shortcuts_customize_also_in_header">In der Kopfzeile</string>
+    <string name="shortcuts_customize_also_in_menu">Im Überlaufmenü</string>
+    <string name="shortcuts_customize_empty_no_definitions">Noch keine Shortcuts — füge oben einen hinzu.</string>
+    <string name="shortcuts_customize_header_empty_title">Keine Kopfzeilen-Shortcuts</string>
+    <string name="shortcuts_customize_header_empty_message">Pinne bis zu %1$d Shortcuts an die Kapsel am oberen Rand des Startbildschirms.</string>
 </resources>

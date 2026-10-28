@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
@@ -55,7 +56,7 @@ class AutoDownloadWorker(
                 // Best-effort: a failed post never fails the pass (the
                 // suggestion card on the Downloads screen is the source of
                 // truth either way).
-                runCatching {
+                runCatchingRethrowingCancellation {
                     if (outcome.newSuggestions > 0) suggestionNotifier.notifyNewSuggestions(outcome.newSuggestions)
                 }
                 Result.success()

@@ -134,4 +134,14 @@
     <string name="downloads_resume_all">全部继续</string>
     <string name="downloads_status_active">进行中</string>
     <string name="downloads_status_completed">已完成</string>
+
+    <plurals name="downloads_suggestions_count">
+        <item quantity="other">%1$d 个新剧集可供下载</item>
+    </plurals>
+    <string name="downloads_suggestions_title">有新剧集可供下载</string>
+    <string name="downloads_suggestions_subtitle">自动下载已设置为在下载前询问。</string>
+    <string name="downloads_suggestions_download">下载</string>
+    <string name="downloads_suggestions_download_all">全部下载</string>
+    <string name="downloads_suggestions_dismiss">忽略</string>
+    <string name="downloads_suggestions_queued">新剧集已加入队列</string>
 </resources>

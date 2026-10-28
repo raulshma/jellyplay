@@ -1181,4 +1181,12 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">ショートカットのカスタマイズ</string>
     <string name="settings_nav_customize_shortcuts_subtitle">ヘッダーとその他メニューのショートカット</string>
+
+    <string name="settings_auto_download_mode">新エピソードを自動ダウンロード</string>
+    <string name="settings_auto_download_mode_subtitle">ダウンロード済みシリーズに新エピソードが追加されたときの動作</string>
+    <string name="settings_auto_download_mode_instant">今すぐ</string>
+    <string name="settings_auto_download_mode_ask">ダウンロード前に確認</string>
+    <string name="settings_auto_download_mode_never">しない</string>
+    <string name="settings_auto_download_check_now">今すぐ新エピソードを確認</string>
+    <string name="settings_auto_download_check_now_subtitle">自動ダウンロードを今すぐ実行する</string>
 </resources>

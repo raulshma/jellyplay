@@ -1184,4 +1184,12 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">Personalizar atalhos</string>
     <string name="settings_nav_customize_shortcuts_subtitle">Atalhos do cabeçalho e do menu mais</string>
+
+    <string name="settings_auto_download_mode">Descarregar novos episódios automaticamente</string>
+    <string name="settings_auto_download_mode_subtitle">O que fazer quando uma série descarregada recebe novos episódios</string>
+    <string name="settings_auto_download_mode_instant">Imediatamente</string>
+    <string name="settings_auto_download_mode_ask">Perguntar antes de descarregar</string>
+    <string name="settings_auto_download_mode_never">Nunca</string>
+    <string name="settings_auto_download_check_now">Procurar novos episódios agora</string>
+    <string name="settings_auto_download_check_now_subtitle">Executar uma passagem de descarregamento automático agora</string>
 </resources>

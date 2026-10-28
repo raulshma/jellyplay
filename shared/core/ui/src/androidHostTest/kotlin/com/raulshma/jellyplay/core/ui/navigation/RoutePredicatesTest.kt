@@ -159,6 +159,7 @@ class RoutePredicatesTest {
         Route.ArrQueue,
         Route.UpcomingCalendar,
         Route.Shortcuts,
+        Route.ShortcutsCustomize(),
         Route.SubtitleTester,
         Route.NextUpExcluded,
     )

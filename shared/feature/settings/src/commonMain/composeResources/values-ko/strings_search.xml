@@ -541,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">미디어 재생이 끝날 때 실행할 명령</string>
     <string name="ss_hooks_idle_cmd_subtitle">앱이 유휴 상태가 될 때 실행할 명령</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">앱이 유휴 상태를 벗어날 때 실행할 명령</string>
+
+    <string name="ss_auto_download_mode_title">새 에피소드 자동 다운로드</string>
+    <string name="ss_auto_download_mode_subtitle">다운로드한 시리즈의 새 에피소드를 즉시 다운로드, 다운로드 전에 묻기 또는 다운로드 안 함</string>
+    <string name="ss_auto_download_check_now_subtitle">자동 다운로드 지금 실행</string>
 </resources>

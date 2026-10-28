@@ -1183,4 +1183,12 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">Personnaliser les raccourcis</string>
     <string name="settings_nav_customize_shortcuts_subtitle">Raccourcis de l’en-tête et du menu plus</string>
+
+    <string name="settings_auto_download_mode">Télécharger automatiquement les nouveaux épisodes</string>
+    <string name="settings_auto_download_mode_subtitle">Que faire lorsqu’une série téléchargée reçoit de nouveaux épisodes</string>
+    <string name="settings_auto_download_mode_instant">Immédiatement</string>
+    <string name="settings_auto_download_mode_ask">Demander avant de télécharger</string>
+    <string name="settings_auto_download_mode_never">Jamais</string>
+    <string name="settings_auto_download_check_now">Rechercher les nouveaux épisodes maintenant</string>
+    <string name="settings_auto_download_check_now_subtitle">Lancer une passe de téléchargement automatique maintenant</string>
 </resources>

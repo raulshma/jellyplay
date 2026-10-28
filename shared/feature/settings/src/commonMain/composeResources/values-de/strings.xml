@@ -1181,4 +1181,13 @@
     <!-- Custom shortcuts -->
     <string name="settings_nav_customize_shortcuts">Shortcuts anpassen</string>
     <string name="settings_nav_customize_shortcuts_subtitle">Kopfzeilen- und Übergänge-Shortcuts</string>
+
+    <!-- Auto-download mode (tri-state, gh-181) -->
+    <string name="settings_auto_download_mode">Neue Episoden automatisch herunterladen</string>
+    <string name="settings_auto_download_mode_subtitle">Was passiert, wenn heruntergeladene Serien neue Episoden bekommen</string>
+    <string name="settings_auto_download_mode_instant">Sofort</string>
+    <string name="settings_auto_download_mode_ask">Vor dem Download nachfragen</string>
+    <string name="settings_auto_download_mode_never">Nie</string>
+    <string name="settings_auto_download_check_now">Jetzt nach neuen Episoden suchen</string>
+    <string name="settings_auto_download_check_now_subtitle">Auto-Download-Durchlauf sofort ausführen</string>
 </resources>

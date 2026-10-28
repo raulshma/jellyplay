@@ -139,4 +139,16 @@
     <string name="downloads_resume_all">Riprendi tutto</string>
     <string name="downloads_status_active">Attivi</string>
     <string name="downloads_status_completed">Completati</string>
+
+    <plurals name="downloads_suggestions_count">
+        <item quantity="one">%1$d nuovo episodio pronto per il download</item>
+        <item quantity="many">%1$d nuovi episodi pronti per il download</item>
+        <item quantity="other">%1$d nuovi episodi pronti per il download</item>
+    </plurals>
+    <string name="downloads_suggestions_title">Nuovi episodi pronti per il download</string>
+    <string name="downloads_suggestions_subtitle">Il download automatico è impostato per chiedere prima di scaricarli.</string>
+    <string name="downloads_suggestions_download">Scarica</string>
+    <string name="downloads_suggestions_download_all">Scarica tutto</string>
+    <string name="downloads_suggestions_dismiss">Ignora</string>
+    <string name="downloads_suggestions_queued">Nuovi episodi in coda</string>
 </resources>

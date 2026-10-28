@@ -91,4 +91,17 @@
     <string name="shortcuts_customize_action_badge">Action</string>
     <string name="shortcuts_customize_pin_section">Épingler à</string>
     <string name="shortcuts_customize_clear_search">Effacer la recherche</string>
+
+    <string name="shortcuts_customize_tab_header">Dock de l’en-tête</string>
+    <string name="shortcuts_customize_tab_menu">Menu</string>
+    <string name="shortcuts_customize_pinned_section">Épinglés</string>
+    <string name="shortcuts_customize_available_section">Disponibles</string>
+    <string name="shortcuts_customize_preview">Aperçu</string>
+    <string name="shortcuts_customize_preview_more">+%1$d autres</string>
+    <string name="shortcuts_customize_cancel">Annuler</string>
+    <string name="shortcuts_customize_also_in_header">Dans l’en-tête d’accueil</string>
+    <string name="shortcuts_customize_also_in_menu">Dans le menu de débordement</string>
+    <string name="shortcuts_customize_empty_no_definitions">Aucun raccourci pour l’instant — ajoute-en un ci-dessus.</string>
+    <string name="shortcuts_customize_header_empty_title">Aucun raccourci d’en-tête</string>
+    <string name="shortcuts_customize_header_empty_message">Épingle jusqu’à %1$d raccourcis sur la capsule en haut de l’écran d’accueil.</string>
 </resources>

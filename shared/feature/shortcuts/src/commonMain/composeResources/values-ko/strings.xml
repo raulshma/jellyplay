@@ -91,4 +91,17 @@
     <string name="shortcuts_customize_action_badge">작업</string>
     <string name="shortcuts_customize_pin_section">고정 대상</string>
     <string name="shortcuts_customize_clear_search">검색 지우기</string>
+
+    <string name="shortcuts_customize_tab_header">헤더 독</string>
+    <string name="shortcuts_customize_tab_menu">메뉴</string>
+    <string name="shortcuts_customize_pinned_section">고정됨</string>
+    <string name="shortcuts_customize_available_section">사용 가능</string>
+    <string name="shortcuts_customize_preview">미리보기</string>
+    <string name="shortcuts_customize_preview_more">+%1$d개 더</string>
+    <string name="shortcuts_customize_cancel">취소</string>
+    <string name="shortcuts_customize_also_in_header">홈 헤더</string>
+    <string name="shortcuts_customize_also_in_menu">더보기 메뉴</string>
+    <string name="shortcuts_customize_empty_no_definitions">아직 바로가기가 없습니다. 위에서 추가하세요.</string>
+    <string name="shortcuts_customize_header_empty_title">헤더 바로가기 없음</string>
+    <string name="shortcuts_customize_header_empty_message">홈 화면 상단 캡슐에 바로가기를 최대 %1$d개까지 고정할 수 있습니다.</string>
 </resources>

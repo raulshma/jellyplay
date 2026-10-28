@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import androidx.work.WorkManager
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.isEnabled
@@ -33,7 +34,7 @@ class AutoDownloadSchedulerImpl(
      */
     private suspend fun shouldStayScheduled(): Boolean {
         if (downloadsStore.downloads.first().autoDownloadMode.isEnabled) return true
-        return runCatching { policyStore.hasSeriesPolicies() }.getOrDefault(false)
+        return runCatchingRethrowingCancellation { policyStore.hasSeriesPolicies() }.getOrDefault(false)
     }
     companion object {
         private val CHECK_INTERVAL: Duration = Duration.ofHours(6)

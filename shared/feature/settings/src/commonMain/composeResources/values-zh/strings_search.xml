@@ -541,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">媒体播放结束时运行的命令</string>
     <string name="ss_hooks_idle_cmd_subtitle">应用进入空闲时运行的命令</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">应用退出空闲时运行的命令</string>
+
+    <string name="ss_auto_download_mode_title">自动下载新剧集</string>
+    <string name="ss_auto_download_mode_subtitle">立即下载、下载前询问，或从不下载已下载剧集的新剧集</string>
+    <string name="ss_auto_download_check_now_subtitle">立即执行一次自动下载</string>
 </resources>

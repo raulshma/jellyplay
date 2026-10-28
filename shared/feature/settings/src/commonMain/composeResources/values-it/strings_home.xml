@@ -168,4 +168,7 @@
     <string name="settings_next_up_hidden_brief">Visualizza e ripristina le serie rimosse dalla riga Prossimi contenuti</string>
     <string name="settings_hidden_libraries">Librerie nascoste</string>
     <string name="settings_hidden_libraries_brief">Visualizza e ripristina le librerie nascoste dalla riga Le mie librerie</string>
+
+    <string name="settings_home_header_shortcuts">Scorciatoie dell’intestazione</string>
+    <string name="settings_home_header_shortcuts_subtitle">Personalizza le scorciatoie nel dock in alto nella schermata Home</string>
 </resources>

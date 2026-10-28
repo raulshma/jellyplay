@@ -91,4 +91,17 @@
     <string name="shortcuts_customize_action_badge">Azione</string>
     <string name="shortcuts_customize_pin_section">Fissa in</string>
     <string name="shortcuts_customize_clear_search">Cancella ricerca</string>
+
+    <string name="shortcuts_customize_tab_header">Dock dell’intestazione</string>
+    <string name="shortcuts_customize_tab_menu">Menu</string>
+    <string name="shortcuts_customize_pinned_section">Fissate</string>
+    <string name="shortcuts_customize_available_section">Disponibili</string>
+    <string name="shortcuts_customize_preview">Anteprima</string>
+    <string name="shortcuts_customize_preview_more">+%1$d altre</string>
+    <string name="shortcuts_customize_cancel">Annulla</string>
+    <string name="shortcuts_customize_also_in_header">Nell’intestazione della home</string>
+    <string name="shortcuts_customize_also_in_menu">Nel menu di overflow</string>
+    <string name="shortcuts_customize_empty_no_definitions">Ancora nessuna scorciatoia: aggiungine una sopra.</string>
+    <string name="shortcuts_customize_header_empty_title">Nessuna scorciatoia nell’intestazione</string>
+    <string name="shortcuts_customize_header_empty_message">Fissa fino a %1$d scorciatoie sulla capsula in alto nella schermata Home.</string>
 </resources>

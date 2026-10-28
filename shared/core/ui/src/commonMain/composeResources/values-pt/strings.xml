@@ -407,4 +407,10 @@
          (ADR 0010 wave), translated together with the default file. -->
     <string name="core_action_hide_from_continue_watching">Remover de «Continuar a ver»</string>
     <string name="core_action_show_from_continue_watching">Mostrar em «Continuar a ver»</string>
+
+    <string name="download_sheet_new_episodes">Novos episódios:</string>
+    <string name="download_sheet_policy_default">Padrão</string>
+    <string name="download_sheet_policy_instant">Imediato</string>
+    <string name="download_sheet_policy_ask">Perguntar</string>
+    <string name="download_sheet_policy_never">Nunca</string>
 </resources>

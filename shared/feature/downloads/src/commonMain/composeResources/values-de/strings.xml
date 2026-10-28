@@ -137,4 +137,16 @@
     <string name="downloads_resume_all">Alle fortsetzen</string>
     <string name="downloads_status_active">Aktiv</string>
     <string name="downloads_status_completed">Abgeschlossen</string>
+
+    <!-- Ask-mode suggestion shade (gh-181). -->
+    <plurals name="downloads_suggestions_count">
+        <item quantity="one">%1$d neue Episode bereit zum Herunterladen</item>
+        <item quantity="other">%1$d neue Episoden bereit zum Herunterladen</item>
+    </plurals>
+    <string name="downloads_suggestions_title">Neue Episoden zum Herunterladen bereit</string>
+    <string name="downloads_suggestions_subtitle">Auto-Download ist auf „Vor dem Download nachfragen“ eingestellt.</string>
+    <string name="downloads_suggestions_download">Herunterladen</string>
+    <string name="downloads_suggestions_download_all">Alle herunterladen</string>
+    <string name="downloads_suggestions_dismiss">Ausblenden</string>
+    <string name="downloads_suggestions_queued">Neue Episoden in Warteschlange</string>
 </resources>
