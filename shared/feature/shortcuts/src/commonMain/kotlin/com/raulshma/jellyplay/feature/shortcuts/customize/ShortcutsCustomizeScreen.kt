@@ -72,7 +72,6 @@ import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.matchesPickerQuery
-import com.raulshma.jellyplay.core.ui.components.ShortcutIconGridPicker
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.icons.ShortcutIconRegistry
 import com.raulshma.jellyplay.feature.shortcuts.ShortcutCategory

@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.ui.components
+package com.raulshma.jellyplay.feature.shortcuts.customize
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border

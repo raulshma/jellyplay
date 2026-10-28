@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.ui.components
+package com.raulshma.jellyplay.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -56,6 +56,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import coil3.size.Size as CoilSize
 import androidx.compose.ui.graphics.Brush
+import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
