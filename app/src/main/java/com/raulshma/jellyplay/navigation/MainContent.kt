@@ -541,30 +541,16 @@ internal fun MainContent(
                     // owns its own BackHandler.
                     BackExitHost(navigator = navigator)
                     // The user's customized overflow menu (shipped defaults
-                    // while unconfigured) — resolved once here with the
-                    // admin/offline/settings-reachability inputs, so the menu
-                    // chrome in PhoneContent only clicks and decorates.
-                    val shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore =
-                        org.koin.compose.koinInject()
-                    val shortcutCatalog: com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog =
-                        org.koin.compose.koinInject()
-                    val shortcutsSlice by shortcutsStore.shortcuts.collectAsStateWithLifecycle()
-                    val isAdminForShortcuts = isAdminState.value
-                    val overflowShortcuts = androidx.compose.runtime.remember(
-                        shortcutsSlice, isAdminForShortcuts, isOffline, activeTopLevelRoutes,
-                    ) {
-                        com.raulshma.jellyplay.core.ui.navigation.resolveShortcuts(
-                            definitions = shortcutsSlice.definitions,
-                            headerOrder = shortcutsSlice.headerOrder,
-                            overflowOrder = shortcutsSlice.overflowOrder,
-                            catalog = shortcutCatalog.entries,
-                            surface = com.raulshma.jellyplay.core.model.ShortcutSurface.OVERFLOW,
-                            isAdmin = isAdminForShortcuts,
-                            isOffline = isOffline,
-                            settingsReachable = Route.Settings in activeTopLevelRoutes,
-                            maxSlots = com.raulshma.jellyplay.core.model.ShortcutLimits.OVERFLOW_MAX,
-                        )
-                    }
+                    // while unconfigured) — resolved by the shared
+                    // ShortcutSurfaceResolver behind rememberShortcutSurfaces
+                    // (the store/catalog Koin resolution lives there, not in
+                    // this layout branch), so the menu chrome in PhoneContent
+                    // only clicks and decorates.
+                    val shortcutSurfaces = rememberShortcutSurfaces(
+                        isAdmin = isAdminState.value,
+                        isOffline = isOffline,
+                        activeTopLevelRoutes = activeTopLevelRoutes.keys,
+                    )
                     PhoneContent(
                         shellParams = shellParams,
                         isAudioPlayerScreen = isAudioPlayerScreen,
@@ -581,7 +567,7 @@ internal fun MainContent(
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
-                        overflowShortcuts = overflowShortcuts,
+                        overflowShortcuts = shortcutSurfaces.overflow,
                         playOnOpenRequests = playOnOpenRequests.value,
                     )
                 } else {

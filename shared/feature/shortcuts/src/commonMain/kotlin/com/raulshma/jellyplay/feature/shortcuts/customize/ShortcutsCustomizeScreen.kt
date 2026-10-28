@@ -36,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,39 +128,28 @@ import org.jetbrains.compose.resources.stringResource
  * [TvSafeSheet] (target picker → surface pins → icon grid → label override),
  * and the quick-pin pool of definitions not yet on this surface. Every
  * command is a [ShortcutsCustomizeViewModel] one-liner over the store's
- * atomic write.
+ * atomic write; the editor bootstrap (adopt-then-prune) is the ViewModel's
+ * init, and the picker's rows arrive in UiState already capability-filtered.
  *
- * @param supportedActions the shell's executable shortcut actions — the
- *   target picker never offers an action outside the set (pinning a pill the
- *   shell cannot execute is the silent-no-op defect), and a stored definition
- *   predating a capability change is pruned on open.
+ * @param supportedActions the shell's executable shortcut actions — required
+ *   (no all-actions default: a shell that cannot execute an action must never
+ *   silently inherit one). Threaded into the ViewModel's construction, which
+ *   owns both capability consumers: the on-open prune and the picker filter.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ShortcutsCustomizeScreen(
     onBack: () -> Unit,
     initialSurface: ShortcutSurface = ShortcutSurface.OVERFLOW,
-    supportedActions: Set<ShortcutAction> = ShortcutAction.entries.toSet(),
-    viewModel: ShortcutsCustomizeViewModel = org.koin.compose.viewmodel.koinViewModel(),
+    supportedActions: Set<ShortcutAction>,
+    viewModel: ShortcutsCustomizeViewModel = org.koin.compose.viewmodel.koinViewModel(
+        // Per-composition construction parameter (ShortcutsKoinModule's
+        // `params.get()`): the shell's capability set is composition wiring,
+        // not a Koin single.
+        parameters = { org.koin.core.parameter.parametersOf(supportedActions) },
+    ),
 ) {
-    // Adopt the shipped layout as the starting config (an unconfigured user's
-    // stored slice is empty by design), then prune stale targets — in this
-    // order, so the editor previews the real default menu and the first edit
-    // lands on top of the shipped layout.
-    LaunchedEffect(Unit) {
-        viewModel.adoptShippedDefaults()
-        viewModel.pruneUnknownTargets(supportedActions)
-    }
-
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // Capability-filter the picker rows (the VM's admin filter is store-side;
-    // the shell's executable-action set is this screen's input) — an action
-    // row outside the set never renders.
-    val pickerByCategory = remember(state.pickerByCategory, supportedActions) {
-        state.pickerByCategory.mapValues { (_, rows) ->
-            rows.filter { ShortcutsCustomizePolicy.executable(it.entry, supportedActions) }
-        }
-    }
     var surface by rememberSaveable { mutableStateOf(initialSurface) }
     var draft by remember { mutableStateOf<EditorDraft?>(null) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
@@ -184,20 +172,19 @@ fun ShortcutsCustomizeScreen(
                 onSelect = { surface = it },
             )
 
-            val pinnedRows = if (surface == ShortcutSurface.HEADER) state.sections.headerRows else state.sections.overflowRows
-            val availableRows = if (surface == ShortcutSurface.HEADER) state.sections.availableHeaderRows else state.sections.availableOverflowRows
-            val surfaceCapacity = if (surface == ShortcutSurface.HEADER) state.sections.headerCapacity else state.sections.overflowCapacity
-            val surfaceFull = if (surface == ShortcutSurface.HEADER) state.sections.headerFull else state.sections.overflowFull
+            // One per-surface lookup (the policy's SurfaceEditorView): the
+            // tab's pinned rows, quick-pin pool, capacity and fullness — the
+            // former parallel if-forks are gone with the five-list fold.
+            val view = state.sections[surface]
             val capacityText = stringResource(
                 Res.string.shortcuts_customize_header_capacity,
-                pinnedRows.size,
-                surfaceCapacity,
+                view.pinnedRows.size,
+                view.capacity,
             )
             val pinnedSectionTitle = stringResource(Res.string.shortcuts_customize_pinned_section)
             val availableSectionTitle = stringResource(Res.string.shortcuts_customize_available_section)
-            val pinCd = stringResource(
-                if (surface == ShortcutSurface.HEADER) Res.string.shortcuts_customize_pin_header else Res.string.shortcuts_customize_pin_overflow,
-            )
+            val chrome = chromeOf(surface)
+            val pinCd = stringResource(chrome.pinToggleLabelRes)
 
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
@@ -205,7 +192,7 @@ fun ShortcutsCustomizeScreen(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 item(key = "preview") {
-                    SurfacePreviewCard(surface = surface, rows = pinnedRows)
+                    SurfacePreviewCard(surface = surface, rows = view.pinnedRows)
                 }
 
                 sectionHeader(
@@ -213,21 +200,21 @@ fun ShortcutsCustomizeScreen(
                     capacity = capacityText,
                 )
 
-                if (pinnedRows.isEmpty()) {
+                if (view.pinnedRows.isEmpty()) {
                     item(key = "pinned-empty") {
                         PinnedEmptyState(
-                            surface = surface,
-                            surfaceCapacity = surfaceCapacity,
+                            chrome = chrome,
+                            surfaceCapacity = view.capacity,
                             onAdd = { draft = EditorDraft.new() },
                         )
                     }
                 } else {
-                    items(pinnedRows, key = { "p:" + it.definition.id }, contentType = { "pinnedRow" }) { row ->
-                        val index = pinnedRows.indexOf(row)
+                    items(view.pinnedRows, key = { "p:" + it.definition.id }, contentType = { "pinnedRow" }) { row ->
+                        val index = view.pinnedRows.indexOf(row)
                         PinnedShortcutRow(
                             row = row,
                             isFirst = index == 0,
-                            isLast = index == pinnedRows.lastIndex,
+                            isLast = index == view.pinnedRows.lastIndex,
                             onMoveUp = { viewModel.move(row.definition.id, surface, up = true) },
                             onMoveDown = { viewModel.move(row.definition.id, surface, up = false) },
                             onEdit = {
@@ -260,7 +247,7 @@ fun ShortcutsCustomizeScreen(
                     capacity = null,
                 )
 
-                if (availableRows.isEmpty()) {
+                if (view.availableRows.isEmpty()) {
                     item(key = "available-empty") {
                         // "Every shortcut is pinned." is only true when something
                         // exists to pin; a fresh user (zero definitions) needs the
@@ -268,11 +255,10 @@ fun ShortcutsCustomizeScreen(
                         AvailableEmptyState(hasDefinitions = state.slice.definitions.isNotEmpty())
                     }
                 } else {
-                    items(availableRows, key = { "a:" + it.definition.id }, contentType = { "availableRow" }) { row ->
+                    items(view.availableRows, key = { "a:" + it.definition.id }, contentType = { "availableRow" }) { row ->
                         AvailableShortcutRow(
                             row = row,
-                            surface = surface,
-                            pinEnabled = !surfaceFull,
+                            pinEnabled = !view.full,
                             pinContentDescription = pinCd,
                             onPin = {
                                 val targets = ShortcutsCustomizePolicy.quickPinTargets(surface, row.pinnedHeader, row.pinnedOverflow)
@@ -300,9 +286,10 @@ fun ShortcutsCustomizeScreen(
     draft?.let { current ->
         ShortcutEditorSheet(
             draft = current,
-            pickerByCategory = pickerByCategory,
-            headerFull = state.sections.headerFull,
-            overflowFull = state.sections.overflowFull,
+            // Arrives capability-filtered from the ViewModel (see UiState).
+            pickerByCategory = state.pickerByCategory,
+            headerFull = state.sections.header.full,
+            overflowFull = state.sections.overflow.full,
             defaultSurface = surface,
             editingLabel = editingRowLabel(state, current),
             onDismiss = { draft = null },
@@ -551,9 +538,41 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sectionHeader(title: 
     }
 }
 
+// ─── Per-surface chrome ────────────────────────────────────────────────────
+
+/**
+ * The copy/icons that genuinely differ per surface — the ONE `when` for them.
+ * The data a tab renders comes from the policy's per-surface view
+ * ([ShortcutsCustomizePolicy.SurfaceEditorView]); this bundle is presentation
+ * only (the pin-toggle label, the empty-state iconography), so no other
+ * surface fork remains in the body.
+ */
+private data class SurfaceChrome(
+    val pinToggleLabelRes: StringResource,
+    val emptyIcon: ImageVector,
+    val emptyTitleRes: StringResource,
+    /** The header tab's capacity note; the menu's empty state carries none. */
+    val emptyMessageRes: StringResource?,
+)
+
+private fun chromeOf(surface: ShortcutSurface): SurfaceChrome = when (surface) {
+    ShortcutSurface.HEADER -> SurfaceChrome(
+        pinToggleLabelRes = Res.string.shortcuts_customize_pin_header,
+        emptyIcon = Tabler.Outline.Pin,
+        emptyTitleRes = Res.string.shortcuts_customize_header_empty_title,
+        emptyMessageRes = Res.string.shortcuts_customize_header_empty_message,
+    )
+    ShortcutSurface.OVERFLOW -> SurfaceChrome(
+        pinToggleLabelRes = Res.string.shortcuts_customize_pin_overflow,
+        emptyIcon = Tabler.Outline.DotsVertical,
+        emptyTitleRes = Res.string.shortcuts_customize_empty_overflow,
+        emptyMessageRes = null,
+    )
+}
+
 @Composable
 private fun PinnedEmptyState(
-    surface: ShortcutSurface,
+    chrome: SurfaceChrome,
     surfaceCapacity: Int,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
@@ -570,26 +589,22 @@ private fun PinnedEmptyState(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
-                imageVector = if (surface == ShortcutSurface.HEADER) Tabler.Outline.Pin else Tabler.Outline.DotsVertical,
+                imageVector = chrome.emptyIcon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.outlineVariant,
                 modifier = Modifier.size(36.dp),
             )
             Spacer(Modifier.size(12.dp))
             Text(
-                text = if (surface == ShortcutSurface.HEADER) {
-                    stringResource(Res.string.shortcuts_customize_header_empty_title)
-                } else {
-                    stringResource(Res.string.shortcuts_customize_empty_overflow)
-                },
+                text = stringResource(chrome.emptyTitleRes),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
             )
-            if (surface == ShortcutSurface.HEADER) {
+            chrome.emptyMessageRes?.let { messageRes ->
                 Spacer(Modifier.size(4.dp))
                 Text(
-                    text = stringResource(Res.string.shortcuts_customize_header_empty_message, surfaceCapacity),
+                    text = stringResource(messageRes, surfaceCapacity),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -680,16 +695,18 @@ private fun PinnedShortcutRow(
 @Composable
 private fun AvailableShortcutRow(
     row: ShortcutsCustomizePolicy.EditorRow,
-    surface: ShortcutSurface,
     pinEnabled: Boolean,
     pinContentDescription: String,
     onPin: () -> Unit,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
 ) {
+    // In an available pool the row is by construction NOT pinned to the pool's
+    // own surface (the view's fold), so at most the other-surface flag can be
+    // set — the flags alone decide the badge, no surface fork needed.
     val alsoInRes: StringResource? = when {
-        surface == ShortcutSurface.HEADER && row.pinnedOverflow -> Res.string.shortcuts_customize_also_in_menu
-        surface == ShortcutSurface.OVERFLOW && row.pinnedHeader -> Res.string.shortcuts_customize_also_in_header
+        row.pinnedOverflow -> Res.string.shortcuts_customize_also_in_menu
+        row.pinnedHeader -> Res.string.shortcuts_customize_also_in_header
         else -> null
     }
     val alsoInText: String? = if (alsoInRes != null) stringResource(alsoInRes) else null

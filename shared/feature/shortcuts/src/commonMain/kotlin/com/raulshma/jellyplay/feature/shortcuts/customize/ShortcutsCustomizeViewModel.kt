@@ -24,6 +24,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
+ * The permissive capability set — every [ShortcutAction] — for hosts that
+ * genuinely arm the whole vocabulary (the Android shell's shape) and for the
+ * VM tests' all-actions lane. Deliberately NOT a default anywhere: a caller
+ * must name it, so a shell that cannot execute an action never silently
+ * inherits an "all actions" editor.
+ */
+val ALL_SHELL_ACTIONS: Set<ShortcutAction> = ShortcutAction.entries.toSet()
+
+/**
  * The shortcuts-customization editor's ViewModel. Reads the per-user
  * [ShortcutsSlice] straight from [com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore]
  * (the home dock / overflow menu read the same slice — the editor's preview
@@ -31,21 +40,57 @@ import kotlinx.coroutines.launch
  * the [PreferencesEditor] seam (`editor.edit { shortcuts.<command> }`), so the
  * store's normalization invariants and the edit-failure reporting apply to
  * every editor action for free.
+ *
+ * Initialization is the ONE editor-bootstrap sequence, owned here instead of
+ * a composition effect: adopt the shipped layout, then prune stale targets —
+ * in that documented order, in one coroutine (see [init]). The shell's
+ * executable-action capability set ([supportedActions]) is an explicit,
+ * non-defaulted construction input captured once and applied to BOTH
+ * consumers — the on-open prune and the target picker's rows — because a
+ * defaulted "all actions" set is exactly the silent-dead-end-pill defect for
+ * a future caller that forgets to pass the shell's real set.
  */
 class ShortcutsCustomizeViewModel(
     private val editor: PreferencesEditor,
     private val shortcutsStore: ShortcutsStore,
     private val catalog: DefaultShortcutCatalog,
     authRepository: AuthRepository,
+    /**
+     * The shell's executable shortcut actions (the shell feature's
+     * ShortcutActionSurface.supportedActions vocabulary, passed as plain
+     * data — no feature→shell edge). Required on purpose: every action
+     * outside the set is pruned from stored configs on open and filtered
+     * from the picker, so an action the shell cannot execute is never
+     * offered or resurrected. Tests pass [ALL_SHELL_ACTIONS] for the
+     * permissive "this shell can run them all" shape.
+     */
+    private val supportedActions: Set<ShortcutAction>,
 ) : JellyPlayViewModel() {
+
+    init {
+        launch {
+            // ── Editor bootstrap: adopt THEN prune, in this order, in one
+            // coroutine so the order is real (not a race between two
+            // launchers). Adoption lands the shipped layout as an
+            // unconfigured user's starting config (without it the editor
+            // would open on empty lists — see [adoptShippedDefaults]); the
+            // prune then runs against the POST-adopt store: an empty slice
+            // would early-return and skip the stale-target sweep.
+            adoptShippedDefaults()
+            pruneUnknownTargets()
+        }
+    }
 
     @Immutable
     data class UiState(
         val slice: ShortcutsSlice = ShortcutsSlice(),
-        /** The pinned/unpinned section fold — the screen's list content. */
-        val sections: ShortcutsCustomizePolicy.EditorSections =
-            ShortcutsCustomizePolicy.EditorSections(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()),
-        /** The target picker's rows, admin-filtered, grouped by category in declaration order. */
+        /** The per-surface editor views — the screen's list content. */
+        val sections: ShortcutsCustomizePolicy.EditorSections = ShortcutsCustomizePolicy.EditorSections.empty(),
+        /**
+         * The target picker's rows, admin- AND capability-filtered (the
+         * shell's executable-action set is [ShortcutsCustomizeViewModel.supportedActions]),
+         * grouped by category in declaration order.
+         */
         val pickerByCategory: Map<ShortcutCategory, List<PickerItem>> = emptyMap(),
     )
 
@@ -74,6 +119,10 @@ class ShortcutsCustomizeViewModel(
             ),
             pickerByCategory = catalog.items.asSequence()
                 .filter { ShortcutsCustomizePolicy.pickable(it.entry, isAdmin) }
+                // Capability filter lives HERE (store-side with the admin one)
+                // so the picker's rows arrive in UiState already filtered — a
+                // shell that cannot execute an action never renders its row.
+                .filter { ShortcutsCustomizePolicy.executable(it.entry, supportedActions) }
                 .groupBy { it.category }
                 .mapValues { (_, items) ->
                     items.map { item ->
@@ -154,9 +203,13 @@ class ShortcutsCustomizeViewModel(
      * ([ShortcutsStore.seedDefaultsIfUnconfigured] reads its guard inside the
      * atomic edit). Targets missing from the catalog drop at adoption —
      * seeding never introduces an unknown row.
+     *
+     * Suspends until the write lands: [PreferencesEditor.edit] fires on the
+     * application scope, and the init's adopt→prune ordering depends on the
+     * adoption being observable before the prune reads the store.
      */
-    fun adoptShippedDefaults() {
-        editor.edit { seedShippedDefaults() }
+    private suspend fun adoptShippedDefaults() {
+        editor.edit { seedShippedDefaults() }.join()
     }
 
     private suspend fun PreferencesEditScope.seedShippedDefaults() {
@@ -173,25 +226,25 @@ class ShortcutsCustomizeViewModel(
 
     /**
      * Drops definitions whose target left the catalog — or targets a shell
-     * action outside [supportedActions] (this shell cannot execute it) — run
-     * once when the editor opens so stale rows (an app update removed/renamed
-     * a destination; a pin predating a capability change) never resurface,
-     * without blocking the read path.
+     * action outside the captured [supportedActions] set (this shell cannot
+     * execute them) — run once in [init], after the adoption, so stale rows
+     * (an app update removed/renamed a destination; a pin predating a
+     * capability change) never resurface, without blocking the read path.
+     * Suspends until a pruning write lands (the bootstrap's ordering), so the
+     * editor's first frame always reflects the post-prune slice.
      */
-    fun pruneUnknownTargets(supportedActions: Set<ShortcutAction> = ShortcutAction.entries.toSet()) {
-        viewModelScope.launch {
-            val slice = shortcutsStore.shortcuts.value
-            if (slice.definitions.isEmpty()) return@launch
-            val kept = ShortcutsCustomizePolicy.prune(slice.definitions, catalog, supportedActions)
-            if (kept.size != slice.definitions.size) {
-                editor.edit {
-                    shortcuts.setShortcutsConfig(
-                        definitions = kept,
-                        headerOrder = slice.headerOrder,
-                        overflowOrder = slice.overflowOrder,
-                    )
-                }
-            }
+    private suspend fun pruneUnknownTargets() {
+        val slice = shortcutsStore.shortcuts.value
+        if (slice.definitions.isEmpty()) return
+        val kept = ShortcutsCustomizePolicy.prune(slice.definitions, catalog, supportedActions)
+        if (kept.size != slice.definitions.size) {
+            editor.edit {
+                shortcuts.setShortcutsConfig(
+                    definitions = kept,
+                    headerOrder = slice.headerOrder,
+                    overflowOrder = slice.overflowOrder,
+                )
+            }.join()
         }
     }
 }

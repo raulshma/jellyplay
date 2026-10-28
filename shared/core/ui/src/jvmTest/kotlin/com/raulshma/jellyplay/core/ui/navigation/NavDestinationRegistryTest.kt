@@ -171,6 +171,19 @@ class NavDestinationRegistryTest {
     }
 
     @Test
+    fun hiddenOfflineFlags_pinTheOfflineHideSet() {
+        // The offline hide-set derives from these flags now (visibleTopLevelRoutes
+        // and the shortcut catalog both read them), so the flag set is pinned row
+        // by row: exactly LiveTv lacks an offline fallback — a second flag must
+        // be a conscious registry decision.
+        assertEquals(
+            listOf(Route.LiveTv),
+            NAV_DESTINATIONS.filter { it.hiddenOffline }.map { it.route },
+            "exactly LiveTv may be hiddenOffline — a second row needs an offline-fallback rationale",
+        )
+    }
+
+    @Test
     fun everyLabelOverrideTargetsARegisteredRoute() {
         // (b): an override whose key has no registry row would be dead at
         // best and a silent re-label of a route the registry doesn't know at

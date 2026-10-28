@@ -20,12 +20,12 @@ import com.composables.icons.tabler.outline.Users
 
 /**
  * Top-level destination facts - the [NAV_DESTINATIONS] registry (key / icon /
- * rail label / group / per-surface membership), the lookup and icon
- * extensions built on it, the recorded label overrides, and the per-mode
- * membership tables derived from the registry rows. [NavKey]'s class KDoc
- * documents the restore contract governing every [Route] declared there; the
- * package (and therefore every persisted binary name and the R8 keep rule) is
- * unchanged.
+ * rail label / group / per-surface membership / offline gating), the lookup
+ * and icon extensions built on it, the recorded label overrides, and the
+ * per-mode membership tables derived from the registry rows. [NavKey]'s class
+ * KDoc documents the restore contract governing every [Route] declared there;
+ * the package (and therefore every persisted binary name and the R8 keep rule)
+ * is unchanged.
  */
 /**
  * One top-level destination's render facts: the persisted customization
@@ -79,6 +79,18 @@ data class NavDestination(
      * names the surfaces.
      */
     val primarySurfaces: Set<NavPrimarySurface> = defaultPrimarySurfaces(topLevelGroups),
+    /**
+     * Whether this destination has no offline fallback and hides from primary
+     * chrome while offline — the registry's ONE owner of the fact, so both
+     * consumers derive from the rows: [visibleTopLevelRoutes]'s offline
+     * hide-set (the nav bar/rail) and the shortcut catalog's `hiddenOffline`
+     * gating (a shortcut can never reach where navigation may not). Only
+     * deviations from `false` carry a value — [Route.LiveTv] today: live
+     * streams are always server-bound and degrade to a dead-end ErrorScreen,
+     * while Library's grid auto-switches to the offline store and
+     * Home/Search/Shortcuts/MusicBrowse all keep offline paths.
+     */
+    val hiddenOffline: Boolean = false,
 )
 
 /** The rail's visual clusters — a spacer renders between consecutive groups. */
@@ -145,6 +157,9 @@ val NAV_DESTINATIONS: List<NavDestination> = listOf(
     NavDestination(
         Route.LiveTv, "LiveTv", Tabler.Outline.DeviceTv, "Live TV", NavDestinationGroup.Browsing,
         topLevelGroups = mapOf(TopLevelGroup.Video to 3),
+        // The one offline-hide deviation (see hiddenOffline): live streams are
+        // always server-bound — no offline fallback to degrade to.
+        hiddenOffline = true,
     ),
     NavDestination(
         Route.MusicBrowse, "MusicBrowse", Tabler.Outline.Disc, "Music", NavDestinationGroup.Browsing,

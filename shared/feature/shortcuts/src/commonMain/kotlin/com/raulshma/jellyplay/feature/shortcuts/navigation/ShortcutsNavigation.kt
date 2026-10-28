@@ -11,13 +11,15 @@ import com.raulshma.jellyplay.feature.shortcuts.customize.ShortcutsCustomizeScre
 /**
  * @param supportedActions the shell's executable shortcut actions (the shell
  *   feature's ShortcutActionSurface.supportedActions vocabulary, passed as
- *   plain data — no feature→shell edge). The customize editor never offers an
- *   action outside the set; defaults to every action (the "this shell can run
- *   them all" case).
+ *   plain data — no feature→shell edge). Required on purpose — no "all
+ *   actions" default, so a shell that cannot execute an action can never
+ *   silently inherit an editor that offers it. The customize editor threads
+ *   the set into its ViewModel, which prunes stored configs against it on
+ *   open and filters the target picker's rows by it.
  */
 fun EntryProviderScope<NavKey>.shortcutsSection(
     navigator: Navigator,
-    supportedActions: Set<ShortcutAction> = ShortcutAction.entries.toSet(),
+    supportedActions: Set<ShortcutAction>,
 ) {
     entry<Route.Shortcuts> {
         ShortcutsScreen(

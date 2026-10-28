@@ -11,9 +11,21 @@ import com.raulshma.jellyplay.feature.shortcuts.ShortcutCategory
 
 /**
  * Compose-free editor policy (the `ShortcutListPolicy` precedent): the
- * pinned/unpinned section fold over the stored slice, the capacity gates the
- * pin toggles enforce, and the prune fold that drops definitions whose
- * target left the catalog. Everything pure, everything unit-testable.
+ * per-surface editor view — pinned rows, available rows, capacity/fullness —
+ * the pin membership behind every row's flags, and the prune fold that drops
+ * definitions whose target left the catalog. Everything pure, everything
+ * unit-testable.
+ *
+ * The pin flags carry ONE formula everywhere
+ * ([EditorRow.pinnedHeader] / [EditorRow.pinnedOverflow] = "is this
+ * definition in that surface's stored order"): the two former
+ * section-relative forms (`surface == HEADER || id in otherOrder` for pinned
+ * sections vs `surface == OVERFLOW && id in otherOrder` for available pools)
+ * were two context-baked simplifications of the same membership question —
+ * a pinned row is in its own surface's order by construction, an available
+ * row is out of it by construction — so the direct membership form preserves
+ * every call site's visible behavior while making the faces of one definition
+ * identical in every list it appears in.
  */
 object ShortcutsCustomizePolicy {
 
@@ -25,88 +37,112 @@ object ShortcutsCustomizePolicy {
         val pinnedOverflow: Boolean,
     )
 
-    data class EditorSections(
-        /** Definitions pinned to the home header, in the stored order. */
-        val headerRows: List<EditorRow>,
-        /** Definitions pinned to the overflow menu, in the stored order. */
-        val overflowRows: List<EditorRow>,
-        /** Defined but unpinned rows, in the stored definition order. */
-        val unpinnedRows: List<EditorRow>,
-        /** Definitions not pinned to the header, in stored definition order. */
-        val availableHeaderRows: List<EditorRow>,
-        /** Definitions not pinned to the overflow menu, in stored definition order. */
-        val availableOverflowRows: List<EditorRow>,
+    /**
+     * One surface's editor view — everything the surface's tab renders,
+     * computed once from the stored slice: the pinned rows in the surface's
+     * stored order, the quick-pin pool in stored definition order, and the
+     * capacity/fullness gate the pin toggles enforce.
+     */
+    data class SurfaceEditorView(
+        val surface: ShortcutSurface,
+        /** Definitions pinned to this surface, in the stored order. */
+        val pinnedRows: List<EditorRow>,
+        /** Definitions NOT pinned to this surface, in stored definition order — the quick-pin pool. */
+        val availableRows: List<EditorRow>,
     ) {
-        val headerCapacity: Int get() = ShortcutLimits.HEADER_MAX
-        val overflowCapacity: Int get() = ShortcutLimits.OVERFLOW_MAX
-        val headerFull: Boolean get() = headerRows.size >= headerCapacity
-        val overflowFull: Boolean get() = overflowRows.size >= overflowCapacity
+        val capacity: Int
+            get() = when (surface) {
+                ShortcutSurface.HEADER -> ShortcutLimits.HEADER_MAX
+                ShortcutSurface.OVERFLOW -> ShortcutLimits.OVERFLOW_MAX
+            }
 
-        /**
-         * The row with [id], wherever it currently sits (pinned, unpinned,
-         * either surface's available pool) — the edit sheet's summary-line
-         * lookup. A definition's face is identical in every section, so the
-         * first hit is the answer.
-         */
-        fun rowFor(id: String): EditorRow? =
-            headerRows.firstOrNull { it.definition.id == id }
-                ?: overflowRows.firstOrNull { it.definition.id == id }
-                ?: unpinnedRows.firstOrNull { it.definition.id == id }
-                ?: availableHeaderRows.firstOrNull { it.definition.id == id }
-                ?: availableOverflowRows.firstOrNull { it.definition.id == id }
-    }
-
-    /** The sections fold: order lists drive the pinned rows; the remainder is unpinned. */
-    fun sections(definitions: List<ShortcutDefinition>, headerOrder: List<String>, overflowOrder: List<String>, catalog: ShortcutCatalog): EditorSections {
-        val byId = definitions.associateBy { it.id }
-        fun rowsFor(order: List<String>, otherOrder: List<String>, surface: ShortcutSurface): List<EditorRow> = order.mapNotNull { id ->
-            val definition = byId[id] ?: return@mapNotNull null
-            EditorRow(
-                definition = definition,
-                entry = catalog.entryFor(definition.kind, definition.targetId),
-                pinnedHeader = surface == ShortcutSurface.HEADER || id in otherOrder,
-                pinnedOverflow = surface == ShortcutSurface.OVERFLOW || id in otherOrder,
-            )
-        }
-        val headerRows = rowsFor(headerOrder, overflowOrder, ShortcutSurface.HEADER)
-        val overflowRows = rowsFor(overflowOrder, headerOrder, ShortcutSurface.OVERFLOW)
-        val pinnedIds = headerOrder + overflowOrder
-        val unpinnedRows = definitions.filter { it.id !in pinnedIds }.map { definition ->
-            EditorRow(definition, catalog.entryFor(definition.kind, definition.targetId), pinnedHeader = false, pinnedOverflow = false)
-        }
-        return EditorSections(
-            headerRows = headerRows,
-            overflowRows = overflowRows,
-            unpinnedRows = unpinnedRows,
-            availableHeaderRows = availableRows(definitions, headerOrder, overflowOrder, ShortcutSurface.HEADER, catalog),
-            availableOverflowRows = availableRows(definitions, overflowOrder, headerOrder, ShortcutSurface.OVERFLOW, catalog),
-        )
+        val full: Boolean get() = pinnedRows.size >= capacity
     }
 
     /**
-     * The per-surface "available" fold behind the editor's tabs: every
-     * definition NOT pinned to [surface], in stored definition order — the
-     * quick-pin pool. A definition pinned only to the other surface appears
-     * here (with that pin carried in [EditorRow.pinnedHeader] /
-     * [EditorRow.pinnedOverflow] for the "also in" badge), which is what lets
-     * a header-only pin be added to the menu without editing it.
+     * Both surfaces' views, indexed by [get] — the screen's tab switch is one
+     * lookup, and a future surface joins the pair, not a fifth parallel list.
      */
-    fun availableRows(
-        definitions: List<ShortcutDefinition>,
-        surfaceOrder: List<String>,
-        otherOrder: List<String>,
-        surface: ShortcutSurface,
-        catalog: ShortcutCatalog,
-    ): List<EditorRow> = definitions
-        .filter { it.id !in surfaceOrder }
-        .map { definition ->
-            EditorRow(
-                definition = definition,
-                entry = catalog.entryFor(definition.kind, definition.targetId),
-                pinnedHeader = surface == ShortcutSurface.OVERFLOW && definition.id in otherOrder,
-                pinnedOverflow = surface == ShortcutSurface.HEADER && definition.id in otherOrder,
+    data class EditorSections(
+        val header: SurfaceEditorView,
+        val overflow: SurfaceEditorView,
+    ) {
+        operator fun get(surface: ShortcutSurface): SurfaceEditorView = when (surface) {
+            ShortcutSurface.HEADER -> header
+            ShortcutSurface.OVERFLOW -> overflow
+        }
+
+        /**
+         * The row with [id], wherever it currently sits (pinned on either
+         * surface, either surface's available pool) — the edit sheet's
+         * summary-line lookup. A definition's face is identical in every
+         * section (the one pin formula — see the object KDoc), so the first
+         * hit is the answer.
+         */
+        fun rowFor(id: String): EditorRow? =
+            header.pinnedRows.firstOrNull { it.definition.id == id }
+                ?: overflow.pinnedRows.firstOrNull { it.definition.id == id }
+                ?: header.availableRows.firstOrNull { it.definition.id == id }
+                ?: overflow.availableRows.firstOrNull { it.definition.id == id }
+
+        companion object {
+            /** The pre-first-emission sections — every surface empty (the VM's initial UiState). */
+            fun empty(): EditorSections = EditorSections(
+                SurfaceEditorView(ShortcutSurface.HEADER, emptyList(), emptyList()),
+                SurfaceEditorView(ShortcutSurface.OVERFLOW, emptyList(), emptyList()),
             )
         }
+    }
+
+    /**
+     * The sections fold: each surface's order drives its pinned rows; the
+     * remainder of the definitions is its quick-pin pool. A definition pinned
+     * only to the other surface appears in the pool with that pin carried in
+     * [EditorRow.pinnedHeader] / [EditorRow.pinnedOverflow] for the "also in"
+     * badge — which is what lets a header-only pin be added to the menu
+     * without editing it.
+     */
+    fun sections(
+        definitions: List<ShortcutDefinition>,
+        headerOrder: List<String>,
+        overflowOrder: List<String>,
+        catalog: ShortcutCatalog,
+    ): EditorSections = EditorSections(
+        header = view(ShortcutSurface.HEADER, headerOrder, definitions, headerOrder, overflowOrder, catalog),
+        overflow = view(ShortcutSurface.OVERFLOW, overflowOrder, definitions, headerOrder, overflowOrder, catalog),
+    )
+
+    /** The per-surface fold behind [sections]: order rows + not-in-order pool. */
+    private fun view(
+        surface: ShortcutSurface,
+        order: List<String>,
+        definitions: List<ShortcutDefinition>,
+        headerOrder: List<String>,
+        overflowOrder: List<String>,
+        catalog: ShortcutCatalog,
+    ): SurfaceEditorView {
+        val byId = definitions.associateBy { it.id }
+        val pinnedRows = order.mapNotNull { id ->
+            byId[id]?.let { editorRow(it, headerOrder, overflowOrder, catalog) }
+        }
+        val availableRows = definitions
+            .filter { it.id !in order }
+            .map { editorRow(it, headerOrder, overflowOrder, catalog) }
+        return SurfaceEditorView(surface, pinnedRows, availableRows)
+    }
+
+    /** The row face — [ShortcutDefinition] + catalog entry + the ONE pin formula. */
+    private fun editorRow(
+        definition: ShortcutDefinition,
+        headerOrder: List<String>,
+        overflowOrder: List<String>,
+        catalog: ShortcutCatalog,
+    ): EditorRow = EditorRow(
+        definition = definition,
+        entry = catalog.entryFor(definition.kind, definition.targetId),
+        pinnedHeader = definition.id in headerOrder,
+        pinnedOverflow = definition.id in overflowOrder,
+    )
 
     /**
      * The quick-pin's surface set: pinning from [surface] is ADDITIVE for the

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.shortcuts
 
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget
@@ -52,6 +53,28 @@ class DefaultShortcutCatalogContractTest {
         catalog.entries.forEach { entry ->
             val screen = entry.target as? ShortcutCatalogTarget.Screen ?: return@forEach
             assertTrue(screen.key.isNotBlank() && !screen.key.contains(':'), "malformed screen key '${screen.key}'")
+        }
+    }
+
+    @Test
+    fun `registered routes' catalog rows agree with their registry rows`() {
+        // The destination facts (icon, offline gating) are the registry row's —
+        // the catalog derives them (registeredScreenItem) instead of copying, so
+        // a hand-written icon or a diverging hiddenOffline flag on a registered
+        // route is the drift this contract catches.
+        catalog.items.forEach { item ->
+            val screen = item.entry.target as? ShortcutCatalogTarget.Screen ?: return@forEach
+            val destination = NAV_DESTINATION_BY_ROUTE[screen.route] ?: return@forEach
+            assertEquals(
+                destination.icon,
+                item.entry.defaultIcon,
+                "${screen.route::class.simpleName}'s catalog icon must be its registry row's icon",
+            )
+            assertEquals(
+                destination.hiddenOffline,
+                item.entry.hiddenOffline,
+                "${screen.route::class.simpleName}'s offline gating must be its registry row's fact",
+            )
         }
     }
 

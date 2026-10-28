@@ -200,7 +200,12 @@ internal class HomeViewModel(
      * presence-chips precedent): the shortcuts store's slice + the admin flag
      * + the offline mode combine into a list only the dock's end capsule
      * reads, and folding it into the ~45-field state would copy the whole
-     * aggregate on every unrelated shortcuts emission.
+     * aggregate on every unrelated shortcuts emission. The resolution goes
+     * through the shared [com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver]
+     * (one owner for resolved-shortcuts-per-surface, same module as the fold
+     * itself): this fold supplies the gating facts it owns — admin, offline —
+     * and reads the header surface's list; no reachability input, the header
+     * never consults it (the resolver's default models that posture).
      */
     val headerShortcuts: StateFlow<List<com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut>> =
         combine(
@@ -208,16 +213,12 @@ internal class HomeViewModel(
             authRepository.currentUser,
             _uiState.flow,
         ) { slice, user, state ->
-            com.raulshma.jellyplay.core.ui.navigation.resolveShortcuts(
-                definitions = slice.definitions,
-                headerOrder = slice.headerOrder,
-                overflowOrder = slice.overflowOrder,
-                catalog = shortcutCatalog.entries,
-                surface = com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER,
+            com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver(
+                catalog = shortcutCatalog,
                 isAdmin = user?.isAdmin == true,
                 isOffline = state.offlineMode != OfflineMode.ONLINE,
-                maxSlots = com.raulshma.jellyplay.core.model.ShortcutLimits.HEADER_MAX,
-            )
+            ).resolve(slice.definitions, slice.headerOrder, slice.overflowOrder)
+                .header
         }
             .distinctUntilChanged()
             .stateIn(

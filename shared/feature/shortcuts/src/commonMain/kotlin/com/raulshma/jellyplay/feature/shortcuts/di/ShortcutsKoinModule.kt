@@ -31,12 +31,16 @@ val shortcutsModule: Module = module {
             catalog = get(),
         )
     }
-    viewModel {
+    viewModel { params ->
         ShortcutsCustomizeViewModel(
             editor = get(),
             shortcutsStore = get(),
             catalog = get(),
             authRepository = get(),
+            // The shell's executable-action set, threaded per composition
+            // through koinViewModel(parameters = ...) (the nav section's
+            // supportedActions) — per-shell wiring, never a Koin single.
+            supportedActions = params.get(),
         )
     }
 }
