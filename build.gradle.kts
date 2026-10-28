@@ -145,3 +145,67 @@ if (enableCoverage.get()) {
         }
     }
 }
+
+// ── Locale-string propagation (repo-wide) ────────────────────────────────────
+// The propagator (shared/core/i18n-tools jvmMain .../StringsPropagator.kt)
+// reads a module's default-locale values/*.xml family as the declaration and
+// inserts every key missing from a values-<lang>/ family verbatim, marked
+// PENDING TRANSLATION — the write-side counterpart of the i18n parity
+// ratchet (I18nParityRatchetTest, in :shared:core:i18n-tools' jvmTest),
+// which counts PENDING-marked entries as still-missing so a repo-wide
+// propagation cannot fake parity. The tasks run REPO-WIDE from the root:
+// `--discover <repo-root>` walks shared/ + apps/ for every
+// composeResources/values/strings.xml (I18nResourceDiscovery — the same
+// walk the ratchet does), so one task pair covers all resource-carrying
+// modules and the settings module's old per-module wiring is gone. Run
+// `./gradlew propagateStrings` after adding default-locale keys;
+// `checkStrings` fails while any gap remains. (No root `check` wiring: the
+// root project applies no lifecycle plugins, and the ratchet's jvmTest —
+// in every CI lane through the settings.gradle.kts derivation — enforces
+// the same invariant.)
+// Same shape as the generateSettingsCatalog/checkSettingsCatalog precedent.
+
+// Resolvable classpath for the JavaExec tasks below: :shared:core:i18n-tools'
+// JVM runtime variant (its compiled classes + kotlin-stdlib). Attribute-pinned
+// so KMP variant selection cannot land on the module's android or metadata
+// variant — this classpath must be the JVM one. A configuration (not a
+// cross-project compilation read) because the build runs with the
+// configuration cache: root may not reach into a subproject's model.
+val stringsToolRuntimeClasspath = configurations.create("stringsToolRuntimeClasspath") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    attributes {
+        attribute(
+            org.gradle.api.attributes.Usage.USAGE_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Usage.JAVA_RUNTIME),
+        )
+        attribute(
+            org.gradle.api.attributes.Category.CATEGORY_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Category.LIBRARY),
+        )
+        attribute(
+            org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.attribute,
+            org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.jvm,
+        )
+    }
+}
+
+dependencies {
+    "stringsToolRuntimeClasspath"(project(":shared:core:i18n-tools"))
+}
+
+tasks.register<JavaExec>("propagateStrings") {
+    group = "jellyplay"
+    description = "Propagates default-locale strings into every shared/app module's locale tables (marked PENDING TRANSLATION)."
+    mainClass.set("com.raulshma.jellyplay.core.i18ntools.StringsPropagatorKt")
+    classpath = stringsToolRuntimeClasspath
+    args(listOf("--discover", rootDir.absolutePath))
+}
+
+tasks.register<JavaExec>("checkStrings") {
+    group = "verification"
+    description = "Fails while any module's locale table misses default-locale keys."
+    mainClass.set("com.raulshma.jellyplay.core.i18ntools.StringsPropagatorKt")
+    classpath = stringsToolRuntimeClasspath
+    args(listOf("--check", "--discover", rootDir.absolutePath))
+}

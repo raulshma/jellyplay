@@ -66,37 +66,3 @@ kotlin {
 // (`...feature.settings.generated.resources`, same as the legacy value) is a
 // path-derived default from the convention plugin now — see
 // KmpLibraryComposePlugin.
-
-// ── Locale-string propagation ────────────────────────────────────────────────
-// The propagator (jvmMain .../tools/StringsPropagator.kt) reads the
-// default-locale values/*.xml family as the declaration and inserts every key
-// missing from a values-<lang>/ family verbatim, marked PENDING TRANSLATION —
-// the write-side counterpart of core/concurrency's I18nParityRatchetTest.
-// Run after adding default-locale keys; `checkStrings` (wired into `check`)
-// fails while any gap remains, so the settings tree stays at zero gaps.
-// Same shape as the generateSettingsCatalog/checkSettingsCatalog precedent.
-
-val stringsPropagatorJvmMain = kotlin.jvm().compilations.getByName("main")
-val stringsPropagatorResources = rootProject.layout.projectDirectory.dir(
-    "shared/feature/settings/src/commonMain/composeResources",
-)
-val stringsPropagatorClasspath =
-    stringsPropagatorJvmMain.output.allOutputs + stringsPropagatorJvmMain.compileDependencyFiles
-
-tasks.register<JavaExec>("propagateStrings") {
-    group = "jellyplay"
-    description = "Propagates default-locale settings strings into every locale table (marked PENDING TRANSLATION)."
-    mainClass.set("com.raulshma.jellyplay.feature.settings.tools.StringsPropagatorKt")
-    classpath = stringsPropagatorClasspath
-    args(stringsPropagatorResources.asFile.absolutePath)
-}
-
-tasks.register<JavaExec>("checkStrings") {
-    group = "verification"
-    description = "Fails while a settings locale table misses default-locale keys."
-    mainClass.set("com.raulshma.jellyplay.feature.settings.tools.StringsPropagatorKt")
-    classpath = stringsPropagatorClasspath
-    args(listOf("--check") + stringsPropagatorResources.asFile.absolutePath)
-}
-
-tasks.named("check") { dependsOn("checkStrings") }

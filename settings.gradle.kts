@@ -57,6 +57,13 @@ include(":shared:core:data")
 include(":shared:core:ui")
 include(":shared:core:player-contract")
 
+// One home for the i18n string-table tooling: the counted-key grammar, the
+// StringsPropagator write side and the resource-tree discovery that the
+// parity ratchet (its jvmTest) and the root build's repo-wide
+// propagateStrings/checkStrings tasks share. A plain JVM-tool leaf — no
+// module depends on it (see its build.gradle.kts).
+include(":shared:core:i18n-tools")
+
 // Test doubles shared across feature jvmTest lanes. AGP 9 has no KMP
 // testFixtures support, so this is a plain library consumed test-scoped
 // only — never a main source set dependency (see its build.gradle.kts).

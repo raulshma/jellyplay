@@ -1,8 +1,8 @@
-package com.raulshma.jellyplay.core.concurrency
+package com.raulshma.jellyplay.core.i18ntools
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import java.io.File
 
 /**
  * Guard against locale drift in Compose Multiplatform string resources:
@@ -15,7 +15,7 @@ import java.io.File
  * every module's resource tree and asserts each locale's MISSING-key
  * count never rises above the per-module+locale baseline in
  * [baselineMissingKeys]. Modules may split their strings across several
- * `strings_*.xml` family files per qualifier dir (CMP merges them) — the
+ * `strings_*.xml` family files per qualifier dir (CMP merges them) —
  * the scan reads every `*.xml` in the dir, so a split cannot hide a gap.
  *
  * This is a drift guard, not full parity enforcement of the raw key sets: the
@@ -24,7 +24,7 @@ import java.io.File
  * full parity has arrived there.
  *
  * Counted-set exemptions (a key in these classes is not a missing
- * translation):
+ * translation — [CountedKeyGrammar.isExempt] is the one home of the rule):
  *  - `translatable="false"` keys: brand names, URL/email placeholders and
  *    acronyms that the default file itself marks as deliberately
  *    untranslated (settings_radarr, auth_app_name, subtitle_tester_mode_hdr,
@@ -33,12 +33,18 @@ import java.io.File
  *  - keys starting with `diff_`: the recorded convention for intentionally
  *    default-locale-only strings — the prefix is prophylactic: a new `diff_`
  *    key is exempt by convention, anything else must translate or baseline.
- *  - [properNounExemptKeys]: product/service proper nouns that must not be
- *    translated. Belt-and-braces for the day one of them loses its
+ *  - the grammar's proper-noun list: product/service proper nouns that must
+ *    not be translated. Belt-and-braces for the day one of them loses its
  *    `translatable="false"` marker.
+ *  - PENDING-marked entries: keys [StringsPropagator] inserted (verbatim
+ *    untranslated copies under a `<!-- PENDING TRANSLATION: … -->` heading)
+ *    still count MISSING — [CountedKeyGrammar.translatedKeys] is the read
+ *    here — so a repo-wide propagation cannot fake parity; the numbers fall
+ *    only when real translations land.
  *
- * Module discovery mirrors [BareRunCatchingRatchetTest]: repo root located
- * by walking up to `settings.gradle.kts`, then every
+ * Module discovery is [I18nResourceDiscovery] — the one walk this test and
+ * the root build's repo-wide propagateStrings/checkStrings tasks share:
+ * repo root located by walking up to `settings.gradle.kts`, then every
  * `composeResources/values/strings.xml` under `shared/` and `apps/` (build
  * output excluded) is a guarded module — a new module with resources is
  * guarded automatically, no hand list to forget.
@@ -102,106 +108,10 @@ class I18nParityRatchetTest {
         // landed with it) — entries deleted per the lower-a-baseline rule.
     )
 
-    /**
-     * Product/service proper nouns that must not be translated. Belt-and-
-     * braces: each of these is currently also marked `translatable="false"`
-     * in its default file, so the marker alone already exempts them — this
-     * list keeps them exempt even if the marker is ever dropped.
-     */
-    private val properNounExemptKeys = setOf(
-        "settings_jellyplay",
-        "settings_radarr",
-        "settings_sonarr",
-        "settings_syncplay",
-    )
-
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (dir != null && !File(dir, "settings.gradle.kts").isFile) dir = dir.parentFile
-        assertTrue(dir != null, "could not locate settings.gradle.kts from ${System.getProperty("user.dir")}")
-        return dir!!
-    }
-
-    /**
-     * Every resource root to guard: directories under `shared/` or `apps/`
-     * holding `composeResources/values/strings.xml`, with `build` output
-     * directories pruned from the walk.
-     */
-    private fun discoverResourceRoots(root: File): List<File> {
-        val roots = mutableListOf<File>()
-        listOf("shared", "apps").forEach { top ->
-            val topDir = File(root, top)
-            if (!topDir.isDirectory) return@forEach
-            topDir.walkTopDown()
-                .onEnter { it.name != "build" }
-                .filter { it.isFile && it.path.replace('\\', '/').endsWith("composeResources/values/strings.xml") }
-                .forEach { roots += it.parentFile }
-        }
-        return roots
-    }
-
-    /**
-     * Regexes matching every counted resource entry: `<string name="…">`
-     * and `<plurals name="…">`, each captured as (name, attributes). A
-     * plurals element counts as one key regardless of how many quantity
-     * items it carries — parity is judged on key existence per locale.
-     */
-    private val keyRegexes = listOf(
-        Regex("""<string\s+name="([^"]+)"([^>]*)>"""),
-        Regex("""<plurals\s+name="([^"]+)"([^>]*)>"""),
-    )
-
-    private fun isExempt(name: String, attributes: String): Boolean =
-        name.startsWith("diff_") ||
-            attributes.contains("translatable=\"false\"") ||
-            name in properNounExemptKeys
-
-    /**
-     * Every `*.xml` string file in a qualifier dir. Modules may split their
-     * strings across per-family files (the settings module's strings_search /
-     * strings_appearance / … siblings of strings.xml, XC-3) — CMP merges all
-     * of them per qualifier dir, so parity is judged over the union.
-     */
-    private fun stringFiles(qualifierDir: File): List<File> =
-        qualifierDir.listFiles { f -> f.isFile && f.extension == "xml" }
-            .orEmpty()
-            .sortedBy { it.name }
-
-    /**
-     * The default-locale keys that COUNT for the guard: every `<string>`
-     * and `<plurals>` key except the exempt classes documented on the class
-     * KDoc.
-     */
-    private fun countedDefaultKeys(valuesDir: File): Set<String> {
-        val keys = mutableSetOf<String>()
-        for (file in stringFiles(valuesDir)) {
-            val text = file.readText(Charsets.UTF_8)
-            for (regex in keyRegexes) {
-                regex.findAll(text)
-                    .map { it.groupValues[1] to it.groupValues[2] }
-                    .filter { (name, attrs) -> !isExempt(name, attrs) }
-                    .map { it.first }
-                    .forEach { keys += it }
-            }
-        }
-        return keys
-    }
-
-    private fun localeKeys(localeValuesDir: File): Set<String> {
-        val keys = mutableSetOf<String>()
-        for (file in stringFiles(localeValuesDir)) {
-            val text = file.readText(Charsets.UTF_8)
-            for (regex in keyRegexes) {
-                regex.findAll(text).mapTo(keys) { it.groupValues[1] }
-            }
-        }
-        return keys
-    }
-
     @Test
     fun `locale missing-key counts never rise above baseline`() {
-        val root = repoRoot()
-        val resourceRoots = discoverResourceRoots(root)
+        val root = I18nResourceDiscovery.repoRoot(File(System.getProperty("user.dir")))
+        val resourceRoots = I18nResourceDiscovery.discoverResourceRoots(root)
         assertTrue(
             resourceRoots.size >= 20,
             "i18n ratchet discovered only ${resourceRoots.size} resource roots under shared/ and apps/ — " +
@@ -209,19 +119,19 @@ class I18nParityRatchetTest {
         )
 
         val failures = mutableListOf<String>()
-        for (valuesDir in resourceRoots.sortedBy { it.path }) {
-            // <module>/src/commonMain/composeResources/values → <module>
-            // (the dir carrying build.gradle.kts), 4 levels up from `values`.
-            val module = valuesDir.parentFile!!.parentFile!!.parentFile!!.parentFile!!
+        for (resourceRoot in resourceRoots.sortedBy { it.path }) {
+            // .../<module>/src/commonMain/composeResources → <module> (the
+            // dir carrying build.gradle.kts), 3 levels up from the root.
+            val module = resourceRoot.parentFile!!.parentFile!!.parentFile!!
             val modulePath = module.relativeTo(root).path.replace('\\', '/')
-            val counted = countedDefaultKeys(valuesDir)
-            val locales = valuesDir.parentFile!!
+            val counted = CountedKeyGrammar.countedKeys(resourceRoot.resolve("values"))
+            val locales = resourceRoot
                 .listFiles { f -> f.isDirectory && f.name.startsWith("values-") }
                 .orEmpty()
                 .filter { it.resolve("strings.xml").isFile }
                 .sortedBy { it.name }
             for (localeDir in locales) {
-                val missing = counted - localeKeys(localeDir)
+                val missing = counted - CountedKeyGrammar.translatedKeys(localeDir)
                 val key = "$modulePath:${localeDir.name.removePrefix("values-")}"
                 val allowed = baselineMissingKeys.getOrDefault(key, 0)
                 if (missing.size > allowed) {

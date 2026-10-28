@@ -1,6 +1,5 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.i18ntools
 
-import com.raulshma.jellyplay.feature.settings.tools.StringsPropagator
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -10,20 +9,18 @@ import kotlin.test.assertTrue
 /**
  * The zero-gap pin for the settings module's locale tables — the settings
  * tree with all locale entries present (259 keys × 8 locales),
- * kept there by `StringsPropagator` (the propagation tool whose Gradle
- * `checkStrings` task enforces the same at build level). Any default-locale
- * key added without its locale entries fails here with the exact missing
- * list; run `:shared:feature:settings:propagateStrings` and translate the
+ * kept there by `StringsPropagator` (the propagation tool whose root-build
+ * repo-wide `checkStrings` task enforces the same at build level). Any
+ * default-locale key added without its locale entries fails here with the
+ * exact missing list; run `./gradlew propagateStrings` and translate the
  * PENDING TRANSLATION entries it inserts.
  */
 class StringsPropagatorTest {
 
     /** The settings module's composeResources root, located from the repo root. */
     private fun composeResourcesDir(): File {
-        var dir: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (dir != null && !File(dir, "settings.gradle.kts").isFile) dir = dir.parentFile
-        check(dir != null) { "could not locate the repo root from ${System.getProperty("user.dir")}" }
-        val resources = dir!!.resolve("shared/feature/settings/src/commonMain/composeResources")
+        val root = I18nResourceDiscovery.repoRoot(File(System.getProperty("user.dir")))
+        val resources = root.resolve("shared/feature/settings/src/commonMain/composeResources")
         check(resources.isDirectory) { "settings composeResources missing: $resources" }
         return resources
     }
@@ -35,7 +32,7 @@ class StringsPropagatorTest {
             emptyList(),
             gaps.map { gap -> gap.locale to gap.missingKeys },
             "locale tables drifted from the default locale — run " +
-                ":shared:feature:settings:propagateStrings and translate the PENDING entries",
+                "./gradlew propagateStrings and translate the PENDING entries",
         )
     }
 
@@ -80,7 +77,7 @@ class StringsPropagatorTest {
         val propagated = de.resolve("strings.xml").readText()
         assertTrue("settings_alpha\">Alpha DE" in propagated, "existing translation must not be overwritten")
         assertTrue("<item quantity=\"one\">%d day</item>" in propagated, "the plurals element is copied verbatim")
-        assertTrue(StringsPropagator.PENDING_MARKER in propagated)
+        assertTrue(CountedKeyGrammar.PENDING_MARKER in propagated)
         assertTrue("settings_beta" !in propagated, "translatable=false keys never propagate")
         assertTrue("diff_reset_only" !in propagated, "diff_ keys never propagate")
 
