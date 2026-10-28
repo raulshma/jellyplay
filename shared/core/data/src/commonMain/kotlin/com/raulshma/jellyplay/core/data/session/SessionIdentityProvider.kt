@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.SharedFlow
  * need from the session —
  * cache identity reads plus the transition stream the registry reacts to —
  * WITHOUT the JVM-bound machinery [HomeSession] is built on (the OkHttp
- * `JellyfinApiClient` + `AtomicReference` mirror). On android/desktop the
+ * engine's `AuthApiClient` + `AtomicReference` mirror). On android/desktop the
  * jvmShared DI graph binds [HomeSession] here (existing behavior unchanged).
  */
 interface SessionIdentityProvider {

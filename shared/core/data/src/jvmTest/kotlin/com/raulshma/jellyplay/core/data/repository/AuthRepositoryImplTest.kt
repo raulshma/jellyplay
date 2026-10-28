@@ -12,7 +12,8 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.UserApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.api.ApiException
 import io.mockk.coEvery
@@ -47,7 +48,11 @@ import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 
 class AuthRepositoryImplTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // One relaxed mock per family seam the ctor takes (the union mock these
+    // replaced implemented both; the production graph injects the two family
+    // singles).
+    private val authClient: AuthApiClient = mockk(relaxed = true)
+    private val userClient: UserApiClient = mockk(relaxed = true)
     private val webSocketClient: JellyfinWebSocketClient = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val serverDao: ServerDao = mockk(relaxed = true)
@@ -97,18 +102,16 @@ class AuthRepositoryImplTest {
         coEvery { database.withTransaction(any<suspend () -> Any?>()) } coAnswers {
             secondArg<suspend () -> Any?>().invoke()
         }
-        every { apiClient.currentServer } returns flowOf(null)
-        every { apiClient.currentUser } returns flowOf(null)
+        every { authClient.currentServer } returns flowOf(null)
+        every { authClient.currentUser } returns flowOf(null)
         // isAuthenticated derives from the ATOMIC session flow (never a
         // combine of the two separate flows above).
-        every { apiClient.session } returns flowOf(null)
+        every { authClient.session } returns flowOf(null)
         every { serverDao.getAllServers() } returns flowOf(emptyList())
         every { userDao.getUsersForServer(any()) } returns flowOf(emptyList())
         repository = AuthRepositoryImpl(
-            // One union mock covers both family seams (the JellyfinApiClient
-            // mock implements each of them).
-            authApiClient = apiClient,
-            userApiClient = apiClient,
+            authApiClient = authClient,
+            userApiClient = userClient,
             webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,
@@ -128,7 +131,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `addServer success persists server and returns info`() = runTest {
-        coEvery { apiClient.connectToServer("https://test.example.com") } returns Result.success(testServer)
+        coEvery { authClient.connectToServer("https://test.example.com") } returns Result.success(testServer)
 
         val result = repository.addServer("https://test.example.com")
 
@@ -139,7 +142,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `addServer failure returns error`() = runTest {
-        coEvery { apiClient.connectToServer("https://bad.example.com") } returns
+        coEvery { authClient.connectToServer("https://bad.example.com") } returns
             Result.failure(Exception("Connection refused"))
 
         val result = repository.addServer("https://bad.example.com")
@@ -150,7 +153,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `probeServer passes success through without persisting`() = runTest {
-        coEvery { apiClient.getServerInfo(altAddress) } returns
+        coEvery { authClient.getServerInfo(altAddress) } returns
             Result.success(testServer.copy(address = altAddress))
 
         val result = repository.probeServer(altAddress)
@@ -164,7 +167,7 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `probeServer passes failure through without persisting`() = runTest {
-        coEvery { apiClient.getServerInfo(altAddress) } returns
+        coEvery { authClient.getServerInfo(altAddress) } returns
             Result.failure(Exception("unreachable"))
 
         val result = repository.probeServer(altAddress)
@@ -175,19 +178,19 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `postCapabilities delegates to the client`() = runTest {
-        coEvery { apiClient.postCapabilities() } returns Result.success(Unit)
+        coEvery { authClient.postCapabilities() } returns Result.success(Unit)
 
         val result = repository.postCapabilities()
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { apiClient.postCapabilities() }
+        coVerify(exactly = 1) { authClient.postCapabilities() }
     }
 
     @Test
-    fun `logout disconnects apiClient and clears only the session`() = runTest {
+    fun `logout disconnects authClient and clears only the session`() = runTest {
         repository.logout()
 
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.disconnect() }
         // logout must clear the active server/user selection only — NOT wipe
         // the whole DataStore (device id + all user prefs must be preserved).
         coVerify { serverIdentityStore.clearSession() }
@@ -199,15 +202,15 @@ class AuthRepositoryImplTest {
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
+        coEvery { userClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
 
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setServer(any()) }
-        coVerify { apiClient.selectReachableAddress() }
-        coVerify { apiClient.setUser(any()) }
-        coVerify(exactly = 0) { apiClient.disconnect() }
+        coVerify { authClient.setServer(any()) }
+        coVerify { authClient.selectReachableAddress() }
+        coVerify { authClient.setUser(any()) }
+        coVerify(exactly = 0) { authClient.disconnect() }
     }
 
     @Test
@@ -224,7 +227,7 @@ class AuthRepositoryImplTest {
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+        coEvery { userClient.getCurrentUser() } returns Result.failure(
             ApiException(
                 isRetryable = false,
                 httpCode = 401,
@@ -239,8 +242,8 @@ class AuthRepositoryImplTest {
         // validation then removed it, so isAuthenticated flips false and the
         // shell renders the login flow instead of a cached ghost home.
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.setUser(any()) }
+        coVerify { authClient.disconnect() }
         coVerify { serverIdentityStore.clearSession() }
     }
 
@@ -254,13 +257,13 @@ class AuthRepositoryImplTest {
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(Exception("offline"))
+        coEvery { userClient.getCurrentUser() } returns Result.failure(Exception("offline"))
 
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
-        coVerify(exactly = 0) { apiClient.disconnect() }
+        coVerify { authClient.setUser(any()) }
+        coVerify(exactly = 0) { authClient.disconnect() }
         coVerify(exactly = 0) { serverIdentityStore.clearSession() }
     }
 
@@ -270,7 +273,7 @@ class AuthRepositoryImplTest {
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+        coEvery { userClient.getCurrentUser() } returns Result.failure(
             ApiException(
                 isRetryable = false,
                 httpCode = 403,
@@ -282,8 +285,8 @@ class AuthRepositoryImplTest {
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
-        coVerify(exactly = 0) { apiClient.disconnect() }
+        coVerify { authClient.setUser(any()) }
+        coVerify(exactly = 0) { authClient.disconnect() }
     }
 
     @Test
@@ -301,7 +304,7 @@ class AuthRepositoryImplTest {
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         // Slower than the ~2 s gate bound, so the on-gate validation times
         // out and the deferred pass pays the full wait instead.
-        coEvery { apiClient.getCurrentUser() } coAnswers {
+        coEvery { userClient.getCurrentUser() } coAnswers {
             delay(3_000)
             Result.failure(
                 ApiException(
@@ -316,8 +319,8 @@ class AuthRepositoryImplTest {
         // the test scheduler so its virtual-time delay is deterministic
         // (same local-construction pattern as the session-flow test below).
         val repo = AuthRepositoryImpl(
-            authApiClient = apiClient,
-            userApiClient = apiClient,
+            authApiClient = authClient,
+            userApiClient = userClient,
             webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,
@@ -334,13 +337,13 @@ class AuthRepositoryImplTest {
         // Bounded gate: the restored session stands exactly as a successful
         // validation would leave it — no teardown before the gate released.
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
-        coVerify(exactly = 0) { apiClient.disconnect() }
+        coVerify { authClient.setUser(any()) }
+        coVerify(exactly = 0) { authClient.disconnect() }
 
         // The deferred validation lands off the gate and the 401 teardown
         // fires through the same path an on-gate 401 uses.
         advanceUntilIdle()
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.disconnect() }
         coVerify { serverIdentityStore.clearSession() }
     }
 
@@ -350,14 +353,14 @@ class AuthRepositoryImplTest {
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
-        coEvery { apiClient.selectReachableAddress() } throws RuntimeException("probe blew up")
+        coEvery { authClient.selectReachableAddress() } throws RuntimeException("probe blew up")
 
         val result = repository.restoreSession()
 
         // A selection crash must not break session restore — the primary
         // address is still wired and offline/cached use is unaffected.
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
+        coVerify { authClient.setUser(any()) }
     }
 
     @Test
@@ -368,7 +371,7 @@ class AuthRepositoryImplTest {
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 0) { apiClient.setServer(any()) }
+        coVerify(exactly = 0) { authClient.setServer(any()) }
     }
 
     @Test
@@ -421,7 +424,7 @@ class AuthRepositoryImplTest {
         val result = repository.switchUser("nonexistent")
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 0) { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { authClient.setUser(any()) }
     }
 
     @Test
@@ -434,7 +437,7 @@ class AuthRepositoryImplTest {
         // the login screen asks for credentials.
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+        coEvery { userClient.getCurrentUser() } returns Result.failure(
             ApiException(
                 isRetryable = false,
                 httpCode = 401,
@@ -446,8 +449,8 @@ class AuthRepositoryImplTest {
         val result = repository.switchUser("user-1")
 
         assertTrue(result.isFailure)
-        coVerify { apiClient.setUser(any()) }
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.setUser(any()) }
+        coVerify { authClient.disconnect() }
         coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
     }
 
@@ -455,12 +458,12 @@ class AuthRepositoryImplTest {
     fun `switchUser succeeds and persists identity when stored token validates`() = runTest {
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
+        coEvery { userClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
 
         val result = repository.switchUser("user-1")
 
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
+        coVerify { authClient.setUser(any()) }
         coVerify { serverIdentityStore.setActiveSession("server-1", "user-1") }
         coVerify { userDao.updateUser(any()) }
     }
@@ -469,7 +472,7 @@ class AuthRepositoryImplTest {
     fun `switchServer fails without establishing session when stored token is rejected with 401`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getMostRecentUserForServer("server-1") } returns testUserEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+        coEvery { userClient.getCurrentUser() } returns Result.failure(
             ApiException(
                 isRetryable = false,
                 httpCode = 401,
@@ -481,8 +484,8 @@ class AuthRepositoryImplTest {
         val result = repository.switchServer("server-1")
 
         assertTrue(result.isFailure)
-        coVerify { apiClient.setUser(any()) }
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.setUser(any()) }
+        coVerify { authClient.disconnect() }
         coVerify(exactly = 0) { serverIdentityStore.setActiveSession(any(), any()) }
     }
 
@@ -490,43 +493,43 @@ class AuthRepositoryImplTest {
     fun `switchServer succeeds and persists identity when stored token validates`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getMostRecentUserForServer("server-1") } returns testUserEntity
-        coEvery { apiClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
+        coEvery { userClient.getCurrentUser() } returns Result.success(mockk(relaxed = true))
 
         val result = repository.switchServer("server-1")
 
         assertTrue(result.isSuccess)
-        coVerify { apiClient.setUser(any()) }
+        coVerify { authClient.setUser(any()) }
         coVerify { serverIdentityStore.setActiveSession("server-1", "user-1") }
     }
 
     @Test
     fun `removeUser deletes user and disconnects if current user`() = runTest {
-        every { apiClient.currentUser } returns flowOf(testUser)
+        every { authClient.currentUser } returns flowOf(testUser)
 
         repository.removeUser("user-1")
 
         coVerify { userDao.deleteUserById("user-1") }
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.disconnect() }
         coVerify { serverIdentityStore.setActiveUser("") }
     }
 
     @Test
     fun `removeUser does not disconnect if different user`() = runTest {
-        every { apiClient.currentUser } returns flowOf(
+        every { authClient.currentUser } returns flowOf(
             testUser.copy(id = "other-user")
         )
 
         repository.removeUser("user-1")
 
         coVerify { userDao.deleteUserById("user-1") }
-        coVerify(exactly = 0) { apiClient.disconnect() }
+        coVerify(exactly = 0) { authClient.disconnect() }
     }
 
     @Test
     fun `removeUser clears user and token from matching servers`() = runTest {
         val serverWithUser = testServerEntity.copy(userId = "user-1", accessToken = "token-123")
         every { serverDao.getAllServers() } returns flowOf(listOf(serverWithUser))
-        every { apiClient.currentUser } returns flowOf(null)
+        every { authClient.currentUser } returns flowOf(null)
 
         repository.removeUser("user-1")
 
@@ -538,23 +541,23 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `revokeServerSession revokes on server, deletes user, and clears session`() = runTest {
-        every { apiClient.currentUser } returns flowOf(testUser)
-        coEvery { apiClient.revokeServerSession() } returns Result.success(Unit)
+        every { authClient.currentUser } returns flowOf(testUser)
+        coEvery { authClient.revokeServerSession() } returns Result.success(Unit)
         val serverWithUser = testServerEntity.copy(userId = "user-1", accessToken = "token-123")
         every { serverDao.getAllServers() } returns flowOf(listOf(serverWithUser))
 
         repository.revokeServerSession()
 
-        coVerify { apiClient.revokeServerSession() }
+        coVerify { authClient.revokeServerSession() }
         coVerify { userDao.deleteUserById("user-1") }
-        coVerify { apiClient.disconnect() }
+        coVerify { authClient.disconnect() }
         coVerify { serverIdentityStore.clearSession() }
     }
 
     @Test
     fun `isAuthenticated is false when no session is established`() = runTest {
-        every { apiClient.currentServer } returns flowOf(null)
-        every { apiClient.currentUser } returns flowOf(null)
+        every { authClient.currentServer } returns flowOf(null)
+        every { authClient.currentUser } returns flowOf(null)
 
         val flow = repository.isAuthenticated
         assertFalse(flow.first() ?: true)
@@ -567,14 +570,14 @@ class AuthRepositoryImplTest {
         // the old combine(currentServer, currentUser) shape could observe and
         // report authenticated for. Only a fully established atomic session
         // may read as authenticated. A fresh repository is built because the
-        // isAuthenticated chain captures apiClient.session at construction.
+        // isAuthenticated chain captures authClient.session at construction.
         val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-        every { apiClient.session } returns sessionFlow
-        every { apiClient.currentServer } returns MutableStateFlow(testServer)
-        every { apiClient.currentUser } returns MutableStateFlow(testUser)
+        every { authClient.session } returns sessionFlow
+        every { authClient.currentServer } returns MutableStateFlow(testServer)
+        every { authClient.currentUser } returns MutableStateFlow(testUser)
         val repo = AuthRepositoryImpl(
-            authApiClient = apiClient,
-            userApiClient = apiClient,
+            authApiClient = authClient,
+            userApiClient = userClient,
             webSocketClient = webSocketClient,
             database = database,
             serverDao = serverDao,
@@ -612,8 +615,8 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `refreshCurrentUser updates and persists flags from server policy`() = runTest {
-        every { apiClient.currentUser } returns flowOf(adminUser)
-        coEvery { apiClient.getCurrentUser() } returns Result.success(
+        every { authClient.currentUser } returns flowOf(adminUser)
+        coEvery { userClient.getCurrentUser() } returns Result.success(
             ManagedUser(
                 id = "user-1",
                 name = "testuser",
@@ -629,15 +632,15 @@ class AuthRepositoryImplTest {
         assertTrue(result.isSuccess)
         assertEquals(true, result.getOrNull()?.isAdmin)
         assertEquals(false, result.getOrNull()?.canDeleteContent)
-        coVerify { apiClient.setUser(match { it.isAdmin && !it.canDeleteContent }) }
+        coVerify { authClient.setUser(match { it.isAdmin && !it.canDeleteContent }) }
         // Persisted the refreshed flags.
         coVerify { userDao.updateUser(match { it.isAdmin && !it.canDeleteContent }) }
     }
 
     @Test
     fun `refreshCurrentUser demotes locally and persists on 403 access denied`() = runTest {
-        every { apiClient.currentUser } returns flowOf(adminUser)
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+        every { authClient.currentUser } returns flowOf(adminUser)
+        coEvery { userClient.getCurrentUser() } returns Result.failure(
             ApiException.fromHttp(403, "Forbidden"),
         )
         coEvery { userDao.getUserById("user-1") } returns testUserEntity.copy(
@@ -650,14 +653,14 @@ class AuthRepositoryImplTest {
         // distinct from a transient failure which returns Result.failure.
         assertTrue(result.isSuccess)
         assertEquals(false, result.getOrNull()?.isAdmin)
-        coVerify { apiClient.setUser(match { !it.isAdmin && !it.canDeleteContent }) }
+        coVerify { authClient.setUser(match { !it.isAdmin && !it.canDeleteContent }) }
         coVerify { userDao.updateUser(match { !it.isAdmin && !it.canDeleteContent }) }
     }
 
     @Test
     fun `refreshCurrentUser keeps cached value and does not persist on transient failure`() = runTest {
-        every { apiClient.currentUser } returns flowOf(adminUser)
-        coEvery { apiClient.getCurrentUser() } returns Result.failure(
+        every { authClient.currentUser } returns flowOf(adminUser)
+        coEvery { userClient.getCurrentUser() } returns Result.failure(
             java.io.IOException("Connection reset"),
         )
 
@@ -667,14 +670,14 @@ class AuthRepositoryImplTest {
         // flaky network can't lock an admin out.
         assertTrue(result.isFailure)
         // setUser must NOT be called with a demoted value.
-        coVerify(exactly = 0) { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { authClient.setUser(any()) }
         coVerify(exactly = 0) { userDao.updateUser(any()) }
     }
 
     @Test
     fun `refreshCurrentUser skips DB write when flags are unchanged`() = runTest {
-        every { apiClient.currentUser } returns flowOf(adminUser)
-        coEvery { apiClient.getCurrentUser() } returns Result.success(
+        every { authClient.currentUser } returns flowOf(adminUser)
+        coEvery { userClient.getCurrentUser() } returns Result.success(
             ManagedUser(
                 id = "user-1",
                 name = "testuser",
@@ -690,19 +693,19 @@ class AuthRepositoryImplTest {
 
         // setUser still publishes the refreshed object (idempotent), but the
         // persist step short-circuits because nothing changed.
-        coVerify { apiClient.setUser(any()) }
+        coVerify { authClient.setUser(any()) }
         coVerify(exactly = 0) { userDao.updateUser(any()) }
     }
 
     @Test
     fun `refreshCurrentUser fails when no active user`() = runTest {
-        every { apiClient.currentUser } returns flowOf(null)
+        every { authClient.currentUser } returns flowOf(null)
 
         val result = repository.refreshCurrentUser()
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 0) { apiClient.getCurrentUser() }
-        coVerify(exactly = 0) { apiClient.setUser(any()) }
+        coVerify(exactly = 0) { userClient.getCurrentUser() }
+        coVerify(exactly = 0) { authClient.setUser(any()) }
     }
 
     // ------------------------------------------------------------------
@@ -720,7 +723,7 @@ class AuthRepositoryImplTest {
     fun `addServerAddress validates and persists alternate address`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery {
-            apiClient.getServerInfo(altAddress)
+            authClient.getServerInfo(altAddress)
         } returns Result.success(testServer.copy(address = altAddress))
 
         val result = repository.addServerAddress("server-1", altAddress)
@@ -736,7 +739,7 @@ class AuthRepositoryImplTest {
     fun `addServerAddress normalizes bare host to https`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery {
-            apiClient.getServerInfo("https://lan.example.com")
+            authClient.getServerInfo("https://lan.example.com")
         } returns Result.success(testServer.copy(address = "https://lan.example.com"))
 
         val result = repository.addServerAddress("server-1", "lan.example.com")
@@ -771,7 +774,7 @@ class AuthRepositoryImplTest {
     fun `addServerAddress rejects address pointing to a different server`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
         coEvery {
-            apiClient.getServerInfo(altAddress)
+            authClient.getServerInfo(altAddress)
         } returns Result.success(testServer.copy(id = "other-server", address = altAddress))
 
         val result = repository.addServerAddress("server-1", altAddress)
@@ -784,7 +787,7 @@ class AuthRepositoryImplTest {
     fun `addServerAddress rejects unreachable address`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
         coEvery {
-            apiClient.getServerInfo(altAddress)
+            authClient.getServerInfo(altAddress)
         } returns Result.failure(Exception("Connection refused"))
 
         val result = repository.addServerAddress("server-1", altAddress)
@@ -801,7 +804,7 @@ class AuthRepositoryImplTest {
 
         assertTrue(result.isFailure)
         coVerify(exactly = 0) { serverDao.updateServer(any()) }
-        coVerify(exactly = 0) { apiClient.getServerInfo(any()) }
+        coVerify(exactly = 0) { authClient.getServerInfo(any()) }
     }
 
     @Test
@@ -845,7 +848,7 @@ class AuthRepositoryImplTest {
     @Test
     fun `switchServerAddress promotes alternate, demotes old primary and reconfigures client`() = runTest {
         coEvery { serverDao.getServerById("server-1") } returns serverEntityWithAlt()
-        every { apiClient.currentUser } returns flowOf(testUser)
+        every { authClient.currentUser } returns flowOf(testUser)
 
         val result = repository.switchServerAddress("server-1", altAddress)
 
@@ -856,8 +859,8 @@ class AuthRepositoryImplTest {
         assertNotNull(captured.captured.alternateAddresses)
         assertTrue(captured.captured.alternateAddresses!!.contains(testServerEntity.address))
         assertFalse(captured.captured.alternateAddresses!!.contains(altAddress))
-        coVerify { apiClient.setServer(any()) }
-        coVerify { apiClient.setUser(match { it.serverAddress == altAddress }) }
+        coVerify { authClient.setServer(any()) }
+        coVerify { authClient.setUser(match { it.serverAddress == altAddress }) }
     }
 
     @Test
@@ -868,7 +871,7 @@ class AuthRepositoryImplTest {
 
         assertTrue(result.isFailure)
         coVerify(exactly = 0) { serverDao.updateServer(any()) }
-        coVerify(exactly = 0) { apiClient.setServer(any()) }
+        coVerify(exactly = 0) { authClient.setServer(any()) }
     }
 
     @Test
@@ -887,9 +890,9 @@ class AuthRepositoryImplTest {
         coEvery { serverDao.getServerByAddress(testServerEntity.address) } returns serverWithAlts
         coEvery { serverDao.getServerById("server-1") } returns serverWithAlts
         coEvery {
-            apiClient.authenticateUser(any<ServerInfo>(), "testuser", "pass")
+            authClient.authenticateUser(any<ServerInfo>(), "testuser", "pass")
         } returns Result.success(testUser)
-        every { apiClient.currentServer } returns flowOf(testServer)
+        every { authClient.currentServer } returns flowOf(testServer)
 
         val result = repository.login(testServerEntity.address, "testuser", "pass")
 
@@ -904,9 +907,9 @@ class AuthRepositoryImplTest {
         coEvery { serverDao.getServerByAddress(testServerEntity.address) } returns null
         coEvery { serverDao.getServerById("server-1") } returns null
         coEvery {
-            apiClient.authenticateUser(eq(testServerEntity.address), "testuser", "pass")
+            authClient.authenticateUser(eq(testServerEntity.address), "testuser", "pass")
         } returns Result.success(testUser)
-        every { apiClient.currentServer } returns flowOf(testServer)
+        every { authClient.currentServer } returns flowOf(testServer)
 
         repository.login(testServerEntity.address, "testuser", "pass")
 

@@ -16,7 +16,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
@@ -158,7 +158,7 @@ class HomeFeedRealStackContractTest {
     // The AuthApiClient seam behind the REAL HomeSession — the proven
     // construction shape of MediaRepositoryHomeSectionsCacheTest.buildRepository.
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val authClient: JellyfinApiClient = mockk(relaxed = true)
+    private val authClient: AuthApiClient = mockk(relaxed = true)
 
     /** The SWR snapshot-store double — the persist call count is the last test's pin. */
     private val snapshotStore: HomeSectionsSnapshotStore = mockk(relaxed = true)

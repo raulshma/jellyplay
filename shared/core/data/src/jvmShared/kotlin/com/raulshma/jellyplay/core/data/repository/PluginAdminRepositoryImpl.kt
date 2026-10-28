@@ -11,9 +11,9 @@ import okhttp3.OkHttpClient
 /**
  * MediaRepository facade split's admin twin (the LiveTvRepositoryImpl
  * precedent): every plugin member moved verbatim from [AdminRepositoryImpl]
- * — a stateless forward over the [PluginApiClient] family seam (not the
- * JellyfinApiClient union; the family single composes the same impl the
- * union delegates to, so wire behavior is unchanged). The WebView bridge
+ * — a stateless forward over the [PluginApiClient] family seam (the family
+ * single composes the same impl the retired JellyfinApiClient union
+ * delegated to, so wire behavior is unchanged). The WebView bridge
  * session reads through narrow ctor seams instead of the whole engine:
  * the active-address read (failover-correct — the engine's
  * activeServerAddress, never currentServer's primary, which may be the

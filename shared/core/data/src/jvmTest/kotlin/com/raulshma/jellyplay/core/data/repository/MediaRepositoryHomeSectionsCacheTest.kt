@@ -11,20 +11,13 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
-import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
-import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -55,9 +48,6 @@ import kotlin.test.assertTrue
  */
 class MediaRepositoryHomeSectionsCacheTest {
 
-    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
-    private var built: MediaRepositoryImpl? = null
-
     /** The announcer leaf the build wires (tests announce through it directly). */
     private lateinit var announcer: UserDataAnnouncerImpl
 
@@ -66,7 +56,9 @@ class MediaRepositoryHomeSectionsCacheTest {
     // identity step, replacing the separate server/user flows the repo's own
     // observer used to combine.
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // The library family seam (the home fetch surface the suite stubs); the
+    // remaining ctor seams take the harness's inert defaults.
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
     /**
      * The home cache-maintenance port (the complete roll operation, the
      * single-row refetch and the sub-call cache drop) — the network side of
@@ -82,58 +74,21 @@ class MediaRepositoryHomeSectionsCacheTest {
     private val fakeTimeSource = FakeTimeSource()
 
     private fun buildRepository(): MediaRepositoryImpl {
-        every { apiClient.session } returns sessionFlow
-        val playedStateSync: PlayedStateSync = mockk(relaxed = true)
-        val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        val homeSession = HomeSession(
-            apiClient,
-            // Unconfined (not Dispatchers.Default): the session assignment then
-            // drives the classifier AND the registry reactions synchronously on
-            // the setter's stack, so the identity chain the suite pins (session
-            // emission → transition → cache drop) needs no settle delay.
-            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-        )
-        // Real registry over the real HomeSession — same chain production runs,
-        // minus the cross-thread settle window.
-        val sessionCacheRegistry = SessionCacheRegistry(
-            homeSession,
-            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-        )
-        val episodeCatalogue = EpisodeCatalogueImpl(
-            apiClient,
-            offlineRepository,
-            homeSession,
-            sessionCacheRegistry,
-        )
-        // The persisted home pipeline (whose pins live in
-        // HomeSectionsSnapshotStoreTest) rides this store — the same
-        // single the Koin graph wires. The suite's remaining pins are the
-        // repo-level IN-MEMORY choreography, which never touches the rows.
-        val homeSnapshotStore = HomeSectionsSnapshotStore(
-            homeSectionCacheDao,
-            homeSession,
-            fakeTimeSource,
-        )
-        return MediaRepositoryImpl(
-            // One union mock covers both family seams (the JellyfinApiClient
-            // mock implements each of them).
+        val stack = mediaRepoStackFor(
             libraryApiClient = apiClient,
-            collectionApiClient = apiClient,
-            // The home cache-maintenance port (the write/roll paths' verbs —
-            // verified directly in the reroll pins below).
-            homeSectionsCachePort = homeSectionsCachePort,
-            homeSnapshotStore = homeSnapshotStore,
-            playedStateSync = playedStateSync,
-            episodeCatalogue = episodeCatalogue,
-            userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
+            sessionFlow = sessionFlow,
+            // Unconfined (not the harness's Default): the session assignment
+            // then drives the classifier AND the registry reactions
+            // synchronously on the setter's stack, so the identity chain the
+            // suite pins (session emission → transition → cache drop) needs
+            // no settle delay.
+            scopeDispatcher = Dispatchers.Unconfined,
             timeSource = fakeTimeSource,
-            homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built }.also { announcer = it },
-            sessionCacheRegistry = sessionCacheRegistry,
-            // Facade split: the detail cluster now lives on the shared
-            // internals holder (construction-only ctor re-point).
-            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        ).also { built = it }
+            homeSectionCacheDao = homeSectionCacheDao,
+            homeSectionsCachePort = homeSectionsCachePort,
+        )
+        announcer = stack.announcer
+        return stack.repository
     }
 
     private fun homeResult(tag: String) = Result.success(

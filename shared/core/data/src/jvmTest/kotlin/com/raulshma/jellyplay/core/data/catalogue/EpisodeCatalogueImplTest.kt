@@ -10,7 +10,8 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -44,7 +45,11 @@ import kotlin.test.Test
  */
 class EpisodeCatalogueImplTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // The library family seam the ctor takes (the union mock this replaced
+    // carried the seasons/episodes reads AND the session flow; the families
+    // are separate relaxed mocks now).
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
+    private val authApi: AuthApiClient = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
 
     // Atomic session flow driving the shared HomeSession identity detector.
@@ -58,14 +63,14 @@ class EpisodeCatalogueImplTest {
 
     @BeforeTest
     fun setup() {
-        every { apiClient.session } returns sessionFlow
+        every { authApi.session } returns sessionFlow
         // Real HomeSession (production scope — Dispatchers.Default); see
         // HomeSessionTest for the classifier's dedicated suite. The registry
         // that owns the identity reaction likewise runs on a real dispatcher
         // (the production @ApplicationScope discipline), matching the
         // chain the catalogue's own observer used to run.
         homeSession = HomeSession(
-            apiClient,
+            authApi,
             kotlinx.coroutines.CoroutineScope(
                 kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
             ),

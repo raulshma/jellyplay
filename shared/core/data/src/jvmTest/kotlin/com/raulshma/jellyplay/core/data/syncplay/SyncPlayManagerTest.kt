@@ -4,7 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
 import io.mockk.coEvery
@@ -35,7 +36,11 @@ import kotlin.test.Test
 
 class SyncPlayManagerTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // One relaxed mock per family seam the ctor takes (the union mock these
+    // replaced implemented both; the production graph injects the two family
+    // singles).
+    private val syncPlayApi: SyncPlayApiClient = mockk(relaxed = true)
+    private val authApi: AuthApiClient = mockk(relaxed = true)
     private val webSocketClient: JellyfinWebSocketClient = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val timeSyncManager: TimeSyncManager = mockk(relaxed = true)
@@ -52,16 +57,13 @@ class SyncPlayManagerTest {
         every { webSocketClient.isConnected } returns MutableStateFlow(true)
         every { timeSyncManager.pingUpdated } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { timeSyncManager.remoteNow() } returns System.currentTimeMillis()
-        coEvery { apiClient.postCapabilities() } returns Result.success(Unit)
-        coEvery { apiClient.joinSyncPlayGroup(any()) } returns Result.success(Unit)
-        coEvery { apiClient.getSyncPlayInfo(any()) } returns Result.failure(Exception("Not in group"))
+        coEvery { authApi.postCapabilities() } returns Result.success(Unit)
+        coEvery { syncPlayApi.joinSyncPlayGroup(any()) } returns Result.success(Unit)
+        coEvery { syncPlayApi.getSyncPlayInfo(any()) } returns Result.failure(Exception("Not in group"))
 
         manager = SyncPlayManager(
-            // The union mock satisfies both family seams (JellyfinApiClient
-            // extends SyncPlayApiClient + AuthApiClient); the production
-            // graph injects the two family singles.
-            syncPlayApiClient = apiClient,
-            authApiClient = apiClient,
+            syncPlayApiClient = syncPlayApi,
+            authApiClient = authApi,
             webSocketClient = webSocketClient,
             authRepository = authRepository,
             timeSyncManager = timeSyncManager,
@@ -127,13 +129,13 @@ class SyncPlayManagerTest {
     @Test
     fun `createGroup creates, joins MY group and returns it`() = runTest {
         armJoinForCreate()
-        coEvery { apiClient.getSyncPlayGroups() } returnsMany listOf(
+        coEvery { syncPlayApi.getSyncPlayGroups() } returnsMany listOf(
             // Pre-create snapshot, then the discovery read finds the new group.
             Result.success(emptyList()),
             Result.success(listOf(SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 1))),
         )
-        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
-        coEvery { apiClient.getSyncPlayInfo("g9") } returns
+        coEvery { syncPlayApi.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { syncPlayApi.getSyncPlayInfo("g9") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
 
         val result = manager.createGroup("Party")
@@ -141,19 +143,19 @@ class SyncPlayManagerTest {
         assertTrue(result.isSuccess)
         assertEquals("g9", result.getOrNull()?.groupId)
         assertEquals("g9", manager.activeGroupId)
-        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("g9") }
+        coVerify(exactly = 1) { syncPlayApi.joinSyncPlayGroup("g9") }
     }
 
     @Test
     fun `createGroup propagates the wire failure instead of reporting success`() = runTest {
-        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(emptyList())
-        coEvery { apiClient.createSyncPlayGroup("Test Group") } returns
+        coEvery { syncPlayApi.getSyncPlayGroups() } returns Result.success(emptyList())
+        coEvery { syncPlayApi.createSyncPlayGroup("Test Group") } returns
             Result.failure(Exception("Network error"))
 
         val result = manager.createGroup("Test Group")
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup(any()) }
+        coVerify(exactly = 0) { syncPlayApi.joinSyncPlayGroup(any()) }
     }
 
     @Test
@@ -161,20 +163,20 @@ class SyncPlayManagerTest {
         armJoinForCreate()
         val stale = SyncPlayGroup(groupId = "stale", groupName = "Party", participantCount = 5)
         val fresh = SyncPlayGroup(groupId = "fresh", groupName = "Party", participantCount = 1)
-        coEvery { apiClient.getSyncPlayGroups() } returnsMany listOf(
+        coEvery { syncPlayApi.getSyncPlayGroups() } returnsMany listOf(
             Result.success(listOf(stale)),
             Result.success(listOf(stale, fresh)),
         )
-        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
-        coEvery { apiClient.getSyncPlayInfo("fresh") } returns
+        coEvery { syncPlayApi.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { syncPlayApi.getSyncPlayInfo("fresh") } returns
             Result.success(SyncPlayGroupInfo(groupId = "fresh", groupName = "Party"))
 
         val result = manager.createGroup("Party")
 
         assertTrue(result.isSuccess)
         assertEquals("fresh", result.getOrNull()?.groupId)
-        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("fresh") }
-        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup("stale") }
+        coVerify(exactly = 1) { syncPlayApi.joinSyncPlayGroup("fresh") }
+        coVerify(exactly = 0) { syncPlayApi.joinSyncPlayGroup("stale") }
     }
 
     // ── home presence-chip join seam ─────────────────────────────────
@@ -197,12 +199,12 @@ class SyncPlayManagerTest {
     @Test
     fun `joinGroupPlayingItem joins the group playing the item and returns it`() = runTest {
         armJoinForCreate()
-        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(
+        coEvery { syncPlayApi.getSyncPlayGroups() } returns Result.success(
             listOf(
                 SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 2, playingItemId = "item_dune"),
             ),
         )
-        coEvery { apiClient.getSyncPlayInfo("g9") } returns
+        coEvery { syncPlayApi.getSyncPlayInfo("g9") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
 
         val result = manager.joinGroupPlayingItem("item_dune")
@@ -210,12 +212,12 @@ class SyncPlayManagerTest {
         assertTrue(result.isSuccess)
         assertEquals("g9", result.getOrNull()?.groupId)
         assertEquals("g9", manager.activeGroupId)
-        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("g9") }
+        coVerify(exactly = 1) { syncPlayApi.joinSyncPlayGroup("g9") }
     }
 
     @Test
     fun `joinGroupPlayingItem fails without joining when no group plays the item`() = runTest {
-        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(
+        coEvery { syncPlayApi.getSyncPlayGroups() } returns Result.success(
             listOf(
                 SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 2, playingItemId = "item_other"),
             ),
@@ -224,22 +226,22 @@ class SyncPlayManagerTest {
         val result = manager.joinGroupPlayingItem("item_dune")
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup(any()) }
+        coVerify(exactly = 0) { syncPlayApi.joinSyncPlayGroup(any()) }
         assertNull(manager.activeGroupId)
     }
 
     @Test
     fun `createGroup polls the group list for a slow server within the discovery window`() = runTest {
         armJoinForCreate()
-        coEvery { apiClient.getSyncPlayGroups() } returnsMany listOf(
+        coEvery { syncPlayApi.getSyncPlayGroups() } returnsMany listOf(
             Result.success(emptyList()),                    // pre-create snapshot
             Result.success(emptyList()),                    // first poll — server lags
             Result.success(                                 // second poll — the group lands
                 listOf(SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 1)),
             ),
         )
-        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
-        coEvery { apiClient.getSyncPlayInfo("g9") } returns
+        coEvery { syncPlayApi.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { syncPlayApi.getSyncPlayInfo("g9") } returns
             Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
 
         val result = manager.createGroup("Party")
@@ -250,13 +252,13 @@ class SyncPlayManagerTest {
 
     @Test
     fun `createGroup fails when the group never surfaces within the discovery window`() = runTest {
-        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(emptyList())
-        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { syncPlayApi.getSyncPlayGroups() } returns Result.success(emptyList())
+        coEvery { syncPlayApi.createSyncPlayGroup("Party") } returns Result.success(Unit)
 
         val result = manager.createGroup("Party")
 
         assertTrue(result.isFailure, "no group in the list inside the window — no blind join")
-        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup(any()) }
+        coVerify(exactly = 0) { syncPlayApi.joinSyncPlayGroup(any()) }
     }
 
     @Test
@@ -316,13 +318,13 @@ class SyncPlayManagerTest {
         // No persisted server: connectWebSocket() returns early, isolating
         // the watcher from real socket lifecycle.
         every { authRepository.currentServer } returns MutableStateFlow(null)
-        coEvery { apiClient.postCapabilities() } answers {
+        coEvery { authApi.postCapabilities() } answers {
             calls += "postCapabilities"; Result.success(Unit)
         }
-        coEvery { apiClient.joinSyncPlayGroup("g1") } answers {
+        coEvery { syncPlayApi.joinSyncPlayGroup("g1") } answers {
             calls += "join"; Result.success(Unit)
         }
-        coEvery { apiClient.getSyncPlayInfo("g1") } answers {
+        coEvery { syncPlayApi.getSyncPlayInfo("g1") } answers {
             calls += "info"
             Result.success(SyncPlayGroupInfo(groupId = "g1", groupName = "Party"))
         }
@@ -363,7 +365,7 @@ class SyncPlayManagerTest {
         reconnects.emit(Unit)
         delay(100)
 
-        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("g1") }
+        coVerify(exactly = 1) { syncPlayApi.joinSyncPlayGroup("g1") }
         assertEquals(0L, manager.lastReconnectMs)
     }
 }

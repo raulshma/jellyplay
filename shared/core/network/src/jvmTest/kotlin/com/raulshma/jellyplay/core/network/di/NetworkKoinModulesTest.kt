@@ -5,8 +5,8 @@ import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import com.raulshma.jellyplay.core.network.realtime.ActivityLogRealtimeChannel
@@ -26,7 +26,7 @@ import org.koin.dsl.module
 /**
  * Smoke test for the C4 Koin construction owner: loads [networkJvmModule] +
  * [desktopNetworkModule] against the (concurrently authored) datastore
- * modules and verifies the shapes the Hilt bridges depend on — the facade
+ * modules and verifies the shapes the app graph depends on — a family seam
  * aliasing its impl, the relocated realtime channels, and the derived
  * streaming/download clients being distinct instances of the base client.
  *
@@ -68,11 +68,11 @@ class NetworkKoinModulesTest {
         try {
             val koin = app.koin
 
-            // The Hilt bridge for JellyfinApiClient must resolve to the same
-            // singleton the concrete facade definition builds.
-            val facade = koin.get<JellyfinApiClient>()
-            assertTrue(facade is JellyfinApiClientImpl)
-            assertSame(koin.get<JellyfinApiClientImpl>(), facade)
+            // A family seam must resolve to the same singleton its concrete
+            // impl definition builds (the one-impl-many-seams binding shape).
+            val auth = koin.get<AuthApiClient>()
+            assertTrue(auth is AuthApiClientImpl)
+            assertSame(koin.get<AuthApiClientImpl>(), auth)
 
             // Relocated realtime channels construct off the shared engine /
             // WebSocket client / application scope.

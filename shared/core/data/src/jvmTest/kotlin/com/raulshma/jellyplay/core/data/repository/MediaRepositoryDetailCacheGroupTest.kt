@@ -1,23 +1,13 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
-import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -38,66 +28,30 @@ import kotlin.test.Test
  * (markUnplayed's user-data funnel, the force lever) plus the zero-coverage
  * wholesale theme-songs clear.
  *
- * Same fake/mock construction as [MediaRepositoryImplTest] (real HomeSession
- * + SessionCacheRegistry + EpisodeCatalogueImpl over a mocked apiClient;
- * this suite never switches identity).
+ * Construction rides [mediaRepoStackFor] — the same real HomeSession +
+ * SessionCacheRegistry + EpisodeCatalogueImpl stack as [MediaRepositoryImplTest],
+ * documented once on the harness; this suite never switches identity.
  */
 class MediaRepositoryDetailCacheGroupTest {
 
-    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
-    private var built: MediaRepositoryImpl? = null
-
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
+    // One relaxed mock per family seam the repo ctor takes (the library seam
+    // is the only one the suite stubs; the collection seam rides the ctor).
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
+    private val collectionApi: CollectionApiClient = mockk(relaxed = true)
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
-    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
-    private val userDataRealtimeChannel: UserDataRealtimeChannel = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
     @BeforeTest
     fun setup() {
-        every { apiClient.session } returns MutableStateFlow(null)
         coEvery { playedStateSync.flip(any(), any()) } returns Result.success(Unit)
         coEvery { playedStateSync.flip(any(), any(), any()) } returns Result.success(Unit)
         coEvery { playedStateSync.toggleFavorite(any()) } returns Result.success(true)
-        val homeSession = HomeSession(
-            apiClient,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        )
-        val sessionCacheRegistry = SessionCacheRegistry(
-            homeSession,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        )
-        val episodeCatalogue = EpisodeCatalogueImpl(
-            apiClient,
-            offlineRepository,
-            homeSession,
-            sessionCacheRegistry,
-        )
-        repository = MediaRepositoryImpl(
-            // One union mock covers both family seams (the JellyfinApiClient
-            // mock implements each of them).
+        repository = mediaRepoStackFor(
             libraryApiClient = apiClient,
-            collectionApiClient = apiClient,
-            // The home cache-maintenance port (inert here — this suite pins
-            // the detail-cache key grammar).
-            homeSectionsCachePort = mockk(relaxed = true),
-            // The persisted home pipeline is the store single the Koin graph
-            // wires (inert here — this
-            // suite pins the detail-cache key grammar).
-            homeSnapshotStore = HomeSectionsSnapshotStore(homeSectionCacheDao, homeSession, SystemTimeSource()),
+            collectionApiClient = collectionApi,
             playedStateSync = playedStateSync,
-            episodeCatalogue = episodeCatalogue,
-            userDataRealtimeChannel = userDataRealtimeChannel,
-            timeSource = SystemTimeSource(),
-            homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built },
-            sessionCacheRegistry = sessionCacheRegistry,
-            // Facade split: the group under test now lives on the shared
-            // internals holder (construction-only ctor re-point).
-            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        ).also { built = it }
+        ).repository
     }
 
     @Test

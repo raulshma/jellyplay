@@ -13,8 +13,8 @@ import com.raulshma.jellyplay.core.model.SearchResult
  * single implements this seam alongside the wide interface, so a consumer
  * narrows without a second client or a family supertype creeping back onto
  * [LibraryApiClient]). Members moved verbatim off [LibraryApiClient]; the
- * [JellyfinApiClient][com.raulshma.jellyplay.core.network.JellyfinApiClient]
- * union carries both.
+ * impl carries the wide interface and this seam alike (the retired
+ * `JellyfinApiClient` union carried both the same way).
  */
 interface PlaylistApiClient {
     suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>

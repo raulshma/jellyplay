@@ -310,8 +310,7 @@ interface LibraryApiClient {
     // The playlist ×8 and collection ×4 members left for the
     // [PlaylistApiClient] / [CollectionApiClient] family seams (the
     // one-impl-many-seams idiom: [LibraryApiClientImpl] implements all three;
-    // the JellyfinApiClient union carries them; consumers narrow to the seam
-    // they read).
+    // consumers narrow to the seam they read).
 
     /**
      * The ONE user-data write member — the parameterized fold of the four

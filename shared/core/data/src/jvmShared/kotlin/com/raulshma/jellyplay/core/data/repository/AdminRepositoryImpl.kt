@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Ctor narrowed to the family singles the members actually call — the
- * injected [JellyfinApiClient] union was a pure delegation over those same
- * singles, so every forward here paid two extra hops
+ * retired `JellyfinApiClient` union those singles used to compose was a pure
+ * delegation, so every forward here paid two extra hops
  * (feature → AdminRepository → union → family single) for nothing:
  *  - [AdminApiClient]: system/tasks/devices/sessions/logs/dashboard telemetry;
  *  - [UserApiClient]: managed users, current user, parental ratings, and the
@@ -36,8 +36,7 @@ import kotlinx.coroutines.flow.Flow
  *  - [LiveTvApiClient]: the users-detail auxiliary channels tab;
  *  - [LibraryApiClient]: tags (the editor's tag picker).
  * The follow-up narrowing batch took every remaining production injector off
- * the union — [JellyfinApiClient] survives as the networkJvmModule binding
- * over the same impl, not a constructor seam.
+ * the union — which the network module has since retired outright.
  */
 class AdminRepositoryImpl constructor(
     private val adminApiClient: AdminApiClient,

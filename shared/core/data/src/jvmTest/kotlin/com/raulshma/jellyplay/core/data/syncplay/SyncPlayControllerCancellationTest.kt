@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -18,7 +18,9 @@ import kotlin.test.Test
  */
 class SyncPlayControllerCancellationTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // The family seam the ctor takes (the union it used to double for is
+    // retired — same wire, one interface).
+    private val apiClient: SyncPlayApiClient = mockk(relaxed = true)
     private lateinit var controller: SyncPlayController
 
     @BeforeTest

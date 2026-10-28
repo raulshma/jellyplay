@@ -18,7 +18,10 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MetadataApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.api.UserDataWrite
 import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import io.mockk.coEvery
@@ -46,7 +49,12 @@ import kotlin.test.assertTrue
  */
 class PlaybackRepositoryImplTest {
 
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // One relaxed mock per family seam the ctor takes (the single union mock
+    // these replaced implemented all four).
+    private val playbackApi: PlaybackApiClient = mockk(relaxed = true)
+    private val libraryApi: LibraryApiClient = mockk(relaxed = true)
+    private val authApi: AuthApiClient = mockk(relaxed = true)
+    private val metadataApi: MetadataApiClient = mockk(relaxed = true)
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val mediaCacheInvalidation: MediaRepositoryCacheInvalidation = mockk(relaxed = true)
@@ -61,9 +69,9 @@ class PlaybackRepositoryImplTest {
         // Real HomeSession over a permanently-null session flow (this suite
         // never switches identity — CacheIdentity.UNKNOWN is the key surface)
         // plus the registry that owns identity reactions.
-        every { apiClient.session } returns MutableStateFlow(null)
+        every { authApi.session } returns MutableStateFlow(null)
         val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
-            apiClient,
+            authApi,
             kotlinx.coroutines.CoroutineScope(
                 kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
             ),
@@ -73,9 +81,7 @@ class PlaybackRepositoryImplTest {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
         )
         repository = PlaybackRepositoryImpl(
-            // One union mock covers all four narrowed family seams: the
-            // JellyfinApiClient mock implements each of them.
-            apiClient, apiClient, apiClient, apiClient,
+            playbackApi, libraryApi, authApi, metadataApi,
             outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
             userDataAnnouncer = userDataAnnouncer,
@@ -89,7 +95,7 @@ class PlaybackRepositoryImplTest {
             sessionId = "session-1",
             playMethod = PlayMethod.DIRECT_PLAY,
         )
-        coEvery { apiClient.reportPlaybackStart("item-1", "session-1", PlayMethod.DIRECT_PLAY) } returns
+        coEvery { playbackApi.reportPlaybackStart("item-1", "session-1", PlayMethod.DIRECT_PLAY) } returns
             Result.success(Unit)
 
         val result = repository.reportPlaybackStart(info)
@@ -107,7 +113,7 @@ class PlaybackRepositoryImplTest {
             playMethod = PlayMethod.DIRECT_PLAY,
         )
         coEvery {
-            apiClient.reportPlaybackProgress("item-1", "session-1", 10000000L, false, PlayMethod.DIRECT_PLAY)
+            playbackApi.reportPlaybackProgress("item-1", "session-1", 10000000L, false, PlayMethod.DIRECT_PLAY)
         } returns Result.success(Unit)
 
         val result = repository.reportPlaybackProgress(progress)
@@ -117,7 +123,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportPlaybackStopped delegates to apiClient`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
             Result.success(Unit)
 
         val result = repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
@@ -129,29 +135,29 @@ class PlaybackRepositoryImplTest {
     fun `reportPlaybackStopped threads the failed flag to the apiClient`() = runTest {
         // An error-aborted session's stop must reach the wire with
         // failed=true (the server then skips its own ">= X% = played" rule).
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, true) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L, true) } returns
             Result.success(Unit)
 
         val result = repository.reportPlaybackStopped("item-1", "session-1", 5000000L, failed = true)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, true) }
-        coVerify(exactly = 0) { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, false) }
+        coVerify(exactly = 1) { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L, true) }
+        coVerify(exactly = 0) { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L, false) }
     }
 
     @Test
     fun `reportPlaybackStopped defaults to a non-failed stop`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, false) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L, false) } returns
             Result.success(Unit)
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
-        coVerify(exactly = 1) { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L, false) }
+        coVerify(exactly = 1) { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L, false) }
     }
 
     @Test
     fun `reportPlaybackStopped purges user-data caches for the item`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
             Result.success(Unit)
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
@@ -162,7 +168,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportPlaybackStopped announces the confirmed position write`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
             Result.success(Unit)
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
@@ -172,7 +178,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportPlaybackStopped does not announce when the send failed`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 5000000L) } returns
             Result.failure(java.io.IOException("down"))
 
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
@@ -187,7 +193,7 @@ class PlaybackRepositoryImplTest {
         repository.reportPlaybackStopped("item-1", "session-1", 5000000L)
 
         verify(exactly = 2) { mediaCacheInvalidation.invalidateForUserDataChange("item-1", null) }
-        coVerify(exactly = 0) { apiClient.reportPlaybackStopped(any(), any(), any()) }
+        coVerify(exactly = 0) { playbackApi.reportPlaybackStopped(any(), any(), any()) }
     }
 
     @Test
@@ -202,7 +208,7 @@ class PlaybackRepositoryImplTest {
     @Test
     fun `reportPlaybackProgress does not purge user-data caches`() = runTest {
         coEvery {
-            apiClient.reportPlaybackProgress("item-1", "session-1", 10000000L, false, PlayMethod.DIRECT_PLAY)
+            playbackApi.reportPlaybackProgress("item-1", "session-1", 10000000L, false, PlayMethod.DIRECT_PLAY)
         } returns Result.success(Unit)
 
         repository.reportPlaybackProgress(
@@ -220,7 +226,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getStreamUrl delegates to apiClient`() {
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
+        every { playbackApi.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
 
         val url = repository.getStreamUrl("item-1", "source-1", 0L)
 
@@ -232,7 +238,7 @@ class PlaybackRepositoryImplTest {
         val segments = listOf(
             MediaSegment("seg-1", "item-1", MediaSegmentType.INTRO, 1000L, 5000L),
         )
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(segments)
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.success(segments)
 
         val result = repository.getMediaSegments("item-1")
 
@@ -243,11 +249,11 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getMediaSegments falls back to intro and credit timestamps`() = runTest {
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(emptyList())
-        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.success(emptyList())
+        coEvery { playbackApi.getIntroTimestamps("item-1") } returns Result.success(
             IntroTimestamps(itemId = "item-1", introStartTicks = 100L, introEndTicks = 200L)
         )
-        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(
+        coEvery { playbackApi.getCreditTimestamps("item-1") } returns Result.success(
             CreditTimestamps(itemId = "item-1", creditStartTicks = 300L, creditEndTicks = 400L)
         )
 
@@ -264,11 +270,11 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getMediaSegments falls back with only intro`() = runTest {
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(emptyList())
-        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.success(emptyList())
+        coEvery { playbackApi.getIntroTimestamps("item-1") } returns Result.success(
             IntroTimestamps(itemId = "item-1", introStartTicks = 100L, introEndTicks = 200L)
         )
-        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(
+        coEvery { playbackApi.getCreditTimestamps("item-1") } returns Result.success(
             CreditTimestamps(itemId = "item-1")
         )
 
@@ -282,11 +288,11 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getMediaSegments returns empty when no segments found`() = runTest {
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(emptyList())
-        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.success(emptyList())
+        coEvery { playbackApi.getIntroTimestamps("item-1") } returns Result.success(
             IntroTimestamps(itemId = "item-1")
         )
-        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(
+        coEvery { playbackApi.getCreditTimestamps("item-1") } returns Result.success(
             CreditTimestamps(itemId = "item-1")
         )
 
@@ -301,36 +307,36 @@ class PlaybackRepositoryImplTest {
         val segments = listOf(
             MediaSegment("seg-1", "item-1", MediaSegmentType.INTRO, 1000L, 5000L),
         )
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(segments)
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.success(segments)
 
         val first = repository.getMediaSegments("item-1")
         val second = repository.getMediaSegments("item-1")
 
         assertTrue(first.isSuccess)
         assertTrue(second.isSuccess)
-        coVerify(exactly = 1) { apiClient.getMediaSegments("item-1") }
+        coVerify(exactly = 1) { playbackApi.getMediaSegments("item-1") }
     }
 
     @Test
     fun `getMediaSegments caches empty fallback when segments API succeeds with no segments`() = runTest {
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(emptyList())
-        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(IntroTimestamps(itemId = "item-1"))
-        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(CreditTimestamps(itemId = "item-1"))
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.success(emptyList())
+        coEvery { playbackApi.getIntroTimestamps("item-1") } returns Result.success(IntroTimestamps(itemId = "item-1"))
+        coEvery { playbackApi.getCreditTimestamps("item-1") } returns Result.success(CreditTimestamps(itemId = "item-1"))
 
         repository.getMediaSegments("item-1")
         repository.getMediaSegments("item-1")
 
         // Success-empty is cached: the legacy endpoints are not re-hit.
-        coVerify(exactly = 1) { apiClient.getMediaSegments("item-1") }
+        coVerify(exactly = 1) { playbackApi.getMediaSegments("item-1") }
     }
 
     @Test
     fun `getMediaSegments does not cache when segments API fails so the next call retries`() = runTest {
         // A transient network failure must not be masked as "no segments" for
         // the cache TTL — the next call should retry the API.
-        coEvery { apiClient.getMediaSegments("item-1") } returns Result.failure(RuntimeException("network"))
-        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(IntroTimestamps(itemId = "item-1"))
-        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(CreditTimestamps(itemId = "item-1"))
+        coEvery { playbackApi.getMediaSegments("item-1") } returns Result.failure(RuntimeException("network"))
+        coEvery { playbackApi.getIntroTimestamps("item-1") } returns Result.success(IntroTimestamps(itemId = "item-1"))
+        coEvery { playbackApi.getCreditTimestamps("item-1") } returns Result.success(CreditTimestamps(itemId = "item-1"))
 
         val first = repository.getMediaSegments("item-1")
         val second = repository.getMediaSegments("item-1")
@@ -338,7 +344,7 @@ class PlaybackRepositoryImplTest {
         assertTrue(first.isSuccess)
         assertTrue(second.isSuccess)
         // Not cached on failure: the API is hit again on the second call.
-        coVerify(exactly = 2) { apiClient.getMediaSegments("item-1") }
+        coVerify(exactly = 2) { playbackApi.getMediaSegments("item-1") }
     }
 
     @Test
@@ -351,13 +357,13 @@ class PlaybackRepositoryImplTest {
         // into the just-cleared cache, pinning it for the TTL if the user
         // switches back to that identity.
         val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-        every { apiClient.session } returns sessionFlow
+        every { authApi.session } returns sessionFlow
         // Unconfined observers (see MediaRepositoryHomeSectionsCacheTest's
         // buildRepository): each session assignment drives the classifier
         // AND the registry reactions synchronously on the setter's stack, so
         // the mid-flight switch below lands deterministically.
         val homeSession = com.raulshma.jellyplay.core.data.session.HomeSession(
-            apiClient,
+            authApi,
             CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
         val sessionCacheRegistry = com.raulshma.jellyplay.core.data.session.SessionCacheRegistry(
@@ -365,9 +371,7 @@ class PlaybackRepositoryImplTest {
             CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
         val repo = PlaybackRepositoryImpl(
-            // One union mock covers all four narrowed family seams: the
-            // JellyfinApiClient mock implements each of them.
-            apiClient, apiClient, apiClient, apiClient,
+            playbackApi, libraryApi, authApi, metadataApi,
             outbox, offlineModeManager, homeSession, sessionCacheRegistry,
             mediaCacheInvalidation = mediaCacheInvalidation,
             userDataAnnouncer = userDataAnnouncer,
@@ -376,7 +380,7 @@ class PlaybackRepositoryImplTest {
 
         val fetchStarted = CompletableDeferred<Unit>()
         val releaseFetch = CompletableDeferred<Unit>()
-        coEvery { apiClient.getMediaSegments("item-1") } coAnswers {
+        coEvery { playbackApi.getMediaSegments("item-1") } coAnswers {
             fetchStarted.complete(Unit)
             releaseFetch.await()
             Result.success(listOf(MediaSegment("seg-1", "item-1", MediaSegmentType.INTRO, 1000L, 5000L)))
@@ -396,7 +400,7 @@ class PlaybackRepositoryImplTest {
         val afterSwitchBack = repo.getMediaSegments("item-1")
 
         assertTrue(afterSwitchBack.isSuccess)
-        coVerify(exactly = 2) { apiClient.getMediaSegments("item-1") }
+        coVerify(exactly = 2) { playbackApi.getMediaSegments("item-1") }
     }
 
     private fun userInfo(id: String) = UserInfo(
@@ -425,8 +429,8 @@ class PlaybackRepositoryImplTest {
     // ── resolvePlayable: the resolve→fallback→default ladder ─────────
 
     private fun stubServer() {
-        every { apiClient.getServerUrl() } returns "https://test.example.com"
-        every { apiClient.getAccessToken() } returns "token-123"
+        every { authApi.getServerUrl() } returns "https://test.example.com"
+        every { authApi.getAccessToken() } returns "token-123"
     }
 
     private fun vodRequest(
@@ -447,9 +451,9 @@ class PlaybackRepositoryImplTest {
     @Test
     fun `resolvePlayable picks Direct Play when supported and uses static URL`() = runTest {
         stubServer()
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
+        every { playbackApi.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "session-xyz",
@@ -472,14 +476,14 @@ class PlaybackRepositoryImplTest {
         assertEquals("https://test/stream", playback.streamUrl)
         assertEquals("session-xyz", playback.playSessionId)
         // The resolve arm answered: no fallback round-trip may follow it.
-        coVerify(exactly = 1) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `resolvePlayable falls back to transcode URL when only transcoding is supported`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "session-t",
@@ -513,7 +517,7 @@ class PlaybackRepositoryImplTest {
         // with the DIRECT_PLAY default and no play session — never a miss.
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = null,
@@ -528,22 +532,22 @@ class PlaybackRepositoryImplTest {
                 ),
             ),
         )
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
+        every { playbackApi.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
 
         val resolution = repository.resolvePlayable(vodRequest(mode = PlaybackMode.FORCE_DIRECT_PLAY))
 
         assertEquals(PlaybackResolution.StaticFallback("https://test/stream"), resolution)
         // A non-live request never runs the live ladder — one fetch total.
-        coVerify(exactly = 1) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `resolvePlayable serves the static fallback when the PlaybackInfo fetch fails`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("network down"))
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
+        every { playbackApi.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
 
         val resolution = repository.resolvePlayable(vodRequest())
 
@@ -557,7 +561,7 @@ class PlaybackRepositoryImplTest {
         // no playable URL, so the ladder refetches and resolves via the
         // liveStreamId (the tuner is already open server-side).
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "psid-1",
@@ -575,7 +579,7 @@ class PlaybackRepositoryImplTest {
             ),
         )
         every {
-            apiClient.getStreamUrl("item-1", "src-1", 0L, maxBitrate = null, liveStreamId = "tuner-9")
+            playbackApi.getStreamUrl("item-1", "src-1", 0L, maxBitrate = null, liveStreamId = "tuner-9")
         } returns "https://test.example.com/Videos/src-1/stream?LiveStreamId=tuner-9"
 
         val resolution = repository.resolvePlayable(
@@ -598,14 +602,14 @@ class PlaybackRepositoryImplTest {
         assertEquals(PlayMethod.DIRECT_STREAM, playback.playMethod)
         assertEquals("psid-1", playback.playSessionId)
         // Resolve arm + ladder: exactly two PlaybackInfo fetches.
-        coVerify(exactly = 2) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `resolvePlayable forced live fallback skips the resolve arm and never rides the transcode URL`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "psid-t",
@@ -623,7 +627,7 @@ class PlaybackRepositoryImplTest {
             ),
         )
         every {
-            apiClient.getStreamUrl("item-1", "src-1", 0L, maxBitrate = null, liveStreamId = "live-1")
+            playbackApi.getStreamUrl("item-1", "src-1", 0L, maxBitrate = null, liveStreamId = "live-1")
         } returns "https://test.example.com/Videos/src-1/stream?LiveStreamId=live-1"
 
         val resolution = repository.resolvePlayable(
@@ -648,14 +652,14 @@ class PlaybackRepositoryImplTest {
         assertEquals("https://test.example.com/Videos/src-1/stream?LiveStreamId=live-1", playback.streamUrl)
         assertEquals(PlayMethod.DIRECT_STREAM, playback.playMethod)
         // Skipping the resolve arm: exactly one fetch (the ladder's).
-        coVerify(exactly = 1) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `resolvePlayable live request with a failing fetch resolves to Unplayable`() = runTest {
         stubServer()
         coEvery {
-            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackApi.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("server down"))
 
         val resolution = repository.resolvePlayable(
@@ -701,13 +705,13 @@ class PlaybackRepositoryImplTest {
                 mediaSourceId = null,
             )
         }
-        coVerify(exactly = 0) { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { playbackApi.reportPlaybackProgress(any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `reportPlaybackProgress enqueues to outbox when online api call fails`() = runTest {
         coEvery {
-            apiClient.reportPlaybackProgress("item-1", "session-1", 10_000_000L, false, PlayMethod.DIRECT_PLAY)
+            playbackApi.reportPlaybackProgress("item-1", "session-1", 10_000_000L, false, PlayMethod.DIRECT_PLAY)
         } returns Result.failure(RuntimeException("timeout"))
 
         repository.reportPlaybackProgress(
@@ -763,18 +767,18 @@ class PlaybackRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { outbox.enqueueStop("item-1", "session-1", 8_000_000L) }
-        coVerify(exactly = 0) { apiClient.reportPlaybackStopped(any(), any(), any()) }
+        coVerify(exactly = 0) { playbackApi.reportPlaybackStopped(any(), any(), any()) }
     }
 
     @Test
     fun `reportPlaybackStopped clears telemetry for item on online success`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
             Result.success(Unit)
 
         repository.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
 
         coVerifyOrder {
-            apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
+            playbackApi.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
             outbox.deletePlaybackTelemetryForItem("item-1")
         }
         // Must NOT wipe the whole item — a pending PLAYED/UNPLAYED flip survives.
@@ -784,7 +788,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportPlaybackStopped enqueues stop when online api call fails`() = runTest {
-        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
+        coEvery { playbackApi.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
             Result.failure(RuntimeException("server 500"))
 
         repository.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
@@ -798,7 +802,7 @@ class PlaybackRepositoryImplTest {
     @Test
     fun `reportPlaybackProgress online success does not enqueue outbox`() = runTest {
         coEvery {
-            apiClient.reportPlaybackProgress("item-1", "s1", 1L, false, PlayMethod.DIRECT_PLAY)
+            playbackApi.reportPlaybackProgress("item-1", "s1", 1L, false, PlayMethod.DIRECT_PLAY)
         } returns Result.success(Unit)
 
         repository.reportPlaybackProgress(
@@ -810,7 +814,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportPlaybackStart online success does not enqueue outbox`() = runTest {
-        coEvery { apiClient.reportPlaybackStart("item-1", "s1", PlayMethod.DIRECT_PLAY) } returns
+        coEvery { playbackApi.reportPlaybackStart("item-1", "s1", PlayMethod.DIRECT_PLAY) } returns
             Result.success(Unit)
 
         repository.reportPlaybackStart(PlaybackStartInfo(itemId = "item-1", sessionId = "s1"))
@@ -820,7 +824,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportPlaybackStart enqueues to outbox when online api call fails`() = runTest {
-        coEvery { apiClient.reportPlaybackStart("item-1", "s1", PlayMethod.TRANSCODE) } returns
+        coEvery { playbackApi.reportPlaybackStart("item-1", "s1", PlayMethod.TRANSCODE) } returns
             Result.failure(RuntimeException("timeout"))
 
         repository.reportPlaybackStart(
@@ -869,7 +873,7 @@ class PlaybackRepositoryImplTest {
     @Test
     fun `reportPlaybackProgress online propagates all fields to apiClient`() = runTest {
         coEvery {
-            apiClient.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_STREAM)
+            playbackApi.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_STREAM)
         } returns Result.success(Unit)
 
         repository.reportPlaybackProgress(
@@ -884,7 +888,7 @@ class PlaybackRepositoryImplTest {
         )
 
         coVerify(exactly = 1) {
-            apiClient.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_STREAM)
+            playbackApi.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_STREAM)
         }
     }
 
@@ -918,7 +922,7 @@ class PlaybackRepositoryImplTest {
     @Test
     fun `repeated online progress failures enqueue repeatedly relying on outbox coalescence`() = runTest {
         coEvery {
-            apiClient.reportPlaybackProgress("item-1", "s1", any(), any(), PlayMethod.DIRECT_PLAY)
+            playbackApi.reportPlaybackProgress("item-1", "s1", any(), any(), PlayMethod.DIRECT_PLAY)
         } returns Result.failure(RuntimeException("down"))
 
         // Simulate the 10s reporter loop firing 3 times while offline-but-reported-online.
@@ -959,7 +963,7 @@ class PlaybackRepositoryImplTest {
     fun `replayOutboxEntry START dispatches reportPlaybackStart`() = runTest {
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.START))
 
-        coVerify(exactly = 1) { apiClient.reportPlaybackStart("item-1", "s1", PlayMethod.DIRECT_PLAY) }
+        coVerify(exactly = 1) { playbackApi.reportPlaybackStart("item-1", "s1", PlayMethod.DIRECT_PLAY) }
         // Pure dispatch: never touches the outbox.
         coVerify(exactly = 0) { outbox.enqueueStart(any(), any(), any(), any()) }
     }
@@ -971,7 +975,7 @@ class PlaybackRepositoryImplTest {
         )
 
         coVerify(exactly = 1) {
-            apiClient.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_PLAY)
+            playbackApi.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_PLAY)
         }
     }
 
@@ -979,7 +983,7 @@ class PlaybackRepositoryImplTest {
     fun `replayOutboxEntry STOP dispatches reportPlaybackStopped`() = runTest {
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.STOP, positionTicks = 5_000_000L))
 
-        coVerify(exactly = 1) { apiClient.reportPlaybackStopped("item-1", "s1", 5_000_000L) }
+        coVerify(exactly = 1) { playbackApi.reportPlaybackStopped("item-1", "s1", 5_000_000L) }
     }
 
     @Test
@@ -987,8 +991,8 @@ class PlaybackRepositoryImplTest {
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED, itemId = "a"))
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.UNPLAYED, itemId = "b"))
 
-        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed("a")) }
-        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkUnplayed("b")) }
+        coVerify(exactly = 1) { libraryApi.writeUserData(UserDataWrite.MarkPlayed("a")) }
+        coVerify(exactly = 1) { libraryApi.writeUserData(UserDataWrite.MarkUnplayed("b")) }
     }
 
     @Test
@@ -996,20 +1000,20 @@ class PlaybackRepositoryImplTest {
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.FAVORITE, itemId = "a"))
         repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.UNFAVORITE, itemId = "b"))
 
-        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.SetFavorite("a", isFavorite = true)) }
-        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.SetFavorite("b", isFavorite = false)) }
+        coVerify(exactly = 1) { libraryApi.writeUserData(UserDataWrite.SetFavorite("a", isFavorite = true)) }
+        coVerify(exactly = 1) { libraryApi.writeUserData(UserDataWrite.SetFavorite("b", isFavorite = false)) }
     }
 
     @Test
     fun `replayOutboxEntry returns true on server success`() = runTest {
-        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.success(UserDataWriteOutcome.Done)
+        coEvery { libraryApi.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.success(UserDataWriteOutcome.Done)
 
         assertTrue(repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED)))
     }
 
     @Test
     fun `replayOutboxEntry returns false on server failure`() = runTest {
-        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.failure<UserDataWriteOutcome>(RuntimeException("500"))
+        coEvery { libraryApi.writeUserData(UserDataWrite.MarkPlayed("item-1")) } returns Result.failure<UserDataWriteOutcome>(RuntimeException("500"))
 
         assertEquals(false, repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED)))
         // No re-enqueue — the drain loop owns retry/dead-letter.
@@ -1020,12 +1024,12 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `reportBookProgress delegates online and returns success`() = runTest {
-        coEvery { apiClient.reportBookProgress("item-1", 30_000L) } returns Result.success(Unit)
+        coEvery { playbackApi.reportBookProgress("item-1", 30_000L) } returns Result.success(Unit)
 
         val result = repository.reportBookProgress("item-1", 30_000L)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { apiClient.reportBookProgress("item-1", 30_000L) }
+        coVerify(exactly = 1) { playbackApi.reportBookProgress("item-1", 30_000L) }
         coVerify(exactly = 0) { outbox.enqueueBookProgress(any(), any()) }
     }
 
@@ -1036,13 +1040,13 @@ class PlaybackRepositoryImplTest {
         val result = repository.reportBookProgress("item-1", 30_000L)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 0) { apiClient.reportBookProgress(any(), any()) }
+        coVerify(exactly = 0) { playbackApi.reportBookProgress(any(), any()) }
         coVerify(exactly = 1) { outbox.enqueueBookProgress("item-1", 30_000L) }
     }
 
     @Test
     fun `reportBookProgress stages on send failure and still returns success`() = runTest {
-        coEvery { apiClient.reportBookProgress("item-1", any()) } returns
+        coEvery { playbackApi.reportBookProgress("item-1", any()) } returns
             Result.failure(RuntimeException("down"))
 
         val result = repository.reportBookProgress("item-1", 40_000L)
@@ -1057,15 +1061,15 @@ class PlaybackRepositoryImplTest {
             outboxEntry(PlaybackOutboxEventType.BOOK_PROGRESS, positionTicks = 70_000L),
         )
 
-        coVerify(exactly = 1) { apiClient.reportBookProgress("item-1", 70_000L) }
+        coVerify(exactly = 1) { playbackApi.reportBookProgress("item-1", 70_000L) }
         // Pure dispatch: never touches the outbox.
         coVerify(exactly = 0) { outbox.enqueueBookProgress(any(), any()) }
     }
 
     @Test
     fun `getBookDownloadUrl builds from the active session`() {
-        every { apiClient.getServerUrl() } returns "http://server:8096"
-        every { apiClient.getAccessToken() } returns "tok"
+        every { authApi.getServerUrl() } returns "http://server:8096"
+        every { authApi.getAccessToken() } returns "tok"
 
         val url = repository.getBookDownloadUrl("item-1")
 
@@ -1076,7 +1080,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getBookDownloadUrl returns empty without a session`() {
-        every { apiClient.getServerUrl() } returns null
+        every { authApi.getServerUrl() } returns null
 
         assertEquals("", repository.getBookDownloadUrl("item-1"))
     }

@@ -8,8 +8,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.ServerDiscoveryService
@@ -127,25 +125,6 @@ val networkJvmModule: Module = module {
             addressRouter = get(),
         )
     }
-    single {
-        JellyfinApiClientImpl(
-            authClient = get(),
-            libraryClient = get(),
-            playlistClient = get(),
-            collectionClient = get(),
-            playbackClient = get(),
-            syncPlayClient = get(),
-            liveTvClient = get(),
-            adminClient = get(),
-            metadataClient = get(),
-            mediaInfoClient = get(),
-            jellyPlayPluginClient = get(),
-            pluginClient = get(),
-            userClient = get(),
-        )
-    }
-    single<JellyfinApiClient> { get<JellyfinApiClientImpl>() }
-
     single { AuthApiClientImpl(get(), get()) }
     single<AuthApiClient> { get<AuthApiClientImpl>() }
     // The get()-resolved TimeSource single is dataJvmModule's SystemTimeSource

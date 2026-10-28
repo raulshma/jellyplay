@@ -26,9 +26,9 @@ internal val dataPlaybackFamilyModule: Module = module {
     // ── playback family (PlaybackRepository + PlaybackIdentity) ──────────
     single {
         PlaybackRepositoryImpl(
-            // Narrow family seams, not the JellyfinApiClient union: the impl
-            // only touches playback/library/auth/metadata, and the family
-            // singles below compose the same impls JellyfinApiClientImpl does.
+            // Narrow family seams (the retired JellyfinApiClient union was a
+            // pure delegation over these same impl singles): the impl
+            // only touches playback/library/auth/metadata.
             playbackApiClient = get<PlaybackApiClient>(),
             libraryApiClient = get<LibraryApiClient>(),
             authApiClient = get<AuthApiClient>(),

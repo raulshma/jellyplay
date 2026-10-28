@@ -27,8 +27,8 @@ internal val dataAdminModule: Module = module {
     // legacy :core:data shim (Hilt @Binds -> koin().get() bridges there, the
     // app's Hilt interop singles deleted). Every ctor dep resolves natively
     // here: the family API clients (admin/user/live-tv/library — the ctor
-    // narrowing; the JellyfinApiClient union is a pure delegation over these
-    // same networkJvmModule singles) + engine + the two realtime channels,
+    // narrowing, each its own networkJvmModule single) + engine + the two
+    // realtime channels,
     // the DAOs from databaseDaosModule, Json from networkJvmModule, the
     // application scope from DatastoreQualifiers, and the label seam from the
     // platform data modules (Android: the app's androidAdminSeamsModule over

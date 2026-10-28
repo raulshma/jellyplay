@@ -14,7 +14,8 @@ import kotlinx.serialization.json.JsonElement
  * contract area) and adds nothing of its own. ADR-0010 §5 stands — all routes
  * ride the one family impl ([JellyPlayPluginApiClientImpl]) over the raw
  * requester — while consumers and test fakes depend on the single narrow
- * role they use. The composite stays what `JellyfinApiClient` registers.
+ * role they use. The composite is what the network module's family singles
+ * register (the retired `JellyfinApiClient` composite's registration role).
  *
  * Availability contract: every call 404s when the plugin is absent. The
  * capability probe ([JellyPlayCapabilitiesRoutes.getCapabilities]) is the ONE

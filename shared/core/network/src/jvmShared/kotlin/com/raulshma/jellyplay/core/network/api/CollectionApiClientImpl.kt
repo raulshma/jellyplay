@@ -14,9 +14,9 @@ import org.jellyfin.sdk.api.client.extensions.*
  * moved verbatim off [LibraryApiClientImpl]. Like its playlist sibling
  * ([PlaylistApiClientImpl]) it closes over nothing but the SAME
  * [JellyfinApiEngine] single the wide client uses — no caches, no fetcher, no
- * favorite-flag store — so Koin constructs it over the engine and the union's
- * [com.raulshma.jellyplay.core.network.JellyfinApiClientImpl] delegates this
- * seam here; the split is pure relocation.
+ * favorite-flag store — so Koin constructs it over the engine alone and the
+ * wide client forwards its one collection obligation here; the split is pure
+ * relocation.
  *
  * One deliberate backward hop: [LibraryApiClientImpl] keeps satisfying
  * [com.raulshma.jellyplay.core.network.library.HomeSectionSources] (the home

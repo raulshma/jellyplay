@@ -337,11 +337,9 @@ internal val dataMediaRepositoryModule: Module = module {
     }
     single {
         SyncPlayManager(
-            // Narrow family seams, not the JellyfinApiClient union (the
-            // PlaybackRepositoryImpl ctor precedent): the manager only
-            // touches SyncPlay group lifecycle/ping + Auth's capability
-            // broadcast, and the family singles compose the same impls
-            // JellyfinApiClientImpl does.
+            // Narrow family seams (the PlaybackRepositoryImpl ctor
+            // precedent): the manager only touches SyncPlay group
+            // lifecycle/ping + Auth's capability broadcast.
             syncPlayApiClient = get<SyncPlayApiClient>(),
             authApiClient = get<AuthApiClient>(),
             webSocketClient = get(),

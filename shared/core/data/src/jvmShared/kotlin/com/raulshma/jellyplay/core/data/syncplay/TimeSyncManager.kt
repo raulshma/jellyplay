@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 class TimeSyncManager constructor(
     // getServerTime lives on the playback family client (the PlaybackRepositoryImpl
-    // ctor precedent: family seam, not the JellyfinApiClient union).
+    // ctor precedent: the family seam, not a wide client surface).
     private val playbackApiClient: PlaybackApiClient,
     /**
      * The Koin application scope (DatastoreQualifiers.applicationScope) the
