@@ -512,4 +512,18 @@
     <string name="jellyplay_det_recap_badge">Riepilogo</string>
     <string name="detail_cd_theme_music_mute">Silenzia musica tema</string>
     <string name="detail_cd_theme_music_unmute">Riattiva musica tema</string>
+    <!-- PENDING TRANSLATION: copied verbatim from the default locale by StringsPropagator — translate each entry and fold it into the groups above. -->
+    <string name="detail_trailer_badge_local">Local</string>
+    <string name="detail_reviews_all">All reviews (%1$d)</string>
+    <string name="detail_section_more_in_collection_format">More in %1$s</string>
+    <string name="detail_play_collection_in_order">Play collection in order</string>
+    <string name="detail_cd_hide_collection_row">Hide this collection row</string>
+    <string name="detail_section_airing_next">Airing next</string>
+    <string name="detail_airs_countdown_format">in %1$dd</string>
+    <string name="detail_airs_countdown_today">Airs today</string>
+    <string name="detail_option_play_with_prerolls">Play (with pre-rolls)</string>
+    <string name="detail_option_notify_new_episodes">Notify me about new episodes</string>
+    <string name="detail_option_stop_notify_new_episodes">Stop notifying about new episodes</string>
+    <string name="detail_msg_series_notifications_on">New-episode notifications on</string>
+    <string name="detail_msg_series_notifications_off">New-episode notifications off</string>
 </resources>
