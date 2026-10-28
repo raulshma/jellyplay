@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -36,11 +38,19 @@ class LibraryApiHandMappersTest {
 
     @BeforeTest
     fun setup() {
+        // The router is a relaxed mock with a permanently-null activeAddress:
+        // a REAL router + updateServer emits the address and the engine's
+        // rebuild collector then races the test's updateApi — losing the race
+        // lands in the SDK's createApi default-args static, which NPEs on the
+        // mock Jellyfin's null options (see AdminApiClientImplTest's setup
+        // note). With the flow stuck at null the collector never fires.
+        val router = mockk<ServerAddressRouter>(relaxed = true)
+        every { router.activeAddress } returns MutableStateFlow(null)
         engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
-            addressRouter = ServerAddressRouter(),
+            addressRouter = router,
         )
         engine.updateServer(ServerInfo(id = "server-1", name = "Test Server", address = "https://test.example.com"))
         engine.updateUser(TEST_USER)

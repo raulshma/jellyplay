@@ -6,7 +6,9 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePortAdapter
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
@@ -61,11 +63,19 @@ class LibraryApiClientImplTest {
     @BeforeTest
     fun setup() {
         val jellyfin = mockk<Jellyfin>(relaxed = true)
+        // The router is a relaxed mock with a permanently-null activeAddress:
+        // a REAL router + updateServer emits the address and the engine's
+        // rebuild collector then races the test's updateApi — losing the race
+        // lands in the SDK's createApi default-args static, which NPEs on the
+        // mock Jellyfin's null options (see AdminApiClientImplTest's setup
+        // note). With the flow stuck at null the collector never fires.
+        val router = mockk<ServerAddressRouter>(relaxed = true)
+        every { router.activeAddress } returns MutableStateFlow(null)
         engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { jellyfin },
             okHttpClientLazy = LazyProvider { OkHttpClient() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
-            addressRouter = ServerAddressRouter(),
+            addressRouter = router,
         )
         // A signed-in (server, user) pair so the favorite cache keys off a real
         // CacheIdentity instead of the pre-login UNKNOWN fallback.
