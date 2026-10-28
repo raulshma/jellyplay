@@ -171,10 +171,10 @@ fun DownloadsScreen(
         hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
-    val updatesAvailable by viewModel.updatesAvailable.collectAsStateWithLifecycle()
-    val checking by viewModel.checking.collectAsStateWithLifecycle()
-    val updateRows by viewModel.updateRows.collectAsStateWithLifecycle(initialValue = emptyList())
-    val resyncProgress by viewModel.resyncProgress.collectAsStateWithLifecycle()
+    val updatesAvailable by viewModel.resyncActions.updatesAvailable.collectAsStateWithLifecycle()
+    val checking by viewModel.resyncActions.checking.collectAsStateWithLifecycle()
+    val updateRows by viewModel.resyncActions.updateRows.collectAsStateWithLifecycle(initialValue = emptyList())
+    val resyncProgress by viewModel.resyncActions.resyncProgress.collectAsStateWithLifecycle()
 
     // One-shot delete feedback (screen-forward seam): resolve the texts here,
     // post each emitted message through the app-wide UserMessageBus.
@@ -344,7 +344,7 @@ fun DownloadsScreen(
                 val syncFocus = rememberTvFocusState()
                 IconButton(
                     onClick = {
-                        viewModel.checkAllForUpdates()
+                        viewModel.resyncActions.checkAllForUpdates()
                         showResyncSheet = true
                     },
                     modifier = Modifier
@@ -792,16 +792,16 @@ fun DownloadsScreen(
             updateRows = updateRows,
             checking = checking,
             progress = resyncProgress,
-            onResyncAll = viewModel::resyncAll,
-            onResyncOne = viewModel::resyncOne,
+            onResyncAll = viewModel.resyncActions::resyncAll,
+            onResyncOne = viewModel.resyncActions::resyncOne,
             onForceResync = {
                 showResyncSheet = false
-                viewModel.clearResyncProgress()
+                viewModel.resyncActions.clearResyncProgress()
                 showForceResyncSheet = true
             },
             onDismiss = {
                 showResyncSheet = false
-                viewModel.clearResyncProgress()
+                viewModel.resyncActions.clearResyncProgress()
             },
         )
     }
@@ -815,15 +815,15 @@ fun DownloadsScreen(
         // Keyed on Unit: the enclosing `if` remounts this block on every sheet
         // open, so a sheet-keyed key would be a constant that can never re-fire.
         LaunchedEffect(Unit) {
-            forceResyncCandidates = viewModel.forceResyncCandidates()
+            forceResyncCandidates = viewModel.resyncActions.forceResyncCandidates()
         }
         ForceResyncSheet(
             candidates = forceResyncCandidates,
             progress = resyncProgress,
-            onSync = { ids, options -> viewModel.forceResync(ids, options) },
+            onSync = { ids, options -> viewModel.resyncActions.forceResync(ids, options) },
             onDismiss = {
                 showForceResyncSheet = false
-                viewModel.clearResyncProgress()
+                viewModel.resyncActions.clearResyncProgress()
             },
         )
     }

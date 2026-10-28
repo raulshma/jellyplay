@@ -39,7 +39,8 @@ import kotlin.test.assertTrue
  * 2. [DownloadsViewModel.moveToFront] / [DownloadsViewModel.lowerPriority]
  *    against an EMPTY list fall back to the 0 baseline (`maxOfOrNull`/`minOfOrNull`
  *    → null → 0), i.e. +1 / −1 respectively.
- * 3. [DownloadsViewModel.checkAllForUpdates] forwards an EMPTY downloaded-id
+ * 3. [DownloadsResyncActions.checkAllForUpdates] (via the VM's
+ *    `resyncActions` accessor) forwards an EMPTY downloaded-id
  *    batch (the sync manager, not the VM, decides what an empty batch means).
  * 4. DELETE/Selected on a selection whose ids no longer match the current
  *    list (list changed under the selection) is a no-op — the target fold
@@ -157,11 +158,11 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     fun checkAllForUpdates_forwardsAnEmptyDownloadedIdBatch() = runTest(mainDispatcher) {
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { syncManager.checkForUpdatesBatch(emptyList()) }
-        assertTrue(viewModel.checking.value.not())
+        assertTrue(viewModel.resyncActions.checking.value.not())
     }
 
     @Test

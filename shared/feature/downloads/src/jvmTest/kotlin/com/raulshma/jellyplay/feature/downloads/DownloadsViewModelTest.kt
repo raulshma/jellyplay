@@ -807,43 +807,45 @@ class DownloadsViewModelTest {
         coVerify(exactly = 1) { downloadRepository.setDownloadPriority("c", 2) }
     }
 
-    // ── Freshness check / resync ──────────────────────────────────────────
+    // ── Freshness check / resync (the DownloadsResyncActions seam) ────────
+    // The VM keeps full construction here — these pin the accessor wiring
+    // (VM → holder → sync manager), not the holder in isolation.
 
     @Test
     fun checkAllForUpdates_checks_batch_with_downloaded_ids_and_resets_checking() = runTest(mainDispatcher) {
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("i1", "i2")
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { syncManager.checkForUpdatesBatch(listOf("i1", "i2")) }
-        assertFalse(viewModel.checking.value)
+        assertFalse(viewModel.resyncActions.checking.value)
     }
 
     @Test
     fun checkAllForUpdates_while_checking_is_a_noop() = runTest(mainDispatcher) {
         // Suspend the first batch check until the test releases it, so the
-        // second call observes _checking == true.
+        // second call observes checking == true.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("i1")
         coEvery { syncManager.checkForUpdatesBatch(any()) } coAnswers { gate.await(); emptyList() }
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
-        assertTrue(viewModel.checking.value)
+        assertTrue(viewModel.resyncActions.checking.value)
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
         coVerify(exactly = 1) { syncManager.checkForUpdatesBatch(any()) }
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertFalse(viewModel.checking.value)
+        assertFalse(viewModel.resyncActions.checking.value)
     }
 
     @Test
     fun resyncOne_delegates_single_id_batch() = runTest(mainDispatcher) {
-        viewModel.resyncOne("i1")
+        viewModel.resyncActions.resyncOne("i1")
         verify(exactly = 1) { syncManager.resyncBatch(listOf("i1")) }
     }
 
@@ -853,7 +855,7 @@ class DownloadsViewModelTest {
             listOf(update("u1"), update("u2")),
         )
 
-        viewModel.resyncAll()
+        viewModel.resyncActions.resyncAll()
         advanceUntilIdle()
 
         verify(exactly = 1) { syncManager.resyncBatch(listOf("u1", "u2")) }
@@ -861,10 +863,10 @@ class DownloadsViewModelTest {
 
     @Test
     fun resyncAll_with_explicit_ids_delegates_and_skips_empty() = runTest(mainDispatcher) {
-        viewModel.resyncAll(listOf("u1", "u2"))
+        viewModel.resyncActions.resyncAll(listOf("u1", "u2"))
         verify(exactly = 1) { syncManager.resyncBatch(listOf("u1", "u2")) }
 
-        viewModel.resyncAll(emptyList())
+        viewModel.resyncActions.resyncAll(emptyList())
         verify(exactly = 1) { syncManager.resyncBatch(any()) }
     }
 
@@ -872,17 +874,17 @@ class DownloadsViewModelTest {
     fun forceResync_delegates_with_options_and_skips_empty_selections() = runTest(mainDispatcher) {
         val options = ResyncOptions(categories = setOf(ResyncCategory.METADATA))
 
-        viewModel.forceResync(listOf("i1"), options)
+        viewModel.resyncActions.forceResync(listOf("i1"), options)
         verify(exactly = 1) { syncManager.resyncBatch(listOf("i1"), options) }
 
-        viewModel.forceResync(emptyList(), options)
-        viewModel.forceResync(listOf("i1"), ResyncOptions(categories = emptySet()))
+        viewModel.resyncActions.forceResync(emptyList(), options)
+        viewModel.resyncActions.forceResync(listOf("i1"), ResyncOptions(categories = emptySet()))
         verify(exactly = 1) { syncManager.resyncBatch(any(), any()) }
     }
 
     @Test
     fun clearResyncProgress_delegates_to_sync_manager() = runTest(mainDispatcher) {
-        viewModel.clearResyncProgress()
+        viewModel.resyncActions.clearResyncProgress()
         verify(exactly = 1) { syncManager.clearBatchProgress() }
     }
 
@@ -898,7 +900,7 @@ class DownloadsViewModelTest {
         )
         advanceUntilIdle()
 
-        val candidates = viewModel.forceResyncCandidates()
+        val candidates = viewModel.resyncActions.forceResyncCandidates()
         assertEquals(listOf("ep1", "m1"), candidates.map { it.id })
         // Episode context is carried so the picker renders the SxxExx line.
         assertEquals("Show", candidates.first().seriesName)
