@@ -71,30 +71,21 @@ exactly one place.
 
 ## Data layer
 
-**Library feed seam** — the library/browse family of the `MediaRepository`
-union as its own interface, `LibraryFeed` (the HomeFeed family-seam pattern):
+**Library feed seam** — the library/browse family of the former
+`MediaRepository` union, `LibraryFeed` (the HomeFeed family-seam pattern):
 the folders, latest-media, search (incl. paged), paged-browse, genres,
-studios and favorites reads. Browse-only consumers (library screens,
-search, the music collection family, photo albums, the settings library
-views) inject the seam alone; mixed browse+detail consumers keep the union.
-No member carries a default argument — the family-seam rule (a
-dual-declaring override cannot take defaults from both superinterfaces), so
-seam-typed callers pass the defaults explicitly. `getFavoritesPaged` is on
-the seam; the paged-grid quick-actions factory takes the
-`Flow<UserDataChange>` it reads instead of the union. The detail/collection
-families have their own seams — `DetailFeed` (getMediaDetail,
-getSimilarItems) and `CollectionOperations` (the read/write trio) —
-dual-declared on the impl; CastAndCrew/MediaInfo/Reviews/ManageSeries/
-ResyncActions consume `DetailFeed`, CollectionAddTarget consumes
-`CollectionOperations`, and `markPlayed` lives only on
-`UserDataWriteOperations` (the drainer uses `recordDrainedPlays`), so the
-union is not a write surface. The remaining union residents are mixtures:
-DetailViewModel (hands the seams to its helpers), Collection/Person detail VMs
-(detail + the change feed), MetadataAdminActions (union-only `search`),
-UnifiedMediaDetailProviderImpl (detail + album tracks — the mixture the
-DetailFeed KDoc reserves for the union), AudioLibraryBrowser /
-NewMediaCheckWorker / PhotoFolderPrefetcher, and the browse+change-feed VMs
-(library, music detail, search, notification settings).
+studios and favorites reads. The union itself is GONE — every consumer
+injects family seams (`LibraryFeed`, `DetailFeed`, `CollectionOperations`,
+`MusicCatalogue`, `UserDataChanges`, `UserDataWriteOperations`, `HomeFeed`,
+plus the one-member `SeriesNotificationReads` / `PhotoFolderReads`), all
+aliased onto the one `MediaRepositoryImpl` single; mixed consumers compose
+the two or three seams they read. No member carries a default argument —
+the family-seam rule (kept for mockk captures, its defaults rationale
+retired with the union), so seam-typed callers pass the defaults
+explicitly. `getFavoritesPaged` is on the seam; the paged-grid
+quick-actions factory takes the `Flow<UserDataChange>` it reads.
+`markPlayed` lives only on `UserDataWriteOperations` (the drainer uses
+`recordDrainedPlays`).
 
 ## Home
 
@@ -120,14 +111,19 @@ list, so a new sub-call cannot be forgotten at clear time (a forgotten clear
 serves stale badges for a TTL). The suggestions-fallback predicate lives
 beside the assembler; both sites call the one function.
 
-**Home write generation** — the home pipeline's one cache-write token,
-branded: `HomeWriteGeneration` (core:network, beside the port verbs it
-qualifies) crosses the repo → port → fetcher-mirror seam named, so a raw
-epoch of a different axis does not type-check where the token is required. A
-data class with a private constructor + `of()` deliberately — a `@JvmInline`
-value class's JVM slot is its underlying `long`, which breaks mockk captures
-on the port verbs (boxed Long → CCE); the token crosses test seams far more
-often than hot loops. The protocol is stated in the type's KDoc.
+**Home write generation** — the data layer's home assembled-payload
+cache-write token: a repo-local monotonic counter
+(`MediaRepositoryImpl.homeWriteGeneration`), bumped by the funnel when the
+network layer reports a row mutation — the dice roll's complete operation
+returning (any outcome: the row memo changed under the repo either way) and
+the single-row refresh succeeding. The branded `HomeWriteGeneration` carrier
+and the fetcher's `observedGeneration` mirror are gone: no token crosses the
+repo → port → fetcher seam anymore — the fetcher's row memo is guarded by its
+own counter inside its roll operation, and the two guarded caches are
+synchronized by the hand-off ordering (the repo bumps AFTER the operation
+that mutated the row) instead of a shared value. The funnel pairs each bump
+with the assembled-payload drop so a fetch in flight across a roll or
+refresh is returned but never pinned.
 
 **Home content state core** — the eleven `HomeUiState` fields the content
 list reads (pref mirrors, click behavior, visit stamp, stats-card and
@@ -180,15 +176,17 @@ documented exclusions, plus a whole-derivation restore→re-read round-trip).
 ## Details
 
 **Detail section module** — everything one detail section knows about itself:
-admission (does this media get this section), fetch/enrichment arm, renderer,
-and event projection, behind one small interface registered in the detail
-section registry (the Home row module's pattern). Six kinds are module-owned,
-including SPECIAL_FEATURES, COLLECTION_ITEMS, UPCOMING_EPISODES and
-MORE_IN_COLLECTION, each with admission, renderer and its enrichment arm
-(specialFeatures, collectionItems, boxSetsContaining franchise members,
-upcomingEpisodes). `DetailSectionRegistryTest` pins exactly one owner per
-kind: a kind admitted by both a fold row and a module would render twice.
-Other kinds render through the fold.
+admission (does this media get this section), optional fetch/enrichment arm,
+renderer, and event projection, behind one small interface registered in the
+detail section registry (the Home row module's pattern). Every
+`DetailSectionKind` is module-owned — the former admission fold and the
+renderer `when` retired once the last wave moved their rows/branches verbatim
+into the modules — and the body routes all kinds through `moduleFor`.
+`DetailSectionRegistryTest` pins exactly one owner per kind (a kind claimed
+by two modules would render twice) and that each module admits somewhere in
+the every-family admission span (an over-tightened row renders nothing).
+Arms without fetches are absent: sections whose content rides the state arms
+(`DetailEnrichmentModules.kt`) carry admission + renderer only.
 
 **Detail play sequencer** — the play click's ordered effects, decided once:
 `DetailPlaySequencer` composes the pure `resolveDetailPlayDispatch` (stream
@@ -224,13 +222,29 @@ a new enrichment field lands in one bag; the fields that must not cross
 `DetailContentState.core` carries the extras, including the nested
 `DownloadsExtras`; readers use `state.core.X`, not passthrough properties.
 
-**Model-typed enrichment roles** — the detail-facing plugin roles (mdbList
-ratings, TMDB season ratings, anime markers, similar items) return
-`core:model` types; wire DTOs decode at the role implementation, completing
-the mapper's stated "DTOs stop at the client boundary." Presentation rules
-(dropping scoreless entries) stay in the section module arm, not the role.
-`DetailSectionEnrichmentHost` is model-only; settings/admin roles keep their
-DTO-in-ViewModel convention.
+**Model-typed enrichment roles** — the enrichment seams are interface-
+segregated per family (the former 29-member mosaic host split): the shared
+`DetailSectionEnrichmentHost` guard/funnel (isCurrent, updateState,
+detailPreferences, mapConcurrent, currentState) plus small role interfaces —
+`DetailPluginGateRole` (ADR-0010's capability-probe gate seam), ratings,
+similar/boxset, plugin-data, media/trailer/stream, collection-strip, and
+ambient roles. Each arm module declares ONLY the roles its body reads; the
+registries are the single wiring points. All roles are model-only
+(`core:model` types; wire DTOs decode at the role implementation, completing
+the mapper's stated "DTOs stop at the client boundary"); presentation rules
+(dropping scoreless entries) stay in the section module arm, not the role;
+settings/admin roles keep their DTO-in-ViewModel convention.
+
+**Detail load orchestrator** — the media-detail load graph behind one module
+(the `HomeRefresher` pattern): sole writer of the content state (VM-side UI
+writes cross a narrow `update` seam — patches, never a second writer), owner
+of the staleness epoch (`DetailLoadGuard`), the content-generation latch
+(attachment-tick clobber protection), the session adoption, the smart-play
+resolution, the book extras, the Seerr companion choreography, the plugin
+gate, and the declared enrichment fan-out with its role adapters.
+`DetailViewModel` is the flows + `onEvent` facade: it folds
+`loader.state` into the published snapshot (with the Seerr request/flags and
+theme-music groups) and keeps the eight action helpers.
 
 ## Downloads
 
@@ -265,25 +279,38 @@ the precedence verdict; neither carries queue fragments.
 `EndOfMediaDecision`: it composes the six individually-tested end-of-media
 verdict modules (`SleepTimerBoundaryPolicy`, `AutoPlayController`,
 `StillWatchingGate`, `UpNextController`, `PostPlaybackActionsController`, the
-session's cinema chain) into an ordered effect list — the VM computes the
-verdicts as facts and executes the effects, one arm each. The ladders are the
-module's content: sleep-intercept > still-watching > streak-record > advance,
+session's cinema chain) into an ordered effect list — the composing session
+computes the verdicts as facts and executes the effects, one arm each. The
+ladders are the module's content: sleep-intercept > still-watching >
+streak-record > advance,
 and cinema > delete-offer > keep-card > close, with the #17 keep gate
 single-sited in `closeTail` across both close entries (the natural end and the
 offer's release) so it cannot drift. `EndOfMediaDecisionTest` holds the truth
-table. Autoplay/cinema/close policy stays VM-side — the module is
-VM-constructed, not a public seam.
+table. The composition site is `PlaybackSession` (the forwarder's
+`PlaybackEnded` arm, the reporter's no-next safety net and the #14 offer's
+release) — the fold stays pure and internal, not a public seam.
 
 **Transport routing module** — the SyncPlay → cast → local seek/play
 precedence ladder plus its per-arm bypass rules (clamp only on
 user-initiated local seeks, no position-flow write on group/cast arms,
 resume-skip import on the local play arm), behind one small interface owned
-by `PlaybackSession`. The session's collaborators call the router directly;
-`SessionHostLambdas` carries only policy outcomes (segment skip,
-end-of-playback), and the ViewModel's transport funnel arms are one-line
+by `PlaybackSession`. The session's collaborators call the router directly,
+and the ViewModel's transport funnel arms are one-line
 forwards. The ladder is asserted behaviorally (recording arms), not by source
 text. `TransportRouter` sits beside `PipTransportController`; the
-skipped-segment notice stays VM-side via a narrow ctor callback.
+skipped-segment notice is session-owned (the router's local arm and the
+auto-skip arm share it), as are the end-of-media fold and the segment-skip
+dispatch.
+
+**Engine commands funnel** — the DIRECT engine commands that never ride the
+transport ladder because they address the decode surface, not the timeline:
+the playback-speed family (picker arm + the long-press hold-speed gesture,
+with its captured restore speed and the 250/1000 ms controls-visibility
+polling cadence) and the scrubbing bracket, behind one small interface
+(`EngineCommands`) owned by `PlaybackSession` beside `TransportRouter`. The
+ViewModel's event arms forward one-line; the "what's playing" reads go
+through the session's `playbackFacts()` snapshot — no caller reaches the
+session manager directly.
 
 **Player UI commands module** — the preference-write choreography (guard →
 uiState mirror → persist launch → apply, with the
@@ -582,17 +609,19 @@ synchronous contexts (outside the toggleable-features ladder).
 
 ## Cross-feature
 
-**Screen-shape declaration** — each settings screen's ordered section list,
-typed as payload-free `SettingsScreenSection(idSet, advancedOnly)`; the
-scroll-adjust arithmetic derives from it (`deriveAdjustForAdvanced`) and a
-source-scan guard ties each `advancedOnly` flag to an advanced-gated emission
-block. The declaration must never grow a composable slot — that would be
-ADR-0009's rejected registry at group grain. Emission blocks and
-engine-dependent hidden-count literals stay hand-written.
-`hiddenRowsFor(groups, flags)` derives six screens' hidden-count hints from
-the same declarations (Playback's `9` is a documented frozen literal — no
-derivation reproduces it across the (isTv, engine) combos), pinned by
-`FusedRowsRatchetTest`. The navigation customization's row list derives from
+**Screen-shape declaration** — each settings screen's ordered group list,
+declared once as `PreferenceScreenGroup(idSet, advancedOnly, emittedRows,
+content)` on `PreferenceScreenScaffold` (ADR-0009 amendment, 2026-10-28):
+the shell derives scroll adjustment, whole-group advanced gating and the
+hidden-row count (`hiddenRowsFor`) from that single declaration. Row
+emission bodies stay hand-written inside each group's one composable slot —
+a row-grain slot registry remains rejected. The per-screen
+`SettingsScreenSection(idSet, advancedOnly)` rows survive as the catalog
+contract test's cross-pin (section 7: slot declarations and group
+declarations must agree); the old source-scan guard and the frozen
+engine-dependent hidden-count literals are gone — the derivation
+differences across the (isTv, engine) leg via `emittedRows`, and
+`FusedRowsRatchetTest` still pins the row catalogs beneath it. The navigation customization's row list derives from
 core:ui's `NAV_DESTINATIONS` (the registry wins on icon/order); only the
 route→subtitle map stays local. The app module's three ViewModel defs ride
 `viewModelOf(::X)` with a source-scan totality guard.
