@@ -1,14 +1,25 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
+import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
@@ -70,11 +81,17 @@ class PlayerStores(
 )
 
 /**
- * Construction-time bundles for [PlaybackSession] (the [PlayerStores] pattern:
- * a flat bundle widens here and at the DI/call site, never the session's
- * constructor). Each groups the collaborators that existed only to construct
- * ONE internally-built module cluster — the session body shows each member
- * flowing to its single consumer under its original receiving name.
+ * Construction-time bundles for the session stack (the [PlayerStores] pattern:
+ * a flat bundle widens here and at the DI/call site, never the session's or
+ * the ViewModel's constructor). Each groups the collaborators that existed
+ * only to construct ONE internally-built module cluster — the session body
+ * shows each member flowing to its single consumer under its original
+ * receiving name. The ViewModel's constructor takes these bundles and
+ * forwards them to [PlaybackSession].
+ *
+ * Public (like [PlayerStores]) because [VideoPlayerViewModel] itself is
+ * public — even a private-val constructor parameter exposes its type through
+ * the public constructor signature.
  *
  * These lived on the deleted `PlayerWiring` composition builder before the
  * builder dissolved into the session; they are the same
@@ -82,7 +99,7 @@ class PlayerStores(
  */
 
 /** The subtitle/track content sources (subtitle search, side-load store, cue preview, user fonts). */
-internal data class PlayerSubtitleSources(
+data class PlayerSubtitleSources(
     val subtitleProviderRepository: SubtitleProviderRepository,
     val streamingSubtitleStore: StreamingSubtitleStore,
     val subtitlePreviewRepository: SubtitlePreviewRepository,
@@ -90,14 +107,14 @@ internal data class PlayerSubtitleSources(
 )
 
 /** The offline/download availability trio the session stack and subtitle gate read. */
-internal data class PlayerOfflineSources(
+data class PlayerOfflineSources(
     val downloadRepository: DownloadRepository,
     val offlineRepository: OfflineRepository,
     val offlineModeManager: OfflineModeManager,
 )
 
 /** What the session stack is built from: identity, lifecycle, and the two engine/media-session factories. */
-internal data class PlayerSessionStackSources(
+data class PlayerSessionStackSources(
     val playbackIdentity: PlaybackIdentity,
     val playerLifecycleManager: PlayerLifecycleManager,
     val playerEngineFactory: PlayerEngineFactory,
@@ -105,7 +122,7 @@ internal data class PlayerSessionStackSources(
 )
 
 /** The item-attached content reads the player's modules consume: cinema intros, episodes, companion lyrics. */
-internal data class PlayerItemContentSources(
+data class PlayerItemContentSources(
     val libraryApiClient: LibraryApiClient,
     val episodeCatalogue: EpisodeCatalogue,
     val lyricsRepository: LyricsRepository,
@@ -120,4 +137,40 @@ internal data class PlayerStateHandles(
     val resumeReminder: MutableSharedFlow<Long>,
     val closePlayer: Channel<Unit>,
     val passOutEvents: Channel<String>,
+)
+
+/**
+ * The session's direct engine-room collaborators that no module-cluster bundle
+ * claims (the detail-read seam, the playback telemetry + offline mirrors, the
+ * preference repository, the "Play On" strategy, the network/bitrate monitors,
+ * the user-data mutator, the now-playing seam, the sleep countdown and the
+ * mini-player state): the [PlayerStores] pattern's pass-through bundle — every
+ * member's ONLY consumer is [PlaybackSession] itself, so a new collaborator
+ * widens this bundle and the DI definitions, not the ViewModel's constructor.
+ */
+data class PlayerSessionSources(
+    /** The detail-read family seam (the session's media-detail fetches). */
+    val detailFeed: DetailFeed,
+    /** Server playback telemetry (the session-owned Stop/Start reports). */
+    val playbackRepository: PlaybackRepository,
+    /** Offline-mirror writes for the seek-coalesced + throttled position persists. */
+    val offlinePlaybackFacade: OfflinePlaybackFacade,
+    /** The completed-download predicate's single owner (the load spine + the manager gate). */
+    val playbackSourceResolver: PlaybackSourceResolver,
+    /** The per-item/series playback preference repository (the resolver + writer's store). */
+    val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
+    /** The "Play On" routing strategy — the load's remote-play early-return reads it. */
+    val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
+    /** The bitrate cap the manager resolves the stream quality against. */
+    val adaptiveBitrateManager: AdaptiveBitrateManager,
+    /** The metered-network feed the session mirrors into the uiState. */
+    val networkMonitor: NetworkMonitor,
+    /** The watched-flip mutator the reporter's watched-threshold arm drives. */
+    val userDataMutator: UserDataMutator,
+    /** The app-wide now-playing seam (feature 4.2). */
+    val nowPlayingReporter: NowPlayingReporter,
+    /** The sleep-timer countdown ticker the [SleepTimerController] polls through. */
+    val sleepCountdown: SleepCountdown,
+    /** The mini-player state the load spine's reclaim gate probes. */
+    val videoMiniPlayerState: VideoMiniPlayerState,
 )

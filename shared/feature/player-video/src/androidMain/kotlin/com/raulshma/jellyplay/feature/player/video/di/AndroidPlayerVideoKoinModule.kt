@@ -14,7 +14,12 @@ import com.raulshma.jellyplay.feature.player.video.AndroidVideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.CastManager
 import com.raulshma.jellyplay.feature.player.video.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.feature.player.video.NextStreamByteWarmer
+import com.raulshma.jellyplay.feature.player.video.PlayerItemContentSources
+import com.raulshma.jellyplay.feature.player.video.PlayerOfflineSources
+import com.raulshma.jellyplay.feature.player.video.PlayerSessionSources
+import com.raulshma.jellyplay.feature.player.video.PlayerSessionStackSources
 import com.raulshma.jellyplay.feature.player.video.PlayerStores
+import com.raulshma.jellyplay.feature.player.video.PlayerSubtitleSources
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
 import com.raulshma.jellyplay.feature.player.video.PostPlaybackDeleteSources
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
@@ -174,23 +179,9 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
-            detailFeed = get(),
-            libraryApiClient = get(),
-            lyricsRepository = get(),
-            playbackRepository = get(),
-            playbackIdentity = get(),
-            subtitleProviderRepository = get(),
-            videoQueue = get(),
-            cinemaModeOverride = get(),
-            streamingSubtitleStore = get(),
-            imageUrlProvider = get(),
-            artworkUrls = get(),
-            downloadRepository = get(),
-            offlineRepository = get(),
-            offlinePlaybackFacade = get(),
-            playbackSourceResolver = get(),
-            episodeCatalogue = get(),
-            itemPlaybackPreferenceRepository = get(),
+            // The construction bundles (the PlayerStores pattern): each built
+            // once here — a new session collaborator widens its bundle and
+            // this definition, not the ViewModel's constructor.
             stores = PlayerStores(
                 aggregateStore = get(),
                 engine = get(),
@@ -206,25 +197,53 @@ fun androidPlayerVideoModule(context: Context): Module = module {
                 networkOffline = get(),
                 volumeProfile = get(),
             ),
-            mediaSessionFactory = get(),
+            subtitleSources = PlayerSubtitleSources(
+                subtitleProviderRepository = get(),
+                streamingSubtitleStore = get(),
+                subtitlePreviewRepository = get(),
+                fontProvider = get(),
+            ),
+            offlineSources = PlayerOfflineSources(
+                downloadRepository = get(),
+                offlineRepository = get(),
+                offlineModeManager = get(),
+            ),
+            sessionStack = PlayerSessionStackSources(
+                playbackIdentity = get(),
+                playerLifecycleManager = get(),
+                playerEngineFactory = get(),
+                mediaSessionFactory = get(),
+            ),
+            itemContent = PlayerItemContentSources(
+                libraryApiClient = get(),
+                episodeCatalogue = get(),
+                lyricsRepository = get(),
+            ),
+            sessionSources = PlayerSessionSources(
+                detailFeed = get(),
+                playbackRepository = get(),
+                offlinePlaybackFacade = get(),
+                playbackSourceResolver = get(),
+                itemPlaybackPreferenceRepository = get(),
+                jellyfinRemotePlayCastStrategy = get(),
+                adaptiveBitrateManager = get(),
+                networkMonitor = get(),
+                userDataMutator = get(),
+                nowPlayingReporter = get(),
+                sleepCountdown = get(),
+                videoMiniPlayerState = get(),
+            ),
+            imageUrlProvider = get(),
+            artworkUrls = get(),
             castManager = get(),
-            jellyfinRemotePlayCastStrategy = get(),
             syncPlayManager = get(),
-            adaptiveBitrateManager = get(),
-            networkMonitor = get(),
             activePlayerController = get(),
-            playerLifecycleManager = get(),
             pipController = get(),
-            videoMiniPlayerState = get(),
-            sleepCountdown = get(),
-            offlineModeManager = get(),
-            userMessageBus = get(),
-            playerEngineFactory = get(),
             fontProvider = get(),
+            userMessageBus = get(),
             savedStateHandle = params.get(),
-            subtitlePreviewRepository = get(),
-            userDataMutator = get(),
-            nowPlayingReporter = get(),
+            videoQueue = get(),
+            cinemaModeOverride = get(),
             nextStreamByteWarmer = get(),
             // Swipe-from-recents mid-playback finishes the activity behind
             // the player: the VM's onCleared teardown must NOT persist the

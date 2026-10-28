@@ -3,24 +3,9 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
-import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.playback.VideoQueueController
-import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
-import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
-import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
-import com.raulshma.jellyplay.core.data.repository.LyricsRepository
-import com.raulshma.jellyplay.core.data.repository.DetailFeed
-import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -31,7 +16,6 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PersonInfo
@@ -40,13 +24,8 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.session.createSessionSlices
 import com.raulshma.jellyplay.feature.player.video.session.PlayerSessionSlices
-import org.jetbrains.compose.resources.getString
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_direct_play_fallback
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_delete_offer_failed
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
 
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -58,11 +37,9 @@ import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayPreparatio
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,9 +64,6 @@ import kotlinx.coroutines.withTimeoutOrNull
  * paths that change nothing (e.g. remote-play routing). Sized for the slowest
  * network preset's timeout chain (VERY_RELAXED 60 s + failover retries).
  */
-
-/** How long the "Skipped …" segment-skip confirmation caption stays up. */
-private const val SKIPPED_SEGMENT_NOTICE_MS = 2_500L
 
 /**
  * Builds the [SegmentOverlayState] for a given live position against a
@@ -124,14 +98,47 @@ class VideoPlayerViewModel(
      * androidMain trickplay/cast-controller/becoming-noisy/focus collaborators.
      */
     private val platform: VideoPlayerPlatform,
-    /** The detail-read family seam. */
-    private val detailFeed: DetailFeed,
-    /** The item-attached extras seam (Cinema Mode intros for the session-load pipeline). */
-    private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
-    private val lyricsRepository: LyricsRepository,
-    private val playbackRepository: PlaybackRepository,
-    private val playbackIdentity: PlaybackIdentity,
-    private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
+    /**
+     * The thirteen datastore stores bundled at construction — see [PlayerStores]
+     * (home's HomeStores move: a new store dependency widens the bundle and the
+     * DI definitions, not this constructor).
+     */
+    private val stores: PlayerStores,
+    /**
+     * The construction bundles (the [PlayerStores] pattern): each groups the
+     * pass-throughs that feed ONE internally-built session module cluster (or,
+     * for [PlayerSessionSources], the session's direct engine-room
+     * collaborators). A new session collaborator widens its bundle and the DI
+     * definitions, not this constructor — the bundles are forwarded to
+     * [PlaybackSession] verbatim below.
+     */
+    private val subtitleSources: PlayerSubtitleSources,
+    private val offlineSources: PlayerOfflineSources,
+    private val sessionStack: PlayerSessionStackSources,
+    private val itemContent: PlayerItemContentSources,
+    private val sessionSources: PlayerSessionSources,
+    private val imageUrlProvider: ImageUrlProvider,
+    /**
+     * The tagged-artwork resolver (the item-based seam over [imageUrlProvider]):
+     * backs the item-based accessors the player surfaces use (episode rows,
+     * companion-dashboard tabs, the Up Next card) so every URL carries the
+     * item's image tag — the etag cache-buster that makes re-uploaded art
+     * visible without manual cache clears.
+     */
+    private val artworkUrls: ArtworkUrls,
+    // Bare ctor parameter; DI passes it by name and no public val exposes it.
+    castManager: CastManager,
+    private val syncPlayManager: SyncPlayManager,
+    private val activePlayerController: ActivePlayerController,
+    val pipController: PipController,
+    // Public for the screen: the zoom-safe Compose overlay consumes the same
+    // singleton (LRU typeface cache + startup prewarm) instead of building a
+    // private FontProvider per composition (androidMain narrows it to
+    // AndroidFontProvider). Same singleton the subtitle-sources bundle carries
+    // to the session's style controller.
+    val fontProvider: FontProvider,
+    private val userMessageBus: PlayerVideoMessageBus,
+    private val savedStateHandle: SavedStateHandle,
     /**
      * The process-wide manual up-next queue (the details screen's "play
      * next/last" feeds it). Defaulted null for test graphs — the accessor
@@ -146,78 +153,6 @@ class VideoPlayerViewModel(
      * [videoQueue] so test graphs that don't wire it keep compiling.
      */
     cinemaModeOverride: com.raulshma.jellyplay.core.data.playback.CinemaModeOverride? = null,
-    private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
-    private val imageUrlProvider: ImageUrlProvider,
-    /**
-     * The tagged-artwork resolver (the item-based seam over [imageUrlProvider]):
-     * backs the item-based accessors the player surfaces use (episode rows,
-     * companion-dashboard tabs, the Up Next card) so every URL carries the
-     * item's image tag — the etag cache-buster that makes re-uploaded art
-     * visible without manual cache clears.
-     */
-    private val artworkUrls: ArtworkUrls,
-    private val downloadRepository: DownloadRepository,
-    private val offlineRepository: OfflineRepository,
-    private val offlinePlaybackFacade: OfflinePlaybackFacade,
-    /**
-     * The deep "playback source resolver" — single owner of the
-     * completed-download predicate (the load spine's offline-resume
-     * resolution, now on [SessionLoadPipeline], pivots onto
-     * [com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver.resolveStartPositionTicks]
-     * and [PlayerSessionManager] consumes
-     * [com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver.resolveUsableDownload]).
-     */
-    private val playbackSourceResolver: PlaybackSourceResolver,
-    /**
-     * The consolidated series seasons/episodes snapshot. [resolveSeasons] and
-     * [resolveEpisodes] delegate here (online and offline), so the player's
-     * episode discovery shares the same single-flight + cache as the detail
-     * screen and the download paths. Offline-ness is read per-session from
-     * [playerSessionManager] and passed as a parameter.
-     */
-    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
-    private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
-    /**
-     * The thirteen datastore stores bundled at construction — see [PlayerStores]
-     * (home's HomeStores move: a new store dependency widens the bundle and the
-     * DI definitions, not this constructor).
-     */
-    private val stores: PlayerStores,
-    /**
-     * Media-session factory seam: replaces the former legacy
-     * `PlaybackSessionManager` slot — that type is now captured inside the
-     * androidMain factory alongside the Context the controller needs.
-     */
-    private val mediaSessionFactory: VideoMediaSessionFactory,
-    // Bare ctor parameter; DI passes it by name and no public val exposes it.
-    castManager: CastManager,
-    private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
-    private val syncPlayManager: SyncPlayManager,
-    private val adaptiveBitrateManager: AdaptiveBitrateManager,
-    private val networkMonitor: NetworkMonitor,
-    private val activePlayerController: ActivePlayerController,
-    val playerLifecycleManager: PlayerLifecycleManager,
-    val pipController: PipController,
-    val videoMiniPlayerState: VideoMiniPlayerState,
-    private val sleepCountdown: SleepCountdown,
-    private val userMessageBus: PlayerVideoMessageBus,
-    private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
-    // Public for the screen: the zoom-safe Compose overlay consumes the same
-    // singleton (LRU typeface cache + startup prewarm) instead of building a
-    // private FontProvider per composition.
-    val fontProvider: FontProvider,
-    private val savedStateHandle: SavedStateHandle,
-    private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
-    private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
-    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
-    /**
-     * The app-wide now-playing seam (feature 4.2): the session manager
-     * publishes loads through it; this VM owns the end/stop events
-     * ([NowPlayingReporter.markEnded] on the session's PlaybackEnded,
-     * [NowPlayingReporter.clear] on the full release — NOT on the per-item
-     * re-initialization, where the session manager's release also runs).
-     */
-    private val nowPlayingReporter: NowPlayingReporter,
     /** The next-item stream-cache pre-warm seam; null disables it (test graphs). */
     private val nextStreamByteWarmer: NextStreamByteWarmer? = null,
     /**
@@ -273,14 +208,15 @@ class VideoPlayerViewModel(
      * — the seek bar's shaded bands and the stats overlay's ranges readout
      * collect this leaf-side like [currentPositionMs]; it deliberately does
      * NOT ride the position-update callback (that scalar path is
-     * reporter-owned) and re-subscribes per engine via [engineFlow]. `lazy`
-     * because [PlayerSessionManager] is constructed further down the class
-     * body; the WhileSubscribed stateIn collects nothing until first read.
+     * reporter-owned) and re-subscribes per engine via the session's
+     * [PlaybackSession.engineFlow] alias. `lazy` because [playbackSession] is
+     * constructed further down the class body; the WhileSubscribed stateIn
+     * collects nothing until first read.
      */
     val bufferedRanges: StateFlow<List<LongRange>> by lazy {
         stateIn(
             initial = emptyList(),
-            flow = playbackSession.playerSessionManager.engineFlow.flatMapLatest { it?.bufferedRanges ?: emptyFlow() },
+            flow = playbackSession.engineFlow.flatMapLatest { it?.bufferedRanges ?: emptyFlow() },
         )
     }
 
@@ -324,41 +260,6 @@ class VideoPlayerViewModel(
     private val _closePlayer = Channel<Unit>(Channel.BUFFERED)
     val closePlayer = _closePlayer.receiveAsFlow()
 
-    /** Bumped per notice so same-type consecutive skips re-trigger the UI. */
-    private var skippedSegmentNoticeSeq: Long = 0
-
-    /** The auto-clear job backing [showSkippedSegmentNotice]'s ~2.5 s window. */
-    private var skippedSegmentNoticeJob: Job? = null
-
-    /**
-     * Raises the ephemeral "Skipped …" caption on the uiState and
-     * re-arms the auto-clear. A notice replacing a live one restarts the
-     * window; the caption's [SkippedSegmentNotice.seq] makes the same-type
-     * consecutive case visible to the collector.
-     */
-    private fun showSkippedSegmentNotice(segmentType: MediaSegmentType) {
-        _uiState.update {
-            it.copy(
-                skippedSegmentNotice = SkippedSegmentNotice(
-                    segmentType = segmentType,
-                    seq = ++skippedSegmentNoticeSeq,
-                ),
-            )
-        }
-        skippedSegmentNoticeJob?.cancel()
-        skippedSegmentNoticeJob = launch {
-            delay(SKIPPED_SEGMENT_NOTICE_MS)
-            _uiState.update { current ->
-                // Only clear OUR notice — a newer one may have replaced it.
-                if (current.skippedSegmentNotice?.seq == skippedSegmentNoticeSeq) {
-                    current.copy(skippedSegmentNotice = null)
-                } else {
-                    current
-                }
-            }
-        }
-    }
-
     /**
      * Fires once when playback resumes from a saved position, so the screen can
      * surface a transient "Resumed — Restart" affordance. Carries
@@ -381,9 +282,9 @@ class VideoPlayerViewModel(
     // the collectors this class's former init block launched inline (the
     // engine-event mirrors, the session-event forwarder, the aggregate-prefs
     // fan-out, the engine-attach choreography). This VM keeps only the state
-    // holders, the [onEvent] funnel + its transport/policy handlers, and the
-    // expose-only flows; the screen drives the controller slices only through
-    // the session-slice seam ([sessionSlices] below).
+    // holders, the [onEvent] funnel + its one-line arms, and the expose-only
+    // flows; the screen drives the controller slices only through the
+    // session-slice seam ([sessionSlices] below).
 
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
@@ -396,25 +297,15 @@ class VideoPlayerViewModel(
      * slots remain), and its arm phase - [PlaybackSession.arm], called from
      * `init` below - registers the collectors the VM's state holders and
      * event funnel need. The session owns the collaborator graph, the load
-     * sequence, the engine-swap choreography, the reporting + release surface
-     * and the session-event forwarder; this VM keeps the constructor
-     * dependencies, the state holders, the [onEvent] funnel + its handlers
-     * and the expose-only flows. The screens never read this handle — they
+     * sequence, the engine-swap choreography, the reporting + release surface,
+     * the session-event forwarder and the session-policy dispatches (the
+     * end-of-media fold + the segment-skip arm, whose every fact and effect
+     * target is session-owned); this VM keeps the constructor dependencies,
+     * the state holders, the [onEvent] funnel + its one-line arms and the
+     * expose-only flows. The screens never read this handle — they
      * program against the per-region session slices ([sessionSlices], the
      * GLOSSARY "Session slice" seam); this property stays the VM-internal
-     * composition-root alias the slices and the funnel handlers project.
-     *
-     * [SessionHostLambdas] is the funnel's mirror — the VM-owned behaviors
-     * the session calls back into: the end-of-playback policy dispatch
-     * ([handlePlaybackEnded]/[onEndedWithNoNext]) and the auto-skip arm
-     * ([autoSkipSegment], with its "Skipped …" notice). The transport funnels
-     * left the bundle into the session's [PlaybackSession.transport] router;
-     * the seek clamp's notice rides the session's `onSegmentSkippedNotice`
-     * seam below. Built as this constructor-lambda bundle over the private
-     * handlers of the same names so the bundle is STORED while this class is
-     * still under construction but only INVOKED from `arm()` onward — no
-     * lambda can observe an uninitialized VM field (the same lazy-callback
-     * discipline the wiring lambdas always applied).
+     * composition-root alias the slices and the funnel arms project.
      */
     internal val playbackSession = PlaybackSession(
         scope = scope,
@@ -423,120 +314,43 @@ class VideoPlayerViewModel(
         videoQueue = videoQueue ?: VideoQueueController(),
         cinemaModeOverride = cinemaModeOverride,
         imageUrlProvider = imageUrlProvider,
-        itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
+        itemPlaybackPreferenceRepository = sessionSources.itemPlaybackPreferenceRepository,
         castManager = castManager,
-        jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
+        jellyfinRemotePlayCastStrategy = sessionSources.jellyfinRemotePlayCastStrategy,
         syncPlayManager = syncPlayManager,
-        adaptiveBitrateManager = adaptiveBitrateManager,
-        networkMonitor = networkMonitor,
+        adaptiveBitrateManager = sessionSources.adaptiveBitrateManager,
+        networkMonitor = sessionSources.networkMonitor,
         activePlayerController = activePlayerController,
         pipController = pipController,
-        videoMiniPlayerState = videoMiniPlayerState,
-        sleepCountdown = sleepCountdown,
+        videoMiniPlayerState = sessionSources.videoMiniPlayerState,
+        sleepCountdown = sessionSources.sleepCountdown,
         userMessageBus = userMessageBus,
         savedStateHandle = savedStateHandle,
-        userDataMutator = userDataMutator,
-        playbackSourceResolver = playbackSourceResolver,
-        nowPlayingReporter = nowPlayingReporter,
+        userDataMutator = sessionSources.userDataMutator,
+        playbackSourceResolver = sessionSources.playbackSourceResolver,
+        nowPlayingReporter = sessionSources.nowPlayingReporter,
         playbackStore = stores.playback,
-        playbackRepository = playbackRepository,
-        offlinePlaybackFacade = offlinePlaybackFacade,
-        detailFeed = detailFeed,
+        playbackRepository = sessionSources.playbackRepository,
+        offlinePlaybackFacade = sessionSources.offlinePlaybackFacade,
+        detailFeed = sessionSources.detailFeed,
         // The construction bundles (the PlayerStores pattern): each groups
         // the pass-throughs that feed ONE internally-built module cluster.
-        subtitleSources = PlayerSubtitleSources(
-            subtitleProviderRepository = subtitleProviderRepository, streamingSubtitleStore = streamingSubtitleStore,
-            subtitlePreviewRepository = subtitlePreviewRepository, fontProvider = fontProvider,
-        ),
-        offlineSources = PlayerOfflineSources(
-            downloadRepository = downloadRepository, offlineRepository = offlineRepository, offlineModeManager = offlineModeManager,
-        ),
-        sessionStack = PlayerSessionStackSources(
-            playbackIdentity = playbackIdentity, playerLifecycleManager = playerLifecycleManager,
-            playerEngineFactory = playerEngineFactory, mediaSessionFactory = mediaSessionFactory,
-        ),
-        itemContent = PlayerItemContentSources(
-            libraryApiClient = libraryApiClient, episodeCatalogue = episodeCatalogue, lyricsRepository = lyricsRepository,
-        ),
+        subtitleSources = subtitleSources,
+        offlineSources = offlineSources,
+        sessionStack = sessionStack,
+        itemContent = itemContent,
         handles = PlayerStateHandles(
             uiState = _uiState, positionMs = _currentPositionMs, durationMs = _durationMs, videoStats = _videoStats,
             resumeReminder = _resumeReminder, closePlayer = _closePlayer, passOutEvents = _passOutEvents,
         ),
-        host = SessionHostLambdas(
-            autoSkipSegment = { segment -> this@VideoPlayerViewModel.autoSkipSegment(segment) },
-            onEndedWithNoNext = { this@VideoPlayerViewModel.onEndedWithNoNext() },
-            handlePlaybackEnded = { this@VideoPlayerViewModel.handlePlaybackEnded() },
-        ),
-        // The seek clamp's "Skipped …" notice stays VM-owned (the auto-skip
-        // arm raises the same notice); the session-side local seek fires it
-        // through this narrow seam.
-        onSegmentSkippedNotice = { segmentType -> showSkippedSegmentNotice(segmentType) },
+        // #14's delete seams — consumed by the session's own
+        // [PlaybackSession.postPlaybackActions] controller.
+        postPlaybackDeleteSources = postPlaybackDeleteSources,
         // The host-exit probe rides the session's position ledger as a
         // constructor input (the probe, not a per-release flag write): the
         // ledger reads it at the final stop report to decide the restore
         // prompt's handled-offer marker (see [isAppExiting]).
         isHostTeardown = isAppExiting,
-    )
-
-    /**
-     * #14 offer-delete-after-playback: the post-playback controller,
-     * constructed VM-side (the session is at its composition-root line
-     * ratchet). The [UpNextController] shape — every read is the narrow
-     * constructor lambda below, NO uiState handle crosses; the screen reaches
-     * its offer flow + commands through the overlay session slice. The
-     * core:data delete seams arrive as one nullable bundle
-     * ([PostPlaybackDeleteSources]); null (test graphs) disables the feature.
-     * The offer arms only from the end-of-media dispatch
-     * ([EndOfMediaDecision]'s OfferDelete rung — a cinema chain continuing,
-     * an auto-advance, a still-watching prompt and the sleep-timer intercept
-     * all route away before it) — and a passing precheck HOLDS that end's
-     * close (the dialog lives in this screen); the hold resolves through
-     * Delete / Keep / the permission-read release.
-     */
-    private val postPlaybackActions = PostPlaybackActionsController(
-        scope = scope,
-        sources = postPlaybackDeleteSources,
-        getMediaKind = {
-            playbackSession.playerSessionManager.sessionState.value.mediaDetail?.item?.mediaType
-        },
-        getItemId = { playbackSession.playerSessionManager.sessionState.value.currentItemId },
-        getItemTitle = { playbackSession.playerSessionManager.sessionState.value.title },
-        getSeriesIdHint = {
-            playbackSession.playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId
-        },
-        isIncognito = { playbackSession.cachedAggregate.videoPlayer.incognitoModeEnabled },
-        isOfflinePlayback = { playbackSession.playerSessionManager.sessionState.value.isOffline },
-        offerForMovies = { playbackSession.cachedAggregate.playback.offerDeleteAfterPlaybackMovies },
-        offerForEpisodes = { playbackSession.cachedAggregate.playback.offerDeleteAfterPlaybackEpisodes },
-        closePlayer = { _closePlayer.trySend(Unit) },
-        closeAfterKeep = {
-            // The end-of-media close, deferred until the offer resolved
-            // ("Keep" or a failing permission read), routed through the same
-            // [EndOfMediaDecision] fold as the natural end so the #17
-            // after-finish keep gate is single-sited — but as the offer's
-            // own RELEASE: the offer is not re-entered (this call IS its
-            // resolution) and the cinema arm routed away before the offer
-            // ever armed, so only the keep-gate rung is live. The gate is
-            // re-evaluated LIVE: a card still holding the player outlives
-            // the dismissed dialog.
-            executeEndOfMedia(
-                EndOfMediaDecision.resolve(
-                    EndOfMediaDecision.Facts(
-                        advance = null,
-                        close = EndOfMediaDecision.CloseFacts(
-                            cinemaChainActive = false,
-                            offerResolved = true,
-                            keepCardHolds = heldByAfterFinishCard(),
-                        ),
-                    ),
-                ),
-            )
-        },
-        notifyDeleteFailed = { title ->
-            userMessageBus.error(
-                getString(Res.string.player_video_delete_offer_failed, title),
-            )
-        },
     )
 
     /**
@@ -550,7 +364,6 @@ class VideoPlayerViewModel(
     // The route-button projection rides the platform cast-chrome seam.
     internal val sessionSlices: PlayerSessionSlices = playbackSession.createSessionSlices(
         routeButton = platformCastRouteButton(),
-        postPlayback = postPlaybackActions,
     )
 
     /**
@@ -589,7 +402,7 @@ class VideoPlayerViewModel(
                 }
                 if (overlay.shouldShowUpNext && !state.isInSyncPlaySession) {
                     playbackSession.upNext.upNextCard.value?.itemId?.let { nextId ->
-                        playbackSession.playerSessionManager.warmNextEpisode(nextId)
+                        playbackSession.warmNextEpisode(nextId)
                     }
                 }
             }
@@ -612,10 +425,10 @@ class VideoPlayerViewModel(
         }
         NextStreamByteWarmWatcher(
             scope = scope,
-            warmNextStream = playbackSession.playerSessionManager.warmNextStream,
+            warmNextStream = playbackSession.warmNextStream,
             upNextCard = playbackSession.upNext.upNextCard,
-            engineFlow = playbackSession.playerSessionManager.engineFlow,
-            sessionState = playbackSession.playerSessionManager.sessionState,
+            engineFlow = playbackSession.engineFlow,
+            sessionState = playbackSession.sessionState,
             isInSyncPlaySession = { _uiState.value.isInSyncPlaySession },
             warmer = nextStreamByteWarmer,
         ).install()
@@ -658,14 +471,14 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
             is VideoPlayerUiEvent.SwitchPlayerEngine -> {
-                val currentEngine = playbackSession.playerSessionManager.engine
+                val currentEngine = playbackSession.engine
                 if (currentEngine != null && event.playerType in playbackSession.availablePlayerTypes &&
                     !playbackSession.cast.isConnectedFlow.value && !_uiState.value.isInSyncPlaySession &&
                     currentEngine.displayName != event.playerType.displayName
                 ) retryWithEngine(event.playerType, sessionOnly = true)
             }
             is VideoPlayerUiEvent.DismissPlaybackError -> dismissPlaybackError()
-            is VideoPlayerUiEvent.SetControlsVisible -> setControlsVisible(event.visible)
+            is VideoPlayerUiEvent.SetControlsVisible -> playbackSession.engineCommands.setControlsVisible(event.visible)
             is VideoPlayerUiEvent.InstallUserFont -> playbackSession.subtitleStyleController.installUserFont(event.uri)
             is VideoPlayerUiEvent.ReattachFromBackgroundCast -> reattachFromBackgroundCast()
             is VideoPlayerUiEvent.DetachForBackgroundCast -> detachForBackgroundCast()
@@ -675,8 +488,8 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SeekByStep -> playbackSession.transport.step(event.direction)
             is VideoPlayerUiEvent.ToggleMute -> playbackSession.uiCommands.toggleMute()
             is VideoPlayerUiEvent.UserInteraction -> onUserInteraction()
-            is VideoPlayerUiEvent.StartHoldSpeed -> startHoldSpeed()
-            is VideoPlayerUiEvent.StopHoldSpeed -> stopHoldSpeed()
+            is VideoPlayerUiEvent.StartHoldSpeed -> playbackSession.engineCommands.startHoldSpeed()
+            is VideoPlayerUiEvent.StopHoldSpeed -> playbackSession.engineCommands.stopHoldSpeed()
             is VideoPlayerUiEvent.ApplySubtitleStyle -> playbackSession.subtitleStyleController.applySubtitleStyle()
             is VideoPlayerUiEvent.UpdatePipSourceRect ->
                 playbackSession.pipTransport.updatePipSourceRect(event.left, event.top, event.right, event.bottom)
@@ -704,10 +517,10 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.ToggleVideoStats -> playbackSession.uiCommands.toggleVideoStats()
             is VideoPlayerUiEvent.ToggleAudioOnly -> toggleAudioOnly()
             is VideoPlayerUiEvent.SetSubtitleDelay -> setSubtitleDelay(event.ms)
-            is VideoPlayerUiEvent.SkipIntro -> skipIntro()
-            is VideoPlayerUiEvent.SkipSegment -> skipSegment(event.segment)
+            is VideoPlayerUiEvent.SkipIntro -> playbackSession.skipIntro()
+            is VideoPlayerUiEvent.SkipSegment -> playbackSession.skipSegment(event.segment)
             is VideoPlayerUiEvent.SaveBrightness -> playbackSession.uiCommands.saveBrightness(event.level)
-            is VideoPlayerUiEvent.SetPlaybackSpeed -> setPlaybackSpeed(event.speed)
+            is VideoPlayerUiEvent.SetPlaybackSpeed -> playbackSession.engineCommands.setPlaybackSpeed(event.speed)
             is VideoPlayerUiEvent.SelectAudioTrack -> selectAudioTrack(event.option)
             is VideoPlayerUiEvent.SelectSubtitleTrack -> selectSubtitleTrack(event.option)
             is VideoPlayerUiEvent.ResetAudioTrack -> resetAudioTrack()
@@ -757,107 +570,14 @@ class VideoPlayerViewModel(
         playbackSession.engineEventCoordinator.onUserInteraction()
     }
 
-    /**
-     * The ONE position-aware snapshot fold behind the segment-skip dispatch
-     * ([dispatchSegmentSkip]): every fact the skip ladder consults, read from
-     * a single snapshot that injects the live position/duration from the
-     * dedicated high-frequency flows over the (stale) `currentPosition`/
-     * `duration` fields stored on uiState itself, so the active segment and
-     * its end ticks can never come from different reads (the pairing rule
-     * [SegmentDispatchFacts] exists to enforce). Lives VM-side on purpose —
-     * it reads the position-aware ui state, which no migrated controller may
-     * touch.
-     */
-    private fun segmentDispatchFacts(): SegmentDispatchFacts {
-        val state = _uiState.value.copy(
-            currentPosition = _currentPositionMs.value,
-            duration = _durationMs.value,
-        )
-        val seg = state.activeSegment
-        return SegmentDispatchFacts(
-            cinemaIntroActive = state.cinemaIntroState != null,
-            isOutroNearEnd = state.isOutroNearEnd,
-            canSkipToNext = playbackSession.autoplayController.canSkipToNext(state.episodes.nextEpisode),
-            segments = SegmentSnapshot(
-                activeType = seg?.type,
-                activeEndTicks = seg?.let { state.segmentEndTicks(it) },
-                introEndTicks = state.introSegmentEndTicks,
-                creditEndTicks = state.creditSegmentEndTicks,
-            ),
-        )
-    }
-
-    /**
-     * The segment-skip dispatch halves (folded back from
-     * SegmentDispatchController, whose three funs + executor were the whole
-     * story): the skip buttons ([skipIntro] / [skipSegment]) and the
-     * position-tick auto-skip arm ([autoSkipSegment]). The DECISION halves
-     * stay in SegmentSkipPolicy.kt ([segmentSkipTarget] /
-     * [segmentEndSeekTarget] / [SegmentSnapshot]) — only the dispatch lives
-     * here: the facts snapshot comes from [segmentDispatchFacts] (ONE
-     * position-aware read, above), the per-segment end-ticks resolution
-     * against this VM's segment list, and each effect — the seek funnel, the
-     * next-episode load, the session's cinema advance, the "Skipped …"
-     * notice — routes onto its owning collaborator directly.
-     */
-
-    /** The "Skip Intro" button / menu arm. */
-    private fun skipIntro() {
-        dispatchSegmentSkip(SegmentSkipKind.INTRO)
-    }
-
-    /**
-     * The overlay button press for the active segment (user-initiated — the
-     * seek itself is the feedback, so no confirmation notice).
-     */
-    private fun skipSegment(segment: MediaSegment) {
-        executeSegmentSkip(segmentEndSeekTarget(_uiState.value.segmentEndTicks(segment)), userInitiated = true)
-    }
-
-    /**
-     * The position-tick auto-skip arm ([PlaybackProgressReporter]'s
-     * `onAutoSkip`): not user-initiated (never clamped) and confirmed with
-     * the "Skipped …" notice so an invisible automatic jump is explained.
-     */
-    private fun autoSkipSegment(segment: MediaSegment) {
-        executeSegmentSkip(segmentEndSeekTarget(_uiState.value.segmentEndTicks(segment)), userInitiated = false)
-        showSkippedSegmentNotice(segment.type)
-    }
-
-    /**
-     * Shared dispatch for the skip buttons: snapshot the position-aware facts,
-     * reduce them to a [SegmentSkipTarget] via the pure policy in
-     * SegmentSkipPolicy.kt, then execute the one-line effect. The active
-     * segment's end ticks ride the snapshot ([SegmentSnapshot.activeEndTicks]
-     * — resolved against the same read the active segment came from); the
-     * policy sees only plain values.
-     */
-    private fun dispatchSegmentSkip(kind: SegmentSkipKind) {
-        val facts = segmentDispatchFacts()
-        executeSegmentSkip(
-            segmentSkipTarget(
-                kind = kind,
-                cinemaIntroActive = facts.cinemaIntroActive,
-                isOutroNearEnd = facts.isOutroNearEnd,
-                canSkipToNext = facts.canSkipToNext,
-                segments = facts.segments,
-            ),
-            userInitiated = true,
-        )
-    }
-
-    private fun executeSegmentSkip(target: SegmentSkipTarget, userInitiated: Boolean) {
-        when (target) {
-            // A LOCAL seek — the segment-skip dispatch never rides the
-            // SyncPlay/cast ladder (the group/receiver own their timelines),
-            // exactly like the former direct seekTo call.
-            is SegmentSkipTarget.SeekToPosition ->
-                playbackSession.transport.seekLocal(target.positionMs, userInitiated)
-            SegmentSkipTarget.SkipToNextEpisode -> playbackSession.upNext.playNextManually()
-            SegmentSkipTarget.AdvanceCinemaIntro -> playbackSession.advanceCinemaIntro()
-            SegmentSkipTarget.None -> Unit
-        }
-    }
+    // The segment-skip dispatch (the skip buttons + the position-tick
+    // auto-skip arm) and the end-of-media fold moved onto the session —
+    // their every fact (the position/duration flows, the autoplay/sleep/
+    // still-watching verdicts, the Up Next keep gate, the cinema chain) and
+    // every effect target (the seek funnel, the advance, the #14 offer, the
+    // close channel) is session-owned; the pure decision halves stay in
+    // SegmentSkipPolicy.kt / EndOfMediaDecision.kt. The funnel arms below
+    // forward one-line.
 
     // The SyncPlay slice the screen drives lives on the session's slices
     // ([sessionSlices].controls / .sheets), built by the session.
@@ -942,31 +662,11 @@ class VideoPlayerViewModel(
         return stores.security.verifyPinOffMainThread(pin)
     }
 
-    private fun setPlaybackSpeed(speed: Float) {
-        // A user-initiated speed change resets the pass-out interaction clock
-        // and feeds the still-watching counter through the same signal.
-        onUserInteraction()
-        _uiState.update { it.copy(playbackSpeed = speed) }
-        playbackSession.playerSessionManager.engine?.setPlaybackSpeed(speed)
-    }
-
-    private var speedBeforeHold: Float? = null
-
-    private fun startHoldSpeed() {
-        if (_uiState.value.gestures.isHoldSpeedActive) return
-        speedBeforeHold = _uiState.value.playbackSpeed
-        val targetSpeed = _uiState.value.gestures.holdSpeedMultiplier
-        playbackSession.playerSessionManager.engine?.setPlaybackSpeed(targetSpeed)
-        _uiState.update { it.copy(playbackSpeed = targetSpeed, gestures = it.gestures.copy(isHoldSpeedActive = true)) }
-    }
-
-    private fun stopHoldSpeed() {
-        if (!_uiState.value.gestures.isHoldSpeedActive) return
-        val restoreSpeed = speedBeforeHold ?: _uiState.value.gestures.defaultSpeed
-        speedBeforeHold = null
-        playbackSession.playerSessionManager.engine?.setPlaybackSpeed(restoreSpeed)
-        _uiState.update { it.copy(playbackSpeed = restoreSpeed, gestures = it.gestures.copy(isHoldSpeedActive = false)) }
-    }
+    // The speed family (the picker arm + the hold-speed gesture with its
+    // captured restore speed) and the engine cadence commands (scrubbing
+    // bracket, controls-visibility polling) moved onto the session's
+    // [PlaybackSession.engineCommands] funnel — the funnel arms forward
+    // one-line.
 
     private fun selectAudioTrack(option: TrackOption) {
         playbackSession.trackSelectionHelper.selectAudioTrack(option)
@@ -1008,7 +708,7 @@ class VideoPlayerViewModel(
      */
     private fun setPreferredMediaVersion(remember: Boolean) {
         if (remember) {
-            val currentSourceId = playbackSession.playerSessionManager.sessionState.value.currentMediaSource?.id
+            val currentSourceId = playbackSession.playbackFacts().currentMediaSourceId
             if (currentSourceId != null) {
                 playbackSession.playbackPreferenceWriter.setPreferredMediaSource(currentSourceId)
             }
@@ -1199,145 +899,14 @@ class VideoPlayerViewModel(
     // Funnel handlers route their dirty-config reports through the wiring's
     // markEngineConfigDirty / markEngineConfigDirtyDebounced.
 
-    private fun handlePlaybackEnded() {
-        // App-wide now-playing seam's Ended event (feature 4.2): fires before
-        // the autoplay/advance decision so shell hooks see ended-then-started.
-        nowPlayingReporter.markEnded()
-        val autoplayNext = _uiState.value.episodes.nextEpisode
-        val queuedNext = playbackSession.upNext.hasQueuedNext.value
-        Log.d(
-            UP_NEXT_LOG_TAG,
-            "ended: nextEpisode=${autoplayNext?.id} hasQueuedNext=$queuedNext " +
-                "enabled=${playbackSession.autoplayController.enabled} " +
-                "cancelled=${playbackSession.autoplayController.cancelled}",
-        )
-        // The whole end-of-media dispatch is the pure [EndOfMediaDecision]
-        // fold — the six verdict modules are consulted HERE (the verdicts
-        // arrive as data; the fold decides ORDER + composition), and
-        // [executeEndOfMedia] runs the returned effects in order. Autoplay /
-        // cinema / close policy stays VM-side — the module is VM-constructed,
-        // nothing moved behind a new public seam.
-        executeEndOfMedia(
-            EndOfMediaDecision.resolve(
-                EndOfMediaDecision.Facts(
-                    advance = EndOfMediaDecision.AdvanceFacts(
-                        armed = playbackSession.autoplayController.shouldAutoPlayNext(
-                            autoplayNext,
-                            hasQueuedNext = queuedNext,
-                        ),
-                        // #17 binge controls: a reached autoplay-episode cap
-                        // blocks the advance — the card renders manual instead
-                        // (the overlay reads the cap verdict through the slice).
-                        upNextAllows = playbackSession.upNext.canAutoAdvance(),
-                        sleepTimerIntercepts = playbackSession.sleepTimer.interceptsAutoAdvance(),
-                        promptStillWatching = playbackSession.autoplayController.shouldPromptStillWatching(
-                            mode = playbackSession.cachedAggregate.videoPlayer.stillWatchingMode,
-                            isInSyncPlaySession = _uiState.value.isInSyncPlaySession,
-                        ),
-                    ),
-                    close = endOfMediaCloseFacts(),
-                ),
-            ),
-        )
-    }
-
-    /**
-     * End-of-stream with nothing queued: a cinema-intro chain advances to its
-     * next item, anything else closes the player. Fold of the progress
-     * reporter's `onPlaybackEndedNoNext` callback — must not drift.
-     *
-     * The two #17/#14 end-of-media policy arms hang here, where playback has
-     * CONCLUDED (no advance fired, no cinema chain continues, the prompt and
-     * sleep-timer arms already routed away) — as [EndOfMediaDecision] close
-     * rungs, dispatched through [executeEndOfMedia]:
-     *  - #14: the offer-delete-after-playback evaluation (a natural end —
-     *    this is reached from the engine-ENDED arm and the reporter's
-     *    safety net, never a user close). A passing precheck HOLDS the close
-     *    (the dialog lives in this screen — closing first would kill it
-     *    unseen); the hold resolves through the offer's Delete / Keep / the
-     *    permission-read release, each re-consulting the keep gate below;
-     *  - #17: the after-finish keep gate — `showNextEpisodeDetailsAfterFinish`
-     *    + a next item + no auto-advance pending keeps the Up Next card up
-     *    persistently (the position is frozen at the end, so the card's
-     *    window stays open) instead of closing.
-     */
-    private fun onEndedWithNoNext() {
-        // The no-next dispatch enters at the close rung: the reporter's
-        // safety net only fires when no episode sibling and no queued head
-        // exist, so the advance rungs are structurally behind it.
-        executeEndOfMedia(
-            EndOfMediaDecision.resolve(
-                EndOfMediaDecision.Facts(
-                    advance = null,
-                    close = endOfMediaCloseFacts(),
-                ),
-            ),
-        )
-    }
-
-    /**
-     * The #17 after-finish keep gate, live-evaluated against the current
-     * autoplay state — both end-of-media close paths evaluate it at their
-     * entry, and the fold ([EndOfMediaDecision]) single-sites the
-     * hold-vs-close decision over it.
-     */
-    private fun heldByAfterFinishCard(): Boolean =
-        playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
-            autoplayEnabled = _uiState.value.autoplay.videoAutoplayNext,
-            autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
-        )
-
-    /**
-     * The close rungs' facts for a natural end — the reads both end-of-media
-     * entries share, evaluated at dispatch time (the offer arm is the
-     * natural-end entry; the offer's own release builds its own
-     * [EndOfMediaDecision.CloseFacts] with the offer marked resolved).
-     */
-    private fun endOfMediaCloseFacts(): EndOfMediaDecision.CloseFacts =
-        EndOfMediaDecision.CloseFacts(
-            cinemaChainActive = playbackSession.cinemaIntroContext != null,
-            offerResolved = false,
-            keepCardHolds = heldByAfterFinishCard(),
-        )
-
-    /**
-     * The end-of-media executor: runs the [EndOfMediaDecision] fold's
-     * effects in order, one arm per effect — the arms are the behaviors the
-     * former if-ladders inlined ([SessionHostLambdas]' end-of-playback
-     * dispatch). [Effect.OfferDelete] is the one arm that can end the
-     * dispatch early: the controller's ONE entry point resolves ownership
-     * HERE — an armed offer holds the close (its Delete / Keep / the
-     * permission-read release resolve it later); a suppressed precheck
-     * releases the ladder's tail (keep-card / close), exactly the original
-     * fall-through.
-     */
-    private fun executeEndOfMedia(effects: List<EndOfMediaDecision.Effect>) {
-        effects.forEach { effect ->
-            when (effect) {
-                EndOfMediaDecision.Effect.SleepTimerIntercept ->
-                    // End-of-episode sleep timer outranks the
-                    // advance/still-watching gates; an explicit skip-credits
-                    // press still wins (deliberate).
-                    playbackSession.sleepTimer.triggerSleepTimerEndOfEpisode()
-                EndOfMediaDecision.Effect.PromptStillWatching ->
-                    // "Still watching?" gate (feature 1.3): confirm overlay
-                    // replaces the advance; no answer stops autoplay.
-                    playbackSession.stillWatching.show(StillWatchingReason.EPISODE_COUNT)
-                EndOfMediaDecision.Effect.RecordStreak ->
-                    playbackSession.autoplayController.recordAutoAdvance()
-                EndOfMediaDecision.Effect.AutoAdvance ->
-                    // The engine-end AUTO arm: the binge streak grows here
-                    // (#17); manual play-next paths reset it instead.
-                    playbackSession.upNext.advanceUnattended()
-                EndOfMediaDecision.Effect.ChainCinema ->
-                    playbackSession.advanceCinemaIntro()
-                EndOfMediaDecision.Effect.OfferDelete ->
-                    if (postPlaybackActions.onPlaybackEndedNaturally()) return
-                EndOfMediaDecision.Effect.HoldForKeepCard -> Unit
-                EndOfMediaDecision.Effect.Close -> _closePlayer.trySend(Unit)
-            }
-        }
-    }
+    // The end-of-media dispatch (the engine-ENDED arm via the session-event
+    // forwarder, the reporter's no-next safety net, and the #14 offer's own
+    // release) moved onto the session — its every fact
+    // (playbackSession.autoplayController / upNext / sleepTimer /
+    // stillWatching / cinemaIntroContext / cachedAggregate) and every effect
+    // target (the advance, the cinema chain, the still-watching overlay, the
+    // #14 offer, the close channel, nowPlayingReporter.markEnded) is
+    // session-owned; the pure [EndOfMediaDecision] fold module stays as is.
 
     private fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {
         launch {
@@ -1384,7 +953,7 @@ class VideoPlayerViewModel(
      * other engines no-op. See [MediaEngine.onScrubbingChanged].
      */
     fun setScrubbing(active: Boolean) {
-        playbackSession.playerSessionManager.engine?.onScrubbingChanged(active)
+        playbackSession.engineCommands.setScrubbing(active)
     }
 
     /**
@@ -1395,7 +964,7 @@ class VideoPlayerViewModel(
      * [ImageUrlProvider]) — no network happens here.
      */
     fun chapterImageUrls(chapters: List<ChapterInfo>): List<String?> {
-        val itemId = playbackSession.playerSessionManager.sessionState.value.currentItemId
+        val itemId = playbackSession.playbackFacts().currentItemId
             ?: return List(chapters.size) { null }
         return chapters.mapIndexed { index, chapter ->
             chapter.imageTag?.let { imageUrlProvider.getChapterImageUrl(itemId, index, it) }
@@ -1420,7 +989,7 @@ class VideoPlayerViewModel(
         val hint = playbackSession.subtitles.state.value.readySubtitles[rowKey]
         Log.d(
             USE_LOG_TAG,
-            "Use pressed: rowKey=$rowKey, hint=$hint, playMethod=${playbackSession.playerSessionManager.sessionState.value.playMethod}, " +
+            "Use pressed: rowKey=$rowKey, hint=$hint, playMethod=${playbackSession.playbackFacts().playMethod}, " +
                 "pickerRows=" + playbackSession.trackSelectionHelper.state.value.subtitleTracks
                     .joinToString { "(i=${it.index},id=${it.id},si=${it.streamIndex},sel=${it.isSelected},'${it.label.take(24)}')" },
         )
@@ -1468,9 +1037,9 @@ class VideoPlayerViewModel(
         if (!castManager.isBackgroundCasting) return
         castManager.markBackgroundCasting(false)
 
-        val engine = playbackSession.playerSessionManager.engine
+        val engine = playbackSession.engine
         if (engine != null) {
-            val itemId = playbackSession.playerSessionManager.sessionState.value.currentItemId ?: return
+            val itemId = playbackSession.playbackFacts().currentItemId ?: return
             // Narrows the engine to its media3 player via asMedia3Player and
             // no-ops when the engine hosts none.
             playbackSession.mediaSessionController.createForPlayer(engine, "jellyplay_video_$itemId", itemId)
@@ -1479,10 +1048,6 @@ class VideoPlayerViewModel(
 
     private fun toggleAudioOnly() {
         _uiState.update { it.copy(audioOnly = !it.audioOnly) }
-    }
-
-    private fun setControlsVisible(visible: Boolean) {
-        playbackSession.playerSessionManager.engine?.setPollingIntervalMs(if (visible) 250L else 1000L)
     }
 
     /**

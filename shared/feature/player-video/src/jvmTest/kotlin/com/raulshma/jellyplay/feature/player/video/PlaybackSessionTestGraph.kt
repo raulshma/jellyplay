@@ -232,12 +232,6 @@ internal class PlaybackSessionTestGraph private constructor(
     /** The uiState the session's mirror seams write through (test-observable). */
     val uiState get() = handles.uiState
 
-    private val host = SessionHostLambdas(
-        autoSkipSegment = { _ -> },
-        onEndedWithNoNext = {},
-        handlePlaybackEnded = {},
-    )
-
     val session = PlaybackSession(
         scope = sessionScope,
         clock = { nowMs },
@@ -295,7 +289,6 @@ internal class PlaybackSessionTestGraph private constructor(
             lyricsRepository = mockk(relaxed = true),
         ),
         handles = handles,
-        host = host,
         playbackStore = playbackStore,
         playbackRepository = playbackRepository,
         offlinePlaybackFacade = offlinePlaybackFacade,

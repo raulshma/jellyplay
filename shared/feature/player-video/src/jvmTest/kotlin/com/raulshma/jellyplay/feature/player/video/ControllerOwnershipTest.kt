@@ -191,9 +191,14 @@ class ControllerOwnershipTest {
         // EXACTLY like every other guard in this suite. Lowered to 1_637
         // when the 2026-10-14 session-slice migration deleted the eight
         // controller pass-throughs (their reads moved to the
-        // session/SessionSlices.kt projections). Lower the ceiling when a
-        // slice moves out; never raise it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_637
+        // session/SessionSlices.kt projections). Lowered to 1_133
+        // (2026-10-28) when the five session construction bundles replaced
+        // the ~19 hand-listed pass-through ctor params and the end-of-media
+        // fold + segment-skip dispatch + speed/cadence engine commands moved
+        // onto PlaybackSession (the VM's constructor dropped 41 → 22 params,
+        // its playerSessionManager reach-throughs to zero). Lower the
+        // ceiling when a slice moves out; never raise it to admit growth.
+        val maxVideoPlayerViewModelLines = 1_110
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(
@@ -219,8 +224,13 @@ class ControllerOwnershipTest {
         // ResumeTicks.kt. Raised to 3_034 (2026-10-26) for the issue-#177
         // artwork threading: the session-scoped DefaultArtworkUrls + the
         // item-based media-session artwork lambda (tag-aware artwork URLs).
-        // Lower the ceiling when a cluster moves out; never raise it to admit growth.
-        val maxPlaybackSessionLines = 3_034
+        // Raised to 3_132 (2026-10-28) for the end-of-media fold +
+        // segment-skip dispatch moving in from the ViewModel (with the #14
+        // PostPlaybackActionsController construction and the Skipped-segment
+        // notice) plus the engine-commands funnel, the playbackFacts()
+        // snapshot and the engine/warm aliases. Lower the ceiling when a
+        // cluster moves out; never raise it to admit growth.
+        val maxPlaybackSessionLines = 3_132
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

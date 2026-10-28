@@ -175,10 +175,11 @@ internal class OverlaySessionSlice(
     private val upNext: UpNextController,
     stillWatching: StillWatchingController,
     /**
-     * The #14 post-playback controller — constructed VM-side (the session is
-     * at its line ratchet) and passed through [createSessionSlices]. Null in
-     * graphs without the delete seams: the commands no-op and the offer flow
-     * stays permanently null.
+     * The #14 post-playback controller — constructed session-side (every
+     * fact it reads is session-owned; see [PlaybackSession.postPlaybackActions])
+     * and projected here by [createSessionSlices]. Null in graphs without
+     * the delete seams: the commands no-op and the offer flow stays
+     * permanently null.
      */
     private val postPlayback: PostPlaybackActionsController? = null,
 ) {
@@ -492,14 +493,12 @@ internal class SheetsSessionSlice(
  */
 internal fun PlaybackSession.createSessionSlices(
     routeButton: CastRouteButton? = null,
-    /** The VM-constructed #14 controller (see [OverlaySessionSlice]). */
-    postPlayback: PostPlaybackActionsController? = null,
 ): PlayerSessionSlices = PlayerSessionSlices(
     cast = CastSessionSlice(cast, routeButton),
     overlay = OverlaySessionSlice(
         upNext = upNext,
         stillWatching = stillWatching,
-        postPlayback = postPlayback,
+        postPlayback = postPlaybackActions,
     ),
     status = StatusSessionSlice(
         abRepeat = abRepeat,

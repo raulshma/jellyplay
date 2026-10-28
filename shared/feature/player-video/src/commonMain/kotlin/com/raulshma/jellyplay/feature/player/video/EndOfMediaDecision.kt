@@ -9,10 +9,15 @@ package com.raulshma.jellyplay.feature.player.video
  * `onEndedWithNoNext` / the #14 release's `closeAfterKeep` used to
  * hand-sequence as if-ladders. Pure — one facts value in, the ladder's
  * decided effect list out; NO Compose types, NO ViewModel types: every
- * verdict arrives ALREADY COMPUTED as data (the VM consults the six modules
- * while building [Facts]; the fold decides ORDER + composition only), and
- * the ViewModel executes the returned effects in order, one arm per effect.
- * Pinned by [EndOfMediaDecisionTest].
+ * verdict arrives ALREADY COMPUTED as data (the composer consults the six
+ * modules while building [Facts]; the fold decides ORDER + composition only),
+ * and the composer executes the returned effects in order, one arm per
+ * effect. Pinned by [EndOfMediaDecisionTest].
+ *
+ * The composition site is [PlaybackSession] (the forwarder's
+ * [SessionEvent.PlaybackEnded] arm, the progress reporter's no-next safety
+ * net and the #14 offer's release): every fact the ladders read and every
+ * effect target are session-owned, so the fold moved there with them.
  *
  * The two ladders (the exact precedence the former if-ordering applied):
  *  - the advance rungs — consulted only when the dispatch carries an
@@ -35,10 +40,9 @@ package com.raulshma.jellyplay.feature.player.video
  * HoldForKeepCard-vs-Close through the same rung, so the gate cannot drift
  * between them.
  *
- * Recorded constraint: autoplay/cinema/close policy stays VM-side — the
- * module is VM-constructed, nothing moved behind a new public seam.
- * [Effect.OfferDelete] is the one effect whose arm may end the dispatch
- * early (the controller owns that close); every other rung is
+ * Recorded constraint: the fold stays PURE and internal — no new public
+ * seam; [Effect.OfferDelete] is the one effect whose arm may end the
+ * dispatch early (the controller owns that close); every other rung is
  * terminal-LAST — a resolve list never carries effects past its terminal
  * rung, so the executor is a plain in-order walk.
  */
@@ -76,9 +80,10 @@ internal object EndOfMediaDecision {
     }
 
     /**
-     * The advance rungs' verdicts, computed by the VM from
-     * [AutoPlayController] / [SleepTimerBoundaryPolicy] / [UpNextController]
-     * before the fold. Every field is computed eagerly on each dispatch —
+     * The advance rungs' verdicts, computed by the composer (the session's
+     * end-of-media dispatch) from [AutoPlayController] /
+     * [SleepTimerBoundaryPolicy] / [UpNextController] before the fold. Every
+     * field is computed eagerly on each dispatch —
      * all four are pure synchronous reads, so eager reads are
      * observationally identical to the pre-fold ladder's lazy arms — but the
      * fold consults [sleepTimerIntercepts] and [promptStillWatching] only
