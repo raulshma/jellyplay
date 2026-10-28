@@ -64,15 +64,15 @@ import org.jetbrains.compose.resources.stringResource
  * restating the index. The event projection a full module would also carry
  * still lives in [DetailContentCallbacks] — a later wave.
  *
- * Wave 1 was the pilot: the two ratings-adjacent sections
- * ([PluginRatingsSectionModule], [TmdbReviewsSectionModule]). Wave 2 brings
- * the four clean 1:1 collection-family/strip sections
- * ([SpecialFeaturesSectionModule], [CollectionItemsSectionModule],
- * [UpcomingEpisodesSectionModule], [MoreInCollectionSectionModule]) — each a
- * verbatim move of its admission fold row and its hand-written enrichment
- * entry, with the renderer slot routing to the existing family composable.
- * The remaining sections stay hand-written in [DetailSectionAdmission]'s fold
- * and [DetailSectionRenderer]'s `when` and migrate in later waves.
+ * The migration ran in waves — the two ratings-adjacent pilots
+ * ([PluginRatingsSectionModule], [TmdbReviewsSectionModule]), the four
+ * collection-family/strip rows ([SpecialFeaturesSectionModule],
+ * [CollectionItemsSectionModule], [UpcomingEpisodesSectionModule],
+ * [MoreInCollectionSectionModule]), then the final waves that moved the last
+ * sections' fold rows and renderer branches verbatim — until every
+ * [DetailSectionKind] is module-owned and the former hand fold and renderer
+ * `when` retired. The event projection a full module would also carry still
+ * lives in [DetailContentCallbacks] — a later wave.
  */
 internal interface DetailSectionModule {
 
@@ -81,12 +81,19 @@ internal interface DetailSectionModule {
 
     /**
      * Admission: does this media get this section. Reads the same state
-     * surface [DetailSectionAdmission.from] folds, so migrating a section is a
+     * surface the former admission fold read, so migrating a section is a
      * verbatim move of its fold row. Media-family gates read [detail]; the
      * render-side content gates (list emptiness inside an admitted slot)
-     * stay in [Content].
+     * stay in [Content]. [showActionButtons]/[showMediaInfo] are the body's
+     * portrait-only params (the fold's ACTION_ROW / MEDIA_INFO rows) — only
+     * those two modules read them; every other module ignores both.
      */
-    fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean
+    fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean = true,
+        showMediaInfo: Boolean = true,
+    ): Boolean
 
     /**
      * The renderer slot. [scope] bundles the region params the body's dispatch
@@ -95,20 +102,11 @@ internal interface DetailSectionModule {
      */
     @Composable
     fun Content(scope: DetailSectionRenderScope)
-
-    /**
-     * The optional enrichment arm: the [DetailEnrichment] declarations this
-     * section contributes to the ViewModel's ordered fan-out, verbatim from
-     * the former hand-written entry. [host] supplies the VM-side seams the
-     * fetch bodies read. Empty for a section whose fetch rides another
-     * declaration or has none — the arm is optional.
-     */
-    fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = emptyList()
 }
 
 /**
- * The params a section's region renders from — the exact surface
- * [DetailSectionRenderer] receives, bundled so a module's
+ * The params a section's region renders from — the exact surface the body's
+ * dispatch already holds, bundled so a module's
  * [DetailSectionModule.Content] slot takes one parameter and reads what its
  * region needs. [DetailSectionKind.delayIndex] is deliberately absent: it
  * stays on the enum.
@@ -125,11 +123,15 @@ internal data class DetailSectionRenderScope(
 )
 
 /**
- * The VM-side seams a section module's enrichment arm reads — implemented by
- * [DetailViewModel] (thin delegations, no new state). The generic write/guard
- * seams, the plugin probe/fetch roles the wave-1 arm needs, and the
- * collection-family/strip roles the wave-2 arms need; later waves extend it
- * per migrated section.
+ * The shared guard/write-funnel seams every enrichment arm reads, implemented
+ * by [DetailViewModel] (thin delegations, no new state). This is the
+ * guard/funnel half of the former 29-member mosaic host: everything else was
+ * split into the per-family fetch roles below ([DetailRatingsRoles],
+ * [DetailSimilarRoles], [DetailPluginRoles], [DetailMediaRoles],
+ * [DetailCollectionStripRoles], [DetailAmbientRoles]) plus the ADR 0010 gate
+ * role ([DetailPluginGateRole]) — each arm module declares ONLY the roles its
+ * body reads, and the registry/enrichment-registry construction sites are the
+ * single wiring points that hand them out.
  */
 internal interface DetailSectionEnrichmentHost {
 
@@ -138,37 +140,6 @@ internal interface DetailSectionEnrichmentHost {
 
     /** The single content-state write seam (the `_uiState.update` funnel). */
     fun updateState(reduce: (DetailUiState) -> DetailUiState)
-
-    /**
-     * The ADR 0010 plugin feature gate (one latched probe per item navigation
-     * AND the user's per-feature toggle) — the DetailViewModel's one gate seam.
-     */
-    suspend fun pluginFeature(feature: String, itemId: String): Boolean
-
-    /**
-     * The mdblist ratings role ([com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes.getMdbListRatings]).
-     * Null when the plugin seam is unwired (direct-construction tests) — the
-     * arm degrades to silent absence.
-     */
-    suspend fun mdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>?
-
-    // The collection-family / strip roles (specialFeatures,
-    //    collectionItems, franchise, upcoming).
-
-    /** The item-attached extras read ([LibraryApiClient.getSpecialFeatures]) — the SPECIAL_FEATURES arm. */
-    suspend fun specialFeatures(itemId: String): Result<List<MediaItem>>
-
-    /**
-     * The collection-members page read ([CollectionOperations.getCollectionItems]) —
-     * the COLLECTION_ITEMS arm, and the franchise rows' per-BoxSet members.
-     */
-    suspend fun collectionItems(collectionId: String, startIndex: Int = 0, limit: Int): Result<SearchResult>
-
-    /** The BoxSet ancestors read ([MediaCatalogueEnrichments.getBoxSetsContaining]) — the franchise arm's enumerate leg. */
-    suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>>
-
-    /** The series "Airing next" strip read ([LibraryApiClient.getUpcoming]) — the UPCOMING_EPISODES arm. */
-    suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>>
 
     /**
      * The projected detail-preference snapshot the arms' BODY-pref halves read
@@ -180,44 +151,45 @@ internal interface DetailSectionEnrichmentHost {
     /**
      * The shared bounded-parallel fan-out (the VM's hydration semaphore,
      * [com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching] semantics:
-     * order-preserving, per-item failures drop) — the franchise members
-     * hydration rides it.
+     * order-preserving, per-item failures drop) — the franchise members and
+     * plugin-similar hydrations ride it.
      */
     suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R>
 
-    // ── Wave 3: the VM-state enrichment arms (DetailEnrichmentModules.kt) —
-    //    the reads their former hand-written bodies in DetailViewModel made
-    //    directly on the VM's collaborators. Unlike the wave-1/2 roles these
-    //    carry DEFAULT bodies with the unwired-seam contract every plugin arm
-    //    already documents: an unoverridden role degrades to silent absence
-    //    (null / empty / false / no-op), so the registry's test fakes override
-    //    only the roles their arms exercise.
-
     /** The published detail state read (suspension-point reads: isSeerrConnected, seasonRatings). */
     fun currentState(): DetailUiState = DetailUiState()
+}
 
-    /** The theme-music player's start ([DetailThemeMusic.playThemeFor]) — the themeMusic arm. Defaults to no-op. */
-    fun playThemeMusic(itemId: String) {}
+/**
+ * The ADR 0010 plugin feature gate as its own role (one latched probe per
+ * item navigation AND the user's per-feature toggle) — the DetailViewModel's
+ * ONE gate seam, kept a role by the ADR's capability-probe contract: plugin
+ * gating goes through the status store only, never per-endpoint 404 handling.
+ */
+internal interface DetailPluginGateRole {
 
-    /** The ARR servers resolve ([ArrRepository.resolveServers]) — the arrServerResolve arm. */
-    suspend fun resolveArrServers(): Result<ArrServiceSummary> = Result.success(ArrServiceSummary())
+    suspend fun pluginFeature(feature: String, itemId: String): Boolean
+}
 
-    /** The stock similar read ([DetailFeed.getSimilarItems]) — the similarItems arm. */
-    suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> = Result.success(emptyList())
+/**
+ * The ratings-family fetch roles: the plugin's mdblist chip row and per-season
+ * TMDB scores, the Seerr ratings leg, the direct-TMDB fallback, and the OMDb
+ * awards leg with its appearance toggle. Carried by the PLUGIN_RATINGS section
+ * arm and the externalRatings / pluginSeasonRatings state arms.
+ *
+ * Like every wave-3 role these carry DEFAULT bodies with the unwired-seam
+ * contract the plugin arms document: an unoverridden role degrades to silent
+ * absence (null / empty / false), so a test fake overrides only the roles its
+ * arm exercises.
+ */
+internal interface DetailRatingsRoles {
 
-    /** The media-segments pre-warm ([PlaybackRepository.getMediaSegments]) — the mediaSegments arm. */
-    suspend fun mediaSegments(itemId: String): Result<List<MediaSegment>> = Result.success(emptyList())
-
-    /** The Seerr companion trigger (the VM's loadSeerrDataIfNeeded) — the seerrDiscovery arm. No-op by default. */
-    suspend fun triggerSeerrDiscovery(detail: MediaDetail) {}
-
-    /** The on-device related read ([OfflineRepository.getLocalRelated]) — the localRelatedItems arm. */
-    suspend fun localRelatedItems(
-        currentId: String,
-        genres: List<String>,
-        studios: List<String>,
-        limit: Int,
-    ): List<MediaItem> = emptyList()
+    /**
+     * The mdblist ratings role ([com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes.getMdbListRatings]).
+     * Null when the plugin seam is unwired (direct-construction tests) — the
+     * arm degrades to silent absence.
+     */
+    suspend fun mdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>? = null
 
     /** The Seerr ratings read ([SeerrRepository.getRatings]) — the externalRatings arm's first leg. */
     suspend fun seerrRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> =
@@ -232,6 +204,41 @@ internal interface DetailSectionEnrichmentHost {
     /** The appearance toggle for award badges — the externalRatings awards leg. */
     fun awardsBadgesEnabled(): Boolean = false
 
+    /** The per-season TMDB scores. Null when the plugin seam is unwired — silent absence. */
+    suspend fun tmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Map<Int, JellyPlayEpisodeScore>? = null
+}
+
+/**
+ * The similar/boxset-family fetch roles: the stock server "More like this"
+ * read, the LOCAL-origin on-device counterpart, and the BoxSet ancestors the
+ * franchise rows enumerate. Carried by the similarItems / localRelatedItems
+ * state arms and the MORE_IN_COLLECTION section arm.
+ */
+internal interface DetailSimilarRoles {
+
+    /** The stock similar read ([DetailFeed.getSimilarItems]) — the similarItems arm. */
+    suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> = Result.success(emptyList())
+
+    /** The on-device related read ([OfflineRepository.getLocalRelated]) — the localRelatedItems arm. */
+    suspend fun localRelatedItems(
+        currentId: String,
+        genres: List<String>,
+        studios: List<String>,
+        limit: Int,
+    ): List<MediaItem> = emptyList()
+
+    /** The BoxSet ancestors read ([MediaCatalogueEnrichments.getBoxSetsContaining]) — the franchise arm's enumerate leg. */
+    suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>>
+}
+
+/**
+ * The plugin data roles behind the ADR 0010 arms that consume plugin PAYLOADS
+ * (as opposed to the [DetailPluginGateRole] gate): the scored similar ids and
+ * their per-item hydration, the pipeline flag, and the anime markers. All
+ * default to the plugin contract's silent absence.
+ */
+internal interface DetailPluginRoles {
+
     /** The plugin-scored similar ids ([JellyPlayPluginApiRoles.getJellyPlaySimilarItems]). Empty when unwired. */
     suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> = emptyList()
 
@@ -243,9 +250,17 @@ internal interface DetailSectionEnrichmentHost {
 
     /** The series-scoped anime markers. Null when the plugin seam is unwired — silent absence. */
     suspend fun animeMarkers(seriesId: String, providerSeriesId: String): List<JellyPlayEpisodeMarker>? = null
+}
 
-    /** The per-season TMDB scores. Null when the plugin seam is unwired — silent absence. */
-    suspend fun tmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Map<Int, JellyPlayEpisodeScore>? = null
+/**
+ * The media/trailer/stream fetch roles: the segments pre-warm, the merged
+ * trailer list's local leg, the ambient ThemeVideo clips, and the stream-URL
+ * shaper the themeVideo arm plays through.
+ */
+internal interface DetailMediaRoles {
+
+    /** The media-segments pre-warm ([PlaybackRepository.getMediaSegments]) — the mediaSegments arm. */
+    suspend fun mediaSegments(itemId: String): Result<List<MediaSegment>> = Result.success(emptyList())
 
     /** The server-hosted local trailers ([LibraryApiClient.getLocalTrailers]) — the trailers arm. */
     suspend fun localTrailers(itemId: String): Result<List<MediaItem>> = Result.success(emptyList())
@@ -255,6 +270,45 @@ internal interface DetailSectionEnrichmentHost {
 
     /** The shaped stream URL ([PlaybackRepository.getStreamUrl]) — the themeVideo arm. Blank by default. */
     fun streamUrl(itemId: String, mediaSourceId: String): String = ""
+}
+
+/**
+ * The collection-family/strip fetch roles: the item-attached extras, the
+ * collection-members page, and the series "Airing next" strip. Carried by the
+ * SPECIAL_FEATURES / COLLECTION_ITEMS / UPCOMING_EPISODES section arms and the
+ * franchise rows' member hydration.
+ */
+internal interface DetailCollectionStripRoles {
+
+    /** The item-attached extras read ([LibraryApiClient.getSpecialFeatures]) — the SPECIAL_FEATURES arm. */
+    suspend fun specialFeatures(itemId: String): Result<List<MediaItem>>
+
+    /**
+     * The collection-members page read ([CollectionOperations.getCollectionItems]) —
+     * the COLLECTION_ITEMS arm, and the franchise rows' per-BoxSet members.
+     */
+    suspend fun collectionItems(collectionId: String, startIndex: Int = 0, limit: Int): Result<SearchResult>
+
+    /** The series "Airing next" strip read ([LibraryApiClient.getUpcoming]) — the UPCOMING_EPISODES arm. */
+    suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>>
+}
+
+/**
+ * The ambient side-effect roles: the arms whose "fetch" is a trigger rather
+ * than a state payload — the theme-music start, the Sonarr/ARR server resolve
+ * that latches the canManageSeries flag, and the Seerr companion discovery
+ * trigger. Default no-op/success like the other wave-3 roles.
+ */
+internal interface DetailAmbientRoles {
+
+    /** The theme-music player's start ([DetailThemeMusic.playThemeFor]) — the themeMusic arm. Defaults to no-op. */
+    fun playThemeMusic(itemId: String) {}
+
+    /** The ARR servers resolve ([ArrRepository.resolveServers]) — the arrServerResolve arm. */
+    suspend fun resolveArrServers(): Result<ArrServiceSummary> = Result.success(ArrServiceSummary())
+
+    /** The Seerr companion trigger (the VM's loadSeerrDataIfNeeded) — the seerrDiscovery arm. No-op by default. */
+    suspend fun triggerSeerrDiscovery(detail: MediaDetail) {}
 }
 
 /**
@@ -268,10 +322,24 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.PLUGIN_RATINGS
 
-    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+    override fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean,
+        showMediaInfo: Boolean,
+    ): Boolean =
         state.core.pluginRatings.isNotEmpty()
 
-    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+    /**
+     * The module's arm: the plugin probe + mdblist fetch, verbatim from the
+     * former hand-written entry. Declares only the roles it reads — the shared
+     * guard/funnel host, the ADR 0010 gate role, and the ratings roles.
+     */
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        ratings: DetailRatingsRoles,
+    ): List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "pluginRatings",
             // The feature-key gate is a suspend probe, so it lives in the BODY
@@ -279,14 +347,14 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
             // stays empty → the section is silently absent.
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
-            if (!host.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
+            if (!pluginGate.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
             val imdbId = resolveImdbId(inputs.detail) ?: return@DetailEnrichment
-            val ratings = host.mdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
+            val ratingsResult = ratings.mdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState {
                 // Scoreless entries would render an empty chip — dropped here so
                 // the section's emptiness check matches what it can render.
-                it.copy(pluginRatings = ratings.filter { r -> r.score != null })
+                it.copy(pluginRatings = ratingsResult.filter { r -> r.score != null })
             }
         },
     )
@@ -366,7 +434,12 @@ internal object TmdbReviewsSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.TMDB_REVIEWS
 
-    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+    override fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean,
+        showMediaInfo: Boolean,
+    ): Boolean =
         state.preferences.showReviews && state.core.tmdbReviews.isNotEmpty()
 
     // The enrichment arm is deliberately empty: the reviews fetch rides the
@@ -458,10 +531,19 @@ internal object SpecialFeaturesSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.SPECIAL_FEATURES
 
-    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+    override fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean,
+        showMediaInfo: Boolean,
+    ): Boolean =
         state.core.capabilities.remoteDiscovery && state.core.specialFeatures.isNotEmpty()
 
-    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+    /** The module's arm, verbatim from the former hand-written entry (strip roles only). */
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        strip: DetailCollectionStripRoles,
+    ): List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "specialFeatures",
             gate = { it.remoteDiscoveryAllowed },
@@ -469,7 +551,7 @@ internal object SpecialFeaturesSectionModule : DetailSectionModule {
             // Fetch special features / extras (featurettes, deleted scenes, etc.)
             // concurrently so the core detail renders immediately; the result lands
             // in specialFeatures and renders as its own horizontal row.
-            host.specialFeatures(inputs.itemId)
+            strip.specialFeatures(inputs.itemId)
                 .onSuccess { extras ->
                     if (!host.isCurrent(inputs.itemId)) return@onSuccess
                     host.updateState { it.copy(specialFeatures = extras) }
@@ -499,10 +581,19 @@ internal object CollectionItemsSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.COLLECTION_ITEMS
 
-    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+    override fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean,
+        showMediaInfo: Boolean,
+    ): Boolean =
         detail.item.mediaType == MediaType.COLLECTION
 
-    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+    /** The module's arm, verbatim from the former hand-written entry (strip roles only). */
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        strip: DetailCollectionStripRoles,
+    ): List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "collectionItems",
             // Collections are remote-only companion content (not part of the
@@ -512,7 +603,7 @@ internal object CollectionItemsSectionModule : DetailSectionModule {
                 it.remoteDiscoveryAllowed && it.mediaType == MediaType.COLLECTION
             },
         ) { inputs ->
-            host.collectionItems(collectionId = inputs.itemId, limit = 100)
+            strip.collectionItems(collectionId = inputs.itemId, limit = 100)
                 .onSuccess { result ->
                     if (!host.isCurrent(inputs.itemId)) return@onSuccess
                     host.updateState { it.copy(collectionItems = result.items) }
@@ -550,10 +641,19 @@ internal object UpcomingEpisodesSectionModule : DetailSectionModule {
     /** The upcoming strip's row bound (an "airing next" rail; small by design) — moved with the arm. */
     private const val UPCOMING_STRIP_LIMIT = 12
 
-    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+    override fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean,
+        showMediaInfo: Boolean,
+    ): Boolean =
         state.preferences.showUpcomingStrip && state.core.upcomingEpisodes.isNotEmpty()
 
-    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+    /** The module's arm, verbatim from the former hand-written entry (strip roles only). */
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        strip: DetailCollectionStripRoles,
+    ): List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "upcoming",
             gate = { it.remoteDiscoveryAllowed && it.mediaType == MediaType.SERIES },
@@ -561,7 +661,7 @@ internal object UpcomingEpisodesSectionModule : DetailSectionModule {
             // The user-pref half of the gate rides the body (the franchise
             // convention).
             if (!host.detailPreferences().showUpcomingStrip) return@DetailEnrichment
-            host.upcomingEpisodes(parentId = inputs.itemId, limit = UPCOMING_STRIP_LIMIT)
+            strip.upcomingEpisodes(parentId = inputs.itemId, limit = UPCOMING_STRIP_LIMIT)
                 .onSuccess { upcoming ->
                     if (!host.isCurrent(inputs.itemId)) return@onSuccess
                     host.updateState { it.copy(upcomingEpisodes = upcoming) }
@@ -596,7 +696,12 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.MORE_IN_COLLECTION
 
-    override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
+    override fun isAdmitted(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean,
+        showMediaInfo: Boolean,
+    ): Boolean =
         state.preferences.showMoreInCollection &&
             // The franchise admission counts only VISIBLE rows: a row the user
             // eye-hid is excluded here (not just render-side) so a fully
@@ -606,7 +711,16 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
                 collection.id !in state.core.hiddenFranchiseCollections[state.itemId].orEmpty()
             }
 
-    override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
+    /**
+     * The module's arm, verbatim from the former hand-written entry. Declares
+     * the strip roles (per-BoxSet members) plus the similar roles (the
+     * BoxSet-ancestor enumerate leg).
+     */
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        strip: DetailCollectionStripRoles,
+        similar: DetailSimilarRoles,
+    ): List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "franchise",
             // The "More in this collection" franchise rows. MOVIE/SERIES
@@ -631,7 +745,7 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
             // cluster's boxsets-containing member): the enumerate-then-probe
             // fan-out below is the costliest enrichment, so a re-entry inside
             // its TTL window re-serves the row instead of re-probing.
-            val boxSets = host.boxSetsContaining(inputs.itemId)
+            val boxSets = similar.boxSetsContaining(inputs.itemId)
                 .getOrNull()
                 ?.take(FRANCHISE_MAX_COLLECTIONS)
                 .orEmpty()
@@ -642,7 +756,7 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
             // (mapConcurrentCatching is order-preserving), so the rows keep
             // the server's default order.
             val rows = host.mapConcurrent(boxSets) { boxSet ->
-                val members = host.collectionItems(collectionId = boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
+                val members = strip.collectionItems(collectionId = boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
                     .getOrNull()
                     ?.items
                     // The loaded item never renders inside its own franchise
@@ -673,25 +787,37 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
 }
 
 /**
- * The detail section registry: the ordered list of [DetailSectionModule]s. The
- * order is [DetailSectionKind] declaration order — the body's emission order —
- * and [admittedSections] re-sorts the merged emission by the enum, so a
+ * The detail section registry: the ordered list of [DetailSectionModule]s —
+ * one per [DetailSectionKind] (the completeness pin lives in
+ * DetailSectionRegistryTest). [admittedSections] re-sorts the admitted kinds
+ * into the enum's declaration order — the body's emission order — so a
  * module's position here can never reorder anything visually.
- *
- * Wave 1 (the pilot) registered the two ratings-adjacent rows; wave 2 brings
- * the four collection-family/strip rows. The remaining sections stay
- * hand-written ([DetailSectionAdmission]'s fold + the [DetailSectionRenderer]
- * `when`) and join in later waves.
  */
 internal object DetailSectionRegistry {
 
     val modules: List<DetailSectionModule> = listOf(
+        HeaderSectionModule,
+        ActionRowSectionModule,
+        BookReadingCardSectionModule,
+        MediaInfoSectionModule,
+        OverviewSectionModule,
+        ChaptersOrTocSectionModule,
+        AlbumTracksSectionModule,
         PluginRatingsSectionModule,
+        UpNextSectionModule,
         UpcomingEpisodesSectionModule,
+        SeasonsSectionModule,
         CollectionItemsSectionModule,
+        CastSectionModule,
+        RelatedVideosSectionModule,
         MoreInCollectionSectionModule,
+        MoreLikeThisSectionModule,
+        JellyPlaySimilarSectionModule,
+        SeerrRecommendationsSectionModule,
+        SeerrSimilarSectionModule,
         SpecialFeaturesSectionModule,
         TmdbReviewsSectionModule,
+        DownloadFooterSectionModule,
     )
 
     /** The module owning [kind], or null for a hand-written section. */
@@ -702,27 +828,46 @@ internal object DetailSectionRegistry {
      * The module-owned admissions for this snapshot, in registry (= enum
      * declaration) order. The fold and the registry own disjoint kinds.
      */
-    fun admittedKinds(state: DetailContentState, detail: MediaDetail): List<DetailSectionKind> =
-        modules.filter { it.isAdmitted(state, detail) }.map { it.kind }
-
-    /**
-     * The body's full admission: the hand-written fold (the unmigrated
-     * sections) merged with the registry's module admissions, re-sorted into
-     * [DetailSectionKind] declaration order. The sort is the structural pin on
-     * "registry modules never reorder the emission".
-     */
-    fun admittedSections(
-        handFold: List<DetailSectionKind>,
+    fun admittedKinds(
         state: DetailContentState,
         detail: MediaDetail,
+        showActionButtons: Boolean = true,
+        showMediaInfo: Boolean = true,
     ): List<DetailSectionKind> =
-        (handFold + admittedKinds(state, detail)).sortedBy { it.ordinal }
+        modules.filter { it.isAdmitted(state, detail, showActionButtons, showMediaInfo) }.map { it.kind }
+
+    /**
+     * The body's full admission — the modules' admitted kinds, re-sorted into
+     * [DetailSectionKind] declaration order. Every kind is module-owned (the
+     * former hand fold retired with the last module wave), and the sort is
+     * the structural pin on "registry modules never reorder the emission".
+     */
+    fun admittedSections(
+        state: DetailContentState,
+        detail: MediaDetail,
+        showActionButtons: Boolean = true,
+        showMediaInfo: Boolean = true,
+    ): List<DetailSectionKind> =
+        admittedKinds(state, detail, showActionButtons, showMediaInfo).sortedBy { it.ordinal }
 
     /**
      * The modules' enrichment registrations for the ViewModel's fan-out, in
-     * registry order. The VM splices this list at the exact position the
-     * migrated hand-written entries occupied (see DetailViewModel.enrichments).
+     * registry order. This is the single wiring point for the section arms:
+     * each module is handed ONLY the roles its arm reads (the per-family role
+     * interfaces above), so a module can never reach a fetch outside its
+     * family. The VM splices this list at the exact position the migrated
+     * hand-written entries occupied (see DetailViewModel.enrichments).
      */
-    fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> =
-        modules.flatMap { it.enrichments(host) }
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        ratings: DetailRatingsRoles,
+        strip: DetailCollectionStripRoles,
+        similar: DetailSimilarRoles,
+    ): List<DetailEnrichment> =
+        PluginRatingsSectionModule.enrichments(host, pluginGate, ratings) +
+            UpcomingEpisodesSectionModule.enrichments(host, strip) +
+            CollectionItemsSectionModule.enrichments(host, strip) +
+            MoreInCollectionSectionModule.enrichments(host, strip, similar) +
+            SpecialFeaturesSectionModule.enrichments(host, strip)
 }

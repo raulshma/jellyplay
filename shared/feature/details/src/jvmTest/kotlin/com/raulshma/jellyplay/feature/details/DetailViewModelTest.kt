@@ -14,7 +14,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -115,7 +116,8 @@ class DetailViewModelTest {
     // appear at all (they live behind DetailActionFactories as un-stubbed
     // relaxed mocks — no VM test exercises those helpers directly; their own
     // suites do).
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var userDataMutator: FakeUserDataMutator
@@ -132,12 +134,13 @@ class DetailViewModelTest {
     /** Per-item provider flow, so tests can emit Loaded/Error/attachment ticks. */
     private val providerFlows = mutableMapOf<String, MutableStateFlow<DetailLoadState>>()
 
-    /** Hot flow behind mediaRepository.userDataChanges; tests emit into it. */
+    /** Hot flow behind userDataChanges.userDataChanges; tests emit into it. */
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
 
     @BeforeTest
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
 
         libraryApiClient = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
@@ -159,7 +162,7 @@ class DetailViewModelTest {
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         // Default stub for the similar-items fetch so the REMOTE side-effect launch
         // doesn't crash casting the relaxed-mock default.
-        coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
+        coEvery { detailFeed.getSimilarItems(any(), any()) } returns Result.success(emptyList())
         // Default stub for the special-features fetch so its REMOTE side-effect
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
@@ -189,7 +192,7 @@ class DetailViewModelTest {
             Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrRatings())
         // Provider refresh is a no-op by default; tests that drive refresh override.
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         // Successful user-data mutations update the provider's active replay
         // snapshot in production; most tests only exercise the ViewModel state.
         coEvery { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) } returns Unit
@@ -242,16 +245,16 @@ class DetailViewModelTest {
             ),
             metadataAdmin = MetadataAdminActions.Factory(
                 editorRepository = mockk<MetadataEditorRepository>(relaxed = true),
-                mediaRepository = mockk(relaxed = true),
+                libraryFeed = mockk(relaxed = true),
                 authRepository = mockk<AuthRepository>(relaxed = true),
             ),
         )
         viewModel = DetailViewModel(
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
-            mediaRepository = mediaRepository,
-            detailFeed = mockk(relaxed = true),
+            detailFeed = detailFeed,
             collectionOperations = mockk(relaxed = true),
+            userDataChanges = userDataChanges,
             mediaCatalogueEnrichments = object : MediaCatalogueEnrichments {
                 override suspend fun getTags(parentId: String?) = Result.success(emptyList<String>())
                 override suspend fun getBoxSetsContaining(itemId: String) =
@@ -1178,7 +1181,7 @@ class DetailViewModelTest {
             // markSeason routes the optimistic flip through the provider
             // (applyOptimisticSeasonRewrite re-emits; no server refetch). Verify
             // no getMediaDetail refetch either.
-            io.mockk.coVerify(exactly = 0) { mediaRepository.getMediaDetail("s1") }
+            io.mockk.coVerify(exactly = 0) { detailFeed.getMediaDetail("s1", any()) }
             // Every episode now played → smart-play falls back to a replay of S1:E1.
             val target = awaitSmartPlayTarget { it.label == "Replay S1:E1" }
             assertEquals("Replay S1:E1", target.label)
@@ -1207,7 +1210,7 @@ class DetailViewModelTest {
             advanceUntilIdle()
 
             // No post-mutation refetch from the VM.
-            io.mockk.coVerify(exactly = 0) { mediaRepository.getMediaDetail("s1") }
+            io.mockk.coVerify(exactly = 0) { detailFeed.getMediaDetail("s1", any()) }
             val episodes = viewModel.uiState.value.episodes["season1"]!!
             assertTrue(episodes.none { it.isPlayed })
         }
@@ -1523,7 +1526,7 @@ class DetailViewModelTest {
         val target = awaitSmartPlayTarget { it.episode.id == "e1" }
         assertEquals(DetailOrigin.LOCAL_OFFLINE_MODE, viewModel.uiState.value.origin)
         // Remote-only discovery coroutines still never fire for a local origin.
-        io.mockk.coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }
+        io.mockk.coVerify(exactly = 0) { detailFeed.getSimilarItems(any(), any()) }
         io.mockk.verify(exactly = 0) { themeMusicPlayer.playThemeFor(any()) }
         io.mockk.coVerify(exactly = 0) { seerrRepository.getMovieDetails(any()) }
         io.mockk.coVerify(exactly = 0) { seerrRepository.getTvDetails(any()) }

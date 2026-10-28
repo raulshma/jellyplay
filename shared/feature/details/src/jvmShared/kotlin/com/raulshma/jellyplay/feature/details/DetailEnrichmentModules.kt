@@ -12,9 +12,13 @@ import kotlinx.coroutines.delay
  * sibling. Wave 3 of the detail modularization: the twelve declarations that
  * lived inline in DetailViewModel's `enrichments` initializer moved here
  * verbatim (guards and comments included), their reads swapped to the
- * [DetailSectionEnrichmentHost] wave-3 roles the VM's private adapter
- * delegates. A module is the unit a new state-feeding enrichment joins —
- * DetailViewModel stops being edited for arm additions.
+ * [DetailSectionEnrichmentHost] guard/funnel plus the per-family fetch roles
+ * ([DetailRatingsRoles], [DetailSimilarRoles], [DetailPluginRoles],
+ * [DetailMediaRoles], [DetailAmbientRoles]) the module's `enrichments`
+ * signature declares — only the roles its bodies read. A module is the unit a
+ * new state-feeding enrichment joins — DetailViewModel stops being edited for
+ * arm additions; [DetailEnrichmentRegistry] is the single wiring point that
+ * hands the roles out.
  *
  * Two conventions carried over from the hand-written entries:
  *  - the gate lambda stays a pure snapshot read — a user preference rides the
@@ -26,49 +30,53 @@ import kotlinx.coroutines.delay
  *    ([DetailSectionEnrichmentHost.isCurrent]) — [DetailLoadGuard] stays the
  *    single admission seam.
  */
-internal interface DetailEnrichmentModule {
-
-    /** The arms this module contributes to the ViewModel's ordered fan-out. */
-    fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment>
-}
 
 /** The stock similar row's limit (the plugin row mirrors it). */
 internal const val SIMILAR_ITEMS_LIMIT = 12
 
 /**
- * The state-arm registry: the ordered module lists spliced around the section
+ * The state-arm registry: the ordered arm list spliced around the section
  * registry's arms in DetailViewModel's fan-out. The split is load-bearing
  * order, not taxonomy: the LEADING arms fire before the section arms (whose
  * pluginRatings probe externalRatings reads — the latch), the TRAILING arms
  * after. All arms are independent fire-and-forget guard-checked coroutines
  * (single-writer-per-field), so positions within a list preserve the
  * observable behavior the fan-out order contract documents.
+ *
+ * This object is the single wiring point for the state arms: each module's
+ * `enrichments` declares only the roles it reads (the per-family role
+ * interfaces beside [DetailSectionEnrichmentHost]) and is handed exactly
+ * those here.
  */
 internal object DetailEnrichmentRegistry {
 
-    val leadingModules: List<DetailEnrichmentModule> = listOf(
-        ThemeMusicEnrichmentModule,
-        ArrServerResolveEnrichmentModule,
-        SimilarItemsEnrichmentModule,
-        MediaSegmentsEnrichmentModule,
-        SeerrDiscoveryEnrichmentModule,
-        LocalRelatedItemsEnrichmentModule,
-    )
+    fun leadingArms(
+        host: DetailSectionEnrichmentHost,
+        ambient: DetailAmbientRoles,
+        similar: DetailSimilarRoles,
+        media: DetailMediaRoles,
+        pluginGate: DetailPluginGateRole,
+    ): List<DetailEnrichment> =
+        ThemeMusicEnrichmentModule.enrichments(host, ambient) +
+            ArrServerResolveEnrichmentModule.enrichments(host, ambient) +
+            SimilarItemsEnrichmentModule.enrichments(host, similar) +
+            MediaSegmentsEnrichmentModule.enrichments(host, media) +
+            SeerrDiscoveryEnrichmentModule.enrichments(host, ambient) +
+            LocalRelatedItemsEnrichmentModule.enrichments(host, similar)
 
-    val trailingModules: List<DetailEnrichmentModule> = listOf(
-        ExternalRatingsEnrichmentModule,
-        PluginSimilarItemsEnrichmentModule,
-        PluginAnimeMarkersEnrichmentModule,
-        PluginSeasonRatingsEnrichmentModule,
-        TrailersEnrichmentModule,
-        ThemeVideoEnrichmentModule,
-    )
-
-    fun leadingArms(host: DetailSectionEnrichmentHost): List<DetailEnrichment> =
-        leadingModules.flatMap { it.enrichments(host) }
-
-    fun trailingArms(host: DetailSectionEnrichmentHost): List<DetailEnrichment> =
-        trailingModules.flatMap { it.enrichments(host) }
+    fun trailingArms(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        ratings: DetailRatingsRoles,
+        plugin: DetailPluginRoles,
+        media: DetailMediaRoles,
+    ): List<DetailEnrichment> =
+        ExternalRatingsEnrichmentModule.enrichments(host, pluginGate, ratings) +
+            PluginSimilarItemsEnrichmentModule.enrichments(host, pluginGate, plugin) +
+            PluginAnimeMarkersEnrichmentModule.enrichments(host, pluginGate, plugin) +
+            PluginSeasonRatingsEnrichmentModule.enrichments(host, pluginGate, ratings) +
+            TrailersEnrichmentModule.enrichments(host, media) +
+            ThemeVideoEnrichmentModule.enrichments(host, media)
 }
 
 /**
@@ -78,8 +86,11 @@ internal object DetailEnrichmentRegistry {
  * the shared remote gate — a muted series's enrichment doesn't start playback
  * at all.
  */
-internal object ThemeMusicEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object ThemeMusicEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        ambient: DetailAmbientRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "themeMusic",
             gate = { it.remoteDiscoveryAllowed },
@@ -87,14 +98,17 @@ internal object ThemeMusicEnrichmentModule : DetailEnrichmentModule {
             val prefs = host.detailPreferences()
             val themeSourceId = inputs.detail.item.seriesId ?: inputs.itemId
             if (!prefs.playThemeMusic || prefs.isThemeMusicMutedFor(themeSourceId)) return@DetailEnrichment
-            host.playThemeMusic(themeSourceId)
+            ambient.playThemeMusic(themeSourceId)
         },
     )
 }
 
 /** The Sonarr-resolution arm: latches the canManageSeries menu's server flag. */
-internal object ArrServerResolveEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object ArrServerResolveEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        ambient: DetailAmbientRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "arrServerResolve",
             // SERIES/EPISODE only (the canManageSeries menu lives on series
@@ -105,7 +119,7 @@ internal object ArrServerResolveEnrichmentModule : DetailEnrichmentModule {
                     it.detail.providerIds["tvdb"]?.toIntOrNull() != null
             },
         ) { inputs ->
-            val summary = host.resolveArrServers()
+            val summary = ambient.resolveArrServers()
                 .getOrDefault(ArrServiceSummary())
             // Guard: don't write sonarr resolution onto a different item's state.
             if (host.isCurrent(inputs.itemId)) {
@@ -116,15 +130,18 @@ internal object ArrServerResolveEnrichmentModule : DetailEnrichmentModule {
 }
 
 /** The stock "More like this" arm: server-scored similar items, self-filtered. */
-internal object SimilarItemsEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object SimilarItemsEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        similar: DetailSimilarRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "similarItems",
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             // Fetch similar/related items concurrently and non-blocking so the core
             // detail renders immediately. The result lands in relatedItems.
-            host.similarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+            similar.similarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
                 .onSuccess { items ->
                     if (!host.isCurrent(inputs.itemId)) return@onSuccess
                     host.updateState {
@@ -139,8 +156,11 @@ internal object SimilarItemsEnrichmentModule : DetailEnrichmentModule {
  * The media-segments arm: pre-warms the player's intro/credits TTL cache and
  * surfaces the two skip affordances as detail-side chips.
  */
-internal object MediaSegmentsEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object MediaSegmentsEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        media: DetailMediaRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "mediaSegments",
             gate = { it.remoteDiscoveryAllowed },
@@ -149,7 +169,7 @@ internal object MediaSegmentsEnrichmentModule : DetailEnrichmentModule {
             // intro/credits skip affordances as a detail-side chip. The cache fill
             // is an implicit side effect of the call; only the booleans flow into
             // uiState so the chip can render before the player attaches.
-            host.mediaSegments(inputs.itemId).onSuccess { segments ->
+            media.mediaSegments(inputs.itemId).onSuccess { segments ->
                 if (!host.isCurrent(inputs.itemId)) return@onSuccess
                 val availability = segments.toAvailability()
                 host.updateState {
@@ -168,15 +188,18 @@ internal object MediaSegmentsEnrichmentModule : DetailEnrichmentModule {
  * 350ms delay is preserved for frame priority (don't contend with first-frame
  * GPU work); seerrDataLoaded keeps it idempotent across re-entries.
  */
-internal object SeerrDiscoveryEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object SeerrDiscoveryEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        ambient: DetailAmbientRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "seerrDiscovery",
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             delay(350)
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
-            host.triggerSeerrDiscovery(inputs.detail)
+            ambient.triggerSeerrDiscovery(inputs.detail)
         },
     )
 }
@@ -187,8 +210,11 @@ internal object SeerrDiscoveryEnrichmentModule : DetailEnrichmentModule {
  * genre/studio to mine the on-device offline library for (the former
  * triggerLocalSideEffects early return).
  */
-internal object LocalRelatedItemsEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object LocalRelatedItemsEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        similar: DetailSimilarRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "localRelatedItems",
             gate = {
@@ -196,7 +222,7 @@ internal object LocalRelatedItemsEnrichmentModule : DetailEnrichmentModule {
                     (it.detail.item.genres.isNotEmpty() || it.detail.item.studios.isNotEmpty())
             },
         ) { inputs ->
-            val related = host.localRelatedItems(
+            val related = similar.localRelatedItems(
                 currentId = inputs.itemId,
                 genres = inputs.detail.item.genres,
                 studios = inputs.detail.item.studios,
@@ -218,8 +244,12 @@ internal object LocalRelatedItemsEnrichmentModule : DetailEnrichmentModule {
  * its ratings fetch failed/returned nothing. MOVIE/SERIES only: the
  * provider-id sources and the ratings payload exist for nothing else.
  */
-internal object ExternalRatingsEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object ExternalRatingsEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        ratings: DetailRatingsRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "externalRatings",
             gate = { it.remoteDiscoveryAllowed },
@@ -236,7 +266,7 @@ internal object ExternalRatingsEnrichmentModule : DetailEnrichmentModule {
             // chips at RENDER time only when the plugin row actually has
             // content. `!hasPluginRatings` cannot gate the START — the plugin
             // row's content lands asynchronously from the same fan-out.
-            val pluginRatingsLive = host.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)
+            val pluginRatingsLive = pluginGate.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)
             val mediaType = inputs.mediaType
             if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@DetailEnrichment
             val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
@@ -247,7 +277,7 @@ internal object ExternalRatingsEnrichmentModule : DetailEnrichmentModule {
             // (SeerrRepositoryImpl's detail cache), so a failed/empty Seerr
             // payload costs one call before the TMDB fallback.
             val seerrRatings = if (host.currentState().isSeerrConnected) {
-                host.seerrRatings(tmdbId, if (mediaType == MediaType.MOVIE) "movie" else "tv")
+                ratings.seerrRatings(tmdbId, if (mediaType == MediaType.MOVIE) "movie" else "tv")
                     .getOrNull()
                     ?.takeUnless { seerr ->
                         seerr.rt?.criticsScore == null && seerr.rt?.audienceScore == null &&
@@ -262,7 +292,7 @@ internal object ExternalRatingsEnrichmentModule : DetailEnrichmentModule {
                 // TMDB-only fallback: the public vote aggregate + the
                 // constructed provider link. Null seam (unwired tests) or a
                 // failed fetch leave the strip empty — silent absence.
-                ?: host.tmdbDetails(tmdbId, mediaType)?.let { details ->
+                ?: ratings.tmdbDetails(tmdbId, mediaType)?.let { details ->
                     DetailExternalRatings.tmdbOnly(
                         voteAverage = details.voteAverage?.toFloat(),
                         tmdbPathSegment = if (mediaType == MediaType.MOVIE) "movie" else "tv",
@@ -278,11 +308,11 @@ internal object ExternalRatingsEnrichmentModule : DetailEnrichmentModule {
             // call is null-safe like the mdbList one; the toggle read is
             // a synchronous slice value (a preference read, not snapshot state).
             val awards: String? = if (
-                host.awardsBadgesEnabled() &&
-                host.pluginFeature(JellyPlayPluginFeatures.OmdbAwards, inputs.itemId)
+                ratings.awardsBadgesEnabled() &&
+                pluginGate.pluginFeature(JellyPlayPluginFeatures.OmdbAwards, inputs.itemId)
             ) {
                 resolveImdbId(inputs.detail)?.let { imdbId ->
-                    host.omdbAwards(imdbId)?.awards
+                    ratings.omdbAwards(imdbId)?.awards
                 }
             } else {
                 null
@@ -309,14 +339,18 @@ internal object ExternalRatingsEnrichmentModule : DetailEnrichmentModule {
  * per-id failures drop out and an empty hydration leaves the stock row in
  * place.
  */
-internal object PluginSimilarItemsEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object PluginSimilarItemsEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        plugin: DetailPluginRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "pluginSimilarItems",
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
-            if (!host.pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
-            val scored = host.pluginSimilarIds(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+            if (!pluginGate.pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
+            val scored = plugin.pluginSimilarIds(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
                 .filter { it != inputs.itemId }
                 .distinct()
             if (scored.isEmpty()) return@DetailEnrichment
@@ -325,7 +359,7 @@ internal object PluginSimilarItemsEnrichmentModule : DetailEnrichmentModule {
             // out (mapConcurrentCatching's drop policy) instead of an unbounded
             // async/awaitAll fan-out over the server.
             val hydrated = host.mapConcurrent(scored) { candidate ->
-                host.mediaDetailItem(candidate)
+                plugin.mediaDetailItem(candidate)
             }
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState {
@@ -336,7 +370,7 @@ internal object PluginSimilarItemsEnrichmentModule : DetailEnrichmentModule {
                         .distinctBy { item -> item.id },
                     // The probe ran synchronously inside pluginFeature above, so
                     // the capabilities payload is fresh for this read.
-                    pluginSimilarSuppressesStock = host.serverSimilarPipeline(),
+                    pluginSimilarSuppressesStock = plugin.serverSimilarPipeline(),
                 )
             }
         },
@@ -348,18 +382,22 @@ internal object PluginSimilarItemsEnrichmentModule : DetailEnrichmentModule {
  * rows. SERIES resolves to itself, EPISODE/SEASON to the parent series
  * (seriesIdForDetail) — the same series context the seasons tree renders.
  */
-internal object PluginAnimeMarkersEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object PluginAnimeMarkersEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        plugin: DetailPluginRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "pluginAnimeMarkers",
             gate = {
                 it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
             },
         ) { inputs ->
-            if (!host.pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
+            if (!pluginGate.pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
             val seriesId = inputs.detail.item.seriesIdForDetail ?: return@DetailEnrichment
             val providerSeriesId = resolveProviderSeriesId(inputs.detail) ?: return@DetailEnrichment
-            val markers = host.animeMarkers(seriesId, providerSeriesId) ?: return@DetailEnrichment
+            val markers = plugin.animeMarkers(seriesId, providerSeriesId) ?: return@DetailEnrichment
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState { it.copy(animeMarkers = animeBadges(markers)) }
         },
@@ -378,15 +416,19 @@ internal object PluginAnimeMarkersEnrichmentModule : DetailEnrichmentModule {
  * out; a wholly empty fold leaves the field empty — silent absence, never an
  * error.
  */
-internal object PluginSeasonRatingsEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object PluginSeasonRatingsEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        pluginGate: DetailPluginGateRole,
+        ratings: DetailRatingsRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "pluginSeasonRatings",
             gate = {
                 it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
             },
         ) { inputs ->
-            if (!host.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
+            if (!pluginGate.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
             val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
             // Seasons still unscored on this field's last emission (the
             // merge source) — numberless seasons never fetch (the serial
@@ -400,7 +442,7 @@ internal object PluginSeasonRatingsEnrichmentModule : DetailEnrichmentModule {
             if (seasonsToFetch.isEmpty()) return@DetailEnrichment
             val fetchedRatingsBySeasonId = host
                 .mapConcurrent(seasonsToFetch) { (season, seasonNumber) ->
-                    host.tmdbSeasonRatings(tmdbId.toString(), seasonNumber)
+                    ratings.tmdbSeasonRatings(tmdbId.toString(), seasonNumber)
                         ?.takeIf { it.isNotEmpty() }
                         ?.let { ratings -> season.id to ratings }
                 }
@@ -423,13 +465,16 @@ internal object PluginSeasonRatingsEnrichmentModule : DetailEnrichmentModule {
  * local fetch degrades to the remote-only list (today's content);
  * remote-only is exactly the no-local-trailer shape.
  */
-internal object TrailersEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object TrailersEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        media: DetailMediaRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "trailers",
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
-            val local = host.localTrailers(inputs.itemId).getOrNull().orEmpty()
+            val local = media.localTrailers(inputs.itemId).getOrNull().orEmpty()
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState {
                 it.copy(
@@ -452,15 +497,18 @@ internal object TrailersEnrichmentModule : DetailEnrichmentModule {
  * skipped entirely. A failed/empty lookup degrades to the embed (today's
  * content); the URL is shaped fresh against the active session.
  */
-internal object ThemeVideoEnrichmentModule : DetailEnrichmentModule {
-    override fun enrichments(host: DetailSectionEnrichmentHost) = listOf(
+internal object ThemeVideoEnrichmentModule {
+    fun enrichments(
+        host: DetailSectionEnrichmentHost,
+        media: DetailMediaRoles,
+    ) = listOf(
         DetailEnrichment(
             name = "themeVideo",
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             if (!host.detailPreferences().trailerAutoplay) return@DetailEnrichment
-            val clip = host.themeVideoClips(inputs.itemId).firstOrNull() ?: return@DetailEnrichment
-            val streamUrl = host.streamUrl(itemId = clip.id, mediaSourceId = clip.id)
+            val clip = media.themeVideoClips(inputs.itemId).firstOrNull() ?: return@DetailEnrichment
+            val streamUrl = media.streamUrl(itemId = clip.id, mediaSourceId = clip.id)
             if (streamUrl.isBlank()) return@DetailEnrichment
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState { it.copy(themeVideoStreamUrl = streamUrl) }

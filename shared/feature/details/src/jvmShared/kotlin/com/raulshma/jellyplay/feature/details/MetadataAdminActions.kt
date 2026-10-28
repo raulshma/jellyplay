@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.model.IdentifyItemType
 import com.raulshma.jellyplay.core.model.IdentifyQuery
 import com.raulshma.jellyplay.core.model.IdentifyResult
@@ -55,7 +55,7 @@ internal class MetadataAdminActions(
     private val strings: DetailStrings,
     private val editorRepository: MetadataEditorRepository,
     /** Same-name library search for the merge sheet's candidate rows. */
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
     /** Invoked once after an accepted refresh so the screen re-fetches the
      * item snapshot and the new image tags reach the artwork (the refresh is
      * server-async — see [refreshScreenItem]). */
@@ -69,7 +69,7 @@ internal class MetadataAdminActions(
      */
     class Factory constructor(
         private val editorRepository: MetadataEditorRepository,
-        private val mediaRepository: MediaRepository,
+        private val libraryFeed: LibraryFeed,
         private val authRepository: AuthRepository,
     ) {
         fun create(
@@ -84,7 +84,7 @@ internal class MetadataAdminActions(
             messages = messages,
             strings = strings,
             editorRepository = editorRepository,
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
             onRefreshAccepted = onRefreshAccepted,
             authRepository = authRepository,
         )
@@ -250,10 +250,11 @@ internal class MetadataAdminActions(
         if (item.mediaType != MediaType.MOVIE) return
         _mergeState.value = MergeVersionsUiState(isLoading = true)
         scope.launch {
-            val result = mediaRepository.search(
+            val result = libraryFeed.search(
                 query = item.name,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.MOVIE)),
                 limit = 30,
+                startIndex = 0,
             )
             val currentName = item.name.trim()
             val candidates = result.getOrNull()?.items

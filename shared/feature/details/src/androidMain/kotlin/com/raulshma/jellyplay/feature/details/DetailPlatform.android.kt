@@ -85,9 +85,9 @@ fun androidDetailsModule(context: Context): Module = module {
         DetailViewModel(
             storageProbe = get(),
             strings = get(),
-            mediaRepository = get(),
             detailFeed = get(),
             collectionOperations = get(),
+            userDataChanges = get(),
             mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             collectionApiClient = get(),
@@ -131,7 +131,9 @@ fun androidDetailsModule(context: Context): Module = module {
     // in desktopDetailsPlatformModule now, the DetailViewModel precedent.
     viewModel {
         CollectionDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            collectionOperations = get(),
+            userDataChanges = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
@@ -140,7 +142,8 @@ fun androidDetailsModule(context: Context): Module = module {
     }
     viewModel {
         PersonDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            userDataChanges = get(),
             libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),

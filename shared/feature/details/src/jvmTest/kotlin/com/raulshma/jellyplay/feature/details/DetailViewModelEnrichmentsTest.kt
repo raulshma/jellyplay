@@ -12,7 +12,9 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -112,7 +114,9 @@ class DetailViewModelEnrichmentsTest {
 
     private val strings = fakeDetailStrings()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
+    private lateinit var collectionOperations: CollectionOperations
+    private lateinit var userDataChanges: UserDataChanges
 
     // The browse-catalogue enrichments fake (the franchise row's source read).
     // Defaults to success/empty; tests override via boxSetResults and assert
@@ -143,7 +147,9 @@ class DetailViewModelEnrichmentsTest {
 
     @BeforeTest
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
+        collectionOperations = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
         playbackRepository = mockk(relaxed = true)
@@ -158,7 +164,7 @@ class DetailViewModelEnrichmentsTest {
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         val offlineModeManager = mockk<OfflineModeManager>(relaxed = true)
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
-        coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
+        coEvery { detailFeed.getSimilarItems(any(), any()) } returns Result.success(emptyList())
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
         // The franchise rows' BoxSet-ancestor read — the injected
         // [catalogueEnrichments] fake defaults to success/empty (no ancestor
@@ -181,7 +187,7 @@ class DetailViewModelEnrichmentsTest {
         coEvery { seerrRepository.getRatings(any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrRatings())
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         coEvery { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) } returns Unit
         every { mediaDetailProvider.invalidate(any()) } returns Unit
         coEvery { arrRepository.resolveServers() } returns Result.success(ArrServiceSummary())
@@ -214,9 +220,9 @@ class DetailViewModelEnrichmentsTest {
     ): DetailViewModel = DetailViewModel(
         storageProbe = mockk<DetailStorageProbe>(relaxed = true),
         strings = strings,
-        mediaRepository = mediaRepository,
-        detailFeed = mockk(relaxed = true),
-        collectionOperations = mockk(relaxed = true),
+        detailFeed = detailFeed,
+        collectionOperations = collectionOperations,
+        userDataChanges = userDataChanges,
         mediaCatalogueEnrichments = catalogueEnrichments,
         libraryApiClient = libraryApiClient,
         collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
@@ -275,7 +281,7 @@ class DetailViewModelEnrichmentsTest {
             ),
                 metadataAdmin = MetadataAdminActions.Factory(
                     editorRepository = mockk<MetadataEditorRepository>(relaxed = true),
-                    mediaRepository = mockk(relaxed = true),
+                    libraryFeed = mockk(relaxed = true),
                     authRepository = mockk<AuthRepository>(relaxed = true),
                 ),
         ),
@@ -352,7 +358,7 @@ class DetailViewModelEnrichmentsTest {
     @Test
     fun remoteMovieWithDiscovery_firesAllRemoteEnrichments_andNoneOfTheLocalOnes() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getSimilarItems("m1", limit = 12) } returns
+        coEvery { detailFeed.getSimilarItems("m1", limit = 12) } returns
             Result.success(listOf(MediaItem(id = "other", name = "Other", mediaType = MediaType.MOVIE)))
         coEvery { libraryApiClient.getSpecialFeatures("m1") } returns
             Result.success(listOf(MediaItem(id = "extra1", name = "Extra", mediaType = MediaType.MOVIE)))
@@ -385,7 +391,7 @@ class DetailViewModelEnrichmentsTest {
         assertTrue(state.collectionItems.isEmpty())
         assertFalse(state.sonarrServersResolved)
         coVerify(exactly = 0) { offlineRepository.getLocalRelated(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { mediaRepository.getCollectionItems(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { collectionOperations.getCollectionItems(any(), any(), any(), any()) }
         coVerify(exactly = 0) { arrRepository.resolveServers() }
     }
 
@@ -472,10 +478,10 @@ class DetailViewModelEnrichmentsTest {
         assertFalse(state.hasIntroSegment)
         assertFalse(state.hasCreditSegment)
         assertTrue(state.collectionItems.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getSimilarItems(any(), any()) }
         coVerify(exactly = 0) { libraryApiClient.getSpecialFeatures(any()) }
         coVerify(exactly = 0) { playbackRepository.getMediaSegments(any()) }
-        coVerify(exactly = 0) { mediaRepository.getCollectionItems(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { collectionOperations.getCollectionItems(any(), any(), any(), any()) }
         coVerify(exactly = 0) { arrRepository.resolveServers() }
     }
 
@@ -503,7 +509,7 @@ class DetailViewModelEnrichmentsTest {
     @Test
     fun remoteCollection_firesCollectionItems_onTopOfTheRemoteSet() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getCollectionItems("c1", any(), any(), any()) } returns
+        coEvery { collectionOperations.getCollectionItems("c1", any(), any(), any()) } returns
             Result.success(
                 SearchResult(
                     items = listOf(MediaItem(id = "ci1", name = "Member", mediaType = MediaType.MOVIE)),
@@ -547,7 +553,7 @@ class DetailViewModelEnrichmentsTest {
         assertTrue(state.relatedItems.isEmpty())
         assertTrue(state.specialFeatures.isEmpty())
         assertFalse(state.hasIntroSegment)
-        coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getSimilarItems(any(), any()) }
         coVerify(exactly = 0) { libraryApiClient.getSpecialFeatures(any()) }
         coVerify(exactly = 0) { playbackRepository.getMediaSegments(any()) }
         verify(exactly = 0) { themeMusicPlayer.playThemeFor(any()) }
@@ -580,7 +586,7 @@ class DetailViewModelEnrichmentsTest {
 
         // The similar-items fetch ran exactly once across both emissions —
         // the tick adopted the same generation and skipped the fan-out.
-        coVerify(exactly = 1) { mediaRepository.getSimilarItems("m3", limit = 12) }
+        coVerify(exactly = 1) { detailFeed.getSimilarItems("m3", limit = 12) }
         verify(exactly = 1) { themeMusicPlayer.playThemeFor(any()) }
     }
 

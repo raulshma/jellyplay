@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -136,11 +137,15 @@ class DetailSectionRegistryTest {
         ),
     )
 
-    /** A [DetailSectionEnrichmentHost] fake recording the state writes. */
+    /**
+     * A fake implementing exactly the PLUGIN_RATINGS module's roles — the
+     * shared guard/funnel host plus the ADR 0010 gate and ratings roles —
+     * recording the state writes.
+     */
     private class FakeHost(
         private val probe: Boolean,
         private val result: Result<List<JellyPlayPluginRating>?>?,
-    ) : DetailSectionEnrichmentHost {
+    ) : DetailSectionEnrichmentHost, DetailPluginGateRole, DetailRatingsRoles {
         var written: DetailUiState? = null
 
         override fun isCurrent(itemId: String): Boolean = true
@@ -149,36 +154,18 @@ class DetailSectionRegistryTest {
             written = reduce(DetailUiState())
         }
 
-        override suspend fun pluginFeature(feature: String, itemId: String): Boolean = probe
-
-        override suspend fun mdbListRatings(
-            imdbId: String,
-        ): Result<List<JellyPlayPluginRating>?>? = result
-
-        // The wave-2 arms' reads: empty successes — the fake exists to pin
-        // the registry's dispatch and state-write shape, not wire content.
-        override suspend fun specialFeatures(itemId: String): Result<List<MediaItem>> =
-            Result.success(emptyList())
-
-        override suspend fun collectionItems(
-            collectionId: String,
-            startIndex: Int,
-            limit: Int,
-        ): Result<SearchResult> =
-            Result.success(SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0))
-
-        override suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
-            Result.success(emptyList())
-
-        override suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>> =
-            Result.success(emptyList())
-
         override fun detailPreferences(): DetailPreferences = DetailPreferences()
 
         override suspend fun <T, R> mapConcurrent(
             items: List<T>,
             transform: suspend (T) -> R,
         ): List<R> = items.map { transform(it) }
+
+        override suspend fun pluginFeature(feature: String, itemId: String): Boolean = probe
+
+        override suspend fun mdbListRatings(
+            imdbId: String,
+        ): Result<List<JellyPlayPluginRating>?>? = result
     }
 
     // ── registry order ────────────────────────────────────────────────────
@@ -189,19 +176,34 @@ class DetailSectionRegistryTest {
         val kinds = DetailSectionRegistry.modules.map { it.kind }
         assertEquals(
             listOf(
+                DetailSectionKind.HEADER,
+                DetailSectionKind.ACTION_ROW,
+                DetailSectionKind.BOOK_READING_CARD,
+                DetailSectionKind.MEDIA_INFO,
+                DetailSectionKind.OVERVIEW,
+                DetailSectionKind.CHAPTERS_OR_TOC,
+                DetailSectionKind.ALBUM_TRACKS,
                 DetailSectionKind.PLUGIN_RATINGS,
+                DetailSectionKind.UP_NEXT,
                 DetailSectionKind.UPCOMING_EPISODES,
+                DetailSectionKind.SEASONS,
                 DetailSectionKind.COLLECTION_ITEMS,
+                DetailSectionKind.CAST,
+                DetailSectionKind.RELATED_VIDEOS,
                 DetailSectionKind.MORE_IN_COLLECTION,
+                DetailSectionKind.MORE_LIKE_THIS,
+                DetailSectionKind.JELLYPLAY_SIMILAR,
+                DetailSectionKind.SEERR_RECOMMENDATIONS,
+                DetailSectionKind.SEERR_SIMILAR,
                 DetailSectionKind.SPECIAL_FEATURES,
                 DetailSectionKind.TMDB_REVIEWS,
+                DetailSectionKind.DOWNLOAD_FOOTER,
             ),
             kinds,
         )
         // …and the merged emission re-sorts by the enum, so nothing can ever
         // reorder visually regardless of how the list is written.
         val merged = DetailSectionRegistry.admittedSections(
-            handFold = DetailSectionAdmission.from(state(), movieDetail).admit(),
             state = state(),
             detail = movieDetail,
         )
@@ -220,7 +222,6 @@ class DetailSectionRegistryTest {
             seerrDataAvailable = true,
         )
         val sections = DetailSectionRegistry.admittedSections(
-            handFold = DetailSectionAdmission.from(full, movieDetail).admit(),
             state = full,
             detail = movieDetail,
         )
@@ -291,9 +292,6 @@ class DetailSectionRegistryTest {
                 detail,
             ),
         )
-        // The fold itself never emits the migrated kinds — the registry owns
-        // them.
-        assertFalse(DetailSectionAdmission.from(state(), detail).admit().contains(DetailSectionKind.PLUGIN_RATINGS))
         assertTrue(
             DetailSectionRegistry.admittedKinds(
                 state(pluginRatings = listOf(JellyPlayPluginRating(source = "RT", score = 96.0))),
@@ -315,7 +313,7 @@ class DetailSectionRegistryTest {
                 ),
             ),
         )
-        val enrichment = PluginRatingsSectionModule.enrichments(host).single()
+        val enrichment = PluginRatingsSectionModule.enrichments(host, host, host).single()
         assertEquals("pluginRatings", enrichment.name)
         assertTrue(enrichment.gate(armInputs()), "remote discovery allowed → the arm may start")
 
@@ -334,17 +332,17 @@ class DetailSectionRegistryTest {
 
         // Feature probe false (unwired store / user toggle) → no write.
         val probedOff = FakeHost(probe = false, result = Result.success(emptyList()))
-        PluginRatingsSectionModule.enrichments(probedOff).single().run(inputs)
+        PluginRatingsSectionModule.enrichments(probedOff, probedOff, probedOff).single().run(inputs)
         assertNull(probedOff.written)
 
         // Seam unwired (direct-construction tests) → silent absence.
         val unwired = FakeHost(probe = true, result = null)
-        PluginRatingsSectionModule.enrichments(unwired).single().run(inputs)
+        PluginRatingsSectionModule.enrichments(unwired, unwired, unwired).single().run(inputs)
         assertNull(unwired.written)
 
         // Fetch failed → silent absence.
         val failed = FakeHost(probe = true, result = Result.failure(RuntimeException("plugin down")))
-        PluginRatingsSectionModule.enrichments(failed).single().run(inputs)
+        PluginRatingsSectionModule.enrichments(failed, failed, failed).single().run(inputs)
         assertNull(failed.written)
     }
 
@@ -379,7 +377,7 @@ class DetailSectionRegistryTest {
             ),
         )
         val host = FakeHost(probe = true, result = Result.success(emptyList()))
-        assertFalse(PluginRatingsSectionModule.enrichments(host).single().gate(localInputs))
+        assertFalse(PluginRatingsSectionModule.enrichments(host, host, host).single().gate(localInputs))
     }
 
     // ── registry completeness (the HomeRowModulesTest mirror) ─────────────
@@ -401,11 +399,11 @@ class DetailSectionRegistryTest {
 
     /**
      * The every-media-family admission span: each family × both capability
-     * sets × both origins, every other input admitting (content present,
-     * prefs on). Its union must admit every fold-owned kind — and must never
-     * admit a registry-owned one.
+     * sets x both origins, content present and prefs on. Every kind must be
+     * admitted somewhere in the span by its module — a module whose row
+     * over-tightened (or a kind that lost its module) renders nothing.
      */
-    private fun admissionSpan(): List<DetailSectionAdmission> {
+    private fun admissionSpan(): List<Pair<DetailContentState, MediaDetail>> {
         val mediaTypes = listOf(
             MediaType.MOVIE,
             MediaType.SERIES,
@@ -416,29 +414,60 @@ class DetailSectionRegistryTest {
             MediaType.ALBUM,
             MediaType.AUDIO,
         )
-        val capabilitySets = listOf(allCapabilities(), localCapabilities())
         return mediaTypes.flatMap { mediaType ->
-            capabilitySets.flatMap { capabilities ->
+            listOf(allCapabilities(), localCapabilities()).flatMap { capabilities ->
                 listOf(false, true).map { isLocal ->
-                    DetailSectionAdmission(
-                        mediaType = mediaType,
-                        isLocalOrigin = isLocal,
-                        capabilities = capabilities,
-                        showActionButtons = true,
-                        showMediaInfo = true,
-                        hasBookState = true,
-                        hasBookToc = true,
-                        hasChapters = true,
-                        hasAlbumTracks = true,
-                        hasSmartPlayTarget = true,
-                        showDetailUpNext = true,
-                        seerrDataAvailable = true,
-                        hasSeerrRecommendations = true,
-                        hasSeerrSimilar = true,
-                        hasAttachedDownload = true,
-                        hasPluginSimilar = true,
-                        suppressStockSimilar = false,
+                    val detail = MediaDetail(
+                        item = MediaItem(id = "k1", name = "Item", mediaType = mediaType),
+                        chapters = listOf(ChapterInfo(name = "Intro", startPositionTicks = 0L)),
                     )
+                    val state = DetailContentState(
+                        core = DetailUiState(
+                            detail = detail,
+                            origin = if (isLocal) DetailOrigin.LOCAL_OFFLINE_MODE else DetailOrigin.REMOTE,
+                            capabilities = capabilities,
+                            book = DetailUiState.BookDetailState(format = BookFormat.EPUB),
+                            albumTracks = listOf(detail.item),
+                            smartPlayTarget = DetailUiState.SmartPlayTarget(
+                                episode = detail.item,
+                                label = "Play",
+                                startPositionTicks = 0L,
+                            ),
+                            isSeerrConnected = true,
+                            isSeerrRecommendationsEnabled = true,
+                            seerrRecommendations = listOf(
+                                SeerrSearchItem(id = 1, mediaType = "movie"),
+                            ),
+                            seerrSimilar = listOf(
+                                SeerrSearchItem(id = 2, mediaType = "movie"),
+                            ),
+                            specialFeatures = listOf(
+                                MediaItem(id = "sf1", name = "Extra", mediaType = MediaType.MOVIE),
+                            ),
+                            pluginSimilarItems = listOf(
+                                MediaItem(id = "ps1", name = "P", mediaType = MediaType.MOVIE),
+                            ),
+                            franchiseCollections = listOf(
+                                DetailUiState.FranchiseCollection(
+                                    id = "box1",
+                                    name = "Franchise",
+                                    members = listOf(detail.item),
+                                ),
+                            ),
+                            upcomingEpisodes = listOf(
+                                MediaItem(id = "up1", name = "Next", mediaType = MediaType.EPISODE),
+                            ),
+                            collectionItems = listOf(
+                                MediaItem(id = "ci1", name = "Member", mediaType = MediaType.MOVIE),
+                            ),
+                            pluginRatings = listOf(
+                                JellyPlayPluginRating(source = "RT", score = 96.0),
+                            ),
+                            tmdbReviews = listOf(TmdbReview(id = "r1", content = "...")),
+                        ),
+                        itemId = "k1",
+                    )
+                    state to detail
                 }
             }
         }
@@ -455,23 +484,19 @@ class DetailSectionRegistryTest {
             moduleKinds.distinct().size,
             "a DetailSectionKind is claimed by two registered modules",
         )
+        // Completeness: the registry owns EVERY kind — the former hand fold
+        // retired with the last module wave, so a kind without a module
+        // renders nothing.
+        assertEquals(DetailSectionKind.entries.toSet(), moduleKinds.toSet())
 
         for (kind in DetailSectionKind.entries) {
-            val module = DetailSectionRegistry.moduleFor(kind)
-            val foldAdmits = span.any { input -> kind in input.admit() }
-            if (module == null) {
-                assertTrue(
-                    foldAdmits,
-                    "$kind has no registered module, so the hand fold must own it — " +
-                        "a deleted fold row leaves the section unowned (rendering nothing)",
-                )
-            } else {
-                assertFalse(
-                    foldAdmits,
-                    "$kind is registered (${module::class.simpleName}); a fold row still emitting it " +
-                        "would admit the section twice and render it twice",
-                )
-            }
+            val module = requireNotNull(DetailSectionRegistry.moduleFor(kind))
+            val admittedSomewhere = span.any { (state, detail) -> module.isAdmitted(state, detail) }
+            assertTrue(
+                admittedSomewhere,
+                "$kind's module (${module::class.simpleName}) admits nowhere in the span — " +
+                    "its admission row over-tightened and the section can never render",
+            )
         }
     }
 }

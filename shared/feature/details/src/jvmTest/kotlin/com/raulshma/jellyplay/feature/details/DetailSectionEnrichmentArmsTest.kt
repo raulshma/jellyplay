@@ -69,9 +69,11 @@ class DetailSectionEnrichmentArmsTest {
         )
 
     /**
-     * The full [DetailSectionEnrichmentHost] fake: canned reads (keyed like
-     * the former MockK stubs), the recorded calls the "never started"
-     * assertions read, and the state writes captured from [updateState].
+     * The fake implementing exactly the collection-family/strip modules'
+     * roles — the shared guard/funnel host plus the strip and similar fetch
+     * roles: canned reads (keyed like the former MockK stubs), the recorded
+     * calls the "never started" assertions read, and the state writes
+     * captured from [updateState].
      */
     private class FakeHost(
         private val preferences: DetailPreferences = DetailPreferences(),
@@ -80,7 +82,7 @@ class DetailSectionEnrichmentArmsTest {
         private val collectionResults: Map<String, Result<SearchResult>> = emptyMap(),
         private val upcomingResult: Result<List<MediaItem>> = Result.success(emptyList()),
         private val stale: Boolean = false,
-    ) : DetailSectionEnrichmentHost {
+    ) : DetailSectionEnrichmentHost, DetailCollectionStripRoles, DetailSimilarRoles {
         var written: DetailUiState? = null
         val boxSetCalls = mutableListOf<String>()
         val collectionCalls = mutableListOf<String>()
@@ -91,10 +93,6 @@ class DetailSectionEnrichmentArmsTest {
         override fun updateState(reduce: (DetailUiState) -> DetailUiState) {
             written = reduce(DetailUiState())
         }
-
-        override suspend fun pluginFeature(feature: String, itemId: String): Boolean = false
-
-        override suspend fun mdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>? = null
 
         override suspend fun specialFeatures(itemId: String): Result<List<MediaItem>> =
             specialFeaturesResult
@@ -154,7 +152,7 @@ class DetailSectionEnrichmentArmsTest {
                 "box2" to Result.success(members(item("s2", MediaType.MOVIE))),
             ),
         )
-        val enrichment = MoreInCollectionSectionModule.enrichments(host).single()
+        val enrichment = MoreInCollectionSectionModule.enrichments(host, host, host).single()
         assertEquals("franchise", enrichment.name)
         val armInputs = inputs(item("m1", MediaType.MOVIE))
         assertTrue(enrichment.gate(armInputs), "remote movie → the arm may start")
@@ -181,7 +179,7 @@ class DetailSectionEnrichmentArmsTest {
             ),
         )
 
-        MoreInCollectionSectionModule.enrichments(host).single().run(inputs(item("m2", MediaType.MOVIE)))
+        MoreInCollectionSectionModule.enrichments(host, host, host).single().run(inputs(item("m2", MediaType.MOVIE)))
 
         // Two ancestors taken (the cap), the empty first row dropped.
         assertEquals(listOf("box2"), host.written?.franchiseCollections?.map { it.id })
@@ -193,7 +191,7 @@ class DetailSectionEnrichmentArmsTest {
             boxSetResults = mapOf("m3" to Result.failure(RuntimeException("down"))),
         )
 
-        MoreInCollectionSectionModule.enrichments(host).single().run(inputs(item("m3", MediaType.MOVIE)))
+        MoreInCollectionSectionModule.enrichments(host, host, host).single().run(inputs(item("m3", MediaType.MOVIE)))
 
         // Silent absence: the failure never surfaces and the members read
         // never starts.
@@ -206,8 +204,8 @@ class DetailSectionEnrichmentArmsTest {
         val host = FakeHost(preferences = DetailPreferences(showMoreInCollection = false))
 
         val armInputs = inputs(item("m4", MediaType.MOVIE))
-        assertTrue(MoreInCollectionSectionModule.enrichments(host).single().gate(armInputs))
-        MoreInCollectionSectionModule.enrichments(host).single().run(armInputs)
+        assertTrue(MoreInCollectionSectionModule.enrichments(host, host, host).single().gate(armInputs))
+        MoreInCollectionSectionModule.enrichments(host, host, host).single().run(armInputs)
 
         assertTrue(host.boxSetCalls.isEmpty())
         assertTrue(host.written?.franchiseCollections?.isEmpty() ?: true)
@@ -219,7 +217,7 @@ class DetailSectionEnrichmentArmsTest {
         // ancestor read (its BoxSet ancestry would key on the episode id).
         val host = FakeHost()
         val armInputs = inputs(item("e9", MediaType.EPISODE, seriesId = "s9"))
-        assertFalse(MoreInCollectionSectionModule.enrichments(host).single().gate(armInputs))
+        assertFalse(MoreInCollectionSectionModule.enrichments(host, host, host).single().gate(armInputs))
         assertTrue(host.boxSetCalls.isEmpty())
     }
 
@@ -240,7 +238,7 @@ class DetailSectionEnrichmentArmsTest {
                 ),
             ),
         )
-        val enrichment = UpcomingEpisodesSectionModule.enrichments(host).single()
+        val enrichment = UpcomingEpisodesSectionModule.enrichments(host, host).single()
         assertEquals("upcoming", enrichment.name)
         val armInputs = inputs(item("s1", MediaType.SERIES))
         assertTrue(enrichment.gate(armInputs), "remote SERIES → the arm may start")
@@ -259,7 +257,7 @@ class DetailSectionEnrichmentArmsTest {
         // fire at all (the SERIES-only gate excludes re-keying entirely).
         val host = FakeHost()
         val armInputs = inputs(item("e1", MediaType.EPISODE, seriesId = "s1"))
-        assertFalse(UpcomingEpisodesSectionModule.enrichments(host).single().gate(armInputs))
+        assertFalse(UpcomingEpisodesSectionModule.enrichments(host, host).single().gate(armInputs))
         assertTrue(host.upcomingCalls.isEmpty())
     }
 
@@ -268,13 +266,13 @@ class DetailSectionEnrichmentArmsTest {
         // Preference off: the body-pref half stops the fetch before it starts.
         val gated = FakeHost(preferences = DetailPreferences(showUpcomingStrip = false))
         val seriesInputs = inputs(item("s2", MediaType.SERIES))
-        assertTrue(UpcomingEpisodesSectionModule.enrichments(gated).single().gate(seriesInputs))
-        UpcomingEpisodesSectionModule.enrichments(gated).single().run(seriesInputs)
+        assertTrue(UpcomingEpisodesSectionModule.enrichments(gated, gated).single().gate(seriesInputs))
+        UpcomingEpisodesSectionModule.enrichments(gated, gated).single().run(seriesInputs)
         assertTrue(gated.upcomingCalls.isEmpty())
 
         // Fetch failure — silent absence, never an error surface.
         val failing = FakeHost(upcomingResult = Result.failure(RuntimeException("server down")))
-        UpcomingEpisodesSectionModule.enrichments(failing).single().run(inputs(item("s3", MediaType.SERIES)))
+        UpcomingEpisodesSectionModule.enrichments(failing, failing).single().run(inputs(item("s3", MediaType.SERIES)))
         assertEquals(listOf("s3"), failing.upcomingCalls)
         assertTrue(failing.written?.upcomingEpisodes?.isEmpty() ?: true)
     }
@@ -288,7 +286,7 @@ class DetailSectionEnrichmentArmsTest {
                 "c1" to Result.success(members(item("ci1", MediaType.MOVIE))),
             ),
         )
-        val enrichment = CollectionItemsSectionModule.enrichments(host).single()
+        val enrichment = CollectionItemsSectionModule.enrichments(host, host).single()
         assertEquals("collectionItems", enrichment.name)
         val armInputs = inputs(item("c1", MediaType.COLLECTION))
         assertTrue(enrichment.gate(armInputs), "remote COLLECTION → the arm may start")
@@ -302,7 +300,7 @@ class DetailSectionEnrichmentArmsTest {
     @Test
     fun collectionItems_arm_gate_requiresTheCollectionFamilyAndRemoteDiscovery() = runTest {
         val host = FakeHost()
-        assertFalse(CollectionItemsSectionModule.enrichments(host).single().gate(inputs(item("m1", MediaType.MOVIE))))
+        assertFalse(CollectionItemsSectionModule.enrichments(host, host).single().gate(inputs(item("m1", MediaType.MOVIE))))
         // A local collection never starts it (the remote-only companion rule).
         val local = DetailEnrichmentInputs(
             itemId = "c2",
@@ -331,7 +329,7 @@ class DetailSectionEnrichmentArmsTest {
                 assets = DetailAssets(),
             ),
         )
-        assertFalse(CollectionItemsSectionModule.enrichments(host).single().gate(local))
+        assertFalse(CollectionItemsSectionModule.enrichments(host, host).single().gate(local))
         assertTrue(host.collectionCalls.isEmpty())
     }
 
@@ -341,7 +339,7 @@ class DetailSectionEnrichmentArmsTest {
     fun specialFeatures_arm_writesTheExtras_andGateRequiresRemoteDiscovery() = runTest {
         val extra = item("extra1", MediaType.MOVIE)
         val host = FakeHost(specialFeaturesResult = Result.success(listOf(extra)))
-        val enrichment = SpecialFeaturesSectionModule.enrichments(host).single()
+        val enrichment = SpecialFeaturesSectionModule.enrichments(host, host).single()
         assertEquals("specialFeatures", enrichment.name)
         val armInputs = inputs(item("m1", MediaType.MOVIE))
         assertTrue(enrichment.gate(armInputs))
@@ -352,7 +350,7 @@ class DetailSectionEnrichmentArmsTest {
 
         // A discovery-capped snapshot never starts the fetch.
         val cold = FakeHost()
-        assertFalse(SpecialFeaturesSectionModule.enrichments(cold).single().gate(inputs(item("m2", MediaType.MOVIE), remoteDiscoveryAllowed = false)))
+        assertFalse(SpecialFeaturesSectionModule.enrichments(cold, cold).single().gate(inputs(item("m2", MediaType.MOVIE), remoteDiscoveryAllowed = false)))
         assertTrue(cold.written == null)
     }
 
@@ -460,7 +458,6 @@ class DetailSectionEnrichmentArmsTest {
             )
         }
         val merged = DetailSectionRegistry.admittedSections(
-            handFold = DetailSectionAdmission.from(loadedSeries, detailOf(series)).admit(),
             state = loadedSeries,
             detail = detailOf(series),
         )

@@ -3,7 +3,8 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
@@ -36,7 +37,10 @@ private data class PersonDetailContent(
 )
 
 class PersonDetailViewModel constructor(
-    private val mediaRepository: MediaRepository,
+    /** The person's detail read (the detail-read family seam). */
+    private val detailFeed: DetailFeed,
+    /** The server user-data change feed (the deferred reload arming). */
+    private val userDataChanges: UserDataChanges,
     /** The browse-facet seam (the person detail's filmography query). */
     private val libraryApiClient: LibraryApiClient,
     private val userDataMutator: UserDataMutator,
@@ -58,7 +62,7 @@ class PersonDetailViewModel constructor(
         projections.detailPreferences.stateIn(scope, SharingStarted.Eagerly, DetailPreferences())
 
     private val fetchCoordinator = DeferredFetchCoordinator<String, PersonDetailContent>(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
         fetch = ::fetchPerson,
     )
@@ -126,7 +130,7 @@ class PersonDetailViewModel constructor(
         return coroutineScope {
             // No feature-level retry: the repository paths already retry
             // (and coordinate retry with address failover) in the engine.
-            val detailDeferred = async { mediaRepository.getMediaDetail(personId, force = force) }
+            val detailDeferred = async { detailFeed.getMediaDetail(personId, force = force) }
             val itemsDeferred = async { libraryApiClient.getItemsByPerson(personId) }
 
             val detailResult = detailDeferred.await()

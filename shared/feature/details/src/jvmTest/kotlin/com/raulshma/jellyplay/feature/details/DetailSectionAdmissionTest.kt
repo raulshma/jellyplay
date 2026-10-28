@@ -1,28 +1,33 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.DetailCapabilities
+import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.RemoteConnectivity
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins the [DetailSectionAdmission] fold that replaced [DetailContentBody]'s
- * inline `if` / `visible` gates: for every media family × origin × capability
- * edge, the ordered section list and each section's delayIndex must match the
- * former inline emission exactly.
+ * Pins the section modules' admission rows ([DetailSectionModule.isAdmitted])
+ * that replaced [DetailContentBody]'s inline `if` / `visible` gates — the
+ * former DetailSectionAdmission fold's rows moved out verbatim, wave by
+ * wave, until every kind was module-owned and the fold retired: for every
+ * media family × origin × capability edge, the merged section list and each
+ * section's delayIndex must match the former inline emission exactly.
  *
  * Two classes of behavior are pinned here:
  *  1. membership — sections admitted for the specific media family (SEASONS
  *     for series/episodes/seasons, ALBUM_TRACKS for audio,
- *     BOOK_READING_CARD for books) — the registry-owned kinds (the wave-1/2
- *     section modules) are pinned by DetailSectionRegistryTest and
- *     DetailSectionEnrichmentArmsTest;
+ *     BOOK_READING_CARD for books) and the content/preference-driven rows —
+ *     via their modules directly or through the registry's merged emission;
  *  2. the stagger indices — byte-identical to the literals the body used to
  *     pass to [StaggeredDetailSection] (they drive the shared entrance
  *     animation arithmetic).
@@ -60,12 +65,17 @@ class DetailSectionAdmissionTest {
         chapters = true,
     )
 
-    private fun admission(
+    private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
+
+    /**
+     * A [DetailContentState] carrying exactly the admission inputs the module
+     * `isAdmitted` rows read (the module-owned kinds' tests build their pins
+     * here — the migrated kinds read state directly, not the fold inputs).
+     */
+    private fun moduleState(
         mediaType: MediaType,
-        isLocalOrigin: Boolean = false,
         capabilities: DetailCapabilities = allCapabilities(),
-        showActionButtons: Boolean = true,
-        showMediaInfo: Boolean = true,
+        isLocalOrigin: Boolean = false,
         hasBookState: Boolean = false,
         hasBookToc: Boolean = false,
         hasChapters: Boolean = true,
@@ -73,80 +83,128 @@ class DetailSectionAdmissionTest {
         hasSmartPlayTarget: Boolean = true,
         showDetailUpNext: Boolean = true,
         seerrDataAvailable: Boolean = true,
-        hasSeerrRecommendations: Boolean = true,
-        hasSeerrSimilar: Boolean = true,
-        hasAttachedDownload: Boolean = false,
+        hasSeerrRecommendations: Boolean = false,
+        hasSeerrSimilar: Boolean = false,
         hasPluginSimilar: Boolean = false,
         suppressStockSimilar: Boolean = false,
-    ): List<DetailSectionKind> = DetailSectionAdmission(
-        mediaType = mediaType,
-        isLocalOrigin = isLocalOrigin,
-        capabilities = capabilities,
-        showActionButtons = showActionButtons,
-        showMediaInfo = showMediaInfo,
-        hasBookState = hasBookState,
-        hasBookToc = hasBookToc,
-        hasChapters = hasChapters,
-        hasAlbumTracks = hasAlbumTracks,
-        hasSmartPlayTarget = hasSmartPlayTarget,
-        showDetailUpNext = showDetailUpNext,
-        seerrDataAvailable = seerrDataAvailable,
-        hasSeerrRecommendations = hasSeerrRecommendations,
-        hasSeerrSimilar = hasSeerrSimilar,
-        hasAttachedDownload = hasAttachedDownload,
-        hasPluginSimilar = hasPluginSimilar,
-        suppressStockSimilar = suppressStockSimilar,
-    ).admit()
+        hasAttachedDownload: Boolean = false,
+    ): DetailContentState {
+        val item = MediaItem(id = "i1", name = "Item", mediaType = mediaType)
+        val detail = MediaDetail(
+            item = item,
+            chapters = if (hasChapters) {
+                listOf(ChapterInfo(name = "Intro", startPositionTicks = 0L))
+            } else {
+                emptyList()
+            },
+        )
+        return DetailContentState(
+            core = DetailUiState(
+                detail = detail,
+                origin = if (isLocalOrigin) DetailOrigin.LOCAL_OFFLINE_MODE else DetailOrigin.REMOTE,
+                capabilities = capabilities,
+                book = if (hasBookState) {
+                    DetailUiState.BookDetailState(
+                        format = com.raulshma.jellyplay.core.model.BookFormat.EPUB,
+                        toc = if (hasBookToc) {
+                            listOf(
+                                com.raulshma.jellyplay.core.model.BookTocEntry(
+                                    label = "Chapter 1",
+                                    href = "ch1.xhtml",
+                                    page = null,
+                                ),
+                            )
+                        } else {
+                            emptyList()
+                        },
+                    )
+                } else {
+                    null
+                },
+                albumTracks = if (hasAlbumTracks) listOf(item) else emptyList(),
+                smartPlayTarget = if (hasSmartPlayTarget) {
+                    DetailUiState.SmartPlayTarget(episode = item, label = "Play", startPositionTicks = 0L)
+                } else {
+                    null
+                },
+                isSeerrConnected = seerrDataAvailable,
+                isSeerrRecommendationsEnabled = seerrDataAvailable,
+                seerrRecommendations = if (hasSeerrRecommendations) {
+                    listOf(SeerrSearchItem(id = 1, mediaType = "movie"))
+                } else {
+                    emptyList()
+                },
+                seerrSimilar = if (hasSeerrSimilar) {
+                    listOf(SeerrSearchItem(id = 2, mediaType = "movie"))
+                } else {
+                    emptyList()
+                },
+                pluginSimilarItems = if (hasPluginSimilar) {
+                    listOf(MediaItem(id = "ps1", name = "Plugin similar", mediaType = MediaType.MOVIE))
+                } else {
+                    emptyList()
+                },
+                pluginSimilarSuppressesStock = suppressStockSimilar,
+                detailContext = if (hasAttachedDownload) {
+                    DetailContext(
+                        origin = if (isLocalOrigin) DetailOrigin.LOCAL_OFFLINE_MODE else DetailOrigin.REMOTE,
+                        connectivity = if (isLocalOrigin) RemoteConnectivity.BLOCKED else RemoteConnectivity.AVAILABLE,
+                        download = com.raulshma.jellyplay.core.model.DownloadAttachment(
+                            status = com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED,
+                            downloadedBytes = 1L,
+                            totalSizeBytes = 1L,
+                            mediaSourceId = null,
+                            container = null,
+                            downloadPath = "/tmp/i1.epub",
+                            createdAtEpochMillis = 0L,
+                            isCompletedFilePresent = true,
+                        ),
+                        syncState = null,
+                        seriesAggregate = null,
+                    )
+                } else {
+                    null
+                },
+            ),
+            itemId = "i1",
+            preferences = DetailPreferences(showDetailUpNext = showDetailUpNext),
+        )
+    }
 
-    private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
+    private fun moduleDetail(state: DetailContentState): MediaDetail = requireNotNull(state.core.detail)
 
     // ── MOVIE ─────────────────────────────────────────────────────────────
 
     @Test
-    fun remoteMovie_fullAdmission_matchesInlineEmission() {
-        // PLUGIN_RATINGS and TMDB_REVIEWS left the fold in the wave-1 section
-        // module pilot, and SPECIAL_FEATURES in wave 2 (their modules own those
-        // rows now) — this pin covers the hand-written sections only; the
-        // merged emission is pinned by DetailSectionRegistryTest.
-        assertEquals(
-            listOf(
-                DetailSectionKind.HEADER,
-                DetailSectionKind.ACTION_ROW,
-                DetailSectionKind.MEDIA_INFO,
-                DetailSectionKind.OVERVIEW,
-                DetailSectionKind.CHAPTERS_OR_TOC,
-                DetailSectionKind.CAST,
-                DetailSectionKind.RELATED_VIDEOS,
-                DetailSectionKind.MORE_LIKE_THIS,
-                DetailSectionKind.SEERR_RECOMMENDATIONS,
-                DetailSectionKind.SEERR_SIMILAR,
-            ),
-            admission(MediaType.MOVIE, hasAttachedDownload = false),
-        )
-        assertEquals(
-            listOf(0, 1, 2, 3, 4, 8, 9, 10, 11, 12),
-            admission(MediaType.MOVIE).indices(),
-        )
-    }
-
-    @Test
     fun remoteMovie_withAttachedDownload_appendsFooterAt15() {
-        val sections = admission(MediaType.MOVIE, hasAttachedDownload = true)
+        // The footer is module-owned (the `hasAttachedDownload || isLocalOrigin`
+        // row moved verbatim); its last-in-body position rides the enum's
+        // ordinal via the registry's merged emission.
+        val movie = moduleState(MediaType.MOVIE, hasAttachedDownload = true)
+        assertTrue(DownloadFooterSectionModule.isAdmitted(movie, moduleDetail(movie)))
+        val sections = DetailSectionRegistry.admittedSections(state = movie, detail = moduleDetail(movie))
         assertEquals(DetailSectionKind.DOWNLOAD_FOOTER, sections.last())
         assertEquals(15, sections.last().delayIndex)
     }
 
     @Test
     fun remoteMovie_withoutDownload_orLocalPresence_hasNoFooter() {
-        assertFalse(admission(MediaType.MOVIE, hasAttachedDownload = false).contains(DetailSectionKind.DOWNLOAD_FOOTER))
+        val movie = moduleState(MediaType.MOVIE, hasAttachedDownload = false)
+        assertFalse(DownloadFooterSectionModule.isAdmitted(movie, moduleDetail(movie)))
     }
 
     @Test
     fun localMovie_offlineCapabilities_admitsLocalSectionsOnly() {
         // Local origin: Seerr rows are remote-only (dropped), the footer
         // always renders, MORE_LIKE_THIS/RELATED_VIDEOS/CAST stay admitted
-        // (their content gates are render-side). SPECIAL_FEATURES is
-        // registry-owned since wave 2.
+        // (their content gates are render-side). The merged emission is the
+        // exact list the pre-module local movie produced.
+        val local = moduleState(
+            MediaType.MOVIE,
+            isLocalOrigin = true,
+            capabilities = localCapabilities(),
+            seerrDataAvailable = false,
+        )
         assertEquals(
             listOf(
                 DetailSectionKind.HEADER,
@@ -159,81 +217,89 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MORE_LIKE_THIS,
                 DetailSectionKind.DOWNLOAD_FOOTER,
             ),
-            admission(
-                mediaType = MediaType.MOVIE,
-                isLocalOrigin = true,
-                capabilities = localCapabilities(),
-                seerrDataAvailable = false,
-                hasSeerrRecommendations = false,
-                hasSeerrSimilar = false,
-            ),
+            DetailSectionRegistry.admittedSections(state = local, detail = moduleDetail(local)),
         )
     }
 
     @Test
     fun localMovie_footerAdmitted_evenWithoutAttachedDownload() {
-        val sections = admission(MediaType.MOVIE, isLocalOrigin = true, hasAttachedDownload = false)
-        assertEquals(DetailSectionKind.DOWNLOAD_FOOTER, sections.last())
+        val local = moduleState(MediaType.MOVIE, isLocalOrigin = true, hasAttachedDownload = false)
+        assertTrue(DownloadFooterSectionModule.isAdmitted(local, moduleDetail(local)))
     }
 
     @Test
     fun movie_landscapeBody_dropsActionRow_only() {
-        val sections = admission(MediaType.MOVIE, showActionButtons = false)
-        assertFalse(sections.contains(DetailSectionKind.ACTION_ROW))
-        assertEquals(0, sections.first().delayIndex)
-        // The fold-only emission: the module-owned kinds (PLUGIN_RATINGS 14,
-        // TMDB_REVIEWS 15, SPECIAL_FEATURES 13, COLLECTION_ITEMS,
-        // UPCOMING_EPISODES, MORE_IN_COLLECTION) are admitted by their
-        // DetailSectionModules since the section-module waves — the merged
-        // emission is pinned by DetailSectionRegistryTest, not by the fold.
-        // For a movie only SPECIAL_FEATURES was fold-admitted before wave 2.
-        assertEquals(listOf(0, 2, 3, 4, 8, 9, 10, 11, 12), sections.indices())
+        // The portrait-only flag is the ACTION_ROW module's admission param
+        // (the fold row moved verbatim with the module).
+        val movie = moduleState(MediaType.MOVIE)
+        val movieDetail = moduleDetail(movie)
+        assertTrue(ActionRowSectionModule.isAdmitted(movie, movieDetail, showActionButtons = true))
+        assertFalse(ActionRowSectionModule.isAdmitted(movie, movieDetail, showActionButtons = false))
     }
 
     @Test
     fun movie_mediaInfoSuppressed_dropsOnlyMediaInfo() {
-        val sections = admission(MediaType.MOVIE, showMediaInfo = false)
-        assertFalse(sections.contains(DetailSectionKind.MEDIA_INFO))
-        assertEquals(3, sections.first { it == DetailSectionKind.OVERVIEW }.delayIndex)
+        // The media-info slot's portrait flag is the MEDIA_INFO module's
+        // admission param (the fold row moved verbatim with the module).
+        val movie = moduleState(MediaType.MOVIE)
+        val movieDetail = moduleDetail(movie)
+        assertTrue(MediaInfoSectionModule.isAdmitted(movie, movieDetail, showMediaInfo = true))
+        assertFalse(MediaInfoSectionModule.isAdmitted(movie, movieDetail, showMediaInfo = false))
     }
 
     @Test
     fun movie_chaptersGate_isCapabilityAndContentConjunction() {
+        // The `(BOOK && hasBookToc) || (capabilities.chapters && hasChapters)`
+        // fold row moved verbatim into the module.
+        fun movieAdmits(capabilities: DetailCapabilities, hasChapters: Boolean): Boolean =
+            ChaptersOrTocSectionModule.isAdmitted(
+                moduleState(MediaType.MOVIE, capabilities = capabilities, hasChapters = hasChapters),
+                moduleDetail(
+                    moduleState(MediaType.MOVIE, capabilities = capabilities, hasChapters = hasChapters),
+                ),
+            )
+
         // No chapter content, no capability → section gone.
-        assertFalse(
-            admission(MediaType.MOVIE, capabilities = localCapabilities().copy(chapters = false), hasChapters = false)
-                .contains(DetailSectionKind.CHAPTERS_OR_TOC),
-        )
+        assertFalse(movieAdmits(localCapabilities().copy(chapters = false), hasChapters = false))
         // Content without the capability → gone.
-        assertFalse(
-            admission(MediaType.MOVIE, capabilities = allCapabilities().copy(chapters = false), hasChapters = true)
-                .contains(DetailSectionKind.CHAPTERS_OR_TOC),
-        )
+        assertFalse(movieAdmits(allCapabilities().copy(chapters = false), hasChapters = true))
         // Capability without content → gone.
-        assertFalse(
-            admission(MediaType.MOVIE, capabilities = allCapabilities().copy(chapters = true), hasChapters = false)
-                .contains(DetailSectionKind.CHAPTERS_OR_TOC),
-        )
+        assertFalse(movieAdmits(allCapabilities().copy(chapters = true), hasChapters = false))
         // Both → admitted at slot 4.
-        assertTrue(admission(MediaType.MOVIE).contains(DetailSectionKind.CHAPTERS_OR_TOC))
-        assertEquals(4, admission(MediaType.MOVIE).first { it == DetailSectionKind.CHAPTERS_OR_TOC }.delayIndex)
+        assertTrue(movieAdmits(allCapabilities().copy(chapters = true), hasChapters = true))
+        assertEquals(4, DetailSectionKind.CHAPTERS_OR_TOC.delayIndex)
     }
 
     // ── EPISODE ───────────────────────────────────────────────────────────
 
     @Test
     fun remoteEpisode_seasonsAdmitted_upNextNever() {
-        val sections = admission(MediaType.EPISODE)
-        assertTrue(sections.contains(DetailSectionKind.SEASONS))
+        // SEASONS (the parent-series context tree, #168) is module-owned —
+        // its [showsSeasonTree] gate moved verbatim. The merged emission
+        // carries the tree (an EPISODE renders its parent series' context)
+        // but never UP_NEXT (a SERIES-only card) or the book reading card.
+        val episode = moduleState(MediaType.EPISODE, hasSmartPlayTarget = false)
+        assertTrue(SeasonsSectionModule.isAdmitted(episode, moduleDetail(episode)))
+        val sections = DetailSectionRegistry.admittedSections(state = episode, detail = moduleDetail(episode))
+        assertEquals(
+            listOf(
+                DetailSectionKind.HEADER,
+                DetailSectionKind.ACTION_ROW,
+                DetailSectionKind.MEDIA_INFO,
+                DetailSectionKind.OVERVIEW,
+                DetailSectionKind.CHAPTERS_OR_TOC,
+                DetailSectionKind.SEASONS,
+                DetailSectionKind.CAST,
+                DetailSectionKind.RELATED_VIDEOS,
+                DetailSectionKind.MORE_LIKE_THIS,
+            ),
+            sections,
+        )
         assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
-        assertFalse(sections.contains(DetailSectionKind.UP_NEXT))
         assertFalse(sections.contains(DetailSectionKind.BOOK_READING_CARD))
         // Slot 14 (TMDB_REVIEWS) is registry-owned since the section-module
         // wave — pinned by DetailSectionRegistryTest's merged-emission test.
-        assertEquals(
-            listOf(0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12),
-            sections.indices(),
-        )
+        assertEquals(6, sections.first { it == DetailSectionKind.SEASONS }.delayIndex)
     }
 
     @Test
@@ -241,14 +307,13 @@ class DetailSectionAdmissionTest {
         // An episode is the canonical local-series member: the download footer
         // renders from the LOCAL origin alone (the header aggregate stays a
         // render-side gate — it reads DetailContext data the fold doesn't need).
-        val sections = admission(
-            mediaType = MediaType.EPISODE,
+        val episode = moduleState(
+            MediaType.EPISODE,
             isLocalOrigin = true,
-            capabilities = localCapabilities(),
-            seerrDataAvailable = false,
-            hasSeerrRecommendations = false,
-            hasSeerrSimilar = false,
+            hasSmartPlayTarget = false,
         )
+        assertTrue(DownloadFooterSectionModule.isAdmitted(episode, moduleDetail(episode)))
+        val sections = DetailSectionRegistry.admittedSections(state = episode, detail = moduleDetail(episode))
         assertEquals(DetailSectionKind.DOWNLOAD_FOOTER, sections.last())
         assertEquals(15, sections.last().delayIndex)
     }
@@ -257,7 +322,13 @@ class DetailSectionAdmissionTest {
 
     @Test
     fun remoteSeries_upNextAdmittedBeforeSeasons_atSharedSlot6() {
-        val sections = admission(MediaType.SERIES)
+        // UP_NEXT is module-owned (SEASONS still rides the fold): the order
+        // pin runs over the registry's merged emission (module rows + the
+        // fold's remaining rows, re-sorted by the enum).
+        val series = moduleState(MediaType.SERIES)
+        val seriesDetail = moduleDetail(series)
+        assertTrue(UpNextSectionModule.isAdmitted(series, seriesDetail))
+        val sections = DetailSectionRegistry.admittedSections(state = series, detail = seriesDetail)
         val upNext = sections.indexOf(DetailSectionKind.UP_NEXT)
         val seasons = sections.indexOf(DetailSectionKind.SEASONS)
         assertTrue(upNext in 0 until seasons, "UP_NEXT must be emitted before SEASONS")
@@ -267,44 +338,51 @@ class DetailSectionAdmissionTest {
 
     @Test
     fun series_upNext_hiddenByPreference_dropsOnlyUpNext() {
-        val sections = admission(MediaType.SERIES, showDetailUpNext = false)
-        assertFalse(sections.contains(DetailSectionKind.UP_NEXT))
-        assertTrue(sections.contains(DetailSectionKind.SEASONS))
+        // The preference term moved verbatim into the module's row.
+        val hidden = moduleState(MediaType.SERIES, showDetailUpNext = false)
+        assertFalse(UpNextSectionModule.isAdmitted(hidden, moduleDetail(hidden)))
+        val shown = moduleState(MediaType.SERIES)
+        assertTrue(UpNextSectionModule.isAdmitted(shown, moduleDetail(shown)))
+        assertTrue(SeasonsSectionModule.isAdmitted(shown, moduleDetail(shown)))
         // SEASONS keeps its shared slot-6 index.
-        assertEquals(6, sections.first { it == DetailSectionKind.SEASONS }.delayIndex)
+        assertEquals(6, DetailSectionKind.SEASONS.delayIndex)
     }
 
     @Test
     fun series_upNext_withoutSmartTarget_dropped() {
         assertFalse(
-            admission(MediaType.SERIES, hasSmartPlayTarget = false)
-                .contains(DetailSectionKind.UP_NEXT),
+            UpNextSectionModule.isAdmitted(
+                moduleState(MediaType.SERIES, hasSmartPlayTarget = false),
+                moduleDetail(moduleState(MediaType.SERIES, hasSmartPlayTarget = false)),
+            ),
         )
-        // smartPlay capability is NOT a fold gate — the target presence is
+        // smartPlay capability is NOT a gate — the target presence is
         // (capabilities.smartPlay is resolved upstream into the target).
-        assertTrue(
-            admission(
-                MediaType.SERIES,
-                capabilities = allCapabilities().copy(smartPlay = false),
-                hasSmartPlayTarget = true,
-            ).contains(DetailSectionKind.UP_NEXT),
+        val capOff = moduleState(
+            MediaType.SERIES,
+            capabilities = allCapabilities().copy(smartPlay = false),
+            hasSmartPlayTarget = true,
         )
+        assertTrue(UpNextSectionModule.isAdmitted(capOff, moduleDetail(capOff)))
     }
 
     // ── BOOK ──────────────────────────────────────────────────────────────
 
     @Test
     fun localBook_withToc_readingCardSharesSlot2_castDropped() {
-        val sections = admission(
-            mediaType = MediaType.BOOK,
-            isLocalOrigin = true,
+        // The reading card + media-info share the slot 2 stagger band (both
+        // module-owned — the enum ratchet pins the indices, the modules the
+        // admission); the merged emission is the exact list the pre-module
+        // local book produced (CAST/SEASONS never admit for a BOOK).
+        val book = moduleState(
+            MediaType.BOOK,
             capabilities = localCapabilities(),
+            isLocalOrigin = true,
             hasBookState = true,
             hasBookToc = true,
             seerrDataAvailable = false,
-            hasSeerrRecommendations = false,
-            hasSeerrSimilar = false,
         )
+        val sections = DetailSectionRegistry.admittedSections(state = book, detail = moduleDetail(book))
         assertEquals(
             listOf(
                 DetailSectionKind.HEADER,
@@ -316,17 +394,20 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MEDIA_INFO,
                 DetailSectionKind.OVERVIEW,
                 DetailSectionKind.CHAPTERS_OR_TOC,
-                // RELATED_VIDEOS / MORE_LIKE_THIS stay admitted: their list
-                // choice (localRelatedItems vs relatedItems) and empty gates
-                // are render-side, exactly as before.
+                // MORE_LIKE_THIS stays admitted: its list choice
+                // (localRelatedItems vs relatedItems) and empty gate are
+                // render-side, exactly as before. RELATED_VIDEOS and the
+                // DOWNLOAD_FOOTER (this snapshot is LOCAL) are module-owned.
                 DetailSectionKind.RELATED_VIDEOS,
                 DetailSectionKind.MORE_LIKE_THIS,
                 DetailSectionKind.DOWNLOAD_FOOTER,
             ),
             sections,
         )
-        assertEquals(2, sections[2].delayIndex)
-        assertEquals(2, sections[3].delayIndex)
+        assertTrue(BookReadingCardSectionModule.isAdmitted(book, moduleDetail(book)))
+        assertTrue(MediaInfoSectionModule.isAdmitted(book, moduleDetail(book)))
+        assertEquals(2, sections.first { it == DetailSectionKind.BOOK_READING_CARD }.delayIndex)
+        assertEquals(2, sections.first { it == DetailSectionKind.MEDIA_INFO }.delayIndex)
         assertFalse(sections.contains(DetailSectionKind.CAST))
         assertFalse(sections.contains(DetailSectionKind.SEASONS))
         assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
@@ -334,36 +415,38 @@ class DetailSectionAdmissionTest {
 
     @Test
     fun book_withoutBookState_dropsReadingCard_fallsBackToChapterGate() {
-        val sections = admission(
-            mediaType = MediaType.BOOK,
-            hasBookState = false,
-            hasBookToc = false,
-            hasChapters = false,
+        val bare = moduleState(
+            MediaType.BOOK,
             capabilities = localCapabilities().copy(chapters = false),
         )
-        assertFalse(sections.contains(DetailSectionKind.BOOK_READING_CARD))
-        assertFalse(sections.contains(DetailSectionKind.CHAPTERS_OR_TOC))
+        // No book state → the reading-card module does not admit (the fold
+        // row's `mediaType == BOOK && hasBookState` moved verbatim); neither
+        // leg of the chapters module admits without TOC content or chapters.
+        assertFalse(BookReadingCardSectionModule.isAdmitted(bare, moduleDetail(bare)))
+        assertFalse(ChaptersOrTocSectionModule.isAdmitted(bare, moduleDetail(bare)))
     }
 
     @Test
     fun book_tocAdmitsContentsSection_withoutChapterCapability() {
         // The TOC branch does not read capabilities.chapters — the local TOC
-        // cache is the authority for books.
-        val sections = admission(
-            mediaType = MediaType.BOOK,
+        // cache is the authority for books. (CHAPTERS_OR_TOC is module-owned.)
+        val book = moduleState(
+            MediaType.BOOK,
+            capabilities = localCapabilities().copy(chapters = false),
             hasBookState = true,
             hasBookToc = true,
-            capabilities = localCapabilities().copy(chapters = false),
         )
-        assertTrue(sections.contains(DetailSectionKind.CHAPTERS_OR_TOC))
-        assertEquals(4, sections.first { it == DetailSectionKind.CHAPTERS_OR_TOC }.delayIndex)
+        assertTrue(ChaptersOrTocSectionModule.isAdmitted(book, moduleDetail(book)))
+        assertEquals(4, DetailSectionKind.CHAPTERS_OR_TOC.delayIndex)
     }
 
     @Test
     fun book_stillNotAudio_mediaInfoSlotStaysAdmitted() {
         // Pins the pre-existing behavior the old comment ("never renders for
         // books") drifted from: the visible flag only excluded audio types.
-        assertTrue(admission(MediaType.BOOK, hasBookState = true).contains(DetailSectionKind.MEDIA_INFO))
+        // (MEDIA_INFO is module-owned — the fold row moved verbatim.)
+        val book = moduleState(MediaType.BOOK)
+        assertTrue(MediaInfoSectionModule.isAdmitted(book, moduleDetail(book)))
     }
 
     // ── ALBUM / audio ─────────────────────────────────────────────────────
@@ -372,11 +455,12 @@ class DetailSectionAdmissionTest {
     fun remoteAlbum_tracksAdmitted_mediaInfoDropped() {
         // Albums are an audio type: the stream-info slot never admits, the
         // track list takes delayIndex 5.
-        val sections = admission(
-            mediaType = MediaType.ALBUM,
-            hasChapters = false,
-            hasAlbumTracks = true,
-        )
+        val album = moduleState(MediaType.ALBUM, hasChapters = false, hasAlbumTracks = true)
+        assertTrue(AlbumTracksSectionModule.isAdmitted(album, moduleDetail(album)))
+        assertEquals(5, DetailSectionKind.ALBUM_TRACKS.delayIndex)
+        // The merged emission: an album drops the stream-info slot (audio
+        // type) and the chapter slot, and keeps the track list at 5.
+        val sections = DetailSectionRegistry.admittedSections(state = album, detail = moduleDetail(album))
         assertEquals(
             listOf(
                 DetailSectionKind.HEADER,
@@ -386,22 +470,18 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.CAST,
                 DetailSectionKind.RELATED_VIDEOS,
                 DetailSectionKind.MORE_LIKE_THIS,
-                DetailSectionKind.SEERR_RECOMMENDATIONS,
-                DetailSectionKind.SEERR_SIMILAR,
             ),
             sections,
         )
-        assertEquals(5, sections.first { it == DetailSectionKind.ALBUM_TRACKS }.delayIndex)
-        assertFalse(sections.contains(DetailSectionKind.SEASONS))
         assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
     }
 
     @Test
     fun audioTrack_withoutTracks_dropsTrackList_andKeepsMediaInfoDropped() {
-        val sections = admission(MediaType.AUDIO, hasAlbumTracks = false, hasChapters = false)
-        assertFalse(sections.contains(DetailSectionKind.ALBUM_TRACKS))
-        assertFalse(sections.contains(DetailSectionKind.MEDIA_INFO))
-        assertFalse(sections.contains(DetailSectionKind.CHAPTERS_OR_TOC))
+        val bare = moduleState(MediaType.AUDIO, hasAlbumTracks = false, hasChapters = false)
+        assertFalse(AlbumTracksSectionModule.isAdmitted(bare, moduleDetail(bare)))
+        assertFalse(MediaInfoSectionModule.isAdmitted(bare, moduleDetail(bare)))
+        assertFalse(ChaptersOrTocSectionModule.isAdmitted(bare, moduleDetail(bare)))
     }
 
     // ── COLLECTION ────────────────────────────────────────────────────────
@@ -414,32 +494,41 @@ class DetailSectionAdmissionTest {
 
     @Test
     fun seerrSections_requireConnectionAndRecommendationEnabled() {
-        val none = admission(MediaType.MOVIE, seerrDataAvailable = false)
-        assertFalse(none.contains(DetailSectionKind.SEERR_RECOMMENDATIONS))
-        assertFalse(none.contains(DetailSectionKind.SEERR_SIMILAR))
+        // The `seerrDataAvailable && hasSeerr*` fold rows moved verbatim into
+        // the two Seerr modules (the flags off `state.core`).
+        fun movieAdmits(
+            connected: Boolean,
+            hasRecommendations: Boolean,
+            hasSimilar: Boolean,
+        ): Pair<Boolean, Boolean> {
+            val state = moduleState(
+                MediaType.MOVIE,
+                seerrDataAvailable = connected,
+                hasSeerrRecommendations = hasRecommendations,
+                hasSeerrSimilar = hasSimilar,
+            )
+            val detail = moduleDetail(state)
+            return SeerrRecommendationsSectionModule.isAdmitted(state, detail) to
+                SeerrSimilarSectionModule.isAdmitted(state, detail)
+        }
 
-        val recsOnly = admission(
-            MediaType.MOVIE,
-            seerrDataAvailable = true,
-            hasSeerrRecommendations = true,
-            hasSeerrSimilar = false,
-        )
-        assertTrue(recsOnly.contains(DetailSectionKind.SEERR_RECOMMENDATIONS))
-        assertFalse(recsOnly.contains(DetailSectionKind.SEERR_SIMILAR))
+        // Disconnected: neither row admits, content or not.
+        assertFalse(movieAdmits(connected = false, hasRecommendations = true, hasSimilar = true).first)
+        assertFalse(movieAdmits(connected = false, hasRecommendations = true, hasSimilar = true).second)
 
-        val simOnly = admission(
-            MediaType.MOVIE,
-            seerrDataAvailable = true,
-            hasSeerrRecommendations = false,
-            hasSeerrSimilar = true,
-        )
-        assertFalse(simOnly.contains(DetailSectionKind.SEERR_RECOMMENDATIONS))
-        assertTrue(simOnly.contains(DetailSectionKind.SEERR_SIMILAR))
+        // Connected + recommendations enabled: each row admits on its own
+        // content alone.
+        val recsOnly = movieAdmits(connected = true, hasRecommendations = true, hasSimilar = false)
+        assertTrue(recsOnly.first)
+        assertFalse(recsOnly.second)
+
+        val simOnly = movieAdmits(connected = true, hasRecommendations = false, hasSimilar = true)
+        assertFalse(simOnly.first)
+        assertTrue(simOnly.second)
 
         // Slot order preserved: recommendations (11) before similar (12).
-        val both = admission(MediaType.MOVIE)
-        assertEquals(11, both.first { it == DetailSectionKind.SEERR_RECOMMENDATIONS }.delayIndex)
-        assertEquals(12, both.first { it == DetailSectionKind.SEERR_SIMILAR }.delayIndex)
+        assertEquals(11, DetailSectionKind.SEERR_RECOMMENDATIONS.delayIndex)
+        assertEquals(12, DetailSectionKind.SEERR_SIMILAR.delayIndex)
     }
 
     // (The PLUGIN_RATINGS / TMDB_REVIEWS admission pins moved to
@@ -491,96 +580,51 @@ class DetailSectionAdmissionTest {
     // DetailSectionEnrichmentArmsTest: the wave-2 section modules own those
     // rows, and their module-level pins exercise the same terms.)
 
-    // ── the state mapper ──────────────────────────────────────────────────
-
-    @Test
-    fun fromState_derivesInputsFromDetailContentState() {
-        val item = MediaItem(id = "i1", name = "Album", mediaType = MediaType.ALBUM)
-        val detail = MediaDetail(item = item)
-        val state = DetailContentState(
-            core = DetailUiState(
-                detail = detail,
-                origin = DetailOrigin.REMOTE,
-                albumTracks = listOf(item),
-                isSeerrConnected = true,
-                isSeerrRecommendationsEnabled = false,
-            ),
-            itemId = "i1",
-        )
-
-        val inputs = DetailSectionAdmission.from(state, detail)
-        assertEquals(MediaType.ALBUM, inputs.mediaType)
-        assertEquals(false, inputs.isLocalOrigin)
-        assertFalse(inputs.hasBookState)
-        assertFalse(inputs.hasBookToc)
-        assertFalse(inputs.hasChapters)
-        assertTrue(inputs.hasAlbumTracks)
-        assertFalse(inputs.hasSmartPlayTarget)
-        assertFalse(inputs.seerrDataAvailable, "connected but recommendations disabled must fold to false")
-        assertFalse(inputs.hasAttachedDownload)
-        assertTrue(inputs.showActionButtons)
-        assertTrue(inputs.showMediaInfo)
-
-        val sections = inputs.admit()
-        assertFalse(sections.contains(DetailSectionKind.MEDIA_INFO))
-        assertTrue(sections.contains(DetailSectionKind.ALBUM_TRACKS))
-    }
-
-    @Test
-    fun fromState_localOrigins_foldToLocalPredicate() {
-        val item = MediaItem(id = "i2", name = "Movie", mediaType = MediaType.MOVIE)
-        val detail = MediaDetail(item = item)
-        DetailOrigin.entries.forEach { origin ->
-            val state = DetailContentState(
-                core = DetailUiState(
-                    detail = detail,
-                    origin = origin,
-                ),
-                itemId = "i2",
-            )
-            assertEquals(
-                origin.isLocal,
-                DetailSectionAdmission.from(state, detail).isLocalOrigin,
-                "origin $origin",
-            )
-        }
-    }
-
     // ── JellyPlay plugin sections (ADR 0010) ────────────────────────────
 
     @Test
     fun pluginSimilar_admitsOnlyWhenItsContentArrived() {
-        // Silent absence: no plugin data → the plugin row not in the fold at
-        // all (the PLUGIN_RATINGS row's pins moved to DetailSectionRegistryTest
+        // The `hasPluginSimilar` / suppression fold rows moved verbatim into
+        // the two similar modules (the state off `state.core`).
+        fun movieAdmits(hasPluginSimilar: Boolean, suppressStockSimilar: Boolean): Pair<Boolean, Boolean> {
+            val state = moduleState(
+                MediaType.MOVIE,
+                hasPluginSimilar = hasPluginSimilar,
+                suppressStockSimilar = suppressStockSimilar,
+            )
+            val detail = moduleDetail(state)
+            return JellyPlaySimilarSectionModule.isAdmitted(state, detail) to
+                MoreLikeThisSectionModule.isAdmitted(state, detail)
+        }
+
+        // Silent absence: no plugin data → the plugin row not admitted at all
+        // (the PLUGIN_RATINGS row's pins moved to DetailSectionRegistryTest
         // with its module).
-        val bare = admission(MediaType.MOVIE)
-        assertFalse(bare.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        val bare = movieAdmits(hasPluginSimilar = false, suppressStockSimilar = false)
+        assertFalse(bare.first)
+        assertTrue(bare.second, "empty plugin hydration → the stock row stays admitted")
 
         // Scored similar present → the plugin row admits (same slot 10 as the
         // stock row), but suppression is NOT tied to its presence: on hosts
         // where the plugin's scorer did NOT register into the stock pipeline
         // (pre-Jellyfin-12 / older plugin) the two lists differ and BOTH rows
         // render.
-        val withSimilar = admission(MediaType.MOVIE, hasPluginSimilar = true)
-        assertTrue(withSimilar.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
-        assertTrue(withSimilar.contains(DetailSectionKind.MORE_LIKE_THIS), "no pipeline → stock row stays")
+        val withSimilar = movieAdmits(hasPluginSimilar = true, suppressStockSimilar = false)
+        assertTrue(withSimilar.first)
+        assertTrue(withSimilar.second, "no pipeline → stock row stays")
         assertEquals(10, DetailSectionKind.JELLYPLAY_SIMILAR.delayIndex)
 
         // Pipeline host (capabilities said the plugin registered into the
         // host's similar-items pipeline) → the stock endpoint returns the
         // SAME scored list; the stock row stands down to avoid the duplicate.
-        val withSimilarOnPipeline = admission(MediaType.MOVIE, hasPluginSimilar = true, suppressStockSimilar = true)
-        assertTrue(withSimilarOnPipeline.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
-        assertFalse(withSimilarOnPipeline.contains(DetailSectionKind.MORE_LIKE_THIS), "pipeline host → stock row suppressed")
+        val withSimilarOnPipeline = movieAdmits(hasPluginSimilar = true, suppressStockSimilar = true)
+        assertTrue(withSimilarOnPipeline.first)
+        assertFalse(withSimilarOnPipeline.second, "pipeline host → stock row suppressed")
 
         // Suppression never suppresses the plugin row itself (an odd
         // capability/empty-list combination just reverts to stock).
-        assertTrue(admission(MediaType.MOVIE, suppressStockSimilar = true).contains(DetailSectionKind.MORE_LIKE_THIS))
-
-        // Empty plugin hydration → the stock row stays admitted (bare above
-        // already contains MORE_LIKE_THIS — re-asserted here against the
-        // plugin row's absence).
-        assertTrue(bare.contains(DetailSectionKind.MORE_LIKE_THIS))
+        val suppressedButEmpty = movieAdmits(hasPluginSimilar = false, suppressStockSimilar = true)
+        assertTrue(suppressedButEmpty.second)
     }
 }
 

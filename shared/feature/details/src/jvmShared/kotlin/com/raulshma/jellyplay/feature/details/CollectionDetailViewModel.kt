@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
@@ -28,7 +30,12 @@ private data class CollectionDetailContent(
 )
 
 class CollectionDetailViewModel constructor(
-    private val mediaRepository: MediaRepository,
+    /** The collection's own detail read (the detail-read family seam). */
+    private val detailFeed: DetailFeed,
+    /** The member page read (the collection-verbs family seam). */
+    private val collectionOperations: CollectionOperations,
+    /** The server user-data change feed (the deferred reload arming). */
+    private val userDataChanges: UserDataChanges,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val artworkUrls: ArtworkUrls,
@@ -36,7 +43,7 @@ class CollectionDetailViewModel constructor(
 ) : JellyPlayViewModel() {
 
     private val fetchCoordinator = DeferredFetchCoordinator<String, CollectionDetailContent>(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
         fetch = ::fetchCollection,
     )
@@ -90,9 +97,14 @@ class CollectionDetailViewModel constructor(
      */
     private suspend fun fetchCollection(collectionId: String, force: Boolean): CollectionDetailContent {
         return coroutineScope {
-            val detailDeferred = async { mediaRepository.getMediaDetail(collectionId, force = force) }
+            val detailDeferred = async { detailFeed.getMediaDetail(collectionId, force = force) }
             val itemsDeferred = async {
-                mediaRepository.getCollectionItems(collectionId, limit = 100, force = force)
+                collectionOperations.getCollectionItems(
+                    collectionId,
+                    startIndex = 0,
+                    limit = 100,
+                    force = force,
+                )
             }
 
             val detailResult = detailDeferred.await()

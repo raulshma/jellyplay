@@ -106,8 +106,9 @@ import org.jetbrains.compose.resources.stringResource
  * The detail body's per-family section renderers, decomposed out of the former
  * ~1,060-line inline [DetailContentBody] column.
  *
- * The trunk ([DetailContentBody]) walks the ordered list [DetailSectionAdmission]
- * produces and dispatches each [DetailSectionKind] to one renderer here. Every
+ * The trunk ([DetailContentBody]) walks the ordered list the section-module
+ * registry produces and routes each [DetailSectionKind] to its module's
+ * renderer. Every
  * renderer owns exactly one [StaggeredDetailSection] slot, receives its
  * `delayIndex` from the admission descriptor (never re-states it), and keeps
  * the former inline body verbatim — same content gates, same remember keys,

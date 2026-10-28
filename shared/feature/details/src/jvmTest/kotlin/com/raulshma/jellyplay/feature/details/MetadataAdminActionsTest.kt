@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -58,7 +58,7 @@ class MetadataAdminActionsTest {
             messages = messages.flow,
             strings = strings,
             editorRepository = editorRepository,
-            mediaRepository = mockk<MediaRepository>(relaxed = true),
+            libraryFeed = mockk<LibraryFeed>(relaxed = true),
             onRefreshAccepted = onRefreshAccepted,
             authRepository = authRepository,
         )

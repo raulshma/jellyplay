@@ -181,20 +181,17 @@ internal fun preferLogoTitleEnabled(preferLogos: Boolean, logoTag: String?, logo
 
 /**
  * The detail body's trunk. The former ~1,060-line inline column decomposed
- * into two halves:
- *
- * 1. [DetailSectionAdmission] — a Compose-free fold deciding WHICH sections
- *    exist and in what order (each [DetailSectionKind] carries its own
- *    delayIndex, pinned by DetailSectionAdmissionTest). Sections whose slot
- *    used to compose empty (overview without a synopsis, seasons on a movie,
- *    ...) stay admitted: every slot contributes a spacedBy gap to the body
- *    Column, so admission reproduces the former `visible` predicates exactly
- *    and the content gates remain render-side.
- * 2. The family renderers in MediaDetailBodySections.kt — one
- *    [StaggeredDetailSection] slot each, bodies kept verbatim from the inline
- *    flow, delayIndex threaded from the admission descriptor. The already
- *    extracted sections (VideosSection / ReviewsSection / UpNextSection /
- *    the book + music files) join the trunk unchanged.
+ * into the section modules: [DetailSectionRegistry.admittedSections] decides
+ * WHICH sections exist and in what order (each module owns its kind's
+ * admission row and routes to its renderer; every [DetailSectionKind] carries
+ * its own delayIndex, pinned by the admission tests). Sections whose slot
+ * used to compose empty (overview without a synopsis, seasons on a movie,
+ * ...) stay admitted: every slot contributes a spacedBy gap to the body
+ * Column, so admission reproduces the former `visible` predicates exactly
+ * and the content gates remain render-side. The family renderers themselves
+ * live in MediaDetailBodySections.kt — one [StaggeredDetailSection] slot
+ * each, bodies kept verbatim from the inline flow, delayIndex threaded from
+ * the kind.
  *
  * The single shared entrance animation is unchanged: one
  * [rememberDetailEntranceProgress] driver provided through
@@ -225,21 +222,19 @@ internal fun DetailContentBody(
     // in the body — replaces ~33 per-element LaunchedEffect + animateFloatAsState pairs.
     val entranceProgress = rememberDetailEntranceProgress()
 
-    // The body's admission is two disjoint halves merged in [DetailSectionKind]
-    // declaration order (= the emission order): the hand-written fold for the
-    // unmigrated sections, the detail section registry's modules for the
-    // migrated ones (wave 1: PLUGIN_RATINGS, TMDB_REVIEWS). Memoized on exactly
-    // the fold's inputs (detail == state.core.detail) so the Compose-free fold +
-    // registry merge + re-sort is not re-executed per recomposition (the
-    // screen-level entrance animation re-runs this body per frame while it
-    // plays).
+    // The body's admission is the detail section registry's modules — every
+    // [DetailSectionKind] is module-owned (the former hand fold retired with
+    // the last module wave), re-sorted into the enum's declaration order (=
+    // the emission order). Memoized on exactly the admission inputs
+    // (detail == state.core.detail) so the module row evaluation + re-sort is
+    // not re-executed per recomposition (the screen-level entrance animation
+    // re-runs this body per frame while it plays).
     val admittedSections = remember(state, showActionButtons, showMediaInfo) {
         DetailSectionRegistry.admittedSections(
-            handFold = DetailSectionAdmission
-                .from(state, detail, showActionButtons, showMediaInfo)
-                .admit(),
             state = state,
             detail = detail,
+            showActionButtons = showActionButtons,
+            showMediaInfo = showMediaInfo,
         )
     }
 
@@ -259,8 +254,7 @@ internal fun DetailContentBody(
                     // switch keeps per-section state anchored to its identity
                     // (equivalent to the former distinct inline call sites).
                     key(section) {
-                        DetailSectionRenderer(
-                            section = section,
+                        val moduleScope = DetailSectionRenderScope(
                             state = state,
                             callbacks = callbacks,
                             detail = detail,
@@ -269,6 +263,11 @@ internal fun DetailContentBody(
                             bodyContentPad = bodyContentPad,
                             contentFocusRequester = contentFocusRequester,
                         )
+                        // Every kind is module-owned (DetailSectionRegistryTest's
+                        // completeness pin), so the dispatch cannot miss.
+                        requireNotNull(DetailSectionRegistry.moduleFor(section)) {
+                            "no DetailSectionModule registered for $section"
+                        }.Content(moduleScope)
                     }
                 }
             }
@@ -276,227 +275,6 @@ internal fun DetailContentBody(
     }
 }
 
-/**
- * Dispatches one admitted section to its family renderer. Pure wiring — the
- * `when` is exhaustive over [DetailSectionKind] so a new admission row cannot
- * silently render nothing. The registry's migrated sections (wave 1:
- * PLUGIN_RATINGS, TMDB_REVIEWS; wave 2: UPCOMING_EPISODES, COLLECTION_ITEMS,
- * MORE_IN_COLLECTION, SPECIAL_FEATURES) route through their module's
- * [DetailSectionModule.Content] slot; the hand-written families keep their
- * per-kind composables.
- */
-@Composable
-internal fun DetailSectionRenderer(
-    section: DetailSectionKind,
-    state: DetailContentState,
-    callbacks: DetailContentCallbacks,
-    detail: MediaDetail,
-    item: MediaItem,
-    isLocalOrigin: Boolean,
-    bodyContentPad: Dp,
-    contentFocusRequester: FocusRequester?,
-) {
-    // The module slot's region params — only the migrated branches read it
-    // (the two wave-1 pilots plus the wave-2 collection-family/strip modules).
-    val moduleScope = DetailSectionRenderScope(
-        state = state,
-        callbacks = callbacks,
-        detail = detail,
-        item = item,
-        isLocalOrigin = isLocalOrigin,
-        bodyContentPad = bodyContentPad,
-        contentFocusRequester = contentFocusRequester,
-    )
-    when (section) {
-        DetailSectionKind.HEADER ->
-            DetailHeaderSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                detail = detail,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.ACTION_ROW ->
-            DetailActionRowSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                contentFocusRequester = contentFocusRequester,
-            )
-
-        DetailSectionKind.BOOK_READING_CARD ->
-            DetailBookReadingCardSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.MEDIA_INFO ->
-            DetailMediaInfoSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                detail = detail,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.OVERVIEW ->
-            DetailOverviewSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                detail = detail,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.PLUGIN_RATINGS ->
-            PluginRatingsSectionModule.Content(moduleScope)
-
-        DetailSectionKind.CHAPTERS_OR_TOC ->
-            DetailChaptersSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                detail = detail,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.ALBUM_TRACKS ->
-            DetailAlbumTracksSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.UP_NEXT ->
-            DetailUpNextCardSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.UPCOMING_EPISODES ->
-            UpcomingEpisodesSectionModule.Content(moduleScope)
-
-        DetailSectionKind.SEASONS ->
-            DetailSeasonsSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                item = item,
-                isLocalOrigin = isLocalOrigin,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.COLLECTION_ITEMS ->
-            CollectionItemsSectionModule.Content(moduleScope)
-
-        DetailSectionKind.CAST ->
-            DetailCastSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                detail = detail,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.RELATED_VIDEOS ->
-            DetailRelatedVideosSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-            )
-
-        DetailSectionKind.MORE_IN_COLLECTION ->
-            MoreInCollectionSectionModule.Content(moduleScope)
-
-        DetailSectionKind.MORE_LIKE_THIS ->
-            DetailMoreLikeThisSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                isLocalOrigin = isLocalOrigin,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.JELLYPLAY_SIMILAR ->
-            DetailJellyPlaySimilarSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                bodyContentPad = bodyContentPad,
-            )
-
-        DetailSectionKind.SEERR_RECOMMENDATIONS ->
-            DetailSeerrRowSection(
-                delayIndex = section.delayIndex,
-                titleRes = Res.string.detail_section_seerr_recommendations,
-                items = state.core.seerrRecommendations,
-                keyPrefix = "seerr_rec",
-                contentType = "seerrRecItem",
-                callbacks = callbacks,
-            )
-
-        DetailSectionKind.SEERR_SIMILAR ->
-            DetailSeerrRowSection(
-                delayIndex = section.delayIndex,
-                titleRes = Res.string.detail_section_seerr_similar,
-                items = state.core.seerrSimilar,
-                keyPrefix = "seerr_sim",
-                contentType = "seerrSimItem",
-                callbacks = callbacks,
-            )
-
-        DetailSectionKind.SPECIAL_FEATURES ->
-            SpecialFeaturesSectionModule.Content(moduleScope)
-
-        DetailSectionKind.TMDB_REVIEWS ->
-            TmdbReviewsSectionModule.Content(moduleScope)
-
-        DetailSectionKind.DOWNLOAD_FOOTER ->
-            DetailDownloadFooterSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-                item = item,
-                bodyContentPad = bodyContentPad,
-            )
-    }
-}
-
-// ── Related videos (delayIndex 9) ─────────────────────────────────────────
-
-@Composable
-private fun DetailRelatedVideosSection(
-    delayIndex: Int,
-    state: DetailContentState,
-    callbacks: DetailContentCallbacks,
-) {
-    if (state.core.trailers.isEmpty()) return
-    StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        VideosSection(
-            trailers = state.core.trailers,
-            urls = callbacks.artwork.urls,
-            onVideoClick = callbacks.seerr.onVideoClick,
-            onPlayLocal = { trailerId ->
-                // A local (server-hosted) trailer plays through the
-                // full player session — the same route the Play button
-                // takes (the libmpv engine on desktop), never the
-                // WebView embed.
-                callbacks.playback.onPlayClick(trailerId, null, 0L)
-            },
-        )
-    }
-}
 
 @Composable
 internal fun SeerrItemsRow(
@@ -550,91 +328,6 @@ internal fun SeerrItemsRow(
     }
 }
 
-
-@Composable
-private fun VideosSection(
-    trailers: List<DetailUiState.TrailerEntry>,
-    urls: ArtworkUrls,
-    onVideoClick: (SeerrRelatedVideo) -> Unit,
-    onPlayLocal: (String) -> Unit,
-) {
-    val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
-    // The video card border depends only on the active theme, not on the per-video
-    // data, so compute it once here rather than rebuilding a BorderStroke + gradient
-    // per video per recomposition. includeAurora = false keeps the historical
-    // no-border look under Aurora (only the Seerr detail cards glow there).
-    // (Family-local decision: the Seerr row renders the shared card borderless.)
-    val themeVariant = LocalThemeVariant.current
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-    val outlineColor = MaterialTheme.colorScheme.outline
-    val videoCardBorder = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
-        themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
-    }
-    // The local-source badge resolved once (the merged row mixes the two
-    // card variants; the badge marks the server-hosted entries).
-    val localBadge = stringResource(Res.string.detail_trailer_badge_local)
-    Column {
-        FadingItem {
-            Text(
-                text = stringResource(Res.string.detail_section_videos),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier
-                    .padding(horizontal = bodyContentPad)
-                    .semantics { heading() },
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        TvFocusableItemRow(
-            items = trailers,
-            // Fall back to the video name/id when its key is null so two
-            // keyless entries don't collide and collapse their composition
-            // slots (the remote rule; locals key on the library item id).
-            key = { entry ->
-                when (entry) {
-                    is DetailUiState.TrailerEntry.Local -> "local_${entry.mediaItem.id}"
-                    is DetailUiState.TrailerEntry.Remote -> entry.video.key ?: entry.video.name ?: "video"
-                }
-            },
-            contentType = { _, entry ->
-                when (entry) {
-                    is DetailUiState.TrailerEntry.Local -> "local_video"
-                    is DetailUiState.TrailerEntry.Remote -> "video"
-                }
-            },
-            contentPadding = PaddingValues(horizontal = bodyContentPad),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) { _, entry, focusModifier ->
-            // The card bodies are the shared [YouTubeVideoCard] /
-            // [LocalTrailerVideoCard] (commonMain DetailSectionVocabulary) —
-            // collapsed with the Seerr family's identical copy; only the row
-            // scaffolding + this border decision stay family-local. The
-            // dispatch is the [resolveTrailerEntryDispatch] policy: locals
-            // play in the full player session, remotes open the YouTube
-            // dialog (embed failure falling back to the external URL).
-            when (val dispatch = resolveTrailerEntryDispatch(entry)) {
-                is TrailerEntryDispatch.PlayerSession -> LocalTrailerVideoCard(
-                    mediaItem = dispatch.mediaItem,
-                    fallbackLabel = "Video",
-                    // Keyed on the item (not its id) so a tag change re-keys.
-                    imageUrl = remember(dispatch.mediaItem) { urls.poster(dispatch.mediaItem) },
-                    badgeLabel = localBadge,
-                    onClick = { onPlayLocal(dispatch.mediaItem.id) },
-                    modifier = focusModifier,
-                    border = videoCardBorder,
-                )
-                is TrailerEntryDispatch.YouTubeEmbed -> YouTubeVideoCard(
-                    video = dispatch.video,
-                    fallbackLabel = "Video",
-                    onClick = { onVideoClick(dispatch.video) },
-                    modifier = focusModifier,
-                    border = videoCardBorder,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 internal fun UpNextSection(
