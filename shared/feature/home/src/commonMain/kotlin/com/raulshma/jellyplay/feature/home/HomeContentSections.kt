@@ -60,6 +60,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
 import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
@@ -257,10 +258,12 @@ internal data class HomeContentState(
 
 /**
  * The content list's per-surface event sinks + the seams only it consumes
- * ([seriesPosterUrl] for the series-art resolver, the per-item photo-folder
- * URL slice). The shared render wiring (URL builders, click funnels,
- * prefetch/loading, hero focus) lives in [HomeRenderInputs] — passed beside
- * these callbacks so the two bundles never re-thread the same lambdas.
+ * (the per-item photo-folder URL slice). The shared render wiring (the
+ * artwork resolver, click funnels, prefetch/loading, hero focus) lives in
+ * [HomeRenderInputs] — passed beside these callbacks so the two bundles never
+ * re-thread the same lambdas; series art rode a `seriesPosterUrl` lambda here
+ * until the artwork fold moved it onto [HomeRenderInputs.artwork] (the row
+ * arms derive their resolver lambdas from the bundle now).
  */
 @Immutable
 internal data class HomeContentCallbacks(
@@ -270,10 +273,6 @@ internal data class HomeContentCallbacks(
     val onOfflineLibraryClick: () -> Unit,
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
-    /** Series poster URL for a [MediaItem] — the episode/season cards'
-     * series-art resolver (series id + its image tag; item-based, so a
-     * re-uploaded series poster mints a new URL on those cards). */
-    val seriesPosterUrl: (MediaItem) -> String,
     /** Per-item slice of the photo-folder child-URL cache — collected at the
      * photo-folder card, not orchestrator scope, so a prefetch merge only
      * recomposes the card whose urls changed. */
@@ -956,7 +955,10 @@ private fun HomeSectionJellyPlayRow(
     JellyPlayHomeRow(
         title = ctx.title,
         entries = ctx.section.jellyPlayRowEntries,
-        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        // Artwork-backed lambdas are remembered ONCE per arm off the bundle's
+        // resolver — never per item — so the rows' `(MediaItem) -> String`
+        // params keep stable identities and the rows stay skippable.
+        imageUrlBuilder = rememberHomePosterUrl(renderInputs.artwork),
         fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
         onItemClick = rowItemClick,
         onPlayClick = renderInputs.mediaOnPlayClick,
@@ -999,7 +1001,7 @@ private fun HomeSectionOnlineTilesRow(
     HomeLibraryTilesRow(
         title = ctx.title,
         items = section.items,
-        imageUrlFor = renderInputs.mediaImageUrlBuilder,
+        imageUrlFor = rememberHomePosterUrl(renderInputs.artwork),
         onTileClick = tileClick,
         modifier = ctx.modifier,
         focusRequester = ctx.focusRequester,
@@ -1177,8 +1179,8 @@ private fun HomeSectionOnlineWideRow(
         title = sectionTitle,
         items = section.items,
         toMediaItem = { it },
-        imageUrl = renderInputs.mediaImageUrlBuilder,
-        backdropUrl = renderInputs.mediaBackdropUrlBuilder,
+        imageUrl = rememberHomePosterUrl(renderInputs.artwork),
+        backdropUrl = rememberHomeBackdropUrl(renderInputs.artwork),
         onItemClick = rowItemClick,
         onPlayClick = renderInputs.mediaOnPlayClick,
         modifier = sectionModifier,
@@ -1245,7 +1247,7 @@ private fun HomeSectionOnlinePosterRow(
     HomeMediaRow(
         title = sectionTitle,
         items = section.items,
-        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        imageUrlBuilder = rememberHomePosterUrl(renderInputs.artwork),
         fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
         onItemClick = rowItemClick,
         onPlayClick = renderInputs.mediaOnPlayClick,
@@ -1286,11 +1288,14 @@ private fun HomeSectionOnlinePosterRow(
         } else {
             null
         },
-        // Item-level series-poster resolver (series id + image tag — see
-        // HomeContentCallbacks.seriesPosterUrl); the backdrop leg stays
-        // id-level (the model carries no series backdrop tag).
-        seriesPosterResolver = callbacks.seriesPosterUrl,
-        seriesBackdropResolver = remember(renderInputs.onlineBackdropResolver) { { id: String -> renderInputs.onlineBackdropResolver(id) } },
+        // Item-level series-poster resolver (series id + image tag),
+        // remembered once off the bundle's [ArtworkUrls] (the callbacks
+        // bundle's former seriesPosterUrl lambda); the backdrop leg stays
+        // id-level (the model carries no series backdrop tag) — the raw read
+        // off [HomeRenderInputs.onlineBackdropResolver], passed as-is (the
+        // bundle already stabilizes its identity).
+        seriesPosterResolver = rememberHomeSeriesPosterUrl(renderInputs.artwork),
+        seriesBackdropResolver = renderInputs.onlineBackdropResolver,
         edgeRefresh = ctx.edgeRefresh,
     )
 }
@@ -1357,3 +1362,23 @@ private fun HomeStatusBannerRow(
         }
     }
 }
+
+/**
+ * The row arms' artwork-backed lambdas, remembered ONCE per arm off the
+ * bundle's [ArtworkUrls] resolver — never per item — so the rows'
+ * `(MediaItem) -> String` params keep stable identities and the rows stay
+ * skippable. One helper per slot (poster, backdrop, series poster); a
+ * hand-rolled `remember(artwork) { … }` at a call site is the duplication
+ * this trio retires.
+ */
+@Composable
+private fun rememberHomePosterUrl(artwork: ArtworkUrls): (MediaItem) -> String =
+    remember(artwork) { { item: MediaItem -> artwork.poster(item) } }
+
+@Composable
+private fun rememberHomeBackdropUrl(artwork: ArtworkUrls): (MediaItem) -> String =
+    remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
+
+@Composable
+private fun rememberHomeSeriesPosterUrl(artwork: ArtworkUrls): (MediaItem) -> String =
+    remember(artwork) { { item: MediaItem -> artwork.seriesPoster(item) } }

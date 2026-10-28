@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -185,16 +186,21 @@ data class HomeCallbacks(
 )
 
 /**
- * The wiring-shaped values every rendered surface shares, bundled — the
- * four adjacent string-returning lambdas of the former flat parameter list
- * ([mediaImageUrlBuilder] / [mediaBackdropUrlBuilder] /
- * [onlineBackdropResolver] / [heroBackdropUrlBuilder]) made transposition a
- * compile-passing bug, and the same ten values were re-threaded through
- * [HomeSurfaceContent] into [HomeContentCallbacks] verbatim. Built ONCE in
- * [MainHomeContent] (every member is already a remembered stable), passed as
- * one parameter beside the per-surface values (surface, state, contentPad);
- * `@Immutable` + value equality keep every consumer skippable — the
- * [HomeDockState]/[HomeDockCallbacks] bundling precedent.
+ * The wiring-shaped values every rendered surface shares, bundled. The
+ * former flat parameter list's adjacent string-returning lambdas
+ * (`mediaImageUrlBuilder`/`mediaBackdropUrlBuilder` and friends) made
+ * transposition a compile-passing bug, so the item-backed artwork slots are
+ * now ONE typed resolver ([artwork]) — its slots are named methods
+ * (`poster`/`backdrop`/`seriesPoster`), a call site can no longer transpose
+ * them past the compiler — and only the genuinely screen-resolved lambdas
+ * stay lambdas: the hero's online-vs-offline fold
+ * ([heroBackdropUrlBuilder]), the raw id-level backdrop read
+ * ([onlineBackdropResolver], the series-backdrop leg no [ArtworkUrls] slot
+ * can carry), and the fallback chain ([fallbackImageUrlBuilder]). Built ONCE
+ * in [MainHomeContent] (every member is already a remembered stable), passed
+ * as one parameter beside the per-surface values (surface, state,
+ * contentPad); `@Immutable` + value equality keep every consumer skippable —
+ * the [HomeDockState]/[HomeDockCallbacks] bundling precedent.
  */
 @Immutable
 internal data class HomeRenderInputs(
@@ -202,10 +208,14 @@ internal data class HomeRenderInputs(
     val mediaOnItemClick: (MediaItem) -> Unit,
     /** Media-card play funnel (overlay button, quick-action menu, ASK dialog). */
     val mediaOnPlayClick: (MediaItem) -> Unit,
-    /** Poster URL for a [MediaItem] (server-backed rows). */
-    val mediaImageUrlBuilder: (MediaItem) -> String,
-    /** Backdrop URL for a [MediaItem] (server-backed wide rows). */
-    val mediaBackdropUrlBuilder: (MediaItem) -> String,
+    /**
+     * The item/tag-aware artwork resolver behind every server-backed image
+     * slot (the VM's [HomeViewModel.artwork] read). Rows derive their
+     * remembered `(MediaItem) -> String` lambdas from it — remembered ONCE
+     * per arm, never per item, so the rows' lambda params keep stable
+     * identities and the rows stay skippable.
+     */
+    val artwork: ArtworkUrls,
     /** Backdrop URL for an item ID (online; the series-backdrop resolver's source). */
     val onlineBackdropResolver: (String) -> String,
     /**
@@ -382,8 +392,12 @@ private fun MainHomeContent(
     // featured (curated or local; a miss renders the item's own metadata).
     val curatedHeroOverlay = remember(state.curatedHero) { state.curatedHero.associateBy { it.item.id } }
     val heroFocusRequester = remember { FocusRequester() }
-    val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.posterUrl(item) } }
-    val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.backdropUrl(item) } }
+    // The item/tag-aware artwork resolver behind every server-backed image
+    // slot — remembered once off the VM (the detail screen's ArtworkCallbacks
+    // wiring: `urls = viewModel.artwork`). The row arms derive their
+    // remembered poster/backdrop lambdas from the bundle's
+    // [HomeRenderInputs.artwork]; per-slot VM pass-throughs are gone.
+    val artwork = remember(viewModel) { viewModel.artwork }
     // Hero artwork while offline resolves to the downloaded item's local
     // backdrop (falling back to its poster) instead of a server URL, which is
     // unreachable offline. Episodes are included so an all-episodes offline
@@ -403,13 +417,17 @@ private fun MainHomeContent(
             currentOfflineContent.itemsById[item.id]?.let { it.backdropPath ?: it.posterPath } ?: ""
         }
     }
+    // The raw id-level backdrop read — the series-backdrop leg of the
+    // episode/season cards (a bare series id; the model carries no series
+    // backdrop tag, so [ArtworkUrls] cannot resolve it). The ONE retained
+    // raw getter's screen-side stabilization.
     val onlineBackdropResolver = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
     // The single hero backdrop builder the content list consumes — the parent
     // resolves online-vs-offline once, so the child never re-branches. Online
     // it is the item-level resolver (the URL carries the item's image tag);
     // offline it reads the local file paths.
-    val onlineHeroBackdropBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.backdropUrl(item) } }
-    val heroBackdropUrlBuilder: (com.raulshma.jellyplay.core.model.MediaItem) -> String =
+    val onlineHeroBackdropBuilder = remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
+    val heroBackdropUrlBuilder: (MediaItem) -> String =
         if (renderingOffline) offlineBackdropResolver else onlineHeroBackdropBuilder
 
     // Scroll state must exist before the hero controller (auto-rotate reads
@@ -578,7 +596,7 @@ private fun MainHomeContent(
         viewModel.onEvent(HomeUiEvent.PrefetchPhotoFolderChildUrls(photoFolderItems))
     }
 
-    val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)
+    val fallbackImageUrlBuilder = rememberFallbackUrls(artwork)
 
     // The shared render wiring, bundled once (see [HomeRenderInputs]) — every
     // member above is already a remembered stable, so the bundle's identity is
@@ -586,8 +604,7 @@ private fun MainHomeContent(
     val renderInputs = remember(
         mediaOnItemClick,
         mediaOnPlayClick,
-        mediaImageUrlBuilder,
-        mediaBackdropUrlBuilder,
+        artwork,
         onlineBackdropResolver,
         heroBackdropUrlBuilder,
         fallbackImageUrlBuilder,
@@ -599,8 +616,7 @@ private fun MainHomeContent(
         HomeRenderInputs(
             mediaOnItemClick = mediaOnItemClick,
             mediaOnPlayClick = mediaOnPlayClick,
-            mediaImageUrlBuilder = mediaImageUrlBuilder,
-            mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+            artwork = artwork,
             onlineBackdropResolver = onlineBackdropResolver,
             heroBackdropUrlBuilder = heroBackdropUrlBuilder,
             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
@@ -738,7 +754,7 @@ private fun MainHomeContent(
             val focusBackdropUrlFor = if (renderingOffline) {
                 remember { { _: MediaItem -> "" } }
             } else {
-                mediaBackdropUrlBuilder
+                remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
             }
             val focusBackdrop = rememberFocusBackdropState(
                 focusedItem = { tvFocusedItem },
@@ -1017,7 +1033,9 @@ private fun HomeSurfaceContent(
                             heroController.onFocusChange(focused)
                         }
                     },
-                    seriesPosterUrl = remember(viewModel) { { item: MediaItem -> viewModel.seriesPosterUrl(item) } },
+                    // seriesPosterUrl rode here until the artwork fold moved
+                    // series art onto HomeRenderInputs.artwork — the row arm
+                    // derives its resolver lambda from the bundle now.
                     photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                     onSeerrItemClick = callbacks.onSeerrItemClick,
                     onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
@@ -1097,7 +1115,7 @@ private fun HomeDockArea(
     // Lift the search-results-overlay lambdas (recreated per keystroke
     // below) into remembered locals so HomeSearchResultsOverlay's
     // results LazyColumn stops being re-scored each keystroke.
-    val searchPosterUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.posterUrl(item) } }
+    val searchPosterUrlBuilder = remember(viewModel) { { item: MediaItem -> viewModel.artwork.poster(item) } }
     val searchOnJellyfinClick = remember(viewModel, callbacks, closeSearch) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
             closeSearch()
@@ -1575,16 +1593,16 @@ private fun HomeTopDockScrim(
 /**
  * The card-image fallback-URL builder the rows consume — a thin remember over
  * the pure [fallbackImageUrls] (the policy lives there; see HomeMediaRows.kt).
- * Keyed on the VM so the builder identity is stable and the rows don't see a
- * new lambda per recomposition.
+ * Keyed on the resolver so the builder identity is stable and the rows don't
+ * see a new lambda per recomposition.
  */
 @Composable
 private fun rememberFallbackUrls(
-    viewModel: HomeViewModel,
+    artwork: ArtworkUrls,
 ): (com.raulshma.jellyplay.core.model.MediaItem) -> List<String> {
-    return remember(viewModel) {
+    return remember(artwork) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
-            fallbackImageUrls(item, viewModel::getImageUrl)
+            fallbackImageUrls(item, artwork)
         }
     }
 }

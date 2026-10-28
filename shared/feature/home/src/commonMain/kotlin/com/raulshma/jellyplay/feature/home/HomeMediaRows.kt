@@ -72,6 +72,7 @@ import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.model.isNewForHome
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
@@ -883,19 +884,24 @@ internal fun HomeAirsDateChip(
  * [PosterCard] tries the candidates in order. Non-audio items carry no
  * fallback chain (empty list). Pure and Compose-free — pinned by
  * [HomeMediaRowsTest]; HomeScreen's rememberFallbackUrls is only a remembered
- * wrapper over this (keeps the builder's remember(viewModel) stability there).
+ * wrapper over this (keeps the builder's remember stability there).
+ *
+ * The id-level reads go through [ArtworkUrls.posterFor]'s fold — the card
+ * holds the track item but addresses a DIFFERENT id (parent/artist, the
+ * documented different-id leg), so both legs resolve raw and untagged, the
+ * same URLs the deleted `HomeViewModel.getImageUrl` pass-through minted.
  * Lives beside the row code because it is the card-slot's image policy (this
  * file is the module's Compose-free pure-helper home, alongside
  * hideWatchedFilter/posterScrim).
  */
 internal fun fallbackImageUrls(
     item: MediaItem,
-    getImageUrl: (String) -> String,
+    artwork: ArtworkUrls,
 ): List<String> =
     if (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC) {
         listOfNotNull(
-            item.parentId?.let(getImageUrl),
-            item.artistItems.firstOrNull()?.id?.let(getImageUrl),
+            item.parentId?.let { artwork.posterFor(item, it) },
+            item.artistItems.firstOrNull()?.id?.let { artwork.posterFor(item, it) },
         )
     } else {
         emptyList()

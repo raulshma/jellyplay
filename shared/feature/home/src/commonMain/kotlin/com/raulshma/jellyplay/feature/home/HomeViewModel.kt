@@ -91,7 +91,7 @@ internal class HomeViewModel(
     /** Read here only for the offline home's cached-layout mirror (see [offlineHomeGate]). */
     private val homeFeed: HomeFeed,
     private val imageUrlProvider: ImageUrlProvider,
-    /** The item-level artwork resolver ([ArtworkUrls]) behind [posterUrl]/[backdropUrl]. */
+    /** The item-level artwork resolver ([ArtworkUrls]) exposed read-side as [artwork]. */
     private val artworkUrls: ArtworkUrls,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadIntake: DownloadIntake,
@@ -1064,21 +1064,29 @@ internal class HomeViewModel(
         }
     }
 
-    fun getImageUrl(itemId: String): String =
-        imageUrlProvider.getImageUrl(itemId)
-
+    /**
+     * The RAW untagged backdrop read by item id — the one retained
+     * [ImageUrlProvider] getter (the detail VM's retained-getter precedent).
+     * It backs the series-backdrop leg of the episode/season cards: a bare
+     * series id the screen holds no [MediaItem] for, and the model carries no
+     * series backdrop tag, so [ArtworkUrls] cannot resolve it (its slots all
+     * select a tag). Every item-backed slot goes through [artwork]; only bare
+     * ids land here.
+     */
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
 
-    fun posterUrl(item: MediaItem): String =
-        artworkUrls.poster(item)
-
-    /** The containing series' poster for episode/season cards (series id + series image tag). */
-    fun seriesPosterUrl(item: MediaItem): String =
-        artworkUrls.seriesPoster(item)
-
-    fun backdropUrl(item: MediaItem): String =
-        artworkUrls.backdrop(item)
+    /**
+     * The item/tag-aware artwork resolver (the [ArtworkUrls] seam): one
+     * MediaItem in, the URL for the slot it renders with the right image tag
+     * already selected — the read-side accessor the screen's rows consume.
+     * The detail VM's `artwork` precedent: it replaced this VM's
+     * posterUrl/seriesPosterUrl/backdropUrl pass-throughs (whose per-slot
+     * wrappers were a transposition waiting to happen) and the raw
+     * `getImageUrl` poster read (the fallback chain resolves its bare
+     * parent/artist ids through the `posterFor` fold instead).
+     */
+    internal val artwork: ArtworkUrls get() = artworkUrls
 
     fun getHomeScrollPosition(): HomeScrollPosition = scrollPositionStore.get()
 
