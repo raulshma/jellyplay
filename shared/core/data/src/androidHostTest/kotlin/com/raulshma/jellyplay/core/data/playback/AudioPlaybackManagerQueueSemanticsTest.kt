@@ -199,12 +199,14 @@ class AudioPlaybackManagerQueueSemanticsTest {
                 }
             }
 
-        // The browser stays a MIXED union consumer (browse + detail reads in
-        // one resolve), so it takes its own MediaRepository mock; the manager
-        // narrowed to the DetailFeed seam and reads the shared detailFeed mock
+        // The browser reads the browse + detail family seams (browse + detail
+        // reads in one resolve); the manager reads the shared detailFeed mock
         // above. Same default: a failing detail read falls to the
         // local-source arm.
-        private val browserMediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository =
+        private val browserLibraryFeed: com.raulshma.jellyplay.core.data.repository.LibraryFeed =
+            mockk(relaxed = true)
+
+        private val browserDetailFeed: com.raulshma.jellyplay.core.data.repository.DetailFeed =
             mockk(relaxed = true) {
                 coEvery { getMediaDetail(any(), any()) } returns
                     Result.failure(RuntimeException("test"))
@@ -212,7 +214,8 @@ class AudioPlaybackManagerQueueSemanticsTest {
 
         private val libraryBrowser = AudioLibraryBrowser(
             scope = scope,
-            mediaRepository = browserMediaRepository,
+            libraryFeed = browserLibraryFeed,
+            detailFeed = browserDetailFeed,
             musicCatalogue = mockk(relaxed = true),
             libraryApiClient = mockk(relaxed = true),
             playlistRepository = mockk(relaxed = true),

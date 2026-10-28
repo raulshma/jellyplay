@@ -9,7 +9,8 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
@@ -69,7 +70,8 @@ import java.time.ZoneId
 @Config(sdk = [34], application = Application::class)
 class NewMediaCheckWorkerTest {
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
+    private val detailFeed: DetailFeed = mockk()
     private val seriesNotificationReads: SeriesNotificationReads = mockk()
     private val seenMediaRepository: SeenMediaRepository = mockk(relaxed = true)
     private val notificationStore: NotificationStore = mockk()
@@ -126,7 +128,8 @@ class NewMediaCheckWorkerTest {
                     ): ListenableWorker = NewMediaCheckWorker(
                         appContext,
                         workerParameters,
-                        mediaRepository = mediaRepository,
+                        libraryFeed = libraryFeed,
+                        detailFeed = detailFeed,
                         seriesNotificationReads = seriesNotificationReads,
                         seenMediaRepository = seenMediaRepository,
                         notificationStore = notificationStore,
@@ -153,12 +156,12 @@ class NewMediaCheckWorkerTest {
     )
 
     private fun stubFolders(vararg folders: LibraryFolder) {
-        coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(folders.toList())
+        coEvery { libraryFeed.getLibraryFolders(any()) } returns Result.success(folders.toList())
     }
 
     private fun stubLatest(folderId: String, items: List<MediaItem>) {
         coEvery {
-            mediaRepository.getLatestMedia(parentId = folderId, limit = any())
+            libraryFeed.getLatestMedia(parentId = folderId, limit = any())
         } returns Result.success(items)
     }
 
@@ -176,7 +179,7 @@ class NewMediaCheckWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Success)
         verify(exactly = 1) { scheduler.cancel() }
-        coVerify(exactly = 0) { mediaRepository.getLibraryFolders(any()) }
+        coVerify(exactly = 0) { libraryFeed.getLibraryFolders(any()) }
     }
 
     @Test
@@ -189,7 +192,7 @@ class NewMediaCheckWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Success)
         verify(exactly = 0) { scheduler.cancel() }
-        coVerify(exactly = 0) { mediaRepository.getLibraryFolders(any()) }
+        coVerify(exactly = 0) { libraryFeed.getLibraryFolders(any()) }
     }
 
     @Test
@@ -205,7 +208,7 @@ class NewMediaCheckWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Success)
         // The fetch honours the per-check cap.
-        coVerify(exactly = 1) { mediaRepository.getLatestMedia(parentId = "f1", limit = 10) }
+        coVerify(exactly = 1) { libraryFeed.getLatestMedia(parentId = "f1", limit = 10) }
         // Only the unseen item is recorded as seen, keyed to its folder.
         // (The seen-at timestamp is stamped from the wall clock at write time,
         // so it is matched field-wise rather than by equality.)
@@ -264,7 +267,7 @@ class NewMediaCheckWorkerTest {
         val result = worker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.getLatestMedia(parentId = any(), limit = any()) }
+        coVerify(exactly = 0) { libraryFeed.getLatestMedia(parentId = any(), limit = any()) }
         verify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
@@ -285,8 +288,8 @@ class NewMediaCheckWorkerTest {
         val result = worker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.getLatestMedia(parentId = "f1", limit = any()) }
-        coVerify(exactly = 1) { mediaRepository.getLatestMedia(parentId = "f2", limit = any()) }
+        coVerify(exactly = 0) { libraryFeed.getLatestMedia(parentId = "f1", limit = any()) }
+        coVerify(exactly = 1) { libraryFeed.getLatestMedia(parentId = "f2", limit = any()) }
         verify(exactly = 1) {
             dispatcher.dispatch(
                 match<Map<LibraryFolder, List<MediaItem>>> { map -> map.keys.single().id == "f2" },
@@ -342,7 +345,7 @@ class NewMediaCheckWorkerTest {
     @Test
     fun `IO error during the folders fetch retries`() = runTest {
         stubPreferences(enabledPrefs())
-        coEvery { mediaRepository.getLibraryFolders(any()) } throws IOException("server unreachable")
+        coEvery { libraryFeed.getLibraryFolders(any()) } throws IOException("server unreachable")
 
         val result = worker().doWork()
 
@@ -353,7 +356,7 @@ class NewMediaCheckWorkerTest {
     @Test
     fun `unexpected error during the folders fetch fails without crashing`() = runTest {
         stubPreferences(enabledPrefs())
-        coEvery { mediaRepository.getLibraryFolders(any()) } throws IllegalStateException("bad state")
+        coEvery { libraryFeed.getLibraryFolders(any()) } throws IllegalStateException("bad state")
 
         val result = worker().doWork()
 
@@ -370,7 +373,7 @@ class NewMediaCheckWorkerTest {
     /**
      * Stubs the per-series newest-episode read. Also stubs the tvdb lookup
      * as failed so the accelerator (which every check re-schedules) degrades
-     * to a no-op unless the test re-stubs [MediaRepository.getMediaDetail]
+     * to a no-op unless the test re-stubs [DetailFeed.getMediaDetail]
      * with a tvdb-carrying detail (the accelerator test does — the later
      * stub wins).
      */
@@ -378,7 +381,7 @@ class NewMediaCheckWorkerTest {
         coEvery {
             seriesNotificationReads.getSeriesNextUpEpisode("s1")
         } returns Result.success(item(id, MediaType.EPISODE))
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.failure(IOException("no arr configured"))
+        coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.failure(IOException("no arr configured"))
     }
 
     /** Captures the store RMW transform so the test can apply it to the input map. */
@@ -496,7 +499,7 @@ class NewMediaCheckWorkerTest {
         coEvery {
             seriesNotificationReads.getSeriesNextUpEpisode("s2")
         } returns Result.success(item("ep9", MediaType.EPISODE))
-        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(IOException("no arr configured"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(IOException("no arr configured"))
         val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
         coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
 
@@ -537,7 +540,7 @@ class NewMediaCheckWorkerTest {
         coEvery {
             seriesNotificationReads.getSeriesNextUpEpisode("s2")
         } returns Result.success(item("ep9", MediaType.EPISODE))
-        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(IOException("no arr configured"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(IOException("no arr configured"))
         val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
         coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
 
@@ -570,7 +573,7 @@ class NewMediaCheckWorkerTest {
         stubFolders()
         stubSeriesEpisode("ep1")
         val airStamp = "2026-10-15T20:00:00Z"
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.success(
             MediaDetail(item = item("s1", MediaType.SERIES), providerIds = mapOf("tvdb" to "42")),
         )
         coEvery { arrRepository.refreshCalendar(any(), any()) } returns Result.success(Unit)
@@ -599,7 +602,7 @@ class NewMediaCheckWorkerTest {
         stubPreferences(seriesPrefs(SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
         stubFolders()
         coEvery { seriesNotificationReads.getSeriesNextUpEpisode("s1") } returns Result.failure(IOException())
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.failure(IOException())
+        coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.failure(IOException())
 
         val result = worker().doWork()
 

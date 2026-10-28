@@ -113,7 +113,8 @@ interface DownloadIntake {
     /**
      * Starts a download straight from a browse [item] (card long-press), with
      * no detail screen in between. Single-stream types (movie, episode, music
-     * track) resolve their detail via [com.raulshma.jellyplay.core.data.repository.MediaRepository]
+     * track) resolve their detail via the detail-read family seam
+     * ([com.raulshma.jellyplay.core.data.repository.DetailFeed])
      * and start immediately at the user's default download quality. Types that
      * need the detail screen's richer flows — series (season/episode selection
      * sheet), seasons, albums, artists — return a navigation outcome instead so

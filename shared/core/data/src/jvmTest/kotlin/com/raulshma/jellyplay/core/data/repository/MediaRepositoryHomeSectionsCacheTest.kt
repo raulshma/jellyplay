@@ -13,7 +13,6 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
-import com.raulshma.jellyplay.core.network.library.HomeWriteGeneration
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -59,6 +58,9 @@ class MediaRepositoryHomeSectionsCacheTest {
     /** Late-binding handle the announcer's arming lambda reads (set at build time). */
     private var built: MediaRepositoryImpl? = null
 
+    /** The announcer leaf the build wires (tests announce through it directly). */
+    private lateinit var announcer: UserDataAnnouncerImpl
+
     // Atomic (server, user) session flow — what the shared HomeSession
     // identity detector consumes (see JellyfinApiEngine.session). One value per
     // identity step, replacing the separate server/user flows the repo's own
@@ -66,9 +68,10 @@ class MediaRepositoryHomeSectionsCacheTest {
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     /**
-     * The home cache-maintenance port (the dice roll's per-row drop/seed and
-     * the sub-call cache drop) — the network verbs moved off LibraryApiClient
-     * onto this seam, so the reroll pins verify against it.
+     * The home cache-maintenance port (the complete roll operation, the
+     * single-row refetch and the sub-call cache drop) — the network side of
+     * the write/roll paths, so the reroll pins verify the repo's half against
+     * it.
      */
     private val homeSectionsCachePort: HomeSectionsCachePort = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
@@ -125,7 +128,7 @@ class MediaRepositoryHomeSectionsCacheTest {
             userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
             timeSource = fakeTimeSource,
             homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built },
+            userDataAnnouncer = announcerFor(homeSession) { built }.also { announcer = it },
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
@@ -198,36 +201,36 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
-    fun `rerollDiscoverRow returns the fresh items and commits the row memo`() = runBlocking {
-        // The dice roll as one operation: the fresh fetch is returned to the
-        // caller AND committed into the network layer's per-row memo (the
-        // invalidate → fetch → seed ordering is the repository's), so the next
-        // home fetch serves the rolled set instead of re-querying (re-rolling)
-        // the server.
+    fun `rerollDiscoverRow returns the fresh items through the network operation`() = runBlocking {
+        // The dice roll as one operation: the invalidate → fetch → seed
+        // choreography lives INSIDE the network layer's op now (the fetcher
+        // owns the row memo and its write guard — the commit itself is pinned
+        // on the real stack by HomeFeedRealStackContractTest and in
+        // core:network's fetcher suite). This side pins the routing and the
+        // outcome: the fresh fetch result is returned to the caller verbatim.
         val repository = buildRepository()
         signIn("server-1", "user-A")
         val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
-        coEvery { apiClient.getDiscoverRowItems(row) } returns Result.success(rolledItems)
+        coEvery { homeSectionsCachePort.rerollDiscoverRow(row) } returns Result.success(rolledItems)
 
         val result = repository.rerollDiscoverRow(row)
 
         assertEquals(rolledItems, result.getOrNull())
-        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id, any()) }
-        coVerify(exactly = 1) { apiClient.getDiscoverRowItems(row) }
-        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems, any()) }
+        coVerify(exactly = 1) { homeSectionsCachePort.rerollDiscoverRow(row) }
     }
 
     @Test
     fun `rerollDiscoverRow drops the cached home payload - the next ordinary read refetches`() = runBlocking {
         // "The roll survives the periodic refresh" at the repo layer: the
-        // pre-roll assembled payload the reroll dropped cannot be replayed by
-        // the next TTL-served read — that read refetches through the network
-        // layer, which now serves the seeded row memo.
+        // pre-roll assembled payload cannot be replayed by the next
+        // TTL-served read — the post-operation bump dropped it, so that read
+        // refetches through the network layer, which now serves the seeded
+        // row memo.
         val repository = buildRepository()
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
-        coEvery { apiClient.getDiscoverRowItems(any()) } returns
+        coEvery { homeSectionsCachePort.rerollDiscoverRow(any()) } returns
             Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
@@ -250,7 +253,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
         coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
-        coEvery { apiClient.getDiscoverRowItems(any()) } returns
+        coEvery { homeSectionsCachePort.rerollDiscoverRow(any()) } returns
             Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
@@ -268,99 +271,98 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
-    fun `invalidate and seed each bump the write generation exactly once - the funnel is the only writer`() = runTest {
-        // The one-token consolidation pin: the repo's home cache-write
-        // generation moves through ONE funnel, and each roll verb hands its
-        // post-bump value down to the network layer as a parameter (the
-        // fetcher keeps no counter of its own). Pinned in two halves:
-        //  - the port verbs receive exactly one generation each, strictly +1
-        //    apart (the funnel bumped once per verb, and nothing else wrote);
-        //  - the guard behaves accordingly: a home fetch parked BEFORE the
-        //    roll (capturing the pre-roll value) is refused once the seed's
-        //    commit bump lands; a fetch arriving INSIDE the invalidate-only
-        //    window joins the parked flight and
-        //    rides the same refused write; and the post-roll ordinary read —
-        //    capturing the settled token — pins and serves, so nothing
-        //    bumped after the commit either.
+    fun `the roll bumps the write generation once after the operation returns - the funnel is the only writer`() = runTest {
+        // The one-funnel pin, retargeted for the operation hand-off: the
+        // roll's cache choreography lives inside the network op (behind the
+        // fetcher's own guard), and the repo answers with ONE post-operation
+        // bump (bump + assembled-payload drop as one indivisible unit — no
+        // repo-side invalidate step exists anymore; the token is repo-local,
+        // so the pin is behavioral). Three halves:
+        //  - a home fetch parked BEFORE the roll captures the pre-bump
+        //    value; released after the op returned, its write is refused
+        //    (still returned to its caller);
+        //  - a read landing while the op is in flight joins the parked
+        //    flight (single-flight: one network call, no second fetch — the
+        //    old double-fetch wart stays dead);
+        //  - the post-roll ordinary read refetches (the raced write did not
+        //    pin), captures the settled generation, and PINS; a further read
+        //    is served from the cache — nothing bumped after the operation.
         val repository = buildRepository()
         signIn("server-1", "user-A")
         val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        val invalidateGenerations = mutableListOf<HomeWriteGeneration>()
-        val seedGenerations = mutableListOf<HomeWriteGeneration>()
-        every { homeSectionsCachePort.invalidateDiscoverRow(any(), any()) } answers { invalidateGenerations += arg<HomeWriteGeneration>(1) }
-        every { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) } answers { seedGenerations += arg<HomeWriteGeneration>(2) }
-
-        // The roll's own fresh fetch parks between the two verbs, opening the
-        // invalidate-only window a home fetch can start inside.
+        // The network op takes real time: the roll parks on this gate,
+        // holding the post-operation bump back and opening the in-flight
+        // window a home read can land inside.
         val rowGate = CompletableDeferred<Unit>()
-        coEvery { apiClient.getDiscoverRowItems(any()) } coAnswers { rowGate.await(); Result.success(rolledItems) }
+        coEvery { homeSectionsCachePort.rerollDiscoverRow(row) } coAnswers { rowGate.await(); Result.success(rolledItems) }
 
-        // Phase 1 — a home fetch parked BEFORE the roll captures the pre-roll
-        // generation (0).
+        // Phase 1 — a home fetch parked BEFORE the roll captures the pre-bump
+        // generation.
         val preRollGate = CompletableDeferred<Result<HomeSectionsResult>>()
         coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { preRollGate.await() }
         val beforeRoll = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
         runCurrent() // parked on preRollGate, generation captured
 
         val roll = async { repository.rerollDiscoverRow(row) }
-        runCurrent() // invalidate ran (bump 1 + port call); the roll parks on rowGate
+        runCurrent() // the roll parks inside the network op (pre-bump still)
 
-        // Phase 2 — a home fetch started INSIDE the invalidate-only window.
-        // It JOINS phase 1's parked flight (single-flight:
-        // overlapping callers share one network call), so it captures the
-        // same pre-roll fetch and its write is refused by the same epoch
-        // guard when the seed's commit bump lands.
+        // Phase 2 — a home read landing INSIDE the operation window. It
+        // JOINS phase 1's parked flight (single-flight: overlapping callers
+        // share one network call), so it receives the same flight result and
+        // issues no second fetch.
         val midRollFetch = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
         runCurrent() // joined the parked flight — no new network call
 
-        // Release the roll: seed runs (bump 2 + port call) and the roll commits.
+        // Release the operation: it returns and the post-op bump lands (the
+        // funnel's single bump + assembled-payload drop).
         rowGate.complete(Unit)
         assertTrue(roll.await().isSuccess)
 
-        // Exactly one generation per verb, in order, +1 apart — the funnel is
-        // the only writer and each verb delivered the repo's post-bump token.
-        assertEquals(listOf(HomeWriteGeneration.of(1L)), invalidateGenerations)
-        assertEquals(listOf(HomeWriteGeneration.of(2L)), seedGenerations)
-
-        // Phase 1's write lands AFTER both bumps: refused (captured 0 ≠ 2),
-        // still returned to its caller — and the joined phase-2 caller
-        // receives the same flight result.
+        // Phase 1's write lands AFTER the bump: refused (captured pre-bump ≠
+        // settled), still returned to its caller — and the joined phase-2
+        // caller receives the flight's result.
         preRollGate.complete(homeResult("pre-roll"))
         assertTrue(beforeRoll.await().isSuccess, "the raced fetch still returns its result to its caller")
         assertTrue(midRollFetch.await().isSuccess, "the joined caller receives the flight's result")
 
-        // The post-roll ordinary read refetches (the raced write did not pin),
-        // captures the settled generation, and PINS; a further read is then
-        // served from the cache with zero new calls — nothing bumped after
-        // the commit.
+        // The post-roll ordinary read refetches (the raced write did not
+        // pin), captures the settled generation, and PINS; a further read is
+        // then served from the cache with zero new calls — nothing bumped
+        // after the operation returned.
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("post-roll")
         repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.getHomeSections(HomeSectionQuery(), force = false)
 
         // Two network calls total — the parked flight's single fetch + the
-        // post-roll read. The old non-flight path issued a SECOND concurrent
-        // call for the mid-window caller: the double-fetch this fixes.
+        // post-roll read. The mid-roll caller joined the flight (no second
+        // concurrent call): the double-fetch this fixes stays fixed.
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
-    fun `rerollDiscoverRow failure returns the failure without committing the memo`() = runBlocking {
-        // A failed roll skips the commit: the network memo is untouched and
-        // only the pre-fetch drop remains — the next home fetch re-queries the
-        // row rather than replaying pre-roll items.
+    fun `rerollDiscoverRow failure returns the failure and keeps the assembled payload dropped`() = runBlocking {
+        // A failed roll skips the commit (inside the network op), but the
+        // operation still DROPPED the row memo — the cached assembled payload
+        // (carrying the pre-roll row) must not survive to be replayed: the
+        // repo's post-operation bump runs on every completed attempt. The
+        // next home fetch therefore re-queries the row rather than replaying
+        // pre-roll items (the interface KDoc's failure contract).
         val repository = buildRepository()
         signIn("server-1", "user-A")
-        coEvery { apiClient.getDiscoverRowItems(any()) } returns
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        coEvery { homeSectionsCachePort.rerollDiscoverRow(any()) } returns
             Result.failure(RuntimeException("flaky"))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
         val result = repository.rerollDiscoverRow(row)
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id, any()) }
-        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) }
+        coVerify(exactly = 1) { homeSectionsCachePort.rerollDiscoverRow(row) }
+
+        repository.getHomeSections(HomeSectionQuery(), force = false) // must refetch, not replay
+        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -461,7 +463,7 @@ class MediaRepositoryHomeSectionsCacheTest {
      * Lazy home staleness, the #157 contract (see MediaRepositoryImpl's
      * homeSectionsStale): a confirmed own-write (toggleFavorite / markPlayed /
      * markUnplayed / delivered STOP / outbox drain) announces through
-     * [MediaRepository.notifyUserDataChanged], which does NOT eagerly clear
+     * [UserDataAnnouncer.notifyUserDataChanged], which does NOT eagerly clear
      * the cache — it arms a marker the next read consumes as a one-shot
      * force. Freshness of the old eager eviction (an unwatched row re-enters
      * Continue Watching within the TTL window, not after 60s of staleness)
@@ -474,7 +476,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery(), force = false)
-        repository.notifyUserDataChanged(listOf("item-1"))
+        announcer.notifyUserDataChanged(listOf("item-1"))
         repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
@@ -499,7 +501,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         }
 
         repository.getHomeSections(HomeSectionQuery(), force = false) // populate the cache
-        repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
+        announcer.notifyUserDataChanged(listOf("item-1")) // arm the marker
         val failed = repository.getHomeSections(HomeSectionQuery(), force = false) // consumes, fetch fails
         assertTrue(failed.isFailure)
         repository.getHomeSections(HomeSectionQuery(), force = false) // re-armed: refetches
@@ -523,7 +525,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         }
 
         repository.getHomeSections(HomeSectionQuery(), force = false) // populate, force = false
-        repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
+        announcer.notifyUserDataChanged(listOf("item-1")) // arm the marker
         repository.getHomeSections(HomeSectionQuery(), force = false) // consumes the marker
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
@@ -550,7 +552,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
         repository.getHomeSections(HomeSectionQuery(), force = false)
-        repository.notifyUserDataChanged(listOf("item-1"))
+        announcer.notifyUserDataChanged(listOf("item-1"))
         repository.getHomeSections(HomeSectionQuery(), force = false) // consumes the marker, refetches
         repository.getHomeSections(HomeSectionQuery(), force = false) // marker gone: cached
 
@@ -575,7 +577,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         }
 
         repository.getHomeSections(HomeSectionQuery(), force = false) // populate, force = false
-        repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
+        announcer.notifyUserDataChanged(listOf("item-1")) // arm the marker
         switchUser("user-B")
         repository.getHomeSections(HomeSectionQuery(), force = false) // identity miss refetches anyway
 

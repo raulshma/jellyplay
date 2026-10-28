@@ -1,3 +1,5 @@
+@file:OptIn(kotlin.concurrent.atomics.ExperimentalAtomicApi::class)
+
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
@@ -32,6 +34,7 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayHeroResult
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowItem
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowResult
 import kotlin.concurrent.Volatile
+import kotlin.concurrent.atomics.AtomicLong
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -55,10 +58,10 @@ import kotlinx.coroutines.sync.Semaphore
  * Construction scope (ADR-0008): implemented by `LibraryApiClientImpl` in
  * production (for free — the signatures above are borrowed verbatim from its
  * [LibraryApiClient] supertype, so the same overrides serve both interfaces)
- * and by test fakes — the real-stack contract suite in core:data's jvmTest
- * (`HomeFeedRealStackContractTest`) builds the fetcher on a module-local
- * fake of this interface. Public only because the fetcher's constructor
- * exposes it; direct implementations elsewhere are not supported.
+ * and by the shared test-fixtures double — the real-stack contract suite in
+ * core:data's jvmTest (`HomeFeedRealStackContractTest`) builds the fetcher on
+ * it. Public only because the fetcher's constructor exposes it; direct
+ * implementations elsewhere are not supported.
  */
 public interface HomeSectionSources {
     suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>>
@@ -200,9 +203,9 @@ public interface JellyPlayHomeSectionSources {
  *    `/Items/Latest` calls and collects in folder order.
  *  - Custom discover rows of BOTH sources fetch in one path (see
  *    [fetchDiscoverRows]): Jellyfin rows per-row memoised behind the
- *    dice-roll generation guard (the repo-owned cache-write token this
- *    class mirrors — see [observedGeneration]), Seerr rows behind a
- *    whole-group TTL gate +
+ *    dice-roll generation guard (this class's own [discoverRowGeneration]
+ *    counter, bumped by the roll operation — see [rerollDiscoverRow]),
+ *    Seerr rows behind a whole-group TTL gate +
  *    last-known-good (the policy the feature layer's
  *    `fetchCustomSeerrRows` used to own, moved here when the parallel
  *    reimplementation died), emitting the DISCOVER block ALREADY ordered by
@@ -284,7 +287,7 @@ public class HomeSectionsFetcher(
      * Custom discover rows. Longer TTL than the latest/similar caches
      * ([HomeFreshness.DISCOVER_ROW_TTL_MS]): a RANDOM-sorted row must stay
      * stable across the 60s periodic refresh (no per-minute reshuffle); the
-     * dice affordance ([invalidateDiscoverRow]) and a forced fetch re-roll.
+     * dice affordance ([rerollDiscoverRow]) and a forced fetch re-roll.
      */
     private val homeDiscoverRowCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS)
 
@@ -293,25 +296,20 @@ public class HomeSectionsFetcher(
 
     /**
      * The write guard for the Jellyfin discover-row memo reads
-     * ([fetchJellyfinDiscoverRows] and [refreshSection]'s DISCOVER arm): a
-     * MIRROR of the data layer's ONE home cache-write generation token,
-     * delivered as [HomeWriteGeneration] by the two mutating
-     * [HomeSectionsCachePort] verbs ([invalidateDiscoverRow] /
-     * [seedDiscoverRow]). This class owns no counter — the mirror is provably
-     * fed by the token's single owner (the repo funnel; the roll protocol's
-     * rules live on `HomeFeed.rerollDiscoverRow`). `@Volatile` because the
-     * writers arrive through port calls on the caller's thread while the
-     * guard reads ride fetch coroutines — the same explicit-visibility idiom
-     * as [lastKnownSeerrRows]. The guard compares captured-vs-current values
-     * only (never against a constant), so the mirror skipping the repo bump
-     * that has no port verb (the single-row refetch's) changes no outcome.
-     * One decision window is deliberately tighter than the retired internal
-     * counter: the seed verb also advances the mirror, so a row writer that
-     * captured between the roll's invalidate and its seed is rejected instead
-     * of pinning a pre-roll payload — strictly safer, never looser.
+     * ([fetchJellyfinDiscoverRows] and [refreshSection]'s DISCOVER arm) and
+     * for the roll's own two memo mutations: ONE fetcher-owned monotonic
+     * counter, bumped by [rerollDiscoverRow]'s drop and seed halves — the
+     * two points where the memo's ordering matters (the bump-at-invalidate-
+     * AND-commit rule, owned HERE where the memo and its choreography live;
+     * the data layer's assembled-payload cache keeps its own repo-local
+     * generation, bumped when an operation hands back "the row changed" — no
+     * token crosses the module seam). Atomic because concurrent rolls of
+     * different rows bump from different callers' contexts. The guard
+     * compares captured-vs-current values only (never against a constant),
+     * so the data layer's other bumps (which never touched this counter)
+     * change no outcome.
      */
-    @Volatile
-    private var observedGeneration: HomeWriteGeneration = HomeWriteGeneration.INITIAL
+    private val discoverRowGeneration = AtomicLong(0L)
 
     // ── Seerr discover rows (moved from the feature layer's ─────────────────
     // fetchCustomSeerrRows) ─────────────────────────────────────────────────
@@ -384,47 +382,52 @@ public class HomeSectionsFetcher(
     }
 
     /**
-     * Drops ONE discover row's memoised items (dice affordance): the next home
-     * fetch re-queries that row — re-rolling a RANDOM sort — while sibling
-     * rows keep their cached items. Identity-scoped like every entry, so the
-     * evict can never touch another user's row. Ordering and the generation
-     * value are roll-protocol concerns owned by the data layer's funnel —
-     * [generation] IS the repo's post-bump cache-write token, mirrored BEFORE
-     * the drop (the same bump-then-drop order this guard always observed);
-     * see `HomeFeed.rerollDiscoverRow`.
+     * The dice re-roll as ONE complete operation — the invalidate → fetch →
+     * seed choreography owned HERE, where the row memo it choreographs (and
+     * its write guard) live. The ordering, the race windows and the bump rule
+     * are this operation's own; the data layer runs its assembled-payload
+     * bump when this returns (see `HomeFeed.rerollDiscoverRow`):
+     *
+     *  1. drop-half bump ([discoverRowGeneration]) + the row's memo drop —
+     *     identity-scoped like every entry, so the evict can never touch
+     *     another user's row; the next memo read re-queries the row (re-rolling
+     *     a RANDOM sort) instead of replaying pre-roll items, while sibling
+     *     rows keep theirs.
+     *  2. the RAW row fetch — the memo's own cache-through read is bypassed
+     *     by construction (a roll must not serve the memo it is about to
+     *     replace).
+     *  3. commit-half bump + the memo write, ONLY on a non-empty success —
+     *     the rolled set is memoised as if fetched, so it survives the
+     *     periodic refresh; a failed or empty fetch leaves nothing behind but
+     *     the pre-fetch drop (the next home fetch re-queries the row instead
+     *     of replaying or pinning pre-roll items).
+     *
+     * A sub-call already on the wire when the roll lands captured a
+     * pre-roll generation and is refused at its write (captured ≠ current
+     * after either bump) — returned to its caller, never pinned; one that
+     * captured between the drop and the seed is rejected too (the commit bump)
+     * — the deliberately tighter window.
      */
-    fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
-        observedGeneration = generation
+    suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
+        discoverRowGeneration.addAndFetch(1L)
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
+        homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_${row.id}")
+        val result = sources.getDiscoverRowItems(row)
+        val items = result.getOrNull()
+        if (!items.isNullOrEmpty()) {
+            discoverRowGeneration.addAndFetch(1L)
+            homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
+        }
+        return result
     }
 
     /**
      * The discover-row sub-call cache key (minus identity scoping, which
      * [TtlCache] applies): the single home of the key grammar — both the
-     * fetch path ([fetchDiscoverRows]) and [seedDiscoverRow] resolve their
-     * keys through it, so the two writers cannot drift.
+     * fetch path ([fetchDiscoverRows]) and [rerollDiscoverRow]'s commit
+     * resolve their keys through it, so the two writers cannot drift.
      */
     private fun discoverRowCacheKey(rowId: String, limit: Int): String = "discover_${rowId}_$limit"
-
-    /**
-     * Memoises a discover row's freshly fetched items as if the fetcher had
-     * fetched them (the dice roll's commit): the next home fetch serves the
-     * rolled items from this cache instead of re-querying the server, so the
-     * row the user sees survives the next periodic refresh rather than
-     * reverting to the pre-roll payload (or silently re-rolling again).
-     * No-op on an empty list (which also skips the mirror write — an empty
-     * commit advances no generation, matching the repo funnel's early
-     * return); the commit-time generation arrives as the [generation]
-     * parameter — the repo funnel's post-bump token, a roll-protocol rule
-     * owned by the data layer (see `HomeFeed.rerollDiscoverRow`).
-     */
-    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
-        if (items.isEmpty()) return
-        observedGeneration = generation
-        val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
-    }
 
     suspend fun fetch(query: HomeSectionQuery, force: Boolean = false): HomeSectionsResult = coroutineScope {
         // Only enabledSections earns a local (gates every deferred launch
@@ -694,7 +697,7 @@ public class HomeSectionsFetcher(
         identity,
         discoverRowCacheKey(row.id, row.limit),
         force = force,
-        currentEpoch = { observedGeneration.value },
+        currentEpoch = { discoverRowGeneration.load() },
     ) {
         sources.getDiscoverRowItems(row)
     }
@@ -710,9 +713,9 @@ public class HomeSectionsFetcher(
      * two implementations this unified):
      *  - JELLYFIN rows: semaphore-bounded at 3, memoised per row in
      *    [homeDiscoverRowCache] (RANDOM stability — see its KDoc) behind the
-     *    dice-roll generation guard ([observedGeneration] — the repo-owned
-     *    token mirrored in), degraded per row (a failing row is dropped,
-     *    never fatal — the pinned-section policy).
+     *    dice-roll generation guard ([discoverRowGeneration] — bumped by the
+     *    roll operation, [rerollDiscoverRow]), degraded per row (a failing
+     *    row is dropped, never fatal — the pinned-section policy).
      *  - SEERR rows: semaphore-bounded at 3 behind the whole-group TTL gate
      *    ([seerrRowsGate]) with last-known-good on total failure — an outage
      *    neither blanks the rows nor pins the blank; partial success keeps

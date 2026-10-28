@@ -246,10 +246,11 @@ class LibraryApiClientImpl(
     // fetcher ([HomeSectionsCachePortAdapter]). This impl constructs that
     // adapter over its own fetcher and re-exposes it (the Koin construction
     // owner binds the port to this property), so the port, this client, and
-    // the fetcher stay one home stack. The discover-row verbs'
-    // HomeWriteGeneration token rides along untouched: it is the data layer's
-    // post-bump cache-write token, and this client neither derives nor alters
-    // it — pure pass-through to the fetcher's mirror.
+    // the fetcher stay one home stack. The port's row-mutation verbs are the
+    // fetcher's COMPLETE operations (the roll's invalidate → fetch → seed
+    // runs inside it, behind its own write guard); no cache-write token
+    // crosses this seam — the data layer bumps its own generation when an
+    // operation reports a row changed.
     internal val homeSectionsCachePort: HomeSectionsCachePort =
         HomeSectionsCachePortAdapter(engine, homeSectionsFetcher)
 

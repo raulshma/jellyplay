@@ -50,7 +50,8 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             // scope (Dispatchers.Default): the browser resolves media3
             // session callbacks on it.
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-            mediaRepository = get(),
+            libraryFeed = get(),
+            detailFeed = get(),
             libraryApiClient = get(),
             musicCatalogue = get(),
             playlistRepository = get(),

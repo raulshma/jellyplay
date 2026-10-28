@@ -8,22 +8,26 @@ import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 
 /**
  * The [HomeSectionsCachePort]'s one production implementation — the small
- * adapter the port's KDoc describes. The four verbs moved verbatim off
- * [com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl] (which used
- * to satisfy the port directly): each cache verb forwards one line to
+ * adapter the port's KDoc describes. The verbs forward to
  * [HomeSectionsFetcher] — the single owner of the home hot-path sub-call
- * caches — and the single-row refetch keeps its exact former transport, the
- * engine's retry chassis ([JellyfinApiEngine.apiResultWithRetry]) wrapped
- * around the fetcher's per-row Result (a failure rethrows inside the retry
- * block and comes back as `Result.failure` with the retry policy applied).
+ * caches AND of the row-mutation choreography (the roll's invalidate →
+ * fetch → seed runs inside it, behind its own write guard) — and the
+ * single-row refetch keeps its exact former transport, the engine's retry
+ * chassis ([JellyfinApiEngine.apiResultWithRetry]) wrapped around the
+ * fetcher's per-row Result (a failure rethrows inside the retry block and
+ * comes back as `Result.failure` with the retry policy applied).
+ *
+ * The roll op deliberately takes NO extra retry wrapper: its raw fetch
+ * already rides the engine through the sources port (`LibraryApiClientImpl`
+ * satisfies [HomeSectionSources] with the same wrapped methods the wide
+ * client exposes), so wrapping the whole operation would re-run the
+ * drop-and-seed choreography per retry attempt — a behavior change, not a
+ * pass-through.
  *
  * Constructed ON the client impl — which builds the fetcher — and re-exposed
  * to the Koin construction owner through it, so the port binding, the wide
  * client, and the fetcher stay one home stack (the adapter holds the same
- * [JellyfinApiEngine] the client does; it adds no state of its own). The
- * discover-row verbs' [HomeWriteGeneration] token rides along untouched: it
- * is the data layer's post-bump cache-write token, and this adapter neither
- * derives nor alters it — pure pass-through to the fetcher's mirror.
+ * [JellyfinApiEngine] the client does; it adds no state of its own).
  */
 internal class HomeSectionsCachePortAdapter(
     private val engine: JellyfinApiEngine,
@@ -34,13 +38,8 @@ internal class HomeSectionsCachePortAdapter(
         fetcher.invalidateCaches()
     }
 
-    override fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
-        fetcher.invalidateDiscoverRow(rowId, generation)
-    }
-
-    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
-        fetcher.seedDiscoverRow(row, items, generation)
-    }
+    override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> =
+        fetcher.rerollDiscoverRow(row)
 
     override suspend fun refreshHomeSection(
         section: HomeSection,

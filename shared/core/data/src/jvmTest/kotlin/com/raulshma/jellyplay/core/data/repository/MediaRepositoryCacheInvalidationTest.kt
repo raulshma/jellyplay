@@ -101,8 +101,8 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `getMediaDetail caches result on repeat calls`() = runBlocking {
         val repository = buildRepository()
-        repository.getMediaDetail("item-1")
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -112,15 +112,15 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
+        repository.getMediaDetail("item-1", force = false)
 
         // Re-emit the same identity (new pair object, same ids) — no
         // invalidation expected.
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -130,13 +130,13 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-B"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -146,13 +146,13 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         sessionFlow.value = ActiveSession(serverInfo("server-2"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -166,7 +166,7 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         // Re-emit the same identity (new pair object, same ids) — still a
@@ -174,7 +174,7 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -184,13 +184,13 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         sessionFlow.value = null
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 

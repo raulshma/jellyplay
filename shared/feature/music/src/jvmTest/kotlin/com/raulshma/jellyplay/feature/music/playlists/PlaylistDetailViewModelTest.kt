@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.feature.music.playlists
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -48,7 +49,8 @@ class PlaylistDetailViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val detailFeed: DetailFeed = mockk()
+    private val userDataChanges: UserDataChanges = mockk()
     private val playlistRepository: PlaylistRepository = mockk()
     private val audioQueueFacade: MusicQueuePlayer = mockk()
 
@@ -69,9 +71,10 @@ class PlaylistDetailViewModelTest {
         coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns AudioQueueOutcome.Started(emptyList(), 0)
         coEvery { audioQueueFacade.enqueuePlaylistItem(any()) } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         viewModel = PlaylistDetailViewModel(
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
+            userDataChanges = userDataChanges,
             playlistRepository = playlistRepository,
             audioQueueFacade = audioQueueFacade,
         )
@@ -134,7 +137,7 @@ class PlaylistDetailViewModelTest {
     fun load_failure_setsErrorAndClearsLoading() = runTest(mainDispatcher) {
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.failure(RuntimeException("gone"))
-        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "X", mediaType = MediaType.MUSIC)))
 
         viewModel.load("pl1")
@@ -147,7 +150,7 @@ class PlaylistDetailViewModelTest {
     @Test
     fun load_withoutAName_resolvesItFromTheDetailEndpoint() = runTest(mainDispatcher) {
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
-        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "Deep Link", mediaType = MediaType.MUSIC)))
 
         viewModel.load("pl1", playlistName = null)
@@ -162,7 +165,7 @@ class PlaylistDetailViewModelTest {
         loadPlaylist()
         advanceUntilIdle()
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
-        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "My Playlist", mediaType = MediaType.MUSIC)))
 
         viewModel.refreshPlaylist("pl1")
@@ -171,7 +174,7 @@ class PlaylistDetailViewModelTest {
         // playlistName is known, so refresh goes through the named (fast) path…
         coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
         // …but the detail read (and its force flag) is unused there.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     // ── Re-entry guard + deferred refresh (the album host's fixture shape) ───
@@ -197,7 +200,7 @@ class PlaylistDetailViewModelTest {
         // error, so the re-entry guard must not skip.
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns
             Result.failure(RuntimeException("gone"))
-        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "X", mediaType = MediaType.MUSIC)))
         viewModel.load("pl1")
         advanceUntilIdle()
@@ -219,7 +222,7 @@ class PlaylistDetailViewModelTest {
         // error owns the screen (the screen renders ErrorScreen whenever
         // error != null && items.isEmpty()) and no half-pair is published.
         coEvery { playlistRepository.getPlaylistItems("pl1", any(), any()) } returns Result.success(items)
-        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.failure(RuntimeException("no title"))
 
         viewModel.load("pl1")
@@ -251,7 +254,7 @@ class PlaylistDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 2) { playlistRepository.getPlaylistItems("pl1", any(), any()) }
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         assertFalse(viewModel.isLoading)
         assertNull(viewModel.error)
         assertEquals(freshItems, viewModel.items)
@@ -461,7 +464,7 @@ class PlaylistDetailViewModelTest {
         // The nameless load path also resolves the playlist name; stub it so
         // the load coroutine completes cleanly instead of dying on an
         // unstubbed mock call.
-        coEvery { mediaRepository.getMediaDetail("pl1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("pl1", any()) } returns
             Result.success(MediaDetail(item = MediaItem(id = "pl1", name = "X", mediaType = MediaType.MUSIC)))
         viewModel.load("pl1")
         advanceUntilIdle()

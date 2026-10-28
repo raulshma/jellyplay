@@ -39,7 +39,7 @@ class PlaybackOutboxDrainerImpl(
      * leave in-memory caches serving the pre-drain view to an open detail
      * screen (#153 home/detail coherence) — and announces each delivered flip
      * from inside the flip. Koin-bound to the same MediaRepositoryImpl single
-     * the union exposes (the family-seam aliasing).
+     * every family seam aliases (the family-seam aliasing).
      */
     private val userDataWrites: UserDataWriteOperations,
     /**
@@ -52,8 +52,8 @@ class PlaybackOutboxDrainerImpl(
      */
     private val userDataAnnouncer: UserDataAnnouncer,
     /**
-     * The post-drain wholesale cache drop. Deliberately off the public
-     * [MediaRepository] interface — it arrives through the narrow
+     * The post-drain wholesale cache drop. Deliberately off every repository
+     * family — it arrives through the narrow
      * [MediaCacheInvalidator] port, Koin-bound to the same
      * MediaRepositoryImpl single as [userDataWrites].
      */

@@ -78,7 +78,10 @@ import java.util.concurrent.atomic.AtomicLong
 //    no longer crosses the module boundary after this move
 //    (MultiConnectionDownloadStrategy precedent).
 class UnifiedMediaDetailProviderImpl(
-    private val mediaRepository: MediaRepository,
+    /** The detail fetch (the detail-read family seam). */
+    private val detailFeed: DetailFeed,
+    /** The album-tracks read (the music-catalogue family seam). */
+    private val musicCatalogue: MusicCatalogue,
     // The per-type "which caches does this detail affect" dispatch is
     // owned by the repository; this internal seam (same module) is how the
     // force-refresh path reaches it without the repo exporting cache knobs.
@@ -234,7 +237,8 @@ class UnifiedMediaDetailProviderImpl(
          */
         private val resolver = DetailContentResolver(
             itemId = itemId,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
+            musicCatalogue = musicCatalogue,
             cacheInvalidation = cacheInvalidation,
             offlineRepository = offlineRepository,
             downloadRepository = downloadRepository,

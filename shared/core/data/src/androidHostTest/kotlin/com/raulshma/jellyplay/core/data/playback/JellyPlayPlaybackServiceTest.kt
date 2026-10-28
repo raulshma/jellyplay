@@ -7,7 +7,8 @@ import androidx.media3.session.MediaSession.ControllerInfo
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -73,7 +74,8 @@ class JellyPlayPlaybackServiceTest {
         }
         browser = AudioLibraryBrowser(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-            mediaRepository = mockk<MediaRepository>(relaxed = true),
+            libraryFeed = mockk<LibraryFeed>(relaxed = true),
+            detailFeed = mockk<DetailFeed>(relaxed = true),
             musicCatalogue = mockk<MusicCatalogue>(relaxed = true),
             libraryApiClient = mockk<LibraryApiClient>(relaxed = true),
             playlistRepository = mockk<PlaylistRepository>(relaxed = true),

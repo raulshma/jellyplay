@@ -4,10 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -19,7 +21,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 
 internal class StudioDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    private val mediaRepository: MediaRepository,
+    /** The studio's paged filmography (the library/browse family seam). */
+    private val libraryFeed: LibraryFeed,
+    /** The server user-data change feed (the grid's deferred-refresh arming). */
+    private val userDataChanges: UserDataChanges,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     /** The item-based artwork accessor set the studio grid renders through. */
@@ -37,7 +42,7 @@ internal class StudioDetailViewModel(
      * this VM keeps only its name-sorted studio paged source.
      */
     private val quickActions = pagedGridQuickActions(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
     )
@@ -59,11 +64,13 @@ internal class StudioDetailViewModel(
         removeDownloadItem = quickActions.removeDownloadItem,
         source = { trigger ->
             trigger.flatMapLatest {
-                mediaRepository.getMediaItemsPaged(
+                libraryFeed.getMediaItemsPaged(
+                    parentId = null,
                     filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                         sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
                     ),
                     studioIds = listOf(studioId),
+                    kindFilter = ItemKindFilter.TOP_LEVEL,
                 )
             }
         },

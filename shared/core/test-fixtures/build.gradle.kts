@@ -42,6 +42,24 @@ kotlin {
         // a future common-safe double would add a commonMain file when a
         // commonTest consumer actually exists.
 
+        getByName("commonMain").dependencies {
+            // FakeHomeSectionSources — the first common-safe double, promoted
+            // here when its first commonTest consumer (core:network's fetcher
+            // suite) materialized, per the source-set rule above. The
+            // HomeSectionSources port it implements (core:network commonMain).
+            // implementation, not api: every consumer already carries its own
+            // core:network edge — this module must never become a reason to
+            // widen one.
+            implementation(project(":shared:core:network"))
+            // The model types (MediaItem/LibraryFolder/SearchResult/
+            // DiscoverRowConfig, core:model commonMain) the port signatures
+            // carry. Declared explicitly to match the jvmShared house style
+            // below (network api's the same module; this pin stays literal).
+            implementation(project(":shared:core:model"))
+            // CompletableDeferred behind the call gates the fetcher suite
+            // parks fetches on.
+            implementation(libs.kotlinx.coroutines.core)
+        }
         getByName("jvmShared").dependencies {
             // TimeSource (core:model jvmShared) FakeTimeSource
             // implements. implementation, not api: every consumer already

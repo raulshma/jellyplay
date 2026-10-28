@@ -4,11 +4,11 @@ import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsResult
 
 /**
- * Lyrics concern of the media domain. Segregated from [MediaRepository]
+ * Lyrics concern of the media domain. Segregated from the media repository
  * so consumers that only fetch/search lyrics — e.g. `AudioLyricsManager` — depend
- * on this narrow contract instead of the full media God-interface. [MediaRepository]
- * extends this interface, therefore `MediaRepositoryImpl` satisfies it and the
- * Koin alias single in dataJvmModule provides the same singleton instance.
+ * on this narrow contract instead of the wide media surface. `MediaRepositoryImpl`
+ * satisfies it and the Koin alias single in dataJvmModule provides the same
+ * singleton instance.
  */
 interface LyricsRepository {
 

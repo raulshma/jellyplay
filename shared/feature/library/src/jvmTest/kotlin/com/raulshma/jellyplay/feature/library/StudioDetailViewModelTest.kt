@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.feature.library
 
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -37,7 +38,8 @@ class StudioDetailViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var quickDownloadActions: QuickDownloadActions
@@ -45,7 +47,8 @@ class StudioDetailViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
@@ -53,7 +56,7 @@ class StudioDetailViewModelTest {
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
         every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
+        every { userDataChanges.userDataChanges } returns MutableSharedFlow(extraBufferCapacity = 16)
     }
 
     @AfterTest
@@ -73,7 +76,8 @@ class StudioDetailViewModelTest {
         )
         return StudioDetailViewModel(
             savedStateHandle = savedStateHandle,
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
+            userDataChanges = userDataChanges,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
             artworkUrls = ArtworkUrls.EMPTY,
@@ -91,9 +95,11 @@ class StudioDetailViewModelTest {
         advanceUntilIdle()
 
         verify {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
+                parentId = any(),
                 studioIds = listOf(expectedStudioId),
                 filters = match { it.sortBy == SortOption.SORT_NAME },
+                kindFilter = any(),
             )
         }
         collector.cancel()
@@ -115,9 +121,11 @@ class StudioDetailViewModelTest {
         advanceUntilIdle()
 
         verify {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
+                parentId = any(),
                 studioIds = listOf("my-studio-id"),
                 filters = any(),
+                kindFilter = any(),
             )
         }
         collector.cancel()
@@ -130,9 +138,11 @@ class StudioDetailViewModelTest {
         advanceUntilIdle()
 
         verify {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
+                parentId = any(),
                 studioIds = any(),
                 filters = match { it.sortBy == SortOption.SORT_NAME },
+                kindFilter = any(),
             )
         }
         collector.cancel()

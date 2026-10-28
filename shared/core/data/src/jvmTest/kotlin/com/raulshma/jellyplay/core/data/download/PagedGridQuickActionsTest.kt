@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.download
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -37,7 +36,6 @@ class PagedGridQuickActionsTest {
     private val userDataEvents =
         MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val userDataMutator: UserDataMutator = mockk(relaxed = true)
     private val quickDownloadActions: QuickDownloadActions = mockk(relaxed = true)
     private val messenger: DownloadOutcomeMessenger = mockk(relaxed = true)

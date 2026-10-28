@@ -124,7 +124,8 @@ val musicModule: Module = module {
     }
     viewModel {
         PlaylistDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            userDataChanges = get(),
             playlistRepository = get(),
             audioQueueFacade = get(),
         )
@@ -139,7 +140,8 @@ val musicModule: Module = module {
     }
     viewModel {
         AlbumDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            userDataChanges = get(),
             musicCatalogue = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
@@ -150,7 +152,8 @@ val musicModule: Module = module {
     }
     viewModel {
         ArtistDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            userDataChanges = get(),
             libraryApiClient = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),

@@ -7,7 +7,8 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -61,7 +62,8 @@ import java.util.concurrent.atomic.AtomicInteger
 @Config(sdk = [34])
 class AudioLibraryBrowserTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val libraryFeed: LibraryFeed = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val musicCatalogue: MusicCatalogue = mockk(relaxed = true)
     private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val playlistRepository: PlaylistRepository = mockk(relaxed = true)
@@ -79,7 +81,8 @@ class AudioLibraryBrowserTest {
 
     private fun browser() = AudioLibraryBrowser(
         scope = scope,
-        mediaRepository = mediaRepository,
+        libraryFeed = libraryFeed,
+        detailFeed = detailFeed,
         musicCatalogue = musicCatalogue,
         libraryApiClient = libraryApiClient,
         playlistRepository = playlistRepository,
@@ -115,7 +118,7 @@ class AudioLibraryBrowserTest {
     /** All tracks resolve locally with per-track delay (later tracks faster). */
     private fun stubLocalResolves(ids: List<String>, droppedId: String? = null) {
         val delays = ids.withIndex().associate { (index, id) -> id to 400L - index * 40L }
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns
             Result.failure(IllegalStateException("offline in this test"))
         coEvery { playbackSourceResolver.resolveLocalSource(any()) } coAnswers {
             val id = firstArg<String>()
@@ -271,7 +274,7 @@ class AudioLibraryBrowserTest {
 
     @Test
     fun `genres folder lists genre nodes and genre children filter by name`() {
-        coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(
             listOf(Genre(id = "g1", name = "Rock"), Genre(id = "g2", name = "Jazz"))
         )
         stubCollectionReads(track("x1"))
@@ -294,7 +297,7 @@ class AudioLibraryBrowserTest {
         // real empties for every arm this test browses into.
         coEvery { musicCatalogue.getAlbumTracks(any(), any()) } returns Result.success(emptyList())
         coEvery { libraryApiClient.getArtistAlbums(any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(emptyList())
         coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
         val browser = browser()
 
@@ -369,7 +372,7 @@ class AudioLibraryBrowserTest {
             .get(5, TimeUnit.SECONDS)
         assertEquals(LibraryResult.RESULT_ERROR_BAD_VALUE, blank.resultCode)
 
-        coEvery { mediaRepository.search(any(), any(), any(), any()) } returns Result.success(
+        coEvery { libraryFeed.search(any(), any(), any(), any()) } returns Result.success(
             SearchResult(
                 items = listOf(
                     MediaItem(id = "ar1", name = "Artist One", mediaType = MediaType.ARTIST),

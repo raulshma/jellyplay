@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import kotlinx.coroutines.CompletableDeferred
+import com.raulshma.jellyplay.core.testfixtures.FakeHomeSectionSources
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -48,11 +48,11 @@ import kotlin.test.assertTrue
  *
  * Also pins the custom discover rows of BOTH sources, which fetch here in one
  * path since the feature layer's parallel reimplementation died:
- *  - JELLYFIN rows: per-row memo behind the dice-roll generation guard (seed
- *    / stall-guard — the repo-owned cache-write token the fetcher mirrors;
- *    the tests feed the mirror through the same verb parameters production
- *    does) and the shared engine's force nuance (a failed forced fetch
- *    keeps the previous entry serving).
+ *  - JELLYFIN rows: per-row memo behind the dice-roll generation guard (the
+ *    fetcher-owned counter the roll operation bumps; the tests drive the
+ *    same complete [HomeSectionsFetcher.rerollDiscoverRow] op production's
+ *    port hands down) and the shared engine's force nuance (a failed forced
+ *    fetch keeps the previous entry serving).
  *  - SEERR rows: the whole-group TTL gate, last-known-good across a total
  *    failure (and the gate staying unstamped so the next ordinary fetch
  *    retries), drop-failed-rows on partial success, force-as-invalidation,
@@ -64,83 +64,10 @@ import kotlin.test.assertTrue
  */
 class HomeSectionsFetcherTest {
 
-    private class FakeHomeSectionSources : HomeSectionSources {
-
-        /** Leaf calls in issue order, e.g. "latest:f1:16:null". */
-        val calls = mutableListOf<String>()
-
-        /** Created by a test BEFORE the call happens; the call suspends until completed. */
-        private val returnGates = mutableMapOf<String, CompletableDeferred<Unit>>()
-
-        /** Pre-register a completion gate for the call named [key]. */
-        fun gate(key: String): CompletableDeferred<Unit> = returnGates.getOrPut(key) { CompletableDeferred() }
-
-        /** Calls named [key] THROW this instead of returning (fatal-leaf paths, e.g. a failing pin). */
-        val throwables = mutableMapOf<String, Throwable>()
-
-        val continueWatchingResults = ArrayDeque<Result<List<MediaItem>>>()
-        val continueReadingResults = ArrayDeque<Result<List<MediaItem>>>()
-        val nextUpResults = ArrayDeque<Result<List<MediaItem>>>()
-        val upcomingResults = ArrayDeque<Result<List<MediaItem>>>()
-        val foldersResults = ArrayDeque<Result<List<LibraryFolder>>>()
-        val latestResults = ArrayDeque<Result<List<MediaItem>>>()
-        val similarResults = ArrayDeque<Result<List<MediaItem>>>()
-        val suggestionsResults = ArrayDeque<Result<SearchResult>>()
-        val collectionResults = ArrayDeque<Result<SearchResult>>()
-
-        private suspend fun <T> resolve(queue: ArrayDeque<Result<T>>, key: String, empty: () -> T): Result<T> {
-            calls += key
-            // The outcome is bound at ISSUE time; a registered gate only
-            // delays its DELIVERY (so scrambled gate completion cannot swap
-            // which caller gets which scripted result).
-            val scripted = queue.removeFirstOrNull() ?: Result.success(empty())
-            returnGates[key]?.await()
-            throwables[key]?.let { throw it }
-            return scripted
-        }
-
-        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>> =
-            resolve(continueWatchingResults, "cw:$limit:$classicRows:$excludeActiveSessions") { emptyList() }
-
-        override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> =
-            resolve(continueReadingResults, "cr:$limit") { emptyList() }
-
-        override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> =
-            resolve(nextUpResults, "nu:$limit:$enableRewatching:$maxDays") { emptyList() }
-
-        override suspend fun getUpcoming(userId: String?, parentId: String?, limit: Int): Result<List<MediaItem>> =
-            resolve(upcomingResults, "upcoming:$userId:$parentId:$limit") { emptyList() }
-
-        override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
-            resolve(foldersResults, "folders") { emptyList() }
-
-        override suspend fun getLatestMedia(parentId: String, limit: Int, classicEpisodePool: Int?): Result<List<MediaItem>> =
-            resolve(latestResults, "latest:$parentId:$limit:$classicEpisodePool") { emptyList() }
-
-        override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
-            resolve(similarResults, "similar:$itemId:$limit") { emptyList() }
-
-        override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> =
-            resolve(suggestionsResults, "suggestions:$limit") { SearchResult(emptyList(), 0, 0) }
-
-        override suspend fun getCollectionItems(collectionId: String, startIndex: Int, limit: Int): Result<SearchResult> =
-            resolve(collectionResults, "collection:$collectionId:$limit") { SearchResult(emptyList(), 0, 0) }
-
-        // Unused by the choreography under test — fail loudly if ever reached.
-        override suspend fun getFavorites(mediaTypes: List<MediaType>?, limit: Int, startIndex: Int): Result<SearchResult> =
-            throw UnsupportedOperationException()
-
-        override suspend fun getItemsByGenre(genreId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult> =
-            throw UnsupportedOperationException()
-
-        override suspend fun getItemsByStudio(studioId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult> =
-            throw UnsupportedOperationException()
-
-        val discoverRowResults = ArrayDeque<Result<List<MediaItem>>>()
-
-        override suspend fun getDiscoverRowItems(row: com.raulshma.jellyplay.core.model.DiscoverRowConfig): Result<List<MediaItem>> =
-            resolve(discoverRowResults, "discover:${row.id}:${row.limit}") { emptyList() }
-    }
+    // The transport double is the shared FakeHomeSectionSources
+    // (:shared:core:test-fixtures) — this suite's former private copy,
+    // promoted verbatim when core:data's real-stack suite needed the same
+    // shape (calls log, per-call gates, throwables map, scripted queues).
 
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)
 
@@ -711,14 +638,16 @@ class HomeSectionsFetcherTest {
             discoverRows = listOf(row),
         )
 
-        // The dice roll's commit: seed the freshly rolled items as if fetched.
-        // The generation value is the data layer's token passed through — any
-        // value works here (the fetch below starts after the seed, so its
-        // guard capture already observes it).
-        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")), generation = HomeWriteGeneration.of(1))
+        // The dice roll's commit: the complete operation (drop → raw fetch →
+        // seed) memoises the freshly rolled items under the roll's commit
+        // generation — exactly the choreography the port hands down.
+        fake.discoverRowResults += Result.success(listOf(item("rolled-1"), item("rolled-2")))
+        f.rerollDiscoverRow(row)
         val after = f.fetch(query)
 
-        assertEquals(0, fake.calls.count { it.startsWith("discover:") })
+        // The roll's own raw fetch was the ONLY discover call: the fetch
+        // served the row from the seeded memo.
+        assertEquals(1, fake.calls.count { it.startsWith("discover:") })
         assertEquals(
             listOf("rolled-1", "rolled-2"),
             discoverRows(after).single().items.map { it.id },
@@ -729,6 +658,7 @@ class HomeSectionsFetcherTest {
     fun `a discover sub-call in flight when the roll lands must not memoise its pre-roll response`() = runTest {
         val fake = FakeHomeSectionSources()
         fake.discoverRowResults += Result.success(listOf(item("pre-roll-1"), item("pre-roll-2")))
+        fake.discoverRowResults += Result.success(listOf(item("rolled-1")))
         val f = fetcher(fake)
         val row = discoverRow("r1")
         val query = HomeSectionQuery(
@@ -742,26 +672,62 @@ class HomeSectionsFetcherTest {
         // rolls) — HERE the claim is the cache: its pre-roll response must not
         // overwrite the seed and revert the row for the TTL window.
         //
-        // Retargeted for the one-token consolidation: the fetcher owns no
-        // counter — the guard mirror is fed by the values the test hands the
-        // two mutating verbs, exactly what the repo funnel passes in
-        // production (post-bump, strictly advancing). The in-flight sub-call
-        // captured the pre-roll generation (0); the roll's verbs deliver 1
-        // then 2, so the stale write must be refused (0 ≠ 2) — same behavior
-        // the old internal counter pinned.
+        // The roll runs as ONE complete operation inside the fetcher: while
+        // the sub-call is parked on the (consumed, one-gate-per-call) gate,
+        // the roll's drop-half bump + drop run, its own raw fetch proceeds
+        // ungated, and the seed-half bump + seed commit — so the parked
+        // sub-call's late write must be refused (captured 0 ≠ current 2),
+        // exactly what the two bumps of the fetcher-owned counter buy.
         val gate = fake.gate("discover:r1:${row.limit}")
         val first = launch { f.fetch(query) }
         runCurrent() // the sub-call is now parked on the gate
-        f.invalidateDiscoverRow("r1", generation = HomeWriteGeneration.of(1))
-        f.seedDiscoverRow(row, listOf(item("rolled-1")), generation = HomeWriteGeneration.of(2))
+        val roll = launch { f.rerollDiscoverRow(row) }
+        runCurrent() // the roll completed: drop bump → raw fetch → seed bump + seed
         gate.complete(Unit)
         first.join()
+        roll.join()
 
         // TTL is fresh and the only memo entry is the seed: the next fetch
-        // serves the rolled items with zero new port calls.
+        // serves the rolled items with zero new port calls (the parked
+        // sub-call's pre-roll response was refused, not memoised).
         val after = f.fetch(query)
-        assertEquals(1, fake.calls.count { it.startsWith("discover:") })
+        assertEquals(2, fake.calls.count { it.startsWith("discover:") })
         assertEquals(listOf("rolled-1"), discoverRows(after).single().items.map { it.id })
+    }
+
+    @Test
+    fun `a failed or empty roll skips the commit - the memo drop stands`() = runTest {
+        // The operation's own commit rule (was the repo funnel's early
+        // return): a failed or empty fetch leaves nothing behind but the
+        // pre-fetch drop — the next home fetch re-queries the row (re-rolls)
+        // instead of replaying or pinning pre-roll items.
+        val fake = FakeHomeSectionSources()
+        fake.discoverRowResults += Result.success(listOf(item("pre-roll")))
+        fake.discoverRowResults += Result.failure(RuntimeException("blip"))
+        fake.discoverRowResults += Result.success(listOf(item("re-rolled-1")))
+        fake.discoverRowResults += Result.success(emptyList())
+        fake.discoverRowResults += Result.success(listOf(item("re-rolled-2")))
+        val f = fetcher(fake)
+        val row = discoverRow("r1")
+        val query = HomeSectionQuery(
+            enabledSections = setOf(HomeSectionType.DISCOVER),
+            discoverRows = listOf(row),
+        )
+
+        f.fetch(query)                       // pre-roll memoised
+        assertTrue(f.rerollDiscoverRow(row).isFailure)
+        assertEquals(
+            listOf("re-rolled-1"),
+            discoverRows(f.fetch(query)).single().items.map { it.id },
+            "the failed roll's drop stands: the row re-queried",
+        )
+        assertTrue(f.rerollDiscoverRow(row).getOrNull().orEmpty().isEmpty())
+        assertEquals(
+            listOf("re-rolled-2"),
+            discoverRows(f.fetch(query)).single().items.map { it.id },
+            "the empty roll's drop stands: the row re-queried",
+        )
+        assertEquals(5, fake.calls.count { it.startsWith("discover:") })
     }
 
     @Test

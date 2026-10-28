@@ -47,7 +47,7 @@ class FavoritesViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var libraryFeed: LibraryFeed
-    private lateinit var prefetcherRepo: com.raulshma.jellyplay.core.data.repository.MediaRepository
+    private lateinit var prefetcherReads: com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var quickDownloadActions: QuickDownloadActions
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -65,7 +65,7 @@ class FavoritesViewModelTest {
         libraryFeed = mockk(relaxed = true)
         // The photo-folder prefetcher still reads the union (its folder-url
         // read has no LibraryFeed member); the test asserts that seam.
-        prefetcherRepo = mockk(relaxed = true)
+        prefetcherReads = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
@@ -81,7 +81,7 @@ class FavoritesViewModelTest {
             quickDownloadActions = quickDownloadActions,
             // Real prefetcher over the mocked repository: the photo-folder
             // prefetch tests assert the repository seam, not the prefetcher.
-            photoFolderPrefetcher = PhotoFolderPrefetcher(prefetcherRepo),
+            photoFolderPrefetcher = PhotoFolderPrefetcher(prefetcherReads),
         )
     }
 
@@ -256,21 +256,21 @@ class FavoritesViewModelTest {
     fun `prefetchPhotoFolderChildUrls fetches only photo folders and merges results`() = runTest {
         val folder = MediaItem(id = "pf-1", name = "Folder", mediaType = MediaType.PHOTO_FOLDER)
         val movie = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
-        coEvery { prefetcherRepo.getPhotoFolderChildImageUrls("pf-1") } returns listOf("u1", "u2")
+        coEvery { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) } returns listOf("u1", "u2")
 
         viewModel.prefetchPhotoFolderChildUrls(listOf(folder, movie))
         advanceUntilIdle()
 
         // Only the photo folder is fetched — regular items never hit the seam.
-        coVerify(exactly = 1) { prefetcherRepo.getPhotoFolderChildImageUrls("pf-1") }
-        coVerify(exactly = 0) { prefetcherRepo.getPhotoFolderChildImageUrls("m1") }
+        coVerify(exactly = 1) { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) }
+        coVerify(exactly = 0) { prefetcherReads.getPhotoFolderChildImageUrls("m1", any()) }
         assertEquals(listOf("u1", "u2"), viewModel.photoFolderChildUrlsFor("pf-1").first())
     }
 
     @Test
     fun `prefetchPhotoFolderChildUrls skips folders already in the map`() = runTest {
         val folder = MediaItem(id = "pf-1", name = "Folder", mediaType = MediaType.PHOTO_FOLDER)
-        coEvery { prefetcherRepo.getPhotoFolderChildImageUrls("pf-1") } returns listOf("u1")
+        coEvery { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) } returns listOf("u1")
 
         viewModel.prefetchPhotoFolderChildUrls(listOf(folder))
         advanceUntilIdle()
@@ -279,7 +279,7 @@ class FavoritesViewModelTest {
 
         // Recomposition re-fires the prefetch; the already-fetched folder is
         // not re-fetched and the merged state keeps the original urls.
-        coVerify(exactly = 1) { prefetcherRepo.getPhotoFolderChildImageUrls("pf-1") }
+        coVerify(exactly = 1) { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) }
         assertEquals(listOf("u1"), viewModel.photoFolderChildUrlsFor("pf-1").first())
     }
 
@@ -290,7 +290,7 @@ class FavoritesViewModelTest {
         viewModel.prefetchPhotoFolderChildUrls(listOf(movie))
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { prefetcherRepo.getPhotoFolderChildImageUrls(any()) }
+        coVerify(exactly = 0) { prefetcherReads.getPhotoFolderChildImageUrls(any(), any()) }
         assertEquals(emptyList(), viewModel.photoFolderChildUrlsFor("m1").first())
     }
 

@@ -30,7 +30,6 @@ import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
-import com.raulshma.jellyplay.core.network.library.HomeWriteGeneration
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
@@ -75,13 +74,18 @@ class MediaRepositoryImpl internal constructor(
      */
     private val collectionApiClient: CollectionApiClient,
     /**
-     * The home hot-path's cache-maintenance verbs (sub-call cache drop, the
-     * dice roll's per-row drop + seed) — the narrow network-layer port beside
+     * The home hot-path's cache-maintenance verb + the two COMPLETE
+     * row-mutation operations (the dice roll's invalidate → fetch → seed, the
+     * single-row refetch) — the narrow network-layer port beside
      * [com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher], NOT
      * the wide [LibraryApiClient]: cache management is not API surface, so the
-     * write/roll paths below depend on the port alone. Same underlying single
-     * (the client impl adapts to the port), so ordering and epochs are exactly
-     * what they were — see the roll protocol on [HomeFeed.rerollDiscoverRow].
+     * write/roll paths below depend on the port alone. The operations own the
+     * network-side caches end-to-end (the fetcher bumps its own write guard
+     * inside them); this repo answers only for its assembled-payload cache,
+     * bumped when an operation reports a row changed — no token crosses the
+     * seam. Same underlying single (the client impl adapts to the port), so
+     * ordering and epochs are exactly what they were — see the roll protocol
+     * on [HomeFeed.rerollDiscoverRow].
      */
     private val homeSectionsCachePort: HomeSectionsCachePort,
     /**
@@ -91,8 +95,8 @@ class MediaRepositoryImpl internal constructor(
      * reads). Injected (not constructed) so `getHomeSections`' persist hook,
      * `getCachedHomeSections` and `getOfflineHomeLayout` delegate to it, the
      * same shape as the [episodeCatalogue] delegation. The store depends on
-     * the DAO + `HomeSession` + `TimeSource` only (never on
-     * `MediaRepository`), so this edge does NOT form a DI cycle — both are
+     * the DAO + `HomeSession` + `TimeSource` only (never on this class),
+     * so this edge does NOT form a DI cycle — both are
      * Koin singles in `core:data` and the constructor edge fixes the
      * direction. The IN-MEMORY half ([homeSectionsCache], the cache-write
      * generation, the SWR layering) stays here.
@@ -105,9 +109,10 @@ class MediaRepositoryImpl internal constructor(
      * invalidation paths can drop a series' snapshot through it
      * ([invalidateSeriesCache]/[invalidateFor]) — the catalogue is the
      * read surface's own dependency (its consumers inject
-     * [EpisodeCatalogue] directly; the union carries no series reads).
+     * [EpisodeCatalogue] directly; no repository family carries series
+     * reads).
      * The catalogue depends on `LibraryApiClient` + `OfflineRepository` only
-     * (never on `MediaRepository`), so this edge does NOT form a DI cycle —
+     * (never on this class), so this edge does NOT form a DI cycle —
      * both are Koin singles in `core:data` and the constructor edge fixes
      * the direction.
      */
@@ -161,18 +166,21 @@ class MediaRepositoryImpl internal constructor(
      * [RecentLocalUserDataWrites] record the refresher's echo demotion
      * consults. A leaf single, so the write paths UPSTREAM of this
      * repository's graph (PlayedStateSyncImpl, PlaybackRepositoryImpl) can
-     * announce through it eagerly, with no `Lazy<MediaRepository>` deferral
+     * announce through it eagerly, with no lazy-deferral cycle-breaking
      * needed.
      */
     private val userDataAnnouncer: UserDataAnnouncer,
-) : MediaRepository,
-    // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
-    // same single carries the music-catalogue and user-data-write families,
-    // the home-feed family, the user-data change feed, the library/browse
-    // family, the detail-read family and the collection-verbs family
-    // alongside the union — [MusicCatalogue] / [UserDataWriteOperations] /
+) :
+    // The family seams over one impl (the SonarrSeriesOperations
+    // over-the-impl pattern): the same single carries the music-catalogue
+    // and user-data-write families, the home-feed family, the user-data
+    // change feed, the library/browse family, the detail-read family, the
+    // collection-verbs family, the series-notification and photo-folder
+    // one-member seams — [MusicCatalogue] / [UserDataWriteOperations] /
     // [HomeFeed] / [UserDataChanges] / [LibraryFeed] / [DetailFeed] /
-    // [CollectionOperations].
+    // [CollectionOperations] / [SeriesNotificationReads] /
+    // [PhotoFolderReads]. The `MediaRepository` union they used to be
+    // dual-declared against is gone; consumers inject the families.
     MusicCatalogue,
     UserDataWriteOperations,
     HomeFeed,
@@ -181,6 +189,7 @@ class MediaRepositoryImpl internal constructor(
     DetailFeed,
     CollectionOperations,
     SeriesNotificationReads,
+    PhotoFolderReads,
     MediaRepositoryCacheInvalidation,
     MediaCatalogueEnrichments,
     MediaCacheInvalidator {
@@ -392,18 +401,20 @@ class MediaRepositoryImpl internal constructor(
     )
 
     /**
-     * THE ONE home cache-write generation token. The single monotonic counter
-     * guarding every home cache write in the pipeline: this class's
-     * assembled-payload cache reads it as the write guard in [getHomeSections],
-     * and the network layer's per-row discover memo observes the SAME token
-     * through the [HomeSectionsCachePort] verbs' [HomeWriteGeneration]
-     * parameter — one owner, one value, two guarded caches. Bumped only by
-     * [bumpHomeWriteGeneration]; the protocol's ordering rules (the roll's
-     * three race windows, bump-at-invalidate-AND-commit) live on
-     * [HomeFeed.rerollDiscoverRow], the single owner. Same idiom as
-     * [MediaRepositoryInternals]' detail epoch. (Named "generation" to say
-     * what it owns — every home CACHE WRITE — and to leave "epoch" to the
-     * feature layer's identity-scoped roll generations, a different axis.)
+     * THE ONE home cache-write generation token of THIS layer: a repo-local
+     * monotonic counter guarding the assembled-payload cache's writes in
+     * [getHomeSections] (read by [homeSectionsFlight]'s stall guard), bumped
+     * only by [bumpHomeWriteGeneration] — which the row-mutation paths run
+     * when the network layer reports a row changed (the roll operation
+     * returning, the single-row refresh succeeding). The network layer's
+     * per-row discover memo keeps its OWN guard inside the fetcher's roll
+     * operation — the token no longer crosses the module seam, so the two
+     * guarded caches are synchronized by the hand-off ordering (bump AFTER
+     * the operation that mutated the row) instead of a shared value. Same
+     * idiom as [MediaRepositoryInternals]' detail epoch. (Named "generation"
+     * to say what it owns — every home CACHE WRITE on this side — and to
+     * leave "epoch" to the feature layer's identity-scoped roll generations,
+     * a different axis.)
      */
     private val homeWriteGeneration = java.util.concurrent.atomic.AtomicLong(0L)
 
@@ -426,14 +437,16 @@ class MediaRepositoryImpl internal constructor(
      * The ONLY writer of [homeWriteGeneration]: bump + assembled-payload drop
      * as one indivisible unit, so no call site can clear the cache without
      * stall-guarding the in-flight fetches racing it (or bump without
-     * evicting). The roll/refresh paths' three mutation points route through
-     * here — [refreshHomeSection] on success, and the dice roll's
-     * invalidate/commit halves — and each then hands the post-bump value down
-     * to the network layer through the port verbs' `generation` parameter
-     * where a row memo is involved. The wholesale drops that are NOT cache-
-     * write generations — [invalidateCaches] and the identity transitions —
-     * clear [homeSectionsCache] without this funnel: they void by identity,
-     * not by ordering, exactly as before the funnel existed.
+     * evicting). The row-mutation paths route through here AFTER the network
+     * operation hands its outcome back — [refreshHomeSection] on success, the
+     * dice roll on every completed attempt (the roll mutates the row memo
+     * inside the network layer on failure too: the memo is dropped even when
+     * the fresh fetch failed, so the cached assembled payload — still
+     * carrying the pre-roll row — must never survive to be replayed). The
+     * wholesale drops that are NOT cache-write generations —
+     * [invalidateCaches] and the identity transitions — clear
+     * [homeSectionsCache] without this funnel: they void by identity, not by
+     * ordering, exactly as before the funnel existed.
      */
     private fun bumpHomeWriteGeneration() {
         homeWriteGeneration.incrementAndGet()
@@ -576,8 +589,9 @@ class MediaRepositoryImpl internal constructor(
         force: Boolean,
     ): Result<HomeSection?> =
         // Straight to the port (the network fetcher owns the per-type
-        // mapping); no assembled-payload cache or SWR persist on this path —
-        // see the interface KDoc for why a single-row result must bypass both.
+        // mapping AND the sub-call memo writes); no assembled-payload cache
+        // or SWR persist on this path — see the interface KDoc for why a
+        // single-row result must bypass both.
         homeSectionsCachePort.refreshHomeSection(section, query, mergeNextUpIntoContinueWatching, force).also { result ->
             // Evict the assembled whole-plan payload on success: the pull just
             // changed one row server-side, and the in-memory entry (60s TTL)
@@ -593,60 +607,33 @@ class MediaRepositoryImpl internal constructor(
             // guard (not the mutex — see [HomeFeed.getHomeSections]' write
             // guarantee) turns that write into a return-but-don't-pin, and the
             // next read refetches instead of re-pinning the pre-pull payload.
-            // No port verb rides this bump: no network row memo is touched by
-            // a single-row pull (the fetcher's own memos were refreshed by the
-            // pull itself), so the fetcher's mirror correctly stays put. The
-            // SWR snapshot persist stays untouched: the next FULL fetch
-            // re-persists it complete. Failure keeps the entry — it is still
-            // accurate for every row the pull didn't touch (same policy as a
-            // failed forced read leaving the network sub-call memos).
+            // The bump rides THIS side only: no network row memo is touched
+            // by it (the fetcher's own memos were refreshed by the pull
+            // itself, behind the fetcher's own guards). The SWR snapshot
+            // persist stays untouched: the next FULL fetch re-persists it
+            // complete. Failure keeps the entry — it is still accurate for
+            // every row the pull didn't touch (same policy as a failed forced
+            // read leaving the network sub-call memos).
             if (result.isSuccess) {
                 bumpHomeWriteGeneration()
             }
         }
 
-    override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
-        // The roll protocol's implementation: invalidate → fetch → seed. The
-        // ordering contract, the three race windows and the generation bump
-        // rule are owned by the interface KDoc (HomeFeed.rerollDiscoverRow).
-        invalidateDiscoverRowCache(row.id)
-        val result = libraryApiClient.getDiscoverRowItems(row)
-        // Commit only a real roll: seedDiscoverRowCache no-ops on an empty
-        // list, so a failed/empty fetch leaves nothing behind but the
-        // pre-fetch drop — the next home fetch re-queries the row instead of
-        // replaying or pinning pre-roll items.
-        result.onSuccess { seedDiscoverRowCache(row, it) }
-        return result
-    }
-
-    /**
-     * Reroll half 1 (see the roll protocol on
-     * [HomeFeed.rerollDiscoverRow]): funnel bump + network per-row memo drop
-     * + assembled-payload drop (maxSize is 1, so the clear is exactly the one
-     * cached payload — nothing else pays for the roll). The port verb carries
-     * the post-bump [HomeWriteGeneration] so the fetcher's write guard
-     * observes the same generation this class's cache guards on.
-     */
-    private fun invalidateDiscoverRowCache(rowId: String) {
-        bumpHomeWriteGeneration()
-        homeSectionsCachePort.invalidateDiscoverRow(rowId, HomeWriteGeneration.of(homeWriteGeneration.get()))
-    }
-
-    /**
-     * Reroll half 3 (see the roll protocol on
-     * [HomeFeed.rerollDiscoverRow]): network row-memo write + the
-     * commit-time funnel bump (a fetch in flight across the whole roll stays
-     * stall-guarded) + the assembled-payload drop again. Cheap (maxSize 1).
-     * No-op on an empty list — the funnel does not run, so an empty commit
-     * advances no generation. The port verb carries the post-bump
-     * [HomeWriteGeneration] (the bump-at-invalidate-AND-commit rule's commit
-     * half, delivered as data).
-     */
-    private fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
-        if (items.isEmpty()) return
-        bumpHomeWriteGeneration()
-        homeSectionsCachePort.seedDiscoverRow(row, items, HomeWriteGeneration.of(homeWriteGeneration.get()))
-    }
+    override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> =
+        // The roll protocol's repo half: the invalidate → fetch → seed
+        // choreography over the row memo is ONE complete operation inside the
+        // network layer — the fetcher owns the memo, its write guard, and the
+        // ordering (see HomeSectionsCachePort.rerollDiscoverRow); this side
+        // owns only the assembled-payload cache. Bump + drop AFTER the
+        // operation returns, on EVERY completed attempt: the row memo changed
+        // under the assembled payload either way (dropped, and on a real roll
+        // re-seeded), so the cached payload — still carrying the pre-roll row
+        // — must never survive to be replayed. The bump stall-guards any FULL
+        // fetch in flight across the roll exactly as the refresh arm's does;
+        // the ordering rules live on HomeFeed.rerollDiscoverRow.
+        homeSectionsCachePort.rerollDiscoverRow(row).also {
+            bumpHomeWriteGeneration()
+        }
 
     override suspend fun getCachedHomeSections(
         query: HomeSectionQuery,
@@ -866,26 +853,12 @@ class MediaRepositoryImpl internal constructor(
      * WS pushes merged with the announcer's synthetic pushes — local writers
      * that reach the server outside the socket's echo (notably the offline
      * outbox drain in PlaybackSyncWorker) feed the same consumer fan-out
-     * (home forced refresh, open detail sessions) through
-     * [notifyUserDataChanged]. The fan-out's owner is the [userDataAnnouncer]
-     * leaf single; this merge is the feed's one composition point.
+     * (home forced refresh, open detail sessions) through the
+     * [UserDataAnnouncer] leaf. The fan-out's owner is the announcer single;
+     * this merge is the feed's one composition point.
      */
     override val userDataChanges: Flow<UserDataChange> =
         merge(userDataRealtimeChannel.changes, userDataAnnouncer.changes)
-
-    override fun notifyUserDataChanged(itemIds: List<String>) {
-        if (itemIds.isEmpty()) return
-        // No identity → nothing is keyed to a user yet; emitting would only
-        // risk refreshing another account's screens on a stale collector.
-        // (Re-checked inside the announcer — this gate also guards the #157
-        // arming, so a signed-out announce arms nothing.)
-        if (homeSession.currentIdentitySnapshot()?.userId == null) return
-        // The #157 arming rides the announcer (see
-        // [UserDataAnnouncerImpl.onConfirmedWrite]) — the flip/stop write
-        // paths announce through the same leaf, and every confirmed write
-        // must arm the stale-read markers, funnel or not.
-        userDataAnnouncer.notifyUserDataChanged(itemIds)
-    }
 
     /**
      * The confirmed-write arming the announcer calls back into (DI wires the
@@ -982,8 +955,8 @@ class MediaRepositoryImpl internal constructor(
      * The home sections cache is deliberately NOT eagerly evicted here
      * (scroll- and flicker-sensitive: a cleared cache forces the next home
      * read into a full blocking refetch). Home freshness after a write is
-     * event-driven instead: the online write paths emit a synthetic
-     * [notifyUserDataChanged] whose consumers (HomeRefresher's throttled
+     * event-driven instead: the online write paths announce through the
+     * [UserDataAnnouncer] leaf, whose consumers (HomeRefresher's throttled
      * silent forced refresh, open screens) heal live, and the announcement
      * also arms the lazy staleness marker ([homeSectionsStale], #157) so the
      * next home READ refetches even when no consumer was collecting. The 60s
@@ -1073,8 +1046,7 @@ class MediaRepositoryImpl internal constructor(
     // pass-through seam later retired to the client family entirely).
 
     /**
-     * Wholesale in-memory cache drop (demoted off the public
-     * [MediaRepository] interface, kept on the impl — the
+     * Wholesale in-memory cache drop (no repository family carries it — the
      * [MediaCacheInvalidator] port is its cross-module seam for the legacy
      * sync workers). The only production caller is the background user-data
      * sync worker — the `SessionCacheRegistry` identity path reacts via its

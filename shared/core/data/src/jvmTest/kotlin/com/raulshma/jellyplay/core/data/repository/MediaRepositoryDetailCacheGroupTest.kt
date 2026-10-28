@@ -111,7 +111,7 @@ class MediaRepositoryDetailCacheGroupTest {
         repository.getSimilarItems("item-1", limit = 12)
         repository.getSimilarItems("item-1", limit = 9)
         repository.getThemeSongs("item-1")
-        repository.getAlbumTracks("item-1")
+        repository.getAlbumTracks("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getSimilarItems("item-1", 12) }
         coVerify(exactly = 1) { apiClient.getSimilarItems("item-1", 9) }
         coVerify(exactly = 1) { apiClient.getThemeSongs("item-1") }
@@ -127,7 +127,7 @@ class MediaRepositoryDetailCacheGroupTest {
         repository.getSimilarItems("item-1", limit = 12)
         repository.getSimilarItems("item-1", limit = 9)
         repository.getThemeSongs("item-1")
-        repository.getAlbumTracks("item-1")
+        repository.getAlbumTracks("item-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getSimilarItems("item-1", 12) }
         coVerify(exactly = 2) { apiClient.getSimilarItems("item-1", 9) }
@@ -143,7 +143,7 @@ class MediaRepositoryDetailCacheGroupTest {
         coEvery { apiClient.getSimilarItems("item-1", any()) } returns Result.success(listOf(mediaItem("s1")))
         coEvery { apiClient.getThemeSongs("item-1") } returns Result.success(emptyList())
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         repository.getSimilarItems("item-1", limit = 12)
         repository.getSimilarItems("item-1", limit = 9)
         repository.getThemeSongs("item-1")

@@ -46,6 +46,12 @@ kotlin {
         // through the commonTest → jvmTest hierarchy edge.
         commonTest.dependencies {
             implementation(libs.coroutines.test)
+            // The shared HomeSectionSources transport double (FakeHomeSectionSources):
+            // the fetcher suite's former module-local fake, promoted to the
+            // fixtures module when core:data's real-stack suite (and
+            // feature/home's roll contract) needed the same double
+            // (test-scoped only — see the fixtures module's house rules).
+            implementation(project(":shared:core:test-fixtures"))
         }
         getByName("jvmTest").dependencies {
             implementation(libs.okhttp)

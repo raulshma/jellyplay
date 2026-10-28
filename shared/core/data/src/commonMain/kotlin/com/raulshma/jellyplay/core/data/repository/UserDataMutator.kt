@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 /**
  * The single seam for user-data mutations (watched / favorite). Owns the
  * protocol: serialize → repository call (PlayedStateSync fan-out via
- * [MediaRepository]: server, offline mirror, outbox) → on success: rewrite the
+ * [UserDataWriteOperations]: server, offline mirror, outbox) → on success: rewrite the
  * caller's exposed containers, rewrite the active provider session, drop the
  * residual series catalogue. Flips only on success; there is no pre-call guess
  * and no revert path (PlayedStateSync stages offline mutations in the outbox

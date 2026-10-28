@@ -11,12 +11,12 @@ import com.raulshma.jellyplay.core.data.repository.CollectionOperations
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.LibraryFeed
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
 import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
@@ -162,16 +162,12 @@ internal val dataMediaRepositoryModule: Module = module {
             userDataAnnouncer = get(),
         )
     }
-    single<MediaRepository> { get<MediaRepositoryImpl>() }
     // Family seams over the same single (the SonarrSeriesOperations
-    // over-the-impl pattern in dataSeerrArrModule): the music-catalogue reads
-    // and the user-data writes, so single-family consumers inject the seam
-    // instead of the union. UserDataMutatorImpl already does (the user-data
-    // family's clean sole consumer); the music playback stack + feature:music
-    // ViewModels migrated too — they inject MusicCatalogue for the catalogue
-    // reads and keep MediaRepository only as mixed consumers (detail reads,
-    // the user-data feed). getAlbumTracks is the one member still dual-declared:
-    // the detail provider's session resolves detail + album tracks together.
+    // over-the-impl pattern in dataSeerrArrModule): every family the former
+    // MediaRepository union carried, aliased onto this one impl so
+    // single-family consumers inject the seam alone and mixed consumers
+    // compose the families they read (e.g. the detail provider's session
+    // resolves DetailFeed + MusicCatalogue together).
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
     // The browse-catalogue enrichments (filter-sheet tags, the detail
     // franchise row) — same over-the-impl aliasing for their two screens.
@@ -179,6 +175,10 @@ internal val dataMediaRepositoryModule: Module = module {
     // The series-notification family (the per-series Next Up diff read).
     single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
+    // The photo-folder family (the cached child-image-URL read the prefetcher
+    // fans out over): the SeriesNotificationReads one-member pattern, aliased
+    // over the same impl single.
+    single<PhotoFolderReads> { get<MediaRepositoryImpl>() }
     // The detail-read family (the detail fetch + the similar-items row) and
     // the collection-operations family (the collection page read + the two
     // collection edits): the same over-the-impl aliasing, so a detail-read-
@@ -207,7 +207,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // Family-repository split: the SyncPlay family is 4 stateless members on
     // its own impl (contract: see SyncPlayRepositoryImpl). Single-family
     // consumers (SyncPlayViewModel, WatchPartyActions) inject the family
-    // type, not the MediaRepository union.
+    // type, not a wide media surface.
     single {
         SyncPlayRepositoryImpl(
             syncPlayApiClient = get(),
@@ -289,7 +289,8 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         UnifiedMediaDetailProviderImpl(
-            mediaRepository = get(),
+            detailFeed = get(),
+            musicCatalogue = get(),
             cacheInvalidation = get(),
             offlineRepository = get(),
             downloadRepository = get(),

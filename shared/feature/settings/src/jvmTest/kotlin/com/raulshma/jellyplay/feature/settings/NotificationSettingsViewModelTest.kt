@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -47,7 +48,8 @@ class NotificationSettingsViewModelTest {
     private lateinit var projections: PreferenceProjections
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var editor: PreferencesEditor
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
+    private lateinit var detailFeed: DetailFeed
     private lateinit var notificationSync: NotificationSync
     private lateinit var imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider
     private lateinit var editScope: PreferencesEditScope
@@ -59,7 +61,8 @@ class NotificationSettingsViewModelTest {
         projections = mockk(relaxed = true)
         appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         notificationSync = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         editScope = mockk(relaxed = true)
@@ -67,7 +70,7 @@ class NotificationSettingsViewModelTest {
         every { projections.notificationPreferences } returns MutableStateFlow(NotificationPreferences())
         every { appearanceStore.showAdvancedSettings } returns MutableStateFlow(false)
         every { editScope.notification } returns notificationStore
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(emptyList())
     }
 
     @AfterTest
@@ -76,13 +79,13 @@ class NotificationSettingsViewModelTest {
     }
 
     private fun viewModel() = NotificationSettingsViewModel(
-        projections, AdvancedSettingsGate(appearanceStore, editor), editor, mediaRepository, notificationSync,
+        projections, AdvancedSettingsGate(appearanceStore, editor), editor, libraryFeed, detailFeed, notificationSync,
         imageUrlProvider = imageUrlProvider,
     )
 
     @Test
     fun `libraryFolders filters music libraries and reports no error`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(
             listOf(
                 LibraryFolder(id = "movies", name = "Movies", collectionType = "movies"),
                 LibraryFolder(id = "music", name = "Music", collectionType = "music"),
@@ -98,7 +101,7 @@ class NotificationSettingsViewModelTest {
 
     @Test
     fun `libraryFolders surfaces the failure message`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders() } returns
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns
             Result.failure(RuntimeException("offline"))
         val viewModel = viewModel()
         advanceUntilIdle()

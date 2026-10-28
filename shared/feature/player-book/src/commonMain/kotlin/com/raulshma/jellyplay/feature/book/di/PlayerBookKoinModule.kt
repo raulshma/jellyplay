@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.book.di
 
 import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers

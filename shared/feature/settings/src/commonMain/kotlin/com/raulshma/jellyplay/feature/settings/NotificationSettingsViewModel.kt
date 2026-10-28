@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.model.LibraryFolder
@@ -34,7 +35,10 @@ class NotificationSettingsViewModel(
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
     advancedSettings: AdvancedSettingsGate,
     editor: PreferencesEditor,
-    private val mediaRepository: MediaRepository,
+    /** The folders read (the library-views picker) of the browse family seam. */
+    private val libraryFeed: LibraryFeed,
+    /** The series' detail read (the upcoming-row hydration) of the detail seam. */
+    private val detailFeed: DetailFeed,
     private val notificationSync: NotificationSync,
     private val imageUrlProvider: ImageUrlProvider,
 ) : SettingsSectionViewModel(advancedSettings, editor) {
@@ -105,7 +109,7 @@ class NotificationSettingsViewModel(
         scope = scope,
         concurrency = 1,
         retry = IdEnricher.Retry.NEVER,
-        fetch = { id -> mediaRepository.getMediaDetail(id).getOrNull()?.item },
+        fetch = { id -> detailFeed.getMediaDetail(id, force = false).getOrNull()?.item },
         merge = { id, item ->
             resolvedSeriesItems[id] = item
             publishSeries(publishedSeriesIds, loading = false)
@@ -166,7 +170,7 @@ class NotificationSettingsViewModel(
     private fun loadLibraryFolders() {
         launch {
             libraryError = null
-            mediaRepository.getLibraryFolders()
+            libraryFeed.getLibraryFolders(force = false)
                 .onSuccess { folders ->
                     _libraryFolders.value = folders.filter { it.collectionType != "music" }
                 }

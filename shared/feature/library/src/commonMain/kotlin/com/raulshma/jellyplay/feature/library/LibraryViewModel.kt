@@ -9,7 +9,8 @@ import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
@@ -68,7 +69,10 @@ private data class PagedQueryKey(
 )
 
 internal class LibraryViewModel(
-    private val mediaRepository: MediaRepository,
+    /** The browse reads (folders, genres, paged items) of the library/browse family seam. */
+    private val libraryFeed: LibraryFeed,
+    /** The server user-data change feed (the grid's deferred-refresh arming). */
+    private val userDataChanges: UserDataChanges,
     private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     private val offlineRepository: OfflineRepository,
     private val quickDownloadActions: QuickDownloadActions,
@@ -104,7 +108,7 @@ internal class LibraryViewModel(
     // library/search/editor triple); the public exposure shape is unchanged.
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
-        getGenres = { force -> mediaRepository.getGenres(force = force) },
+        getGenres = { force -> libraryFeed.getGenres(parentId = null, force = force) },
         getTags = { mediaCatalogueEnrichments.getTags(null) },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
@@ -266,7 +270,7 @@ internal class LibraryViewModel(
      * routing, the sink).
      */
     private val quickActions = pagedGridQuickActions(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
         messenger = downloadOutcomeSink,
@@ -322,9 +326,10 @@ internal class LibraryViewModel(
                     )
                     items.map { PagingData.from(it.toFilteredLibraryItems(filters), idleStates) }
                 } else {
-                    mediaRepository.getMediaItemsPaged(
+                    libraryFeed.getMediaItemsPaged(
                         parentId = folder?.id,
                         filters = filters,
+                        studioIds = null,
                         // Section mode ("See All" from a home Latest row) shows the same
                         // top-level items as the default library tab — series for a TV library,
                         // movies for a movie library — just sorted by latest. Leaf episodes
@@ -469,7 +474,7 @@ internal class LibraryViewModel(
     private fun loadFolders(force: Boolean = false) {
         launch {
             _isLoading.set(true)
-            mediaRepository.getLibraryFolders(force = force)
+            libraryFeed.getLibraryFolders(force = force)
                 .onSuccess { folders ->
                     _folders.set(folders)
                     // Clear any stale error once folders load successfully.

@@ -5,7 +5,8 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
@@ -44,10 +45,13 @@ import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 internal class SearchViewModel(
-    private val mediaRepository: MediaRepository,
+    /** The browse reads (genres, paged search) of the library/browse family seam. */
+    private val libraryFeed: LibraryFeed,
+    /** The server user-data change feed (the grid's deferred-refresh arming). */
+    private val userDataChanges: UserDataChanges,
     private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     /** The library client's uncached reads (the empty-search suggestions —
-     *  off the union; the filter row's tag list rides the repository's
+     *  the client family; the filter row's tag list rides the repository's
      *  cached getTags). */
     private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
@@ -76,7 +80,7 @@ internal class SearchViewModel(
     // library/search/editor triple); the public exposure shape is unchanged.
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
-        getGenres = { force -> mediaRepository.getGenres(force = force) },
+        getGenres = { force -> libraryFeed.getGenres(parentId = null, force = force) },
         getTags = { mediaCatalogueEnrichments.getTags(null) },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
@@ -139,7 +143,7 @@ internal class SearchViewModel(
      * this VM keeps only its (debounced query, filters) paged source.
      */
     private val quickActions = pagedGridQuickActions(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
     )
@@ -166,7 +170,7 @@ internal class SearchViewModel(
                 if (query.isBlank()) {
                     flowOf(PagingData.empty())
                 } else {
-                    mediaRepository.searchPaged(
+                    libraryFeed.searchPaged(
                         query = query,
                         filters = filters,
                     )

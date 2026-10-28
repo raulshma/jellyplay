@@ -34,7 +34,8 @@ import org.koin.dsl.module
 val libraryModule: Module = module {
     viewModel {
         LibraryViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
+            userDataChanges = get(),
             mediaCatalogueEnrichments = get(),
             offlineRepository = get(),
             quickDownloadActions = get(),
@@ -61,7 +62,8 @@ val libraryModule: Module = module {
     viewModel { params ->
         StudioDetailViewModel(
             savedStateHandle = params.get<SavedStateHandle>(),
-            mediaRepository = get(),
+            libraryFeed = get(),
+            userDataChanges = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),

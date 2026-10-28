@@ -23,7 +23,8 @@ class NotificationWorkerFactory : WorkerFactory() {
         when (workerClassName.substringAfterLast('.')) {
             NewMediaCheckWorker::class.simpleName -> NewMediaCheckWorker(
                 context, workerParameters,
-                mediaRepository = koin().get(),
+                libraryFeed = koin().get(),
+                detailFeed = koin().get(),
                 seriesNotificationReads = koin().get(),
                 seenMediaRepository = koin().get(),
                 notificationStore = koin().get(),

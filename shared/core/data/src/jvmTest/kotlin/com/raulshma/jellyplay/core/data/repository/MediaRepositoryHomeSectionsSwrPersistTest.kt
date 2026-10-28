@@ -49,10 +49,12 @@ import kotlin.test.assertTrue
  *     [HomeSectionsSnapshotStore.clearIdentity] (privacy: the just-logged-out
  *     user's home payload must not cold-open for the next user), while a
  *     first sign-in clears nothing;
- *  3. [MediaRepositoryImpl.notifyUserDataChanged] — the synthetic push the
+ *  3. [UserDataAnnouncerImpl.notifyUserDataChanged] — the synthetic push the
  *     offline outbox drain uses to refresh open screens without a WS echo:
  *     distinct item ids under the current identity, and a silent no-op for
- *     an empty list or a missing identity.
+ *     an empty list or a missing identity. (The announce rides the
+ *     [UserDataAnnouncerImpl] leaf directly — the funnel the former union
+ *     member provided retired with the union.)
  *
  * The DAO mock is backed by an in-memory map so the persist path observes
  * the rows it itself persisted (a plain relaxed mock would answer `get` with
@@ -62,6 +64,9 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
 
     /** Late-binding handle the announcer's arming lambda reads (set at build time). */
     private var built: MediaRepositoryImpl? = null
+
+    /** The announcer leaf the build wires (tests announce through it directly). */
+    private lateinit var announcer: UserDataAnnouncerImpl
 
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
@@ -133,7 +138,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             userDataRealtimeChannel = realtimeChannel,
             timeSource = fakeTimeSource,
             homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built },
+            userDataAnnouncer = announcerFor(homeSession) { built }.also { announcer = it },
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
@@ -276,7 +281,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         }
         delay(150)
 
-        repository.notifyUserDataChanged(listOf("item-1", "item-1", "item-2"))
+        announcer.notifyUserDataChanged(listOf("item-1", "item-1", "item-2"))
         delay(150) // let the shared-flow emission reach the collector
 
         assertEquals(listOf(UserDataChange(userId = "user-A", itemIds = listOf("item-1", "item-2"))), received)
@@ -293,7 +298,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         }
         delay(150) // subscription must land first or the test proves nothing
 
-        repository.notifyUserDataChanged(emptyList())
+        announcer.notifyUserDataChanged(emptyList())
         delay(150)
 
         assertTrue(received.isEmpty())
@@ -311,7 +316,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         }
         delay(150) // subscription must land first or the test proves nothing
 
-        repository.notifyUserDataChanged(listOf("item-1"))
+        announcer.notifyUserDataChanged(listOf("item-1"))
         delay(150)
 
         assertTrue(received.isEmpty())

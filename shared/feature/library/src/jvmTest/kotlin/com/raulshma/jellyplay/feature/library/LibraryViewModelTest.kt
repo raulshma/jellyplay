@@ -10,7 +10,8 @@ import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -76,7 +77,8 @@ class LibraryViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     private lateinit var quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -99,7 +101,8 @@ class LibraryViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -138,11 +141,11 @@ class LibraryViewModelTest {
         // read (force = false) and refresh()'s force = true read — an
         // unmatched call falls through to the relaxed mock whose Result mock
         // ClassCasts inside the inline onSuccess/onFailure.
-        coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
-        coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
     }
 
     @AfterTest
@@ -157,7 +160,8 @@ class LibraryViewModelTest {
         userMessageBus: com.raulshma.jellyplay.core.ui.message.UserMessageBus =
             com.raulshma.jellyplay.core.ui.message.UserMessageBus(),
     ): LibraryViewModel = LibraryViewModel(
-        mediaRepository = mediaRepository,
+        libraryFeed = libraryFeed,
+        userDataChanges = userDataChanges,
         mediaCatalogueEnrichments = catalogueEnrichments,
         offlineRepository = offlineRepository,
         quickDownloadActions = quickDownloadActions,
@@ -178,14 +182,14 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
         // Only the init-block load so far.
-        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
+        coVerify(exactly = 1) { libraryFeed.getLibraryFolders(any()) }
 
         // A write confirmed while the library screen is NOT resumed only
         // marks the grid stale.
         vm.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
+        coVerify(exactly = 1) { libraryFeed.getLibraryFolders(any()) }
 
         // Re-entry regenerates the item pager only — watched/favorite flips
         // never change folders, so the deferred path skips refresh()'s
@@ -193,7 +197,7 @@ class LibraryViewModelTest {
         // pull-to-refresh).
         vm.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(any()) }
+        coVerify(exactly = 1) { libraryFeed.getLibraryFolders(any()) }
     }
 
     @Test
@@ -632,7 +636,7 @@ class LibraryViewModelTest {
 
         assertTrue(firstPage.isCompleted)
         // The local store is the source, the server pager is never touched…
-        verify(exactly = 0) { mediaRepository.getMediaItemsPaged(any(), any(), any()) }
+        verify(exactly = 0) { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) }
         // …and the auto filter never mutated the user's filters.
         assertNull(vm.state().filters.isDownloaded)
     }
@@ -648,7 +652,7 @@ class LibraryViewModelTest {
             append = LoadState.NotLoading(endOfPaginationReached = false),
         )
         every {
-            mediaRepository.getMediaItemsPaged(any(), any(), any(), any())
+            libraryFeed.getMediaItemsPaged(any(), any(), any(), any())
         } answers { flowOf(PagingData.from(emptyList<MediaItem>(), idleStates)) }
 
         val vm = createViewModel()
@@ -658,9 +662,10 @@ class LibraryViewModelTest {
 
         assertTrue(firstPage.isCompleted)
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 parentId = "lib-tv",
                 filters = LibraryFilters(),
+                studioIds = any(),
                 kindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
             )
         }
@@ -927,7 +932,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `loadFolders failure with no cached folders surfaces the error and clears loading`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders(any()) } returns
+        coEvery { libraryFeed.getLibraryFolders(any()) } returns
             Result.failure(RuntimeException("boom"))
 
         val vm = createViewModel()
@@ -940,7 +945,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `loadFolders failure with a null message falls back to the exception class name`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.failure(RuntimeException())
+        coEvery { libraryFeed.getLibraryFolders(any()) } returns Result.failure(RuntimeException())
 
         val vm = createViewModel()
         advanceUntilIdle()
@@ -952,7 +957,7 @@ class LibraryViewModelTest {
     fun `loadFolders failure after success keeps the stale folders and stays silent`() = runTest {
         // A transient 403 mid-session must not blank the library: already
         // loaded folders stay browsable and no blocking error is raised.
-        coEvery { mediaRepository.getLibraryFolders(any()) } returnsMany listOf(
+        coEvery { libraryFeed.getLibraryFolders(any()) } returnsMany listOf(
             Result.success(listOf(LibraryFolder(id = "lib-1", name = "Movies"))),
             Result.failure(RuntimeException("403")),
         )
@@ -972,7 +977,7 @@ class LibraryViewModelTest {
 
     @Test
     fun `loadFolders success after failure clears the stale error`() = runTest {
-        coEvery { mediaRepository.getLibraryFolders(any()) } returnsMany listOf(
+        coEvery { libraryFeed.getLibraryFolders(any()) } returnsMany listOf(
             Result.failure(RuntimeException("boom")),
             Result.success(listOf(LibraryFolder(id = "lib-1", name = "Movies"))),
         )
@@ -999,8 +1004,8 @@ class LibraryViewModelTest {
         advanceUntilIdle()
 
         // Initial load is cached; the manual pull-to-refresh is not.
-        coVerify(exactly = 1) { mediaRepository.getLibraryFolders(force = true) }
-        coVerify(exactly = 1) { mediaRepository.getGenres(force = true) }
+        coVerify(exactly = 1) { libraryFeed.getLibraryFolders(force = true) }
+        coVerify(exactly = 1) { libraryFeed.getGenres(parentId = any(), force = true) }
         // Both loads run (the tag cache lives beneath the mocked repository).
         assertEquals(2, catalogueEnrichments.tagsCalls)
     }

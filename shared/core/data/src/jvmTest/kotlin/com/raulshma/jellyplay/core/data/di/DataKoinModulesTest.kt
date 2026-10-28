@@ -20,10 +20,11 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
 import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
 import com.raulshma.jellyplay.core.data.repository.SeerrRequestLifecycle
 import com.raulshma.jellyplay.core.data.repository.SeerrServiceDirectory
@@ -174,39 +175,46 @@ class DataKoinModulesTest {
                 koin.get<ArrReleaseOperations>() === koin.get<ArrRepository>(),
                 "ArrReleaseOperations must alias the ArrRepositoryImpl single (one impl, three seams)",
             )
-            // The family seams of the two widest repository interfaces follow
-            // the same alias contract: MediaRepository's music-catalogue and
-            // user-data-write families, its home-feed and user-data-change
-            // families, and SeerrRepository's service-directory /
-            // request-lifecycle / auth families — each resolves to the SAME
-            // impl single as its union, never a second repository instance.
+            // The family seams of the two widest repository impls follow the
+            // same alias contract: the media repository's music-catalogue /
+            // user-data-write / home-feed / user-data-change / browse /
+            // detail / collection families (every member of the former
+            // MediaRepository union — the union itself is gone), and
+            // SeerrRepository's service-directory / request-lifecycle / auth
+            // families — each resolves to the SAME impl single, never a
+            // second repository instance.
+            val mediaImpl = koin.get<MediaRepositoryImpl>()
             assertTrue(
-                koin.get<MusicCatalogue>() === koin.get<MediaRepository>(),
+                koin.get<MusicCatalogue>() === mediaImpl,
                 "MusicCatalogue must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<UserDataWriteOperations>() === koin.get<MediaRepository>(),
+                koin.get<UserDataWriteOperations>() === mediaImpl,
                 "UserDataWriteOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<HomeFeed>() === koin.get<MediaRepository>(),
+                koin.get<HomeFeed>() === mediaImpl,
                 "HomeFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<LibraryFeed>() === koin.get<MediaRepository>(),
+                koin.get<LibraryFeed>() === mediaImpl,
                 "LibraryFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<UserDataChanges>() === koin.get<MediaRepository>(),
+                koin.get<UserDataChanges>() === mediaImpl,
                 "UserDataChanges must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<DetailFeed>() === koin.get<MediaRepository>(),
+                koin.get<DetailFeed>() === mediaImpl,
                 "DetailFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<CollectionOperations>() === koin.get<MediaRepository>(),
+                koin.get<CollectionOperations>() === mediaImpl,
                 "CollectionOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<PhotoFolderReads>() === mediaImpl,
+                "PhotoFolderReads must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
                 koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
@@ -300,10 +308,9 @@ class DataKoinModulesTest {
             // MediaDetailProvider and its concrete impl resolve through
             // PlaybackSourceResolverImpl, which lives in dataJvmModule
             // (Uri-free).
-            val mediaRepository = koin.get<MediaRepository>()
             assertTrue(
-                koin.get<MediaRepositoryCacheInvalidation>() === mediaRepository,
-                "MediaRepositoryCacheInvalidation must alias the MediaRepository single (one cache set, not two)",
+                koin.get<MediaRepositoryCacheInvalidation>() === mediaImpl,
+                "MediaRepositoryCacheInvalidation must alias the MediaRepositoryImpl single (one cache set, not two)",
             )
             assertTrue(
                 koin.get<LyricsRepository>() is LyricsRepositoryImpl,
