@@ -7,6 +7,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
@@ -210,15 +211,15 @@ internal fun PlaybackPlayerGroup(
                         icon = rowIcon(PlaybackRows.DefaultSpeed),
                         title = rowTitle(PlaybackRows.DefaultSpeed),
                         subtitle = rowSubtitle(PlaybackRows.DefaultSpeed),
-                        trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
+                        trailingText = PlaybackSpeedLadder.format(preferences.videoDefaultSpeed),
                         highlighted = highlightSettingId == PlaybackRows.DefaultSpeed.id,
                         onClick = {
-                            val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 5.0f)
+                            val speeds = PlaybackSpeedLadder.fullRungs
                             activePicker.value = pickerChip(
                                 title = defaultSpeedTitle,
                                 values = speeds,
                                 current = preferences.videoDefaultSpeed,
-                                label = { if (it == 1.0f) "1x" else "${it}x" },
+                                label = { PlaybackSpeedLadder.format(it) },
                                 onSelect = { speed -> viewModel.edit { it.videoPlayer.setVideoDefaultSpeed(speed) } },
                             )
                         },

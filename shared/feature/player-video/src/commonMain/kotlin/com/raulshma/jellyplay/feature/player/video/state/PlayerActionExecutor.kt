@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.PlayerInputKey
 import com.raulshma.jellyplay.core.model.PlayerInputMap
@@ -20,7 +21,6 @@ import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdic
 import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.chrome.keyboardSeekStepMs
 import com.raulshma.jellyplay.feature.player.video.components.A11Y_STEP_DELTA
-import com.raulshma.jellyplay.feature.player.video.components.SPEED_OPTIONS
 import com.raulshma.jellyplay.feature.player.video.delayAdjustMs
 import com.raulshma.jellyplay.feature.player.video.mediaKeySeek
 import com.raulshma.jellyplay.feature.player.video.playerKeyCode
@@ -305,11 +305,13 @@ internal class PlayerActionExecutor(
                 true
             }
             PlayerAction.CYCLE_SPEED -> {
-                // The SpeedPickerSheet ladder: next rung above the current
-                // speed, wrapping to 1x past the top (an off-ladder speed
-                // snaps to the first rung).
+                // The shared speed ladder (PlaybackSpeedLadder.fullRungs — the
+                // SpeedPickerSheet's chip rungs, read from core:model not the
+                // UI components package): next rung above the current speed,
+                // wrapping to 1x past the top (an off-ladder speed snaps to
+                // the first rung).
                 val current = getPlaybackSpeed()
-                val next = SPEED_OPTIONS.firstOrNull { it > current + 0.01f } ?: 1.0f
+                val next = PlaybackSpeedLadder.fullRungs.firstOrNull { it > current + 0.01f } ?: 1.0f
                 onUiEvent(VideoPlayerUiEvent.SetPlaybackSpeed(next))
                 chrome.show()
                 true

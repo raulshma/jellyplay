@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.ui.player.SpeedSlider
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
@@ -27,11 +28,12 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Gauge
 
 /**
- * The playback-speed rungs this sheet's chips offer — also the CYCLE_SPEED
- * input action's ladder (next rung up, wrapping to 1x), so a rebound key
- * steps the same speeds the sheet shows.
+ * The sheet's chip rungs — the shared [PlaybackSpeedLadder.fullRungs] ladder
+ * verbatim (core:model owns the speeds), so this alias no longer states them.
+ * Also the CYCLE_SPEED input action's ladder (next rung up, wrapping to 1x),
+ * so a rebound key steps the same speeds the sheet shows.
  */
-internal val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 5.0f)
+internal val SPEED_OPTIONS = PlaybackSpeedLadder.fullRungs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

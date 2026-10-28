@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
@@ -191,7 +192,7 @@ fun AudioSettingsScreen(
                 SettingsGroup(
                     icon = Tabler.Outline.Music,
                     title = stringResource(Res.string.settings_audio_player_title),
-                    summary = { stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x") },
+                    summary = { stringResource(Res.string.settings_default_speed_value, PlaybackSpeedLadder.format(preferences.audioDefaultSpeed)) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
@@ -200,16 +201,18 @@ fun AudioSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,
                         title = rowTitle(AudioRows.AudioDefaultSpeed),
-                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) stringResource(Res.string.settings_audio_default_speed_normal) else stringResource(Res.string.settings_audio_default_speed_value, "${preferences.audioDefaultSpeed}x"),
-                        trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
+                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) stringResource(Res.string.settings_audio_default_speed_normal) else stringResource(Res.string.settings_audio_default_speed_value, PlaybackSpeedLadder.format(preferences.audioDefaultSpeed)),
+                        trailingText = PlaybackSpeedLadder.format(preferences.audioDefaultSpeed),
                         highlighted = highlightSettingId == AudioRows.AudioDefaultSpeed.id,
                         onClick = {
-                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 5.0f)
+                // The audio settings picker's deliberate subset (no 0.25x/1.75x
+                // — fullRungs keeps those), read from the shared speed ladder.
+                val speeds = PlaybackSpeedLadder.audioSettingsRungs
                 activePicker.value = pickerChip(
                     title = audioDefaultSpeedTitle,
                     values = speeds,
                     current = preferences.audioDefaultSpeed,
-                    label = { if (it == 1.0f) "1x" else "${it}x" },
+                    label = { PlaybackSpeedLadder.format(it) },
                     onSelect = { speed -> viewModel.edit { it.audio.setAudioDefaultSpeed(speed) } },
                 )
             },

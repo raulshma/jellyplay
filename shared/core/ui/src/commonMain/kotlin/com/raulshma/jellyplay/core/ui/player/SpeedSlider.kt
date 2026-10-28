@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.player_speed_slider_label
@@ -21,14 +22,14 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import org.jetbrains.compose.resources.stringResource
 
-private val SPEED_RANGE = 0.25f..5.0f
-private const val SPEED_STEPS = 94 // ((5.0 - 0.25) / 0.05) - 1
-private const val DPAD_STEP = 0.05f
-
 /**
  * Shared playback-speed slider with label. Delegates to [TvOrTouchSlider] so it
  * works for both touch and D-pad/TV navigation. Used by the audio and video
  * speed-picker sheets.
+ *
+ * The slider geometry (range / step / D-pad step) reads the shared
+ * [PlaybackSpeedLadder] — core:model owns the speed ladder, this composable
+ * only renders it.
  */
 @Composable
 fun SpeedSlider(
@@ -50,11 +51,11 @@ fun SpeedSlider(
     TvOrTouchSlider(
         value = sliderValue,
         onValueChange = { sliderValue = it },
-        valueRange = SPEED_RANGE,
+        valueRange = PlaybackSpeedLadder.range,
         modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
         isTv = isTv,
-        steps = SPEED_STEPS,
-        dpadStep = DPAD_STEP,
+        steps = PlaybackSpeedLadder.stepCount,
+        dpadStep = PlaybackSpeedLadder.stepSize,
         onValueChangeFinished = { onSelect(sliderValue) },
         colors = SliderDefaults.colors(
             thumbColor = MaterialTheme.colorScheme.primary,
