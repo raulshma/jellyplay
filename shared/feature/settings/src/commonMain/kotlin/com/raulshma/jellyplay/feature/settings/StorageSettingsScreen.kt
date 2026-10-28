@@ -116,18 +116,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi_only_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.storage_sd_card
 
-/**
- * The declared storage screen groups in LazyColumn order — the derivation
- * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
- * the scroll target can never drift from the UI. All three groups always
- * render, so no advanced offset applies.
- */
-private val storageScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.storageCache.itemIdSet,
-    SettingsScreenGroups.storageNetwork.itemIdSet,
-    SettingsScreenGroups.storageDownloads.itemIdSet,
-)
-
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StorageSettingsScreen(
@@ -150,19 +138,12 @@ fun StorageSettingsScreen(
     )
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_downloads_storage_title),
-        onBack = onBack,
-        focusTag = "storage_init",
-        highlightSettingId = highlightSettingId,
-        highlightGroups = storageScreenGroups,
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-            item {
+    // The screen's ONE group declaration, in LazyColumn order — the shell
+    // derives the deep-link scroll resolution and the hidden-settings hint
+    // count from it. Slots stop at GROUP grain: the row emission inside each
+    // slot is the hand-written body, unchanged (ADR-0009).
+    val storageGroups = listOf(
+        SettingsScreenGroups.storageCache.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Database,
                     title = stringResource(Res.string.settings_storage),
@@ -356,9 +337,8 @@ fun StorageSettingsScreen(
                         }
                     }
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.storageNetwork.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Cloud,
                     title = stringResource(Res.string.settings_network_offline),
@@ -519,9 +499,8 @@ fun StorageSettingsScreen(
                     )
                     }
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.storageDownloads.asScreenGroup { activePicker ->
                 // Android 16 Live Updates opt-in (the download-progress
                 // notification's promoted rendering). Null below API 36 /
                 // on desktop — the row does not exist there.
@@ -898,27 +877,28 @@ fun StorageSettingsScreen(
                     }
                     }
                 }
-            }
+        }
+    )
 
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // Derived from the fused declarations (hiddenRowsFor):
-                        // the cache group's five advanced tuning rows; the
-                        // network/downloads groups carry no advanced gates).
-                        hiddenCount = hiddenRowsFor(
-                            listOf(
-                                SettingsScreenGroups.storageCache,
-                                SettingsScreenGroups.storageNetwork,
-                                SettingsScreenGroups.storageDownloads,
-                            ),
-                            rowFlags,
-                        ),
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-    }
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_downloads_storage_title),
+        onBack = onBack,
+        focusTag = "storage_init",
+        highlightSettingId = highlightSettingId,
+        groups = storageGroups,
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above: the cache
+            // group's five advanced tuning rows; the network/downloads slots
+            // carry no advanced gates.
+            rowFlags = rowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+        ),
+        pickerHost = true,
+    )
 }
 
 @Composable

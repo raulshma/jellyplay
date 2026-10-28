@@ -99,26 +99,6 @@ sealed class SecuritySettingsDialog {
     object QuickConnectAuthorize : SecuritySettingsDialog()
 }
 
-/**
- * The declared security screen groups in LazyColumn order — the derivation
- * source the deep-link scroll resolver consumes (see HighlightScroll.kt),
- * named so the chassis reads it as a parameter like every sibling screen's
- * group list.
- */
-private val securityScreenGroups: List<Set<String>> = listOf(
-    setOf(
-        SecurityRows.PinLock.id,
-        SecurityRows.BiometricLock.id,
-        SecurityRows.PinForPlayerLock.id,
-        SecurityRows.AutoLockTimer.id,
-    ),
-    setOf(SecurityRows.QuickConnectAuthorize.id),
-    setOf(
-        SecurityRows.RemoteControlEnabled.id,
-        SecurityRows.RemoteDisplayContentEnabled.id,
-    ),
-)
-
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SecuritySettingsScreen(
@@ -161,19 +141,25 @@ val biometricGate = rememberBiometricGate()
     val authorizationFailed = stringResource(Res.string.settings_authorization_failed)
     val biometricTitle = stringResource(Res.string.settings_enable_biometric_title)
     val biometricSubtitle = stringResource(Res.string.settings_enable_biometric_subtitle)
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_security),
-        onBack = onBack,
-        focusTag = "security_init",
-        highlightSettingId = highlightSettingId,
-        highlightGroups = securityScreenGroups,
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-            item {
+    // The screen's ONE group declaration, in LazyColumn order — the shell
+    // derives the deep-link scroll resolution and the hidden-settings hint
+    // count from it. The lock slot carries the declared security group's row
+    // count (its hidden delta is the auto-lock timer's All(AppLock, Advanced)
+    // gate — 1 where the app-lock stack exists, 0 on desktop); the
+    // quick-connect and remote-control slots are content-only (their rows
+    // always render — the shipped undeclared-count quirks, their rows carry
+    // no admission). Slots stop at GROUP grain: the row emission inside each
+    // slot is the hand-written body, unchanged (ADR-0009).
+    val securityGroups = listOf(
+        PreferenceScreenGroup(
+            idSet = setOf(
+                SecurityRows.PinLock.id,
+                SecurityRows.BiometricLock.id,
+                SecurityRows.PinForPlayerLock.id,
+                SecurityRows.AutoLockTimer.id,
+            ),
+            emittedRows = { flags -> rowTotalFor(SettingsScreenGroups.security, flags) },
+        ) { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Lock,
                     title = stringResource(Res.string.settings_security),
@@ -289,9 +275,10 @@ val biometricGate = rememberBiometricGate()
                     }
                     }
                 }
-            }
-
-            item {
+        },
+        PreferenceScreenGroup(
+            idSet = setOf(SecurityRows.QuickConnectAuthorize.id),
+        ) { _ ->
                 SettingsGroup(
                     icon = Tabler.Outline.Bolt,
                     title = stringResource(Res.string.settings_quick_connect_authorizer),
@@ -313,9 +300,13 @@ val biometricGate = rememberBiometricGate()
                         },
                     )
                 }
-            }
-
-            item {
+        },
+        PreferenceScreenGroup(
+            idSet = setOf(
+                SecurityRows.RemoteControlEnabled.id,
+                SecurityRows.RemoteDisplayContentEnabled.id,
+            ),
+        ) { _ ->
                 SettingsGroup(
                     icon = Tabler.Outline.Cast,
                     title = stringResource(Res.string.settings_remote_control),
@@ -353,20 +344,28 @@ val biometricGate = rememberBiometricGate()
                         },
                     )
                 }
-            }
+        }
+    )
 
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // Derived from the fused declaration (hiddenRowsFor):
-                        // the auto-lock timer's All(AppLock, Advanced) gate —
-                        // 1 where the app-lock stack exists, 0 on desktop.
-                        hiddenCount = hiddenRowsFor(listOf(SettingsScreenGroups.security), securityRowFlags),
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-    }
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_security),
+        onBack = onBack,
+        focusTag = "security_init",
+        highlightSettingId = highlightSettingId,
+        groups = securityGroups,
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above: the auto-lock
+            // timer's All(AppLock, Advanced) gate — 1 where the app-lock
+            // stack exists, 0 on desktop.
+            rowFlags = securityRowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+        ),
+        pickerHost = true,
+    )
 
     if (activeDialog is SecuritySettingsDialog.PinDialog) {
         ImeAlertDialog(

@@ -119,21 +119,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unli
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
 
 /**
- * The declared Home settings screen groups in LazyColumn order — the
- * derivation source the deep-link scroll resolver consumes (see
- * HighlightScroll.kt). All four groups always compose (no advanced gate on
- * this screen — the dedicated hub IS the discoverability fix), so the
- * adjustment lambda is the identity. Internal so the contract test can pin
- * the derivation against it.
- */
-internal val homeScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.homeDisplay.itemIdSet,
-    SettingsScreenGroups.homeNextUp.itemIdSet,
-    SettingsScreenGroups.homeLayout.itemIdSet,
-    SettingsScreenGroups.homeCards.itemIdSet,
-)
-
-/**
  * The display group's `SettingsItemList(total = …)` row count, derived by
  * [rowTotalFor] from the [SettingsScreenGroups.homeDisplay] declaration
  * (the always-rendered config rows — the declared `unhide_cw` admission is
@@ -204,21 +189,14 @@ fun HomeSettingsScreen(
     val serverUndecodableText = stringResource(Res.string.settings_home_layout_server_undecodable)
     var showRestoreConfirm by remember { mutableStateOf(false) }
 
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_home_title),
-        onBack = onBack,
-        focusTag = "home_settings_init",
-        highlightSettingId = highlightSettingId,
-        highlightGroups = homeScreenGroups,
-        reset = PreferenceResetAction(
-            iconContentDescription = stringResource(Res.string.settings_reset_defaults_cd),
-            dialogTitle = stringResource(Res.string.settings_reset_home_title),
-            dialogMessage = stringResource(Res.string.settings_reset_home_message),
-            onReset = { viewModel.resetCategory(PreferenceResetCategory.HOME_DISCOVERY) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-            item {
+    // The screen's ONE group declaration, in LazyColumn order — the shell
+    // derives the deep-link scroll resolution from it. All four groups always
+    // compose (no advanced gate on this screen — the dedicated hub IS the
+    // discoverability fix), so the scroll adjust is the identity and there is
+    // no hidden hint. Slots stop at GROUP grain: the row emission inside each
+    // slot is the hand-written body, unchanged (ADR-0009).
+    val homeGroups = listOf(
+        SettingsScreenGroups.homeDisplay.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Home,
                     title = stringResource(Res.string.settings_home_display),
@@ -497,9 +475,8 @@ fun HomeSettingsScreen(
                     }
                     }
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.homeNextUp.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.CalendarTime,
                     title = stringResource(Res.string.settings_continue_next_up),
@@ -573,9 +550,8 @@ fun HomeSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setExcludeActiveSessions(it) } },
                     )
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.homeLayout.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.LayoutGrid,
                     title = stringResource(Res.string.settings_home_screen_layout),
@@ -715,9 +691,8 @@ fun HomeSettingsScreen(
                         )
                     }
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.homeCards.asScreenGroup { _ ->
                 // The "Library & Cards" card-display toggles — home-discovery
                 // knobs grouped beside the rest of the home hub — plus the
                 // badge/spoiler/trickplay toggles (the trickplay row is
@@ -818,8 +793,23 @@ fun HomeSettingsScreen(
                         )
                     }
                 }
-            }
-    }
+        }
+    )
+
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_home_title),
+        onBack = onBack,
+        focusTag = "home_settings_init",
+        highlightSettingId = highlightSettingId,
+        groups = homeGroups,
+        reset = PreferenceResetAction(
+            iconContentDescription = stringResource(Res.string.settings_reset_defaults_cd),
+            dialogTitle = stringResource(Res.string.settings_reset_home_title),
+            dialogMessage = stringResource(Res.string.settings_reset_home_message),
+            onReset = { viewModel.resetCategory(PreferenceResetCategory.HOME_DISCOVERY) },
+        ),
+        pickerHost = true,
+    )
 
     // Restore confirmation: the timestamp-diff dialog (server write stamp
     // vs both layouts' enabled-section counts). Shown only while a decoded

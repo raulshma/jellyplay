@@ -143,19 +143,6 @@ internal val appLanguages = listOf(
 
 private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }
 
-/**
- * The declared screen groups in LazyColumn order — the derivation source the
- * deep-link scroll resolver consumes (see HighlightScroll.kt): the leading
- * language trio, then the track-selection group, then the subtitle
- * rows. Both always groups compose (the advanced rows hide inside the
- * subtitle group), so no advanced adjustment applies.
- */
-private val languageScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.languageGeneral.itemIdSet,
-    SettingsScreenGroups.languageTrackSelection.itemIdSet,
-    SettingsScreenGroups.languageSubtitles.itemIdSet,
-)
-
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun LanguageSettingsScreen(
@@ -186,19 +173,13 @@ fun LanguageSettingsScreen(
 
     val langs = languages
 
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_language_subs_title),
-        onBack = onBack,
-        focusTag = "language_init",
-        highlightSettingId = highlightSettingId,
-        highlightGroups = languageScreenGroups,
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-            item {
+    // The screen's ONE group declaration, in LazyColumn order — the shell
+    // derives the deep-link scroll resolution and the hidden-settings hint
+    // count from it (the track-selection slot contributes no hidden delta —
+    // every row declares Always). Slots stop at GROUP grain: the row emission
+    // inside each slot is the hand-written body, unchanged (ADR-0009).
+    val languageGroups = listOf(
+        SettingsScreenGroups.languageGeneral.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Language,
                     title = stringResource(Res.string.settings_language),
@@ -286,9 +267,8 @@ fun LanguageSettingsScreen(
                     )
                     }
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.languageTrackSelection.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.AdjustmentsHorizontal,
                     title = stringResource(Res.string.settings_track_selection),
@@ -410,9 +390,8 @@ fun LanguageSettingsScreen(
                         )
                     }
                 }
-            }
-
-            item {
+        },
+        SettingsScreenGroups.languageSubtitles.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Subtitles,
                     title = stringResource(Res.string.settings_subtitles),
@@ -647,24 +626,28 @@ fun LanguageSettingsScreen(
                     }
                     }
                 }
-            }
+        }
+    )
 
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // Derived from the fused declarations (hiddenRowsFor):
-                        // the subtitles group's seven Advanced-gated style
-                        // rows, plus the HDR font-size row while the HDR-style
-                        // toggle is on.
-                        hiddenCount = hiddenRowsFor(
-                            listOf(SettingsScreenGroups.languageGeneral, SettingsScreenGroups.languageSubtitles),
-                            subtitleRowFlags,
-                        ),
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-    }
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_language_subs_title),
+        onBack = onBack,
+        focusTag = "language_init",
+        highlightSettingId = highlightSettingId,
+        groups = languageGroups,
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above: the subtitles
+            // slot's seven Advanced-gated style rows, plus the HDR font-size
+            // row while the HDR-style toggle is on.
+            rowFlags = subtitleRowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+        ),
+        pickerHost = true,
+    )
 
     if (activeDialog is LanguageSettingsDialog.SubtitleTextColorPicker) {
         TvSafeSheet(onDismissRequest = { activeDialog = LanguageSettingsDialog.None }) {

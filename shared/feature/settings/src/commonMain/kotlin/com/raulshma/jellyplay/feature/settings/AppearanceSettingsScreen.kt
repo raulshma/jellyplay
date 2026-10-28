@@ -108,36 +108,79 @@ import kotlinx.datetime.toLocalDateTime
 private val THEME_HIGHLIGHT_IDS = setOf(AppearanceRows.ThemeMode.id, AppearanceRows.ThemeScheduler.id)
 
 /**
- * The declared appearance screen groups in LazyColumn order — the derivation
- * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
- * the scroll target can never drift from the UI. Indices 0-2 always render;
- * 3-5 (performance, eye care, newsletter) only compose when advanced settings
- * are shown (their [SettingsScreenSection] carries `advancedOnly = true`,
- * which [deriveAdjustForAdvanced] folds into the adjust). (The home display /
- * Next Up / home-layout rows AND the home-discovery card-display quartet moved
- * to HomeSettingsScreen.)
+ * The appearance screen's ONE group declaration, in LazyColumn order — the
+ * shell derives the deep-link scroll resolution, the whole-group advanced
+ * gating (slots 3-5: performance, eye care, newsletter only compose behind
+ * the advanced toggle) and the hidden-settings hint count from it, so the
+ * scroll target and the hint can never drift from the UI. The per-group row
+ * emission stays hand-written inside each slot (ADR-0009). (The home display
+ * / Next Up / home-layout rows AND the home-discovery card-display quartet
+ * moved to HomeSettingsScreen.)
+ *
+ * The declaration lives in the screen body — its slots close over the
+ * screen's state (preferences, view model, the highlight id) and the shell
+ * only reads the derived shape.
  */
-private val appearanceScreenSections: List<SettingsScreenSection> = listOf(
-    SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
-    SettingsScreenSection(SettingsScreenGroups.appearanceNavigation.itemIdSet),
-    SettingsScreenSection(SettingsScreenGroups.appearanceLibrary.itemIdSet),
-    SettingsScreenSection(SettingsScreenGroups.appearancePerformance.itemIdSet, advancedOnly = true),
-    SettingsScreenSection(SettingsScreenGroups.appearanceEyeCare.itemIdSet, advancedOnly = true),
-    SettingsScreenSection(SettingsScreenGroups.appearanceNewsletter.itemIdSet, advancedOnly = true),
-)
-
-/**
- * The section groups themselves, in the same LazyColumn order — the
- * hidden-settings hint's derivation source ([hiddenRowsFor]; the idSet twin
- * above is the scroll resolver's).
- */
-private val appearanceScreenGroups = listOf(
-    SettingsScreenGroups.appearanceTheme,
-    SettingsScreenGroups.appearanceNavigation,
-    SettingsScreenGroups.appearanceLibrary,
-    SettingsScreenGroups.appearancePerformance,
-    SettingsScreenGroups.appearanceEyeCare,
-    SettingsScreenGroups.appearanceNewsletter,
+private fun appearanceScreenGroups(
+    preferences: AppearanceScreenPreferences,
+    showAdvanced: Boolean,
+    isTv: Boolean,
+    highlightSettingId: String?,
+    viewModel: AppearanceSettingsViewModel,
+    onCustomizeShortcuts: () -> Unit,
+    showBlueLightStrengthSheet: () -> Unit,
+): List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.appearanceTheme.asScreenGroup { activePicker ->
+        AppearanceThemeGroup(
+            preferences = preferences,
+            showAdvanced = showAdvanced,
+            isTv = isTv,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+            activePicker = activePicker,
+        )
+    },
+    SettingsScreenGroups.appearanceNavigation.asScreenGroup { _ ->
+        // Floating navigation bar customization (enable/disable items, reorder,
+        // hide-on-scroll).
+        val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
+        NavigationCustomizationGroup(
+            preferences = navPrefs,
+            viewModel = viewModel,
+            onCustomizeShortcuts = onCustomizeShortcuts,
+        )
+    },
+    SettingsScreenGroups.appearanceLibrary.asScreenGroup { _ ->
+        // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode.
+        AppearanceLibraryGroup(
+            preferences = preferences,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+        )
+    },
+    // Remaining groups are expert-level; the shell keeps them behind the Advanced gate.
+    SettingsScreenGroups.appearancePerformance.asScreenGroup(advancedOnly = true) { _ ->
+        AppearancePerformanceGroup(
+            preferences = preferences,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+        )
+    },
+    SettingsScreenGroups.appearanceEyeCare.asScreenGroup(advancedOnly = true) { _ ->
+        AppearanceEyeCareGroup(
+            preferences = preferences,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+            onShowStrengthSheet = showBlueLightStrengthSheet,
+        )
+    },
+    SettingsScreenGroups.appearanceNewsletter.asScreenGroup(advancedOnly = true) { _ ->
+        AppearanceNewsletterGroup(
+            preferences = preferences,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+        )
+    },
 )
 
 /**
@@ -234,11 +277,22 @@ fun AppearanceSettingsScreen(
         onBack = onBack,
         focusTag = "appearance_init",
         highlightSettingId = highlightSettingId,
-        highlightGroups = appearanceScreenSections.map { it.idSet },
-        adjustForAdvanced = deriveAdjustForAdvanced(appearanceScreenSections, showAdvanced),
+        groups = appearanceScreenGroups(
+            preferences = preferences,
+            showAdvanced = showAdvanced,
+            isTv = LocalTvMode.current,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+            onCustomizeShortcuts = onCustomizeShortcuts,
+            showBlueLightStrengthSheet = { showBlueLightStrengthSheet = true },
+        ),
         advancedToggle = PreferenceAdvancedToggle(
             showAdvanced = showAdvanced,
             onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            rowFlags = RowAdmissionFlags(showAdvanced = false, isTv = LocalTvMode.current),
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
         ),
         reset = PreferenceResetAction(
             iconContentDescription = stringResource(Res.string.settings_reset_defaults_cd),
@@ -247,82 +301,7 @@ fun AppearanceSettingsScreen(
             onReset = { viewModel.resetCategory(PreferenceResetCategory.APPEARANCE) },
         ),
         pickerHost = true,
-    ) { activePicker ->
-        item {
-            AppearanceThemeGroup(
-                preferences = preferences,
-                showAdvanced = showAdvanced,
-                isTv = LocalTvMode.current,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-                activePicker = activePicker,
-            )
-        }
-
-        // Floating navigation bar customization (enable/disable items, reorder,
-        // hide-on-scroll).
-        item {
-            val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
-            NavigationCustomizationGroup(
-                preferences = navPrefs,
-                viewModel = viewModel,
-                onCustomizeShortcuts = onCustomizeShortcuts,
-            )
-        }
-
-        // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode.
-        item {
-            AppearanceLibraryGroup(
-                preferences = preferences,
-                highlightSettingId = highlightSettingId,
-                viewModel = viewModel,
-            )
-        }
-
-        // Remaining groups are expert-level; keep them behind the Advanced gate.
-        if (showAdvanced) {
-            item {
-                AppearancePerformanceGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                )
-            }
-
-            item {
-                AppearanceEyeCareGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    onShowStrengthSheet = { showBlueLightStrengthSheet = true },
-                )
-            }
-
-            item {
-                AppearanceNewsletterGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                )
-            }
-        }
-
-        if (!showAdvanced) {
-            item {
-                // Derived from the fused declarations (hiddenRowsFor): the
-                // theme group's advanced rows (the NotTv-forked layout row
-                // included off-TV) plus both performance/eye-care rows and
-                // the newsletter trio.
-                HiddenSettingsHint(
-                    hiddenCount = hiddenRowsFor(
-                        appearanceScreenGroups,
-                        RowAdmissionFlags(showAdvanced = false, isTv = LocalTvMode.current),
-                    ),
-                    onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                )
-            }
-        }
-    }
+    )
 
     if (showBlueLightStrengthSheet) {
         SettingsSliderSheet(

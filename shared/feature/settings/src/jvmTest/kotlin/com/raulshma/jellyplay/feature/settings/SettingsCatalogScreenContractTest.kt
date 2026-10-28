@@ -550,11 +550,11 @@ class SettingsCatalogScreenContractTest {
     // ── 3. The fixed drifts, pinned behaviorally ────────────────────────
 
     /**
-     * The playback screen sections in LazyColumn order — the same
-     * [SettingsScreenSection] declaration the screen consumes, so the adjust
-     * pins below run the very [deriveAdjustForAdvanced] the screen passes to
-     * `PreferenceScreenScaffold` (no per-screen hand-written lambda left to
-     * drift from the shipped shapes).
+     * The playback screen sections in LazyColumn order — the same fold the
+     * shell derives from the screen's [PreferenceScreenGroup] slot
+     * declaration, so the adjust pins below run the very
+     * [deriveAdjustForAdvanced] the shell computes (the hand-written
+     * per-screen lambda and the hand-maintained section list are gone).
      */
     private val playbackSections = listOf(
         SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
@@ -1472,11 +1472,10 @@ class SettingsCatalogScreenContractTest {
     }
 
     /**
-     * The appearance screen sections in LazyColumn order — the same
-     * [SettingsScreenSection] declaration the screen consumes, so the
-     * trailing-shape adjust pin below runs the very [deriveAdjustForAdvanced]
-     * the screen passes to `PreferenceScreenScaffold` (the hand-written
-     * per-screen lambda is gone).
+     * The appearance screen sections in LazyColumn order — the same fold the
+     * shell derives from the screen's [PreferenceScreenGroup] slot
+     * declaration, so the trailing-shape adjust pin below runs the very
+     * [deriveAdjustForAdvanced] the shell computes.
      */
     private val appearanceSections = listOf(
         SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
@@ -1558,7 +1557,167 @@ class SettingsCatalogScreenContractTest {
         assertEquals(naiveSecurityTotal(showAdvanced = true, supportsAppLock = false, supportsBiometric = true), securityTotal(canShowBiometric = true, showAdvanced = true, supportsAppLock = false))
     }
 
-    // ── 7. The search-result click action ───────────────────────────────
+    // ── 7. The screen-shell declaration path ────────────────────────────
+
+    /**
+     * The migrated screens' [PreferenceScreenGroup] slot declarations — the
+     * ONE ordered declaration the shell derives the whole-group advanced
+     * gating and the hidden-settings hint count from (the scroll fold is
+     * pinned by the section replicas above). The slot lists below replicate
+     * the screens' in-body declarations group-for-group, so every pin here
+     * runs the same derivation the shell runs. The per-engine hook is the
+     * one content-count term the flags vocabulary cannot express (the
+     * engine branch renders one prefix at a time); the deliberately-absent
+     * groups (the security screen's content-only quick-connect and
+     * remote-control slots) contribute zero by construction.
+     */
+    private val appearanceSlots = listOf(
+        SettingsScreenGroups.appearanceTheme.asScreenGroup(),
+        SettingsScreenGroups.appearanceNavigation.asScreenGroup(),
+        SettingsScreenGroups.appearanceLibrary.asScreenGroup(),
+        SettingsScreenGroups.appearancePerformance.asScreenGroup(advancedOnly = true),
+        SettingsScreenGroups.appearanceEyeCare.asScreenGroup(advancedOnly = true),
+        SettingsScreenGroups.appearanceNewsletter.asScreenGroup(advancedOnly = true),
+    )
+
+    private val playbackSlots = listOf(
+        SettingsScreenGroups.playbackPlayer.asScreenGroup(),
+        SettingsScreenGroups.playbackAdvancedVideo.asScreenGroup(advancedOnly = true),
+        SettingsScreenGroups.playbackEngine.asScreenGroup(
+            advancedOnly = true,
+            emittedRows = { flags ->
+                rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("vlc_") }
+            },
+        ),
+        SettingsScreenGroups.playbackMediaSegments.asScreenGroup(advancedOnly = true),
+        SettingsScreenGroups.playbackSyncPlay.asScreenGroup(),
+        SettingsScreenGroups.playbackCasting.asScreenGroup(),
+        SettingsScreenGroups.playbackDvr.asScreenGroup(),
+    )
+
+    private val languageSlots = listOf(
+        SettingsScreenGroups.languageGeneral.asScreenGroup(),
+        SettingsScreenGroups.languageTrackSelection.asScreenGroup(),
+        SettingsScreenGroups.languageSubtitles.asScreenGroup(),
+    )
+
+    private val storageSlots = listOf(
+        SettingsScreenGroups.storageCache.asScreenGroup(),
+        SettingsScreenGroups.storageNetwork.asScreenGroup(),
+        SettingsScreenGroups.storageDownloads.asScreenGroup(),
+    )
+
+    private val securitySlots = listOf(
+        PreferenceScreenGroup(
+            idSet = setOf(
+                SecurityRows.PinLock.id,
+                SecurityRows.BiometricLock.id,
+                SecurityRows.PinForPlayerLock.id,
+                SecurityRows.AutoLockTimer.id,
+            ),
+            emittedRows = { flags -> rowTotalFor(SettingsScreenGroups.security, flags) },
+        ),
+        PreferenceScreenGroup(idSet = setOf(SecurityRows.QuickConnectAuthorize.id)),
+        PreferenceScreenGroup(
+            idSet = setOf(SecurityRows.RemoteControlEnabled.id, SecurityRows.RemoteDisplayContentEnabled.id),
+        ),
+    )
+
+    @Test
+    fun `screen-shell slot declarations derive the same hidden counts as their group declarations`() {
+        // The default content-count hook IS the declared-admission delta, so
+        // every plain slot list derives exactly what [hiddenRowsFor] over the
+        // group list derives — the ratchet's absolute numbers
+        // (FusedRowsRatchetTest) hold through the shell unchanged. The
+        // track-selection slot contributes zero (every row declares Always),
+        // so the language declaration's completeness does not move its hint.
+        val appearanceGroups = listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearanceNavigation,
+            SettingsScreenGroups.appearanceLibrary,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+            SettingsScreenGroups.appearanceNewsletter,
+        )
+        assertEquals(
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            hiddenRowsFor(appearanceSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            hiddenRowsFor(appearanceSlots, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+        )
+        assertEquals(
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.languageGeneral, SettingsScreenGroups.languageSubtitles),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLocaleOverride = false),
+            ),
+            hiddenRowsFor(languageSlots, RowAdmissionFlags(showAdvanced = false, supportsAppLocaleOverride = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(
+                listOf(
+                    SettingsScreenGroups.storageCache,
+                    SettingsScreenGroups.storageNetwork,
+                    SettingsScreenGroups.storageDownloads,
+                ),
+                RowAdmissionFlags(showAdvanced = false),
+            ),
+            hiddenRowsFor(storageSlots, RowAdmissionFlags(showAdvanced = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.security),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false),
+            ),
+            hiddenRowsFor(securitySlots, RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false)),
+        )
+
+        // Playback: the engine slot's prefix hook is the declared-admission
+        // delta over the branch the screen emits — the shell count is the
+        // plain groups' delta plus that one branch term (this JVM's desktop
+        // seam backs the mpv device rows; the vlc branch is capability-free).
+        val desktop = RowAdmissionFlags(showAdvanced = false)
+        val plainPlaybackGroups = listOf(
+            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackAdvancedVideo,
+            SettingsScreenGroups.playbackMediaSegments,
+            SettingsScreenGroups.playbackSyncPlay,
+            SettingsScreenGroups.playbackCasting,
+            SettingsScreenGroups.playbackDvr,
+        )
+        assertEquals(
+            hiddenRowsFor(plainPlaybackGroups, desktop) +
+                (
+                    rowTotalFor(SettingsScreenGroups.playbackEngine, desktop.copy(showAdvanced = true)) { it.id.startsWith("vlc_") } -
+                        rowTotalFor(SettingsScreenGroups.playbackEngine, desktop) { it.id.startsWith("vlc_") }
+                    ),
+            hiddenRowsFor(playbackSlots, desktop),
+        )
+        // …and it is honest where the frozen literal was not: the count moves
+        // with the engine branch (vlc's declared row count differs from mpv's
+        // desktop-gated one) instead of sitting at a hand-picked constant.
+        val mpvSlots = listOf(
+            playbackSlots[0],
+            playbackSlots[1],
+            SettingsScreenGroups.playbackEngine.asScreenGroup(
+                advancedOnly = true,
+                emittedRows = { flags ->
+                    rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("mpv_") }
+                },
+            ),
+            playbackSlots[3],
+            playbackSlots[4],
+            playbackSlots[5],
+            playbackSlots[6],
+        )
+        assertTrue(
+            hiddenRowsFor(playbackSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
+            "the derived playback hint must track the engine branch (the frozen 28 could not)",
+        )
+    }
+
+    // ── 8. The search-result click action ───────────────────────────────
 
     @Test
     fun `search-result clicks decide the pure action per branch`() {
