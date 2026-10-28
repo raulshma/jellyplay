@@ -109,6 +109,22 @@ object ShortcutsCustomizePolicy {
         }
 
     /**
+     * The quick-pin's surface set: pinning from [surface] is ADDITIVE for the
+     * other one — a row already pinned there keeps that pin (the "also in"
+     * badge promises it stays put), so a quick-pin only ever turns a pin ON.
+     */
+    fun quickPinTargets(
+        surface: ShortcutSurface,
+        pinnedHeader: Boolean,
+        pinnedOverflow: Boolean,
+    ): QuickPinTargets = QuickPinTargets(
+        header = surface == ShortcutSurface.HEADER || pinnedHeader,
+        overflow = surface == ShortcutSurface.OVERFLOW || pinnedOverflow,
+    )
+
+    data class QuickPinTargets(val header: Boolean, val overflow: Boolean)
+
+    /**
      * The capability-aware prune: drops definitions whose target has no
      * catalog entry (an app update removed/renamed a destination) and
      * definitions pointing at a shell action outside [supportedActions]

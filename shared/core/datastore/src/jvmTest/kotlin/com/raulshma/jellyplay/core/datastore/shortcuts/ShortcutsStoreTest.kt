@@ -71,6 +71,51 @@ class ShortcutsStoreTest {
     }
 
     // ------------------------------------------------------------------
+    // Shipped-default adoption (seedDefaultsIfUnconfigured)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `seedDefaultsIfUnconfigured seeds an unconfigured user`() = runTest {
+        activate("user-1")
+        store.seedDefaultsIfUnconfigured(
+            definitions = listOf(screen("default:Downloads", "Downloads")),
+            headerOrder = emptyList(),
+            overflowOrder = listOf("default:Downloads"),
+        )
+        val slice = store.shortcuts.first()
+        assertEquals(listOf("default:Downloads"), slice.definitions.map { it.id })
+        assertEquals(listOf("default:Downloads"), slice.overflowOrder)
+        assertFalse(slice.isUnconfigured)
+    }
+
+    @Test
+    fun `seedDefaultsIfUnconfigured never clobbers a configured user`() = runTest {
+        activate("user-1")
+        store.addShortcut(screen("mine"), pinHeader = true)
+        store.seedDefaultsIfUnconfigured(
+            definitions = listOf(screen("default:Downloads", "Downloads")),
+            headerOrder = emptyList(),
+            overflowOrder = listOf("default:Downloads"),
+        )
+        val slice = store.shortcuts.first()
+        assertEquals(listOf("mine"), slice.definitions.map { it.id })
+        assertEquals(listOf("mine"), slice.headerOrder)
+        assertTrue(slice.overflowOrder.isEmpty())
+    }
+
+    @Test
+    fun `seedDefaultsIfUnconfigured normalizes like every write`() = runTest {
+        activate("user-1")
+        store.seedDefaultsIfUnconfigured(
+            definitions = listOf(screen("a")),
+            headerOrder = emptyList(),
+            overflowOrder = listOf("a", "ghost", "a"),
+        )
+        val slice = store.shortcuts.first()
+        assertEquals(listOf("a"), slice.overflowOrder)
+    }
+
+    // ------------------------------------------------------------------
     // Round-trips
     // ------------------------------------------------------------------
 

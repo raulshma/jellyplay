@@ -4,11 +4,15 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
+import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog
+import com.raulshma.jellyplay.core.ui.navigation.defaultShortcutsFor
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.shortcuts.DefaultShortcutCatalog
 import com.raulshma.jellyplay.feature.shortcuts.ShortcutCategory
@@ -30,7 +34,7 @@ import kotlinx.coroutines.launch
  */
 class ShortcutsCustomizeViewModel(
     private val editor: PreferencesEditor,
-    private val shortcutsStore: com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore,
+    private val shortcutsStore: ShortcutsStore,
     private val catalog: DefaultShortcutCatalog,
     authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
@@ -124,7 +128,7 @@ class ShortcutsCustomizeViewModel(
         editor.edit { shortcuts.setShortcutSurfaces(id, header, overflow) }
     }
 
-    fun move(id: String, surface: com.raulshma.jellyplay.core.model.ShortcutSurface, up: Boolean) {
+    fun move(id: String, surface: ShortcutSurface, up: Boolean) {
         editor.edit { shortcuts.moveShortcut(id, surface, up) }
     }
 
@@ -133,7 +137,38 @@ class ShortcutsCustomizeViewModel(
     }
 
     fun resetAll() {
-        editor.edit { shortcuts.resetShortcuts() }
+        editor.edit {
+            shortcuts.resetShortcuts()
+            seedShippedDefaults()
+        }
+    }
+
+    /**
+     * Adopts the shipped default layout as the editor's starting config. An
+     * unconfigured user's stored slice is empty by design (the surfaces render
+     * the code-defined defaults), so without this adoption the editor would
+     * open on empty lists — and the user's first edit (a header pin, say)
+     * would persist "definitions exist, other surface never chosen" and
+     * collapse the untouched overflow menu to its Settings guard rail. Runs
+     * on open and again after a reset; a no-op for a configured user
+     * ([ShortcutsStore.seedDefaultsIfUnconfigured] reads its guard inside the
+     * atomic edit). Targets missing from the catalog drop at adoption —
+     * seeding never introduces an unknown row.
+     */
+    fun adoptShippedDefaults() {
+        editor.edit { seedShippedDefaults() }
+    }
+
+    private suspend fun PreferencesEditScope.seedShippedDefaults() {
+        fun defaultRows(surface: ShortcutSurface) =
+            defaultShortcutsFor(surface).filter { catalog.entryFor(it.kind, it.targetId) != null }
+        val header = defaultRows(ShortcutSurface.HEADER)
+        val overflow = defaultRows(ShortcutSurface.OVERFLOW)
+        shortcuts.seedDefaultsIfUnconfigured(
+            definitions = header + overflow,
+            headerOrder = header.map { it.id },
+            overflowOrder = overflow.map { it.id },
+        )
     }
 
     /**

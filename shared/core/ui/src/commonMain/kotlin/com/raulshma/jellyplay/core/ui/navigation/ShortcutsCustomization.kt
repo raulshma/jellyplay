@@ -55,21 +55,15 @@ fun resolveShortcuts(
 ): List<ResolvedShortcut> {
     val entryByTarget = catalog.associateBy { it.storageKey }
     val isUnconfigured = definitions.isEmpty() && headerOrder.isEmpty() && overflowOrder.isEmpty()
+    val defaultDefinitions = if (isUnconfigured) defaultShortcutsFor(surface) else emptyList()
 
-    val defaultTargets = defaultTargetsFor(surface)
     val definitionsById: Map<String, ShortcutDefinition> = if (isUnconfigured) {
-        defaultTargets.associate { target ->
-            target.id to ShortcutDefinition(
-                id = target.id,
-                kind = target.kind,
-                targetId = target.targetId,
-            )
-        }
+        defaultDefinitions.associateBy { it.id }
     } else {
         definitions.associateBy { it.id }
     }
     val order: List<String> = if (isUnconfigured) {
-        defaultTargets.map { it.id }
+        defaultDefinitions.map { it.id }
     } else {
         when (surface) {
             ShortcutSurface.HEADER -> headerOrder
@@ -186,6 +180,24 @@ private fun defaultTargetsFor(surface: ShortcutSurface): List<DefaultTarget> = w
     ShortcutSurface.HEADER -> DEFAULT_HEADER_TARGETS
     ShortcutSurface.OVERFLOW -> DEFAULT_OVERFLOW_TARGETS
 }
+
+/**
+ * The shipped-default layout for [surface] as synthetic definitions (id =
+ * `default:<targetId>`) in shipped order — exactly the rows [resolveShortcuts]
+ * renders for an unconfigured user, so the two can never drift. The customize
+ * editor adopts this as its starting config (on open, and after a reset), so
+ * the editor previews the real default menu and the user's first edit lands
+ * on top of the shipped layout instead of flipping the untouched other
+ * surface to "user chose empty".
+ */
+fun defaultShortcutsFor(surface: ShortcutSurface): List<ShortcutDefinition> =
+    defaultTargetsFor(surface).map { target ->
+        ShortcutDefinition(
+            id = target.id,
+            kind = target.kind,
+            targetId = target.targetId,
+        )
+    }
 
 // ----------------------------------------------------------------------
 // Catalog lookup keys — the kind-discriminated pair a definition is

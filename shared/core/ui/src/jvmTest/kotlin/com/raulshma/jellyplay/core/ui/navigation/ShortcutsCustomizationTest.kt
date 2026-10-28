@@ -96,6 +96,22 @@ class ShortcutsCustomizationTest {
     }
 
     @Test
+    fun `defaultShortcutsFor matches the unconfigured resolve output`() {
+        ShortcutSurface.entries.forEach { surface ->
+            val definitions = defaultShortcutsFor(surface)
+            val resolved = resolveShortcuts(
+                definitions = emptyList(),
+                headerOrder = emptyList(),
+                overflowOrder = emptyList(),
+                catalog = catalog,
+                surface = surface,
+            )
+            assertEquals(resolved.map { it.id }, definitions.map { it.id })
+            assertEquals(resolved.map { it.targetIdKey() }, definitions.map { it.targetId })
+        }
+    }
+
+    @Test
     fun `a partially-empty config is NOT treated as unconfigured`() {
         // Definitions exist but this surface's order is empty → nothing to
         // show (the user unpinned everything), not the shipped defaults.

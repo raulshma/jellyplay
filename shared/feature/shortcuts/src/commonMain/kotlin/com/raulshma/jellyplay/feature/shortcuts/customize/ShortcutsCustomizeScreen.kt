@@ -144,7 +144,14 @@ fun ShortcutsCustomizeScreen(
     supportedActions: Set<ShortcutAction> = ShortcutAction.entries.toSet(),
     viewModel: ShortcutsCustomizeViewModel = org.koin.compose.viewmodel.koinViewModel(),
 ) {
-    LaunchedEffect(Unit) { viewModel.pruneUnknownTargets(supportedActions) }
+    // Adopt the shipped layout as the starting config (an unconfigured user's
+    // stored slice is empty by design), then prune stale targets — in this
+    // order, so the editor previews the real default menu and the first edit
+    // lands on top of the shipped layout.
+    LaunchedEffect(Unit) {
+        viewModel.adoptShippedDefaults()
+        viewModel.pruneUnknownTargets(supportedActions)
+    }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     // Capability-filter the picker rows (the VM's admin filter is store-side;
@@ -268,10 +275,11 @@ fun ShortcutsCustomizeScreen(
                             pinEnabled = !surfaceFull,
                             pinContentDescription = pinCd,
                             onPin = {
+                                val targets = ShortcutsCustomizePolicy.quickPinTargets(surface, row.pinnedHeader, row.pinnedOverflow)
                                 viewModel.setSurfaces(
                                     row.definition.id,
-                                    header = surface == ShortcutSurface.HEADER,
-                                    overflow = surface == ShortcutSurface.OVERFLOW,
+                                    header = targets.header,
+                                    overflow = targets.overflow,
                                 )
                             },
                             onEdit = {

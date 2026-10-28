@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.shortcuts
 
 import com.raulshma.jellyplay.core.model.ShortcutDefinition
+import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.ShortcutTargetKind
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
@@ -158,6 +159,28 @@ class ShortcutsCustomizePolicyTest {
         assertTrue(ShortcutsCustomizePolicy.executable(surpriseEntry, setOf(ShortcutAction.SURPRISE_ME)))
         assertFalse(ShortcutsCustomizePolicy.executable(surpriseEntry, setOf(ShortcutAction.TOGGLE_OFFLINE)))
         assertTrue(ShortcutsCustomizePolicy.executable(screenEntry, emptySet()))
+    }
+
+    @Test
+    fun `quick-pin keeps the other surface's existing pin and always pins the tapped one`() {
+        // Tapping header: pins header, preserves an existing overflow pin.
+        assertEquals(
+            ShortcutsCustomizePolicy.QuickPinTargets(header = true, overflow = true),
+            ShortcutsCustomizePolicy.quickPinTargets(ShortcutSurface.HEADER, pinnedHeader = false, pinnedOverflow = true),
+        )
+        assertEquals(
+            ShortcutsCustomizePolicy.QuickPinTargets(header = true, overflow = false),
+            ShortcutsCustomizePolicy.quickPinTargets(ShortcutSurface.HEADER, pinnedHeader = false, pinnedOverflow = false),
+        )
+        // Tapping menu mirrors it: pins overflow, preserves an existing header pin.
+        assertEquals(
+            ShortcutsCustomizePolicy.QuickPinTargets(header = true, overflow = true),
+            ShortcutsCustomizePolicy.quickPinTargets(ShortcutSurface.OVERFLOW, pinnedHeader = true, pinnedOverflow = false),
+        )
+        assertEquals(
+            ShortcutsCustomizePolicy.QuickPinTargets(header = false, overflow = true),
+            ShortcutsCustomizePolicy.quickPinTargets(ShortcutSurface.OVERFLOW, pinnedHeader = false, pinnedOverflow = false),
+        )
     }
 
     @Test

@@ -56,6 +56,11 @@ import kotlin.concurrent.atomics.AtomicReference
  * code-defined default surface layouts (the pre-customization hard-coded
  * menus) rendered by the resolve policy in core:ui. Reset therefore restores
  * the shipped defaults, and a stored config always means "the user edited".
+ * The customize editor bridges the two states through
+ * [seedDefaultsIfUnconfigured]: opening the editor (or resetting inside it)
+ * adopts the shipped layout as the stored config, so the editor's preview
+ * matches the surfaces and the user's first edit lands on top of the shipped
+ * layout instead of flipping the untouched other surface to "empty".
  */
 @OptIn(ExperimentalAtomicApi::class)
 class ShortcutsStore constructor(
@@ -226,6 +231,22 @@ class ShortcutsStore constructor(
         headerOrder: List<String>,
         overflowOrder: List<String>,
     ) = editForUser { prefs, userId ->
+        writeConfig(prefs, userId, normalize(definitions, headerOrder, overflowOrder))
+    }
+
+    /**
+     * Adopts [definitions] / [headerOrder] / [overflowOrder] as the config —
+     * but ONLY while the current config is unconfigured, read inside this same
+     * atomic edit: the customize editor's "start from the shipped layout"
+     * adoption (on open, and after a reset), which must never clobber a config
+     * that already exists. Normalizes like every write; a no-op otherwise.
+     */
+    suspend fun seedDefaultsIfUnconfigured(
+        definitions: List<ShortcutDefinition>,
+        headerOrder: List<String>,
+        overflowOrder: List<String>,
+    ) = editForUser { prefs, userId ->
+        if (!readerFor(userId).read(prefs).isUnconfigured) return@editForUser
         writeConfig(prefs, userId, normalize(definitions, headerOrder, overflowOrder))
     }
 
