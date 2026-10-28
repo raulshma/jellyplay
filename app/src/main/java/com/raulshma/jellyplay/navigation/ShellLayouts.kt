@@ -526,37 +526,39 @@ internal fun PhoneContent(
                 // (both Classic and Expressive styles) expands an animated list
                 // of destinations upward, so Settings/Downloads/SyncPlay/Play On
                 // are reachable from anywhere. The items render as an
-                // overlay above the nav bar (see OverflowMenuItems below).
+                // overlay above the nav bar with macOS dock item maximize/minimize
+                // transitions anchored at the 3-dot icon (see OverflowMenuItems below).
                 // On tablet the toggle lives in the NavigationRail (left edge),
                 // so the pills dock top-start beside the rail and flow top-down;
                 // on phone they dock bottom-end beside the floating nav toggle.
-                if (isOverflowExpanded) {
-                    com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
-                        onDismiss = { isOverflowExpanded = false },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                    // The placement fold (ShellChromePlacement): the bare
-                    // numbers below are named there; the alignment fork
-                    // (top-start beside the rail vs bottom-end beside the
-                    // nav toggle) stays here — a compose-side concern.
-                    val overflowInsets = overflowMenuInsets(isExpanded = isExpanded, statusBarTop = statusBarTop)
-                    com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
-                        entries = overflowEntries,
-                        alignToStart = isExpanded,
-                        modifier = if (isExpanded) {
-                            // The scaffold body already starts beside the rail, so the
-                            // folded margin keeps the pills flush to the drawer. Anchor
-                            // at the top (under the status bar) so the list flows
-                            // top-down.
-                            Modifier.align(Alignment.TopStart)
-                                .padding(start = overflowInsets.start, top = overflowInsets.top)
-                        } else {
-                            Modifier.align(Alignment.BottomEnd)
-                                .clearFloatingNav(extraBottom = 0.dp)
-                                .padding(end = overflowInsets.end, bottom = overflowInsets.bottom)
-                        },
-                    )
-                }
+                com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
+                    visible = isOverflowExpanded,
+                    exitDurationMillis = com.raulshma.jellyplay.navigation.components.overflowMenuTotalExitDurationMs(overflowEntries.size),
+                    onDismiss = { isOverflowExpanded = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+                // The placement fold (ShellChromePlacement): the bare
+                // numbers below are named there; the alignment fork
+                // (top-start beside the rail vs bottom-end beside the
+                // nav toggle) stays here — a compose-side concern.
+                val overflowInsets = overflowMenuInsets(isExpanded = isExpanded, statusBarTop = statusBarTop)
+                com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
+                    entries = overflowEntries,
+                    visible = isOverflowExpanded,
+                    alignToStart = isExpanded,
+                    modifier = if (isExpanded) {
+                        // The scaffold body already starts beside the rail, so the
+                        // folded margin keeps the pills flush to the drawer. Anchor
+                        // at the top (under the status bar) so the list flows
+                        // top-down.
+                        Modifier.align(Alignment.TopStart)
+                            .padding(start = overflowInsets.start, top = overflowInsets.top)
+                    } else {
+                        Modifier.align(Alignment.BottomEnd)
+                            .clearFloatingNav(extraBottom = 0.dp)
+                            .padding(end = overflowInsets.end, bottom = overflowInsets.bottom)
+                    },
+                )
                 if (!isExpanded) {
                     val navBarModifier = Modifier
                         .align(Alignment.BottomCenter)
