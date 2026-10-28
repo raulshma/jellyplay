@@ -7,8 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.components.HdrOptionsSheet
+import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.RenderSheet
 import com.raulshma.jellyplay.feature.player.video.session.SheetsSessionSlice
 
@@ -38,11 +40,12 @@ import com.raulshma.jellyplay.feature.player.video.session.SheetsSessionSlice
  * cross-sheet link reference the module's [sheet] identity instead of
  * restating the raw constant.
  *
- * Exactly two sheets are implemented so far ([HdrSheetModule],
- * [RenderSheetModule], chosen because they cross-link). The remaining
- * branches stayed hand-written in [PlayerSheetRouter]'s `when` and migrate
- * as touched — the Detail section module precedent
- * ([SubtitleHubSheetModule], its own file).
+ * Four sheets are implemented so far ([HdrSheetModule], [RenderSheetModule]
+ * — wave 1, chosen because they cross-link — [SubtitleHubSheetModule], its
+ * own file, and [PlaybackModeSheetModule], the session-slice repair's
+ * as-touched vehicle). The remaining branches stay hand-written in
+ * [PlayerSheetRouter]'s `when` and migrate as touched — the Detail section
+ * module precedent.
  */
 internal interface PlayerSheetModule {
 
@@ -154,7 +157,7 @@ internal object PlayerSheetRegistry {
         PlayerSheet.Queue -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.SyncPlay -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.Quality -> PlayerSheetRegistration.pending(sheet)
-        PlayerSheet.PlaybackMode -> PlayerSheetRegistration.pending(sheet)
+        PlayerSheet.PlaybackMode -> PlayerSheetRegistration.migrated(PlaybackModeSheetModule)
         PlayerSheet.SleepTimer -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.VideoFilter -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.Hdr -> PlayerSheetRegistration.migrated(HdrSheetModule)
@@ -299,15 +302,62 @@ internal object RenderSheetModule : PlayerSheetModule {
             onShaderPackSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderShaderPack(it, scope.inputs.saveRenderForSeries)) },
             onToneMappingSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderToneMapping(it, scope.inputs.saveRenderForSeries)) },
             onRenderQualitySelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderQuality(it)) },
-            onToneMappingCurveSelect = { scope.viewModel.playbackSession.uiCommands.setMpvToneMappingCurve(it) },
-            onDebandModeSelect = { scope.viewModel.playbackSession.uiCommands.setMpvDebandMode(it) },
-            onMotionInterpolationChange = { scope.viewModel.playbackSession.uiCommands.setMpvMotionInterpolation(it) },
+            onToneMappingCurveSelect = { scope.sheets.setMpvToneMappingCurve(it) },
+            onDebandModeSelect = { scope.sheets.setMpvDebandMode(it) },
+            onMotionInterpolationChange = { scope.sheets.setMpvMotionInterpolation(it) },
             onSaveForSeriesChange = { scope.inputs.onSaveRenderForSeriesChange(it) },
             onInherit = {
                 scope.viewModel.onEvent(VideoPlayerUiEvent.ClearRenderOverride)
                 scope.inputs.onSheetChange(PlayerSheet.None)
             },
             onDismiss = scope.inputs.dismissSheet,
+        )
+    }
+}
+
+/**
+ * The combined playback-options module (wave 3, the as-touched cadence
+ * vehicle for the session-slice repair): delivery + engine + quality in one
+ * panel that stays open across picks. The branch's two session reads were
+ * the audited defect — cast connectivity and the platform's
+ * availablePlayerTypes read off the session handle, and the eligibility
+ * policy (cast-connected, SyncPlay-active, engine identity) restated in the
+ * ViewModel's SwitchPlayerEngine arm. Both now read the sheets slice's ONE
+ * verdicts ([SheetsSessionSlice.switchableEngines] /
+ * [SheetsSessionSlice.localControlBlocked]): the module renders the
+ * verdicts, the VM arm consumes the same flow, nothing re-folds.
+ */
+internal object PlaybackModeSheetModule : PlayerSheetModule {
+
+    override val sheet: PlayerSheet = PlayerSheet.PlaybackMode
+
+    /** The verdict flows are collected HERE (sheet-local) — only this panel consumes them while open. */
+    @Composable
+    override fun Content(scope: PlayerSheetScope) {
+        val sheets = scope.sheets
+        val engine by sheets.engineFlow.collectAsStateWithLifecycle()
+        val switchableEngines by sheets.switchableEngines.collectAsStateWithLifecycle()
+        val localControlBlocked by sheets.localControlBlocked.collectAsStateWithLifecycle()
+        val uiState = scope.uiState
+        PlaybackModeSheet(
+            currentMode = uiState.uiPrefs.playbackMode,
+            currentPlayMethod = uiState.media.playMethod,
+            onSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackMode(it)) },
+            onDismiss = scope.inputs.dismissSheet,
+            currentQuality = uiState.uiPrefs.streamingQuality,
+            adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
+            onQualitySelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
+            onToggleAdaptiveBitrate = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
+            // Forced direct play has no transcode quality to pick either —
+            // the section disables until the delivery mode changes. The
+            // VM-state terms (forced mode, downloaded badge) fold here; the
+            // cast/SyncPlay terms ride the slice's verdict.
+            qualityAvailable = uiState.uiPrefs.playbackMode != PlaybackMode.FORCE_DIRECT_PLAY &&
+                !uiState.media.showDownloadedBadge &&
+                !localControlBlocked,
+            currentEngineName = engine?.displayName,
+            availablePlayers = switchableEngines,
+            onPlayerSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SwitchPlayerEngine(it)) },
         )
     }
 }

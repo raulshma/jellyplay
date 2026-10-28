@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
@@ -22,7 +21,6 @@ import com.raulshma.jellyplay.feature.player.video.components.VideoQueueSheet
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
-import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.RememberPreferenceToggle
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
@@ -50,10 +48,10 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 // VideoPlayerScreen.kt.
 //
 // The sheet-module migration is staged (the Detail section precedent): the
-// migrated branches (wave 1: Hdr, Render) delegate to their
-// [PlayerSheetModule]s in PlayerSheetModule.kt — the registry
-// ([PlayerSheetRegistry]) owns the sheet enumeration the former manual
-// ALL_SHEETS list carried — and the remaining branches stay hand-written
+// migrated branches (wave 1: Hdr, Render; wave 2: SubtitleHub; wave 3:
+// PlaybackMode) delegate to their [PlayerSheetModule]s in PlayerSheetModule.kt
+// — the registry ([PlayerSheetRegistry]) owns the sheet enumeration the former
+// manual ALL_SHEETS list carried — and the remaining branches stay hand-written
 // here, migrating as touched.
 
 /**
@@ -112,9 +110,9 @@ internal fun PlayerSheetRouter(
     // through it (the GLOSSARY "Session slice" seam) — no controller reaches.
     val sheets = viewModel.sessionSlices.sheets
     // The module slot's region params — only the migrated branches read it
-    // (wave 1: Hdr, Render; wave 2: SubtitleHub); their slice collections
-    // stay inside each module's Content exactly where the branches collected
-    // them.
+    // (wave 1: Hdr, Render; wave 2: SubtitleHub; wave 3: PlaybackMode);
+    // their slice collections stay inside each module's Content exactly
+    // where the branches collected them.
     val moduleScope = PlayerSheetScope(uiState, inputs, viewModel, sheets)
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
@@ -348,35 +346,14 @@ internal fun PlayerSheetRouter(
                 onDismiss = inputs.dismissSheet,
             )
         }
-        is PlayerSheet.PlaybackMode -> {
-            // The combined options sheet stays open across picks: engine +
-            // delivery + quality in one panel. The engine section hides for
-            // cast/SyncPlay; quality hides for offline sessions too.
-            val engine by sheets.engineFlow.collectAsStateWithLifecycle()
-            val castConnected by viewModel.playbackSession.cast.isConnectedFlow.collectAsStateWithLifecycle()
-            val engineName = engine?.displayName
-            PlaybackModeSheet(
-                currentMode = uiState.uiPrefs.playbackMode,
-                currentPlayMethod = uiState.media.playMethod,
-                onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackMode(it)) },
-                onDismiss = inputs.dismissSheet,
-                currentQuality = uiState.uiPrefs.streamingQuality,
-                adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
-                onQualitySelect = { viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
-                onToggleAdaptiveBitrate = { viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
-                // Forced direct play has no transcode quality to pick either —
-                // the section disables until the delivery mode changes.
-                qualityAvailable = uiState.uiPrefs.playbackMode != PlaybackMode.FORCE_DIRECT_PLAY &&
-                    !uiState.media.showDownloadedBadge && !castConnected && !uiState.isInSyncPlaySession,
-                currentEngineName = engineName,
-                availablePlayers = if (castConnected || uiState.isInSyncPlaySession) {
-                    emptyList()
-                } else {
-                    viewModel.playbackSession.availablePlayerTypes.filter { it.displayName != engineName }
-                },
-                onPlayerSelect = { viewModel.onEvent(VideoPlayerUiEvent.SwitchPlayerEngine(it)) },
-            )
-        }
+        is PlayerSheet.PlaybackMode ->
+            // Migrated (the sheet-module wave 3): the branch body lives in
+            // PlaybackModeSheetModule.Content; the engine-swap and
+            // local-control verdicts ride the sheets slice's flows (the
+            // former direct cast/isConnectedFlow + availablePlayerTypes
+            // reads off the session handle are the defect the migration
+            // retired).
+            PlaybackModeSheetModule.Content(moduleScope)
         is PlayerSheet.SleepTimer -> {
             // Sleep-timer slice: collected inside the branch.
             val sleepTimerState by sheets.sleepTimerState.collectAsStateWithLifecycle()

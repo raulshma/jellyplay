@@ -43,7 +43,12 @@ import java.io.File
  *    Baseline: [SettingsProjector] (a deferred, prefs-mirror
  *    writer — 2 wirings) and [PlaybackProgressReporter] (raw handle, 1 wiring).
  * 3. [VideoPlayerViewModel.kt]'s total line count must never exceed the
- *    post-extraction ceiling (see [videoPlayerViewModel_totalLineCeiling]).
+ *    post-extraction ceiling (see [videoPlayerViewModel_totalLineCeiling]),
+ *    and neither may the screen root's ([videoPlayerScreen_totalLineCeiling]).
+ * 4. The screen-side family (`VideoPlayerScreen*.kt`, `PlayerSheetModule.kt`,
+ *    `SubtitleHubSheetModule.kt`) must never read the playback session
+ *    handle — the GLOSSARY "Session slice" law at the source
+ *    (see [screenSideFiles_neverReadThePlaybackSessionHandle]).
  *
  * Lower the baseline when another slice migrates; never raise it.
  */
@@ -241,6 +246,63 @@ class ControllerOwnershipTest {
                 "root. Lower the ceiling when a cluster moves out; never " +
                 "raise it.",
         )
+    }
+
+    @Test
+    fun videoPlayerScreen_totalLineCeiling() {
+        // The screen-root companion to videoPlayerViewModel_totalLineCeiling:
+        // the screen's session reads move into the per-region slices and its
+        // branches into the sheet modules, so its TOTAL line count is a
+        // one-way guard too. Baseline: 2_140 — the then-current 2_138 lines
+        // plus two lines of slack, pinned EXACTLY like every other guard in
+        // this suite. Lower the ceiling when a section moves out; never
+        // raise it to admit growth.
+        val maxVideoPlayerScreenLines = 2_140
+        val screen = mainSources().first { it.name == "VideoPlayerScreen.kt" }
+        val lines = screen.sourceText().lineSequence().count()
+        assertTrue(
+            lines <= maxVideoPlayerScreenLines,
+            "VideoPlayerScreen.kt grew to $lines lines (ceiling " +
+                "$maxVideoPlayerScreenLines) — new behaviour belongs in a " +
+                "section-host file, an extracted module or a session slice. " +
+                "Lower the ceiling when a section moves out; never raise it.",
+        )
+    }
+
+    @Test
+    fun screenSideFiles_neverReadThePlaybackSessionHandle() {
+        // The GLOSSARY "Session slice" law, enforced at the source: the
+        // screens program against the per-region slices
+        // (`viewModel.sessionSlices.<region>`), never the session handle. The
+        // audited shape — `viewModel.playbackSession` reached through the
+        // sheet router and the migrated sheet modules (the PlaybackMode
+        // branch's cast connectivity + engine availability, the Render
+        // module's uiCommands triplet, the SubtitleHub's
+        // subtitlePreferences) — moved onto the SheetsSessionSlice members
+        // (`switchableEngines` / `localControlBlocked` / the render-pref
+        // commands / `subtitlePreferences`); this guard keeps the handle out
+        // of the screen-side family for good.
+        //
+        // Sanctioned handle sites OUTSIDE this family (the guard's scope,
+        // not exemptions): the VM composition root itself, and the platform
+        // route-button construction seam (VideoPlayerScreenSeams.*: the
+        // VM-receiver extension that builds the CastRouteButton projection
+        // createSessionSlices wires in — the one place the platform cast
+        // surface is reachable, per CastRouteButton's KDoc).
+        val screenSideFiles = mainSources().filter {
+            (it.name.startsWith("VideoPlayerScreen") && it.name.endsWith(".kt")) ||
+                it.name == "PlayerSheetModule.kt" ||
+                it.name == "SubtitleHubSheetModule.kt"
+        }
+        assertTrue(screenSideFiles.isNotEmpty(), "screen-side source family not found")
+        for (file in screenSideFiles) {
+            val text = file.sourceText().stripComments()
+            assertFalse(
+                text.contains("viewModel.playbackSession"),
+                "${file.name} must not read the playback session handle directly — " +
+                    "program against the session slices (the GLOSSARY \"Session slice\" seam)",
+            )
+        }
     }
 
     @Test

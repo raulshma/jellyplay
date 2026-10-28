@@ -470,13 +470,9 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.RestartPlayback -> playbackSession.transport.restart()
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
             is VideoPlayerUiEvent.RetryWithEngine -> retryWithEngine(event.playerType)
-            is VideoPlayerUiEvent.SwitchPlayerEngine -> {
-                val currentEngine = playbackSession.engine
-                if (currentEngine != null && event.playerType in playbackSession.availablePlayerTypes &&
-                    !playbackSession.cast.isConnectedFlow.value && !_uiState.value.isInSyncPlaySession &&
-                    currentEngine.displayName != event.playerType.displayName
-                ) retryWithEngine(event.playerType, sessionOnly = true)
-            }
+            is VideoPlayerUiEvent.SwitchPlayerEngine ->
+                // The sheets slice's ONE engine-swap verdict — membership check, never a re-fold.
+                if (event.playerType in sessionSlices.sheets.switchableEngines.value) retryWithEngine(event.playerType, sessionOnly = true)
             is VideoPlayerUiEvent.DismissPlaybackError -> dismissPlaybackError()
             is VideoPlayerUiEvent.SetControlsVisible -> playbackSession.engineCommands.setControlsVisible(event.visible)
             is VideoPlayerUiEvent.InstallUserFont -> playbackSession.subtitleStyleController.installUserFont(event.uri)
@@ -534,7 +530,11 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetSeriesSubtitleDisabled -> setSeriesSubtitleDisabled(event.disabled)
             is VideoPlayerUiEvent.SetSeriesAudioDescriptionPreference ->
                 setSeriesPreferAudioDescription(event.remember)
-            is VideoPlayerUiEvent.PlayQueueItem -> playbackSession.upNext.playQueueItem(event.index)
+            is VideoPlayerUiEvent.PlayQueueItem -> {
+                // Manual navigation: the still-watching streak restarts.
+                playbackSession.autoplayController.onUserInteraction()
+                playbackSession.upNext.playQueueItem(event.index)
+            }
             is VideoPlayerUiEvent.RemoveQueueItem -> playbackSession.videoQueue.removeAt(event.index)
             is VideoPlayerUiEvent.MoveQueueItem -> playbackSession.videoQueue.move(event.fromIndex, event.toIndex)
             VideoPlayerUiEvent.ClearQueue -> playbackSession.videoQueue.clear()

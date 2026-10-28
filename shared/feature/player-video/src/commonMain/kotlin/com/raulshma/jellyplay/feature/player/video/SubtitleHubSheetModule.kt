@@ -69,8 +69,9 @@ internal object SubtitleHubSheetModule : PlayerSheetModule {
         val subtitleState by sheets.subtitleState.collectAsStateWithLifecycle()
         // Display-filter prefs: the picker list may hide tracks outside the
         // preferred languages (presentation only — auto-selection and the
-        // series-off label below always see the full list).
-        val subtitlePrefs by scope.viewModel.playbackSession.subtitlePreferences.collectAsStateWithLifecycle()
+        // series-off label below always see the full list). The slice rides
+        // the sheets slice (the GLOSSARY "Session slice" seam).
+        val subtitlePrefs by sheets.subtitlePreferences.collectAsStateWithLifecycle()
         // named style presets: the hub's Style tab is the apply/save/
         // delete surface. Presets are pure data over the style-controller
         // slice behind the sheets slice; the list rides the slice.
