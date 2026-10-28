@@ -474,9 +474,6 @@ class AudioPlayerViewModelTest {
         verify { effectsManager.setDialogueBoostStrength(EffectStrength.HIGH) }
         verify { effectsManager.setNightModeStrength(EffectStrength.LOW) }
         verify { effectsManager.setBassBoostStrength(EffectStrength.MODERATE) }
-        assertEquals(0.6f, viewModel.nightModeVolume, 0.0001f)
-        assertEquals(900, viewModel.nightModeGain)
-        assertEquals(5_000L, viewModel.skipPreviousThresholdMs)
     }
 
     @Test

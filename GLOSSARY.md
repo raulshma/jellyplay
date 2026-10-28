@@ -261,6 +261,19 @@ projections gate on the uiState mirror, the advance on the manager flag.
 Segment display math (`SegmentCalculator`) and the autoplay gate consume
 the precedence verdict; neither carries queue fragments.
 
+**End-of-media decision** — the end-of-media dispatch as one pure fold,
+`EndOfMediaDecision`: it composes the six individually-tested end-of-media
+verdict modules (`SleepTimerBoundaryPolicy`, `AutoPlayController`,
+`StillWatchingGate`, `UpNextController`, `PostPlaybackActionsController`, the
+session's cinema chain) into an ordered effect list — the VM computes the
+verdicts as facts and executes the effects, one arm each. The ladders are the
+module's content: sleep-intercept > still-watching > streak-record > advance,
+and cinema > delete-offer > keep-card > close, with the #17 keep gate
+single-sited in `closeTail` across both close entries (the natural end and the
+offer's release) so it cannot drift. `EndOfMediaDecisionTest` holds the truth
+table. Autoplay/cinema/close policy stays VM-side — the module is
+VM-constructed, not a public seam.
+
 **Transport routing module** — the SyncPlay → cast → local seek/play
 precedence ladder plus its per-arm bypass rules (clamp only on
 user-initiated local seeks, no position-flow write on group/cast arms,
@@ -280,6 +293,20 @@ not a flag table. `PlayerUiCommands` is owned by `PlaybackSession`;
 `applyPlaybackPrefChange` lives there. Aspect-ratio belongs here despite
 persisting nothing — the name says UI commands.
 
+**Track selection hub** — `TrackSelectionHelper`: the one hub for audio/subtitle
+track selection across engines — picker-row building from engine + server
+stream data, the side-effecting selection consequences (`engine.selectTrack`,
+the held-selection guard, the per-item persist, the cross-episode
+remembered-track memory and the toggle-with-memory latch), and the
+`TrackState` slice as its single home (read-only StateFlow; `resetForItem`
+clears it — track state does not survive an item switch, the series memory
+does). The pure decision half — which track plays — is the already-split
+`TrackSelectionPolicy` (the pending → stored → scoring → type-specific →
+matcher → fallback ladder, plus the side-loaded
+`external:`/`offline:`/`streaming:` id grammar); the hub consumes it, never
+re-encodes it. `TrackSelectionPolicyTest` / `TrackSelectionHelperTest` pin the
+halves.
+
 **Config delta** — one decision half for all four engines:
 `EngineConfigDelta.of(old, new)` computes which config slices moved, and
 every adapter's `onConfigChanged` switches on flags rather than per-field
@@ -288,6 +315,39 @@ delay that rides `SubtitleStyle.offsetMs`) is computed inside `of()` from the
 raw configs — never derived from the other flags.
 `subtitleStyleChangedExcludingDelay` feeds Exo and VLC, which consume the
 delta alongside the two mpv hosts.
+
+**Engine event verdict** — the event→decision policy both shipped video hosts
+ride: `EngineEventCoordinator` (player-contract, beside `MediaEngine`) folds
+the raw `EngineEventSource` slice into `EngineDecision`s — the guarded
+play/buffering mirrors, the transcode-fallback policy, the buffering watchdog,
+the subtitle toasts, the pass-out interaction clock — while
+`EngineSessionShell` owns the structural half around it (construction,
+dispose/reArm, the decision fan-out, the one-shot session-event pipe). The
+decision→execution split is the depth: the coordinator never writes uiState
+nor commands an engine, so the 657-line suite drives the interface with flow
+fixtures and an injected clock, zero mocks. Each host pins its divergence as
+`Config` knobs, never a hand-rolled copy — VOD keeps the defaults
+(`FORCE_DIRECT_PLAY_ONE_SHOT`, `INITIAL_BUFFER_ONLY`), live pins
+`EXTERNAL_REQUEST_ONLY` + `EVERY_BUFFERING_EPISODE` + its own window. The two
+hosts are the VOD session (over `PlayerSessionManager.engineFlow` through
+`toEngineEventSource`) and the live tuner (its state enum mapped onto
+`EnginePlaybackState`) — two adapters, one seam.
+
+**Session spine** — `PlayerSessionManager`: the engine stack + load
+bookkeeping deep module under the session root. The `loadMedia` spines (the
+`PlaybackSource.Auto` resolve → offline fail-fast gate →
+`loadOffline`/`loadOnline` dispatch, every failure converging on `failLoad`),
+the engine ritual (`initializeEngine`, `activateEngine`'s lifecycle-callback +
+PiP wiring, `adoptEngine`'s config/speed push before load), the warm slot
+(`warmNextEpisode` → `takeWarmResolution`, the `WarmNextStream` facts
+published for the byte pre-warmer), and `reresolveAndSwap` under the
+reload-shaped verbs (`reloadPlayback`, `reloadForStreamChange`,
+`switchMediaSource`, `reloadWithEngine`) beside `bindReclaimedEngine`. What
+stays outside: the five reload variants' choreography (the Playback reload
+coordinator) and the position/report family (the Session position ledger).
+The per-load stale-fetch cancels (`transcodeReasonsRefresher`,
+`sidecarCatchUpJob`) and the publish points (`sessionState`, `engineFlow`)
+are private to the spine.
 
 **Session position ledger** — the position/report family of the playback
 session as one module: the play-session id resolution (one id per session
@@ -314,6 +374,22 @@ entry points are one-line forwards; a new reload-shaped feature adds a
 variant, not another copy of the choreography. The shared rebind tail stays
 session-owned (cinema/reclaim reuse it) — deliberately outside the
 coordinator. The pure variant→delta folds are pinned by `PlaybackReloadTest`.
+
+**Cinema pre-roll sequencer** — the cinema-mode chain as session-root state:
+`CinemaIntroContext` (the original `initialize` args + intro queue + cursor,
+`@Volatile` — the VM's end/skip arms and the reporter read it),
+`beginCinemaMode` (entered through the pipeline's hook), `loadCinemaIntro`
+(the `trackProgress = false` rule: intros are not library history, so no
+server reporting and no segment/next-episode/trickplay bookkeeping while
+media session + position tracking still rebind), and the idempotent
+`advanceCinemaIntro` whose restore arm clears the context before the
+recursive `initialize` (`allowCinemaMode = false`) so the chain cannot
+re-enter itself. The VM-side arms — the skip button's `AdvanceCinemaIntro`
+routing and the end-of-media `ChainCinema` effect — call the session; they
+own no sequencing. Deliberately not a standalone module: the bodies need
+`loadMedia` + `rebindSessionTracking` + `initialize` — the full session
+graph — so extraction fails ADR-0012's shallow-module test; a reviewer
+re-proposing it is re-litigating that ADR's reasoning.
 
 **Player preference leaf table** — ONE home for "which preference feeds
 which player uiState leaf": typed rows (aggregate read, optional state
@@ -453,6 +529,29 @@ enable gates and the SELECT ladder through it over the same
 `videoInputBindings` store, with zap behavior preserved as the default
 binding.
 
+**Restore prompt applier** — `SessionRestorePromptApplier` (the player-video
+session package), the one home for the cold-start restore prompt's shell half:
+the evaluate-once ladder over the restoration controller (`Ask` parks the
+snapshot in the dialog state / `AutoRestore` acks then navigates at the
+snapshot's resume position / `None`), the dialog's three arms (Resume, the
+dismissal write, close), and the host-level-scope invariant — the dismissal
+write rides a scope OUTSIDE the prompt-conditional composition; a scope inside
+dies with the dialog and the DataStore marker never lands. Desktop's
+preconditions ride the suspend `gate()` parameter (video-surface support,
+onboarding-completed), never a flag table; Android admits everything. Both
+shells — the Android `SessionRestoreHost` and the desktop
+`DesktopNavScaffold` — are one-line calls; wiring shared, arms per-shell
+(ADR-0001).
+
+**Player focus handoff** — everything "where does focus land when the
+controls hide or an overlay appears" knows about itself at the player
+surface: the overlay-priority ladder in `VideoPlayerScreen` (cinema intro >
+next-episode card > skip-segment prompt) and the grab/retry/re-assert
+machine in `PlatformWindowSeam`'s `PlayerTvFocusGrabEffect`, including the
+hide-edge handoff. Container-grain restored focus is core:ui's TV focus
+cursor; the player's ladder stays screen-owned, pinned by the
+keyboard-focus-grab suites.
+
 ## Admin (logs, plugins)
 
 **Log line parse** — the log screen's severity-highlight decode as plain
@@ -499,9 +598,13 @@ route→subtitle map stays local. The app module's three ViewModel defs ride
 `viewModelOf(::X)` with a source-scan totality guard.
 
 **Reset review cross-pin** — every spec-backed preference in a reset
-category has a `DiffField` row, so the Factory-Reset / restore-wizard review
-surface's totality is not self-referential; sanctioned omissions ride an
-explicit pinned-exception set in `PreferenceSpecDiffFieldRatchetTest`.
+category that carries a search face has a `DiffField` row, so the
+Factory-Reset / restore-wizard review surface's totality is not
+self-referential; sanctioned omissions ride an explicit pinned-exception set
+in `PreferenceSpecDiffFieldRatchetTest`. Search-less reset-category rows
+(the later-wave spec domains' plain toggles) stay outside the review
+surface — their reset lists are pinned by their `<Domain>SpecDerivationTest`
+reset pins instead.
 
 **Restore wizard selection target** — the ONE selection verb's payload:
 `WizardSelectionTarget` names which wizard group a toggle addresses, and
@@ -515,6 +618,20 @@ one table (placement/styling stays per-surface). The admin TaskState
 family has the same single home (`TaskStatePresentation`: color role,
 cancellable, startable, label — labels single-sited; i18n is a follow-up),
 as do the requests-side ArrDownloadStatus rows.
+
+**Structural/live state split** — the VM state protocol for screens with hot
+per-row values: structural rows ride the uiState bag, per-key moving values
+ride a keyed side flow, and the leaves collect per key. The instances:
+`DownloadsViewModel` (`structuralItems` + `progressById` +
+`totalStorageBytes`, with the exit-transition retention scan — a row's live
+bytes must outlive its removal from the live query for exactly one frame,
+then be forgotten — and the single-upstream-subscription rule keeping
+`totalStorageBytes` off the per-tick path), `RequestsViewModel` (the
+enrichment maps, citing the DownloadsViewModel split), and `HomeViewModel`'s
+`presenceChips`/`headerShortcuts` members (deliberately out of the ~45-field
+`HomeUiState`). The term answers "which values ride outside the bag" —
+placement stays each screen's own decision; a screen re-justifying the split
+in prose instead of citing the term is the defect shape.
 
 **Seerr media kind** — `SeerrMediaKind` + `SeerrRequestItem.kind` derived
 once in core:model beside `effectiveMediaStatus` (ignoreCase); the thirteen
@@ -555,13 +672,20 @@ source-scan guard asserts every ViewModel class has exactly one registration.
 `SettingsKoinModule` follows the convention; the hand-written form stands
 elsewhere.
 
-**Preference spec tier (subtitle domain)** — the seventh spec domain: the
-subtitle store's keys, reads, restore, reset lists, defaults and search faces
-derive from `SubtitlePreferenceSpecs` rows; invariant writes (LRU per-item
-delay, identity-by-absence sets, nullable set-or-remove) stay hand setters
-beside the rows — the documented `derived` opt-out. Migrating a domain
-requires the derivation test before the reset rewire and a plugin-catalog
-artifact regeneration. `SubtitleSpecDerivationTest` pins key identity.
+**Preference spec tier** — the preference domains whose keys, reads, restore,
+reset lists, defaults and search faces derive from `<Domain>PreferenceSpecs`
+rows (nineteen spec-backed stores: the seven first-wave domains — playback,
+videoplayer, appearance, screensaver, shortcuts, experimental, subtitle —
+plus audio effects, player engines, notifications & newsletter, library,
+downloads, reader, audio, network & offline, audio cache, SyncPlay &
+casting, volume memory, navigation). Invariant writes (LRU per-item delay,
+identity-by-absence sets, nullable set-or-remove, coalesced multi-key edits,
+read-modify-write map verbs) stay hand setters beside the rows — the
+documented `derived` opt-out, declared per store as "Hand-written residuals".
+Migrating a domain requires the derivation test before the reset rewire and
+a plugin-catalog artifact regeneration; every newly advertised bound must
+have a visible clamp in its owning store and a row in the generator test's
+audited-bounds set. Each `<Domain>SpecDerivationTest` pins key identity.
 
 **Receiver intake fold** — each entry receiver's decode (verb, extras —
 including `NotificationActionReceiver`'s hand-validated parallel arrays — and
@@ -603,7 +727,11 @@ the repository's refcounted loop behind the visibility binding.
 re-arming on identity reset, and gating on the store, behind one interface;
 the transcodes/analytics/dashboard/settings status ViewModels consume it.
 `JellyPlayCapabilityGate` + `JellyPlayCapabilityState` live in core:data's
-session package.
+session package. The meta-keyed settings-sync family gates through
+`settingsSyncGateOpen()` (the `JellyPlayPluginStatusStore` extension beside
+the gate) — probe AVAILABLE and the settings-sync meta key, probe-only
+because meta keys carry no toggle; a future registry-version floor lands
+there.
 
 **Download summary surface** — the notification-group summary's in-flight
 count as one observed flow with a single collector through the notification

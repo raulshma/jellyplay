@@ -6,8 +6,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -29,6 +27,21 @@ import kotlinx.serialization.Serializable
  * on the system `STREAM_MUSIC` model and never touches this store; the
  * buckets are written by the desktop mpv engine's user-initiated volume path
  * and the audio players, and applied at session start.
+ *
+ * **Spec derivation:** every key this store owns is declared exactly once as a
+ * row in [VolumeProfilePreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding (the blob's decode
+ * lives in the [VolumeProfilePreferenceSpecs.VOLUME_PROFILES] row's read,
+ * memoised beside the row), the toggle's single-key setter delegates to its
+ * row's derived write, and [resetKeysFor] filters the rows by reset category.
+ *
+ * **Hand-written residuals (the documented opt-outs — see the specs object
+ * KDoc):** [setVolume] / [clearVolume] are read-modify-writes of the whole
+ * JSON map (four buckets make a diff-based edit pointless) and [restore]
+ * removes the blob key when the restored map is empty (the identity-by-absence
+ * convention) — a read-modify-write or a removal cannot be a row encoding.
  */
 class VolumeProfileStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -36,13 +49,18 @@ class VolumeProfileStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [VolumeProfilePreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key of
+     * the same name). Kept as a plain object rather than folded into the rows
+     * because it is the reflection anchor for the JVM reset-coverage guard.
+     */
     internal object Keys {
-        val VOLUME_PROFILES = stringPreferencesKey("volume_profiles")
-        val REMEMBER_VOLUME_PER_CONTENT_TYPE = booleanPreferencesKey("remember_volume_per_content_type")
+        val VOLUME_PROFILES = stringPreferencesKey(VolumeProfilePreferenceSpecs.VOLUME_PROFILES.keyName)
+        val REMEMBER_VOLUME_PER_CONTENT_TYPE = booleanPreferencesKey(VolumeProfilePreferenceSpecs.REMEMBER_VOLUME_PER_CONTENT_TYPE.keyName)
     }
-
-    private var cachedVolumes: ParsedCache<Map<VolumeBucket, Float>> =
-        ParsedCache(null, emptyMap())
 
     /** The volume-memory slice, derived directly from the raw DataStore. */
     val volumeProfile: StateFlow<VolumeProfileSlice> =
@@ -50,45 +68,18 @@ class VolumeProfileStore constructor(
 
     /**
      * Pure read of the volume-memory fields from a raw [Preferences]
-     * snapshot. The JSON blob decode is memoised (typed-key reads below it
-     * re-run per emission); a corrupt blob degrades to no remembered levels
-     * rather than throwing.
+     * snapshot, each field delegated to its [VolumeProfilePreferenceSpecs] row
+     * encoding.
      */
-    internal fun read(prefs: Preferences): VolumeProfileSlice {
-        val volumes = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.VOLUME_PROFILES],
-            cache = cachedVolumes,
-            default = emptyMap(),
-            parse = ::decodeVolumes,
-            onNull = { emptyMap() },
-            cacheRef = { cachedVolumes = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-        return VolumeProfileSlice(
-            volumes = volumes,
-            rememberVolumePerContentType = PreferenceCodec.readBool(
-                prefs,
-                Keys.REMEMBER_VOLUME_PER_CONTENT_TYPE,
-                "remember_volume_per_content_type",
-                true,
-            ),
-        )
-    }
-
-    private fun decodeVolumes(raw: String): Map<VolumeBucket, Float> = try {
-        PreferenceCodec.json.decodeFromString<Map<String, Float>>(raw)
-            .mapNotNull { (bucketStr, level) ->
-                val bucket = VolumeBucket.entries.firstOrNull { it.name == bucketStr }
-                    ?: return@mapNotNull null
-                bucket to level.coerceIn(0f, 1f)
-            }
-            .toMap()
-    } catch (_: Exception) {
-        emptyMap()
-    }
+    internal fun read(prefs: Preferences): VolumeProfileSlice = VolumeProfileSlice(
+        volumes = VolumeProfilePreferenceSpecs.VOLUME_PROFILES.readFrom(prefs),
+        rememberVolumePerContentType = VolumeProfilePreferenceSpecs.REMEMBER_VOLUME_PER_CONTENT_TYPE.readFrom(prefs),
+    )
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — the blob's read-modify-write verbs stay hand-written (the
+    // documented opt-out); they re-derive the current map through the row's
+    // own read. The toggle delegates to its row's derived write.
     // ------------------------------------------------------------------
 
     /**
@@ -98,7 +89,7 @@ class VolumeProfileStore constructor(
      */
     suspend fun setVolume(bucket: VolumeBucket, level: Float) {
         dataStore.edit { prefs ->
-            val current = decodeVolumes(prefs[Keys.VOLUME_PROFILES] ?: "{}")
+            val current = VolumeProfilePreferenceSpecs.VOLUME_PROFILES.readFrom(prefs)
             prefs[Keys.VOLUME_PROFILES] = PreferenceCodec.json.encodeToString(
                 (current + (bucket to level.coerceIn(0f, 1f)))
                     .mapKeys { it.key.name },
@@ -109,7 +100,7 @@ class VolumeProfileStore constructor(
     /** Forgets one bucket's remembered level (factory-reset helper). */
     suspend fun clearVolume(bucket: VolumeBucket) {
         dataStore.edit { prefs ->
-            val current = decodeVolumes(prefs[Keys.VOLUME_PROFILES] ?: "{}")
+            val current = VolumeProfilePreferenceSpecs.VOLUME_PROFILES.readFrom(prefs)
             prefs[Keys.VOLUME_PROFILES] = PreferenceCodec.json.encodeToString(
                 (current - bucket).mapKeys { it.key.name },
             )
@@ -117,13 +108,14 @@ class VolumeProfileStore constructor(
     }
 
     suspend fun setRememberVolumePerContentType(enabled: Boolean) {
-        dataStore.edit { it[Keys.REMEMBER_VOLUME_PER_CONTENT_TYPE] = enabled }
+        dataStore.edit { VolumeProfilePreferenceSpecs.REMEMBER_VOLUME_PER_CONTENT_TYPE.writeTo(it, enabled) }
     }
 
     /**
      * Faithful inverse of [read] (backup restore path). An empty volume map
      * removes the key so storage carries no no-op blob — the
      * identity-by-absence convention (`setTrackSelectionRules` precedent).
+     * Hand-written: the conditional removal cannot be a row encoding.
      */
     suspend fun restore(slice: VolumeProfileSlice) {
         dataStore.edit { prefs ->
@@ -131,36 +123,36 @@ class VolumeProfileStore constructor(
             else prefs[Keys.VOLUME_PROFILES] = PreferenceCodec.encodeDefaultsJson.encodeToString(
                 slice.volumes.mapKeys { it.key.name },
             )
-            prefs[Keys.REMEMBER_VOLUME_PER_CONTENT_TYPE] = slice.rememberVolumePerContentType
+            VolumeProfilePreferenceSpecs.REMEMBER_VOLUME_PER_CONTENT_TYPE.writeTo(prefs, slice.rememberVolumePerContentType)
         }
     }
 
     /**
-     * Category reset participation: both keys clear under PLAYBACK, matching
-     * every other in-player preference.
+     * Category reset participation: the [VolumeProfilePreferenceSpecs] rows
+     * whose declared reset category matches — both keys clear under PLAYBACK,
+     * matching every other in-player preference.
      */
     internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
-        when (category) {
-            PreferenceResetCategory.PLAYBACK -> listOf(
-                Keys.VOLUME_PROFILES,
-                Keys.REMEMBER_VOLUME_PER_CONTENT_TYPE,
-            )
-            else -> emptyList()
-        }
+        VolumeProfilePreferenceSpecs.resetKeysFor(category)
 }
 
 /**
  * The volume-memory slice. `@Serializable` so it can ride the backup slice
  * machinery like every other domain slice; `@Immutable` for cheap Compose
- * stability reads at the UI edge.
+ * stability reads at the UI edge. Every default IS its
+ * [VolumeProfilePreferenceSpecs] row's declared default — read off the row via
+ * a plain accessor, so a preference's default is stated exactly once, in its
+ * spec, and cannot drift between the spec (what an absent key reads) and the
+ * slice (what a fresh in-memory instance serves). The spec-default equality is
+ * pinned field-for-field by `VolumeProfileSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class VolumeProfileSlice(
     /** Remembered normalized levels (0..1) per bucket; absent = never set. */
-    val volumes: Map<VolumeBucket, Float> = emptyMap(),
+    val volumes: Map<VolumeBucket, Float> = VolumeProfilePreferenceSpecs.VOLUME_PROFILES.default,
     /** Master toggle — default ON where the feature is available at all. */
-    val rememberVolumePerContentType: Boolean = true,
+    val rememberVolumePerContentType: Boolean = VolumeProfilePreferenceSpecs.REMEMBER_VOLUME_PER_CONTENT_TYPE.default,
 ) {
     /** The remembered level for [bucket], or null when none was ever stored. */
     fun volumeFor(bucket: VolumeBucket): Float? = volumes[bucket]

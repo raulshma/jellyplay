@@ -215,29 +215,15 @@ class DownloadsViewModel(
      * costly; rows read their moving values from here while the
      * list itself only re-emits on structural change. The backing StateFlow
      * is conflated by construction (stateIn), so a burst of ticks collapses
-     * to the latest map.
-     *
-     * Exit-transition retention: the live query drops a row the moment its
-     * status leaves the in-flight set, which can land a frame BEFORE the
-     * structural list re-emits with the row's new status — without retention
-     * the still-DOWNLOADING row would flash back to its stale structural
-     * bytes for that frame. The scan accumulator keeps the last live value
-     * for every row the structural list still shows as DOWNLOADING and
-     * forgets a row once its structural status moves on (or it leaves the
-     * list).
+     * to the latest map. The scan accumulator is [retainedDownloadProgress]
+     * — the exit-transition retention rule (one-frame retain-then-forget)
+     * lives there.
      */
     val progressById: StateFlow<Map<String, DownloadProgress>> =
         queue.getActiveDownloadProgress()
             .combine(structuralItems) { live, items -> live to items }
             .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
-                val stillDownloading = structural
-                    .asSequence()
-                    .filter { it.status == DownloadStatus.DOWNLOADING }
-                    .mapTo(HashSet()) { it.id }
-                val merged = HashMap(retained)
-                merged.keys.retainAll(stillDownloading)
-                merged.putAll(live)
-                merged
+                retainedDownloadProgress(retained, live, structural)
             }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())

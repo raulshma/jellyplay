@@ -41,5 +41,6 @@ fun androidCoreDataModule(context: Context): Module = module {
         androidRemoteCastModule(context),
         androidIntakeStorageModule(context),
         androidWorkSchedulersModule(context),
+        androidDownloadsSeamsModule(context),
     )
 }

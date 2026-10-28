@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
@@ -283,6 +284,7 @@ class DataKoinModulesTest {
             assertResolves<MediaRepositoryAccess>(koin)
             assertResolves<DesktopDownloadManager>(koin)
             assertResolves<DesktopAutoDownloadScheduler>(koin)
+            assertResolves<AutoDownloadScheduler>(koin)
 
             // ── Home conveyor desktop actuals ────────────────────
             // The four WorkManager/widget-backed HomeViewModel ctor deps are

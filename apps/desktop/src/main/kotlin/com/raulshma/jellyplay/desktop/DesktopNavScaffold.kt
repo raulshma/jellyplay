@@ -23,10 +23,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -64,10 +62,7 @@ import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
-import com.raulshma.jellyplay.feature.player.video.session.LaunchContext
-import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationDecision
-import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
-import com.raulshma.jellyplay.feature.player.video.session.SessionRestorePromptDialog
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorePromptApplier
 import com.raulshma.jellyplay.feature.player.video.session.toPlayerRoute
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.navigation.ShortcutActionSurface
@@ -268,43 +263,6 @@ internal fun DesktopNavScaffold(
                 DesktopOpenLinkEvent.NoLinkFound ->
                     snackbarHostState.showSnackbar(DesktopLinkOpenMessages.NO_LINK_IN_CLIPBOARD)
             }
-        }
-    }
-
-    // ── cold-start session restoration ("resume last watched?") ─────
-    // ONE evaluation per process (the controller's latch), applied shell-side —
-    // the prompt lives HERE, not in the player screen. Launch context: an argv
-    // link at boot is an explicit launch destination ([LaunchContext.DeepLink])
-    // that must never be hijacked by the prompt; a plain launch is ColdStart.
-    // Two deliberate skips, both documented: (1) no video surface story — an
-    // AutoRestore would push an unregistered Route.VideoPlayer into the
-    // dead-end guard; (2) a not-yet-onboarded session — the first-run wizard
-    // push above owns that boot, and the skip is total for the session (the
-    // effect runs once per scaffold composition).
-    var restorePrompt by remember { mutableStateOf<SessionRestorationSnapshot?>(null) }
-    // Scaffold-level ON PURPOSE: the dismissal write launches on this scope,
-    // and a scope declared inside the prompt block below is CANCELLED the
-    // moment `restorePrompt = null` removes that block from composition —
-    // the DataStore write died with the dialog and the marker never landed.
-    val promptScope = rememberCoroutineScope()
-    LaunchedEffect(services) {
-        if (!DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported &&
-            !DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported
-        ) {
-            return@LaunchedEffect
-        }
-        if (!services.appRuntimeStateStore.isOnboardingCompleted()) {
-            return@LaunchedEffect
-        }
-        val launchContext =
-            if (linkOpens?.launchCarriedLink == true) LaunchContext.DeepLink else LaunchContext.ColdStart
-        when (val decision = services.sessionRestoration.evaluate(launchContext)) {
-            is SessionRestorationDecision.Ask -> restorePrompt = decision.snapshot
-            is SessionRestorationDecision.AutoRestore -> {
-                services.sessionRestoration.onRestoreHandled()
-                guardedNavigator.navigate(decision.snapshot.toPlayerRoute())
-            }
-            SessionRestorationDecision.None -> Unit
         }
     }
 
@@ -674,21 +632,29 @@ internal fun DesktopNavScaffold(
         }
     }
 
-    // The restoration prompt, over everything the scaffold renders (a window
-    // dialog — tree placement carries no visual weight; rendered last like the
-    // AppRoot About dialog). The shared prompt dialog owns the arm-splitting
-    // choreography: only a REAL dismiss persists the marker.
-    restorePrompt?.let { snapshot ->
-        SessionRestorePromptDialog(
-            snapshot = snapshot,
-            onResume = {
-                services.sessionRestoration.onRestoreHandled()
-                guardedNavigator.navigate(snapshot.toPlayerRoute())
-            },
-            onDismissed = { promptScope.launch { services.sessionRestoration.onAskDismissed(snapshot) } },
-            onDismiss = { restorePrompt = null },
-        )
-    }
+    // ── cold-start session restoration ("resume last watched?") ─────
+    // ONE evaluation per process (the controller's latch), applied by the
+    // shared applier — the prompt lives HERE, over everything the scaffold
+    // renders (a window dialog — tree placement carries no visual weight;
+    // rendered last like the AppRoot About dialog), not in the player screen.
+    // Launch fact: an argv link at boot is an explicit launch destination
+    // that must never be hijacked by the prompt; a plain launch is ColdStart.
+    // Two deliberate skips ride the gate, in the effect's original order:
+    // (1) no video surface story — an AutoRestore would push an unregistered
+    // Route.VideoPlayer into the dead-end guard; (2) a not-yet-onboarded
+    // session — the first-run wizard push above owns that boot. Either skip
+    // is total for the session (the effect runs once per process — the
+    // latch).
+    SessionRestorePromptApplier(
+        controller = services.sessionRestoration,
+        launchedWithExplicitDestination = linkOpens?.launchCarriedLink == true,
+        navigate = { snapshot -> guardedNavigator.navigate(snapshot.toPlayerRoute()) },
+        gate = {
+            (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
+                DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) &&
+                services.appRuntimeStateStore.isOnboardingCompleted()
+        },
+    )
 }
 
 @Composable

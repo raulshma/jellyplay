@@ -3,14 +3,13 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.data.session.settingsSyncGateOpen
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
-import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingWrite
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsEntry
@@ -443,9 +442,7 @@ suspend fun captureSafetySnapshot(
     apiClient: JellyPlaySettingsSyncRoutes,
     statusStore: JellyPlayPluginStatusStore,
 ): Boolean {
-    val gateOpen = statusStore.status.value == JellyPlayPluginStatus.AVAILABLE &&
-        statusStore.hasFeature(JellyPlayPluginFeatures.SettingsSync)
-    if (!gateOpen) return true
+    if (!statusStore.settingsSyncGateOpen()) return true
     // The block returns the api's own Result, so the outer runCatching only
     // sees a THROWN error — the api's failure arm is the inner Result's.
     return runCatchingRethrowingCancellation { apiClient.createSnapshot() }

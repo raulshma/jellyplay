@@ -1,13 +1,25 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audio.AudioPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCachePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEnginePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.library.LibraryPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.notification.NotificationPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflinePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.reader.ReaderPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfilePreferenceSpecs
 import kotlin.test.Test
 import kotlin.test.fail
 
@@ -31,9 +43,9 @@ import kotlin.test.fail
  * [exceptions] below, each with its reason; the list stays minimal rather
  * than pre-emptively admitting a lazy row.
  *
- * Scope: the seven spec-backed stores. The spec-less stores (the audio /
- * effects / navigation / library residuals) have no spec tier to cross-pin —
- * their diff coverage is the human review the registry comments document.
+ * Scope: the nineteen spec-backed stores. A store without a spec tier has no
+ * registration here — its diff coverage is the human review the registry
+ * comments document.
  */
 class PreferenceSpecDiffFieldRatchetTest {
 
@@ -46,6 +58,39 @@ class PreferenceSpecDiffFieldRatchetTest {
         "HomeDiscoveryPreferenceSpecs" to HomeDiscoveryPreferenceSpecs.all,
         "ScreensaverPreferenceSpecs" to ScreensaverPreferenceSpecs.all,
         "ExperimentalPreferenceSpecs" to ExperimentalPreferenceSpecs.all,
+        "AudioEffectsPreferenceSpecs" to AudioEffectsPreferenceSpecs.all,
+        "PlayerEnginePreferenceSpecs" to PlayerEnginePreferenceSpecs.all,
+        "NotificationPreferenceSpecs" to NotificationPreferenceSpecs.all,
+        // The reader rows carry no search face and no reset category, so every
+        // row auto-skips the loop below — registered for the same totality the
+        // other domains get (a future searchable+resettable reader row is
+        // ratcheted by construction).
+        "ReaderPreferenceSpecs" to ReaderPreferenceSpecs.all,
+        // The library and downloads rows carry no search face either (their
+        // catalog rows stay the feature-side residuals the appearance/storage
+        // screens render), so every row auto-skips the loop below — registered
+        // for the same totality (a future search-bearing row is ratcheted by
+        // construction).
+        "LibraryPreferenceSpecs" to LibraryPreferenceSpecs.all,
+        "DownloadsPreferenceSpecs" to DownloadsPreferenceSpecs.all,
+        // The audio-player, audio-cache and network/offline rows carry no
+        // search face either (their catalog rows stay the feature-side
+        // residuals the audio/network screens render), so every row
+        // auto-skips the loop below — registered for the same totality (a
+        // future search-bearing row is ratcheted by construction).
+        "AudioPreferenceSpecs" to AudioPreferenceSpecs.all,
+        "AudioCachePreferenceSpecs" to AudioCachePreferenceSpecs.all,
+        "NetworkOfflinePreferenceSpecs" to NetworkOfflinePreferenceSpecs.all,
+        // The SyncPlay/casting rows all carry search faces (the hand fused
+        // rows' ss_* keys, which the SYNCPLAY_CASTING diff registry already
+        // pins), so they hit the loop below; the volume-memory toggle's
+        // ss_remember_volume_title face is pinned by its new PLAYBACK diff
+        // row, and the two navigation toggles' faces by the HOME_DISCOVERY
+        // diff rows that were always there (the customization blobs and the
+        // levels blob carry no search face and auto-skip).
+        "SyncPlayCastPreferenceSpecs" to SyncPlayCastPreferenceSpecs.all,
+        "VolumeProfilePreferenceSpecs" to VolumeProfilePreferenceSpecs.all,
+        "NavigationPreferenceSpecs" to NavigationPreferenceSpecs.all,
     )
 
     /**

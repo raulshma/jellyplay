@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadSuggestionNotifier
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
@@ -121,4 +122,5 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
             scope = get(DatastoreQualifiers.applicationScope),
         )
     }
+    single<AutoDownloadScheduler> { get<DesktopAutoDownloadScheduler>() }
 }

@@ -19,7 +19,7 @@ class LibrarySyncHookImpl (
 ) : LibrarySyncHook {
 
     override suspend fun onLibraryScanComplete() {
-        runCatchingRethrowingCancellation { autoDownloadScheduler.enqueueNow() }
+        runCatchingRethrowingCancellation { autoDownloadScheduler.checkNow() }
         runCatchingRethrowingCancellation {
             widgetWorkScheduler.refreshLibraryNow()
             widgetWorkScheduler.refreshSeerrNow()

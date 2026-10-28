@@ -7,13 +7,9 @@ import kotlin.test.assertNull
 import kotlin.test.Test
 
 /**
- * Pure-JVM tests — `TtlCache` accepts an injectable clock so it does not depend
- * on `android.os.SystemClock` at test time (the `core:model` module has no
- * Robolectric dependency).
- *
- * Test-lane note: this file has no actual JVM dependency — the clock is
- * injected, the assertions pure — so it is a commonTest candidate despite
- * its jvmTest placement.
+ * Pins the [TtlCache] contract: TTL expiry and eviction via the injectable
+ * clock, LRU capping, prefix removal, identity-keyed isolation, and the
+ * cache-aside [TtlCache.getOrPut] semantics.
  */
 class TtlCacheTest {
 

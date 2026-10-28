@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.di
 import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadSchedulerImpl
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
@@ -27,13 +28,14 @@ import org.koin.dsl.module
 internal fun androidWorkSchedulersModule(context: Context): Module = module {
     // ── WorkManager schedulers + reconnect listeners ────────────────────
     single {
-        AutoDownloadScheduler(
+        AutoDownloadSchedulerImpl(
             context = context,
             downloadsStore = get(),
             policyStore = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
+    single<AutoDownloadScheduler> { get<AutoDownloadSchedulerImpl>() }
     single { TvWatchNextSchedulerImpl(context = context) }
     single<TvWatchNextScheduler> { get<TvWatchNextSchedulerImpl>() }
     single { UserDataSyncSchedulerImpl(context = context) }

@@ -609,11 +609,12 @@ internal fun MainContent(
             // evaluation per process, applied shell-side — the prompt host
             // resolves the controller single through the infra bundle
             // (authenticated branch only, like every other lazy provider here)
-            // and renders the shared ConfirmDialog on an Ask. Composed INSIDE
-            // the providers above (ConfirmDialog's TV-focus policy reads
-            // LocalJellyPlayUi). The explicit-launch fact rides the same
-            // bundle (classified in onCreate, before this composed) and is
-            // remember-frozen in the host.
+            // and renders the shared SessionRestorePromptDialog on an Ask
+            // (the shared applier owns the ladder, the arms and the dismissal
+            // scope). Composed INSIDE the providers above (ConfirmDialog's
+            // TV-focus policy reads LocalJellyPlayUi). The explicit-launch
+            // fact rides the same bundle (classified in onCreate, before this
+            // composed) and is remember-frozen in the applier.
             SessionRestorePromptHost(
                 controller = infra.sessionRestorationControllerLazy.value,
                 launchedWithExplicitDestination = remember { infra.launchedWithExplicitDestination },

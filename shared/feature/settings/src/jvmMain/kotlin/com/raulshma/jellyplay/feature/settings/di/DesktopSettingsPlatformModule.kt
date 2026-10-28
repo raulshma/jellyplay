@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.settings.di
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.feature.settings.AppLocaleSetter
 import com.raulshma.jellyplay.feature.settings.AppMetaProvider
 import com.raulshma.jellyplay.feature.settings.AboutLibrariesJsonSource
@@ -45,11 +45,14 @@ import org.koin.dsl.module
  * delegates to the shell-injected [imageCache] handle (Coil's disk cache
  * belongs to the app shell's image pipeline, not this module).
  *
- * The auto-download sync wraps the existing Koin-owned
- * [DesktopAutoDownloadScheduler] (desktopDataModule): a poke restarts the
- * idempotent 6 h loop with one immediate check, so a freshly toggled
- * auto-download preference is honoured right away. WatchNext / audio-cache /
- * notification-sync have no desktop backend and bind no-ops — the no-ops are
+ * The auto-download sync delegates to the bound [AutoDownloadScheduler]
+ * (desktopDataModule's DesktopAutoDownloadScheduler actual): `sync` pokes the
+ * idempotent 6 h loop with its immediate check, so a freshly toggled
+ * auto-download preference is honoured right away, and `checkNow` runs the
+ * REAL off-cycle pass (the storage screen's "Check for new episodes now" —
+ * previously a silent no-op re-poking the already-running loop). WatchNext /
+ * audio-cache / notification-sync have no desktop backend and bind no-ops —
+ * the no-ops are
  * the BEHAVIOR half only; the rows themselves are hidden through
  * `SettingsCapabilities` (see its ownership rule), so no desktop user sees a
  * control whose poke lands nowhere.
@@ -89,7 +92,11 @@ fun desktopSettingsPlatformModule(
         single<LogCollector> { DesktopLogCollector() }
         single<AboutLibrariesJsonSource> { DesktopAboutLibrariesJsonSource() }
         single<AutoDownloadSync> {
-            AutoDownloadSync { get<DesktopAutoDownloadScheduler>().start() }
+            val scheduler = get<AutoDownloadScheduler>()
+            object : AutoDownloadSync {
+                override fun sync() = scheduler.sync()
+                override fun checkNow() = scheduler.checkNow()
+            }
         }
         single<AutoDownloadCleanup> {
             AutoDownloadCleanup {

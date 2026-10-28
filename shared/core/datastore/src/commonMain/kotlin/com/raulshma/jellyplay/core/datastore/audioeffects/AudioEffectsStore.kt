@@ -8,11 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -34,8 +30,26 @@ import kotlinx.serialization.Serializable
  * [EqualizerSettings]), and reset-key list end-to-end. Mirrors the
  * `PlaybackStore` / `AppearanceStore` shape.
  *
+ * **Spec derivation:** every key this store owns is declared exactly once as a
+ * row in [AudioEffectsPreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding, the single-key
+ * setters and [restore] delegate to the rows' derived writes, and
+ * [resetKeysFor] filters the rows by reset category. The [EqualizerSettings]
+ * JSON blob's decode lives in the [AudioEffectsPreferenceSpecs.EQUALIZER_SETTINGS]
+ * row's read (memoised beside the row). The blob's derived write is the lenient
+ * encode — value-equivalent to the defaults-encoding the pre-spec `restore`
+ * used (the omitted defaults decode back to their Kotlin defaults).
+ *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [AudioEffectsPreferenceSpecs] row + one [AudioEffectsSlice] property + one
+ * [read] / [restore] row (and its setter) + one write-through test line. See
+ * the spec KDoc.
  */
 class AudioEffectsStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -43,139 +57,135 @@ class AudioEffectsStore constructor(
 ) {
     private val scope = externalScope
 
-    internal object Keys {
-        val DIALOGUE_BOOST_ENABLED = booleanPreferencesKey("dialogue_boost_enabled")
-        val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
-        val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
-        val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
-        val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
-        val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
-        val NIGHT_MODE_STRENGTH = stringPreferencesKey("night_mode_strength")
-        val BASS_BOOST_ENABLED = booleanPreferencesKey("bass_boost_enabled")
-        val BASS_BOOST_STRENGTH = stringPreferencesKey("bass_boost_strength")
-        val VIRTUALIZER_ENABLED = booleanPreferencesKey("virtualizer_enabled")
-        val VIRTUALIZER_STRENGTH = intPreferencesKey("virtualizer_strength")
-        val REVERB_PRESET = stringPreferencesKey("reverb_preset")
-        val LR_BALANCE = floatPreferencesKey("lr_balance")
-        val AUTO_EQ_BY_GENRE = booleanPreferencesKey("auto_eq_by_genre")
-        val PITCH_SEMITONES = floatPreferencesKey("pitch_semitones")
-        val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
-        val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
-    }
-
     /**
-     * Memoisation holder for the JSON-decoded [EqualizerSettings] blob, keyed on
-     * the raw string so the decode is skipped when the underlying key has not
-     * changed on a given `dataStore.data` emission.
+     * The store's DataStore keys, each derived from its
+     * [AudioEffectsPreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key of
+     * the same name). Kept as a plain object rather than folded into the rows
+     * because it is the reflection anchor for the JVM reset-coverage guard.
      */
-    private var cachedEqualizerSettings: ParsedCache<EqualizerSettings?> = ParsedCache(null, null)
+    internal object Keys {
+        val DIALOGUE_BOOST_ENABLED = booleanPreferencesKey(AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_ENABLED.keyName)
+        val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey(AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_STRENGTH.keyName)
+        val EQUALIZER_ENABLED = booleanPreferencesKey(AudioEffectsPreferenceSpecs.EQUALIZER_ENABLED.keyName)
+        val EQUALIZER_SETTINGS = stringPreferencesKey(AudioEffectsPreferenceSpecs.EQUALIZER_SETTINGS.keyName)
+        val EQUALIZER_PRESET = stringPreferencesKey(AudioEffectsPreferenceSpecs.EQUALIZER_PRESET.keyName)
+        val NIGHT_MODE_ENABLED = booleanPreferencesKey(AudioEffectsPreferenceSpecs.NIGHT_MODE_ENABLED.keyName)
+        val NIGHT_MODE_STRENGTH = stringPreferencesKey(AudioEffectsPreferenceSpecs.NIGHT_MODE_STRENGTH.keyName)
+        val BASS_BOOST_ENABLED = booleanPreferencesKey(AudioEffectsPreferenceSpecs.BASS_BOOST_ENABLED.keyName)
+        val BASS_BOOST_STRENGTH = stringPreferencesKey(AudioEffectsPreferenceSpecs.BASS_BOOST_STRENGTH.keyName)
+        val VIRTUALIZER_ENABLED = booleanPreferencesKey(AudioEffectsPreferenceSpecs.VIRTUALIZER_ENABLED.keyName)
+        val VIRTUALIZER_STRENGTH = intPreferencesKey(AudioEffectsPreferenceSpecs.VIRTUALIZER_STRENGTH.keyName)
+        val REVERB_PRESET = stringPreferencesKey(AudioEffectsPreferenceSpecs.REVERB_PRESET.keyName)
+        val LR_BALANCE = floatPreferencesKey(AudioEffectsPreferenceSpecs.LR_BALANCE.keyName)
+        val AUTO_EQ_BY_GENRE = booleanPreferencesKey(AudioEffectsPreferenceSpecs.AUTO_EQ_BY_GENRE.keyName)
+        val PITCH_SEMITONES = floatPreferencesKey(AudioEffectsPreferenceSpecs.PITCH_SEMITONES.keyName)
+        val VOLUME_BOOST_ENABLED = booleanPreferencesKey(AudioEffectsPreferenceSpecs.VOLUME_BOOST_ENABLED.keyName)
+        val VOLUME_BOOST_GAIN = intPreferencesKey(AudioEffectsPreferenceSpecs.VOLUME_BOOST_GAIN.keyName)
+    }
 
     val audioEffects: StateFlow<AudioEffectsSlice> =
         dataStore.sliceStateFlow(scope, seed = AudioEffectsSlice(), read = ::read)
 
-    internal fun read(prefs: Preferences): AudioEffectsSlice {
-        // MemoizeNull (this store's pre-promotion policy): a null raw is a
-        // cacheable input — the nullable settings blob memoises its null
-        // "absent" result like any other value.
-        val equalizerSettings = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.EQUALIZER_SETTINGS],
-            cache = cachedEqualizerSettings,
-            default = null,
-            parse = { PreferenceCodec.json.decodeFromString<EqualizerSettings>(it) },
-            cacheRef = { cachedEqualizerSettings = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-        return AudioEffectsSlice(
-            dialogueBoostEnabled = PreferenceCodec.readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
-            dialogueBoostStrength = prefs[Keys.DIALOGUE_BOOST_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
-            equalizerEnabled = PreferenceCodec.readBool(prefs, Keys.EQUALIZER_ENABLED, "equalizer_enabled", false),
-            equalizerSettings = equalizerSettings ?: EqualizerSettings(),
-            equalizerPreset = prefs[Keys.EQUALIZER_PRESET].toEnumOrNull() ?: EqualizerPreset.FLAT,
-            nightModeEnabled = PreferenceCodec.readBool(prefs, Keys.NIGHT_MODE_ENABLED, "night_mode_enabled", false),
-            nightModeStrength = prefs[Keys.NIGHT_MODE_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
-            bassBoostEnabled = PreferenceCodec.readBool(prefs, Keys.BASS_BOOST_ENABLED, "bass_boost_enabled", false),
-            bassBoostStrength = prefs[Keys.BASS_BOOST_STRENGTH].toEnumOrNull() ?: EffectStrength.MODERATE,
-            virtualizerEnabled = PreferenceCodec.readBool(prefs, Keys.VIRTUALIZER_ENABLED, "virtualizer_enabled", false),
-            virtualizerStrength = PreferenceCodec.readInt(prefs, Keys.VIRTUALIZER_STRENGTH, "virtualizer_strength", 500),
-            reverbPreset = prefs[Keys.REVERB_PRESET].toEnumOrNull() ?: ReverbPreset.NONE,
-            lrBalance = PreferenceCodec.readFloat(prefs, Keys.LR_BALANCE, "lr_balance", 0f),
-            autoEqByGenre = PreferenceCodec.readBool(prefs, Keys.AUTO_EQ_BY_GENRE, "auto_eq_by_genre", false),
-            pitchSemitones = PreferenceCodec.readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
-            volumeBoostEnabled = PreferenceCodec.readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
-            volumeBoostGain = PreferenceCodec.readInt(prefs, Keys.VOLUME_BOOST_GAIN, "volume_boost_gain", 0),
-        )
-    }
+    /**
+     * Pure read of the audio-effects fields from a raw [Preferences] snapshot,
+     * each field delegated to its [AudioEffectsPreferenceSpecs] row encoding.
+     * Exposed so the facade can fold these into the whole-`UserPreferences`
+     * projection without duplicating the read logic.
+     */
+    internal fun read(prefs: Preferences): AudioEffectsSlice = AudioEffectsSlice(
+        dialogueBoostEnabled = AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_ENABLED.readFrom(prefs),
+        dialogueBoostStrength = AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_STRENGTH.readFrom(prefs),
+        equalizerEnabled = AudioEffectsPreferenceSpecs.EQUALIZER_ENABLED.readFrom(prefs),
+        equalizerSettings = AudioEffectsPreferenceSpecs.EQUALIZER_SETTINGS.readFrom(prefs),
+        equalizerPreset = AudioEffectsPreferenceSpecs.EQUALIZER_PRESET.readFrom(prefs),
+        nightModeEnabled = AudioEffectsPreferenceSpecs.NIGHT_MODE_ENABLED.readFrom(prefs),
+        nightModeStrength = AudioEffectsPreferenceSpecs.NIGHT_MODE_STRENGTH.readFrom(prefs),
+        bassBoostEnabled = AudioEffectsPreferenceSpecs.BASS_BOOST_ENABLED.readFrom(prefs),
+        bassBoostStrength = AudioEffectsPreferenceSpecs.BASS_BOOST_STRENGTH.readFrom(prefs),
+        virtualizerEnabled = AudioEffectsPreferenceSpecs.VIRTUALIZER_ENABLED.readFrom(prefs),
+        virtualizerStrength = AudioEffectsPreferenceSpecs.VIRTUALIZER_STRENGTH.readFrom(prefs),
+        reverbPreset = AudioEffectsPreferenceSpecs.REVERB_PRESET.readFrom(prefs),
+        lrBalance = AudioEffectsPreferenceSpecs.LR_BALANCE.readFrom(prefs),
+        autoEqByGenre = AudioEffectsPreferenceSpecs.AUTO_EQ_BY_GENRE.readFrom(prefs),
+        pitchSemitones = AudioEffectsPreferenceSpecs.PITCH_SEMITONES.readFrom(prefs),
+        volumeBoostEnabled = AudioEffectsPreferenceSpecs.VOLUME_BOOST_ENABLED.readFrom(prefs),
+        volumeBoostGain = AudioEffectsPreferenceSpecs.VOLUME_BOOST_GAIN.readFrom(prefs),
+    )
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, JSON — is the row's, not re-declared
+    // here).
     // ------------------------------------------------------------------
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setDialogueBoostStrength(strength: EffectStrength) {
-        dataStore.edit { it[Keys.DIALOGUE_BOOST_STRENGTH] = strength.name }
+        dataStore.edit { AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_STRENGTH.writeTo(it, strength) }
     }
 
     suspend fun setEqualizerEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.EQUALIZER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setEqualizerSettings(settings: EqualizerSettings) {
-        dataStore.edit { it[Keys.EQUALIZER_SETTINGS] = PreferenceCodec.json.encodeToString(settings) }
+        dataStore.edit { AudioEffectsPreferenceSpecs.EQUALIZER_SETTINGS.writeTo(it, settings) }
     }
 
     suspend fun setEqualizerPreset(preset: EqualizerPreset) {
-        dataStore.edit { it[Keys.EQUALIZER_PRESET] = preset.name }
+        dataStore.edit { AudioEffectsPreferenceSpecs.EQUALIZER_PRESET.writeTo(it, preset) }
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.NIGHT_MODE_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setNightModeStrength(strength: EffectStrength) {
-        dataStore.edit { it[Keys.NIGHT_MODE_STRENGTH] = strength.name }
+        dataStore.edit { AudioEffectsPreferenceSpecs.NIGHT_MODE_STRENGTH.writeTo(it, strength) }
     }
 
     suspend fun setBassBoostEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.BASS_BOOST_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setBassBoostStrength(strength: EffectStrength) {
-        dataStore.edit { it[Keys.BASS_BOOST_STRENGTH] = strength.name }
+        dataStore.edit { AudioEffectsPreferenceSpecs.BASS_BOOST_STRENGTH.writeTo(it, strength) }
     }
 
     suspend fun setVirtualizerEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.VIRTUALIZER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVirtualizerStrength(strength: Int) {
-        dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength }
+        dataStore.edit { AudioEffectsPreferenceSpecs.VIRTUALIZER_STRENGTH.writeTo(it, strength) }
     }
 
     suspend fun setReverbPreset(preset: ReverbPreset) {
-        dataStore.edit { it[Keys.REVERB_PRESET] = preset.name }
+        dataStore.edit { AudioEffectsPreferenceSpecs.REVERB_PRESET.writeTo(it, preset) }
     }
 
     suspend fun setLrBalance(balance: Float) {
-        dataStore.edit { it[Keys.LR_BALANCE] = balance }
+        dataStore.edit { AudioEffectsPreferenceSpecs.LR_BALANCE.writeTo(it, balance) }
     }
 
     suspend fun setAutoEqByGenre(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.AUTO_EQ_BY_GENRE.writeTo(it, enabled) }
     }
 
     suspend fun setPitchSemitones(semitones: Float) {
-        dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
+        dataStore.edit { AudioEffectsPreferenceSpecs.PITCH_SEMITONES.writeTo(it, semitones) }
     }
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VOLUME_BOOST_ENABLED] = enabled }
+        dataStore.edit { AudioEffectsPreferenceSpecs.VOLUME_BOOST_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVolumeBoostGain(gain: Int) {
-        dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
+        dataStore.edit { AudioEffectsPreferenceSpecs.VOLUME_BOOST_GAIN.writeTo(it, gain) }
     }
 
     /**
@@ -190,76 +200,69 @@ class AudioEffectsStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. Every audio-effects key sits in `AUDIO`, so all other
-     * categories return an empty list. The facade aggregates these lists
-     * instead of a central `when` switch.
+     * [category] — the [AudioEffectsPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. Every audio-effects key
+     * sits in `AUDIO`, so all other categories return an empty list. The
+     * facade aggregates these lists instead of a central `when` switch.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.AUDIO -> listOf(
-            Keys.DIALOGUE_BOOST_ENABLED, Keys.DIALOGUE_BOOST_STRENGTH,
-            Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS, Keys.EQUALIZER_PRESET,
-            Keys.NIGHT_MODE_ENABLED, Keys.NIGHT_MODE_STRENGTH,
-            Keys.BASS_BOOST_ENABLED, Keys.BASS_BOOST_STRENGTH,
-            Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
-            Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
-            Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        AudioEffectsPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences], including the
-     * [EqualizerSettings] JSON blob via [PreferenceCodec.encodeDefaultsJson].
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with).
      */
     suspend fun restore(slice: AudioEffectsSlice) {
-        dataStore.edit { it ->
-            it[Keys.DIALOGUE_BOOST_ENABLED] = slice.dialogueBoostEnabled
-            it[Keys.DIALOGUE_BOOST_STRENGTH] = slice.dialogueBoostStrength.name
-            it[Keys.EQUALIZER_ENABLED] = slice.equalizerEnabled
-            it[Keys.EQUALIZER_SETTINGS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<EqualizerSettings>(),
-                slice.equalizerSettings,
-            )
-            it[Keys.EQUALIZER_PRESET] = slice.equalizerPreset.name
-            it[Keys.NIGHT_MODE_ENABLED] = slice.nightModeEnabled
-            it[Keys.NIGHT_MODE_STRENGTH] = slice.nightModeStrength.name
-            it[Keys.BASS_BOOST_ENABLED] = slice.bassBoostEnabled
-            it[Keys.BASS_BOOST_STRENGTH] = slice.bassBoostStrength.name
-            it[Keys.VIRTUALIZER_ENABLED] = slice.virtualizerEnabled
-            it[Keys.VIRTUALIZER_STRENGTH] = slice.virtualizerStrength
-            it[Keys.REVERB_PRESET] = slice.reverbPreset.name
-            it[Keys.VOLUME_BOOST_ENABLED] = slice.volumeBoostEnabled
-            it[Keys.VOLUME_BOOST_GAIN] = slice.volumeBoostGain
-            it[Keys.LR_BALANCE] = slice.lrBalance
-            it[Keys.AUTO_EQ_BY_GENRE] = slice.autoEqByGenre
-            it[Keys.PITCH_SEMITONES] = slice.pitchSemitones
+        dataStore.edit { prefs ->
+            AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_ENABLED.writeTo(prefs, slice.dialogueBoostEnabled)
+            AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_STRENGTH.writeTo(prefs, slice.dialogueBoostStrength)
+            AudioEffectsPreferenceSpecs.EQUALIZER_ENABLED.writeTo(prefs, slice.equalizerEnabled)
+            AudioEffectsPreferenceSpecs.EQUALIZER_SETTINGS.writeTo(prefs, slice.equalizerSettings)
+            AudioEffectsPreferenceSpecs.EQUALIZER_PRESET.writeTo(prefs, slice.equalizerPreset)
+            AudioEffectsPreferenceSpecs.NIGHT_MODE_ENABLED.writeTo(prefs, slice.nightModeEnabled)
+            AudioEffectsPreferenceSpecs.NIGHT_MODE_STRENGTH.writeTo(prefs, slice.nightModeStrength)
+            AudioEffectsPreferenceSpecs.BASS_BOOST_ENABLED.writeTo(prefs, slice.bassBoostEnabled)
+            AudioEffectsPreferenceSpecs.BASS_BOOST_STRENGTH.writeTo(prefs, slice.bassBoostStrength)
+            AudioEffectsPreferenceSpecs.VIRTUALIZER_ENABLED.writeTo(prefs, slice.virtualizerEnabled)
+            AudioEffectsPreferenceSpecs.VIRTUALIZER_STRENGTH.writeTo(prefs, slice.virtualizerStrength)
+            AudioEffectsPreferenceSpecs.REVERB_PRESET.writeTo(prefs, slice.reverbPreset)
+            AudioEffectsPreferenceSpecs.VOLUME_BOOST_ENABLED.writeTo(prefs, slice.volumeBoostEnabled)
+            AudioEffectsPreferenceSpecs.VOLUME_BOOST_GAIN.writeTo(prefs, slice.volumeBoostGain)
+            AudioEffectsPreferenceSpecs.LR_BALANCE.writeTo(prefs, slice.lrBalance)
+            AudioEffectsPreferenceSpecs.AUTO_EQ_BY_GENRE.writeTo(prefs, slice.autoEqByGenre)
+            AudioEffectsPreferenceSpecs.PITCH_SEMITONES.writeTo(prefs, slice.pitchSemitones)
         }
     }
 }
 
 /**
  * The audio-effects preference slice. Plain data class.
- * Defaults mirror the projection defaults in [AudioEffectsStore.read].
+ * Every default IS its [AudioEffectsPreferenceSpecs] row's declared default —
+ * read off the row via a plain accessor, so a preference's default is stated
+ * exactly once, in its spec, and cannot drift between the spec (what an absent
+ * key reads) and the slice (what a fresh in-memory instance serves). The
+ * spec-default equality is pinned field-for-field by
+ * `AudioEffectsSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class AudioEffectsSlice(
-    val dialogueBoostEnabled: Boolean = false,
-    val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val equalizerEnabled: Boolean = false,
-    val equalizerSettings: EqualizerSettings = EqualizerSettings(),
-    val equalizerPreset: EqualizerPreset = EqualizerPreset.FLAT,
-    val nightModeEnabled: Boolean = false,
-    val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
-    val bassBoostEnabled: Boolean = false,
-    val bassBoostStrength: EffectStrength = EffectStrength.MODERATE,
-    val virtualizerEnabled: Boolean = false,
-    val virtualizerStrength: Int = 500,
-    val reverbPreset: ReverbPreset = ReverbPreset.NONE,
-    val lrBalance: Float = 0f,
-    val autoEqByGenre: Boolean = false,
-    val pitchSemitones: Float = 0f,
-    val volumeBoostEnabled: Boolean = false,
-    val volumeBoostGain: Int = 0,
+    val dialogueBoostEnabled: Boolean = AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_ENABLED.default,
+    val dialogueBoostStrength: EffectStrength = AudioEffectsPreferenceSpecs.DIALOGUE_BOOST_STRENGTH.default,
+    val equalizerEnabled: Boolean = AudioEffectsPreferenceSpecs.EQUALIZER_ENABLED.default,
+    val equalizerSettings: EqualizerSettings = AudioEffectsPreferenceSpecs.EQUALIZER_SETTINGS.default,
+    val equalizerPreset: EqualizerPreset = AudioEffectsPreferenceSpecs.EQUALIZER_PRESET.default,
+    val nightModeEnabled: Boolean = AudioEffectsPreferenceSpecs.NIGHT_MODE_ENABLED.default,
+    val nightModeStrength: EffectStrength = AudioEffectsPreferenceSpecs.NIGHT_MODE_STRENGTH.default,
+    val bassBoostEnabled: Boolean = AudioEffectsPreferenceSpecs.BASS_BOOST_ENABLED.default,
+    val bassBoostStrength: EffectStrength = AudioEffectsPreferenceSpecs.BASS_BOOST_STRENGTH.default,
+    val virtualizerEnabled: Boolean = AudioEffectsPreferenceSpecs.VIRTUALIZER_ENABLED.default,
+    val virtualizerStrength: Int = AudioEffectsPreferenceSpecs.VIRTUALIZER_STRENGTH.default,
+    val reverbPreset: ReverbPreset = AudioEffectsPreferenceSpecs.REVERB_PRESET.default,
+    val lrBalance: Float = AudioEffectsPreferenceSpecs.LR_BALANCE.default,
+    val autoEqByGenre: Boolean = AudioEffectsPreferenceSpecs.AUTO_EQ_BY_GENRE.default,
+    val pitchSemitones: Float = AudioEffectsPreferenceSpecs.PITCH_SEMITONES.default,
+    val volumeBoostEnabled: Boolean = AudioEffectsPreferenceSpecs.VOLUME_BOOST_ENABLED.default,
+    val volumeBoostGain: Int = AudioEffectsPreferenceSpecs.VOLUME_BOOST_GAIN.default,
 )

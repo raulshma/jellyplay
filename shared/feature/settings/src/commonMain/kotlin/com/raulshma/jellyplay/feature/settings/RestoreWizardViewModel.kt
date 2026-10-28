@@ -5,6 +5,7 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.data.session.settingsSyncGateOpen
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.datastore.BackupParser
 import com.raulshma.jellyplay.core.datastore.BackupSecrets
@@ -16,8 +17,6 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
 import com.raulshma.jellyplay.core.datastore.settings.buildPreferenceSliceSnapshotFromBackup
-import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
@@ -903,15 +902,13 @@ class RestoreWizardViewModel(
     // ---------------------------------------------------------------------------
 
     /**
-     * The ONE gate seam for the server arm (the sync screen's pattern): probe
-     * AVAILABLE AND the `settings-sync` meta key. Meta keys carry no user
-     * toggle, so the gate is probe-only.
+     * The server arm's gate: [settingsSyncGateOpen] (the sync screen's
+     * pattern) behind the wizard's nullable status-store seam — and the api
+     * client is never touched while unwired.
      */
     private fun syncGateOpen(): Boolean {
         val store = statusStore ?: return false
-        return pluginApiClient != null &&
-            store.status.value == JellyPlayPluginStatus.AVAILABLE &&
-            store.hasFeature(JellyPlayPluginFeatures.SettingsSync)
+        return pluginApiClient != null && store.settingsSyncGateOpen()
     }
 
     /** The wizard's own texts through the injectable seam (see [textResolver]). */

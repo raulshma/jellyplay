@@ -3,13 +3,11 @@ package com.raulshma.jellyplay.core.datastore.notification
 import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
@@ -47,6 +45,31 @@ import kotlinx.serialization.encodeToString
  * fields onto the slice itself, since newsletter has no equivalent aggregate in
  * `core.model` and the legacy store exposed them as independent keys.
  *
+ * **Spec derivation:** every key this store owns is declared exactly once as a
+ * row in [NotificationPreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding — including the read-policy split the codec note below
+ * records, now per row) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding, the newsletter
+ * single-key setters and [restore]'s encoded rows delegate to the rows'
+ * derived writes, and [resetKeysFor] filters the rows by reset category. The
+ * JSON blob decodes live in the rows now (memoised beside them).
+ *
+ * **Cross-key writes owned here (hand-written by decision — a coalesced or
+ * read-modify-write cannot be a row encoding):**
+ *  - [updateNotificationPreferences] — reads the current aggregate inside the
+ *    edit, applies [transform], and writes every field back in one
+ *    transaction (mirrors the legacy
+ *    `UserPreferencesStore.updateNotificationPreferences`).
+ *  - [updateSeriesNotificationConfigs] — the per-series map's
+ *    read-modify-write verb (the worker's per-series write-back and the
+ *    opt-in/out commands funnel through it, so concurrent writers cannot drop
+ *    each other's entries), plus its [setSeriesNotificationEnabled] /
+ *    [clearSeriesNotificationConfigs] command wrappers.
+ *  - the six plain boolean rows (declaration-only `PreferenceSpec.boolean`
+ *    declarations with no derived write) are written only by the two
+ *    hand-written sites above and [restore]'s hand rows.
+ *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
  *
@@ -56,10 +79,18 @@ import kotlinx.serialization.encodeToString
  * `notifications_new_episodes_enabled`) and the
  * notification ints (`notifications_quiet_hours_start/end`,
  * `notifications_max_per_check`) are **not** in the legacy-string → typed-key
- * migration lists, so they are read with plain `prefs[key] ?: default`. The
- * newsletter keys (`newsletter_enabled`, `newsletter_day_of_week`,
- * `newsletter_last_viewed_ms`) **are** migrated, so they go through
- * [PreferenceCodec.readBool]/[readInt]/[readLong].
+ * migration lists, so they are read with plain `prefs[key] ?: default` (the
+ * declaration-only [NotificationPreferenceSpecs] rows; the ints ride the
+ * behaviorally-identical `PreferenceSpec.plainInt`-encoded rows —
+ * see that object's read-policy note). The newsletter keys
+ * (`newsletter_enabled`, `newsletter_day_of_week`, `newsletter_last_viewed_ms`)
+ * **are** migrated, so they go through the [NotificationPreferenceSpecs]
+ * `plainBoolean`/`plainInt`/`plainLong` rows' shared fallback reads.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [NotificationPreferenceSpecs] row + one [read] / [restore] row (and its
+ * setter) + one write-through test line. See the spec KDoc.
  */
 class NotificationStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -69,118 +100,84 @@ class NotificationStore constructor(
 
     private val json get() = PreferenceCodec.json
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [NotificationPreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key of
+     * the same name). Kept as a plain object rather than folded into the rows
+     * because it is the reflection anchor for the JVM reset-coverage guard and
+     * the key-identity reference for the hand-written coalesced / read-modify-
+     * write verbs below.
+     */
     internal object Keys {
-        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
-        val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey("notifications_check_frequency")
-        val NOTIFICATIONS_QUIET_HOURS_ENABLED = booleanPreferencesKey("notifications_quiet_hours_enabled")
-        val NOTIFICATIONS_QUIET_HOURS_START = intPreferencesKey("notifications_quiet_hours_start")
-        val NOTIFICATIONS_QUIET_HOURS_END = intPreferencesKey("notifications_quiet_hours_end")
-        val NOTIFICATIONS_SOUND_ENABLED = booleanPreferencesKey("notifications_sound_enabled")
-        val NOTIFICATIONS_VIBRATE_ENABLED = booleanPreferencesKey("notifications_vibrate_enabled")
-        val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey("notifications_lights_enabled")
-        val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
-        val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
-        val NOTIFICATIONS_NEW_EPISODES_ENABLED = booleanPreferencesKey("notifications_new_episodes_enabled")
-        val NOTIFICATIONS_SERIES_CONFIGS = stringPreferencesKey("notifications_series_configs")
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_ENABLED.keyName)
+        val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_CHECK_FREQUENCY.keyName)
+        val NOTIFICATIONS_QUIET_HOURS_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_ENABLED.keyName)
+        val NOTIFICATIONS_QUIET_HOURS_START = intPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_START.keyName)
+        val NOTIFICATIONS_QUIET_HOURS_END = intPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_END.keyName)
+        val NOTIFICATIONS_SOUND_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_SOUND_ENABLED.keyName)
+        val NOTIFICATIONS_VIBRATE_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_VIBRATE_ENABLED.keyName)
+        val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_LIGHTS_ENABLED.keyName)
+        val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_MAX_PER_CHECK.keyName)
+        val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_LIBRARY_CONFIGS.keyName)
+        val NOTIFICATIONS_NEW_EPISODES_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_NEW_EPISODES_ENABLED.keyName)
+        val NOTIFICATIONS_SERIES_CONFIGS = stringPreferencesKey(NotificationPreferenceSpecs.NOTIFICATIONS_SERIES_CONFIGS.keyName)
 
 
-        val NEWSLETTER_ENABLED = booleanPreferencesKey("newsletter_enabled")
-        val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
-        val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
-        val ENABLED_NEWSLETTER_SECTIONS = stringPreferencesKey("enabled_newsletter_sections")
-        val NEWSLETTER_SECTION_ORDER = stringPreferencesKey("newsletter_section_order")
+        val NEWSLETTER_ENABLED = booleanPreferencesKey(NotificationPreferenceSpecs.NEWSLETTER_ENABLED.keyName)
+        val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey(NotificationPreferenceSpecs.NEWSLETTER_DAY_OF_WEEK.keyName)
+        val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey(NotificationPreferenceSpecs.NEWSLETTER_LAST_VIEWED_MS.keyName)
+        val ENABLED_NEWSLETTER_SECTIONS = stringPreferencesKey(NotificationPreferenceSpecs.ENABLED_NEWSLETTER_SECTIONS.keyName)
+        val NEWSLETTER_SECTION_ORDER = stringPreferencesKey(NotificationPreferenceSpecs.NEWSLETTER_SECTION_ORDER.keyName)
     }
-
-    // JSON memoisation — decode is skipped when the raw key is unchanged.
-    private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> =
-        ParsedCache(null, emptyMap())
-    private var cachedNotificationSeriesConfigs: ParsedCache<Map<String, SeriesNotificationConfig>> =
-        ParsedCache(null, emptyMap())
-    private var cachedEnabledNewsletterSections: ParsedCache<Set<NewsletterSectionType>> =
-        ParsedCache(null, NewsletterSectionType.entries.toSet())
-    private var cachedNewsletterSectionOrder: ParsedCache<List<NewsletterSectionType>> =
-        ParsedCache(null, NewsletterSectionType.DEFAULT_ORDER)
 
     val notification: StateFlow<NotificationSlice> =
         dataStore.sliceStateFlow(scope, seed = NotificationSlice(), read = ::read)
 
+    /**
+     * Pure read of the notification + newsletter fields from a raw
+     * [Preferences] snapshot, each field delegated to its
+     * [NotificationPreferenceSpecs] row encoding (the declaration-only boolean
+     * rows via [PreferenceSpec.readStored] — the exact hand plain read).
+     * Exposed so the facade can fold these into the whole-`UserPreferences`
+     * projection without duplicating the read logic.
+     */
     internal fun read(prefs: Preferences): NotificationSlice = NotificationSlice(
         notificationPreferences = NotificationPreferences(
-            enabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
-            checkFrequency = readCheckFrequency(prefs),
-            quietHoursEnabled = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] ?: false,
-            quietHoursStart = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] ?: 1380,
-            quietHoursEnd = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] ?: 420,
-            soundEnabled = prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] ?: true,
-            vibrateEnabled = prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] ?: true,
-            lightsEnabled = prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] ?: true,
-            maxPerCheck = prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] ?: 10,
-            libraryConfigs = readNotificationLibraryConfigs(prefs),
-            newEpisodesEnabled = prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] ?: false,
-            seriesConfigs = readNotificationSeriesConfigs(prefs),
+            enabled = NotificationPreferenceSpecs.NOTIFICATIONS_ENABLED.readStored(prefs),
+            checkFrequency = NotificationPreferenceSpecs.NOTIFICATIONS_CHECK_FREQUENCY.readFrom(prefs),
+            quietHoursEnabled = NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_ENABLED.readStored(prefs),
+            quietHoursStart = NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_START.readFrom(prefs),
+            quietHoursEnd = NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_END.readFrom(prefs),
+            soundEnabled = NotificationPreferenceSpecs.NOTIFICATIONS_SOUND_ENABLED.readStored(prefs),
+            vibrateEnabled = NotificationPreferenceSpecs.NOTIFICATIONS_VIBRATE_ENABLED.readStored(prefs),
+            lightsEnabled = NotificationPreferenceSpecs.NOTIFICATIONS_LIGHTS_ENABLED.readStored(prefs),
+            maxPerCheck = NotificationPreferenceSpecs.NOTIFICATIONS_MAX_PER_CHECK.readFrom(prefs),
+            libraryConfigs = NotificationPreferenceSpecs.NOTIFICATIONS_LIBRARY_CONFIGS.readFrom(prefs),
+            newEpisodesEnabled = NotificationPreferenceSpecs.NOTIFICATIONS_NEW_EPISODES_ENABLED.readStored(prefs),
+            seriesConfigs = NotificationPreferenceSpecs.NOTIFICATIONS_SERIES_CONFIGS.readFrom(prefs),
         ),
-        newsletterEnabled = PreferenceCodec.readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
-        newsletterDayOfWeek = PreferenceCodec.readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
-        newsletterLastViewedMs = PreferenceCodec.readLong(prefs, Keys.NEWSLETTER_LAST_VIEWED_MS, "newsletter_last_viewed_ms", 0L),
-        enabledNewsletterSections = readEnabledNewsletterSections(prefs),
-        newsletterSectionOrder = readNewsletterSectionOrder(prefs),
+        newsletterEnabled = NotificationPreferenceSpecs.NEWSLETTER_ENABLED.readFrom(prefs),
+        newsletterDayOfWeek = NotificationPreferenceSpecs.NEWSLETTER_DAY_OF_WEEK.readFrom(prefs),
+        newsletterLastViewedMs = NotificationPreferenceSpecs.NEWSLETTER_LAST_VIEWED_MS.readFrom(prefs),
+        enabledNewsletterSections = NotificationPreferenceSpecs.ENABLED_NEWSLETTER_SECTIONS.readFrom(prefs),
+        newsletterSectionOrder = NotificationPreferenceSpecs.NEWSLETTER_SECTION_ORDER.readFrom(prefs),
     )
 
-    private fun readCheckFrequency(prefs: Preferences): CheckFrequency =
-        prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY].toEnumOrNull() ?: CheckFrequency.EVERY_6_HOURS
-
-    // MemoizeNull (this store's pre-promotion policy at every site): a null
-    // raw is a cacheable input — the decoded value depends only on the raw
-    // string, so a memoised default is safe to serve.
-    private fun readNotificationLibraryConfigs(prefs: Preferences): Map<String, LibraryNotificationConfig> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS],
-            cache = cachedNotificationLibraryConfigs,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, LibraryNotificationConfig>>(it) },
-            cacheRef = { cachedNotificationLibraryConfigs = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-    private fun readNotificationSeriesConfigs(prefs: Preferences): Map<String, SeriesNotificationConfig> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.NOTIFICATIONS_SERIES_CONFIGS],
-            cache = cachedNotificationSeriesConfigs,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, SeriesNotificationConfig>>(it) },
-            cacheRef = { cachedNotificationSeriesConfigs = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-    private fun readEnabledNewsletterSections(prefs: Preferences): Set<NewsletterSectionType> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS],
-            cache = cachedEnabledNewsletterSections,
-            default = NewsletterSectionType.entries.toSet(),
-            parse = { json.decodeFromString<Set<NewsletterSectionType>>(it) },
-            cacheRef = { cachedEnabledNewsletterSections = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-    private fun readNewsletterSectionOrder(prefs: Preferences): List<NewsletterSectionType> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.NEWSLETTER_SECTION_ORDER],
-            cache = cachedNewsletterSectionOrder,
-            default = NewsletterSectionType.DEFAULT_ORDER,
-            parse = { json.decodeFromString<List<NewsletterSectionType>>(it) },
-            cacheRef = { cachedNewsletterSectionOrder = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — the newsletter single-key setters delegate to their rows'
+    // derived writes; the notification aggregate has no single-key setters
+    // (its writes are the coalesced verb below).
     // ------------------------------------------------------------------
 
     /**
      * Atomic update of the whole [NotificationPreferences] aggregate. Reads the
      * current values inside the edit, applies [transform], and writes every
      * field back in one transaction — mirrors the legacy
-     * `UserPreferencesStore.updateNotificationPreferences`.
+     * `UserPreferencesStore.updateNotificationPreferences`. Hand-written by
+     * decision: a coalesced multi-key write cannot be a row encoding (see the
+     * [NotificationPreferenceSpecs] KDoc's opt-outs).
      */
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         dataStore.edit { prefs ->
@@ -227,7 +224,8 @@ class NotificationStore constructor(
      * aggregate transform's series-granularity twin). The worker's per-series
      * write-back (diff baseline + check stamp) and the opt-in/out UI commands
      * both funnel through here, so concurrent writers cannot drop each other's
-     * entries.
+     * entries. Hand-written by decision: a read-modify-write cannot be a row
+     * encoding (see the [NotificationPreferenceSpecs] KDoc's opt-outs).
      */
     suspend fun updateSeriesNotificationConfigs(
         transform: (Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>,
@@ -271,24 +269,24 @@ class NotificationStore constructor(
     }
 
     suspend fun setNewsletterEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
+        dataStore.edit { NotificationPreferenceSpecs.NEWSLETTER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setNewsletterDayOfWeek(day: Int) {
-        dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day }
+        dataStore.edit { NotificationPreferenceSpecs.NEWSLETTER_DAY_OF_WEEK.writeTo(it, day) }
     }
 
     /** One-time state — recorded but **not** part of [resetKeys]. */
     suspend fun setNewsletterLastViewed(timestampMs: Long) {
-        dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs }
+        dataStore.edit { NotificationPreferenceSpecs.NEWSLETTER_LAST_VIEWED_MS.writeTo(it, timestampMs) }
     }
 
     suspend fun setEnabledNewsletterSections(sections: Set<NewsletterSectionType>) {
-        dataStore.edit { it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(sections) }
+        dataStore.edit { NotificationPreferenceSpecs.ENABLED_NEWSLETTER_SECTIONS.writeTo(it, sections) }
     }
 
     suspend fun setNewsletterSectionOrder(order: List<NewsletterSectionType>) {
-        dataStore.edit { it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(order) }
+        dataStore.edit { NotificationPreferenceSpecs.NEWSLETTER_SECTION_ORDER.writeTo(it, order) }
     }
 
     /**
@@ -307,60 +305,52 @@ class NotificationStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. This store owns keys in both `NOTIFICATIONS` (the whole
-     * notification aggregate) and `NEWSLETTER` (the digest settings minus the
-     * one-time [Keys.NEWSLETTER_LAST_VIEWED_MS] state).
+     * [category] — the [NotificationPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. This store owns keys in
+     * both `NOTIFICATIONS` (the whole notification aggregate) and `NEWSLETTER`
+     * (the digest settings minus the one-time [Keys.NEWSLETTER_LAST_VIEWED_MS]
+     * state).
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.NOTIFICATIONS -> listOf(
-            Keys.NOTIFICATIONS_ENABLED,
-            Keys.NOTIFICATIONS_CHECK_FREQUENCY,
-            Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
-            Keys.NOTIFICATIONS_QUIET_HOURS_START,
-            Keys.NOTIFICATIONS_QUIET_HOURS_END,
-            Keys.NOTIFICATIONS_SOUND_ENABLED,
-            Keys.NOTIFICATIONS_VIBRATE_ENABLED,
-            Keys.NOTIFICATIONS_LIGHTS_ENABLED,
-            Keys.NOTIFICATIONS_MAX_PER_CHECK,
-            Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
-            Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED,
-            Keys.NOTIFICATIONS_SERIES_CONFIGS,
-        )
-        PreferenceResetCategory.NEWSLETTER -> listOf(
-            Keys.NEWSLETTER_ENABLED,
-            Keys.NEWSLETTER_DAY_OF_WEEK,
-            Keys.ENABLED_NEWSLETTER_SECTIONS,
-            Keys.NEWSLETTER_SECTION_ORDER,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        NotificationPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences]. The notification
-     * sub-domain is read from [NotificationSlice.notificationPreferences];
-     * libraryConfigs / enabledNewsletterSections / newsletterSectionOrder are
-     * JSON-encoded via this store's [json] codec.
+     * DataStore. The [NotificationPreferenceSpecs] rows with a derived write
+     * go through it; the six declaration-only boolean rows keep hand-written
+     * lines (they declare no derived write — see the spec KDoc's opt-outs).
      */
     suspend fun restore(slice: NotificationSlice) {
         dataStore.edit { it ->
             it[Keys.NOTIFICATIONS_ENABLED] = slice.notificationPreferences.enabled
-            it[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = slice.notificationPreferences.checkFrequency.name
+            NotificationPreferenceSpecs.NOTIFICATIONS_CHECK_FREQUENCY.writeTo(
+                it, slice.notificationPreferences.checkFrequency,
+            )
             it[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = slice.notificationPreferences.quietHoursEnabled
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_START] = slice.notificationPreferences.quietHoursStart
-            it[Keys.NOTIFICATIONS_QUIET_HOURS_END] = slice.notificationPreferences.quietHoursEnd
+            NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_START.writeTo(
+                it, slice.notificationPreferences.quietHoursStart,
+            )
+            NotificationPreferenceSpecs.NOTIFICATIONS_QUIET_HOURS_END.writeTo(
+                it, slice.notificationPreferences.quietHoursEnd,
+            )
             it[Keys.NOTIFICATIONS_SOUND_ENABLED] = slice.notificationPreferences.soundEnabled
             it[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = slice.notificationPreferences.vibrateEnabled
             it[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = slice.notificationPreferences.lightsEnabled
-            it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = slice.notificationPreferences.maxPerCheck
-            it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(slice.notificationPreferences.libraryConfigs)
+            NotificationPreferenceSpecs.NOTIFICATIONS_MAX_PER_CHECK.writeTo(
+                it, slice.notificationPreferences.maxPerCheck,
+            )
+            NotificationPreferenceSpecs.NOTIFICATIONS_LIBRARY_CONFIGS.writeTo(
+                it, slice.notificationPreferences.libraryConfigs,
+            )
             it[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] = slice.notificationPreferences.newEpisodesEnabled
-            it[Keys.NOTIFICATIONS_SERIES_CONFIGS] = json.encodeToString(slice.notificationPreferences.seriesConfigs)
-            it[Keys.NEWSLETTER_ENABLED] = slice.newsletterEnabled
-            it[Keys.NEWSLETTER_DAY_OF_WEEK] = slice.newsletterDayOfWeek
-            it[Keys.NEWSLETTER_LAST_VIEWED_MS] = slice.newsletterLastViewedMs
-            it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(slice.enabledNewsletterSections)
-            it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(slice.newsletterSectionOrder)
+            NotificationPreferenceSpecs.NOTIFICATIONS_SERIES_CONFIGS.writeTo(
+                it, slice.notificationPreferences.seriesConfigs,
+            )
+            NotificationPreferenceSpecs.NEWSLETTER_ENABLED.writeTo(it, slice.newsletterEnabled)
+            NotificationPreferenceSpecs.NEWSLETTER_DAY_OF_WEEK.writeTo(it, slice.newsletterDayOfWeek)
+            NotificationPreferenceSpecs.NEWSLETTER_LAST_VIEWED_MS.writeTo(it, slice.newsletterLastViewedMs)
+            NotificationPreferenceSpecs.ENABLED_NEWSLETTER_SECTIONS.writeTo(it, slice.enabledNewsletterSections)
+            NotificationPreferenceSpecs.NEWSLETTER_SECTION_ORDER.writeTo(it, slice.newsletterSectionOrder)
         }
     }
 }
@@ -373,15 +363,21 @@ class NotificationStore constructor(
  * shape). The newsletter sub-domain is flattened onto the slice because it has
  * no equivalent aggregate in `core.model`.
  *
- * Defaults mirror the projection defaults in [NotificationStore.read].
+ * The newsletter defaults ARE their [NotificationPreferenceSpecs] rows'
+ * declared defaults — read off the rows via plain accessors, so a preference's
+ * default is stated exactly once, in its spec. The aggregate keeps its
+ * `core.model` defaults (the spec rows pin the same values —
+ * `NotificationSpecDerivationTest`); the [NotificationPreferences] aggregate
+ * is owned by `core.model`, which cannot read the spec rows. The spec-default
+ * equality is pinned by that derivation test.
  */
 @Immutable
 @Serializable
 data class NotificationSlice(
     val notificationPreferences: NotificationPreferences = NotificationPreferences(),
-    val newsletterEnabled: Boolean = true,
-    val newsletterDayOfWeek: Int = 7,
-    val newsletterLastViewedMs: Long = 0L,
-    val enabledNewsletterSections: Set<NewsletterSectionType> = NewsletterSectionType.entries.toSet(),
-    val newsletterSectionOrder: List<NewsletterSectionType> = NewsletterSectionType.DEFAULT_ORDER,
+    val newsletterEnabled: Boolean = NotificationPreferenceSpecs.NEWSLETTER_ENABLED.default,
+    val newsletterDayOfWeek: Int = NotificationPreferenceSpecs.NEWSLETTER_DAY_OF_WEEK.default,
+    val newsletterLastViewedMs: Long = NotificationPreferenceSpecs.NEWSLETTER_LAST_VIEWED_MS.default,
+    val enabledNewsletterSections: Set<NewsletterSectionType> = NotificationPreferenceSpecs.ENABLED_NEWSLETTER_SECTIONS.default,
+    val newsletterSectionOrder: List<NewsletterSectionType> = NotificationPreferenceSpecs.NEWSLETTER_SECTION_ORDER.default,
 )

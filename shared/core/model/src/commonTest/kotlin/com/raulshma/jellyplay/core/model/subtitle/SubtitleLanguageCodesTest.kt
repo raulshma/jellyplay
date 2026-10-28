@@ -9,10 +9,6 @@ import kotlin.test.Test
  * Unit tests for [SubtitleLanguageCodes] — the cross-dialect normalization that
  * lets a single user-selected ISO 639-3 culture feed Wyzie (639-1),
  * OpenSubtitles (639-2B), and Jellyfin (639-3).
- *
- * Test-lane note: pure string normalization against a commonMain subject —
- * no JVM dependency in test or subject — so this is a commonTest candidate
- * despite its jvmTest placement.
  */
 class SubtitleLanguageCodesTest {
 

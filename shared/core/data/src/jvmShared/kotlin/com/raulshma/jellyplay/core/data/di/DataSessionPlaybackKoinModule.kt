@@ -516,8 +516,9 @@ internal val dataSessionPlaybackModule: Module = module {
     // core:data-cannot-see-core:ui rule, DownloadOutcomeMessenger idiom):
     // JellyPlayNewMediaNotifier — the Android tray path, registered in the
     // platform notification module (desktop registers nothing → log-only);
-    // JellyPlayBroadcastMessenger — bridged to the shared UserMessageBus by
-    // both shells' interop modules. LAZY on purpose: constructing this graph
+    // JellyPlayBroadcastMessenger — bridged to the shared UserMessageBus
+    // once, in shared/feature/shell (shellBroadcastMessengerModule, riding
+    // the sharedFeatureModules spread both shells consume). LAZY on purpose: constructing this graph
     // eagerly would pull AuthRepositoryImpl → Room + migrations + the WebSocket
     // client onto the main thread inside startKoin, for signed-out sessions
     // too. The shells' background prewarm groups call the idempotent start()

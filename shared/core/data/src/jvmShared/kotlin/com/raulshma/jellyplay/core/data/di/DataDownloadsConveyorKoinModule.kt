@@ -33,10 +33,11 @@ internal val dataDownloadsConveyorModule: Module = module {
     // ── V3 downloads conveyor: the portable download engine ────────────────
     // DownloadRepositoryImpl moved from the legacy :core:data shim with its
     // Android surfaces behind seams: enqueue/cancel → DownloadEnqueueCoordinator
-    // (Android: WorkManager DownloadEnqueuer via the app's
-    // androidDownloadSeamsModule; desktop: the in-process DesktopDownloadManager),
+    // (Android: WorkManager DownloadEnqueuer via androidDownloadsSeamsModule;
+    // desktop: the in-process DesktopDownloadManager),
     // storage layout → DownloadStorageLayoutContract (Android: Context/StatFs
-    // impl via the app module; desktop: appdata-based impl in desktopDataModule),
+    // impl via androidDownloadsSeamsModule; desktop: appdata-based impl in
+    // desktopDataModule),
     // notification summary + Coil preloading → platform no-op-able fun
     // interfaces, and MediaRepository behind the deferred MediaRepositoryAccess
     // (both platform defs forward to this module's own MediaRepositoryImpl

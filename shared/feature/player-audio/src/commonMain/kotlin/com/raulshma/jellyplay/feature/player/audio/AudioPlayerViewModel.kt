@@ -134,13 +134,6 @@ class AudioPlayerViewModel(
      */
     val currentLyricIndex: StateFlow<Int> get() = engine.currentLyricIndex
 
-    var nightModeVolume by composeFloatState(0.4f)
-        private set
-    var nightModeGain by composeState(1200)
-        private set
-    var skipPreviousThresholdMs by composeLongState(3_000L)
-        private set
-
     /** Karaoke toggle — the only lyrics field the UI mutates directly (not engine-driven). */
     var karaokeMode by composeState(false)
         private set
@@ -332,9 +325,6 @@ class AudioPlayerViewModel(
             if (audio.audioDefaultSpeed != 1.0f) {
                 engine.changePlaybackSpeed(audio.audioDefaultSpeed)
             }
-            nightModeVolume = audio.audioNightModeVolume
-            nightModeGain = audio.audioNightModeGain
-            skipPreviousThresholdMs = audio.audioSkipPreviousThresholdMs
             engine.setSkipPreviousThreshold(audio.audioSkipPreviousThresholdMs)
             // The prefs→effects field list lives in ONE place: the controller's
             // seeding entry (apply-only — the values came FROM the stores).

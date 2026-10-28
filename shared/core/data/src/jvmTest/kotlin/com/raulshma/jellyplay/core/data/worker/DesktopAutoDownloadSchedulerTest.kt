@@ -225,4 +225,36 @@ class DesktopAutoDownloadSchedulerTest {
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
         coVerify(exactly = 0) { episodeCatalogue.loadSeriesEpisodes("s2", any()) }
     }
+
+    // ── The interface's off-cycle check (checkNow) ────────────────────
+
+    @Test
+    fun `checkNow runs exactly one off-cycle pass without the loop`() = runTest {
+        val scheduler = buildScheduler()
+
+        scheduler.checkNow()
+        testScheduler.runCurrent()
+
+        // One pass over the one downloaded series — a single catalogue load
+        // and the per-season intake — with no loop job ever started: the
+        // manual check is a fire-and-forget one-shot on the scope.
+        coVerify(exactly = 1) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
+        coVerify(exactly = 2) { downloadIntake.startSeries(any(), any()) }
+    }
+
+    @Test
+    fun `checkNow adds exactly one pass beside the loop's tick`() = runTest {
+        val scheduler = buildScheduler()
+
+        scheduler.start()
+        testScheduler.runCurrent() // the loop's startup pass
+        scheduler.checkNow()
+        testScheduler.runCurrent() // the manual pass, serialized after it
+        scheduler.stop()
+
+        // Startup + manual: exactly two passes over the one series — the
+        // checkNow neither duplicates the tick's pass nor is dropped (the
+        // mutex serializes, it does not KEEP-skip).
+        coVerify(exactly = 2) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
+    }
 }

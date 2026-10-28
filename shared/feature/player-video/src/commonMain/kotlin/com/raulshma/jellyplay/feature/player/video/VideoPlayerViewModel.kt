@@ -486,11 +486,12 @@ class VideoPlayerViewModel(
      * its offer flow + commands through the overlay session slice. The
      * core:data delete seams arrive as one nullable bundle
      * ([PostPlaybackDeleteSources]); null (test graphs) disables the feature.
-     * The offer arms only from the end-of-media policy ([onEndedWithNoNext])
-     * — a cinema chain continuing, an auto-advance, a still-watching prompt
-     * and the sleep-timer intercept all route away before it — and a passing
-     * precheck HOLDS that end's close (the dialog lives in this screen); the
-     * hold resolves through Delete / Keep / the permission-read release.
+     * The offer arms only from the end-of-media dispatch
+     * ([EndOfMediaDecision]'s OfferDelete rung — a cinema chain continuing,
+     * an auto-advance, a still-watching prompt and the sleep-timer intercept
+     * all route away before it) — and a passing precheck HOLDS that end's
+     * close (the dialog lives in this screen); the hold resolves through
+     * Delete / Keep / the permission-read release.
      */
     private val postPlaybackActions = PostPlaybackActionsController(
         scope = scope,
@@ -510,10 +511,26 @@ class VideoPlayerViewModel(
         closePlayer = { _closePlayer.trySend(Unit) },
         closeAfterKeep = {
             // The end-of-media close, deferred until the offer resolved
-            // ("Keep" or a failing permission read). Conditional on the #17
-            // after-finish keep gate re-evaluated LIVE: a card still holding
-            // the player outlives the dismissed dialog.
-            if (!heldByAfterFinishCard()) _closePlayer.trySend(Unit)
+            // ("Keep" or a failing permission read), routed through the same
+            // [EndOfMediaDecision] fold as the natural end so the #17
+            // after-finish keep gate is single-sited — but as the offer's
+            // own RELEASE: the offer is not re-entered (this call IS its
+            // resolution) and the cinema arm routed away before the offer
+            // ever armed, so only the keep-gate rung is live. The gate is
+            // re-evaluated LIVE: a card still holding the player outlives
+            // the dismissed dialog.
+            executeEndOfMedia(
+                EndOfMediaDecision.resolve(
+                    EndOfMediaDecision.Facts(
+                        advance = null,
+                        close = EndOfMediaDecision.CloseFacts(
+                            cinemaChainActive = false,
+                            offerResolved = true,
+                            keepCardHolds = heldByAfterFinishCard(),
+                        ),
+                    ),
+                ),
+            )
         },
         notifyDeleteFailed = { title ->
             userMessageBus.error(
@@ -1194,47 +1211,45 @@ class VideoPlayerViewModel(
                 "enabled=${playbackSession.autoplayController.enabled} " +
                 "cancelled=${playbackSession.autoplayController.cancelled}",
         )
-        if (playbackSession.autoplayController.shouldAutoPlayNext(
-                autoplayNext,
-                hasQueuedNext = queuedNext,
-                // #17 binge controls: a reached autoplay-episode cap blocks
-                // the advance — the card renders manual instead (the overlay
-                // reads the cap verdict through the slice).
-            ) && playbackSession.upNext.canAutoAdvance()
-        ) {
-            // End-of-episode sleep timer outranks the advance/still-watching
-            // gates; an explicit skip-credits press still wins (deliberate).
-            if (playbackSession.sleepTimer.interceptsAutoAdvance()) {
-                playbackSession.sleepTimer.triggerSleepTimerEndOfEpisode()
-                return
-            }
-            // "Still watching?" gate (feature 1.3): confirm overlay replaces
-            // the advance; no answer stops autoplay.
-            if (playbackSession.autoplayController.shouldPromptStillWatching(
-                    mode = playbackSession.cachedAggregate.videoPlayer.stillWatchingMode,
-                    isInSyncPlaySession = _uiState.value.isInSyncPlaySession,
-                )
-            ) {
-                playbackSession.stillWatching.show(StillWatchingReason.EPISODE_COUNT)
-            } else {
-                playbackSession.autoplayController.recordAutoAdvance()
-                // The engine-end AUTO arm: the binge streak grows here (#17);
-                // manual play-next paths reset it instead.
-                playbackSession.upNext.advanceUnattended()
-            }
-        } else {
-            onEndedWithNoNext()
-        }
+        // The whole end-of-media dispatch is the pure [EndOfMediaDecision]
+        // fold — the six verdict modules are consulted HERE (the verdicts
+        // arrive as data; the fold decides ORDER + composition), and
+        // [executeEndOfMedia] runs the returned effects in order. Autoplay /
+        // cinema / close policy stays VM-side — the module is VM-constructed,
+        // nothing moved behind a new public seam.
+        executeEndOfMedia(
+            EndOfMediaDecision.resolve(
+                EndOfMediaDecision.Facts(
+                    advance = EndOfMediaDecision.AdvanceFacts(
+                        armed = playbackSession.autoplayController.shouldAutoPlayNext(
+                            autoplayNext,
+                            hasQueuedNext = queuedNext,
+                        ),
+                        // #17 binge controls: a reached autoplay-episode cap
+                        // blocks the advance — the card renders manual instead
+                        // (the overlay reads the cap verdict through the slice).
+                        upNextAllows = playbackSession.upNext.canAutoAdvance(),
+                        sleepTimerIntercepts = playbackSession.sleepTimer.interceptsAutoAdvance(),
+                        promptStillWatching = playbackSession.autoplayController.shouldPromptStillWatching(
+                            mode = playbackSession.cachedAggregate.videoPlayer.stillWatchingMode,
+                            isInSyncPlaySession = _uiState.value.isInSyncPlaySession,
+                        ),
+                    ),
+                    close = endOfMediaCloseFacts(),
+                ),
+            ),
+        )
     }
 
     /**
      * End-of-stream with nothing queued: a cinema-intro chain advances to its
-     * next item, anything else closes the player. Byte-identical fold of the
-     * progress reporter's `onPlaybackEndedNoNext` callback — must not drift.
+     * next item, anything else closes the player. Fold of the progress
+     * reporter's `onPlaybackEndedNoNext` callback — must not drift.
      *
      * The two #17/#14 end-of-media policy arms hang here, where playback has
      * CONCLUDED (no advance fired, no cinema chain continues, the prompt and
-     * sleep-timer arms already routed away):
+     * sleep-timer arms already routed away) — as [EndOfMediaDecision] close
+     * rungs, dispatched through [executeEndOfMedia]:
      *  - #14: the offer-delete-after-playback evaluation (a natural end —
      *    this is reached from the engine-ENDED arm and the reporter's
      *    safety net, never a user close). A passing precheck HOLDS the close
@@ -1246,9 +1261,25 @@ class VideoPlayerViewModel(
      *    persistently (the position is frozen at the end, so the card's
      *    window stays open) instead of closing.
      */
+    private fun onEndedWithNoNext() {
+        // The no-next dispatch enters at the close rung: the reporter's
+        // safety net only fires when no episode sibling and no queued head
+        // exist, so the advance rungs are structurally behind it.
+        executeEndOfMedia(
+            EndOfMediaDecision.resolve(
+                EndOfMediaDecision.Facts(
+                    advance = null,
+                    close = endOfMediaCloseFacts(),
+                ),
+            ),
+        )
+    }
+
     /**
      * The #17 after-finish keep gate, live-evaluated against the current
-     * autoplay state — both end-of-media close paths re-consult it.
+     * autoplay state — both end-of-media close paths evaluate it at their
+     * entry, and the fold ([EndOfMediaDecision]) single-sites the
+     * hold-vs-close decision over it.
      */
     private fun heldByAfterFinishCard(): Boolean =
         playbackSession.upNext.shouldKeepUpNextCardAfterFinish(
@@ -1256,14 +1287,56 @@ class VideoPlayerViewModel(
             autoplayCancelled = _uiState.value.autoplay.autoplayCancelled,
         )
 
-    private fun onEndedWithNoNext() {
-        if (playbackSession.cinemaIntroContext != null) {
-            playbackSession.advanceCinemaIntro()
-            return
+    /**
+     * The close rungs' facts for a natural end — the reads both end-of-media
+     * entries share, evaluated at dispatch time (the offer arm is the
+     * natural-end entry; the offer's own release builds its own
+     * [EndOfMediaDecision.CloseFacts] with the offer marked resolved).
+     */
+    private fun endOfMediaCloseFacts(): EndOfMediaDecision.CloseFacts =
+        EndOfMediaDecision.CloseFacts(
+            cinemaChainActive = playbackSession.cinemaIntroContext != null,
+            offerResolved = false,
+            keepCardHolds = heldByAfterFinishCard(),
+        )
+
+    /**
+     * The end-of-media executor: runs the [EndOfMediaDecision] fold's
+     * effects in order, one arm per effect — the arms are the behaviors the
+     * former if-ladders inlined ([SessionHostLambdas]' end-of-playback
+     * dispatch). [Effect.OfferDelete] is the one arm that can end the
+     * dispatch early: the controller's ONE entry point resolves ownership
+     * HERE — an armed offer holds the close (its Delete / Keep / the
+     * permission-read release resolve it later); a suppressed precheck
+     * releases the ladder's tail (keep-card / close), exactly the original
+     * fall-through.
+     */
+    private fun executeEndOfMedia(effects: List<EndOfMediaDecision.Effect>) {
+        effects.forEach { effect ->
+            when (effect) {
+                EndOfMediaDecision.Effect.SleepTimerIntercept ->
+                    // End-of-episode sleep timer outranks the
+                    // advance/still-watching gates; an explicit skip-credits
+                    // press still wins (deliberate).
+                    playbackSession.sleepTimer.triggerSleepTimerEndOfEpisode()
+                EndOfMediaDecision.Effect.PromptStillWatching ->
+                    // "Still watching?" gate (feature 1.3): confirm overlay
+                    // replaces the advance; no answer stops autoplay.
+                    playbackSession.stillWatching.show(StillWatchingReason.EPISODE_COUNT)
+                EndOfMediaDecision.Effect.RecordStreak ->
+                    playbackSession.autoplayController.recordAutoAdvance()
+                EndOfMediaDecision.Effect.AutoAdvance ->
+                    // The engine-end AUTO arm: the binge streak grows here
+                    // (#17); manual play-next paths reset it instead.
+                    playbackSession.upNext.advanceUnattended()
+                EndOfMediaDecision.Effect.ChainCinema ->
+                    playbackSession.advanceCinemaIntro()
+                EndOfMediaDecision.Effect.OfferDelete ->
+                    if (postPlaybackActions.onPlaybackEndedNaturally()) return
+                EndOfMediaDecision.Effect.HoldForKeepCard -> Unit
+                EndOfMediaDecision.Effect.Close -> _closePlayer.trySend(Unit)
+            }
         }
-        if (postPlaybackActions.onPlaybackEndedNaturally()) return
-        if (heldByAfterFinishCard()) return
-        _closePlayer.trySend(Unit)
     }
 
     private fun setSyncPlayRepeatMode(mode: SyncPlayRepeatMode) {

@@ -37,8 +37,8 @@ import org.koin.dsl.module
  * enqueue/cancel, notification summary, Coil preloading, storage layout)
  * behind the `DownloadEnqueueCoordinator` / `DownloadProgressNotifier` /
  * `OfflineImagePreloader` / `DownloadStorageLayoutContract` seams, whose
- * Android actuals the app composition root registers
- * (androidDownloadSeamsModule) and desktop actuals live in
+ * Android actuals androidDownloadsSeamsModule registers (this module's
+ * androidMain) and desktop actuals live in
  * [desktopDataModule]. With the cluster flip above, the desktop
  * `MediaRepositoryAccess` actual became real — desktop series downloads and
  * the auto-download scheduler are live.

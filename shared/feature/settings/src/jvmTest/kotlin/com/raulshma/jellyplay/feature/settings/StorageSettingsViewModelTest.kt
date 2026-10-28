@@ -183,7 +183,17 @@ class StorageSettingsViewModelTest {
             projections = projections,
             advancedSettings = AdvancedSettingsGate(appearanceStore, editor),
             editor = editor,
-            autoDownloadSync = AutoDownloadSync { autoDownloadSyncs.add(Unit) },
+            // No default checkNow any more — the fake states both members
+            // explicitly (the absence-must-be-stated seam rule).
+            autoDownloadSync = object : AutoDownloadSync {
+                override fun sync() {
+                    autoDownloadSyncs.add(Unit)
+                }
+
+                override fun checkNow() {
+                    autoDownloadSyncs.add(Unit)
+                }
+            },
             autoDownloadCleanup = autoDownloadCleanup,
             storageAreas = storageAreas,
             storageMountsProvider = storageMountsProvider,

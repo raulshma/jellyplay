@@ -167,8 +167,8 @@ class StorageSettingsViewModel(
 
     /**
      * The "Check for new episodes now" action: one immediate auto-download
-     * discovery pass (the [AutoDownloadSync.checkNow] seam — the Android
-     * one-shot, the desktop loop's check).
+     * discovery pass (the [AutoDownloadSync.checkNow] seam — Android's KEEP
+     * one-shot, the desktop in-process off-cycle pass).
      */
     fun checkForNewEpisodesNow() {
         autoDownloadSync.checkNow()

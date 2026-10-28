@@ -109,7 +109,13 @@ class SettingsCatalogGeneratorTest {
         // autoplay_episode_limit floor at 0; the pause-screensaver delay
         // clamps to its 1–60 minute picker; the next-up preroll to its
         // 5–120-second picker; the home hero slideshow to its 3–60-second
-        // picker). A new bound must
+        // picker; the reader rows clamp in ReaderStore's read and setters —
+        // font px, line height %, margin %, brightness %, speech rate,
+        // pitch, wpm, auto-scroll px/s; the library poster size clamps to
+        // its scale in the setter; the auto-download bands clamp in
+        // DownloadsStore — concurrency 1–6, lookahead 0–MAX_LOOKAHEAD,
+        // per-pass 0–MAX_PER_PASS_LIMIT, keep-days floor at 0). A new bound
+        // must
         // be evidence-backed: declare it on the spec row AND extend this set
         // in the same commit. (The dream_* rows carry no bounds — the sync
         // prefix policy excludes them from the catalog entirely.)
@@ -125,6 +131,19 @@ class SettingsCatalogGeneratorTest {
                 "pause_screensaver_after_minutes",
                 "next_up_button_preroll_sec",
                 "home_hero_slideshow_interval_sec",
+                "reader_font_size_px",
+                "reader_line_height_pct",
+                "reader_margin_pct",
+                "reader_brightness_pct",
+                "reader_speech_rate",
+                "reader_speech_pitch",
+                "reader_reading_speed_wpm",
+                "reader_auto_scroll_speed_px",
+                "library_poster_size",
+                "max_concurrent_downloads",
+                "auto_download_lookahead",
+                "auto_download_max_per_pass",
+                "auto_download_keep_days",
             ),
             entries.filter { it.min != null || it.max != null }.map { it.key }.toSet(),
             "the bounded-row set changed — audit the new clamp before advertising it",

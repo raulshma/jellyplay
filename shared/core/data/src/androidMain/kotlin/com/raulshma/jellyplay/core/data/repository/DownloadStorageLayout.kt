@@ -11,7 +11,8 @@ import java.io.File
 // package) with the portable DownloadRepositoryImpl; this Android actual keeps
 // the Context/Environment/StatFs logic verbatim and now implements the shared
 // interface. The @Inject/@Singleton annotations were stripped — Koin owns
-// construction (the app composition root's androidDownloadSeamsModule), and
+// construction (androidDownloadsSeamsModule, this module's downloads-seams
+// family module), and
 // DownloadRecoveryInitializer (Koin single, app androidAppModule) consumes this
 // (StorageSettingsViewModel) via koin().get().
 

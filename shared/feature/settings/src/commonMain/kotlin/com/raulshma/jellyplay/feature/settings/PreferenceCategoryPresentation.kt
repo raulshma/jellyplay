@@ -349,6 +349,11 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_mpv_custom_buttons_title, { it.videoPlayer.mpvCustomButtons }, { v -> v.ifBlank { "Off" } }),
     DiffField(Res.string.ss_next_up_preroll_title, { it.videoPlayer.nextUpButtonPrerollSec }, Int::toString),
     DiffField(Res.string.ss_bitmap_subtitle_scale_title, { it.videoPlayer.bitmapSubtitleScaleMode }, enumLabel = ::bitmapSubtitleScaleModeLabelRes),
+    // The volume-memory toggle (the spec-backed VolumeProfilePreferenceSpecs
+    // row's search face): the PLAYBACK-category diff row the spec ratchet
+    // pins — the remembered levels blob beside it has no search face (its
+    // user face IS this toggle).
+    DiffField(Res.string.ss_remember_volume_title, { it.volumeProfile.rememberVolumePerContentType }, Boolean::onOff),
 )
 
 private val audioDiffFields: List<DiffField<*>> = listOf(
@@ -527,6 +532,7 @@ private val notificationsDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_notification_sound_title, { it.notification.notificationPreferences.soundEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_notification_vibrate_title, { it.notification.notificationPreferences.vibrateEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_notification_lights_title, { it.notification.notificationPreferences.lightsEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_new_episodes_title, { it.notification.notificationPreferences.newEpisodesEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_max_per_check_title, { it.notification.notificationPreferences.maxPerCheck }, Int::toString),
     DiffField(Res.string.ss_notification_libraries_title, { it.notification.notificationPreferences.libraryConfigs.size }, Int::toString),
     DiffField(Res.string.ss_series_notifications_title, { it.notification.notificationPreferences.seriesConfigs.size }, Int::toString),

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.session
 
+import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
@@ -91,3 +92,19 @@ class JellyPlayCapabilityGate(
             }
         }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, JellyPlayCapabilityState.Unknown)
 }
+
+/**
+ * The ONE gate predicate for the meta-keyed settings-sync family (the sync
+ * ViewModel, the restore wizard's server arm, the pre-destructive
+ * safety-snapshot capture): probe AVAILABLE **and** the
+ * [JellyPlayPluginFeatures.SettingsSync] key in the registry. Meta keys carry
+ * no user toggle — they are deliberately absent from
+ * [JellyPlayFeatureGate.TOGGLEABLE_FEATURES] — so the gate is probe-only: no
+ * toggle half, and no registry-version floor today (a future floor lands
+ * HERE, not at the call sites). This is the second, deliberate gate shape
+ * beside [JellyPlayCapabilityGate] — the toggleable-feature surfaces keep the
+ * probe ⊕ key ⊕ toggle verdict, and the two shapes are not merged.
+ */
+fun JellyPlayPluginStatusStore.settingsSyncGateOpen(): Boolean =
+    status.value == JellyPlayPluginStatus.AVAILABLE &&
+        hasFeature(JellyPlayPluginFeatures.SettingsSync)

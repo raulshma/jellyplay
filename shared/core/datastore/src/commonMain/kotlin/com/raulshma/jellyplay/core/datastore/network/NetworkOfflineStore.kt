@@ -9,9 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -32,6 +30,28 @@ import kotlinx.serialization.Serializable
  * **Note:** `incognito_mode_enabled` is intentionally NOT owned here — it
  * belongs to the playback/player domain (`VideoPlayerStore`).
  *
+ * **Spec derivation:** every spec-declarable key this store owns is declared
+ * exactly once as a row in [NetworkOfflinePreferenceSpecs] (wire name,
+ * default, reset category, read/write encoding) and the machinery below is
+ * derived from those rows — each [Keys] member rebuilds its row's typed key
+ * from the row's wire name, each [read] projection row delegates to its row
+ * encoding, the single-key setters and the derived rows of [restore] delegate
+ * to the rows' derived writes, and [resetKeysFor] filters the rows by reset
+ * category. Every row this domain declares resets under the single legacy
+ * `DOWNLOADS_NETWORK` category.
+ *
+ * **Hand-written residuals (the documented opt-outs — see the spec KDoc):**
+ *  - the [HOME_STREAMING_QUALITY] row is the declaration-only
+ *    [com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec.string] (the
+ *    hand read was the plain `prefs[key] ?: default`): its setter/restore
+ *    lines stay hand-written (a declaration-only row has no derived write).
+ *  - the self-signed trust-host grant set ([Keys.SELF_SIGNED_TRUST_HOSTS])
+ *    has no spec row — a DataStore StringSet slot, and the spec tier's
+ *    [com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage] declares
+ *    single-value storages only. The key, its read, its read-modify-write
+ *    grant/revoke verbs and its `restore` line stay hand-written, and
+ *    [resetKeysFor] appends its reset participation beside the rows.
+ *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file; key strings match
  * the legacy `UserPreferencesStore.Keys` names — no migration file.
  */
@@ -41,102 +61,133 @@ class NetworkOfflineStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [NetworkOfflinePreferenceSpecs] row — the member rebuilds the row's
+     * typed key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key
+     * of the same name). Kept as a plain object rather than folded into the
+     * rows because it is the reflection anchor for the JVM reset-coverage
+     * guard — and because it still carries the one hand-residual key the
+     * spec tier cannot declare (the trust-host StringSet slot).
+     */
     internal object Keys {
-        val MANUAL_OFFLINE_ENABLED = booleanPreferencesKey("manual_offline_enabled")
-        val AUTO_OFFLINE_ENABLED = booleanPreferencesKey("auto_offline_enabled")
-        val MANUAL_BANDWIDTH_CAP = longPreferencesKey("manual_bandwidth_cap")
-        val METERED_NETWORK_BEHAVIOR = stringPreferencesKey("metered_network_behavior")
-        val ADAPTIVE_BITRATE_ENABLED = booleanPreferencesKey("adaptive_bitrate_enabled")
-        val DATA_SAVER_ENABLED = booleanPreferencesKey("data_saver_enabled")
-        val VERBOSE_NETWORK_LOGGING = booleanPreferencesKey("verbose_network_logging")
-        val NETWORK_TIMEOUT_PRESET = stringPreferencesKey("network_timeout_preset")
-        val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
-        val AUTO_DELETE_CACHE = booleanPreferencesKey("auto_delete_cache")
+        val MANUAL_OFFLINE_ENABLED = booleanPreferencesKey(NetworkOfflinePreferenceSpecs.MANUAL_OFFLINE_ENABLED.keyName)
+        val AUTO_OFFLINE_ENABLED = booleanPreferencesKey(NetworkOfflinePreferenceSpecs.AUTO_OFFLINE_ENABLED.keyName)
+        val MANUAL_BANDWIDTH_CAP = longPreferencesKey(NetworkOfflinePreferenceSpecs.MANUAL_BANDWIDTH_CAP.keyName)
+        val METERED_NETWORK_BEHAVIOR =
+            stringPreferencesKey(NetworkOfflinePreferenceSpecs.METERED_NETWORK_BEHAVIOR.keyName)
+        val ADAPTIVE_BITRATE_ENABLED =
+            booleanPreferencesKey(NetworkOfflinePreferenceSpecs.ADAPTIVE_BITRATE_ENABLED.keyName)
+        val DATA_SAVER_ENABLED = booleanPreferencesKey(NetworkOfflinePreferenceSpecs.DATA_SAVER_ENABLED.keyName)
+        val VERBOSE_NETWORK_LOGGING =
+            booleanPreferencesKey(NetworkOfflinePreferenceSpecs.VERBOSE_NETWORK_LOGGING.keyName)
+        val NETWORK_TIMEOUT_PRESET = stringPreferencesKey(NetworkOfflinePreferenceSpecs.NETWORK_TIMEOUT_PRESET.keyName)
+        val MAX_CACHE_SIZE_MB = intPreferencesKey(NetworkOfflinePreferenceSpecs.MAX_CACHE_SIZE_MB.keyName)
+        val AUTO_DELETE_CACHE = booleanPreferencesKey(NetworkOfflinePreferenceSpecs.AUTO_DELETE_CACHE.keyName)
+        /**
+         * The one hand-residual key: a DataStore StringSet slot the spec tier
+         * cannot declare (no STRING_SET storage — see the class KDoc's
+         * opt-outs).
+         */
         val SELF_SIGNED_TRUST_HOSTS = stringSetPreferencesKey("self_signed_trust_hosts")
-        /** The home-streaming quality stored as the enum NAME ("AUTO" default) — see [NetworkOfflineSlice.homeStreamingQuality]. */
-        val HOME_NETWORK_STREAMING_QUALITY = stringPreferencesKey("home_network_streaming_quality")
+        /**
+         * The home-streaming quality stored as the enum NAME ("AUTO" default) — see [NetworkOfflineSlice.homeStreamingQuality].
+         * The declaration-only [NetworkOfflinePreferenceSpecs.HOME_STREAMING_QUALITY] row's slot.
+         */
+        val HOME_NETWORK_STREAMING_QUALITY =
+            stringPreferencesKey(NetworkOfflinePreferenceSpecs.HOME_STREAMING_QUALITY.keyName)
     }
 
     val networkOffline: StateFlow<NetworkOfflineSlice> =
         dataStore.sliceStateFlow(scope, seed = NetworkOfflineSlice(), read = ::read)
 
+    /**
+     * Pure read of the network / offline-mode fields from a raw [Preferences]
+     * snapshot, each field delegated to its [NetworkOfflinePreferenceSpecs]
+     * row encoding (the declaration-only home-quality row via its plain
+     * [com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec.readStored] —
+     * the exact hand read). Exposed so the facade can fold these into the
+     * whole-`UserPreferences` projection without duplicating the read logic.
+     */
     internal fun read(prefs: Preferences): NetworkOfflineSlice = NetworkOfflineSlice(
-        manualOfflineEnabled = PreferenceCodec.readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),
-        autoOfflineEnabled = PreferenceCodec.readBool(prefs, Keys.AUTO_OFFLINE_ENABLED, "auto_offline_enabled", true),
-        manualBandwidthCap = prefs[Keys.MANUAL_BANDWIDTH_CAP] ?: 0L,
-        homeStreamingQuality = prefs[Keys.HOME_NETWORK_STREAMING_QUALITY] ?: "AUTO",
-        meteredNetworkBehavior = readMeteredNetworkBehavior(prefs),
-        adaptiveBitrateEnabled = PreferenceCodec.readBool(prefs, Keys.ADAPTIVE_BITRATE_ENABLED, "adaptive_bitrate_enabled", true),
-        dataSaverEnabled = PreferenceCodec.readBool(prefs, Keys.DATA_SAVER_ENABLED, "data_saver_enabled", false),
-        verboseNetworkLogging = PreferenceCodec.readBool(prefs, Keys.VERBOSE_NETWORK_LOGGING, "verbose_network_logging", false),
-        networkTimeoutPreset = readNetworkTimeoutPreset(prefs),
-        maxCacheSizeMb = PreferenceCodec.readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
-        autoDeleteCache = PreferenceCodec.readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
+        manualOfflineEnabled = NetworkOfflinePreferenceSpecs.MANUAL_OFFLINE_ENABLED.readFrom(prefs),
+        autoOfflineEnabled = NetworkOfflinePreferenceSpecs.AUTO_OFFLINE_ENABLED.readFrom(prefs),
+        manualBandwidthCap = NetworkOfflinePreferenceSpecs.MANUAL_BANDWIDTH_CAP.readFrom(prefs),
+        homeStreamingQuality = NetworkOfflinePreferenceSpecs.HOME_STREAMING_QUALITY.readStored(prefs),
+        meteredNetworkBehavior = NetworkOfflinePreferenceSpecs.METERED_NETWORK_BEHAVIOR.readFrom(prefs),
+        adaptiveBitrateEnabled = NetworkOfflinePreferenceSpecs.ADAPTIVE_BITRATE_ENABLED.readFrom(prefs),
+        dataSaverEnabled = NetworkOfflinePreferenceSpecs.DATA_SAVER_ENABLED.readFrom(prefs),
+        verboseNetworkLogging = NetworkOfflinePreferenceSpecs.VERBOSE_NETWORK_LOGGING.readFrom(prefs),
+        networkTimeoutPreset = NetworkOfflinePreferenceSpecs.NETWORK_TIMEOUT_PRESET.readFrom(prefs),
+        maxCacheSizeMb = NetworkOfflinePreferenceSpecs.MAX_CACHE_SIZE_MB.readFrom(prefs),
+        autoDeleteCache = NetworkOfflinePreferenceSpecs.AUTO_DELETE_CACHE.readFrom(prefs),
         selfSignedTrustHosts = prefs[Keys.SELF_SIGNED_TRUST_HOSTS] ?: emptySet(),
     )
 
-    private fun readMeteredNetworkBehavior(prefs: Preferences): MeteredNetworkBehavior =
-        prefs[Keys.METERED_NETWORK_BEHAVIOR].toEnumOrNull() ?: MeteredNetworkBehavior.WARN
-
-    private fun readNetworkTimeoutPreset(prefs: Preferences): NetworkTimeoutPreset =
-        prefs[Keys.NETWORK_TIMEOUT_PRESET].toEnumOrNull() ?: NetworkTimeoutPreset.DEFAULT
-
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, plain slot — is the row's, not
+    // re-declared here); the declaration-only home-quality row keeps its
+    // hand-written line, as do the trust-host grant/revoke verbs below.
     // ------------------------------------------------------------------
 
     suspend fun setManualOffline(enabled: Boolean) {
-        dataStore.edit { it[Keys.MANUAL_OFFLINE_ENABLED] = enabled }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.MANUAL_OFFLINE_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setAutoOfflineEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_OFFLINE_ENABLED] = enabled }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.AUTO_OFFLINE_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setManualBandwidthCap(cap: Long) {
-        dataStore.edit { it[Keys.MANUAL_BANDWIDTH_CAP] = cap }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.MANUAL_BANDWIDTH_CAP.writeTo(it, cap) }
     }
 
     /**
      * The home-streaming quality as the persisted enum NAME ("AUTO" default —
      * the [com.raulshma.jellyplay.core.model.StreamingQuality] vocabulary).
      * Carried as a raw String so an unknown name from a newer binary degrades
-     * to the caller's handling instead of a hard parse failure here.
+     * to the caller's handling instead of a hard parse failure here. The
+     * declaration-only row keeps this hand-written plain slot write (see the
+     * class KDoc's opt-outs).
      */
     suspend fun setHomeStreamingQuality(value: String) {
         dataStore.edit { it[Keys.HOME_NETWORK_STREAMING_QUALITY] = value }
     }
 
     suspend fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) {
-        dataStore.edit { it[Keys.METERED_NETWORK_BEHAVIOR] = behavior.name }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.METERED_NETWORK_BEHAVIOR.writeTo(it, behavior) }
     }
 
     suspend fun setAdaptiveBitrateEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.ADAPTIVE_BITRATE_ENABLED] = enabled }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.ADAPTIVE_BITRATE_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setDataSaverEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DATA_SAVER_ENABLED] = enabled }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.DATA_SAVER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVerboseNetworkLogging(enabled: Boolean) {
-        dataStore.edit { it[Keys.VERBOSE_NETWORK_LOGGING] = enabled }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.VERBOSE_NETWORK_LOGGING.writeTo(it, enabled) }
     }
 
     suspend fun setNetworkTimeoutPreset(preset: NetworkTimeoutPreset) {
-        dataStore.edit { it[Keys.NETWORK_TIMEOUT_PRESET] = preset.name }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.NETWORK_TIMEOUT_PRESET.writeTo(it, preset) }
     }
 
     suspend fun setMaxCacheSize(sizeMb: Int) {
-        dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.MAX_CACHE_SIZE_MB.writeTo(it, sizeMb) }
     }
 
     suspend fun setAutoDeleteCache(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
+        dataStore.edit { NetworkOfflinePreferenceSpecs.AUTO_DELETE_CACHE.writeTo(it, enabled) }
     }
 
     // ------------------------------------------------------------------
-    // Self-signed certificate trust (opt-in, per server address)
+    // Self-signed certificate trust (opt-in, per server address) — the
+    // hand-residual StringSet slot the spec tier cannot declare (see the
+    // class KDoc's opt-outs); the read-modify-write verbs stay hand-written.
     // ------------------------------------------------------------------
 
     /**
@@ -183,75 +234,78 @@ class NetworkOfflineStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. The network/offline keys (plus the image-cache size + auto
-     * delete toggles) all sit in the legacy `DOWNLOADS_NETWORK` reset category.
+     * [category] — the [NetworkOfflinePreferenceSpecs] rows whose declared
+     * reset category matches, mapped to their derived keys, plus the
+     * hand-residual trust-host set key for its `DOWNLOADS_NETWORK` lane (see
+     * the class KDoc's opt-outs). The network/offline keys (plus the
+     * image-cache size + auto delete toggles) all sit in the legacy
+     * `DOWNLOADS_NETWORK` reset category.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
-            Keys.MAX_CACHE_SIZE_MB,
-            Keys.AUTO_DELETE_CACHE,
-            Keys.MANUAL_OFFLINE_ENABLED,
-            Keys.AUTO_OFFLINE_ENABLED,
-            Keys.MANUAL_BANDWIDTH_CAP,
-            Keys.HOME_NETWORK_STREAMING_QUALITY,
-            Keys.METERED_NETWORK_BEHAVIOR,
-            Keys.ADAPTIVE_BITRATE_ENABLED,
-            Keys.DATA_SAVER_ENABLED,
-            Keys.VERBOSE_NETWORK_LOGGING,
-            Keys.NETWORK_TIMEOUT_PRESET,
-            Keys.SELF_SIGNED_TRUST_HOSTS,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        NetworkOfflinePreferenceSpecs.resetKeysFor(category) +
+            if (category == PreferenceResetCategory.DOWNLOADS_NETWORK) {
+                listOf(Keys.SELF_SIGNED_TRUST_HOSTS)
+            } else {
+                emptyList()
+            }
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences].
+     * DataStore — the derived rows via their row's derived write (the same
+     * encoding the row reads with), the declaration-only home-quality row and
+     * the hand-residual trust-host set via their hand-written lines.
      */
     suspend fun restore(slice: NetworkOfflineSlice) {
-        dataStore.edit { it ->
-            it[Keys.MAX_CACHE_SIZE_MB] = slice.maxCacheSizeMb
-            it[Keys.AUTO_DELETE_CACHE] = slice.autoDeleteCache
-            it[Keys.MANUAL_OFFLINE_ENABLED] = slice.manualOfflineEnabled
-            it[Keys.AUTO_OFFLINE_ENABLED] = slice.autoOfflineEnabled
-            it[Keys.MANUAL_BANDWIDTH_CAP] = slice.manualBandwidthCap
-            it[Keys.HOME_NETWORK_STREAMING_QUALITY] = slice.homeStreamingQuality
-            it[Keys.METERED_NETWORK_BEHAVIOR] = slice.meteredNetworkBehavior.name
-            it[Keys.ADAPTIVE_BITRATE_ENABLED] = slice.adaptiveBitrateEnabled
-            it[Keys.DATA_SAVER_ENABLED] = slice.dataSaverEnabled
-            it[Keys.VERBOSE_NETWORK_LOGGING] = slice.verboseNetworkLogging
-            it[Keys.NETWORK_TIMEOUT_PRESET] = slice.networkTimeoutPreset.name
-            it[Keys.SELF_SIGNED_TRUST_HOSTS] = slice.selfSignedTrustHosts
+        dataStore.edit { prefs ->
+            NetworkOfflinePreferenceSpecs.MANUAL_OFFLINE_ENABLED.writeTo(prefs, slice.manualOfflineEnabled)
+            NetworkOfflinePreferenceSpecs.AUTO_OFFLINE_ENABLED.writeTo(prefs, slice.autoOfflineEnabled)
+            NetworkOfflinePreferenceSpecs.MANUAL_BANDWIDTH_CAP.writeTo(prefs, slice.manualBandwidthCap)
+            prefs[Keys.HOME_NETWORK_STREAMING_QUALITY] = slice.homeStreamingQuality
+            NetworkOfflinePreferenceSpecs.METERED_NETWORK_BEHAVIOR.writeTo(prefs, slice.meteredNetworkBehavior)
+            NetworkOfflinePreferenceSpecs.ADAPTIVE_BITRATE_ENABLED.writeTo(prefs, slice.adaptiveBitrateEnabled)
+            NetworkOfflinePreferenceSpecs.DATA_SAVER_ENABLED.writeTo(prefs, slice.dataSaverEnabled)
+            NetworkOfflinePreferenceSpecs.VERBOSE_NETWORK_LOGGING.writeTo(prefs, slice.verboseNetworkLogging)
+            NetworkOfflinePreferenceSpecs.NETWORK_TIMEOUT_PRESET.writeTo(prefs, slice.networkTimeoutPreset)
+            NetworkOfflinePreferenceSpecs.MAX_CACHE_SIZE_MB.writeTo(prefs, slice.maxCacheSizeMb)
+            NetworkOfflinePreferenceSpecs.AUTO_DELETE_CACHE.writeTo(prefs, slice.autoDeleteCache)
+            prefs[Keys.SELF_SIGNED_TRUST_HOSTS] = slice.selfSignedTrustHosts
         }
     }
 }
 
 /**
- * The network / offline-mode preference slice. Plain data class. Defaults mirror
- * the projection defaults in [NetworkOfflineStore.read].
+ * The network / offline-mode preference slice. Plain data class.
+ * Every default IS its [NetworkOfflinePreferenceSpecs] row's declared
+ * default — read off the row via a plain accessor, so a preference's default
+ * is stated exactly once, in its spec, and cannot drift between the spec
+ * (what an absent key reads) and the slice (what a fresh in-memory instance
+ * serves). The spec-default equality is pinned field-for-field by
+ * `NetworkOfflineSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class NetworkOfflineSlice(
-    val manualOfflineEnabled: Boolean = false,
-    val autoOfflineEnabled: Boolean = true,
-    val manualBandwidthCap: Long = 0L,
+    val manualOfflineEnabled: Boolean = NetworkOfflinePreferenceSpecs.MANUAL_OFFLINE_ENABLED.default,
+    val autoOfflineEnabled: Boolean = NetworkOfflinePreferenceSpecs.AUTO_OFFLINE_ENABLED.default,
+    val manualBandwidthCap: Long = NetworkOfflinePreferenceSpecs.MANUAL_BANDWIDTH_CAP.default,
     /**
      * The home-streaming quality as the persisted enum NAME
      * ([com.raulshma.jellyplay.core.model.StreamingQuality] vocabulary).
      * Default "AUTO".
      */
-    val homeStreamingQuality: String = "AUTO",
-    val meteredNetworkBehavior: MeteredNetworkBehavior = MeteredNetworkBehavior.WARN,
-    val adaptiveBitrateEnabled: Boolean = true,
-    val dataSaverEnabled: Boolean = false,
-    val verboseNetworkLogging: Boolean = false,
-    val networkTimeoutPreset: NetworkTimeoutPreset = NetworkTimeoutPreset.DEFAULT,
-    val maxCacheSizeMb: Int = 0,
-    val autoDeleteCache: Boolean = true,
+    val homeStreamingQuality: String = NetworkOfflinePreferenceSpecs.HOME_STREAMING_QUALITY.default,
+    val meteredNetworkBehavior: MeteredNetworkBehavior =
+        NetworkOfflinePreferenceSpecs.METERED_NETWORK_BEHAVIOR.default,
+    val adaptiveBitrateEnabled: Boolean = NetworkOfflinePreferenceSpecs.ADAPTIVE_BITRATE_ENABLED.default,
+    val dataSaverEnabled: Boolean = NetworkOfflinePreferenceSpecs.DATA_SAVER_ENABLED.default,
+    val verboseNetworkLogging: Boolean = NetworkOfflinePreferenceSpecs.VERBOSE_NETWORK_LOGGING.default,
+    val networkTimeoutPreset: NetworkTimeoutPreset = NetworkOfflinePreferenceSpecs.NETWORK_TIMEOUT_PRESET.default,
+    val maxCacheSizeMb: Int = NetworkOfflinePreferenceSpecs.MAX_CACHE_SIZE_MB.default,
+    val autoDeleteCache: Boolean = NetworkOfflinePreferenceSpecs.AUTO_DELETE_CACHE.default,
     /**
      * Server addresses granted self-signed TLS trust, canonical
-     * `scheme://host[:port]` form. Empty by default (opt-in only).
+     * `scheme://host[:port]` form. Empty by default (opt-in only). The one
+     * hand-residual slot — no spec row (see the store KDoc's opt-outs).
      */
     val selfSignedTrustHosts: Set<String> = emptySet(),
 )
