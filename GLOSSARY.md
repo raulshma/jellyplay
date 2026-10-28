@@ -264,6 +264,15 @@ The composite resume/retry+enqueue verb lives inside `DownloadRepositoryImpl`
 verb); the notification receiver dispatches it alone. The effects fold stays
 VM-side — DELETE-only, single-sited.
 
+**Downloads resync actions** — the resync/freshness family of the downloads
+screen as one constructed module: `DownloadsResyncActions` (built from
+`OfflineResync` + `OfflineRepository` + `DownloadQueue`) owns the four
+freshness flows, the check/resync/force verbs, the checking TTL-gate
+wrapper, and the eligible-status policy (single-sited, private). The
+ViewModel keeps construction and one accessor; post-action UI effects stay
+VM-side (the Download action module's rule). `DownloadsViewModelOwnershipTest`
+holds the member/line ceilings — the holder was the offsetting relocation.
+
 ## Playback
 
 **Up Next module** — everything "what plays next" knows about itself:
@@ -436,8 +445,10 @@ is not a uiState leaf (controller seeds, autoplay flip, focus push).
 itself: its entry points (chip, overflow, gear, cross-sheet links),
 its commands, and its slice region — registered in a sheet registry at
 the Home row module's grain (feature-grain; NOT ADR-0009's rejected
-settings-group grain). A new sheet lands in one module. Three sheets are
-registry-owned (Hdr, Render, SubtitleHub): SubtitleHub reads the
+settings-group grain). A new sheet lands in one module. Four sheets are
+registry-owned (Hdr, Render, SubtitleHub, PlaybackMode — PlaybackMode
+migrated as the vehicle for the sheets-slice engine-swap verdict):
+SubtitleHub reads the
 `SheetsSessionSlice` through `SubtitleHubSheetModule` with per-tab input
 bundles. The remaining sheets route through the router `when`; the
 commands, slice-region and entry-bundle halves remain outside the registry.
@@ -526,7 +537,12 @@ dialects, and the desktop one-shot hint gate.
 session: per-region projections (overlay, status, sheets, cast) whose
 interfaces the screens program against. Controllers sit behind the seam; a
 screen reading a controller directly, or a ViewModel re-exposing one as a
-pass-through, is a defect. Collection placement follows the slice: hot flows
+pass-through, is a defect — the law is source-scan pinned
+(`ControllerOwnershipTest`: no screen-side file names
+`viewModel.playbackSession`), and the sheets region carries the engine-swap
+availability verdict (`switchableEngines`, `localControlBlocked`) so the
+fold lives once session-side and the VM's SwitchPlayerEngine arm consumes
+the same verdict. Collection placement follows the slice: hot flows
 are collected in the leaf that reads them, never in the screen root. The
 cast region's route-button projection is a slice member, so the cast manager
 is not a public VM member. The audio family's lyric index is a dedicated VM
@@ -538,8 +554,14 @@ in their leaves).
 itself: visibility state, the auto-hide timer, the summon policy, focus-grab
 arming, the BACK hide-or-exit ladder, and the visibility→poll-cadence
 switch, behind one small interface at the player-contract chrome seam (where
-`PlayerChromePolicies` sits). VOD and live both use it; the book reader's
-chrome is a possible future adapter. `PlayerChromeController` composes over
+`PlayerChromePolicies` sits). VOD and live both use it. The book reader deliberately stays OUTSIDE the
+module: its chrome is a gate-and-delay only (`AutoHideControlsEffect` in
+feature/player-book — VM-owned visibility, sheet-stack suppression, no
+summon policy, BACK ladder, focus arm, or poll-cadence switch to answer);
+the one shared decision, the TV-doubled timeout selection
+(`controlsAutoHideTimeoutMs`), already crosses through player-contract.
+A future adapter needs new controller vocabulary first, not a forced fit
+(the ADR-0012 shallow-module bar). `PlayerChromeController` composes over
 the pure predicates; the screens bind it through
 `rememberPlayerChromeController`, which keeps the VOD saveable visibility
 state.
@@ -692,7 +714,12 @@ announce-on-delivery pairing, one batched call).
 **Test fixtures home** — ADR-0006 rule 4: the desktop-audio queue fixtures
 live once in `:shared:core:test-fixtures` (jvmMain — the fakes reference
 core:data's jvmMain-only `AudioEffectsSession`; both consumer lanes are
-JVM-only).
+JVM-only). The boundary is the internal-ctor line: doubles of public
+interfaces go in test-fixtures; construction graphs over internal
+constructors stay jvmTest-local to their module — `MediaRepoStackHarness`
+(core:data jvmTest: the media-repo construction ritual behind one bundle —
+real catalogue transplant, null-session key surface) and `announcerFor`
+are the precedents.
 
 **Koin registration totality** — plain ViewModel registrations ride
 `viewModelOf(::X)`; hand-written blocks remain only where wiring is genuinely
@@ -810,6 +837,26 @@ order differs), pinned by a both-ways contract test. The TV
 `menu_shortcuts` label override stays at the call site — per-
 destination presentation, not eligibility (a localized resource vs the
 registry's English labels).
+
+**Playback speed ladder** — one home for the playback-speed vocabulary:
+`PlaybackSpeedLadder` (core:model, beside `PlayerAction`) carries the range,
+the derived step count (never a hand constant), the full rung list and the
+audio-settings subset (deliberate product choice, not drift), plus the
+`1x` formatting. Both sliders, both pickers, the CYCLE_SPEED cycle and the
+settings rows read it — a rung change is one edit; a picker offering a rung
+the slider cannot reach is the defect class this shape makes
+unrepresentable.
+
+**I18n tooling home** — `:shared:core:i18n-tools` owns the repo's
+string-table tooling as one module: the counted-key grammar (strings and
+plurals counted, plurals once, per-family union, `diff_` /
+`translatable="false"` / proper-noun exemptions — one home, two consumers),
+the repo discovery walk, `StringsPropagator` (write side) and the parity
+ratchet (read side, relocated out of core:concurrency). Repo-wide
+`propagateStrings`/`checkStrings` run from the root build against the
+module's classpath. Propagated copies land `PENDING TRANSLATION`-marked and
+count present-but-not-translated, so the ratchet's numbers only ever go
+down.
 
 **Preference stores aggregate** — `UserPreferencesStore` and
 `PreferencesEditScope` take the grouped `PreferenceStores` value
