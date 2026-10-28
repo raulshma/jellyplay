@@ -87,7 +87,7 @@ internal fun floatingNavBarOffsetYpx(bottomNavHideOffsetPx: Float): Int =
  *    pills flush to the drawer, anchored under the status bar
  *    (start 12.dp / top statusBarTop + 8.dp).
  *  - compact: docked bottom-end beside the floating nav toggle
- *    (end 16.dp / bottom 4.dp).
+ *    (end 16.dp / bottom 12.dp — 4.dp nav-bar clearance + 8.dp whitespace).
  *
  * @param statusBarTop the status-bar inset the expanded anchor hangs under
  *   (the call site's already-computed padding value).
@@ -103,5 +103,5 @@ internal fun overflowMenuInsets(isExpanded: Boolean, statusBarTop: Dp): Overflow
     if (isExpanded) {
         OverflowMenuInsets(start = 12.dp, top = statusBarTop + 8.dp, end = 0.dp, bottom = 0.dp)
     } else {
-        OverflowMenuInsets(start = 0.dp, top = 0.dp, end = 16.dp, bottom = 4.dp)
+        OverflowMenuInsets(start = 0.dp, top = 0.dp, end = 16.dp, bottom = 12.dp)
     }
