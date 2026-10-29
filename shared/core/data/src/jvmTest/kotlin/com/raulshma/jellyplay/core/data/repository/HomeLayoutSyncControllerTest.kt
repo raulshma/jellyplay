@@ -13,7 +13,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.network.api.HomeLayoutServerState
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.HomeLayoutApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -67,7 +67,7 @@ class HomeLayoutSyncControllerTest {
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var identityStore: ServerIdentityStore
     private lateinit var store: HomeDiscoveryStore
-    private lateinit var apiClient: LibraryApiClient
+    private lateinit var apiClient: HomeLayoutApiClient
     private lateinit var controller: HomeLayoutSyncController
 
     /** Every write-payload the fake client accepted, in order. */

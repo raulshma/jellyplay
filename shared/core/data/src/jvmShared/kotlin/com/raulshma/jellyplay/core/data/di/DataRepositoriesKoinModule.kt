@@ -140,7 +140,7 @@ internal val dataRepositoriesModule: Module = module {
     // Session-scoped by design (no persistence) — see VideoQueueController.
     single { com.raulshma.jellyplay.core.data.playback.VideoQueueController() }
 
-    single { MetadataEditorRepositoryImpl(get(), get(), get()) }
+    single { MetadataEditorRepositoryImpl(get(), get(), get(), get()) }
     single<MetadataEditorRepository> { get<MetadataEditorRepositoryImpl>() }
 
     single { SeenMediaRepositoryImpl(get()) }
@@ -158,7 +158,7 @@ internal val dataRepositoriesModule: Module = module {
 
     // Companion-plugin bookmark sync (ADR 0010, `bookmarks` feature) over the
     // SAME book_bookmarks rows the marks repo owns — shares the BookBookmarkDao
-    // single. The status store resolves from dataSessionPlaybackModule (one
+    // single. The status store resolves from dataProfileSyncModule (one
     // graph); the network api client from the network modules.
     single {
         BookmarksSyncRepositoryImpl(

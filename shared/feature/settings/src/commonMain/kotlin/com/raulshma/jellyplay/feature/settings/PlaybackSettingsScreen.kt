@@ -19,23 +19,53 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rese
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_message
 
 /**
- * The playback screen's ONE group declaration, in LazyColumn order — the
+ * The playback screen's ONE ordered group declaration — parameterized by the
+ * preferred player because the engine slot's content-count hook is the one
+ * runtime-keyed shape the flags vocabulary cannot express (only the preferred
+ * player's rows exist at runtime, so the declared all-engines group
+ * contributes its delta for that prefix alone; the screen-local reset row
+ * cancels in the delta). The screen passes the live preference, and the
+ * contract test pins the shipped JVM shape (LIBVLC — the desktop seam backs
+ * the mpv device rows) plus the MPV honesty pin against the SAME
+ * declaration, so the per-engine hook is stated exactly once (ADR-0009's
+ * amendment). Per-group row emission stays hand-written: the screen maps
+ * each slot to its body inline in [playbackScreenGroups].
+ */
+internal fun PlaybackSettingsScreenSlots(
+    preferredPlayer: PlayerType,
+): List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.playbackPlayer.asScreenGroup(),
+    SettingsScreenGroups.playbackAdvancedVideo.asScreenGroup(advancedOnly = true),
+    SettingsScreenGroups.playbackEngine.asScreenGroup(
+        advancedOnly = true,
+        emittedRows = { flags ->
+            when (preferredPlayer) {
+                PlayerType.MPV -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("mpv_") }
+                PlayerType.LIBVLC -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("vlc_") }
+                PlayerType.EXO_PLAYER -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("exo_") }
+                PlayerType.EXTERNAL -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id == PlaybackRows.ExternalPlayerApp.id }
+                else -> 0
+            }
+        },
+    ),
+    SettingsScreenGroups.playbackMediaSegments.asScreenGroup(advancedOnly = true),
+    SettingsScreenGroups.playbackSyncPlay.asScreenGroup(),
+    SettingsScreenGroups.playbackCasting.asScreenGroup(),
+    SettingsScreenGroups.playbackDvr.asScreenGroup(),
+)
+
+/**
+ * The playback screen's group bodies, mapped onto the ONE ordered
+ * declaration ([PlaybackSettingsScreenSlots], in LazyColumn order — the
  * shell derives the deep-link scroll resolution, the whole-group advanced
  * gating (indices 1-3: advanced video, engine config, media segments only
  * compose behind the advanced toggle) and the hidden-settings hint count
- * from it, so the scroll target and the hint can never drift from the UI.
- * The advanced shape folds into the scroll adjust in the shell. The
- * per-group row emission stays hand-written inside each slot (ADR-0009).
- *
- * The engine slot's content-count hook reads the per-engine branch the
- * screen emits (the one shape the flags vocabulary cannot express): only the
- * preferred player's rows exist at runtime, so the declared all-engines
- * group contributes its delta for that prefix alone. The screen-local reset
- * row cancels in the delta (it renders under both evaluations).
- *
- * Built in the screen body — its slots close over the screen's state
- * (preferences, flags, view model) and the shell only reads the derived
- * shape.
+ * from it, and the contract test pins the same declaration, so the scroll
+ * target and the hint can never drift from the UI. The advanced shape folds
+ * into the scroll adjust in the shell) with each slot's hand-written body
+ * attached inline — the bodies close over the screen's state (preferences,
+ * flags, view model) and the shell only reads the derived shape (ADR-0009:
+ * per-row emission stays hand-written).
  */
 @Composable
 private fun playbackScreenGroups(
@@ -45,88 +75,81 @@ private fun playbackScreenGroups(
     viewModel: PlaybackSettingsViewModel,
     scope: CoroutineScope,
     navActions: SettingsNavActions,
-): List<PreferenceScreenGroup> = listOf(
-    SettingsScreenGroups.playbackPlayer.asScreenGroup { activePicker ->
-        PlaybackPlayerGroup(
-            preferences = preferences,
-            showAdvanced = rowFlags.showAdvanced,
-            rowFlags = rowFlags,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-            navActions = navActions,
-        )
-    },
-    SettingsScreenGroups.playbackAdvancedVideo.asScreenGroup(advancedOnly = true) { activePicker ->
-        PlaybackAdvancedVideoGroup(
-            preferences = preferences,
-            rowFlags = rowFlags,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-        )
-    },
-    SettingsScreenGroups.playbackEngine.asScreenGroup(
-
-        advancedOnly = true,
-        emittedRows = { flags ->
-            when (preferences.preferredPlayer) {
-                PlayerType.MPV -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("mpv_") }
-                PlayerType.LIBVLC -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("vlc_") }
-                PlayerType.EXO_PLAYER -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("exo_") }
-                PlayerType.EXTERNAL -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id == PlaybackRows.ExternalPlayerApp.id }
-                else -> 0
-            }
+): List<PreferenceScreenGroup> {
+    val slots = PlaybackSettingsScreenSlots(preferredPlayer = preferences.preferredPlayer)
+    return slots.withContent(
+        bodies = listOf(
+        { activePicker ->
+            PlaybackPlayerGroup(
+                preferences = preferences,
+                showAdvanced = rowFlags.showAdvanced,
+                rowFlags = rowFlags,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+                navActions = navActions,
+            )
         },
-    ) { activePicker ->
-        PlaybackEngineGroup(
-            preferences = preferences,
-            rowFlags = rowFlags,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-        )
-    },
-    SettingsScreenGroups.playbackMediaSegments.asScreenGroup(advancedOnly = true) { activePicker ->
-        PlaybackMediaSegmentsGroup(
-            preferences = preferences,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-        )
-    },
-    SettingsScreenGroups.playbackSyncPlay.asScreenGroup { activePicker ->
-        PlaybackSyncPlayGroup(
-            preferences = preferences,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-        )
-    },
-    SettingsScreenGroups.playbackCasting.asScreenGroup { activePicker ->
-        PlaybackCastingGroup(
-            preferences = preferences,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-        )
-    },
-    SettingsScreenGroups.playbackDvr.asScreenGroup { activePicker ->
-        PlaybackDvrGroup(
-            preferences = preferences,
-            highlightSettingId = highlightSettingId,
-            viewModel = viewModel,
-            scope = scope,
-            activePicker = activePicker,
-        )
-    },
-)
+        { activePicker ->
+            PlaybackAdvancedVideoGroup(
+                preferences = preferences,
+                rowFlags = rowFlags,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackEngineGroup(
+                preferences = preferences,
+                rowFlags = rowFlags,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackMediaSegmentsGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackSyncPlayGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackCastingGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackDvrGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        ),
+    )
+}
 
 /**
  * The playback screen's admission flags — the declared row admissions both

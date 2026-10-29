@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PinnedSectionType
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.HomeLayoutApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
@@ -105,7 +105,8 @@ sealed interface HomeLayoutRestoreFetch {
 class HomeLayoutSyncController(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val identityStore: ServerIdentityStore,
-    private val apiClient: LibraryApiClient,
+    /** The home-layout DisplayPreferences family seam (carved off LibraryApiClient — its one consumer is this controller). */
+    private val apiClient: HomeLayoutApiClient,
     /** The collector's home — the application scope; virtual-time tests pass a TestScope and construct with [startAutopushOnConstruction] = false. */
     private val externalScope: CoroutineScope,
     private val startAutopushOnConstruction: Boolean = true,

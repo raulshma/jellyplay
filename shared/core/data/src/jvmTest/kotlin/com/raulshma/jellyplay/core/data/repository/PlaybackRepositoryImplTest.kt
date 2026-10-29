@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.api.UserDataWrite
@@ -52,7 +52,7 @@ class PlaybackRepositoryImplTest {
     // One relaxed mock per family seam the ctor takes (the single union mock
     // these replaced implemented all four).
     private val playbackApi: PlaybackApiClient = mockk(relaxed = true)
-    private val libraryApi: LibraryApiClient = mockk(relaxed = true)
+    private val libraryApi: UserDataApiClient = mockk(relaxed = true)
     private val authApi: AuthApiClient = mockk(relaxed = true)
     private val metadataApi: MetadataApiClient = mockk(relaxed = true)
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)

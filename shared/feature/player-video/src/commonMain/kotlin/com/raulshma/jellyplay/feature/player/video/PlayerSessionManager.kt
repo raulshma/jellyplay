@@ -20,11 +20,9 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.preferredMediaSource
-import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -821,72 +819,30 @@ internal class PlayerSessionManager(
 
         val artworkUri = artworkUrls.poster(detail.item, maxWidth = 300)
 
-        val headers = mutableMapOf<String, String>()
-        val serverUrl = playbackIdentity.serverUrl()
-        val token = playbackIdentity.accessToken()
-        if (!token.isNullOrBlank()) {
-            headers += playbackIdentity.authorizationHeader(token)
-        }
-
-        // When the language rule engine resolves languages for this
-        // item, seed the request's preferred languages so the engine's native
-        // track selection (ExoPlayer track-selection parameters) starts out in
-        // agreement with the helper's restore ladder. A null resolution axis
-        // falls back to the global preferred language — the exact precedence
-        // the ladder applies (per-item/series manual preferences are the
-        // helper's rung and outrank both).
-        val ruleResolution = TrackResolutionEngine.resolve(
-            agg.subtitle.languageRules,
-            TrackRuleContext(
-                contentType = mediaRuleContentType(detail.item.mediaType),
-                titles = listOfNotNull(
-                    detail.item.seriesName?.takeIf { it.isNotBlank() },
-                    detail.item.name?.takeIf { it.isNotBlank() },
-                ),
-                streams = _sessionState.value.mediaStreams,
-            ),
-        )
-
-        val request = PlaybackRequest(
-            uri = url,
-            title = detail.item.name,
-            startPositionMs = startPositionTicks / 10_000,
-            artworkUri = artworkUri,
-            externalSubtitles = externalSubtitles,
-            headers = headers,
-            preferredAudioLanguage = ruleResolution?.audioLanguage
-                ?: agg.subtitle.preferredAudioLanguage,
-            preferAudioDescription = agg.subtitle.preferAudioDescription,
-            // A rule-driven OFF keeps the engine's native subtitle preference
-            // unset — the helper's ladder enforces the Off itself.
-            preferredSubtitleLanguage = if (ruleResolution?.subtitleDisabled == true) {
-                null
-            } else {
-                ruleResolution?.subtitleLanguage ?: agg.subtitle.preferredSubtitleLanguage
-            },
-            maxVideoBitrate = if (agg.playback.playbackMode == PlaybackMode.AUTO)
-                // Same server, same split (#19): the external hand-off honours
-                // the home tier on a LOCAL server like the in-app paths do.
-                adaptiveBitrateManager.resolveEffectiveMaxBitrate(
-                    com.raulshma.jellyplay.core.model.serverHostOf(serverUrl),
-                )?.toInt()
-                else null,
-            serverUrl = serverUrl,
-            authToken = token,
-            playMethod = playMethod,
-            minBufferMs = agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
-            maxBufferMs = agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
-            serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
-            // The per-engine request payload (core:model's
-            // PlaybackRequestSpecific behind the contract's engineSpecific
-            // slot): Exo unpacks the ReplayGain + MIME hint; the mpv engines
-            // unpack the app-level client-certificate paths (null when no
-            // certificate is enabled — OkHttp-backed engines inherit it via
-            // the shared TLS layer instead).
-            engineSpecific = PlaybackRequestSpecific(
-                normalizationGain = detail.item.normalizationGain,
+        // The 20-field request as one pure fold (the MpvLoadOptionsPlan
+        // precedent, PlaybackRequestPlan.kt): header/token resolution, the
+        // language-rule resolution with its subtitle-disabled fallback, the
+        // AUTO-mode bitrate cap, buffer sizing and the engineSpecific payload
+        // are the plan's; the impure projections (the identity reads, the
+        // side-loaded subtitle set, the bitrate-cap source) arrive as plain
+        // inputs, captured once per request exactly as the inline form read
+        // them.
+        val request = PlaybackRequestPlan.of(
+            PlaybackRequestPlan.Inputs(
+                url = url,
+                startPositionTicks = startPositionTicks,
+                playMethod = playMethod,
                 mimeType = mimeType,
-                tls = playbackIdentity.clientTls(),
+                detail = detail,
+                agg = agg,
+                streams = _sessionState.value.mediaStreams,
+                externalSubtitles = externalSubtitles,
+                artworkUri = artworkUri,
+                serverUrl = playbackIdentity.serverUrl(),
+                token = playbackIdentity.accessToken(),
+                clientTls = playbackIdentity.clientTls(),
+                authorizationHeader = playbackIdentity::authorizationHeader,
+                resolveServerBitrate = { host -> adaptiveBitrateManager.resolveEffectiveMaxBitrate(host) },
             ),
         )
 

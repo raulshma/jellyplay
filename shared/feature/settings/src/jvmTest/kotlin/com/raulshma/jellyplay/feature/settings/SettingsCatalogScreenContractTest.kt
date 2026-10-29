@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -1559,78 +1560,32 @@ class SettingsCatalogScreenContractTest {
 
     // ── 7. The screen-shell declaration path ────────────────────────────
 
-    /**
-     * The migrated screens' [PreferenceScreenGroup] slot declarations — the
-     * ONE ordered declaration the shell derives the whole-group advanced
-     * gating and the hidden-settings hint count from (the scroll fold is
-     * pinned by the section replicas above). The slot lists below replicate
-     * the screens' in-body declarations group-for-group, so every pin here
-     * runs the same derivation the shell runs. The per-engine hook is the
-     * one content-count term the flags vocabulary cannot express (the
-     * engine branch renders one prefix at a time); the deliberately-absent
-     * groups (the security screen's content-only quick-connect and
-     * remote-control slots) contribute zero by construction.
-     */
-    private val appearanceSlots = listOf(
-        SettingsScreenGroups.appearanceTheme.asScreenGroup(),
-        SettingsScreenGroups.appearanceNavigation.asScreenGroup(),
-        SettingsScreenGroups.appearanceLibrary.asScreenGroup(),
-        SettingsScreenGroups.appearancePerformance.asScreenGroup(advancedOnly = true),
-        SettingsScreenGroups.appearanceEyeCare.asScreenGroup(advancedOnly = true),
-        SettingsScreenGroups.appearanceNewsletter.asScreenGroup(advancedOnly = true),
-    )
-
-    private val playbackSlots = listOf(
-        SettingsScreenGroups.playbackPlayer.asScreenGroup(),
-        SettingsScreenGroups.playbackAdvancedVideo.asScreenGroup(advancedOnly = true),
-        SettingsScreenGroups.playbackEngine.asScreenGroup(
-            advancedOnly = true,
-            emittedRows = { flags ->
-                rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("vlc_") }
-            },
-        ),
-        SettingsScreenGroups.playbackMediaSegments.asScreenGroup(advancedOnly = true),
-        SettingsScreenGroups.playbackSyncPlay.asScreenGroup(),
-        SettingsScreenGroups.playbackCasting.asScreenGroup(),
-        SettingsScreenGroups.playbackDvr.asScreenGroup(),
-    )
-
-    private val languageSlots = listOf(
-        SettingsScreenGroups.languageGeneral.asScreenGroup(),
-        SettingsScreenGroups.languageTrackSelection.asScreenGroup(),
-        SettingsScreenGroups.languageSubtitles.asScreenGroup(),
-    )
-
-    private val storageSlots = listOf(
-        SettingsScreenGroups.storageCache.asScreenGroup(),
-        SettingsScreenGroups.storageNetwork.asScreenGroup(),
-        SettingsScreenGroups.storageDownloads.asScreenGroup(),
-    )
-
-    private val securitySlots = listOf(
-        PreferenceScreenGroup(
-            idSet = setOf(
-                SecurityRows.PinLock.id,
-                SecurityRows.BiometricLock.id,
-                SecurityRows.PinForPlayerLock.id,
-                SecurityRows.AutoLockTimer.id,
-            ),
-            emittedRows = { flags -> rowTotalFor(SettingsScreenGroups.security, flags) },
-        ),
-        PreferenceScreenGroup(idSet = setOf(SecurityRows.QuickConnectAuthorize.id)),
-        PreferenceScreenGroup(
-            idSet = setOf(SecurityRows.RemoteControlEnabled.id, SecurityRows.RemoteDisplayContentEnabled.id),
-        ),
-    )
-
     @Test
     fun `screen-shell slot declarations derive the same hidden counts as their group declarations`() {
-        // The default content-count hook IS the declared-admission delta, so
-        // every plain slot list derives exactly what [hiddenRowsFor] over the
-        // group list derives — the ratchet's absolute numbers
-        // (FusedRowsRatchetTest) hold through the shell unchanged. The
-        // track-selection slot contributes zero (every row declares Always),
-        // so the language declaration's completeness does not move its hint.
+        // The five migrated screens' hoisted slot declarations — the ONE
+        // ordered declarations the screens map their hand-written bodies
+        // onto ([AppearanceSettingsScreenSlots] et al., beside each screen).
+        // Consumed directly here, so a screen reorder or re-flag updates
+        // both sides of every pin below at once instead of stranding a stale
+        // replica. The default content-count hook IS the declared-admission
+        // delta, so every plain slot list derives exactly what
+        // [hiddenRowsFor] over the group list derives — the ratchet's
+        // absolute numbers (FusedRowsRatchetTest) hold through the shell
+        // unchanged. The track-selection slot contributes zero (every row
+        // declares Always), so the language declaration's completeness does
+        // not move its hint. The deliberately-absent content-only slots (the
+        // security screen's quick-connect and remote-control groups)
+        // contribute zero by construction.
+        val appearanceSlots = AppearanceSettingsScreenSlots
+        val languageSlots = LanguageSettingsScreenSlots
+        val storageSlots = StorageSettingsScreenSlots
+        val securitySlots = SecuritySettingsScreenSlots
+        // The playback declaration is parameterized by the preferred player
+        // (the engine slot's content-count hook is the one runtime-keyed
+        // shape the flags vocabulary cannot express); the shipped JVM shape
+        // is the LIBVLC branch — this JVM's desktop seam backs the mpv
+        // device rows and the vlc branch is capability-free.
+        val playbackSlots = PlaybackSettingsScreenSlots(PlayerType.LIBVLC)
         val appearanceGroups = listOf(
             SettingsScreenGroups.appearanceTheme,
             SettingsScreenGroups.appearanceNavigation,
@@ -1697,20 +1652,7 @@ class SettingsCatalogScreenContractTest {
         // …and it is honest where the frozen literal was not: the count moves
         // with the engine branch (vlc's declared row count differs from mpv's
         // desktop-gated one) instead of sitting at a hand-picked constant.
-        val mpvSlots = listOf(
-            playbackSlots[0],
-            playbackSlots[1],
-            SettingsScreenGroups.playbackEngine.asScreenGroup(
-                advancedOnly = true,
-                emittedRows = { flags ->
-                    rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("mpv_") }
-                },
-            ),
-            playbackSlots[3],
-            playbackSlots[4],
-            playbackSlots[5],
-            playbackSlots[6],
-        )
+        val mpvSlots = PlaybackSettingsScreenSlots(PlayerType.MPV)
         assertTrue(
             hiddenRowsFor(playbackSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
             "the derived playback hint must track the engine branch (the frozen 28 could not)",

@@ -18,12 +18,19 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClientImpl
 import com.raulshma.jellyplay.core.network.api.DeviceProfileProvider
+import com.raulshma.jellyplay.core.network.api.HomeLayoutApiClient
+import com.raulshma.jellyplay.core.network.api.HomeLayoutApiClientImpl
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClientImpl
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.LazyProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
+import com.raulshma.jellyplay.core.network.api.UserDataApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataApiClientImpl
+import com.raulshma.jellyplay.core.network.api.currentCacheIdentity
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
@@ -156,16 +163,31 @@ val networkJvmModule: Module = module {
         )
     }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
-    // The two library family seams are their own impl singles now (the
-    // families moved off LibraryApiClientImpl): each adapter is constructed
+    // The library family seams are their own impl singles (the families
+    // moved off LibraryApiClientImpl): each adapter is constructed
     // over the SAME engine single — no duplicate network state — and
     // single-family consumers (PlaylistRepositoryImpl, MediaRepositoryImpl's
-    // collection reads/writes) inject the seam, never the wide library
+    // collection reads/writes, the outbox drain's user-data writes,
+    // HomeLayoutSyncController's DisplayPreferences pair, the image-URL
+    // builders' memoising provider) inject the seam, never the wide library
     // surface.
     single { PlaylistApiClientImpl(get()) }
     single<PlaylistApiClient> { get<PlaylistApiClientImpl>() }
     single { CollectionApiClientImpl(get()) }
     single<CollectionApiClient> { get<CollectionApiClientImpl>() }
+    single {
+        UserDataApiClientImpl(
+            engine = get(),
+            // The same atomic-session identity the wide client's home caches
+            // key off (the shared engine extension — one derivation).
+            cacheIdentity = { get<JellyfinApiEngine>().currentCacheIdentity() },
+        )
+    }
+    single<UserDataApiClient> { get<UserDataApiClientImpl>() }
+    single { HomeLayoutApiClientImpl(get(), get()) }
+    single<HomeLayoutApiClient> { get<HomeLayoutApiClientImpl>() }
+    single { ImageUrlApiClientImpl(get()) }
+    single<ImageUrlApiClient> { get<ImageUrlApiClientImpl>() }
     // The home cache-maintenance verbs ride their own port (beside the fetcher
     // that owns the caches): the data layer's write/roll paths drop/seed the
     // home hot-path sub-call caches through this seam instead of the wide

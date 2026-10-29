@@ -143,6 +143,21 @@ internal val appLanguages = listOf(
 
 private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }
 
+/**
+ * The language screen's ONE ordered group declaration — the derivation-only
+ * shape (group ids/order; every slot uses the default declared-admission
+ * count hook, the content slots stay empty) that BOTH the screen and the
+ * catalog contract test's section-7 pins consume, so a reordered or
+ * re-flagged group cannot strand a stale replica (the mirror-drift class
+ * ADR-0009's amendment closes). Per-group row emission stays hand-written:
+ * the screen maps each slot to its body inline.
+ */
+internal val LanguageSettingsScreenSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.languageGeneral.asScreenGroup(),
+    SettingsScreenGroups.languageTrackSelection.asScreenGroup(),
+    SettingsScreenGroups.languageSubtitles.asScreenGroup(),
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun LanguageSettingsScreen(
@@ -173,13 +188,16 @@ fun LanguageSettingsScreen(
 
     val langs = languages
 
-    // The screen's ONE group declaration, in LazyColumn order — the shell
-    // derives the deep-link scroll resolution and the hidden-settings hint
-    // count from it (the track-selection slot contributes no hidden delta —
-    // every row declares Always). Slots stop at GROUP grain: the row emission
-    // inside each slot is the hand-written body, unchanged (ADR-0009).
-    val languageGroups = listOf(
-        SettingsScreenGroups.languageGeneral.asScreenGroup { activePicker ->
+    // The screen's group bodies mapped onto the ONE ordered declaration
+    // ([LanguageSettingsScreenSlots], in LazyColumn order — the shell derives
+    // the deep-link scroll resolution and the hidden-settings hint count from
+    // it, and the contract test pins the same declaration; the track-selection
+    // slot contributes no hidden delta — every row declares Always). Slots
+    // stop at GROUP grain: the row emission inside each slot is the
+    // hand-written body, unchanged (ADR-0009).
+    val languageGroups = LanguageSettingsScreenSlots.withContent(
+        bodies = listOf(
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Language,
                     title = stringResource(Res.string.settings_language),
@@ -268,7 +286,7 @@ fun LanguageSettingsScreen(
                     }
                 }
         },
-        SettingsScreenGroups.languageTrackSelection.asScreenGroup { activePicker ->
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.AdjustmentsHorizontal,
                     title = stringResource(Res.string.settings_track_selection),
@@ -391,7 +409,7 @@ fun LanguageSettingsScreen(
                     }
                 }
         },
-        SettingsScreenGroups.languageSubtitles.asScreenGroup { activePicker ->
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Subtitles,
                     title = stringResource(Res.string.settings_subtitles),
@@ -626,7 +644,8 @@ fun LanguageSettingsScreen(
                     }
                     }
                 }
-        }
+        },
+        ),
     )
 
     PreferenceScreenScaffold(

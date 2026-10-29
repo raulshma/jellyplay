@@ -17,7 +17,6 @@ import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegmentType
-import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -372,8 +371,9 @@ class VideoPlayerViewModel(
      * session-event forwarder, the PiP transport registration + dismissal
      * discharge, the aggregate-prefs and metered-network collectors, the
      * SyncPlay start + session mirror, the becoming-noisy registration, the
-     * video-focus binding, the session-state fold, the preference resolver,
-     * and the engine-attach choreography LAST) — in the same order, so
+     * video-focus binding, the session-state fold, the queue mirror, the
+     * preference resolver, and the engine-attach choreography LAST) — in the
+     * same order, so
      * subscription timing relative to the first session/engine emission is
      * unchanged.
      */
@@ -407,22 +407,9 @@ class VideoPlayerViewModel(
                 }
             }
         }
-        // Queue mirror: the up-next overlay and the autoplay gate read
-        // hasQueuedNext from the uiState projection; the Up Next controller's
-        // flow IS the truth (queue non-empty under the SyncPlay gate). The
-        // mirror survives item switches via keepAcrossItems — the controller's
-        // flow won't re-emit to re-set a dropped mirror.
-        launch {
-            playbackSession.upNext.hasQueuedNext.collect { queued ->
-                if (_uiState.value.hasQueuedNext != queued) {
-                    Log.d(
-                        UP_NEXT_LOG_TAG,
-                        "queue mirror -> $queued (head=${playbackSession.upNext.upNextCard.value?.itemId})",
-                    )
-                    _uiState.update { it.copy(hasQueuedNext = queued) }
-                }
-            }
-        }
+        // Queue mirror moved into [PlaybackSession.arm] beside the other
+        // engine/controller mirrors — the controller's flow is session-owned
+        // and so is the keepAcrossItems teardown half the mirror leans on.
         NextStreamByteWarmWatcher(
             scope = scope,
             warmNextStream = playbackSession.warmNextStream,
@@ -678,16 +665,6 @@ class VideoPlayerViewModel(
         // eagerly so the AV-sync sheet (if open) shows the newly selected
         // track's cues without a reopen.
         playbackSession.subtitlePreview.onTrackSelectionChanged()
-    }
-
-    /**
-     * Thin delegate to [PlaybackSession.reloadForStreamChange]: reloads the
-     * current item at the current position with a new audio/subtitle stream
-     * selection (server-origin track picks during transcoded playback — the
-     * server must re-issue the stream with the chosen index).
-     */
-    private fun reloadForStreamChange(selection: MediaStreamSelection) {
-        playbackSession.reloadForStreamChange(selection)
     }
 
     /**

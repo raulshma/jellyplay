@@ -426,9 +426,7 @@ private fun DashboardContent(
         // stock server (the settings screen carries the full banner).
         val mismatch = contractMismatch
         if (mismatch != null) {
-            val supported = with(mismatch.supportedRange) {
-                if (first == last) "$first" else "$first–$last"
-            }
+            val supported = mismatch.supportedRangeLabel
             Text(
                 text = stringResource(
                     Res.string.admin_plugin_contract_mismatch,

@@ -1,10 +1,8 @@
 package com.raulshma.jellyplay.navigation
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -14,7 +12,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -24,41 +21,49 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
-import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MainPreferences
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
-import com.raulshma.jellyplay.core.ui.adaptive.applyOverride
-import com.raulshma.jellyplay.core.ui.adaptive.rememberAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.rememberJellyPlayUiEnvironment
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
-import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
-import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.navigation.ALL_TOP_LEVEL_ROUTE_KEYS
 import com.raulshma.jellyplay.core.ui.navigation.MUSIC_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.navigation.visibleTopLevelRoutes
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.LocalTvTypography
-import com.raulshma.jellyplay.core.ui.tv.isTv
-import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
-import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
-import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
-import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAdminGate
-import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
-import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import com.raulshma.jellyplay.shell.ShellInfra
 
+/**
+ * The main shell's ORCHESTRATOR: one composable body that orders the shell's
+ * holders and dispatches the TV / phone / full-screen layout branches. The
+ * bodies live beside it, one cluster per holder file:
+ *
+ *  - [rememberShellEnvironmentHost] (ShellEnvironmentHost.kt) — the shell
+ *    environment: TV detection, the nav-bar color animation, the
+ *    adaptive-info + UI environment pair, the TV typography, the floating
+ *    nav-bar scroll state, and the ~12 app-wide CompositionLocals published
+ *    through its [ShellEnvironmentHost.Provide];
+ *  - [rememberPeekPreviewState] (PeekPreviewState.kt) — the press-and-hold
+ *    peek preview state;
+ *  - [rememberShellUserMessages] (feature/shell) — the app-wide one-shot
+ *    message collector over this shell's present adapter;
+ *  - [rememberNavRequestController] (NavRequestController.kt) — the
+ *    request-dispatch half (the identity-stable navigator + collector);
+ *  - [rememberShellHostArms] (ShellHostArms.kt) — the shell-HOST arms: the
+ *    Play On controller, the admin states, and the shared
+ *    rememberShellComposition call that builds the audio clicks / admin gate
+ *    / ShortcutActionSurface / ShellHostHooks from this shell's
+ *    ShellCompositionArms (ADR-0001: wiring shared, arms per shell), plus the
+ *    ShellNavParams bundle;
+ *  - [rememberShortcutSurfaces] / [BackExitHost] / [SessionRestorePromptHost]
+ *    — their own small holders, called at their branch sites below.
+ *
+ * Nothing here owns state construction anymore beyond the truly
+ * ordering-local pieces (the navigation state, the mini-player dismissed
+ * flag, the drawer states); behavior is unchanged — each holder carries its
+ * block's remember-key discipline comments.
+ */
 @Composable
 internal fun MainContent(
     onLogout: (Boolean) -> Unit,
@@ -180,13 +185,45 @@ internal fun MainContent(
         )
     }
 
-    // Stable on purpose: this is a key of the shellHost construction below
-    // (the rememberShellHost factory keys on it) and a ShellNavParams field,
-    // so a fresh lambda per recomposition would make both compare unequal
-    // (a fresh allocation makes the section-graph memoization always
-    // miss). Remembered on the model, whose activity scope is the lambda's
-    // only capture.
-    val onModeChange: (HomeMode) -> Unit = remember(model) { model::setHomeMode }
+    // The shell environment holder: TV detection, the nav-bar color
+    // animation, the adaptive-info + UI-environment pair (the manual layout
+    // override clamped before anything consumes it), the TV typography and the
+    // floating nav-bar scroll state. Constructed BEFORE the peek preview,
+    // whose factory needs the holder's isTv; its [ShellEnvironmentHost.Provide]
+    // publishes the app-wide locals below, after the peek holder exists.
+    val environment = rememberShellEnvironmentHost(preferences)
+    val isTv = environment.isTv
+
+    // Press-and-hold "peek" preview (Instagram-style): the controller +
+    // backdrop-blur pair live in their own holder (PeekPreviewState.kt);
+    // purely ephemeral UI state, so no DI/ViewModel involvement. The whole
+    // feature is dormant unless the user opts in under Experimental settings
+    // (off by default).
+    val peekEnabled = environment.peekEnabled
+    val peekPreview = rememberPeekPreviewState(
+        peekEnabled = peekEnabled,
+        isTv = isTv,
+        performanceMode = preferences.performanceMode,
+    )
+
+    // Single root collector for app-wide one-shot messages, behind the
+    // shared rememberShellUserMessages seam: host construction and the
+    // collector effect live in feature/shell now; this shell supplies only
+    // the surface fork (the TV-Toast vs phone-Snackbar adapter, built by
+    // shellUserMessagePresent in NavRequestCollector.kt). The ONE
+    // (commonMain) bus's payloads are already seam UserMessages, so the
+    // plain overload. Collection lives with this composition and restarts
+    // only if the bus instance is swapped; a TV/phone flip re-arms the
+    // surface adapter in place instead of cancelling and relaunching the
+    // collector.
+    val userMessageBus = LocalUserMessageBus.current
+    val presentUserMessage = shellUserMessagePresent(
+        context = context,
+        isTv = isTv,
+        snackbarHostState = snackbarHostState,
+    )
+
+    rememberShellUserMessages(presentUserMessage, userMessageBus.messages)
 
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
     val libraryFolders by infra.sessionCoordinatorLazy.value.libraryFolders.collectAsStateWithLifecycle()
@@ -256,104 +293,15 @@ internal fun MainContent(
         navRequests.collectNowPlayingSnackbars(nowPlayingTemplate)
     }
 
-    val navBarColorState = remember { mutableStateOf<Color?>(null) }
-    val animatedNavBarColor by animateColorAsState(
-        targetValue = navBarColorState.value ?: MaterialTheme.colorScheme.surfaceContainer,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "navBarColor",
-    )
-
-    val isTv = context.isTv()
-
-    // Press-and-hold "peek" preview (Instagram-style): the controller +
-    // backdrop-blur pair live in their own holder (PeekPreviewState.kt);
-    // purely ephemeral UI state, so no DI/ViewModel involvement. The whole
-    // feature is dormant unless the user opts in under Experimental settings
-    // (off by default).
-    val peekEnabled = preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK)
-    val peekPreview = rememberPeekPreviewState(
-        peekEnabled = peekEnabled,
-        isTv = isTv,
-        performanceMode = preferences.performanceMode,
-    )
-
-    // Single root collector for app-wide one-shot messages, behind the
-    // shared rememberShellUserMessages seam: host construction and the
-    // collector effect live in feature/shell now; this shell supplies only
-    // the surface fork (the TV-Toast vs phone-Snackbar adapter, built by
-    // shellUserMessagePresent in NavRequestCollector.kt). The ONE
-    // (commonMain) bus's payloads are already seam UserMessages, so the
-    // plain overload. Collection lives with this composition and restarts
-    // only if the bus instance is swapped; a TV/phone flip re-arms the
-    // surface adapter in place instead of cancelling and relaunching the
-    // collector.
-    val userMessageBus = LocalUserMessageBus.current
-    val presentUserMessage = shellUserMessagePresent(
-        context = context,
-        isTv = isTv,
-        snackbarHostState = snackbarHostState,
-    )
-
-    rememberShellUserMessages(presentUserMessage, userMessageBus.messages)
-
-    // The manual layout override clamps the measured width class
-    // BEFORE anything consumes it: the shell's isExpanded fork below, the TV/
-    // phone DeviceClass tokens, and every downstream LocalAdaptiveInfo reader
-    // (rail vs bottom bar, two-pane details, grids) all follow the override
-    // from this single site.
-    val adaptiveInfo = preferences.layoutMode.applyOverride(rememberAdaptiveInfo())
-    val uiEnvironment = rememberJellyPlayUiEnvironment(
-        adaptiveInfo = adaptiveInfo,
-        isTv = isTv,
-    )
-
-    val tvTypography = if (isTv) TvTypography else null
-
-    // The floating nav-bar's hide-on-scroll state (ScrollDirectionVisibility
-    // policy + the animated px offset + its stable getter) — constructed by
-    // its own holder (BottomNavScrollState.kt); the phone layout's
-    // NestedScrollConnection and LocalFloatingNavVisibility/Offset consume it
-    // below.
-    val bottomNav = rememberBottomNavScrollState()
-
-    // Stable lambdas for CompositionLocalProvider — `provides` compares by ==,
-    // so a fresh lambda per recomposition forces downstream invalidation even
-    // when the captured state hasn't changed. MainContent recomposes often
-    // (audio metadata, nav color, mini-player), so hoist these out. The same
-    // discipline is the shell's capture rule for remembered/derived lambdas:
-    // they may capture State objects and rememberUpdatedState delegates (read
-    // live through the delegate), never plain composition locals — those are
-    // captured by value from the first composition and go stale (the
-    // showMiniPlayer derivedStateOf bug removed above).
-
-    CompositionLocalProvider(
-        LocalTvMode provides isTv,
-        LocalAdaptiveInfo provides adaptiveInfo,
-        LocalJellyPlayUi provides uiEnvironment,
-        LocalTvTypography provides tvTypography,
-        LocalPerformanceMode provides preferences.performanceMode,
-        com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
-        LocalFloatingNavVisibility provides bottomNav.scrollVisibility.visibleState,
-        com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides peekPreview.controller,
-        com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled provides
-            preferences.isExperimentalEnabled(ExperimentalFeature.MEDIA_CARD_PEEK),
-        com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences provides com.raulshma.jellyplay.core.ui.components.CardDisplayPreferences(
-            showUnwatchedBadge = preferences.showUnwatchedBadge,
-            showWatchedCheckmark = preferences.showWatchedCheckmark,
-            hideWatchedItems = preferences.hideWatchedItems,
-            showQualityBadges = preferences.showQualityBadges,
-            showNewBadges = preferences.showNewBadges,
-            antiSpoilerHome = preferences.antiSpoilerHome,
-        ),
-    ) {
-        val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
+    environment.Provide(peekPreview) {
+        val isExpanded = environment.adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
 
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         androidx.compose.animation.SharedTransitionLayout {
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope provides if (preferences.performanceMode) null else this,
-                LocalNavigationBarColor provides navBarColorState,
-                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) bottomNav.floatingNavOffset else ({ 0f })),
+                com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor provides environment.navBarColorState,
+                com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset provides (if (!isExpanded && !isFullScreenRoute) environment.bottomNav.floatingNavOffset else ({ 0f })),
                 // The floating bottom nav paints ONLY in the compact phone branch
                 // (PhoneContent's `if (!isExpanded)` bar; TV composes TvContent,
                 // full-screen routes FullScreenContent, expanded widths a rail).
@@ -370,139 +318,28 @@ internal fun MainContent(
             // every layout-branch switch (e.g. entering the player and back).
             val saveableStateHolder = rememberSaveableStateHolder()
             val entryDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>(saveableStateHolder)
-            // Hoist the audio-mini-player navigation callbacks so all three layout branches
-            // (TvContent / PhoneContent / FullScreenContent) share identical instances
-            // instead of allocating fresh lambdas per call site. Built through the shared
-            // rememberShellAudioClicks — the ONE construction site for the pair (its KDoc
-            // owns the remember-key discipline and the blank-art→null normalization):
-            // this shell's audio core (AudioPlaybackManager) IS the shared
-            // NowPlayingSurface — passed straight in, and the helper reads the
-            // manager's flows at
-            // CLICK time — the desktop hooks' pattern. Capturing the composed
-            // `audioItemId` instead would either go stale (keyed on the navigator
-            // alone) or rebuild the shellHost graph on every song change (keyed on
-            // the item). Equivalent while resumed, which is the only time a click can land.
-            val audioClicks = rememberShellAudioClicks(navigator, audioPlaybackManager)
-
-            // Play On (cast-to-Jellyfin-session) controller — the ONE
-            // construction site for the whole Play On surface family, hoisted
-            // above the TV / phone / full-screen branches for the same reason
-            // as the saveable state holder: a runtime TV-mode flip (or
-            // entering/leaving a full-screen route) re-dispatches the branch,
-            // and the mini bar's companion screen must keep rendering the
-            // same controller instead of re-resolving per branch. Activity-
-            // scoped through the ViewModelStore (Koin def in AppKoinModule),
-            // so the instance also survives config changes. Threaded to every
-            // host below as an explicit parameter — no Play On surface
-            // resolves it itself.
-            val playOn: com.raulshma.jellyplay.PlayOnViewModel =
-                org.koin.compose.viewmodel.koinViewModel()
-
-            // Admin access-control state, collected once here (a @Composable
-            // context) and threaded into the hooks as read lambdas so the
-            // navigation entries — which are composed lazily — observe the
-            // latest value without re-building the entry graph. The flows
-            // arrive through the [MainShellModel] seam; nothing below this
-            // point reaches past it.
-            val isAdminState = model.isAdmin.collectAsStateWithLifecycle()
-            val isRefreshingAdminState = model.isRefreshingAdmin.collectAsStateWithLifecycle()
-
-            // The shell-host hooks (ShellHostHooks) behind the shared section
-            // graph, built through the shared rememberShellHost factory —
-            // the ONE construction site for the hooks (desktop's
-            // DesktopNavScaffold feeds the same five group bundles; the
-            // bundle-by-bundle wiring lives in that factory file). The model's
-            // signals (admin gate, update check, surprise/search prefill)
-            // and the Play On controller meet the shell seam HERE — this
-            // call site is the value wiring. Every factory parameter is a
-            // remember key, so each bundle below may be built fresh per
-            // recomposition (the groups are data classes and compare
-            // structurally) as long as its members are remembered/stable
-            // (the discipline the factory's KDoc states) — the graph
-            // rebuilds only when these identities change.
-            // The admin reads are the shared rememberShellAdminGate outputs —
-            // lazy .value reads, so admin refreshes don't rebuild the graph.
-            val adminGate = rememberShellAdminGate(isAdminState, isRefreshingAdminState)
-            val onRefreshAdmin: () -> Unit = remember(model) { { model.refreshAdminStatus() } }
-            val onCheckForUpdates: () -> Unit = remember(infra) {
-                { infra.updateCoordinatorLazy.value.manualCheckForUpdate() }
-            }
-            val onConsumeSearchQuery: () -> Unit = remember(model) {
-                model::consumePendingSearchQuery
-            }
-            // The shared home module narrows the Play-On surface to its
-            // HomePlayOnRedirect seam (the concrete strategy is Android-
-            // bound); the probe + fling choreography lives on the controller
-            // (flingIfConnected), so the strategy never leaves it. The
-            // redirect is active on EVERY host — TV and full-screen
-            // MainNavDisplay calls included. Only observable when
-            // a remote session is already connected, which itself can only
-            // be initiated from the phone layout's Play On device sheet.
-            // Remembered on the controller, keyed on playOn.
-            val playOnRedirect = remember(playOn) { HomePlayOnRedirect(playOn::flingIfConnected) }
-            // The Play On device sheet's state lives in PhoneContent; header
-            // shortcuts request it through this counter (the sheet-owning
-            // scope observes increments).
-            val playOnOpenRequests = androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-            // Header-shortcut shell actions — the ONE execution surface behind
-            // every action pill (home dock's header rows, the overflow menu's
-            // action fold): the shared ShortcutActionSurface owns the
-            // capability verdict and the navigate-home-before-arm-surprise
-            // ordering. Android arms all three actions (MainViewModel
-            // + the Play On sheet counter), so the unsupported arm is a
-            // defensive error — it is unreachable from this shell.
-            val shortcutActions = remember(model, navigationState, playOnOpenRequests) {
-                com.raulshma.jellyplay.feature.shell.navigation.ShortcutActionSurface(
-                    focusHome = { navigationState.topLevelRoute.value = Route.Home },
-                    armSurprise = model::requestSurprise,
-                    requestPlayOn = { playOnOpenRequests.value += 1 },
-                    toggleOffline = model::toggleOfflineMode,
-                    onUnsupported = { action ->
-                        error("ShortcutActionSurface: the Android shell arms every action; $action cannot be unsupported")
-                    },
-                )
-            }
-            val shellHost = rememberShellHost(
+            // The shell-host arms holder (ShellHostArms.kt): the Play On
+            // controller, the admin states, the shared
+            // rememberShellComposition construction (audio clicks, admin
+            // gate's lazy reads, ShortcutActionSurface, the ShellHostHooks
+            // behind the shared section graph) and the ShellNavParams bundle
+            // — the ONE value-wiring site where the model's signals meet the
+            // shell seam. The arms holder carries the audio-clicks and
+            // Play-On remember-key discipline comments; the graph below
+            // (MainNavDisplay's remember(navigator, shellHost)) rebuilds only
+            // when the arms' identities change.
+            val arms = rememberShellHostArms(
                 navigator = navigator,
-                home = ShellHomeHooks(
-                    homeMode = homeMode,
-                    onHomeModeChange = onModeChange,
-                    playOnRedirect = playOnRedirect,
-                    surpriseRequests = model.surpriseRequests,
-                    shortcutActions = shortcutActions,
-                ),
-                audio = audioClicks,
-                settings = ShellSettingsHooks(
-                    onLogout = onLogout,
-                    onCheckForUpdates = onCheckForUpdates,
-                ),
-                admin = ShellAdminHooks(
-                    isAdmin = adminGate.isAdmin,
-                    isRefreshingAdmin = adminGate.isRefreshingAdmin,
-                    onRefreshAdmin = onRefreshAdmin,
-                ),
-                search = ShellSearchHooks(
-                    pendingSearchQuery = model.pendingSearchQuery,
-                    onConsumeSearchQuery = onConsumeSearchQuery,
-                ),
-            )
-
-            // The shell-wide parameter bundle (the HomeCallbacks idiom —
-            // ShellNavParams in ShellLayouts.kt): everything drilled
-            // identically into all three layout branches and MainNavDisplay.
-            // Every field is a remembered/stable value or a Compose-memoized
-            // lambda, so the @Immutable data class compares equal across
-            // recompositions and the branches stay skippable. The per-section
-            // hook values ride shellHost's groups — no duplicate scalars.
-            val shellParams = ShellNavParams(
                 navigationState = navigationState,
+                model = model,
+                onLogout = onLogout,
+                infra = infra,
+                audioPlaybackManager = audioPlaybackManager,
+                homeMode = homeMode,
                 currentTopLevel = currentTopLevel,
                 activeTopLevelRoutes = activeTopLevelRoutes,
-                navigator = navigator,
                 saveableStateHolder = saveableStateHolder,
                 entryDecorator = entryDecorator,
-                playOn = playOn,
-                shellHost = shellHost,
             )
 
             Box(Modifier.fillMaxSize()) {
@@ -529,7 +366,7 @@ internal fun MainContent(
             }
             if (isTv && !isFullScreenRoute) {
                 TvContent(
-                    shellParams = shellParams,
+                    shellParams = arms.shellParams,
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
@@ -556,31 +393,31 @@ internal fun MainContent(
                     // this layout branch), so the menu chrome in PhoneContent
                     // only clicks and decorates.
                     val shortcutSurfaces = rememberShortcutSurfaces(
-                        isAdmin = isAdminState.value,
+                        isAdmin = arms.isAdminState.value,
                         isOffline = isOffline,
                         activeTopLevelRoutes = activeTopLevelRoutes.keys,
                     )
                     PhoneContent(
-                        shellParams = shellParams,
+                        shellParams = arms.shellParams,
                         isAudioPlayerScreen = isAudioPlayerScreen,
                         isExpanded = isExpanded,
-                        bottomNavScrollVisibility = bottomNav.scrollVisibility,
+                        bottomNavScrollVisibility = environment.bottomNav.scrollVisibility,
                         hideBottomNavOnScroll = preferences.hideBottomNavOnScroll,
-                        bottomNavOffsetHeightPx = bottomNav.offsetHeightPx,
+                        bottomNavOffsetHeightPx = environment.bottomNav.offsetHeightPx,
                         showMiniPlayer = showMiniPlayer,
                         audioPlaybackManager = audioPlaybackManager,
                         audioItemId = audioItemId,
                         onDismissMiniPlayer = { isMiniPlayerDismissed = true },
-                        animatedNavBarColor = animatedNavBarColor,
+                        animatedNavBarColor = environment.animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
                         overflowShortcuts = shortcutSurfaces.overflow,
-                        playOnOpenRequests = playOnOpenRequests.value,
+                        playOnOpenRequests = arms.playOnOpenRequests.value,
                     )
                 } else {
-                    FullScreenContent(shellParams = shellParams)
+                    FullScreenContent(shellParams = arms.shellParams)
                 }
                 }
             } // end inner blur Box

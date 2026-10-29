@@ -41,7 +41,10 @@ multi-bind the interface and `ProfileSyncRepository` consumes them sorted by
 order, not declaration order — the engine's own sequence is the contract;
 `DataKoinModulesTest` pins the resolved order through `activeNamespaces`). The
 prefs adapter keeps a frozen root mirror prefix and a whole `deleteRemote`
-override; value-only namespaces keep the SPI-default `deletedKeys`.
+override; value-only namespaces keep the SPI-default `deletedKeys`. The
+sync cluster's registration home is `DataProfileSyncKoinModule` (split out
+of `DataSessionPlaybackKoinModule`, which keeps the session spine and
+playback helpers only).
 
 **Playlist row codec** — ONE home for the smart/mood/moodpref row shape:
 `PlaylistRowCodec` owns entity↔payload, payload↔domain (lenient JSON decode)
@@ -66,15 +69,23 @@ probe: the plugin answered, but its `contractVersion` falls outside
 the `contractMismatch` side channel carries served version + supported range
 + plugin version — the settings screen's error banner and the admin
 dashboard's one-line hint consume it, so "update the plugin or the app" is
-visible instead of the section silently vanishing. `servedPluginVersion`
+visible instead of the section silently vanishing. The served-range label is
+`supportedRangeLabel` on the mismatch type — both banner sites read it; a
+second hand-fold of the range is a defect. `servedPluginVersion`
 (names the server's plugin build once any payload decoded) feeds the
 settings group's summary.
 
 **Library client families** — the impl-side counterpart of the consumer
-seams: `PlaylistApiClientImpl` (8 members), `CollectionApiClientImpl` (4) and
-the `HomeSectionsCachePortAdapter` are small ctor-injected adapters over the
-one `JellyfinApiEngine` single, while `LibraryApiClientImpl` keeps only the
-library-browse/home/user-data families (44 overrides). The port adapter takes
+seams: small ctor-injected adapters over the one `JellyfinApiEngine`
+single — `PlaylistApiClientImpl` (8 members), `CollectionApiClientImpl` (4),
+`UserDataApiClientImpl` (the `writeUserData` funnel + `FavoriteFlagCache`),
+`HomeLayoutApiClientImpl` (the DisplayPreferences pair; one consumer,
+`HomeLayoutSyncController`) and `ImageUrlApiClientImpl` (the pure URL
+builders, incl. the child-image transport fold) — plus the
+`HomeSectionsCachePortAdapter`. The wide `LibraryApiClient` keeps only the
+library-browse/home read families; consumers inject the family they read
+(`MediaRepositoryImpl`'s photo-folder fold and `PlayedStateSyncImpl`'s
+writes ride the narrow ones). The port adapter takes
 engine + fetcher (the fetcher is constructed with `sources = this` inside the
 impl), and `HomeSectionSources.getCollectionItems` is a one-line forward to
 the same collection adapter single — each family's wire bodies exist in
@@ -97,6 +108,20 @@ explicitly. `getFavoritesPaged` is on the seam; the paged-grid
 quick-actions factory takes the `Flow<UserDataChange>` it reads.
 `markPlayed` lives only on `UserDataWriteOperations` (the drainer uses
 `recordDrainedPlays`).
+
+**Media freshness ledger** — the freshness/cache chassis of the media
+repository as one ctor-injected collaborator (`MediaFreshnessLedger`, the
+`HomeSectionsSnapshotStore` construction precedent): the seven-spec cache
+registry with the `MediaCacheGroup`/`MediaCacheSpec` vocabulary, the
+`StaleReadGroups` ladder (rider-vs-home arming per announce channel), the
+home assembled-payload cache + write-generation funnel (bump-after-operation,
+one single flight), the identity-transition registrations with the
+previous-identity SWR clear, the mutation bracket, the composite user-data
+eviction ladder with the `invalidateFor` type table, and the wholesale drop.
+`MediaRepositoryImpl` is pure family forwards over it; the outward faces
+(`MediaRepositoryCacheInvalidation`, `MediaCacheInvalidator`) stay and
+forward. Freshness-policy changes stop landing in the twelve-interface file;
+`MediaFreshnessLedgerTest` pins the ladder directly.
 
 ## Home
 
@@ -121,6 +146,15 @@ declares itself on, `invalidateCaches` iterates it — the
 list, so a new sub-call cannot be forgotten at clear time (a forgotten clear
 serves stale badges for a TTL). The suggestions-fallback predicate lives
 beside the assembler; both sites call the one function.
+
+**Plugin home content** — the plugin rows + curated-hero family of the home
+feed as one module the fetcher composes (`PluginHomeContent`): both TTL
+memos, the cache-through reads, the resolve-then-map choreography and the
+hero fetch — constructed through the declared `JellyPlayHomeSectionSources`
+port (incl. `getItemsByIds`) and exposing its sub-call caches so the
+fetcher's cache-spec list stays total. The batch schedule, the discover
+generation memo and the Seerr TTL gate stay fetcher-side — the batch IS
+the fetcher's stated job.
 
 **Home write generation** — the data layer's home assembled-payload
 cache-write token: a repo-local monotonic counter
@@ -509,7 +543,16 @@ dedup guard) are the guard's pinned contract. Exo and mpv ride it.
 family: `ShellAudioSurface` (the narrow interface the shell consumes —
 current-playing item and the shell-read state) instead of the concrete
 androidMain `AudioPlaybackManager` class crossing into shell code. The
-manager implements it; the Koin binding is the seam.
+seam is finished: the remote-control dispatcher reads
+`AudioRemoteControlSurface` (its transport/queue verbs + the position
+read), the playback service reads `AudioServiceSurface` (ensure/stop),
+the focus surface reads `AudioFocusCommands` (pause/duck/restore), and
+the shortcut manager reads `NowPlayingSurface` — the manager implements
+the faces, and only the Koin modules name the concrete class. The
+crossfade hand-off tail lives in `AudioCrossfadeHandoff` beside
+`AudioCrossfader` (the decision/execution split: the crossfader decides,
+the handoff owns the stop-report → commit → engine swap → session
+rebuild sequence).
 
 **HDR mode verdict** — the playback-mode derivation
 (`resolveHdrPlaybackMode`) and the HDR family vocabulary (dovi / hdr10+ /
@@ -576,6 +619,59 @@ A future adapter needs new controller vocabulary first, not a forced fit
 the pure predicates; the screens bind it through
 `rememberPlayerChromeController`, which keeps the VOD saveable visibility
 state.
+
+**Exo build plan** — `ExoBuildPlan.of(inputs)` (commonMain, beside
+`ExoPlayerReusePolicy`, the `MpvLoadOptionsPlan` twin): the four ordered
+build verdicts of the Exo load ritual as pure data — sink shape
+(passthrough bitstream vs in-sink processor chain), the ASS session
+verdict (carrying the embedded-MKV offset limitation), the extractor
+pairing (co-derived from the same input as the ASS verdict so the two
+cannot disagree), and the load-control numbers. `load()` folds the plan
+once and executes; `ExoBuildPlanTest` pins the ladder on the JVM lane the
+contract-law suite descopes.
+
+**Audio session-effect trio** — the engine-agnostic
+equalizer/dialogue-boost/night-mode attach/apply/release over an audio
+session id (`AudioSessionEffectTrio`): the co-enabling call's ONE
+choreography home (the rule itself stays folded in `EqualizerHelper`).
+`AudioEffectChain` composes the trio for Exo and keeps the Exo-only
+in-sink processor half; mpv constructs it against `assignAudioSessionId`
+— the pre-carve hand-copy is gone. VLC stays out (constructor options, a
+genuinely different mechanism).
+
+**VLC slave registration holder** — `VlcSlaveRegistration`, the
+generation-guarded external-subtitle registration machine over plain
+values (begin/tick→verdict/advance/enqueue, the attempts budget, the
+injectable `schedulePoll` seam); the engine keeps wiring only.
+Android-hostTest lane, the `TimePosDedupe` precedent.
+
+**Seek-chip commit clock** — the seek chip's timing policy as a pure fold
+(`SeekChipCommitClock`, beside the state/ decision modules): the D-pad
+linger filter, the keyboard-commit verdict with its stale-timestamp
+stand-down, and the 500/800 ms constants with their load-bearing ordering
+(a linger reset inside the commit window clears direction without
+bumping the timestamp). The screen keeps only collector registration.
+
+**Trickplay feeds** — `rememberTrickplayFeeds`: the three trickplay
+collectors' gates (seek-bar + TV mirror, gesture), the TV-mirror
+divergence (the gesture feed's gate deliberately carries no
+`trickplayInfo != null` conjunct), and the seek-clear/grace-clear
+effects, as one hoist the screen consumes. Gate reads arrive as getter
+lambdas so `snapshotFlow` tracking is byte-identical.
+
+**Playback request plan** — `PlaybackRequestPlan.of(inputs)` (commonMain,
+the plan-fold shape): the 20-field `PlaybackRequest` build decisions —
+header/token resolution, the track-resolution fold with its
+subtitle-disabled fallback, the lazy AUTO-mode bitrate cap (the resolver
+is never consulted in forced modes), buffer sizing, the engineSpecific
+payload — pure over plain projections; `initializeEngine` consumes;
+`PlaybackRequestPlanTest` pins.
+
+**Session ui mirrors** — `SessionUiMirrors`: the session's derived
+read/write seams over `PlayerStateHandles` (the mirror lambdas) as one
+holder with a single construction site — data, not a behavior seam (the
+ADR-0012 bar). The composition root names the family once instead of
+anonymous per-lambda locals.
 
 **Input dispatch module** — one persisted input map's other half: map
 resolution plus the discrete-arm executor behind one interface, with each
@@ -657,7 +753,15 @@ differences across the (isTv, engine) leg via `emittedRows`, and
 `FusedRowsRatchetTest` still pins the row catalogs beneath it. The navigation customization's row list derives from
 core:ui's `NAV_DESTINATIONS` (the registry wins on icon/order); only the
 route→subtitle map stays local. The app module's three ViewModel defs ride
-`viewModelOf(::X)` with a source-scan totality guard.
+`viewModelOf(::X)` with a source-scan totality guard. The five migrated
+screens' group sequences are hoisted as named declarations
+(`AppearanceSettingsScreenSlots` … `SecuritySettingsScreenSlots`; playback's
+is a function of `preferredPlayer` because its engine `emittedRows` hook is
+runtime-keyed) consumed by BOTH the scaffold call — via `withContent`, which
+carries the derivation members while the body stays screen-inline — and
+contract-test section 7: the cross-pin pins the object, not a replica. The
+search catalog's size pin is per-group (`SettingsSearchCatalogTest`),
+replacing the global integer ratchet.
 
 **Reset review cross-pin** — every spec-backed preference in a reset
 category that carries a search face has a `DiffField` row, so the
@@ -847,7 +951,40 @@ it; the rail's explicit list stays as its own ORDER policy (registry
 order differs), pinned by a both-ways contract test. The TV
 `menu_shortcuts` label override stays at the call site — per-
 destination presentation, not eligibility (a localized resource vs the
-registry's English labels).
+registry's English labels). The desktop rail's ORDER policy is now
+registry data — `NavDestination.railOrder` stamps the recorded sequence
+and `DESKTOP_RAIL_ROUTES` derives from it, pinned both ways by the rail
+contract test.
+
+**Route totality guard** — `RouteSectionTotalityTest` (shell jvmTest)
+constructs the union section graph — the real `appSections` plus doubles
+ONLY for the two shell-conditional entries (Android's `PlayOnCompanion`,
+desktop's probe-conditional `VideoPlayer`; a duplicate registration fails
+loudly if either ever moves to `appSections`) — and fails naming any
+`Route` leaf that would render `UnregisteredEntryContentKey`. Pinned
+exceptions: `LiveTvChannelPlayer` and `SubtitleTester` (Android-only
+sections, each with its recorded reason). The blank-entry failure mode is
+closed: adding a Route without a section is a red test, not a silent
+blank on Android.
+
+**Shell composition arms** — the per-shell hook wiring (audio clicks,
+admin gate, `ShortcutActionSurface`, `shellHost`) as one construction:
+`rememberShellComposition(navigator, arms)` over the
+`ShellCompositionArms` bundle (shell jvmShared, beside `ShellHostHooks`).
+Each shell fills the arms; construction moves, policy does not (ADR-0001):
+the routes folds and the user-message present adapters stay per-shell —
+their shapes genuinely differ — and adding a hook is one arms member +
+one wiring line + two arm values, not a factory-wide edit.
+
+**Sync screen presentation folds** — the sync screen's near-pure
+presentation as plain folds beside a test (`JellyPlaySyncPresentation`):
+`syncNamespaceFace` (the eleven-namespace table → resource ids + icon),
+`syncNamespaceSubtitleParts` (the subtitle gate ORDER as data:
+master-off hint > namespace-off > pending > description > usage), and
+`SyncOpFaces` — the screen composes them. `SyncMasterControls` (toggle +
+sync-now + banner; arms parameterized by their copy keys — the TV and
+non-TV subtitle keys stay deliberately separate) and the one
+`keysCountText` plural fold round out the dedup.
 
 **Playback speed ladder** — one home for the playback-speed vocabulary:
 `PlaybackSpeedLadder` (core:model, beside `PlayerAction`) carries the range,
@@ -876,4 +1013,5 @@ instead of re-enumerating every store positionally; the edit scope keeps
 `PreferenceStores`' member names mirror the slice names one-to-one. Adding a
 preference family touches three sites: the `PreferenceStores` field, the
 `PreferenceSliceSnapshot` row, the Koin single. A missed aggregate update
-fails at compile time, not by silent positional drift.
+fails at compile time, not by silent positional drift. `UserPreferencesStore`
+reads `stores.X` inline — the aggregate has no re-flatten site.

@@ -53,13 +53,13 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.session.SessionUiMirrors
 import com.raulshma.jellyplay.feature.player.video.session.playbackHandledFingerprint
 import com.raulshma.jellyplay.feature.player.video.state.InputBindingToggleController
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayPreparation
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_direct_play_fallback
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_delete_offer_failed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
 import kotlinx.coroutines.CoroutineScope
@@ -311,62 +311,20 @@ internal class PlaybackSession(
 
     // ── The ui-mirror seams (derived, not injected) ───────────────────────────
     //
-    //    The values derived over the handles + the cached aggregate. The
-    //    lambdas run only from session/engine call chains — long after every
-    //    collaborator below initializes — so the forward reads are safe.
+    //    The values derived over the handles + the cached aggregate, as ONE
+    //    named holder (session/SessionUiMirrors.kt — data + this single
+    //    construction site, not a behavior seam). The lambdas run only from
+    //    session/engine call chains — long after every collaborator below
+    //    initializes — so the forward reads are safe.
 
-    /** Current in-memory streaming quality (the ui-prefs mirror). */
-    private val getStreamingQuality = { uiState.value.uiPrefs.streamingQuality }
-
-    /** Writes the in-memory playback-mode mirror. */
-    private val setUiPlaybackMode = { mode: PlaybackMode ->
-        uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = mode)) }
-    }
-
-    /** Incognito gate for the session-owned stop/start reports. */
-    private val getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled }
-
-    /** Feeds the track-selection helper's pending stream selection before a stream-change reload. */
-    private val setPendingStreams = { selection: MediaStreamSelection? ->
-        trackSelectionHelper.setPendingStreams(selection)
-    }
-
-    /** Synchronous playback-mode read feeding the coordinator's fallback latch policy. */
-    private val getPlaybackMode = { uiState.value.uiPrefs.playbackMode }
-
-    /** Localized FORCE_DIRECT_PLAY fallback notice for [SessionEvent.InformUser]. */
-    private val resolveDirectPlayFallbackNotice = directPlayFallbackNotice
-        ?: { errorText: String -> getString(Res.string.player_direct_play_fallback, errorText) }
-
-    /** Pass-out protection hours; values <= 0 disable the poller. */
-    private val passOutHours: Flow<Int> =
-        uiState.flow.map { it.uiPrefs.passOutProtectionHours }.distinctUntilChanged()
-
-    /**
-     * Whether the still-watching mode includes HOURS (feature 1.3): a tripped
-     * pass-out pause then arrives as [SessionEvent.StillWatchingPrompt] (the
-     * confirm overlay) instead of the bare [SessionEvent.PassOutPause] toast.
-     */
-    private val upgradesPassOutToOverlay = {
-        StillWatchingGate.upgradesPassOutToOverlay(cachedAggregate.videoPlayer.stillWatchingMode)
-    }
-
-    /**
-     * The uiState `cinemaIntroState` write seam: every write the cinema
-     * sequencing needs flows through this setter — the same seam shows
-     * ([loadCinemaIntro]) and clears ([advanceCinemaIntro]) the intro.
-     */
-    private val setCinemaIntroState = { state: CinemaIntroUiState? ->
-        uiState.update { it.copy(cinemaIntroState = state) }
-    }
-
-    /**
-     * Writes the high-frequency position display flow — the seam behind
-     * [preSeedPlayhead].
-     */
-    private val seedDisplayedPositionMs = { seed: Long ->
-        positionMs.value = seed
-    }
+    private val uiMirrors = SessionUiMirrors(
+        handlesBundle = handles,
+        // A getter, not the value: the holder is constructed before this
+        // property initializes and the mirrors must see every refresh.
+        aggregate = { cachedAggregate },
+        setPendingStreamsForward = { selection -> trackSelectionHelper.setPendingStreams(selection) },
+        directPlayFallbackNotice = directPlayFallbackNotice,
+    )
 
 
     // ── The collaborator graph (the composition root's construction pass) ────
@@ -453,9 +411,9 @@ internal class PlaybackSession(
         engineSources = playerSessionManager.engineFlow.map { it?.toEngineEventSource() },
         onDecision = ::executeEngineDecision,
         config = EngineSessionShell.Config(
-            getPlaybackMode = getPlaybackMode,
-            directPlayFallbackNotice = resolveDirectPlayFallbackNotice,
-            passOutHours = passOutHours,
+            getPlaybackMode = uiMirrors.getPlaybackMode,
+            directPlayFallbackNotice = uiMirrors.resolveDirectPlayFallbackNotice,
+            passOutHours = uiMirrors.passOutHours,
             onRearmed = { startEngineEventCoordinatorOutputs() },
         ),
     )
@@ -844,7 +802,7 @@ internal class PlaybackSession(
             getPlaySessionId = { positionLedger.currentPlaySessionId },
             getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
             getMediaEngine = { playerSessionManager.engine },
-            getIncognitoModeEnabled = getIncognitoModeEnabled,
+            getIncognitoModeEnabled = uiMirrors.getIncognitoModeEnabled,
             onAutoSkip = { segment -> autoSkipSegment(segment) },
             onPlaybackEndedNoNext = { onEndedWithNoNext() },
             onWatchedThresholdReached = { itemId ->
@@ -913,8 +871,8 @@ internal class PlaybackSession(
         offlinePlaybackFacade = offlinePlaybackFacade,
         progressReporter = progressReporter,
         playerSessionManager = playerSessionManager,
-        getIncognitoModeEnabled = getIncognitoModeEnabled,
-        seedDisplayedPositionMs = { seed -> seedDisplayedPositionMs(seed) },
+        getIncognitoModeEnabled = uiMirrors.getIncognitoModeEnabled,
+        seedDisplayedPositionMs = { seed -> uiMirrors.seedDisplayedPositionMs(seed) },
         isHostTeardown = isHostTeardown,
         persistHandledOffer = { itemId, finalPositionMs ->
             stores.playback.setSessionRestoreDismissal(playbackHandledFingerprint(itemId, finalPositionMs))
@@ -1533,8 +1491,8 @@ internal class PlaybackSession(
         mediaSessionController = mediaSessionController,
         playbackStore = playbackStore,
         adaptiveBitrateManager = adaptiveBitrateManager,
-        setPendingStreams = setPendingStreams,
-        setUiPlaybackMode = setUiPlaybackMode,
+        setPendingStreams = uiMirrors.setPendingStreams,
+        setUiPlaybackMode = uiMirrors.setUiPlaybackMode,
         rebindSessionTracking = { itemId -> rebindSessionTracking(itemId) },
     )
 
@@ -1593,7 +1551,7 @@ internal class PlaybackSession(
                 if (released) return
                 launchFallbackToTranscode(
                     fromPositionMs = decision.fromPositionMs,
-                    quality = getStreamingQuality(),
+                    quality = uiMirrors.getStreamingQuality(),
                 )
             }
             EngineDecision.PlaybackEnded -> {
@@ -1610,7 +1568,7 @@ internal class PlaybackSession(
                 // pause arrives as the confirm prompt instead of the silent
                 // toast; the toast survives where the overlay doesn't take
                 // over (mode OFF/EPISODES).
-                if (upgradesPassOutToOverlay()) {
+                if (uiMirrors.upgradesPassOutToOverlay()) {
                     engineEventShell.emitEvent(
                         SessionEvent.StillWatchingPrompt(StillWatchingReason.HOURS_IDLE)
                     )
@@ -1851,7 +1809,7 @@ internal class PlaybackSession(
         // re-side-loads subtitles, so seeding the pending indices (which also
         // clears the held-selection latches) lets the ladder restore the
         // selection on the new engine's first track emissions.
-        setPendingStreams(selection)
+        uiMirrors.setPendingStreams(selection)
         val resolved = playerSessionManager.reloadPlayback(
             mode = mode,
             quality = quality,
@@ -2070,7 +2028,7 @@ internal class PlaybackSession(
     private fun loadCinemaIntro(intro: MediaItem) {
         val context = cinemaIntroContext ?: return
         scope.launch {
-            setCinemaIntroState(
+            uiMirrors.setCinemaIntroState(
                 CinemaIntroUiState(
                     title = intro.name.ifBlank { "Intro" },
                     currentIndex = context.currentIndex + 1,
@@ -2103,7 +2061,7 @@ internal class PlaybackSession(
         // Out of intros — restore the main feature. Clear cinema state first so
         // the recursive initialize call cannot re-enter cinema mode.
         cinemaIntroContext = null
-        setCinemaIntroState(null)
+        uiMirrors.setCinemaIntroState(null)
         progressReporter.cancelJobs()
         initialize(
             LoadRequest(
@@ -2469,8 +2427,9 @@ internal class PlaybackSession(
      * registration + dismissal discharge, the aggregate-prefs and
      * metered-network collectors, the SyncPlay start + session mirror, the
      * becoming-noisy registration, the video-focus binding, the
-     * displaced-holder observer, the session-state fold, the preference
-     * resolver, and the engine-attach choreography LAST). Called EXACTLY ONCE
+     * displaced-holder observer, the session-state fold, the queue mirror,
+     * the preference resolver, and the engine-attach choreography LAST).
+     * Called EXACTLY ONCE
      * from the ViewModel's `init`, immediately after the session is
      * constructed. There are no late-bound slots to bind — the construction
      * cycles dissolved into ownership seams (see the class KDoc).
@@ -2585,6 +2544,24 @@ internal class PlaybackSession(
                         uiState.update { it.copy(isInSyncPlaySession = inSession) }
                     }
                 }
+        }
+
+        // Queue mirror: the up-next overlay and the autoplay gate read
+        // hasQueuedNext from the uiState projection; the Up Next controller's
+        // flow IS the truth (queue non-empty under the SyncPlay gate). The
+        // mirror survives item switches via keepAcrossItems (the teardown
+        // half, releaseInternalsVmPart, this session also owns) — the
+        // controller's flow won't re-emit to re-set a dropped mirror.
+        scope.launch {
+            upNext.hasQueuedNext.collect { queued ->
+                if (uiState.value.hasQueuedNext != queued) {
+                    Log.d(
+                        UP_NEXT_LOG_TAG,
+                        "queue mirror -> $queued (head=${upNext.upNextCard.value?.itemId})",
+                    )
+                    uiState.update { it.copy(hasQueuedNext = queued) }
+                }
+            }
         }
 
         // Headphone unplug auto-pause (the becoming-noisy half of the former

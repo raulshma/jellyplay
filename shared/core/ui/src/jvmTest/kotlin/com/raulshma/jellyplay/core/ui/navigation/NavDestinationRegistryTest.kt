@@ -184,6 +184,39 @@ class NavDestinationRegistryTest {
     }
 
     @Test
+    fun railOrderPresenceEqualsDesktopRailPlacement() {
+        // The desktop rail derives its items from the rows' railOrder
+        // positions, so the presence of an order IS the rail membership: a
+        // DesktopRail-placed row without an order would silently drop off the
+        // rail, and an ordered row without the placement is dead order data.
+        // (The exact sequence is apps/desktop's DesktopRailRegistryContractTest
+        // pin — this module cannot see that derivation.)
+        val ordered = NAV_DESTINATIONS.filter { it.railOrder != null }.map { it.route }.toSet()
+        val railPlaced = NAV_DESTINATIONS
+            .filter { NavPrimarySurface.DesktopRail in it.primarySurfaces }
+            .map { it.route }.toSet()
+        assertEquals(
+            railPlaced,
+            ordered,
+            "railOrder presence must equal the DesktopRail placement set — " +
+                "a placed row without an order drops off the rail, an order without the placement is dead data",
+        )
+    }
+
+    @Test
+    fun railOrderPositionsAreDense() {
+        // Same density rule as topLevelGroups: the rail's derived order sorts
+        // these positions, so a gap or duplicate would silently re-order or
+        // collide on the rail.
+        val positions = NAV_DESTINATIONS.mapNotNull { it.railOrder }.sorted()
+        assertEquals(
+            List(positions.size) { it },
+            positions,
+            "railOrder positions must be dense 0..n-1 — a gap or duplicate breaks the derived rail order",
+        )
+    }
+
+    @Test
     fun everyLabelOverrideTargetsARegisteredRoute() {
         // (b): an override whose key has no registry row would be dead at
         // best and a silent re-label of a route the registry doesn't know at

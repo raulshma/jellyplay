@@ -87,6 +87,11 @@ kotlin {
             // app module's SessionCoordinatorTest pattern — final classes,
             // no seams of their own).
             implementation(libs.mockk)
+            // RouteSectionTotalityTest fabricates one instance per sealed
+            // Route leaf (KClass.primaryConstructor/callBy) to resolve it
+            // through the real shell graph — the same reflective enumeration
+            // desktopNavSavedStateConfiguration rides.
+            implementation(kotlin("reflect"))
         }
         // SharedFeatureModules (jvmShared) collects every feature Koin
         // module as a Module value, and SignedOutAuthHost (the shared

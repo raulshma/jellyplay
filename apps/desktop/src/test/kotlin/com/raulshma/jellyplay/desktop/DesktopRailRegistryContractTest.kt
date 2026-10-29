@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.desktop
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -67,5 +68,36 @@ class DesktopRailRegistryContractTest {
         // that drops the default DesktopRail placement must be a deliberate
         // desktop decision, not a forgotten annotation.
         assertTrue(flagged.isNotEmpty())
+    }
+
+    @Test
+    fun railOrderIsTheRecordedDesktopSequence() {
+        // DESKTOP_RAIL_ROUTES now DERIVES from the registry rows' railOrder
+        // positions, so the exact sequence — the recorded desktop ORDER policy
+        // (registry order differs: Search/Library swap, Shortcuts parked after
+        // Arr Queue) — is pinned verbatim here. A railOrder edit that
+        // re-orders the rail fails loudly; re-recording a new order is a
+        // deliberate desktop decision, never derivation drift.
+        assertEquals(
+            listOf(
+                Route.Home,
+                Route.Search,
+                Route.Library,
+                Route.LiveTv,
+                Route.MusicBrowse,
+                Route.Downloads,
+                Route.Newsletter,
+                Route.WatchProgressHeatmap,
+                Route.SyncPlay,
+                Route.Requests,
+                Route.UpcomingCalendar,
+                Route.ArrQueue,
+                Route.Shortcuts,
+                Route.Settings,
+                Route.AdminDashboard,
+            ),
+            DESKTOP_RAIL_ROUTES,
+            "the desktop rail order changed — a deliberate desktop product decision must re-record this sequence",
+        )
     }
 }

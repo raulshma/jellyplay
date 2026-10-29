@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
@@ -24,9 +25,11 @@ import kotlin.test.Test
 class MetadataEditorRepositoryImplTest {
 
     private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
+    private val imageApiClient: ImageUrlApiClient = mockk(relaxed = true)
     private val metadataApiClient: MetadataApiClient = mockk(relaxed = true)
     private val playbackApiClient: PlaybackApiClient = mockk(relaxed = true)
-    private val repository = MetadataEditorRepositoryImpl(libraryApiClient, metadataApiClient, playbackApiClient)
+    private val repository =
+        MetadataEditorRepositoryImpl(libraryApiClient, imageApiClient, metadataApiClient, playbackApiClient)
 
     @Test
     fun `getMediaDetail passes success through`() = runTest {
@@ -101,7 +104,7 @@ class MetadataEditorRepositoryImplTest {
 
     @Test
     fun `getItemImageUrl forwards variant parameters`() {
-        every { libraryApiClient.getImageUrl("m1", "Backdrop", 400, 2, "tag-9") } returns "https://server/img"
+        every { imageApiClient.getImageUrl("m1", "Backdrop", 400, 2, "tag-9") } returns "https://server/img"
 
         val url = repository.getItemImageUrl("m1", "Backdrop", 400, 2, "tag-9")
 

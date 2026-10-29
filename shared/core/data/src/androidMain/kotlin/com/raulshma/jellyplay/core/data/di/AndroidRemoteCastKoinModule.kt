@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.GoogleCastStrategy
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
+import com.raulshma.jellyplay.core.data.playback.AudioRemoteControlSurface
 import com.raulshma.jellyplay.core.data.remote.AndroidAudioRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.AndroidVideoRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.AudioRemoteControlDispatcher
@@ -37,7 +38,9 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
     }
     single<AudioRemoteControlDispatcher> {
         AndroidAudioRemoteControlDispatcher(
-            audioPlaybackManager = get(),
+            // The Audio shell seam: the dispatcher reads only the
+            // AudioRemoteControlSurface face of the manager single.
+            audioPlaybackManager = get<AudioRemoteControlSurface>(),
             detailFeed = get(),
             remoteNavigationBridge = get(),
         )

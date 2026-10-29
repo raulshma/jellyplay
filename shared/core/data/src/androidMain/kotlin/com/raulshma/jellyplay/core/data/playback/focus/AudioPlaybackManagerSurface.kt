@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback.focus
 
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.AudioFocusCommands
 
 /**
  * The music surface adapter: the matrix's pause command lands on the
@@ -24,13 +24,15 @@ internal class AudioPlaybackManagerSurface(
      * Deferred: the manager's constructor takes the [PlaybackFocus] single
      * this surface belongs to, so the graph wires the manager LAZILY (the
      * AppShortcutManager precedent) — the first pause command is long after
-     * construction, and the cycle dies here.
+     * construction, and the cycle dies here. The type is the
+     * [AudioFocusCommands] face (the Audio shell seam's role-split), not the
+     * concrete manager — the Koin alias binds the same single.
      */
-    private val manager: Lazy<AudioPlaybackManager>,
+    private val commands: Lazy<AudioFocusCommands>,
 ) : PlaybackSurface {
     override val id = PlaybackSurfaceId.MUSIC
     override fun pause() {
-        manager.value.pause()
+        commands.value.pause()
     }
 
     /**
@@ -40,10 +42,10 @@ internal class AudioPlaybackManagerSurface(
      * the default pause ruling never calls these.
      */
     override fun duck(volume: Float) {
-        manager.value.duck(volume)
+        commands.value.duck(volume)
     }
 
     override fun restore() {
-        manager.value.restoreFromDuck()
+        commands.value.restoreFromDuck()
     }
 }

@@ -60,7 +60,6 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
-import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
@@ -557,22 +556,38 @@ class ExoPlayerEngine(
         release()
         lastRebuildInputs = inputs
 
+        // The rebuild's ordered build decisions, folded once (the plan owns
+        // the DECISIONS — sink shape, ASS session, extractor pairing, buffer
+        // numbers — jvmTest-pinned in ExoBuildPlanTest; this body is the
+        // plan executor: a when per verdict over Exo API assembly).
+        val plan = ExoBuildPlan.of(
+            ExoBuildInputs(
+                decoderMode = currentConfig.decoderMode,
+                audioPassthrough = currentConfig.audioPassthrough,
+                assSession = assForRequest,
+                minBufferMs = request.minBufferMs,
+                maxBufferMs = request.maxBufferMs,
+                backBufferDurationMs = exoCfg.backBufferDurationMs,
+            ),
+        )
+
         val selector = DefaultTrackSelector(context)
         applyRequestTrackSelection(selector, request, exoCfg)
         trackSelector = selector
 
-        val rendererMode = when (currentConfig.decoderMode) {
-            DecoderMode.HW_PREFERRED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-            DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-            DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-        }
         // Custom renderers factory injects the in-sink AudioProcessor chain
         // (channel mix → dynamics → ReplayGain → high-pass) into the video
         // ExoPlayer path. Kept as the base; the ASS path wraps it below so the
         // AudioProcessor chain is preserved on both paths.
         val baseRenderersFactory = object : DefaultRenderersFactory(context) {
             init {
-                setExtensionRendererMode(rendererMode)
+                setExtensionRendererMode(
+                    when (plan.extensionRendererMode) {
+                        ExoBuildPlan.ExtensionRendererMode.ON -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+                        ExoBuildPlan.ExtensionRendererMode.OFF -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
+                        ExoBuildPlan.ExtensionRendererMode.PREFER -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                    },
+                )
                 setEnableDecoderFallback(exoCfg.enableDecoderFallback)
             }
 
@@ -581,62 +596,65 @@ class ExoPlayerEngine(
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): DefaultAudioSink {
-                // Bitstream passthrough (audio offload) split: when the config
-                // requests passthrough, the sink is built WITHOUT the PCM
-                // in-sink chain — audio processors force the decode-to-PCM
-                // path and are incompatible with offload (the passthrough
-                // session forgoes the in-sink DSP, which is the point of
-                // bitstreaming). A processor-free sink is OFFLOAD-CAPABLE in
-                // media3 1.11: the per-format offload support is resolved
-                // intrinsically (AudioOutputProvider → platform AudioTrack
-                // checks, API 29+), and the offload DEMAND rides the track
-                // selection (ExoPassthroughOffload.offloadMode) — media3's
-                // renderer sets the sink's offload mode from the selection
-                // (the 1.11 refactor removed the builder-level offload flag).
-                // CONSTRUCTION-time split: the renderer set (and its sink) is
-                // fixed at player build, so a mid-session passthrough flip
-                // applies on the next player rebuild (the mode/decoder reload
-                // path), while the track-selection half re-pushes live.
-                if (currentConfig.audioPassthrough) {
-                    return DefaultAudioSink.Builder(context)
-                        .setEnableFloatOutput(enableFloatOutput)
-                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                        .build()
+                // The plan's sink shape (see ExoBuildPlan.SinkShape): the
+                // passthrough arm builds the bare sink, the in-sink arm the
+                // processor chain. CONSTRUCTION-time split: the renderer set
+                // (and its sink) is fixed at player build, so a mid-session
+                // passthrough flip applies on the next player rebuild (the
+                // mode/decoder reload path), while the track-selection half
+                // re-pushes live.
+                return when (plan.sinkShape) {
+                    ExoBuildPlan.SinkShape.PassthroughBitstream ->
+                        DefaultAudioSink.Builder(context)
+                            .setEnableFloatOutput(enableFloatOutput)
+                            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                            .build()
+                    ExoBuildPlan.SinkShape.InSinkProcessorChain ->
+                        DefaultAudioSink.Builder(context)
+                            // ONE in-sink chain order, shared with the music sink
+                            // (core:data `inSinkAudioChain`): channel mix first — it
+                            // may change the channel count, so every downstream
+                            // processor must see the remixed layout — then
+                            // dynamics/ReplayGain and the dialogue-boost high-pass.
+                            // No balance processor: video has no L/R balance surface
+                            // (the declared divergence from music's in-sink balance,
+                            // recorded on the factory's KDoc).
+                            .setAudioProcessors(
+                                inSinkAudioChain(
+                                    channelMixProcessor = channelMixProcessor,
+                                    dynamicsProcessor = dynamicsProcessor,
+                                    replayGainProcessor = replayGainProcessor,
+                                    highPassProcessor = highPassFilter,
+                                ),
+                            )
+                            .setEnableFloatOutput(enableFloatOutput)
+                            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                            .build()
                 }
-                return DefaultAudioSink.Builder(context)
-                    // ONE in-sink chain order, shared with the music sink
-                    // (core:data `inSinkAudioChain`): channel mix first — it
-                    // may change the channel count, so every downstream
-                    // processor must see the remixed layout — then
-                    // dynamics/ReplayGain and the dialogue-boost high-pass.
-                    // No balance processor: video has no L/R balance surface
-                    // (the declared divergence from music's in-sink balance,
-                    // recorded on the factory's KDoc).
-                    .setAudioProcessors(
-                        inSinkAudioChain(
-                            channelMixProcessor = channelMixProcessor,
-                            dynamicsProcessor = dynamicsProcessor,
-                            replayGainProcessor = replayGainProcessor,
-                            highPassProcessor = highPassFilter,
-                        ),
-                    )
-                    .setEnableFloatOutput(enableFloatOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .build()
             }
         }
 
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(request.minBufferMs, request.maxBufferMs, 1_000, 3_000)
-            .setTargetBufferBytes(-1)
-            .setBackBuffer(exoCfg.backBufferDurationMs.coerceAtLeast(0), false)
-            .build()
+        val loadControl = with(plan.loadControl) {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    minBufferMs,
+                    maxBufferMs,
+                    bufferForPlaybackMs,
+                    bufferForPlaybackAfterRebufferMs,
+                )
+                .setTargetBufferBytes(targetBufferBytes)
+                .setBackBuffer(backBufferDurationMs, retainBackBuffer)
+                .build()
+        }
 
-        // Decide whether this session needs the libass (ass-media) path: only
-        // when an ASS/SSA subtitle source is present. Non-ASS sessions keep the
-        // existing DefaultSubtitleParserFactory path untouched, so the existing
-        // engine tests (which never carry ASS sources) are unaffected.
-        assEnabledForSession = assForRequest
+        // The plan's ASS session verdict executes: only the engage arm creates
+        // the handler; non-ASS sessions keep the existing
+        // DefaultSubtitleParserFactory path untouched, so the existing engine
+        // tests (which never carry ASS sources) are unaffected.
+        assEnabledForSession = when (plan.assSession) {
+            ExoBuildPlan.AssSessionVerdict.LibassEngages -> true
+            ExoBuildPlan.AssSessionVerdict.Discharges -> false
+        }
         // Reset the active-track ASS flag: a reused engine (load() called again
         // without release()) must not carry over stale activeTrackIsAss=true from
         // a prior ASS track, which would hide subtitles until the next select.
@@ -680,49 +698,46 @@ class ExoPlayerEngine(
             enableStreamCache = streamCacheEligible,
         )
 
-        // On the ASS path, wrap the extractors with Matroska+ASS support (for
-        // ASS embedded in MKV) and the renderers with the libass text renderer;
-        // otherwise the plain base factories reproduce the pre-ASS build exactly.
-        // The extractor swap mirrors ass-media's withAssMkvSupport extension but
-        // takes the style-override wrapper: AssMatroskaExtractor accepts the
-        // SubtitleParser.Factory INTERFACE, so the FORCE-mode header rewrite
-        // reaches embedded ASS too (the library's extension only accepts the
-        // concrete AssSubtitleParserFactory).
-        //
-        // KNOWN LIMITATION: embedded ASS-in-MKV extraction still bypasses the
-        // OffsettingSubtitleParserFactory — the subtitle-delay slider has no
-        // effect on embedded MKV ASS tracks in this engine. Preserved from the
-        // previous wiring (which passed the bare concrete factory) rather than
-        // destabilizing the working ASS path; mpv and libVLC render embedded
-        // ASS at the correct offset via sub-delay/setSpuDelay regardless.
-        val (finalRenderersFactory, msf) = if (assEnabledForSession) {
-            val assExtractors = AssStyleOverrideExtractorsFactory(
-                extractorsFactory,
-                delegateParserFactory,
-                assHandler!!,
-            )
-            // Own clock-pump factory instead of ass-media's AssRenderersFactory:
-            // the library's appended AssRenderer derives the render clock from
-            // the renderer position minus a hardcoded 10¹² µs base, and the
-            // player's own position cannot be queried from the playback thread —
-            // see [AssClockPumpRenderersFactory] for the delta-integration
-            // approach used instead.
-            val renderers = AssClockPumpRenderersFactory(
-                assHandler!!,
-                baseRenderersFactory,
-                startMediaTimeUs = request.startPositionMs * 1000L,
-            )
-            val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, assExtractors)
-                .setSubtitleParserFactory(offsetFactory)
-            renderers to sourceFactory
-        } else {
-            // setSubtitleParserFactory on the MediaSourceFactory so that side-
-            // loaded (side-car SubtitleConfiguration) text subs are also parsed
-            // through the offset wrapper. The extractors-level factory set above
-            // only covers embedded text tracks; side-car subs are parsed by the
-            // MSF's own factory, which must be the offset factory too.
-            baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
-                .setSubtitleParserFactory(offsetFactory)
+        // The plan's extractor pairing: on the ASS arm, wrap the extractors
+        // with Matroska+ASS support (for ASS embedded in MKV) and the
+        // renderers with the libass text renderer; the plain arm reproduces
+        // the pre-ASS build exactly. The extractor swap mirrors ass-media's
+        // withAssMkvSupport extension but takes the style-override wrapper:
+        // AssMatroskaExtractor accepts the SubtitleParser.Factory INTERFACE,
+        // so the FORCE-mode header rewrite reaches embedded ASS too (the
+        // library's extension only accepts the concrete
+        // AssSubtitleParserFactory).
+        val (finalRenderersFactory, msf) = when (plan.extractorPairing) {
+            ExoBuildPlan.ExtractorPairing.AssAwareExtractors -> {
+                val assExtractors = AssStyleOverrideExtractorsFactory(
+                    extractorsFactory,
+                    delegateParserFactory,
+                    assHandler!!,
+                )
+                // Own clock-pump factory instead of ass-media's AssRenderersFactory:
+                // the library's appended AssRenderer derives the render clock from
+                // the renderer position minus a hardcoded 10¹² µs base, and the
+                // player's own position cannot be queried from the playback thread —
+                // see [AssClockPumpRenderersFactory] for the delta-integration
+                // approach used instead.
+                val renderers = AssClockPumpRenderersFactory(
+                    assHandler!!,
+                    baseRenderersFactory,
+                    startMediaTimeUs = request.startPositionMs * 1000L,
+                )
+                val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, assExtractors)
+                    .setSubtitleParserFactory(offsetFactory)
+                renderers to sourceFactory
+            }
+            ExoBuildPlan.ExtractorPairing.PlainExtractors -> {
+                // setSubtitleParserFactory on the MediaSourceFactory so that side-
+                // loaded (side-car SubtitleConfiguration) text subs are also parsed
+                // through the offset wrapper. The extractors-level factory set above
+                // only covers embedded text tracks; side-car subs are parsed by the
+                // MSF's own factory, which must be the offset factory too.
+                baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+                    .setSubtitleParserFactory(offsetFactory)
+            }
         }
 
         // DRM: attach a DrmSessionManager only when the caller supplied one via

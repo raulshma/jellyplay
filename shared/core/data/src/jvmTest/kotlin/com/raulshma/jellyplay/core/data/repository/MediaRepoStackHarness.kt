@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
@@ -92,6 +93,7 @@ internal fun mediaRepoStackFor(
     authClient: AuthApiClient = mockk(relaxed = true),
     libraryApiClient: LibraryApiClient = mockk(relaxed = true),
     collectionApiClient: CollectionApiClient = mockk(relaxed = true),
+    imageUrlApiClient: ImageUrlApiClient = mockk(relaxed = true),
     playlistApiClient: PlaylistApiClient = mockk(relaxed = true),
     playedStateSync: PlayedStateSync = mockk(relaxed = true),
     offlineRepository: OfflineRepository = mockk(relaxed = true),
@@ -128,25 +130,40 @@ internal fun mediaRepoStackFor(
     )
     val internals = MediaRepositoryInternals(libraryApiClient, homeSession, sessionCacheRegistry)
     val announcer = announcerFor(homeSession) { built }
+    // The persisted home pipeline — the same store single the Koin graph
+    // wires, over the suite's (usually inert) DAO. One instance shared by
+    // the ledger (its identity-action SWR clear + the flight-body persist)
+    // and the repository's cold-open reads.
+    val homeSnapshotStore = HomeSectionsSnapshotStore(
+        homeSectionCacheDao,
+        homeSession,
+        timeSource,
+    )
+    // The freshness ledger — the same ctor-injected collaborator the Koin
+    // graph wires, built over the harness's real machinery so the chassis
+    // (spec registry, stale ladder, write-generation funnel, eviction
+    // ladders) is the production shape.
+    val ledger = MediaFreshnessLedger(
+        homeSession = homeSession,
+        sessionCacheRegistry = sessionCacheRegistry,
+        homeSnapshotStore = homeSnapshotStore,
+        episodeCatalogue = episodeCatalogue,
+        internals = internals,
+        homeSectionsCachePort = homeSectionsCachePort,
+        timeSource = timeSource,
+    )
     val repository = MediaRepositoryImpl(
         libraryApiClient = libraryApiClient,
         collectionApiClient = collectionApiClient,
+        // The image-URL family seam (the photo-folder cover probe's read).
+        imageUrlApiClient = imageUrlApiClient,
         // The home cache-maintenance port (the write/roll paths' verbs).
         homeSectionsCachePort = homeSectionsCachePort,
-        // The persisted home pipeline — the same store single the Koin graph
-        // wires, over the suite's (usually inert) DAO.
-        homeSnapshotStore = HomeSectionsSnapshotStore(
-            homeSectionCacheDao,
-            homeSession,
-            timeSource,
-        ),
+        homeSnapshotStore = homeSnapshotStore,
         playedStateSync = playedStateSync,
-        episodeCatalogue = episodeCatalogue,
         userDataRealtimeChannel = userDataRealtimeChannel,
-        timeSource = timeSource,
-        homeSession = homeSession,
         userDataAnnouncer = announcer,
-        sessionCacheRegistry = sessionCacheRegistry,
+        ledger = ledger,
         internals = internals,
     ).also { built = it }
     val playlistRepository = PlaylistRepositoryImpl(playlistApiClient, internals)

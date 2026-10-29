@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.HomeSectionsSnapshotStore
+import com.raulshma.jellyplay.core.data.repository.MediaFreshnessLedger
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
@@ -94,7 +95,11 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         PlayedStateSyncImpl(
+            // Reconcile's fresh-detail read rides the wide client; the flip /
+            // toggleFavorite writes ride the UserDataApiClient family single
+            // (the former LibraryApiClient.writeUserData forward is gone).
             apiClient = get(),
+            userDataApiClient = get(),
             offlineRepository = get(),
             playbackOutboxRepository = get(),
             offlineModeManager = get(),
@@ -147,20 +152,38 @@ internal val dataMediaRepositoryModule: Module = module {
     // the writes that caused it; declared before its two consumers.
     single { RecentLocalUserDataWritesImpl() }
     single<RecentLocalUserDataWrites> { get<RecentLocalUserDataWritesImpl>() }
+    // The media freshness ledger: the ONE owner of the freshness/cache
+    // chassis (spec registry, #157 stale-read ladder, home write-generation
+    // funnel, identity-transition clear, eviction ladders) — extracted from
+    // MediaRepositoryImpl. Declared BEFORE its one consumer below (the
+    // HomeSectionsSnapshotStore precedent), so its registry registrations
+    // happen at the same graph point the impl's construction used to run
+    // them.
+    single {
+        MediaFreshnessLedger(
+            homeSession = get(),
+            sessionCacheRegistry = get(),
+            homeSnapshotStore = get(),
+            episodeCatalogue = get(),
+            internals = get(),
+            homeSectionsCachePort = get(),
+            timeSource = get(),
+        )
+    }
     single {
         MediaRepositoryImpl(
             libraryApiClient = get(),
             collectionApiClient = get(),
+            // The image-URL family single (the collectionApiClient precedent):
+            // the photo-folder cover probe's child-image row read.
+            imageUrlApiClient = get(),
             homeSectionsCachePort = get(),
             homeSnapshotStore = get(),
             playedStateSync = get(),
-            episodeCatalogue = get(),
             userDataRealtimeChannel = get(),
-            timeSource = get(),
-            homeSession = get(),
-            sessionCacheRegistry = get(),
             internals = get(),
             userDataAnnouncer = get(),
+            ledger = get(),
         )
     }
     // Family seams over the same single (the SonarrSeriesOperations

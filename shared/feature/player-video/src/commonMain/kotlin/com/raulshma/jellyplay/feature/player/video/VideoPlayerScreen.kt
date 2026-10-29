@@ -69,8 +69,8 @@ import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
 import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdict
-import com.raulshma.jellyplay.feature.player.video.chrome.KEYBOARD_SEEK_COMMIT_DELAY_MS
 import com.raulshma.jellyplay.feature.player.video.chrome.rememberPlayerChromeController
+import com.raulshma.jellyplay.feature.player.video.state.SeekChipCommitClock
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.AmbientBackdropLayer
@@ -126,8 +126,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 
 // ── Player overlay/animation timing (ms) ─────────────────────────────────
 // Named so the tuning is discoverable instead of scattered as bare literals.
-/** How long the gesture-seek ripple/indicator lingers after the last seek input. */
-private const val GESTURE_SEEK_LINGER_MS = 800L
+// (The seek-chip pair moved to the state module's SeekChipCommitClock.)
 
 /** "Resumed — tap to restart" chip lifetime (3s). */
 private const val RESUME_CHIP_DISPLAY_MS = 3_000L
@@ -345,10 +344,8 @@ fun VideoPlayerScreen(
         }
     }
 
-    var seekTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
-    var gestureTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
-    var gestureTrickplayVisible by remember { mutableStateOf(false) }
-    var tvTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
+    // The trickplay bitmaps moved into the feeds holder (rememberTrickplayFeeds,
+    // below — it needs the gesture controller, declared in the input tier).
 
     LaunchedEffect(itemId, forceStream) {
         if (viewModel.sessionSlices.cast.isBackgroundCasting) {
@@ -970,6 +967,24 @@ fun VideoPlayerScreen(
     val currentSeekState by rememberUpdatedState(seekState)
     val currentGestureController by rememberUpdatedState(gestureController)
 
+    // The three trickplay thumbnail feeds + their bitmap-clear effects,
+    // hoisted into the gesture-tier section host ([rememberTrickplayFeeds]):
+    // the seek-bar feed's gate, the gesture feed's deliberate gate divergence
+    // (its gate carries no trickplayInfo conjunct) and the TV mirror live
+    // there; the screen reads the bitmaps through the returned holder. Sat
+    // here — not beside the old state declarations above — because the
+    // gesture controller is the feed's position source.
+    val trickplayFeeds = rememberTrickplayFeeds(
+        seekPositionMs = { seekPositionMs },
+        isSeeking = { isSeeking },
+        gestureController = gestureController,
+        trickplayEnabled = { uiState.uiPrefs.trickplayEnabled },
+        trickplayOnSeekGesture = { uiState.uiPrefs.trickplayOnSeekGesture },
+        trickplayInfo = { uiState.uiPrefs.trickplayInfo },
+        isTv = isTv,
+        loadThumbnail = { pos -> viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap },
+    )
+
     // The TV D-pad arm set, built ONCE per executor/chrome instance (the
     // input-dispatch module's registered surface): the gesture modifier AND
     // the key sink consume this ONE instance, so the two dispatch paths can
@@ -1349,8 +1364,8 @@ fun VideoPlayerScreen(
                 uiState.uiPrefs.trickplayOnSeekGesture,
                 uiState.uiPrefs.trickplayMode,
                 uiState.uiPrefs.trickplayInfo,
-                gestureTrickplayVisible,
-                gestureTrickplayBitmap,
+                trickplayFeeds.gestureVisible,
+                trickplayFeeds.gestureBitmap,
                 gestureController,
                 duration,
                 isCinemaIntroVisible,
@@ -1374,8 +1389,8 @@ fun VideoPlayerScreen(
                     trickplayOnSeekGesture = uiState.uiPrefs.trickplayOnSeekGesture,
                     trickplayMode = uiState.uiPrefs.trickplayMode,
                     trickplayInfo = uiState.uiPrefs.trickplayInfo,
-                    gestureTrickplayVisible = gestureTrickplayVisible,
-                    gestureTrickplayBitmap = gestureTrickplayBitmap,
+                    gestureTrickplayVisible = trickplayFeeds.gestureVisible,
+                    gestureTrickplayBitmap = trickplayFeeds.gestureBitmap,
                     gestureSeekPositionMs = gestureController.seekPositionMs,
                     gestureDeltaMs = gestureController.deltaMs,
                     durationMs = duration,
@@ -1690,7 +1705,7 @@ fun VideoPlayerScreen(
                     hasNextEpisode = hasNextEpisode,
                     onPreviousEpisode = onPreviousEpisode,
                     onNextEpisode = onNextEpisode,
-                    tvTrickplayBitmap = if (isTv) tvTrickplayBitmap else null,
+                    tvTrickplayBitmap = if (isTv) trickplayFeeds.tvBitmap else null,
                     isMuted = uiState.isMuted,
                     onMuteClick = onMuteClick,
                 ),
@@ -1817,7 +1832,7 @@ fun VideoPlayerScreen(
                 isSeeking = isSeeking,
                 trickplayMode = uiState.uiPrefs.trickplayMode,
                 trickplayInfo = uiState.uiPrefs.trickplayInfo,
-                bitmap = seekTrickplayBitmap,
+                bitmap = trickplayFeeds.seekBitmap,
                 positionMs = seekPositionMs,
                 durationMs = duration,
                 loadTile = loadSeekTile,
@@ -1858,18 +1873,19 @@ fun VideoPlayerScreen(
 
     // Single long-lived collector replaces a fresh LaunchedEffect keyed on
     // seekState.timestamp (which changes per D-pad seek → coroutine create/cancel
-    // per event, thrashing during hold-and-repeat seeking). The reset side-effect
-    // body is unchanged; only the dispatch mechanism changes. KEYED ON THE
-    // seekState INSTANCE: `actionExecutor` is remember(gestureController)-keyed
+    // per event, thrashing during hold-and-repeat seeking). The verdicts and
+    // both delay constants live in the seek-chip commit clock
+    // ([SeekChipCommitClock]); the screen registers the collector only.
+    // KEYED ON THE seekState INSTANCE: `actionExecutor` is remember(gestureController)-keyed
     // and the controller is remember(engine, …)-keyed, so an engine/cast/
     // swipe-max change mints a NEW DpadSeekState — a Unit key would leave this
     // collector resetting the dead instance while the chip renders from the new
     // one and never hides.
     LaunchedEffect(seekState) {
         snapshotFlow { seekState.timestamp to seekState.direction }
-            .filter { (_, direction) -> direction != 0 }
+            .filter { (_, direction) -> SeekChipCommitClock.chipIsLive(direction) }
             .collectLatest {
-                delay(GESTURE_SEEK_LINGER_MS)
+                delay(SeekChipCommitClock.LINGER_RESET_MS)
                 seekState.reset()
             }
     }
@@ -1878,97 +1894,39 @@ fun VideoPlayerScreen(
     // commit-on-key-up. Every seek key-down bumps the executor's
     // [PlayerActionExecutor.keyboardSeekStamp], and collectLatest restarts
     // this delay, so the commit fires exactly once —
-    // KEYBOARD_SEEK_COMMIT_DELAY_MS after the LAST key-down (key-up is not
-    // observable on the desktop sink bridge, which delivers KeyDown only).
-    // Commits route through the same seekState → doSeekTo funnel the D-pad
-    // uses, then the chip lingers out via the reset effect above. One
-    // long-lived collector, not a per-press LaunchedEffect — the same
-    // dispatch-shape reason the D-pad linger effect above cites. Keyed on the
-    // executor instance for the same reason that effect keys on seekState.
+    // [SeekChipCommitClock.KEYBOARD_COMMIT_DELAY_MS] after the LAST key-down
+    // (key-up is not observable on the desktop sink bridge, which delivers
+    // KeyDown only). The stale-timestamp stand-down + the direction ladder
+    // are the clock's [SeekChipCommitClock.keyboardCommit]. Commits route
+    // through the same seekState → doSeekTo funnel the D-pad uses, then the
+    // chip lingers out via the reset effect above. One long-lived collector,
+    // not a per-press LaunchedEffect — the same dispatch-shape reason the
+    // D-pad linger effect above cites. Keyed on the executor instance for
+    // the same reason that effect keys on seekState.
     LaunchedEffect(actionExecutor) {
         val executor = actionExecutor
         snapshotFlow { executor.keyboardSeekStamp }
             .filter { it > 0 }
             .collectLatest {
-                delay(KEYBOARD_SEEK_COMMIT_DELAY_MS)
-                // Stand down if the chip moved on after the last keyboard
-                // contribution (drag/swipe/double-tap seek inside the commit
-                // window) — a commit from the keyboard's stale base position
-                // would yank playback back over the newer seek.
-                if (seekState.timestamp != executor.lastKeyboardSeekChipTimestamp) {
-                    return@collectLatest
-                }
-                when (seekState.direction) {
-                    1 -> {
+                delay(SeekChipCommitClock.KEYBOARD_COMMIT_DELAY_MS)
+                when (
+                    SeekChipCommitClock.keyboardCommit(
+                        chipTimestamp = seekState.timestamp,
+                        direction = seekState.direction,
+                        lastKeyboardSeekChipTimestamp = executor.lastKeyboardSeekChipTimestamp,
+                    )
+                ) {
+                    SeekChipCommitClock.Verdict.CommitForward -> {
                         seekState.commitForward()
                         performConfirmHaptic()
                     }
-                    -1 -> {
+                    SeekChipCommitClock.Verdict.CommitBackward -> {
                         seekState.commitBackward()
                         performConfirmHaptic()
                     }
+                    SeekChipCommitClock.Verdict.StandDown -> {}
                 }
             }
-    }
-
-    LaunchedEffect(Unit) {
-        // Seek-bar / D-pad scrub feed: the seek overlay bitmap plus the TV
-        // mirror (TV renders no gesture overlay, so the seek-bar thumbnail
-        // IS its scrub preview).
-        collectTrickplayThumbnails(
-            positionMs = { seekPositionMs },
-            gate = { isSeeking && uiState.uiPrefs.trickplayEnabled && uiState.uiPrefs.trickplayInfo != null },
-            trickplayInfo = { uiState.uiPrefs.trickplayInfo },
-            onFetch = { pos, _ ->
-                val bitmap = viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
-                seekTrickplayBitmap = bitmap
-                if (isTv) {
-                    tvTrickplayBitmap = bitmap
-                }
-            },
-        )
-    }
-
-    LaunchedEffect(isSeeking) {
-        if (!isSeeking) {
-            seekTrickplayBitmap = null
-            tvTrickplayBitmap = null
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        // Gesture-swipe feed: unlike the seek feed, its gate does NOT include
-        // trickplayInfo != null — a null info with the gesture active still
-        // flips the overlay visible (with a null bitmap) so the swipe preview
-        // placeholder shows; the onFetch body encodes that divergence.
-        collectTrickplayThumbnails(
-            positionMs = { gestureController.seekPositionMs.value },
-            gate = { gestureController.isSeeking.value && uiState.uiPrefs.trickplayOnSeekGesture },
-            trickplayInfo = { uiState.uiPrefs.trickplayInfo },
-            onFetch = { pos, trickplayInfo ->
-                gestureTrickplayVisible = true
-                gestureTrickplayBitmap = if (trickplayInfo != null) {
-                    viewModel.loadTrickplayThumbnail(pos) as? PlatformBitmap
-                } else {
-                    null
-                }
-            },
-        )
-    }
-
-    LaunchedEffect(Unit) {
-        // Flow-collected (not a composition key): keying the former
-        // LaunchedEffect on isGestureSeeking subscribed this scope to every
-        // drag's start/end flips. collectLatest keeps the former restart
-        // semantics — a new gesture starting inside the 1 s grace cancels
-        // the pending clear.
-        gestureController.isSeeking.collectLatest { seeking ->
-            if (!seeking && gestureTrickplayVisible) {
-                delay(1000)
-                gestureTrickplayVisible = false
-                gestureTrickplayBitmap = null
-            }
-        }
     }
 
     // The auto-hide timer lives in the chrome module: this effect re-arms it

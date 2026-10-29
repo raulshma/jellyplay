@@ -108,18 +108,34 @@ import kotlinx.datetime.toLocalDateTime
 private val THEME_HIGHLIGHT_IDS = setOf(AppearanceRows.ThemeMode.id, AppearanceRows.ThemeScheduler.id)
 
 /**
- * The appearance screen's ONE group declaration, in LazyColumn order — the
+ * The appearance screen's ONE ordered group declaration — the derivation-only
+ * shape (group ids/order, the whole-group advanced flags; the content slots
+ * stay empty) that BOTH the screen and the catalog contract test's section-7
+ * pins consume, so a reordered or re-flagged group cannot strand a stale
+ * replica (the mirror-drift class ADR-0009's amendment closes). Per-group row
+ * emission stays hand-written: the screen maps each slot to its body inline
+ * in [appearanceScreenGroups].
+ */
+internal val AppearanceSettingsScreenSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.appearanceTheme.asScreenGroup(),
+    SettingsScreenGroups.appearanceNavigation.asScreenGroup(),
+    SettingsScreenGroups.appearanceLibrary.asScreenGroup(),
+    SettingsScreenGroups.appearancePerformance.asScreenGroup(advancedOnly = true),
+    SettingsScreenGroups.appearanceEyeCare.asScreenGroup(advancedOnly = true),
+    SettingsScreenGroups.appearanceNewsletter.asScreenGroup(advancedOnly = true),
+)
+
+/**
+ * The appearance screen's group bodies, mapped onto the ONE ordered
+ * declaration ([AppearanceSettingsScreenSlots], in LazyColumn order — the
  * shell derives the deep-link scroll resolution, the whole-group advanced
- * gating (slots 3-5: performance, eye care, newsletter only compose behind
- * the advanced toggle) and the hidden-settings hint count from it, so the
- * scroll target and the hint can never drift from the UI. The per-group row
- * emission stays hand-written inside each slot (ADR-0009). (The home display
+ * gating and the hidden-settings hint count from it, and the contract test
+ * pins the same declaration) with each slot's hand-written body attached
+ * inline — the bodies close over the screen's state (preferences, view
+ * model, the highlight id) and the shell only reads the derived shape
+ * (ADR-0009: per-row emission stays hand-written). (The home display
  * / Next Up / home-layout rows AND the home-discovery card-display quartet
  * moved to HomeSettingsScreen.)
- *
- * The declaration lives in the screen body — its slots close over the
- * screen's state (preferences, view model, the highlight id) and the shell
- * only reads the derived shape.
  */
 private fun appearanceScreenGroups(
     preferences: AppearanceScreenPreferences,
@@ -129,8 +145,10 @@ private fun appearanceScreenGroups(
     viewModel: AppearanceSettingsViewModel,
     onCustomizeShortcuts: () -> Unit,
     showBlueLightStrengthSheet: () -> Unit,
-): List<PreferenceScreenGroup> = listOf(
-    SettingsScreenGroups.appearanceTheme.asScreenGroup { activePicker ->
+): List<PreferenceScreenGroup> =
+    AppearanceSettingsScreenSlots.withContent(
+        bodies = listOf(
+    { activePicker ->
         AppearanceThemeGroup(
             preferences = preferences,
             showAdvanced = showAdvanced,
@@ -140,7 +158,7 @@ private fun appearanceScreenGroups(
             activePicker = activePicker,
         )
     },
-    SettingsScreenGroups.appearanceNavigation.asScreenGroup { _ ->
+    { _ ->
         // Floating navigation bar customization (enable/disable items, reorder,
         // hide-on-scroll).
         val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
@@ -150,7 +168,7 @@ private fun appearanceScreenGroups(
             onCustomizeShortcuts = onCustomizeShortcuts,
         )
     },
-    SettingsScreenGroups.appearanceLibrary.asScreenGroup { _ ->
+    { _ ->
         // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode.
         AppearanceLibraryGroup(
             preferences = preferences,
@@ -159,14 +177,14 @@ private fun appearanceScreenGroups(
         )
     },
     // Remaining groups are expert-level; the shell keeps them behind the Advanced gate.
-    SettingsScreenGroups.appearancePerformance.asScreenGroup(advancedOnly = true) { _ ->
+    { _ ->
         AppearancePerformanceGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
         )
     },
-    SettingsScreenGroups.appearanceEyeCare.asScreenGroup(advancedOnly = true) { _ ->
+    { _ ->
         AppearanceEyeCareGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
@@ -174,14 +192,15 @@ private fun appearanceScreenGroups(
             onShowStrengthSheet = showBlueLightStrengthSheet,
         )
     },
-    SettingsScreenGroups.appearanceNewsletter.asScreenGroup(advancedOnly = true) { _ ->
+    { _ ->
         AppearanceNewsletterGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
         )
     },
-)
+        ),
+    )
 
 /**
  * The persisted accent id for a themed variant, or null when the variant has

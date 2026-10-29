@@ -18,9 +18,9 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataApiClient
 import com.raulshma.jellyplay.core.network.api.UserDataWrite
 import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
@@ -32,8 +32,8 @@ import kotlinx.coroutines.coroutineScope
 class PlaybackRepositoryImpl(
     /** Telemetry, URL builders, PlaybackInfo, segments, subtitle delivery, trickplay. */
     private val playbackApiClient: PlaybackApiClient,
-    /** The played/favorite flips the outbox drain replays. */
-    private val libraryApiClient: LibraryApiClient,
+    /** The played/favorite flips the outbox drain replays (the user-data write family seam). */
+    private val userDataApiClient: UserDataApiClient,
     /** Server URL + access token for the absolute-ize URL folds. */
     private val authApiClient: AuthApiClient,
     /** Remote-subtitle search/upload + the subtitle-cultures metadata read. */
@@ -238,13 +238,13 @@ class PlaybackRepositoryImpl(
             PlaybackOutboxEventType.BOOK_PROGRESS ->
                 playbackApiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.PLAYED ->
-                libraryApiClient.writeUserData(UserDataWrite.MarkPlayed(entry.itemId)).isSuccess
+                userDataApiClient.writeUserData(UserDataWrite.MarkPlayed(entry.itemId)).isSuccess
             PlaybackOutboxEventType.UNPLAYED ->
-                libraryApiClient.writeUserData(UserDataWrite.MarkUnplayed(entry.itemId)).isSuccess
+                userDataApiClient.writeUserData(UserDataWrite.MarkUnplayed(entry.itemId)).isSuccess
             PlaybackOutboxEventType.FAVORITE ->
-                libraryApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = true)).isSuccess
+                userDataApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = true)).isSuccess
             PlaybackOutboxEventType.UNFAVORITE ->
-                libraryApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = false)).isSuccess
+                userDataApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = false)).isSuccess
         }
 
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =

@@ -263,14 +263,13 @@ internal fun SettingsJellyPlayPluginSection(
 /**
  * The refused-contract face: the whole section hides (every gate is closed),
  * so this banner is the drift's ONLY surface — what the server runs vs what
- * this client understands, in error-container colors. A single-version range
- * renders as `1`, a real range as `1–2`.
+ * this client understands, in error-container colors. The range's rendering
+ * (single version as `1`, a real range as `1–2`) is the model's
+ * [JellyPlayContractMismatch.supportedRangeLabel].
  */
 @Composable
 private fun JellyPlayContractMismatchBanner(mismatch: JellyPlayContractMismatch) {
-    val supported = with(mismatch.supportedRange) {
-        if (first == last) "$first" else "$first–$last"
-    }
+    val supported = mismatch.supportedRangeLabel
     Column(
         modifier = Modifier
             .fillMaxWidth()

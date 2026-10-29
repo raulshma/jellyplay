@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
@@ -201,19 +202,29 @@ class HomeFeedRealStackContractTest {
             homeSession,
             CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
+        // ONE shared detail cluster across the impl + its ledger (the facade
+        // split's single-instance shape — the same MediaRepositoryInternals
+        // single the Koin graph aliases).
+        val internals = MediaRepositoryInternals(client, homeSession, sessionCacheRegistry)
         val repository = MediaRepositoryImpl(
             libraryApiClient = client,
             collectionApiClient = mockk<CollectionApiClient>(relaxed = true),
+            imageUrlApiClient = mockk<ImageUrlApiClient>(relaxed = true),
             homeSectionsCachePort = port,
             homeSnapshotStore = snapshotStore,
             playedStateSync = mockk(relaxed = true),
-            episodeCatalogue = mockk<EpisodeCatalogue>(relaxed = true),
             userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
-            timeSource = fakeTimeSource,
-            homeSession = homeSession,
             userDataAnnouncer = announcerFor(homeSession) { built },
-            sessionCacheRegistry = sessionCacheRegistry,
-            internals = MediaRepositoryInternals(client, homeSession, sessionCacheRegistry),
+            internals = internals,
+            ledger = MediaFreshnessLedger(
+                homeSession = homeSession,
+                sessionCacheRegistry = sessionCacheRegistry,
+                homeSnapshotStore = snapshotStore,
+                episodeCatalogue = mockk<EpisodeCatalogue>(relaxed = true),
+                internals = internals,
+                homeSectionsCachePort = port,
+                timeSource = fakeTimeSource,
+            ),
         ).also { built = it }
         return Stack(repository, client, port)
     }

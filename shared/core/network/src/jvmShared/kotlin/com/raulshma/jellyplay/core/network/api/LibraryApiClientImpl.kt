@@ -14,7 +14,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.lruMapOf
-import com.raulshma.jellyplay.core.model.buildItemImageUrl
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TimeSource
@@ -23,12 +22,10 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.LyricsApi
-import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
 import com.raulshma.jellyplay.core.network.library.ClassicLatestCard
 import com.raulshma.jellyplay.core.network.library.CLASSIC_TV_LATEST_MEDIA_TYPE
 import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
-import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePortAdapter
@@ -38,7 +35,6 @@ import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
 import com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
-import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildDiscoverRowQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildFavoritesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildItemsByGenreQuerySpec
@@ -48,17 +44,14 @@ import com.raulshma.jellyplay.core.network.library.buildResumeQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
 import com.raulshma.jellyplay.core.network.library.synthesizedSeries
-import com.raulshma.jellyplay.core.network.library.toChildItemImageUrls
 import com.raulshma.jellyplay.core.network.library.toClassicLatestCards
 import com.raulshma.jellyplay.core.network.library.toFilteredLatestRows
 import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
 import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import org.jellyfin.sdk.model.api.BaseItemKind
-import org.jellyfin.sdk.model.api.DisplayPreferencesDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
-import org.jellyfin.sdk.model.api.ScrollDirection
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.serializer.toUUID
 import org.jellyfin.sdk.api.client.ApiClient
@@ -118,12 +111,10 @@ private fun Long?.toSdkLocalDateTime(): java.time.LocalDateTime? = this?.let {
     java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault())
 }
 
+
 /** The default-zone wall clock through the seam — the ONE "now" derivation every seam read in this file shares (mirrors [toSdkLocalDateTime]). */
 private fun TimeSource.nowLocalDateTime(): java.time.LocalDateTime =
     java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(nowEpochMillis()), java.time.ZoneId.systemDefault())
-
-/** ImageType resolved by serial name once — [ImageType.fromNameOrNull] linear-scans per call and Coil binds run per item. Keys lowercased: [fromNameOrNull] matches serial names case-insensitively, so callers passing server-JSON casing ("primary") must resolve too. */
-private val IMAGE_TYPES_BY_SERIAL_NAME = ImageType.entries.associateBy { it.serialName.lowercase() }
 
 class LibraryApiClientImpl(
     private val engine: JellyfinApiEngine,
@@ -212,7 +203,7 @@ class LibraryApiClientImpl(
     private val homeSectionsFetcher = HomeSectionsFetcher(
         sources = this,
         seerrSources = seerrHomeSectionSources,
-        cacheIdentity = { currentHomeCacheIdentity() },
+        cacheIdentity = { engine.currentCacheIdentity() },
         today = {
             // ofInstant-then-toLocalDate (not LocalDate.ofInstant — a JDK 9 API
             // this Android floor must not assume): [nowLocalDateTime].
@@ -220,18 +211,6 @@ class LibraryApiClientImpl(
         },
         jellyPlaySources = jellyPlayHomeSectionSources,
     )
-
-    /**
-     * The current cache identity from ONE atomic session snapshot — never two
-     * separate StateFlow reads, which could observe a synthetic
-     * (newServer, oldUser) pair mid-switch. [CacheIdentity.UNKNOWN] before
-     * login never leaks into another user's entry: a wrong identity is a
-     * guaranteed miss.
-     */
-    private fun currentHomeCacheIdentity(): CacheIdentity {
-        val session = engine.session.value
-        return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
-    }
 
     override suspend fun getHomeSections(
         query: HomeSectionQuery,
@@ -1052,192 +1031,14 @@ class LibraryApiClientImpl(
     // on this class closed over them: no caches, no fetcher, no favorite-flag
     // store — pure relocation, byte-identical wire.
 
-    /**
-     * The ONE user-data write funnel (the four former per-verb members
-     * folded): each op keeps its exact former transport — mark/unmark ride
-     * [JellyfinApiEngine.withApi], the toggle rides the retry chassis +
-     * [FavoriteFlagCache] read-flip cache. The [UserDataWriteOutcome] carries
-     * the post-toggle favorite state; state writes answer [UserDataWriteOutcome.Done].
-     */
-    override suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome> = when (write) {
-        is UserDataWrite.MarkPlayed -> engine.withApi { api ->
-            val userId = engine.requireUserId()
-            api.playStateApi.markPlayedItem(
-                userId = userId.toUUID(),
-                itemId = write.itemId.toUUID(),
-            )
-            UserDataWriteOutcome.Done
-        }
-
-        is UserDataWrite.MarkUnplayed -> engine.withApi { api ->
-            val userId = engine.requireUserId()
-            api.playStateApi.markUnplayedItem(
-                userId = userId.toUUID(),
-                itemId = write.itemId.toUUID(),
-            )
-            UserDataWriteOutcome.Done
-        }
-
-        is UserDataWrite.ToggleFavorite -> engine.apiResultWithRetry {
-            val userId = engine.requireUserId()
-            val uuid = write.itemId.toUUID()
-            val toggled = favoriteFlags.toggle(
-                cacheKey = uuid.toString(),
-                currentIsFavorite = write.currentIsFavorite,
-                fetchCurrent = {
-                    engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-                },
-                markOnServer = {
-                    engine.requireApi().userLibraryApi.markFavoriteItem(
-                        userId = userId.toUUID(),
-                        itemId = uuid,
-                    )
-                },
-                unmarkOnServer = {
-                    engine.requireApi().userLibraryApi.unmarkFavoriteItem(
-                        userId = userId.toUUID(),
-                        itemId = uuid,
-                    )
-                },
-            )
-            UserDataWriteOutcome.FavoriteNow(toggled)
-        }
-
-        is UserDataWrite.SetFavorite -> engine.withApi { api ->
-            val userId = engine.requireUserId()
-            val uuid = write.itemId.toUUID()
-            if (write.isFavorite) {
-                api.userLibraryApi.markFavoriteItem(
-                    userId = userId.toUUID(),
-                    itemId = uuid,
-                )
-            } else {
-                api.userLibraryApi.unmarkFavoriteItem(
-                    userId = userId.toUUID(),
-                    itemId = uuid,
-                )
-            }
-            favoriteFlags.put(uuid.toString(), write.isFavorite)
-            UserDataWriteOutcome.Done
-        }
-    }
-
-    /**
-     * The home-layout DisplayPreferences slice. Transport: the SDK's
-     * DisplayPreferencesApi keyed by (displayPreferencesId, user, client) —
-     * the client value ("jellyplay") namespaces our store away from
-     * jellyfin-web's; the payload rides the DTO's CustomPrefs string map
-     * under the HomeLayoutSync keys. The write is a single POST with a fresh
-     * DTO: this wrapper owns the whole namespace, so replacing the custom
-     * prefs is safe — no foreign keys to preserve, and no stale key can
-     * outlive a layout delete.
-     */
-    override suspend fun readHomeLayoutDisplayPreferences(userId: String): Result<HomeLayoutServerState> =
-        engine.withApi { api ->
-            val dto = api.displayPreferencesApi.getDisplayPreferences(
-                displayPreferencesId = HOME_LAYOUT_DISPLAY_PREFERENCES_ID,
-                userId = userId.toUUID(),
-                client = HOME_LAYOUT_CLIENT,
-            ).content
-            // Missing keys decode to null state (never synced / partial
-            // store) — a value, not a failure; the caller's lenient decode
-            // treats absent as "nothing on server".
-            HomeLayoutServerState(
-                json = dto.customPrefs[HOME_LAYOUT_JSON_KEY],
-                schemaVersion = dto.customPrefs[HOME_LAYOUT_SCHEMA_VERSION_KEY]?.toIntOrNull(),
-                savedAtEpochMillis = dto.customPrefs[HOME_LAYOUT_SAVED_AT_KEY]?.toLongOrNull(),
-            )
-        }
-
-    override suspend fun writeHomeLayoutDisplayPreferences(userId: String, json: String, schemaVersion: Int): Result<Unit> =
-        engine.withApi { api ->
-            // savedAt stamps the write-time client clock (the DisplayPreferences
-            // DTO carries no server timestamp) — the manual sync dialog's
-            // newer-copy signal, not a clock-sync guarantee.
-            api.displayPreferencesApi.updateDisplayPreferences(
-                displayPreferencesId = HOME_LAYOUT_DISPLAY_PREFERENCES_ID,
-                userId = userId.toUUID(),
-                client = HOME_LAYOUT_CLIENT,
-                data = DisplayPreferencesDto(
-                    id = userId,
-                    viewType = null,
-                    sortBy = null,
-                    indexBy = null,
-                    rememberIndexing = false,
-                    primaryImageHeight = 0,
-                    primaryImageWidth = 0,
-                    customPrefs = mapOf(
-                        HOME_LAYOUT_JSON_KEY to json,
-                        HOME_LAYOUT_SCHEMA_VERSION_KEY to schemaVersion.toString(),
-                        HOME_LAYOUT_SAVED_AT_KEY to timeSource.nowEpochMillis().toString(),
-                    ),
-                    scrollDirection = ScrollDirection.HORIZONTAL,
-                    showBackdrop = false,
-                    rememberSorting = false,
-                    sortOrder = SortOrder.ASCENDING,
-                    showSidebar = false,
-                    client = HOME_LAYOUT_CLIENT,
-                ),
-            ).content
-            Unit
-        }
-
-    /**
-     * The shared commonMain favorite-flag cache-aside choreography
-     * ([FavoriteFlagCache]); this client supplies the atomic-session identity
-     * (see [currentHomeCacheIdentity]) and the SDK transport calls.
-     */
-    private val favoriteFlags = FavoriteFlagCache { currentHomeCacheIdentity() }
-
-    /**
-     * Delegates to core:model's [buildItemImageUrl] — the single owner of the
-     * item-image URL math (a byte-parity port of the SDK `imageApi` builder,
-     * pinned by ImageUrlBuilderTest); the SDK transport stays for the actual
-     * requests. One deliberate divergence from the former direct SDK call:
-     * the builder's [normalizeItemIdGuid] accepts the compact 32-hex item ids
-     * Jellyfin 10.11 emits (the `toUUID()` parse refused them), normalizing
-     * to the dashed form the server serves either way.
-     */
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
-        val api = engine.api ?: return ""
-        val imageTypeEnum = IMAGE_TYPES_BY_SERIAL_NAME[imageType.lowercase()]
-            ?: return ""
-        return buildItemImageUrl(
-            baseUrl = api.baseUrl,
-            itemId = itemId,
-            imageType = imageTypeEnum.serialName,
-            maxWidth = maxWidth,
-            tag = tag,
-            imageIndex = imageIndex,
-        )
-    }
-
-    override fun getBackdropImageUrl(itemId: String, maxWidth: Int, tag: String?): String =
-        getImageUrl(itemId, "Backdrop", maxWidth, null, tag)
-
-    override suspend fun getChildItemImageUrls(parentId: String, limit: Int): List<String> {
-        return try {
-            // Request shape + Primary-tag fold live in commonMain
-            // (ChildItemImageUrls.kt); this side keeps only the SDK transport
-            // and the image-URL seam.
-            val spec = buildChildItemImagesQuerySpec(parentId, limit)
-            val api = engine.requireApi()
-            val response = api.itemsApi.getItems(
-                parentId = spec.parentId?.toUUID(),
-                includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-                limit = spec.limit,
-                sortBy = spec.sortBy.toItemSortBys(),
-                sortOrder = spec.sortOrderDescending.toSortOrderList(),
-                fields = spec.fields.toItemFieldsList(),
-            ).content
-            response.items.map { item ->
-                ChildItemImageRow(
-                    id = item.id.toString(),
-                    hasPrimaryImage = item.imageTags?.containsKey(ImageType.PRIMARY) == true,
-                )
-            }.toChildItemImageUrls { itemId -> getImageUrl(itemId, "Primary", 200) }
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
+    // The oddball-trio carve is COMPLETE off this class: the user-data write
+    // funnel (+ its FavoriteFlagCache state) lives on [UserDataApiClientImpl],
+    // the home-layout DisplayPreferences pair on [HomeLayoutApiClientImpl],
+    // and the image-URL builders + the child-image row read on
+    // [ImageUrlApiClientImpl] — each its own adapter single over this class's
+    // SAME engine, its former forward(s) here deleted with its last
+    // consumer's rewire (PlayedStateSyncImpl writes through UserDataApiClient;
+    // MediaRepositoryImpl's photo-folder read rides ImageUrlApiClient).
+    // Nothing else on this class closed over them — pure relocation,
+    // byte-identical wire.
 }

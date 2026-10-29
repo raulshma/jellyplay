@@ -25,7 +25,17 @@ data class JellyPlayContractMismatch(
     val servedContractVersion: Int,
     val supportedRange: IntRange,
     val pluginVersion: String,
-)
+) {
+    /**
+     * The supported range's presentation fold: a single-version range renders
+     * as `1`, a real range as `1–2` (en-dash). The settings screen's error
+     * banner and the admin dashboard's one-line hint both consume this —
+     * a second hand-fold of it is a defect (the SeerrMediaKind precedent:
+     * derived presentation lives in core:model beside the type).
+     */
+    val supportedRangeLabel: String
+        get() = with(supportedRange) { if (first == last) "$first" else "$first–$last" }
+}
 
 /**
  * Stable feature keys reported by the plugin's capabilities handshake.

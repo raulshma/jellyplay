@@ -376,7 +376,7 @@ class DataKoinModulesTest {
 
             // ── Companion-plugin sync adapters ──────────────────
             // The nine ProfileSyncAdapter registrations multi-bind their
-            // commonMain interface (dataSessionPlaybackModule), and the sync
+            // commonMain interface (dataProfileSyncModule), and the sync
             // engine consumes them sorted by the engine's REGISTRATION_ORDER
             // (Koin's `getAll` on secondary binds returns them in
             // index-allocation order, not declaration order — the engine

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.ActiveSession
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.RetryPolicy
@@ -308,4 +309,17 @@ class JellyfinApiEngine(
             GeneralCommandType.TAKE_SCREENSHOT,
         )
     }
+}
+
+/**
+ * The current cache identity from ONE atomic session snapshot — never two
+ * separate StateFlow reads, which could observe a synthetic
+ * (newServer, oldUser) pair mid-switch. [CacheIdentity.UNKNOWN] before login
+ * never leaks into another user's entry: a wrong identity is a guaranteed
+ * miss. Internal, module-scoped: the library client's home caches and the
+ * user-data write family's favorite-flag cache both key off it.
+ */
+internal fun JellyfinApiEngine.currentCacheIdentity(): CacheIdentity {
+    val session = session.value
+    return CacheIdentity.ofOrNull(session?.server?.id, session?.user?.id)
 }

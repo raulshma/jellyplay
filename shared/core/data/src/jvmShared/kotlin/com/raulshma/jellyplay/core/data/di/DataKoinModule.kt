@@ -76,6 +76,7 @@ val dataJvmModule: Module = module {
         dataCoreLeafModule,
         dataRepositoriesModule,
         dataSessionPlaybackModule,
+        dataProfileSyncModule,
         dataMediaRepositoryModule,
         dataDownloadsConveyorModule,
         dataDownloadActionsModule,

@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +49,7 @@ import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.PlayerInputKey
 import com.raulshma.jellyplay.core.model.SwipeSide
 import com.raulshma.jellyplay.core.model.TouchZone
+import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.WheelAxis
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
@@ -64,6 +67,7 @@ import com.raulshma.jellyplay.feature.player.video.state.PlayerWheelPolicy
 import com.raulshma.jellyplay.feature.player.video.state.WheelRowDisposition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -866,4 +870,118 @@ internal fun PlayerGestureOverlayTier(
             }
         }
     }
+}
+
+/**
+ * The three trickplay thumbnail feeds' bitmaps, hoisted out of
+ * `VideoPlayerScreen` beside the gesture tier that drives one of them (the
+ * gestures-file grain): the seek-bar/D-pad scrub overlay bitmap, the TV
+ * mirror, and the gesture-swipe preview pair. The collectors and their
+ * bitmap-clear effects live in [rememberTrickplayFeeds]; the screen reads
+ * these through this holder.
+ */
+internal class TrickplayFeeds {
+    /** The seek-bar / D-pad scrub overlay bitmap (the filmstrip/preview source). */
+    var seekBitmap by mutableStateOf<PlatformBitmap?>(null)
+        internal set
+
+    /** The TV mirror of [seekBitmap] (TV renders no gesture overlay). */
+    var tvBitmap by mutableStateOf<PlatformBitmap?>(null)
+        internal set
+
+    /** The gesture-swipe preview bitmap (null when trickplay info is absent). */
+    var gestureBitmap by mutableStateOf<PlatformBitmap?>(null)
+        internal set
+
+    /** Whether the gesture preview overlay is visible. */
+    var gestureVisible by mutableStateOf(false)
+        internal set
+}
+
+/**
+ * The player's three trickplay thumbnail feeds hoisted out of
+ * `VideoPlayerScreen`: the seek-bar feed collector + its clear-on-end effect,
+ * the gesture-swipe feed collector + its 1 s grace clear, and the TV mirror
+ * write inside the seek feed's onFetch (TV renders no gesture overlay, so
+ * the seek-bar thumbnail IS its scrub preview). Every gate composition and
+ * the TV-mirror divergence live here; the screen registers nothing.
+ *
+ * The gate reads arrive as getter lambdas (the screen's reader-lambda rule):
+ * the collectors' `snapshotFlow` blocks invoke them per emission, so the
+ * snapshot tracking is byte-identical to the inline form the screen had.
+ * The clear effect re-keys on the live `isSeeking` read the same way the
+ * former inline `LaunchedEffect(isSeeking)` did.
+ */
+@Composable
+internal fun rememberTrickplayFeeds(
+    seekPositionMs: () -> Long,
+    isSeeking: () -> Boolean,
+    gestureController: GestureSeekController,
+    trickplayEnabled: () -> Boolean,
+    trickplayOnSeekGesture: () -> Boolean,
+    trickplayInfo: () -> TrickplayInfo?,
+    isTv: Boolean,
+    loadThumbnail: suspend (positionMs: Long) -> PlatformBitmap?,
+): TrickplayFeeds {
+    val feeds = remember { TrickplayFeeds() }
+    LaunchedEffect(Unit) {
+        // Seek-bar / D-pad scrub feed: the seek overlay bitmap plus the TV
+        // mirror (TV renders no gesture overlay, so the seek-bar thumbnail
+        // IS its scrub preview).
+        collectTrickplayThumbnails(
+            positionMs = seekPositionMs,
+            gate = { isSeeking() && trickplayEnabled() && trickplayInfo() != null },
+            trickplayInfo = trickplayInfo,
+            onFetch = { pos, _ ->
+                val bitmap = loadThumbnail(pos)
+                feeds.seekBitmap = bitmap
+                if (isTv) {
+                    feeds.tvBitmap = bitmap
+                }
+            },
+        )
+    }
+
+    LaunchedEffect(isSeeking()) {
+        if (!isSeeking()) {
+            feeds.seekBitmap = null
+            feeds.tvBitmap = null
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        // Gesture-swipe feed: unlike the seek feed, its gate does NOT include
+        // trickplayInfo != null — a null info with the gesture active still
+        // flips the overlay visible (with a null bitmap) so the swipe preview
+        // placeholder shows; the onFetch body encodes that divergence.
+        collectTrickplayThumbnails(
+            positionMs = { gestureController.seekPositionMs.value },
+            gate = { gestureController.isSeeking.value && trickplayOnSeekGesture() },
+            trickplayInfo = trickplayInfo,
+            onFetch = { pos, info ->
+                feeds.gestureVisible = true
+                feeds.gestureBitmap = if (info != null) {
+                    loadThumbnail(pos)
+                } else {
+                    null
+                }
+            },
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        // Flow-collected (not a composition key): keying the former
+        // LaunchedEffect on isGestureSeeking subscribed this scope to every
+        // drag's start/end flips. collectLatest keeps the former restart
+        // semantics — a new gesture starting inside the 1 s grace cancels
+        // the pending clear.
+        gestureController.isSeeking.collectLatest { seeking ->
+            if (!seeking && feeds.gestureVisible) {
+                delay(1000)
+                feeds.gestureVisible = false
+                feeds.gestureBitmap = null
+            }
+        }
+    }
+    return feeds
 }

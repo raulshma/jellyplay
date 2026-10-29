@@ -16,8 +16,11 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
     // the Koin container (androidCoreDataModule), which the app composition
     // root starts before super.onCreate(). Lazy keeps construction off the
     // service's critical path until a lifecycle callback actually needs them.
+    // The audio side is the [AudioServiceSurface] face (the Audio shell seam's
+    // role-split): the service reads only ensure/stop — the Koin alias binds
+    // the same manager single.
     private val sessionManager: PlaybackSessionManager by lazy { koin().get() }
-    private val audioPlaybackManager: AudioPlaybackManager by lazy { koin().get() }
+    private val audioServiceSurface: AudioServiceSurface by lazy { koin().get() }
 
     private var notificationProvider: JellyPlayNotificationProvider? = null
 
@@ -68,7 +71,7 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
         // video"). With a session already active the answer below is that
         // session, exactly what a connecting controller should get.
         if (sessionManager.currentSession == null) {
-            audioPlaybackManager.ensureAudioSession()
+            audioServiceSurface.ensureAudioSession()
         }
         return sessionManager.currentSession as? MediaLibrarySession
     }
@@ -89,7 +92,7 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
         // the player + wake lock so they don't leak via a lingering ongoing
         // notification. Mirrors Spotify/Apple/Google Music behaviour.
         if (!player.isPlaying) {
-            audioPlaybackManager.stopAndRelease()
+            audioServiceSurface.stopAndRelease()
             stopSelf()
             // Let Media3 run its task-removed bookkeeping (clearing the
             // media-button receiver / task description) before returning.
@@ -109,8 +112,8 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
             try { session.release() } catch (_: Exception) { }
         }
         // Release ExoPlayer, audio effects, and the audio MediaSession held by
-        // AudioPlaybackManager so they don't linger after the service is destroyed.
-        audioPlaybackManager.stopAndRelease()
+        // the audio manager so they don't linger after the service is destroyed.
+        audioServiceSurface.stopAndRelease()
         // Release our notification provider so its coroutine scope and cached
         // artwork bitmap are torn down cleanly.
         notificationProvider?.release()

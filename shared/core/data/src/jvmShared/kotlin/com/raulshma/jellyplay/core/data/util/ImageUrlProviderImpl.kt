@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.util
 
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.model.lruMapOf
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
 import java.util.Collections
 
 /**
@@ -16,10 +16,10 @@ import java.util.Collections
  *
  * Since the image/chapter-image/backdrop URL builders were retired off the
  * [com.raulshma.jellyplay.core.data.repository.PlaybackRepository] surface,
- * this class builds the URLs directly through [LibraryApiClient] — the same
- * client the playback repository delegated to, so the emitted strings are
- * unchanged (imageType "Primary"/"Logo"/"Chapter" + `maxWidth`, empty string
- * when no session).
+ * this class builds the URLs directly through [ImageUrlApiClient] — the
+ * item-image-URL family seam (the pure builders carved off the wide library
+ * client), so the emitted strings are unchanged (imageType
+ * "Primary"/"Logo"/"Chapter" + `maxWidth`, empty string when no session).
  *
  * Policy: image URLs are built per visible card per recomposition (poster
  * grids, CW rows, search results). Each build runs UUID parsing + string
@@ -50,7 +50,8 @@ import java.util.Collections
  * never cached, so a later login/server change can start producing URLs.
  */
 class ImageUrlProviderImpl(
-    private val libraryApiClient: LibraryApiClient,
+    /** The item-image-URL family seam (the pure builders carved off LibraryApiClient). */
+    private val imageApiClient: ImageUrlApiClient,
     private val appearanceStore: AppearanceStore,
 ) : ImageUrlProvider {
 
@@ -70,7 +71,7 @@ class ImageUrlProviderImpl(
         // like the full-screen photo viewer deliberately ask for the source
         // bitmap, and capping null to a fixed perf width silently broke that contract.
         if (maxWidth == null) {
-            return libraryApiClient.getImageUrl(itemId, maxWidth = null, tag = tag)
+            return imageApiClient.getImageUrl(itemId, imageType = "Primary", maxWidth = null, imageIndex = null, tag = tag)
         }
         // The default-width (UI card) request is the one path performance mode
         // clamps; explicit caller widths are honored verbatim (see the class
@@ -79,7 +80,7 @@ class ImageUrlProviderImpl(
         else maxWidth
         val key = "p_$itemId|$effectiveWidth|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getImageUrl(itemId, maxWidth = effectiveWidth, tag = tag)
+        val url = imageApiClient.getImageUrl(itemId, imageType = "Primary", maxWidth = effectiveWidth, imageIndex = null, tag = tag)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
@@ -87,7 +88,7 @@ class ImageUrlProviderImpl(
     override fun getBackdropUrl(itemId: String, maxWidth: Int, tag: String?): String {
         val key = "b_$itemId|$maxWidth|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getBackdropImageUrl(itemId, maxWidth = maxWidth, tag = tag)
+        val url = imageApiClient.getBackdropImageUrl(itemId, maxWidth = maxWidth, tag = tag)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
@@ -99,7 +100,7 @@ class ImageUrlProviderImpl(
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "l_$itemId|$effectiveWidth|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth, tag = tag)
+        val url = imageApiClient.getImageUrl(itemId, imageType = "Logo", maxWidth = effectiveWidth, imageIndex = null, tag = tag)
         if (url.isNotEmpty()) urlCache[key] = url
         return url
     }
@@ -111,7 +112,7 @@ class ImageUrlProviderImpl(
         else ImageUrlProvider.DEFAULT_MAX_WIDTH
         val key = "c_$itemId|$imageIndex|${tag ?: ""}"
         urlCache[key]?.let { return it }
-        val url = libraryApiClient.getImageUrl(
+        val url = imageApiClient.getImageUrl(
             itemId,
             imageType = "Chapter",
             maxWidth = effectiveWidth,

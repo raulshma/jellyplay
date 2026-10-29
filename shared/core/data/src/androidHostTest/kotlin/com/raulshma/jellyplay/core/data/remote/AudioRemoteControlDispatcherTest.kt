@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.remote
 
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioRemoteControlSurface
 import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -36,7 +36,7 @@ import org.junit.Test
 
 /**
  * Pins the [AudioRemoteControlDispatcher] routing invariant: playstate and
- * general commands drive the singleton [AudioPlaybackManager] on the main
+ * general commands drive the audio family's [AudioRemoteControlSurface] face on the main
  * thread (`withContext(Main.immediate)`), Stop is terminal
  * (`stopAndRelease` + [NavigationTarget.ClosePlayer]), and a fresh "Play"
  * opens the audio player: a single-item request plays that item directly,
@@ -51,7 +51,7 @@ class AudioRemoteControlDispatcherTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val audioPlaybackManager: AudioPlaybackManager = mockk(relaxed = true)
+    private val audioPlaybackManager: AudioRemoteControlSurface = mockk(relaxed = true)
     private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val bridge = RemoteNavigationBridge()
 

@@ -138,6 +138,42 @@ internal fun SettingsSearchItemGroup.asScreenGroup(
 )
 
 /**
+ * Attaches a group's hand-written body to a derivation-only slot from a
+ * screen's hoisted `XScreenSlots` declaration — the screen-side half of the
+ * ONE ordered declaration (ADR-0009 amendment). The declaration carries the
+ * group ids/order, the whole-group advanced gating and the content-count
+ * hook (and is what the contract test's section-7 pins consume); the screen
+ * maps each slot to its body inline at the call site, carrying the
+ * derivation members over verbatim — re-deriving them here is exactly the
+ * stale-replica drift the hoist exists to rule out.
+ */
+internal fun PreferenceScreenGroup.withContent(
+    content: @Composable (MutableState<PickerState<*>?>) -> Unit,
+): PreferenceScreenGroup = PreferenceScreenGroup(
+    idSet = idSet,
+    advancedOnly = advancedOnly,
+    emittedRows = emittedRows,
+    content = content,
+)
+
+/**
+ * Pairs a screen's ordered slot declaration with its ordered body list in ONE
+ * zip-style call — the whole-list counterpart of the single-slot
+ * [PreferenceScreenGroup.withContent]. Reordering a declaration used to
+ * silently re-pair the indexed `XScreenSlots[n].withContent { … }` bodies with
+ * the wrong derivation members; here the count `check` fails loudly on any
+ * length drift and the pairing is positional end-to-end, so a reordered
+ * declaration can only move its body with it. The bodies stay the screens'
+ * hand-written group bodies, in the same LazyColumn order they always passed.
+ */
+internal fun List<PreferenceScreenGroup>.withContent(
+    bodies: List<@Composable (MutableState<PickerState<*>?>) -> Unit>,
+): List<PreferenceScreenGroup> {
+    check(size == bodies.size) { "slot/body count mismatch: $size slots vs ${bodies.size} bodies" }
+    return mapIndexed { i, slot -> slot.withContent(bodies[i]) }
+}
+
+/**
  * The hidden-count derivation over a screen's [PreferenceScreenGroup]
  * declaration — the shell's [PreferenceHiddenHint] count: each slot's
  * [PreferenceScreenGroup.emittedRows] count under the advanced leg forced on

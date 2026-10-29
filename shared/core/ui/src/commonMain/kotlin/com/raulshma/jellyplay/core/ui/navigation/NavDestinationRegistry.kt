@@ -40,8 +40,11 @@ import com.composables.icons.tabler.outline.Users
  *
  * Per-shell DISPLAY policy stays out of the registry where it is genuinely
  * per-shell: which hidden/customization-filtered subset a shell actually
- * renders ([applyNavCustomization] over the shell's base set), the desktop
- * rail's own display order, and the phone overflow's membership. The
+ * renders ([applyNavCustomization] over the shell's base set) and the phone
+ * overflow's membership. The desktop rail's display order is the one
+ * per-shell ORDER policy that IS registry data — carried as
+ * [NavDestination.railOrder] so the rail derives its items instead of keeping
+ * a second hand list. The
  * registry owns the per-surface membership every shell agrees on: the
  * video/music bar/drawer membership + order, recorded as
  * [NavDestination.topLevelGroups] and derived into the video/music tables
@@ -91,6 +94,21 @@ data class NavDestination(
      * Home/Search/Shortcuts/MusicBrowse all keep offline paths.
      */
     val hiddenOffline: Boolean = false,
+    /**
+     * The desktop rail's 0-based display position — the recorded desktop
+     * ORDER policy carried as registry data. The rail's items now DERIVE from
+     * these rows (apps/desktop's DESKTOP_RAIL_ROUTES), so a destination joins
+     * or moves on the rail by editing its [railOrder], never a second hand
+     * list. `null` = not on the desktop rail at all. The rail order is
+     * deliberately NOT the registry's [NAV_DESTINATIONS] order (that is the
+     * customization-UI display order — e.g. Search before Library there but
+     * after it on the rail, Shortcuts parked after Arr Queue on the rail);
+     * the divergence is the recorded policy, pinned both by
+     * NavDestinationRegistryTest (presence ⇔ [NavPrimarySurface.DesktopRail]
+     * placement, dense positions) and apps/desktop's
+     * DesktopRailRegistryContractTest (the exact sequence).
+     */
+    val railOrder: Int? = null,
 )
 
 /** The rail's visual clusters — a spacer renders between consecutive groups. */
@@ -142,17 +160,24 @@ enum class TopLevelGroup { Video, Music }
  * derived from this registry, so the two cannot drift).
  */
 val NAV_DESTINATIONS: List<NavDestination> = listOf(
+    // railOrder = the recorded desktop rail display order (see the field's
+    // KDoc): Home, Search, Library, LiveTv, MusicBrowse, Downloads,
+    // Newsletter, Insights, SyncPlay, Requests, Calendar, Arr Queue,
+    // Shortcuts, Settings, Admin — deliberately not the registry order below.
     NavDestination(
         Route.Home, "Home", Tabler.Outline.Home, "Home", NavDestinationGroup.Browsing,
         topLevelGroups = mapOf(TopLevelGroup.Video to 0, TopLevelGroup.Music to 0),
+        railOrder = 0,
     ),
     NavDestination(
         Route.Library, "Library", Tabler.Outline.Library, "Library", NavDestinationGroup.Browsing,
         topLevelGroups = mapOf(TopLevelGroup.Video to 1),
+        railOrder = 2,
     ),
     NavDestination(
         Route.Search, "Search", Tabler.Outline.Search, "Search", NavDestinationGroup.Browsing,
         topLevelGroups = mapOf(TopLevelGroup.Video to 2, TopLevelGroup.Music to 2),
+        railOrder = 1,
     ),
     NavDestination(
         Route.LiveTv, "LiveTv", Tabler.Outline.DeviceTv, "Live TV", NavDestinationGroup.Browsing,
@@ -160,10 +185,12 @@ val NAV_DESTINATIONS: List<NavDestination> = listOf(
         // The one offline-hide deviation (see hiddenOffline): live streams are
         // always server-bound — no offline fallback to degrade to.
         hiddenOffline = true,
+        railOrder = 3,
     ),
     NavDestination(
         Route.MusicBrowse, "MusicBrowse", Tabler.Outline.Disc, "Music", NavDestinationGroup.Browsing,
         topLevelGroups = mapOf(TopLevelGroup.Music to 1),
+        railOrder = 4,
     ),
     NavDestination(
         Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, "Shortcuts", NavDestinationGroup.Tools,
@@ -171,16 +198,17 @@ val NAV_DESTINATIONS: List<NavDestination> = listOf(
         // phone-bar tab — the phone bar parks it in the ⋮ overflow — but
         // TV-drawer primary because that drawer has no overflow menu.
         primarySurfaces = setOf(NavPrimarySurface.TvDrawer, NavPrimarySurface.DesktopRail),
+        railOrder = 12,
     ),
-    NavDestination(Route.Downloads, "Downloads", Tabler.Outline.Download, "Downloads", NavDestinationGroup.Browsing),
-    NavDestination(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, "Newsletter", NavDestinationGroup.Browsing),
-    NavDestination(Route.WatchProgressHeatmap, "WatchProgressHeatmap", Tabler.Outline.Flame, "Insights", NavDestinationGroup.Browsing),
-    NavDestination(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, "SyncPlay", NavDestinationGroup.Browsing),
-    NavDestination(Route.Requests, "Requests", Tabler.Outline.Movie, "Requests", NavDestinationGroup.Tools),
-    NavDestination(Route.UpcomingCalendar, "UpcomingCalendar", Tabler.Outline.Calendar, "Calendar", NavDestinationGroup.Tools),
-    NavDestination(Route.ArrQueue, "ArrQueue", Tabler.Outline.Stack, "Arr Queue", NavDestinationGroup.Tools),
-    NavDestination(Route.Settings, "Settings", Tabler.Outline.Settings, "Settings", NavDestinationGroup.System),
-    NavDestination(Route.AdminDashboard, "AdminDashboard", Tabler.Outline.Shield, "Admin", NavDestinationGroup.System),
+    NavDestination(Route.Downloads, "Downloads", Tabler.Outline.Download, "Downloads", NavDestinationGroup.Browsing, railOrder = 5),
+    NavDestination(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, "Newsletter", NavDestinationGroup.Browsing, railOrder = 6),
+    NavDestination(Route.WatchProgressHeatmap, "WatchProgressHeatmap", Tabler.Outline.Flame, "Insights", NavDestinationGroup.Browsing, railOrder = 7),
+    NavDestination(Route.SyncPlay, "SyncPlay", Tabler.Outline.Users, "SyncPlay", NavDestinationGroup.Browsing, railOrder = 8),
+    NavDestination(Route.Requests, "Requests", Tabler.Outline.Movie, "Requests", NavDestinationGroup.Tools, railOrder = 9),
+    NavDestination(Route.UpcomingCalendar, "UpcomingCalendar", Tabler.Outline.Calendar, "Calendar", NavDestinationGroup.Tools, railOrder = 10),
+    NavDestination(Route.ArrQueue, "ArrQueue", Tabler.Outline.Stack, "Arr Queue", NavDestinationGroup.Tools, railOrder = 11),
+    NavDestination(Route.Settings, "Settings", Tabler.Outline.Settings, "Settings", NavDestinationGroup.System, railOrder = 13),
+    NavDestination(Route.AdminDashboard, "AdminDashboard", Tabler.Outline.Shield, "Admin", NavDestinationGroup.System, railOrder = 14),
 )
 
 /** Route → registry row; shells resolve their display order through this lookup. */

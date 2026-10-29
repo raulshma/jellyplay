@@ -144,6 +144,16 @@ class MpvPlayerEngine(
     private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
     private val nightMode = NightModeHelper()
 
+    // The engine-agnostic session-effect trio over the generated session id
+    // (attach/apply/release + the equalizer/dialogue-boost co-enabling
+    // call) — the same choreography AudioEffectChain composes on the Exo
+    // path; mpv's normalization and rumble-cut DSP stays in the af chain.
+    private val sessionTrio = AudioSessionEffectTrio(
+        equalizerHelper = equalizerHelper,
+        dialogueBoost = dialogueBoost,
+        nightMode = nightMode,
+    )
+
     // The Android [MpvBinding] over this view's mpv handle — the platform
     // seam of the shared [MpvCore] choreography (writes absorb this JNI
     // wrapper's throw-on-failure contract with the shipped log; commands
@@ -797,21 +807,11 @@ class MpvPlayerEngine(
     private fun applyAndroidAudioEffects() {
         val sid = audioSessionId
         if (sid == 0) return
-        val effects = currentConfig.audioEffects
-
-        // Dialogue Boost and the equalizer share one system Equalizer instance.
-        equalizerHelper.attach(sid)
-        equalizerHelper.setEnabled(
-            equalizerEnabled = effects.equalizerEnabled,
-            dialogueBoostEnabled = effects.dialogueBoostEnabled,
-        )
-        dialogueBoost.attach(sid)
-        dialogueBoost.setStrength(effects.dialogueBoostStrength)
-        dialogueBoost.setEnabled(effects.dialogueBoostEnabled)
-
-        nightMode.attach(sid)
-        nightMode.setStrength(effects.nightModeStrength)
-        nightMode.setEnabled(effects.nightModeEnabled)
+        // The shared [AudioSessionEffectTrio] owns the attach ladder and the
+        // equalizer/dialogue-boost co-enabling call — the former hand-copy
+        // of Exo's AudioEffectChain choreography is gone.
+        sessionTrio.attach(sid)
+        sessionTrio.apply(currentConfig.audioEffects)
     }
 
     override fun load(request: PlaybackRequest) {
@@ -876,9 +876,7 @@ class MpvPlayerEngine(
         // guaranteed to finish before this release() runs — the main looper
         // is single-threaded.
         core.cancelTrackRefresh()
-        dialogueBoost.detach()
-        equalizerHelper.detach()
-        nightMode.detach()
+        sessionTrio.release()
         // Stop the display-event refreshes: the probe's listener is held
         // strongly by DisplayManager, so it must not outlive the engine.
         displayHdrProbe.release()

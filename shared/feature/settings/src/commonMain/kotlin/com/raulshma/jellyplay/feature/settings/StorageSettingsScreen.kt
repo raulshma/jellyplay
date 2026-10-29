@@ -116,6 +116,21 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi_only_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.storage_sd_card
 
+/**
+ * The storage screen's ONE ordered group declaration — the derivation-only
+ * shape (group ids/order; every slot uses the default declared-admission
+ * count hook, the content slots stay empty) that BOTH the screen and the
+ * catalog contract test's section-7 pins consume, so a reordered or
+ * re-flagged group cannot strand a stale replica (the mirror-drift class
+ * ADR-0009's amendment closes). Per-group row emission stays hand-written:
+ * the screen maps each slot to its body inline.
+ */
+internal val StorageSettingsScreenSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.storageCache.asScreenGroup(),
+    SettingsScreenGroups.storageNetwork.asScreenGroup(),
+    SettingsScreenGroups.storageDownloads.asScreenGroup(),
+)
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StorageSettingsScreen(
@@ -138,12 +153,15 @@ fun StorageSettingsScreen(
     )
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
-    // The screen's ONE group declaration, in LazyColumn order — the shell
-    // derives the deep-link scroll resolution and the hidden-settings hint
-    // count from it. Slots stop at GROUP grain: the row emission inside each
-    // slot is the hand-written body, unchanged (ADR-0009).
-    val storageGroups = listOf(
-        SettingsScreenGroups.storageCache.asScreenGroup { activePicker ->
+    // The screen's group bodies mapped onto the ONE ordered declaration
+    // ([StorageSettingsScreenSlots], in LazyColumn order — the shell derives
+    // the deep-link scroll resolution and the hidden-settings hint count from
+    // it, and the contract test pins the same declaration). Slots stop at
+    // GROUP grain: the row emission inside each slot is the hand-written
+    // body, unchanged (ADR-0009).
+    val storageGroups = StorageSettingsScreenSlots.withContent(
+        bodies = listOf(
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Database,
                     title = stringResource(Res.string.settings_storage),
@@ -338,7 +356,7 @@ fun StorageSettingsScreen(
                     }
                 }
         },
-        SettingsScreenGroups.storageNetwork.asScreenGroup { activePicker ->
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Cloud,
                     title = stringResource(Res.string.settings_network_offline),
@@ -500,7 +518,7 @@ fun StorageSettingsScreen(
                     }
                 }
         },
-        SettingsScreenGroups.storageDownloads.asScreenGroup { activePicker ->
+        { activePicker ->
                 // Android 16 Live Updates opt-in (the download-progress
                 // notification's promoted rendering). Null below API 36 /
                 // on desktop — the row does not exist there.
@@ -877,7 +895,8 @@ fun StorageSettingsScreen(
                     }
                     }
                 }
-        }
+        },
+        ),
     )
 
     PreferenceScreenScaffold(

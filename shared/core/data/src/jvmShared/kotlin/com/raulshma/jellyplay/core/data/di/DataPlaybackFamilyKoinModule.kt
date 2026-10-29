@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.config.ClientCertificateManager
@@ -28,9 +28,9 @@ internal val dataPlaybackFamilyModule: Module = module {
         PlaybackRepositoryImpl(
             // Narrow family seams (the retired JellyfinApiClient union was a
             // pure delegation over these same impl singles): the impl
-            // only touches playback/library/auth/metadata.
+            // only touches playback/user-data-writes/auth/metadata.
             playbackApiClient = get<PlaybackApiClient>(),
-            libraryApiClient = get<LibraryApiClient>(),
+            userDataApiClient = get<UserDataApiClient>(),
             authApiClient = get<AuthApiClient>(),
             metadataApiClient = get<MetadataApiClient>(),
             outbox = get(),

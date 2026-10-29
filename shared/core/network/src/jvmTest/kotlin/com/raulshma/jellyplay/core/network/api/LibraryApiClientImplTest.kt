@@ -24,8 +24,9 @@ import kotlin.test.assertTrue
 
 /**
  * Covers the [LibraryApiClientImpl] behavior that needs a real engine: the
- * favorite-flag cache hand-off between [LibraryApiClientImpl.setFavorite] and
- * [LibraryApiClientImpl.toggleFavorite]. (The home-sections fetch
+ * favorite-flag cache hand-off — owned by [UserDataApiClientImpl] since the
+ * write funnel's carve, driven directly here over the SAME engine — plus the
+ * wide client's wire shapes. (The home-sections fetch
  * choreography and its TTL sub-call caches moved to the commonMain
  * `HomeSectionsFetcher` — pinned by `HomeSectionsFetcherTest` in commonTest.)
  *
@@ -42,6 +43,8 @@ import kotlin.test.assertTrue
 class LibraryApiClientImplTest {
 
     private lateinit var client: LibraryApiClientImpl
+    private lateinit var userDataClient: UserDataApiClientImpl
+    private lateinit var homeLayoutClient: HomeLayoutApiClientImpl
     private lateinit var playlistClient: PlaylistApiClientImpl
     private lateinit var collectionClient: CollectionApiClientImpl
     private lateinit var engine: JellyfinApiEngine
@@ -83,10 +86,18 @@ class LibraryApiClientImplTest {
         engine.updateUser(testUser)
 
         client = LibraryApiClientImpl(engine, mockk(relaxed = true), SystemTimeSource())
+        // The user-data write funnel rides its own adapter over the SAME
+        // engine — the shape the Koin graph builds in production (the
+        // favorite-flag cache lives HERE, not on the wide client anymore).
+        userDataClient = UserDataApiClientImpl(
+            engine = engine,
+            cacheIdentity = { engine.currentCacheIdentity() },
+        )
         // The moved families ride their own adapters over the SAME engine —
         // the shape the Koin graph builds in production.
         playlistClient = PlaylistApiClientImpl(engine)
         collectionClient = CollectionApiClientImpl(engine)
+        homeLayoutClient = HomeLayoutApiClientImpl(engine, SystemTimeSource())
     }
 
     private val favoriteItemId = FAVORITE_ITEM_ID
@@ -157,8 +168,8 @@ class LibraryApiClientImplTest {
         val api = RecordingApiClient()
         engine.updateApi(api)
 
-        client.writeUserData(UserDataWrite.SetFavorite(favoriteItemId, isFavorite = true)).getOrThrow()
-        val toggled = client.writeUserData(UserDataWrite.ToggleFavorite(favoriteItemId)).getOrThrow()
+        userDataClient.writeUserData(UserDataWrite.SetFavorite(favoriteItemId, isFavorite = true)).getOrThrow()
+        val toggled = userDataClient.writeUserData(UserDataWrite.ToggleFavorite(favoriteItemId)).getOrThrow()
 
         assertFalse((toggled as UserDataWriteOutcome.FavoriteNow).isFavorite)
         // Seed-POST then the toggle's unmark-DELETE — and crucially no GET:
@@ -583,7 +594,7 @@ class LibraryApiClientImplTest {
         )
         engine.updateApi(api)
 
-        val state = client.readHomeLayoutDisplayPreferences(testUser.id).getOrThrow()
+        val state = homeLayoutClient.readHomeLayoutDisplayPreferences(testUser.id).getOrThrow()
 
         assertEquals("""{"sections":["latest","next_up"]}""", state.json)
         assertEquals(3, state.schemaVersion)
@@ -611,7 +622,7 @@ class LibraryApiClientImplTest {
         )
         engine.updateApi(api)
 
-        val state = client.readHomeLayoutDisplayPreferences(testUser.id).getOrThrow()
+        val state = homeLayoutClient.readHomeLayoutDisplayPreferences(testUser.id).getOrThrow()
 
         assertNull(state.json)
         assertNull(state.schemaVersion)
@@ -626,7 +637,7 @@ class LibraryApiClientImplTest {
         )
         engine.updateApi(api)
 
-        client.writeHomeLayoutDisplayPreferences(
+        homeLayoutClient.writeHomeLayoutDisplayPreferences(
             userId = testUser.id,
             json = """{"sections":[]}""",
             schemaVersion = 3,
