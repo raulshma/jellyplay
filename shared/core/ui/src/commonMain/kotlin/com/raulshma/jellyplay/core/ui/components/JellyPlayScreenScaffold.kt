@@ -195,7 +195,7 @@ fun JellyPlayScreenScaffold(
                 if (topBarStyle == TopBarStyle.Collapsing) {
                     MediumTopAppBar(
                         title = {
-                            ScreenTitle(text = title)
+                            ScreenTitle(text = title, isCollapsing = true)
                         },
                         navigationIcon = {
                             if (onBack != null) {
@@ -209,7 +209,7 @@ fun JellyPlayScreenScaffold(
                 } else {
                     TopAppBar(
                         title = {
-                            ScreenTitle(text = title)
+                            ScreenTitle(text = title, isCollapsing = false)
                         },
                         navigationIcon = {
                             if (onBack != null) {
@@ -229,10 +229,10 @@ fun JellyPlayScreenScaffold(
 }
 
 @Composable
-private fun ScreenTitle(text: String) {
+private fun ScreenTitle(text: String, isCollapsing: Boolean = false) {
     Text(
         text = text,
-        style = MaterialTheme.typography.headlineLarge.copy(
+        style = (if (isCollapsing) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge).copy(
             fontWeight = FontWeight.Bold,
         ),
         color = MaterialTheme.colorScheme.onSurface,

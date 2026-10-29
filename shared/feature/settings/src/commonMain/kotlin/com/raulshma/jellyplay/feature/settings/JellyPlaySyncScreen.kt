@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,11 +15,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,15 +35,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AdjustmentsHorizontal
 import com.composables.icons.tabler.outline.AlertTriangle
+import com.composables.icons.tabler.outline.Apps
 import com.composables.icons.tabler.outline.ArrowDown
 import com.composables.icons.tabler.outline.ArrowUp
 import com.composables.icons.tabler.outline.Ban
+import com.composables.icons.tabler.outline.Book
+import com.composables.icons.tabler.outline.Book2
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.CloudDownload
 import com.composables.icons.tabler.outline.Database
@@ -48,7 +58,13 @@ import com.composables.icons.tabler.outline.DeviceFloppy
 import com.composables.icons.tabler.outline.Devices
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.History
+import com.composables.icons.tabler.outline.LayoutGrid
+import com.composables.icons.tabler.outline.Movie
+import com.composables.icons.tabler.outline.Palette
+import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.Upload
@@ -76,85 +92,7 @@ import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.datetime.toKotlinLocalDate
 import kotlinx.datetime.toKotlinLocalTime
-import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_action_failed
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_actions_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_activity_unavailable
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_admin_section
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_admin_user_usage
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_deleted_value
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_keep_mine
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_ours
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_row
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_take_theirs
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_theirs
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflicts_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_last_sync
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_rename_confirm
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_rename_label
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_rename_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_revoke_confirm_message
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_revoke_confirm_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_revoke_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_revoke_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_device_revoked
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_devices_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_error_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_export_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_export_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_failed
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_force_repull_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_force_repull_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_empty
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_entry
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_keys_empty
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_keys_loading
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_retention
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_rejects
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_import_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_import_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_in_flight
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_last_sync
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_ns_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_ns_toggle_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_pull
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_push
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_reset
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_unknown
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_pending
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_profile_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_profile_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_quota_bytes
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_quota_keys
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_relative_days
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_relative_hours
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_relative_minutes
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_relative_now
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_reset_confirm_message
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_reset_confirm_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_reset_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_reset_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshot_entry
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_create_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_create_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_empty
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_tab_activity
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_tab_backup
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_tab_status
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_this_device
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_usage_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_usage_unavailable
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_across_devices
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_never
-import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_safety_snapshot_failed
-import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_snapshot_preview_short
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_now
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.*
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -290,113 +228,142 @@ fun JellyPlaySyncScreen(
                 } else {
                     val namespaceRows = uiState.namespaceRows.filter { it.toggleable }
                     items(namespaceRows, key = { "ns_${it.ns}" }, contentType = { "namespaceToggle" }) { namespace ->
+                        val presentation = syncNamespacePresentation(namespace.ns)
                         SettingToggleItem(
-                            icon = Tabler.Outline.Database,
-                            title = namespace.ns,
-                            subtitle = namespaceSubtitle(namespace),
+                            icon = presentation.icon,
+                            title = presentation.title,
+                            subtitle = namespaceSubtitle(namespace, presentation.description, syncState.enabled),
                             checked = namespace.enabled,
+                            enabled = syncState.enabled,
                             onCheckedChange = { enabled -> viewModel.setNamespaceEnabled(namespace.ns, enabled) },
                         )
                     }
                 }
             }
         } else {
-            // Non-TV: the master switch + the manual cycle + the error face
-            // pinned above the tab row (visible from every tab), the content
-            // split across tabs. Each tab keeps its own hoisted scroll state,
-            // so switching back restores the position.
+            // Non-TV: compact pinned master controls and surface-backed tab row;
+            // content sits inside a bounded weighted box with independent scroll states.
             var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
             val tab = JellyPlaySyncTab.entries.getOrElse(selectedTabIndex) { JellyPlaySyncTab.Status }
             val statusListState = rememberLazyListState()
             val devicesListState = rememberLazyListState()
             val activityListState = rememberLazyListState()
             val backupListState = rememberLazyListState()
+            val bottomPadding = contentPadding.calculateBottomPadding() + 96.dp
             Column(
-                modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding() + 8.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = contentPadding.calculateTopPadding()),
             ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SettingsItemList(total = rowTotalFor(JellyPlaySyncGroup, RowAdmissionFlags())) {
-                        SettingToggleItem(
-                            icon = Tabler.Outline.Devices,
-                            title = stringResource(Res.string.settings_sync_across_devices),
-                            subtitle = stringResource(Res.string.ss_jellyplay_sync_enabled_subtitle),
-                            checked = syncState.enabled,
-                            onCheckedChange = { enabled -> viewModel.setSyncEnabled(enabled) },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.Refresh,
-                            title = stringResource(Res.string.settings_sync_now),
-                            subtitle = syncNowSubtitle(syncState, uiState.thisDeviceId, uiState.status),
-                            onClick = { viewModel.syncNow() },
-                        )
-                    }
-                    // The error banner: the engine's failure face (fatal
-                    // rejects, transport errors) beside the snapshot/export/
-                    // import action failures — one banner, never two, visible
-                    // regardless of the active tab.
-                    if (syncState.lastError != null || uiState.actionError) {
-                        ErrorBanner(text = syncState.lastError)
-                    }
-                }
-                PrimaryTabRow(selectedTabIndex = tab.ordinal) {
-                    JellyPlaySyncTab.entries.forEach { entry ->
-                        Tab(
-                            selected = tab == entry,
-                            onClick = { selectedTabIndex = entry.ordinal },
-                            text = { Text(stringResource(entry.labelRes)) },
-                        )
-                    }
-                }
-                when (tab) {
-                    JellyPlaySyncTab.Status -> SyncStatusTabContent(
-                        uiState = uiState,
-                        listState = statusListState,
-                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
-                        onNamespaceEnabled = { ns, enabled -> viewModel.setNamespaceEnabled(ns, enabled) },
-                    )
-                    JellyPlaySyncTab.Devices -> SyncDevicesTabContent(
-                        uiState = uiState,
-                        deviceProfile = viewModel.deviceProfile,
-                        listState = devicesListState,
-                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
-                        onRenameThisDevice = { name ->
-                            renameText = name
-                            showRenameDialog = true
-                        },
-                        onRevokeDevice = { deviceId ->
-                            revokeConfirm.request { viewModel.revokeDevice(deviceId) }
-                        },
-                    )
-                    JellyPlaySyncTab.Activity -> SyncActivityTabContent(
-                        uiState = uiState,
-                        conflicts = syncState.conflicts,
-                        expandedConflictKey = expandedConflictKey,
-                        listState = activityListState,
-                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
-                        onConflictToggle = { key ->
-                            expandedConflictKey = if (expandedConflictKey == key) null else key
-                        },
-                        onKeepMine = { ns, key -> viewModel.resolveConflictKeepMine(ns, key) },
-                        onTakeTheirs = { ns, key -> viewModel.resolveConflictTakeTheirs(ns, key) },
-                        onToggleHistory = { seq -> viewModel.toggleHistoryEntryExpanded(seq) },
-                    )
-                    JellyPlaySyncTab.Backup -> SyncBackupTabContent(
-                        uiState = uiState,
-                        listState = backupListState,
-                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
-                        onCreateSnapshot = { if (!uiState.actionInFlight) viewModel.createSnapshot() },
-                        onRestoreSnapshot = onRestoreSnapshot,
-                        onResetNamespace = { resetConfirm.request { viewModel.resetNamespace() } },
-                        onForceRepull = { viewModel.forceRepull() },
-                        onExport = {
-                            if (!uiState.actionInFlight) {
-                                viewModel.exportSettings { json ->
-                                    platformIntents.shareJson(exportSubject, exportChooser, json)
-                                }
+                Surface(
+                    color = backgroundColorState.value,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        ) {
+                            SettingsItemList(total = rowTotalFor(JellyPlaySyncGroup, RowAdmissionFlags())) {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Devices,
+                                    title = stringResource(Res.string.settings_sync_across_devices),
+                                    subtitle = if (syncState.enabled) {
+                                        stringResource(Res.string.settings_jellyplay_sync_on)
+                                    } else {
+                                        stringResource(Res.string.settings_jellyplay_sync_off)
+                                    },
+                                    checked = syncState.enabled,
+                                    onCheckedChange = { enabled -> viewModel.setSyncEnabled(enabled) },
+                                )
+                                SettingListItem(
+                                    icon = Tabler.Outline.Refresh,
+                                    title = stringResource(Res.string.settings_sync_now),
+                                    subtitle = syncNowSubtitle(syncState, uiState.thisDeviceId, uiState.status),
+                                    onClick = { viewModel.syncNow() },
+                                )
                             }
-                        },
-                        onRestoreWizard = onRestoreWizard,
-                    )
+                            if (syncState.lastError != null || uiState.actionError) {
+                                ErrorBanner(text = syncState.lastError)
+                            }
+                        }
+                        TabRow(
+                            selectedTabIndex = tab.ordinal,
+                            containerColor = backgroundColorState.value,
+                            divider = {},
+                        ) {
+                            JellyPlaySyncTab.entries.forEach { entry ->
+                                Tab(
+                                    selected = tab == entry,
+                                    onClick = { selectedTabIndex = entry.ordinal },
+                                    text = {
+                                        Text(
+                                            text = stringResource(entry.labelRes),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = if (tab == entry) FontWeight.SemiBold else FontWeight.Normal,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    when (tab) {
+                        JellyPlaySyncTab.Status -> SyncStatusTabContent(
+                            uiState = uiState,
+                            syncEnabled = syncState.enabled,
+                            listState = statusListState,
+                            bottomPadding = bottomPadding,
+                            onNamespaceEnabled = { ns, enabled -> viewModel.setNamespaceEnabled(ns, enabled) },
+                        )
+                        JellyPlaySyncTab.Devices -> SyncDevicesTabContent(
+                            uiState = uiState,
+                            deviceProfile = viewModel.deviceProfile,
+                            listState = devicesListState,
+                            bottomPadding = bottomPadding,
+                            onRenameThisDevice = { name ->
+                                renameText = name
+                                showRenameDialog = true
+                            },
+                            onRevokeDevice = { deviceId ->
+                                revokeConfirm.request { viewModel.revokeDevice(deviceId) }
+                            },
+                        )
+                        JellyPlaySyncTab.Activity -> SyncActivityTabContent(
+                            uiState = uiState,
+                            conflicts = syncState.conflicts,
+                            expandedConflictKey = expandedConflictKey,
+                            listState = activityListState,
+                            bottomPadding = bottomPadding,
+                            onConflictToggle = { key ->
+                                expandedConflictKey = if (expandedConflictKey == key) null else key
+                            },
+                            onKeepMine = { ns, key -> viewModel.resolveConflictKeepMine(ns, key) },
+                            onTakeTheirs = { ns, key -> viewModel.resolveConflictTakeTheirs(ns, key) },
+                            onToggleHistory = { seq -> viewModel.toggleHistoryEntryExpanded(seq) },
+                        )
+                        JellyPlaySyncTab.Backup -> SyncBackupTabContent(
+                            uiState = uiState,
+                            listState = backupListState,
+                            bottomPadding = bottomPadding,
+                            onCreateSnapshot = { if (!uiState.actionInFlight) viewModel.createSnapshot() },
+                            onRestoreSnapshot = onRestoreSnapshot,
+                            onResetNamespace = { resetConfirm.request { viewModel.resetNamespace() } },
+                            onForceRepull = { viewModel.forceRepull() },
+                            onExport = {
+                                if (!uiState.actionInFlight) {
+                                    viewModel.exportSettings { json ->
+                                        platformIntents.shareJson(exportSubject, exportChooser, json)
+                                    }
+                                }
+                            },
+                            onRestoreWizard = onRestoreWizard,
+                        )
+                    }
                 }
             }
         }
@@ -436,6 +403,7 @@ fun JellyPlaySyncScreen(
 @Composable
 private fun SyncStatusTabContent(
     uiState: JellyPlaySyncUiState,
+    syncEnabled: Boolean,
     listState: LazyListState,
     bottomPadding: Dp,
     onNamespaceEnabled: (ns: String, enabled: Boolean) -> Unit,
@@ -446,14 +414,14 @@ private fun SyncStatusTabContent(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 8.dp,
+            top = 12.dp,
             bottom = bottomPadding,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "usage_label") { SectionLabel(
                 stringResource(Res.string.settings_jellyplay_sync_usage_title),
-                Modifier.padding(top = 8.dp, start = 4.dp),
+                Modifier.padding(top = 4.dp, start = 4.dp),
             ) }
         val status = uiState.status
         if (status == null) {
@@ -466,19 +434,21 @@ private fun SyncStatusTabContent(
             items(uiState.namespaceRows, key = { "ns_${it.ns}" }, contentType = { row ->
                 if (row.toggleable) "namespaceToggle" else "namespaceInfo"
             }) { namespace ->
+                val presentation = syncNamespacePresentation(namespace.ns)
                 if (namespace.toggleable) {
                     SettingToggleItem(
-                        icon = Tabler.Outline.Database,
-                        title = namespace.ns,
-                        subtitle = namespaceSubtitle(namespace),
+                        icon = presentation.icon,
+                        title = presentation.title,
+                        subtitle = namespaceSubtitle(namespace, presentation.description, syncEnabled),
                         checked = namespace.enabled,
+                        enabled = syncEnabled,
                         onCheckedChange = { enabled -> onNamespaceEnabled(namespace.ns, enabled) },
                     )
                 } else {
                     SettingInfoItem(
-                        icon = Tabler.Outline.Database,
-                        title = namespace.ns,
-                        subtitle = namespaceSubtitle(namespace),
+                        icon = presentation.icon,
+                        title = presentation.title,
+                        subtitle = namespaceSubtitle(namespace, presentation.description, syncEnabled),
                     )
                 }
             }
@@ -489,15 +459,15 @@ private fun SyncStatusTabContent(
                     Modifier.padding(top = 8.dp, start = 4.dp),
                 ) }
                 items(adminUsers, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
+                    val formattedUsage = if (user.keys == 1) {
+                        stringResource(Res.string.settings_jellyplay_sync_key_singular, user.keys, user.bytes.formatBytes())
+                    } else {
+                        stringResource(Res.string.settings_jellyplay_sync_keys_plural, user.keys, user.bytes.formatBytes())
+                    }
                     SettingInfoItem(
                         icon = Tabler.Outline.Users,
                         title = user.userName.ifBlank { user.userId },
-                        subtitle = stringResource(
-                            Res.string.settings_jellyplay_sync_admin_user_usage,
-                            user.keys,
-                            user.bytes.formatBytes(),
-                            user.deviceCount,
-                        ),
+                        subtitle = "$formattedUsage • ${user.deviceCount} devices",
                     )
                 }
             }
@@ -526,7 +496,7 @@ private fun SyncDevicesTabContent(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 8.dp,
+            top = 12.dp,
             bottom = bottomPadding,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -591,7 +561,7 @@ private fun SyncActivityTabContent(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 8.dp,
+            top = 12.dp,
             bottom = bottomPadding,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -599,7 +569,7 @@ private fun SyncActivityTabContent(
         if (conflicts.isNotEmpty()) {
             item(key = "conflicts_label") { SectionLabel(
                 stringResource(Res.string.settings_jellyplay_sync_conflicts_title),
-                Modifier.padding(top = 8.dp, start = 4.dp),
+                Modifier.padding(top = 4.dp, start = 4.dp),
             ) }
             items(conflicts, key = { "conflict_${it.ns}/${it.key}" }, contentType = { "conflictRow" }) { conflict ->
                 val key = "${conflict.ns}/${conflict.key}"
@@ -622,7 +592,7 @@ private fun SyncActivityTabContent(
         if (status != null) {
             item(key = "history_label") { SectionLabel(
                 stringResource(Res.string.settings_jellyplay_sync_history_title),
-                Modifier.padding(top = 8.dp, start = 4.dp),
+                Modifier.padding(top = 4.dp, start = 4.dp),
             ) }
             if (uiState.history.isEmpty()) {
                 item(key = "history_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_history_empty)) }
@@ -675,7 +645,7 @@ private fun SyncBackupTabContent(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 8.dp,
+            top = 12.dp,
             bottom = bottomPadding,
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -684,7 +654,7 @@ private fun SyncBackupTabContent(
         if (snapshots != null) {
             item(key = "snapshots_label") { SectionLabel(
                 stringResource(Res.string.settings_jellyplay_sync_snapshots_title),
-                Modifier.padding(top = 8.dp, start = 4.dp),
+                Modifier.padding(top = 4.dp, start = 4.dp),
             ) }
             item(key = "snapshot_create") {
                 SettingListItem(
@@ -698,16 +668,22 @@ private fun SyncBackupTabContent(
                 item(key = "snapshots_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_snapshots_empty)) }
             } else {
                 items(snapshots, key = { "snapshot_${it.id}" }, contentType = { "snapshotRow" }) { snapshot ->
+                    val originDisplay = when (snapshot.origin.lowercase()) {
+                        "manual" -> stringResource(Res.string.settings_jellyplay_sync_origin_manual)
+                        "safety" -> stringResource(Res.string.settings_jellyplay_sync_origin_safety)
+                        "auto" -> stringResource(Res.string.settings_jellyplay_sync_origin_auto)
+                        else -> snapshot.origin.ifBlank { stringResource(Res.string.settings_jellyplay_sync_op_unknown) }
+                    }
+                    val formattedKeys = if (snapshot.keys == 1) {
+                        stringResource(Res.string.settings_jellyplay_sync_key_singular, snapshot.keys, snapshot.bytes.formatBytes())
+                    } else {
+                        stringResource(Res.string.settings_jellyplay_sync_keys_plural, snapshot.keys, snapshot.bytes.formatBytes())
+                    }
                     SettingListItem(
                         icon = Tabler.Outline.Clock,
-                        title = stringResource(
-                            Res.string.settings_jellyplay_sync_snapshot_entry,
-                            snapshot.origin.ifBlank { stringResource(Res.string.settings_jellyplay_sync_op_unknown) },
-                            snapshot.keys,
-                            snapshot.bytes.formatBytes(),
-                        ),
-                        subtitle = formatSyncTimestamp(snapshot.createdAt),
-                        trailingText = stringResource(Res.string.wizard_snapshot_preview_short),
+                        title = formatSyncTimestamp(snapshot.createdAt),
+                        subtitle = "$originDisplay • $formattedKeys",
+                        trailingText = null,
                         onClick = { onRestoreSnapshot(snapshot.id.toString()) },
                     )
                 }
@@ -777,23 +753,100 @@ private fun syncNowSubtitle(
     }
 }
 
-/** One namespace row's factual line: usage (when the server reported it), pending, or the sync-off note. */
+private data class SyncNamespacePresentation(
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+)
+
 @Composable
-private fun namespaceSubtitle(namespace: JellyPlaySyncNamespaceRow): String {
-    val usage = stringResource(
-        Res.string.settings_jellyplay_sync_ns_toggle_subtitle,
-        namespace.ns,
-        namespace.keys,
-        namespace.bytes.formatBytes(),
-    )
+private fun syncNamespacePresentation(ns: String): SyncNamespacePresentation {
+    return when (ns.lowercase()) {
+        "prefs" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_prefs_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_prefs_desc),
+            icon = Tabler.Outline.AdjustmentsHorizontal,
+        )
+        "books" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_books_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_books_desc),
+            icon = Tabler.Outline.Book,
+        )
+        "search" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_search_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_search_desc),
+            icon = Tabler.Outline.Search,
+        )
+        "cw" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_cw_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_cw_desc),
+            icon = Tabler.Outline.PlayerPlay,
+        )
+        "reader" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_reader_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_reader_desc),
+            icon = Tabler.Outline.Book2,
+        )
+        "homelayout" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_homelayout_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_homelayout_desc),
+            icon = Tabler.Outline.LayoutGrid,
+        )
+        "integrations" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_integrations_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_integrations_desc),
+            icon = Tabler.Outline.Apps,
+        )
+        "itemprefs" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_itemprefs_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_itemprefs_desc),
+            icon = Tabler.Outline.Movie,
+        )
+        "playlists" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_playlists_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_playlists_desc),
+            icon = Tabler.Outline.Playlist,
+        )
+        "ui" -> SyncNamespacePresentation(
+            title = stringResource(Res.string.settings_jellyplay_sync_ns_ui_title),
+            description = stringResource(Res.string.settings_jellyplay_sync_ns_ui_desc),
+            icon = Tabler.Outline.Palette,
+        )
+        else -> SyncNamespacePresentation(
+            title = ns.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+            description = "",
+            icon = Tabler.Outline.Database,
+        )
+    }
+}
+
+/** One namespace row's factual line: description, usage with pluralization, or sync-off note. */
+@Composable
+private fun namespaceSubtitle(
+    namespace: JellyPlaySyncNamespaceRow,
+    description: String,
+    masterSyncEnabled: Boolean,
+): String {
+    val formattedUsage = if (namespace.keys == 1) {
+        stringResource(Res.string.settings_jellyplay_sync_key_singular, namespace.keys, namespace.bytes.formatBytes())
+    } else {
+        stringResource(Res.string.settings_jellyplay_sync_keys_plural, namespace.keys, namespace.bytes.formatBytes())
+    }
     return buildList {
-        if (namespace.toggleable && !namespace.enabled) {
+        if (!masterSyncEnabled) {
+            add(stringResource(Res.string.settings_jellyplay_sync_master_off_hint))
+        } else if (namespace.toggleable && !namespace.enabled) {
             add(stringResource(Res.string.settings_jellyplay_sync_ns_off))
         }
-        if (namespace.pending > 0) {
+        if (namespace.pending > 0 && masterSyncEnabled) {
             add(stringResource(Res.string.settings_jellyplay_sync_pending, namespace.pending))
         }
-        if (namespace.enabled) add(usage)
+        if (description.isNotBlank()) {
+            add(description)
+        }
+        if (namespace.keys > 0 || namespace.bytes > 0) {
+            add(formattedUsage)
+        }
     }.joinToString(" • ")
 }
 
@@ -943,9 +996,14 @@ private fun QuotaBar(label: String, ratio: Float) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(4.dp))
-        JellyPlayLinearProgressIndicator(
+        LinearProgressIndicator(
             progress = { ratio },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
     }
 }
