@@ -306,53 +306,65 @@ internal fun PhoneContent(
     // The customized overflow entries: resolved shortcuts folded with this
     // scope's click wiring + the shared decoration fold (OverflowShortcutDecoration
     // — the offline icon/label/progress trio, downloads badge, highlight and
-    // menu-dismiss policy). Built per composition on purpose — the menu is
-    // only composed while open, and the closures need this scope's live state
-    // (navigator, sheet toggles). The action EXECUTION is the shell's
-    // ShortcutActionSurface (shellHost.home.shortcutActions) — the same
-    // dispatcher the header dock uses; the only per-action nuance left here is
-    // the going-online re-tap guard, which reads presentation state this scope
-    // owns.
+    // menu-dismiss policy). Remembered on every captured input — the build-site
+    // half of the @Immutable OverflowMenuItem convention (the ShellNavParams
+    // idiom): without it the list identity changed on every PhoneContent
+    // recomposition (audio ticks, nav color) and re-executed every pill entry.
+    // The closures stay live between rebuilds: isOverflowExpanded is captured
+    // through its delegate, and navigator/shortcutActions are identity-stable.
+    // The action EXECUTION is the shell's ShortcutActionSurface
+    // (shellHost.home.shortcutActions) — the same dispatcher the header dock
+    // uses; the only per-action nuance left here is the going-online re-tap
+    // guard, which reads presentation state this scope owns.
     val isOfflineActive = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
     val shortcutActions = shellParams.shellHost.home.shortcutActions
-    val overflowEntries = overflowShortcuts.map { shortcut ->
-        val closeMenu = { isOverflowExpanded = false }
-        val decoration = overflowShortcutDecoration(
-            target = shortcut.target,
-            isOfflineActive = isOfflineActive,
-            isGoingOnline = isGoingOnline,
-            downloadCount = downloadCount,
-        )
-        com.raulshma.jellyplay.navigation.components.OverflowMenuItem(
-            key = shortcut.id,
-            shortcut = shortcut,
-            onClick = {
-                if (decoration.closesMenu) closeMenu()
-                when (val target = shortcut.target) {
-                    is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen ->
-                        navigator.navigate(target.route)
-                    is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action -> {
-                        // Guard re-taps while the offline→online transition is
-                        // in flight (the spinner pill is already up — a second
-                        // tap would flip the direction mid-flight).
-                        if (target.action != com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE ||
-                            !isGoingOnline
-                        ) {
-                            shortcutActions.execute(target.action)
+    val overflowEntries = remember(
+        overflowShortcuts,
+        isOfflineActive,
+        isGoingOnline,
+        downloadCount,
+        navigator,
+        shortcutActions,
+    ) {
+        overflowShortcuts.map { shortcut ->
+            val closeMenu = { isOverflowExpanded = false }
+            val decoration = overflowShortcutDecoration(
+                target = shortcut.target,
+                isOfflineActive = isOfflineActive,
+                isGoingOnline = isGoingOnline,
+                downloadCount = downloadCount,
+            )
+            com.raulshma.jellyplay.navigation.components.OverflowMenuItem(
+                key = shortcut.id,
+                shortcut = shortcut,
+                onClick = {
+                    if (decoration.closesMenu) closeMenu()
+                    when (val target = shortcut.target) {
+                        is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen ->
+                            navigator.navigate(target.route)
+                        is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action -> {
+                            // Guard re-taps while the offline→online transition is
+                            // in flight (the spinner pill is already up — a second
+                            // tap would flip the direction mid-flight).
+                            if (target.action != com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE ||
+                                !isGoingOnline
+                            ) {
+                                shortcutActions.execute(target.action)
+                            }
                         }
                     }
-                }
-            },
-            iconOverride = when (decoration.iconSlot) {
-                OverflowOfflineIcon.Wifi -> Tabler.Outline.Wifi
-                OverflowOfflineIcon.WifiOff -> Tabler.Outline.WifiOff
-                null -> null
-            },
-            labelOverrideRes = decoration.labelOverrideRes,
-            badgeCount = decoration.badgeCount,
-            isHighlighted = decoration.isHighlighted,
-            isProgressing = decoration.isProgressing,
-        )
+                },
+                iconOverride = when (decoration.iconSlot) {
+                    OverflowOfflineIcon.Wifi -> Tabler.Outline.Wifi
+                    OverflowOfflineIcon.WifiOff -> Tabler.Outline.WifiOff
+                    null -> null
+                },
+                labelOverrideRes = decoration.labelOverrideRes,
+                badgeCount = decoration.badgeCount,
+                isHighlighted = decoration.isHighlighted,
+                isProgressing = decoration.isProgressing,
+            )
+        }
     }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible

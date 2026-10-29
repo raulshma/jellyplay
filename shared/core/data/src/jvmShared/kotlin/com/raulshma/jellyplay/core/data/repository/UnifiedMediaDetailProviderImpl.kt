@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DownloadAttachment
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
@@ -93,13 +94,34 @@ class UnifiedMediaDetailProviderImpl(
     private val offlineModeManager: OfflineModeManager,
     private val localStreamProbe: LocalStreamProbe,
     private val appScope: CoroutineScope,
+    /** Monotonic clock for the fresh-seed TTL (injected so the expiry branch is testable). */
+    private val timeSource: TimeSource,
 ) : MediaDetailProvider {
 
     private val sessions = ConcurrentHashMap<String, Session>()
     private val sessionsMutex = Mutex()
 
+    /**
+     * Item id → the monotonic stamp of the last COMPLETED [refresh] for that
+     * item that CREATED its session. Consumed ONCE (and only within
+     * [FRESH_SEED_WINDOW_MS]) by the next session CREATION for the item: the
+     * load path's refresh→observe sequence releases + destroys the refresh's
+     * session before the observe runs, so without this the observe's
+     * brand-new session would force a SECOND full fan-out for content the
+     * refresh just fetched. Seeding the new session's tick collector past the
+     * initial tick makes its first resolve take the resolver's non-forced
+     * (cache-through) path — the caches hold the refresh's own data. Stamping
+     * is gated on creation so a refresh landing on a LIVE session (the
+     * offline-mutation path — no observe follows, the screen's collector
+     * holds the session) never leaves a marker a genuine re-entry would
+     * wrongly consume. One-shot + time-boxed so a genuine later re-entry
+     * still revalidates: the seed only ever stands in for content the
+     * refresh itself fetched moments ago, never for aged TTL state.
+     */
+    private val recentRefreshes = ConcurrentHashMap<String, Long>()
+
     override fun observe(itemId: String): Flow<DetailLoadState> = flow {
-        val session = acquireSession(itemId)
+        val session = acquireSession(itemId).session
         try {
             emitAll(session.snapshots)
         } finally {
@@ -113,9 +135,21 @@ class UnifiedMediaDetailProviderImpl(
     override suspend fun refresh(itemId: String) {
         // revalidate = false: refresh() forces its own re-resolve below (and
         // awaits it), so the reuse-path revalidation would only duplicate it.
-        val session = acquireSession(itemId, revalidate = false)
+        val acquired = acquireSession(itemId, revalidate = false)
         try {
-            session.refresh()
+            acquired.session.refresh()
+            // Seed the freshness marker for the observe() that follows (the
+            // load path's refresh→observe sequence) — see [recentRefreshes].
+            // Creation-gated: a refresh landing on a live session has no
+            // observe following it, so its marker would only be wrongly
+            // consumed by a genuine later re-entry.
+            if (acquired.created) {
+                val now = timeSource.nowElapsedRealtimeMillis()
+                // Sweep expired markers while stamping — a refresh whose
+                // observe never followed otherwise lingers forever.
+                recentRefreshes.entries.removeIf { now - it.value > FRESH_SEED_WINDOW_MS }
+                recentRefreshes[itemId] = now
+            }
         } finally {
             releaseSession(itemId)
         }
@@ -183,22 +217,48 @@ class UnifiedMediaDetailProviderImpl(
      * and without revalidation every re-entry would serve stale state. Pass
      * [revalidate] = false when the caller drives its own re-resolve (see
      * [refresh]).
+     *
+     * A session CREATED right after a completed [refresh] (the load path's
+     * refresh→observe sequence — the refresh's own session was released and
+     * destroyed) instead consumes the freshness marker ([recentRefreshes]) and
+     * starts with its initial force suppressed: the caches hold the refresh's
+     * just-fetched content, so the first resolve runs the resolver's non-forced
+     * path rather than repeating the fan-out. A genuine later re-entry — marker
+     * consumed or expired — revalidates as documented above.
      */
-    private suspend fun acquireSession(itemId: String, revalidate: Boolean = true): Session =
+    private suspend fun acquireSession(itemId: String, revalidate: Boolean = true): AcquiredSession =
         sessionsMutex.withLock {
             val existing = sessions[itemId]
             if (existing != null) {
                 existing.acquire()
                 if (revalidate) existing.requestRevalidate()
-                existing
+                AcquiredSession(existing, created = false)
             } else {
                 val session = Session(itemId)
                 sessions[itemId] = session
-                session.start()
+                session.start(seedFresh = consumeFreshSeed(itemId))
                 session.acquire() // count the caller holding this session
-                session
+                AcquiredSession(session, created = true)
             }
         }
+
+    /** The session plus whether [acquireSession] created it (the fresh-seed stamp gate). */
+    private inner class AcquiredSession(val session: Session, val created: Boolean)
+
+    /**
+     * Consumes the freshness marker [refresh] left for [itemId], if any. The
+     * marker is one-shot (removed on read) and honored only within
+     * [FRESH_SEED_WINDOW_MS] of the refresh. Past that window it is dead —
+     * a later re-entry revalidates — but a genuine re-entry WITHIN the window
+     * of a refresh no observe ever followed would consume it and take the
+     * cache-through path once; self-healing (the caches hold the refresh's
+     * own data) and bounded by the window. See [recentRefreshes].
+     */
+    private fun consumeFreshSeed(itemId: String): Boolean {
+        val stampedAt = recentRefreshes[itemId] ?: return false
+        recentRefreshes.remove(itemId, stampedAt)
+        return timeSource.nowElapsedRealtimeMillis() - stampedAt <= FRESH_SEED_WINDOW_MS
+    }
 
     private suspend fun releaseSession(itemId: String) {
         val toRemove = sessionsMutex.withLock {
@@ -290,9 +350,15 @@ class UnifiedMediaDetailProviderImpl(
                 current.episodesBySeason.containsKey(seriesOrSeasonId)
         }
 
-        fun start() {
+        fun start(seedFresh: Boolean = false) {
             if (started) return
             started = true
+            // A fresh-seeded session (created right after refresh() completed —
+            // see [recentRefreshes]) starts its collector PAST the initial tick:
+            // the first pass then computes force=false and takes the resolver's
+            // non-forced (cache-through) path instead of repeating the refresh's
+            // fan-out. Every later tick (revalidate, refresh) still forces.
+            if (seedFresh) lastTick = 0L
             scope.launch {
                 combine(refreshTick, offlineModeManager.offlineMode) { tick, mode -> tick to mode }
                     .distinctUntilChanged()
@@ -654,5 +720,14 @@ class UnifiedMediaDetailProviderImpl(
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
         const val REFRESH_TIMEOUT_MS = 15_000L
+
+        /**
+         * How long after a completed [refresh] the next session creation may
+         * start with its initial force suppressed ([recentRefreshes]). Far
+         * wider than the refresh→observe gap (one suspension apart), so only
+         * the intended sequence consumes it; a genuine re-entry — user
+         * navigation time — lands past it and revalidates.
+         */
+        const val FRESH_SEED_WINDOW_MS = 10_000L
     }
 }

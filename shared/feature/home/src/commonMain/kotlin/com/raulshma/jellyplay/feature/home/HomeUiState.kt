@@ -180,23 +180,6 @@ data class HomeUiState(
      */
     val sectionConfig: SectionConfigState = SectionConfigState(),
     /**
-     * Non-null while the offline home's advanced "delete downloaded episodes"
-     * sheet is open for a series card. Carries the seasons/episodes loaded for
-     * the targeted series (only downloaded episodes), the aggregate size, and a
-     * brief loading flag while that data is being read from the offline store.
-     * Rendered by [MainHomeContent] as a `DeleteDownloadedEpisodesSheet`.
-     */
-    val seriesDelete: HomeSeriesDeleteState? = null,
-
-    /**
-     * Non-null while the series download sheet is open for a series card's
-     * quick-action Download. Carries the seasons/episodes loaded for the
-     * targeted series (server catalogue) plus which episodes are already
-     * downloaded. Rendered by [MainHomeContent] as a `SeriesDownloadSheet` —
-     * the same sheet the media-detail screen hosts.
-     */
-    val seriesDownload: HomeSeriesDownloadState? = null,
-    /**
      * Visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
      * never stamped), read ONCE per home session — before this session's
      * dwell timer writes its own stamp — so the NEW-badge predicate compares

@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
@@ -188,6 +189,7 @@ internal val dataRepositoriesModule: Module = module {
 
     single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
+    single<SeriesArtReads> { get<OfflineRepositoryImpl>() }
 
     single { PlaybackOutboxRepositoryImpl(get(), get()) }
     single<PlaybackOutboxRepository> { get<PlaybackOutboxRepositoryImpl>() }

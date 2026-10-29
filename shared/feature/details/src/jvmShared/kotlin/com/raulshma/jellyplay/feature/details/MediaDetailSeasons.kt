@@ -478,16 +478,17 @@ internal fun SeasonsSection(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             currentEpisodes.forEach { episode ->
+                                val arms = rememberEpisodeArms(episode, callbacks)
                                 CompactEpisodeRow(
                                     episode = episode,
                                     urls = urls,
                                     isCurrentEpisode = episode.id == presentation.currentItemId,
-                                    onPlayClick = { callbacks.onEpisodePlayClick(episode) },
-                                    onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
-                                    onLongPress = { callbacks.onEpisodeLongPress(episode) },
+                                    onPlayClick = arms.onPlayClick,
+                                    onDetailClick = arms.onDetailClick,
+                                    onLongPress = arms.onLongPress,
                                     hideThumbnail = presentation.hideEpisodeThumbnails,
                                     isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
-                                    onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
+                                    onDeleteClick = arms.onDeleteClick,
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
                                     animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
                                     tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
@@ -513,17 +514,18 @@ internal fun SeasonsSection(
                                 currentEpisodes.getOrNull(index)?.let(callbacks.onFocusedEpisodeChange)
                             },
                         ) { _, episode, focusModifier ->
+                                val arms = rememberEpisodeArms(episode, callbacks)
                                 EpisodeCard(
                                     episode = episode,
                                     urls = urls,
                                     isCurrentEpisode = episode.id == presentation.currentItemId,
-                                    onPlayClick = { callbacks.onEpisodePlayClick(episode) },
-                                    onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
-                                    onLongPress = { callbacks.onEpisodeLongPress(episode) },
+                                    onPlayClick = arms.onPlayClick,
+                                    onDetailClick = arms.onDetailClick,
+                                    onLongPress = arms.onLongPress,
                                     modifier = focusModifier,
                                     hideThumbnail = presentation.hideEpisodeThumbnails,
                                     isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
-                                    onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
+                                    onDeleteClick = arms.onDeleteClick,
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
                                     animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
                                     tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
@@ -1608,3 +1610,28 @@ private data class SeasonEpisodesTargetState(
     val isLoading: Boolean,
     val isCompact: Boolean,
 )
+
+/** The per-episode click arms both episode-list variants share. */
+private class EpisodeArms(
+    val onPlayClick: () -> Unit,
+    val onDetailClick: () -> Unit,
+    val onLongPress: () -> Unit,
+    val onDeleteClick: () -> Unit,
+)
+
+/**
+ * Per-row lambdas remembered on the episode (the sibling sections'
+ * item-keyed pattern) — they capture the full item, so keying on the id
+ * alone would keep a re-fetched instance's stale playback position on the
+ * play path.
+ */
+@Composable
+private fun rememberEpisodeArms(episode: MediaItem, callbacks: SeasonsSectionCallbacks): EpisodeArms =
+    remember(episode) {
+        EpisodeArms(
+            onPlayClick = { callbacks.onEpisodePlayClick(episode) },
+            onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
+            onLongPress = { callbacks.onEpisodeLongPress(episode) },
+            onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
+        )
+    }

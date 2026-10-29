@@ -1267,8 +1267,13 @@ private fun HomeTailSheets(
 ) {
     // Advanced series delete-episodes sheet — the same one the media-detail
     // screen uses. Shown when a series card's quick-action Delete is tapped;
-    // the ViewModel loads the series' seasons/downloaded episodes.
-    state.seriesDelete?.let { sd ->
+    // the ViewModel loads the series' seasons/downloaded episodes. The state
+    // is leaf-collected off its holder flow (the `pendingSyncEntries`
+    // pattern — see the sync sheet below), not folded into HomeUiState: a
+    // sheet emission (open, load, per-season expand) must not copy the bag
+    // and re-run the orchestrator while a modal sheet covers the screen.
+    val seriesDelete by viewModel.seriesDeleteSheet.collectAsStateWithLifecycle()
+    seriesDelete?.let { sd ->
         HomeSeriesDeleteSheet(
             state = sd,
             onDelete = remember(viewModel) { { episodeIds: Set<String> -> viewModel.onEvent(HomeUiEvent.DeleteOfflineEpisodes(episodeIds)) } },
@@ -1280,7 +1285,9 @@ private fun HomeTailSheets(
     // Series download sheet — the same one the media-detail screen uses. Shown
     // when a series card's quick-action Download is tapped; the ViewModel
     // assembles the series' seasons/episodes from the episode catalogue.
-    state.seriesDownload?.let { sd ->
+    // Leaf-collected off its holder flow like the delete sheet above.
+    val seriesDownload by viewModel.seriesDownloadSheet.collectAsStateWithLifecycle()
+    seriesDownload?.let { sd ->
         HomeSeriesDownloadSheet(
             state = sd,
             onLoadEpisodes = remember(viewModel) { { seasonId: String -> viewModel.onEvent(HomeUiEvent.LoadSeriesDownloadEpisodes(seasonId)) } },

@@ -296,6 +296,11 @@ internal class DetailLoadOrchestrator(
                 // Suspend until the new generation lands so the collector that follows
                 // observes the refreshed snapshot rather than a stale replay; the detail
                 // stays visible (kept above) under the Refreshing indicator meanwhile.
+                // The provider seeds a freshness marker on completion, so the
+                // observe below adopts the refreshed caches without forcing a
+                // SECOND full fan-out (its session's first resolve runs the
+                // resolver's non-forced path; a genuine later re-entry still
+                // revalidates — see the provider's acquireSession contract).
                 mediaDetailProvider.refresh(itemId)
             }
             mediaDetailProvider.observe(itemId).collect { state ->
@@ -627,8 +632,14 @@ internal class DetailLoadOrchestrator(
         override suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> =
             pluginArms.pluginSimilarIds(itemId, limit)
 
-        override suspend fun mediaDetailItem(itemId: String): MediaItem? =
-            detailFeed.getMediaDetail(itemId, force = false).getOrNull()?.item
+        override suspend fun mediaDetailItems(ids: List<String>): List<MediaItem> {
+            // ONE batched ids read (the home plugin-row seam) instead of a
+            // per-id detail fan-out; found-only (dead ids drop — the old
+            // mapConcurrentCatching drop semantics) and mapped back onto the
+            // requested order so the plugin's score order survives.
+            val byId = libraryApiClient.getItemsByIds(ids).getOrNull().orEmpty().associateBy { it.id }
+            return ids.mapNotNull(byId::get)
+        }
 
         override fun serverSimilarPipeline(): Boolean =
             pluginArms.serverSimilarPipeline()
@@ -965,7 +976,13 @@ internal class DetailLoadOrchestrator(
                     connected = connected,
                     recommendationsEnabled = publishedState().isSeerrRecommendationsEnabled,
                     loadVideos = true,
-                    loadReviews = true,
+                    // The reviews section's own pref — the admission fold
+                    // re-checks it (and an empty tmdbReviews renders nothing),
+                    // so skipping the leg when it's off is a pure perf skip,
+                    // never correctness. Videos/recommendations keep their
+                    // hardcoded legs (no owning pref / recommendationsEnabled
+                    // already gates the latter).
+                    loadReviews = preferences.value.showReviews,
                     loadRecommendations = true,
                     isCurrent = { loadGuard.isCurrent(generation) },
                     onLanding = ::foldCompanionLanding,

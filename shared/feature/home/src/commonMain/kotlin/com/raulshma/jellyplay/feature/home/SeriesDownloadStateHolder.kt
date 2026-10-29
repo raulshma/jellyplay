@@ -24,9 +24,10 @@ import kotlinx.coroutines.launch
  * Owns the series download sheet opened from a home series card's quick-action
  * Download: the sheet's [HomeSeriesDownloadState] (seasons, per-season
  * episodes, already-downloaded ids) plus the actions that drive it. The VM
- * folds [state] into [HomeUiState.seriesDownload] with one collector (same
- * fold pattern as [SeriesDeleteStateHolder]) and forwards the action methods,
- * so the sheet's UI call sites stay thin.
+ * re-exposes [state] (`seriesDownloadSheet`) for the sheet's leaf collector in
+ * HomeTailSheets — not a [HomeUiState] fold; dismissal is this holder's null
+ * write — and forwards the action methods, so the sheet's UI call sites stay
+ * thin.
  *
  * The sheet is the shared `SeriesDownloadSheet` the media-detail screen hosts;
  * where the detail screen reads its session's seasons and expands episodes

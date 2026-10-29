@@ -887,7 +887,7 @@ internal class PlaybackSession(
             onPositionPersisted = { positionMsValue ->
                 persistPlaybackPosition(positionMsValue, force = false)
             },
-            onEnginePositionUpdate = { position, duration, _, stats ->
+            onEnginePositionUpdate = { position, duration, stats ->
                 this.positionMs.value = position
                 durationMs.value = duration
                 videoStats.value = stats
@@ -1090,7 +1090,7 @@ internal class PlaybackSession(
             .distinctUntilChanged(),
         isShowDetailsAfterFinishEnabled = { cachedAggregate.videoPlayer.showNextEpisodeDetailsAfterFinish },
         isSmartDownloadsEnabled = { stores.downloads.downloads.value.smartDownloadsEnabled },
-        getDurationMs = { uiState.value.duration },
+        getDurationMs = { durationMs.value },
         deleteDownload = { itemId -> offlinePlaybackFacade.deleteDownload(itemId) },
         notifySmartDownloadDeleted = { userMessageBus.info(PlayerVideoMessage.SmartDownloadDeleted) },
     )
@@ -2131,27 +2131,27 @@ internal class PlaybackSession(
     /**
      * The ONE position-aware snapshot fold behind the segment-skip dispatch
      * ([dispatchSegmentSkip]): every fact the skip ladder consults, read from
-     * a single snapshot that injects the live position/duration from the
-     * dedicated high-frequency flows over the (stale) `currentPosition`/
-     * `duration` fields stored on uiState itself, so the active segment and
-     * its end ticks can never come from different reads (the pairing rule
-     * [SegmentDispatchFacts] exists to enforce).
+     * a single snapshot that pairs the live position/duration from the
+     * dedicated high-frequency flows with the low-frequency uiState slices
+     * ([SegmentProjection]), so the active segment and its end ticks can never
+     * come from different reads (the pairing rule [SegmentDispatchFacts]
+     * exists to enforce). The active scan runs once (precomputed overloads);
+     * the intro/credit end-tick reads re-scan the short list per read.
      */
     private fun segmentDispatchFacts(): SegmentDispatchFacts {
-        val state = uiState.value.copy(
-            currentPosition = positionMs.value,
-            duration = durationMs.value,
-        )
-        val seg = state.activeSegment
+        val state = uiState.value
+        val input = SegmentProjection(state).toSegmentInput(durationMs.value)
+        val positionMsValue = positionMs.value
+        val seg = SegmentCalculator.computeActiveSegment(input, positionMsValue)
         return SegmentDispatchFacts(
             cinemaIntroActive = state.cinemaIntroState != null,
-            isOutroNearEnd = state.isOutroNearEnd,
+            isOutroNearEnd = SegmentCalculator.isOutroNearEnd(input, seg),
             canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
             segments = SegmentSnapshot(
                 activeType = seg?.type,
-                activeEndTicks = seg?.let { state.segmentEndTicks(it) },
-                introEndTicks = state.introSegmentEndTicks,
-                creditEndTicks = state.creditSegmentEndTicks,
+                activeEndTicks = seg?.let { SegmentCalculator.segmentEndTicks(input, it) },
+                introEndTicks = SegmentCalculator.segmentEndTicksForType(input, positionMsValue, MediaSegmentType.INTRO),
+                creditEndTicks = SegmentCalculator.segmentEndTicksForType(input, positionMsValue, MediaSegmentType.OUTRO),
             ),
         )
     }

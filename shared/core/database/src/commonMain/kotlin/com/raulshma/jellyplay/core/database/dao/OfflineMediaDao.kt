@@ -246,6 +246,18 @@ interface OfflineMediaDao {
     suspend fun getLocalImagePaths(itemId: String): OfflineImagePaths?
 
     /**
+     * Narrow `(id, posterPath, blurHashPrimary)` projection of the rows for
+     * [ids] in one read — the series-artwork read behind the downloads
+     * screen's group headers, which otherwise paid a full
+     * `getByIdWithPlayback` + artwork-resolution round-trip per series on
+     * every rows rebuild. Blank/remote poster paths still ride the caller's
+     * artwork-resolution fallback; this query only carries what resolution
+     * would keep unchanged.
+     */
+    @Query("SELECT id, posterPath, blurHashPrimary FROM offline_media WHERE id IN (:ids)")
+    suspend fun getSeriesArtRows(ids: List<String>): List<SeriesArtRow>
+
+    /**
      * Whether any offline row's `peopleJson` references the person whose
      * [personReferenceLikePattern] built [pattern]. Per-candidate existence
      * check for cast-image cleanup after a delete (see
@@ -319,6 +331,17 @@ interface OfflineMediaDao {
 data class OfflineImagePaths(
     val posterPath: String?,
     val backdropPath: String?,
+)
+
+/**
+ * `(id, posterPath, blurHashPrimary)` projection used by
+ * [OfflineMediaDao.getSeriesArtRows] so the downloads screen resolves every
+ * series group's header art in one 3-column query.
+ */
+data class SeriesArtRow(
+    val id: String,
+    val posterPath: String?,
+    val blurHashPrimary: String?,
 )
 
 /**

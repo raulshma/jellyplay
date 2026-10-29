@@ -72,7 +72,7 @@ class OfflineRepositoryImpl constructor(
     private val database: JellyPlayDatabase,
     /** Clock seam for the `lastPlayedDate` stamps (updatePlaybackProgress / applyPlayedState). */
     private val timeSource: TimeSource,
-) : OfflineRepository {
+) : OfflineRepository, SeriesArtReads {
 
     /**
      * The shared deletion choreography (see the class KDoc for the six-step
@@ -331,6 +331,31 @@ class OfflineRepositoryImpl constructor(
     override suspend fun getOfflineItem(id: String): OfflineMediaItem? =
         offlineMediaDao.getByIdWithPlayback(id)?.toOfflineMediaItem()
             ?.let { withContext(Dispatchers.IO) { artworkResolver.resolveItemArtwork(it) } }
+
+    override suspend fun getSeriesArt(seriesIds: List<String>): Map<String, ResolvedSeriesArt> {
+        if (seriesIds.isEmpty()) return emptyMap()
+        return buildMap {
+            // Chunked like downloadsByItemIds: a whole library of downloaded
+            // series can exceed SQLite's host-variable cap.
+            for (row in seriesIds.chunked(SQLITE_HOST_VARIABLE_CHUNK_SIZE)
+                .flatMap { offlineMediaDao.getSeriesArtRows(it) }
+            ) {
+                val poster = row.posterPath
+                val art = if (artworkResolver.needsArtworkResolution(poster)) {
+                    // The blank/remote rows keep the per-item resolution step
+                    // (the series artifact beside a downloaded episode's dir,
+                    // the original value preserved when none exists) — the
+                    // batched read narrows the N round-trips to exactly them.
+                    getOfflineItem(row.id)?.let {
+                        ResolvedSeriesArt(it.posterPath, it.blurHashPrimary)
+                    }
+                } else {
+                    ResolvedSeriesArt(poster, row.blurHashPrimary)
+                }
+                if (art != null) put(row.id, art)
+            }
+        }
+    }
 
     override fun getOfflineItemCount(): Flow<Int> =
         offlineMediaDao.getOfflineItemCount()

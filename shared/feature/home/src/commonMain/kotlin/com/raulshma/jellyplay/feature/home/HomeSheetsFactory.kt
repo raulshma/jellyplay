@@ -52,9 +52,9 @@ internal class HomeSheetsFactory(
 }
 
 /**
- * The pair of series-sheet holders as one value: the VM folds each holder's
- * `state` into its [HomeUiState] slice and routes the sheet events to the
- * holder methods exactly as before — only the construction moved.
+ * The pair of series-sheet holders as one value: the VM re-exposes each
+ * holder's `state` for the sheet's leaf collector and routes the sheet events
+ * to the holder methods exactly as before — only the construction moved.
  */
 internal class HomeSheets(
     val seriesDelete: SeriesDeleteStateHolder,

@@ -13,8 +13,10 @@ import org.koin.dsl.module
  *    commonMain interfaces — implemented DIRECTLY by the jvmShared
  *    DownloadRepositoryImpl / OfflineSyncManager singles and bound in
  *    dataJvmModule).
- *  - OfflineRepository resolves from dataJvmModule and UserDataMutator from
- *    the shared-module graph.
+ *  - OfflineRepository / SeriesArtReads (the downloads VM's batched series-art
+ *    read family) resolve from dataJvmModule — the same OfflineRepositoryImpl
+ *    single behind both interfaces — and UserDataMutator from the
+ *    shared-module graph.
  *  - OfflineSyncManager is a Koin single in dataJvmModule.
  *
  * DownloadsViewModel's delete feedback emits DownloadsUserMessage values on a
@@ -26,6 +28,7 @@ val downloadsModule: Module = module {
         DownloadsViewModel(
             queue = get(),
             offlineRepository = get(),
+            seriesArt = get(),
             resync = get(),
             downloadsStore = get(),
             policyStore = get(),

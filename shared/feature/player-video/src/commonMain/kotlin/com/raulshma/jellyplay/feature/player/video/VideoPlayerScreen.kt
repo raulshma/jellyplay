@@ -1640,6 +1640,10 @@ fun VideoPlayerScreen(
             val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
             val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
 
+            val arms = rememberPlayerScreenControlArms(viewModel, controls, openSheet,
+                setShowDelayOverlay = { showDelayOverlay = true },
+                onControlRowInteraction = { userInteractionCount++; viewModel.onEvent(VideoPlayerUiEvent.UserInteraction) })
+
             // Remote "TakeScreenshot": the receiver emits through the
             // active-engine registry while this screen's engine is bound;
             // each request drives the SAME capture path as the overflow-menu
@@ -1695,10 +1699,7 @@ fun VideoPlayerScreen(
                     onLockClick = onLockClick,
                     onPipClick = onPipClick,
                     onToggleOrientation = toggleOrientation,
-                    onControlRowScrolled = {
-                        userInteractionCount++
-                        viewModel.onEvent(VideoPlayerUiEvent.UserInteraction)
-                    },
+                    onControlRowScrolled = arms.onControlRowScrolled,
                     onControlsFocusChange = onControlsFocusChange,
                     onOverflowMenuChange = onOverflowMenuChange,
                 ),
@@ -1707,39 +1708,39 @@ fun VideoPlayerScreen(
                     onSubtitleClick = onSubtitleClick,
                     onSubtitleHubClick = onSubtitleHubClick,
                     onMpvConfigNoticeClick = onMpvConfigNoticeClick,
-                    onSubtitleToggle = { viewModel.onEvent(VideoPlayerUiEvent.ToggleSubtitles) },
-                    onSubtitleDelayClick = { showDelayOverlay = true },
+                    onSubtitleToggle = arms.onSubtitleToggle,
+                    onSubtitleDelayClick = arms.onSubtitleDelayClick,
                     hasEpisodes = hasEpisodes,
                     episodeBrowserEnabled = episodeBrowserEnabled,
                     showVideoStats = uiState.uiPrefs.showVideoStats,
                     onVideoStatsClick = onVideoStatsClick,
                     videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
                     onScreenshotClick = onScreenshotClick,
-                    onAbRepeatToggle = { controls.setAbRepeatEnabled(!abRepeat.enabled) },
-                    onAbRepeatSetA = { controls.setAbRepeatPointA() },
-                    onAbRepeatSetB = { controls.setAbRepeatPointB() },
-                    onAbRepeatClear = { controls.clearAbRepeat() },
+                    onAbRepeatToggle = arms.onAbRepeatToggle,
+                    onAbRepeatSetA = arms.onAbRepeatSetA,
+                    onAbRepeatSetB = arms.onAbRepeatSetB,
+                    onAbRepeatClear = arms.onAbRepeatClear,
                     audioOnly = uiState.audioOnly,
-                    onToggleAudioOnly = { viewModel.onEvent(VideoPlayerUiEvent.ToggleAudioOnly) },
+                    onToggleAudioOnly = arms.onToggleAudioOnly,
                     incognitoModeEnabled = viewModel.incognitoModeEnabled,
-                    onMarkWatchedAndSkip = { viewModel.onEvent(VideoPlayerUiEvent.MarkWatchedAndSkip) },
-                    onMarkUnwatchedAndQuit = { viewModel.onEvent(VideoPlayerUiEvent.MarkUnwatchedAndQuit) },
+                    onMarkWatchedAndSkip = arms.onMarkWatchedAndSkip,
+                    onMarkUnwatchedAndQuit = arms.onMarkUnwatchedAndQuit,
                     // the Rendering sheet is an mpv surface (shader packs /
                     // tone mapping / quality); the deinterlace item gates on
                     // the engine capability matrix. The gear entry declares
                     // through the sheet module's registered key.
                     supportsRenderPanel = uiState.preferredPlayerType == PlayerType.MPV,
-                    onRenderClick = { openSheet(RenderSheetModule.sheet) },
+                    onRenderClick = arms.onRenderClick,
                     deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
                         controls.render.deinterlace
                     } else {
                         null
                     },
-                    onDeinterlaceCycle = { viewModel.onEvent(VideoPlayerUiEvent.CycleDeinterlace) },
-                    onVersionClick = { openSheet(PlayerSheet.Version) },
+                    onDeinterlaceCycle = arms.onDeinterlaceCycle,
+                    onVersionClick = arms.onVersionClick,
                     queueItemCount = videoQueue.size,
                     isInSyncPlaySession = uiState.isInSyncPlaySession,
-                    onQueueClick = { openSheet(PlayerSheet.Queue) },
+                    onQueueClick = arms.onQueueClick,
                     inputQuickToggles = inputQuickToggles,
                     onInputQuickToggle = onInputQuickToggle,
                 ),

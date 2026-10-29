@@ -45,7 +45,7 @@ import kotlin.test.assertTrue
  * [baseState] deliberately differs from the defaults for every seeded leaf and
  * carries sentinel values on leaves the seed must NOT touch
  * (`isHoldSpeedActive`, `autoplayCancelled`, `detectedAspectRatio`,
- * `segments`, `isLoadingEpisodes`, title/position/subtitleStyle…), so
+ * `segments`, `isLoadingEpisodes`, title/playbackSpeed/subtitleStyle…), so
  * "exactly the expected leaves changed" is checkable per test.
  */
 class PlayerPrefsSeedTest {
@@ -59,7 +59,7 @@ class PlayerPrefsSeedTest {
      */
     private fun baseState() = VideoPlayerUiState(
         title = "Persisted Title",
-        currentPosition = 42L,
+        playbackSpeed = 2.5f,
         subtitleStyle = SubtitleStyle.DEFAULT.copy(offsetMs = 123L),
         preferredPlayerType = PlayerType.EXTERNAL,
         uiPrefs = PlayerUiPrefsState(
@@ -299,7 +299,7 @@ class PlayerPrefsSeedTest {
 
         // ── NOT seeded: session state + controller-owned leaves survive. ──
         assertEquals("Persisted Title", seeded.title)
-        assertEquals(42L, seeded.currentPosition)
+        assertEquals(2.5f, seeded.playbackSpeed, 0.0001f)
         assertEquals(123L, seeded.subtitleStyle.offsetMs)
         assertTrue(seeded.gestures.isHoldSpeedActive, "hold-speed activity is session state")
         assertTrue(seeded.autoplay.autoplayCancelled, "the user's cancellation is not a pref")

@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
@@ -56,6 +57,7 @@ data class DownloadsUiState(
 class DownloadsViewModel(
     private val queue: DownloadQueue,
     private val offlineRepository: OfflineRepository,
+    private val seriesArt: SeriesArtReads,
     private val resync: OfflineResync,
     private val downloadsStore: DownloadsStore,
     /** The gh-181 Ask-mode suggestion surface (observe/confirm/dismiss). */
@@ -348,22 +350,20 @@ class DownloadsViewModel(
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
-     * The locally-saved series posters for [items]' series groups — one-shot
-     * offline-DB reads keyed by raw series id (the [downloadListRows] lookup
-     * shape). A series without saved artwork is simply absent, and the group
-     * header falls back to an episode still inside the grouping. Runs on every
-     * rows rebuild; a handful of indexed PK lookups off Main per structural
-     * change.
+     * The locally-saved series posters for [items]' series groups — one
+     * batched offline-DB read keyed by raw series id (the [downloadListRows]
+     * lookup shape; the former per-series getOfflineItem round-trip cost one
+     * uncached PK read + artwork resolution per series on every rows
+     * rebuild), blank-poster entries dropped so the group header falls back
+     * to an episode still inside the grouping. Runs on every rows rebuild.
      */
     private suspend fun resolveSeriesArt(items: List<DownloadItem>): Map<String, SeriesArt> =
-        items.mapNotNull { it.seriesId?.takeIf(String::isNotBlank) }
-            .distinct()
-            .mapNotNull { seriesId ->
-                offlineRepository.getOfflineItem(seriesId)
-                    ?.takeIf { !it.posterPath.isNullOrBlank() }
-                    ?.let { seriesId to SeriesArt(it.posterPath, it.blurHashPrimary) }
-            }
-            .toMap()
+        seriesArt.getSeriesArt(
+            items.mapNotNull { it.seriesId?.takeIf(String::isNotBlank) }.distinct(),
+        ).mapNotNull { (seriesId, art) ->
+            art.posterPath?.takeIf(String::isNotBlank)
+                ?.let { seriesId to SeriesArt(it, art.blurHashPrimary) }
+        }.toMap()
 
     init {
         launch {

@@ -66,12 +66,11 @@ internal class PlaybackProgressReporter(
     private val onWatchedThresholdReached: (String) -> Unit,
     private val onPositionPersisted: (positionMs: Long) -> Unit,
     /**
-     * Receives every engine position tick (position, duration, buffered,
-     * stats). The ViewModel routes these to dedicated high-frequency
-      * StateFlows instead of the monolithic [uiState], so the screen
-     * root stops recomposing at 4 Hz.
+     * Receives every engine position tick (position, duration, stats). The
+     * ViewModel routes these to dedicated high-frequency StateFlows instead of
+     * the monolithic [uiState], so the screen root stops recomposing at 4 Hz.
      */
-    private val onEnginePositionUpdate: (positionMs: Long, durationMs: Long, bufferedPositionMs: Long, videoStats: EngineVideoStats) -> Unit,
+    private val onEnginePositionUpdate: (positionMs: Long, durationMs: Long, videoStats: EngineVideoStats) -> Unit,
     /**
      * Wall clock (ms) for the stalled-finish detector. Injectable so tests
      * advance the 10 s no-advance window virtually instead of sleeping.
@@ -83,8 +82,26 @@ internal class PlaybackProgressReporter(
     private var endedNoNextTriggered = false
     private var watchedThresholdTriggered = false
     private var cachedDurationMs: Long = 0L
-    private var cachedState: VideoPlayerUiState? = null
     private var cachedSegmentInput: SegmentCalculatorInput? = null
+
+    /**
+     * The cache key [cachedSegmentInput] was built against: the uiState
+     * instance BY IDENTITY (the cheap check — a data-class equals would run
+     * the ~95-field comparison per tick) plus the duration it was built
+     * with, because the engine's duration can resolve (0 → real) after the
+     * first tick cached an input without the uiState instance having changed
+     * in between. One object, so the invalidation condition is the key's
+     * equality — not a hand-maintained multi-field condition.
+     */
+    private var cachedInputKey: SegmentInputKey? = null
+
+    /** Identity-based cache key for [cachedSegmentInput] — see the field KDoc. */
+    private class SegmentInputKey(val state: VideoPlayerUiState, val durationMs: Long) {
+        override fun equals(other: Any?) =
+            other is SegmentInputKey && other.state === state && other.durationMs == durationMs
+
+        override fun hashCode() = System.identityHashCode(state) * 31 + durationMs.hashCode()
+    }
 
     /**
      * Error latch: set the moment the engine enters ERROR or an
@@ -130,8 +147,8 @@ internal class PlaybackProgressReporter(
         endedNoNextTriggered = false
         watchedThresholdTriggered = false
         cachedDurationMs = 0L
-        cachedState = null
         cachedSegmentInput = null
+        cachedInputKey = null
         // A successful (re)load is the recovery point that re-arms the
         // watched-threshold callback after an error — the retry /
         // transcode-fallback / next-item paths all restart tracking here
@@ -153,7 +170,6 @@ internal class PlaybackProgressReporter(
                     dur = engine.durationMs.coerceAtLeast(0L)
                     cachedDurationMs = dur
                 }
-                val buffered = engine.bufferedPositionMs.value
                 if (pos != lastPos || dur != lastDur) {
                     lastPos = pos
                     lastDur = dur
@@ -161,9 +177,10 @@ internal class PlaybackProgressReporter(
                     // flows — NOT into uiState — so the screen root is
                     // not invalidated at 4 Hz. The segment auto-skip logic
                     // below operates on the raw `pos` directly, decoupled from
-                    // uiState.currentPosition, so behavior is unchanged.
+                    // the (absent) uiState position snapshot, so behavior is
+                    // unchanged.
                     val stats = engine.videoStats.value
-                    onEnginePositionUpdate(pos, dur, buffered, stats)
+                    onEnginePositionUpdate(pos, dur, stats)
                     onPositionPersisted(pos)
                 }
                 checkAutoSkip(pos)
@@ -207,11 +224,16 @@ internal class PlaybackProgressReporter(
         // dedicated ViewModel flows), so an instance-identity check rebuilds
         // the segment input only when a segment-relevant field can actually
         // have changed — the field list lives in [SegmentProjection], not
-        // duplicated here as a hand-maintained invalidation condition.
-        if (input == null || cachedState !== state) {
-            input = state.toSegmentInput()
+        // duplicated here as a hand-maintained invalidation condition. The
+        // cached duration rides in the key: it is stable per item (reset
+        // only by [startPositionTracking]) and feeds the chapter fallback's
+        // last-chapter end, matching the VM overlay path's real-duration
+        // input.
+        val key = SegmentInputKey(state, cachedDurationMs)
+        if (input == null || cachedInputKey != key) {
+            input = state.toSegmentInput(cachedDurationMs)
             cachedSegmentInput = input
-            cachedState = state
+            cachedInputKey = key
         }
         val seg = SegmentCalculator.computeActiveSegment(input, currentPositionMs) ?: return
         val behavior = SegmentCalculator.behaviorForType(input, seg.type)

@@ -498,9 +498,15 @@ fun MediaDetailScreen(
                     ),
                 )
 
+                // Remembered with no keys: the lambda captures the delegated
+                // MutableState itself, so the assignment resolves at invocation
+                // and stays correct across recompositions. A fresh lambda per
+                // pass would re-key rememberVideoClickHandler — and every
+                // bundle downstream that captures its result — each time.
+                val onPlayYouTube = remember { { key: String -> activeTrailerKey = key } }
                 val onVideoClick = rememberVideoClickHandler(
                     uriHandler = uriHandler,
-                    onPlayYouTube = { key -> activeTrailerKey = key },
+                    onPlayYouTube = onPlayYouTube,
                 )
 
                 // ── Per-concern callback bundles. Each bundle is remembered on
@@ -509,10 +515,11 @@ fun MediaDetailScreen(
                 // constructor. Two bundles additionally key on plain local vals
                 // their lambdas capture (`detail`, `seriesIdForSeasons`): the
                 // former single remember was effectively refreshed every
-                // recomposition (its `onVideoClick` key is unstable), and these
-                // captures must not go stale now that the other bundles' keys
-                // are stable. Delegated reads (`uiState`, `var … by remember`)
-                // resolve at invocation time and need no keys. ──
+                // recomposition, and these captures must not go stale now that
+                // every bundle key (incl. `onVideoClick`, stable since
+                // `onPlayYouTube` was remembered) is stable. Delegated reads
+                // (`uiState`, `var … by remember`) resolve at invocation time
+                // and need no keys. ──
                 // The resolver itself is the stateless core:data single the VM
                 // holds — sections tag URLs off the MediaItems they already
                 // render; only the chapter getter (coordinates, no id) stays a

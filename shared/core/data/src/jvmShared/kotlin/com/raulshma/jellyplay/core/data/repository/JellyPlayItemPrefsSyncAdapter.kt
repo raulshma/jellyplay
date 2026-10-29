@@ -83,8 +83,9 @@ class JellyPlayItemPrefsSyncAdapter(
         SliceJson.encodeToJsonElement(entity.toPayload())
 
     override suspend fun snapshot(): Map<String, JsonElement> =
-        // getAll is newest-write first: the head of the list IS the roam cap.
-        dao.getAll().take(ItemPlaybackPreferenceRoamCap.CAP).associate { keyOf(it) to valueOf(it) }
+        // getRecentForRoam caps in SQL (newest-write first): the head of the
+        // list IS the roam cap.
+        dao.getRecentForRoam(ItemPlaybackPreferenceRoamCap.CAP).associate { keyOf(it) to valueOf(it) }
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         for ((key, value) in entries) {

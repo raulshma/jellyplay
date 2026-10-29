@@ -26,7 +26,6 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -40,6 +39,7 @@ import com.raulshma.jellyplay.core.model.seerr.isPending
 import com.raulshma.jellyplay.core.model.seerr.isProcessing
 
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.image.rowCardDecodeSize
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
 import com.raulshma.jellyplay.core.ui.preview.toMediaPreview
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -102,9 +102,11 @@ fun SeerrMediaCard(
                     modifier = imageModifier,
                     contentScale = ContentScale.Crop,
                     crossfade = false,
-                    // Poster card (2:3, fillMaxWidth). ~360×540 covers ~2× density
-                    // for typical grid card widths without the 512×512 over-decode.
-                    size = CoilSize(360, 540),
+                    // Poster card (2:3, fillMaxWidth) — the shared
+                    // rowCardDecodeSize policy; 360 ≈ 2× density for typical
+                    // grid card widths, resolving to the same 360×540 as the
+                    // former fixed size (without the 512×512 over-decode).
+                    size = rowCardDecodeSize(width = 360, aspectRatio = 2f / 3f),
                 )
             } else {
                 Box(

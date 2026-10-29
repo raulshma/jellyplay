@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
 import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWritesImpl
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepositoryImpl
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
 import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncerImpl
@@ -299,6 +300,7 @@ internal val dataMediaRepositoryModule: Module = module {
             offlineModeManager = get(),
             localStreamProbe = get(),
             appScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get<TimeSource>(),
         )
     }
     single<MediaDetailProvider> { get<UnifiedMediaDetailProviderImpl>() }

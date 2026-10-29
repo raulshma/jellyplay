@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -49,7 +50,12 @@ import com.raulshma.jellyplay.core.ui.navigation.resolvedShortcutLabel
  * tablet rail) from [resolveShortcuts]' output — the menu itself knows
  * nothing about the catalog, the persisted config, or which targets exist
  * (the `applyNavCustomization` split: policy resolves, chrome renders).
+ *
+ * `@Immutable` (the ShellNavParams convention): the class carries a click
+ * lambda, which the compiler can't prove immutable on its own — unannotated,
+ * every unrelated PhoneContent emission rebuilds the whole pill column.
  */
+@Immutable
 data class OverflowMenuItem(
     /** Stable identity (the resolved shortcut's id) — animation/keys only. */
     val key: String,

@@ -26,6 +26,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -73,6 +74,7 @@ class UnifiedMediaDetailProviderImplTest {
         offlineModeManager = offlineModeManager,
         localStreamProbe = localStreamProbe,
         appScope = this,
+        timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
     )
 
     private fun movieDetail(id: String = "m1"): MediaDetail = MediaDetail(
@@ -908,6 +910,86 @@ class UnifiedMediaDetailProviderImplTest {
 
         coVerify(atLeast = 1) { detailFeed.getMediaDetail("m1", force = true) }
         firstJob.cancel()
+        secondJob.cancel()
+    }
+
+    // ── The load path's refresh→observe sequence: refresh() resolves the
+    //    fan-out and destroys its session; the observe's brand-new session
+    //    must adopt the refreshed caches (non-forced first resolve) instead of
+    //    forcing a SECOND full fan-out. A genuine later re-entry — the fresh
+    //    seed consumed — still revalidates. ──────────────────────────────────
+
+    @Test
+    fun `refresh then observe resolves the forced fan-out once`() = runTest {
+        wireStubs("m1", mode = OfflineMode.ONLINE)
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
+
+        val provider = buildProvider()
+        provider.refresh("m1")
+        advanceUntilIdle()
+
+        // The observe that follows the refresh (the orchestrator's load path).
+        val job = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+
+        // Exactly ONE forced resolution (the refresh's own); the observe-side
+        // session consumed the freshness marker and its first resolve took the
+        // non-forced (cache-through) path.
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("m1", force = true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("m1", force = false) }
+        job.cancel()
+    }
+
+    @Test
+    fun `genuine re-entry after the fresh seed still revalidates`() = runTest {
+        wireStubs("m1", mode = OfflineMode.ONLINE)
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
+
+        val provider = buildProvider()
+        provider.refresh("m1")
+        advanceUntilIdle()
+
+        // The refresh-following observe consumes the seed.
+        val job = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("m1", force = true) }
+        job.cancelAndJoin()
+
+        // A later re-entry (session destroyed) is genuine: no seed remains,
+        // so the new session force-revalidates instead of replaying caches.
+        clearMocks(detailFeed, musicCatalogue, answers = false, recordedCalls = true, childMocks = false)
+        val secondJob = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+
+        coVerify(atLeast = 1) { detailFeed.getMediaDetail("m1", force = true) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail("m1", force = false) }
+        secondJob.cancel()
+    }
+
+    @Test
+    fun `refresh on a live session leaves no fresh seed`() = runTest {
+        wireStubs("m1", mode = OfflineMode.ONLINE)
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
+
+        val provider = buildProvider()
+
+        // A screen collector holds the session live (the offline-mutation
+        // path: refreshAfterOfflineMutation runs while the open screen's
+        // observe holds the session — no observe follows the refresh).
+        val job = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+        provider.refresh("m1")
+        advanceUntilIdle()
+        job.cancelAndJoin()
+
+        // The session was live during the refresh, so no marker was stamped:
+        // the next session creation is a genuine re-entry and revalidates.
+        clearMocks(detailFeed, musicCatalogue, answers = false, recordedCalls = true, childMocks = false)
+        val secondJob = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+
+        coVerify(atLeast = 1) { detailFeed.getMediaDetail("m1", force = true) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail("m1", force = false) }
         secondJob.cancel()
     }
 

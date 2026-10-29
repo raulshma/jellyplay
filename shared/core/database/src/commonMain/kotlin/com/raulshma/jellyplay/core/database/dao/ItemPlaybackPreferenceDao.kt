@@ -18,12 +18,21 @@ interface ItemPlaybackPreferenceDao {
     suspend fun getByKey(scope: String, key: String): ItemPlaybackPreferenceEntity?
 
     /**
-     * Every row, newest-write first — the settings-sync adapter's snapshot
-     * face (it takes the most-recent slice under its roam cap). Query only:
-     * no entity change, so no schema/version bump.
+     * Every row, newest-write first — the settings-backup slice source's whole
+     * store face. Query only: no entity change, so no schema/version bump.
      */
     @Query("SELECT * FROM item_playback_preferences ORDER BY updatedAt DESC")
     suspend fun getAll(): List<ItemPlaybackPreferenceEntity>
+
+    /**
+     * The [cap] most-recent rows, newest-write first — [getAll]'s head pushed
+     * into the query so the settings-sync adapter's snapshot stops
+     * materializing the whole (unbounded) store to take its roam cap in
+     * Kotlin (the head of the list IS the roam cap). Served by the `updatedAt`
+     * index. Query only: no entity change, so no schema/version bump.
+     */
+    @Query("SELECT * FROM item_playback_preferences ORDER BY updatedAt DESC LIMIT :cap")
+    suspend fun getRecentForRoam(cap: Int): List<ItemPlaybackPreferenceEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ItemPlaybackPreferenceEntity)

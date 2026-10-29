@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -58,6 +59,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     private lateinit var policyRepository: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
     private lateinit var intake: com.raulshma.jellyplay.core.data.download.DownloadIntake
     private lateinit var offlineRepository: OfflineRepository
+    private lateinit var seriesArt: SeriesArtReads
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var viewModel: DownloadsViewModel
@@ -71,6 +73,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         policyRepository = mockk(relaxed = true)
         intake = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
+        seriesArt = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
@@ -81,7 +84,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
     }
 
     @AfterTest

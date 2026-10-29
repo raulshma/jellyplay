@@ -234,7 +234,7 @@ internal interface DetailSimilarRoles {
 /**
  * The plugin data roles behind the ADR 0010 arms that consume plugin PAYLOADS
  * (as opposed to the [DetailPluginGateRole] gate): the scored similar ids and
- * their per-item hydration, the pipeline flag, and the anime markers. All
+ * their batched hydration, the pipeline flag, and the anime markers. All
  * default to the plugin contract's silent absence.
  */
 internal interface DetailPluginRoles {
@@ -242,8 +242,14 @@ internal interface DetailPluginRoles {
     /** The plugin-scored similar ids ([JellyPlayPluginApiRoles.getJellyPlaySimilarItems]). Empty when unwired. */
     suspend fun pluginSimilarIds(itemId: String, limit: Int): List<String> = emptyList()
 
-    /** The per-item detail hydration ([DetailFeed.getMediaDetail]) — the pluginSimilarItems arm. Null on failure. */
-    suspend fun mediaDetailItem(itemId: String): MediaItem? = null
+    /**
+     * The batched hydration of the scored similar ids ([LibraryApiClient.getItemsByIds] —
+     * ONE `/Items?ids=` read; the row renders poster cards, so list-grade
+     * fields suffice) — the pluginSimilarItems arm. Ids the server no longer
+     * knows are absent (found-only); the caller restores the requested (score)
+     * order. Empty when unwired.
+     */
+    suspend fun mediaDetailItems(ids: List<String>): List<MediaItem> = emptyList()
 
     /** The capabilities' server-similar-pipeline flag ([JellyPlayCapabilities.serverSimilarPipeline]). */
     fun serverSimilarPipeline(): Boolean = false

@@ -715,13 +715,17 @@ internal fun HomeContentList(
                     } else null
                 }
 
-                // The per-row spinner mirrors, leaf-collected at row scope
+                // The per-row spinner mirror, leaf-collected at row scope
                 // (the `pendingSyncEntries` pattern): a single-row refresh's
                 // spin-up/data/spin-down emissions invalidate only THIS
-                // item's recompose scope, never the orchestrator above.
-                // Derivation is set membership on the small mirror sets
+                // item's recompose scope, never the orchestrator above — and
+                // the membership read is wrapped in a per-row derivedStateOf,
+                // so only the row whose id entered/left the set recomposes
                 // (see [HomeRefreshSpinnerState]).
                 val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
+                val edgeRefreshing by remember(section.id) {
+                    derivedStateOf { section.id in spinners.refreshingSectionIds }
+                }
 
                 // Edge-pull refresh wiring: online rows of the refreshable
                 // types only ([isEdgeRefreshableSection] — the same gate the
@@ -731,7 +735,7 @@ internal fun HomeContentList(
                 val edgeRefreshCtx = if (offlineContent == null && isEdgeRefreshableSection(section)) {
                     EdgeRefreshContext(
                         sectionId = section.id,
-                        inProgress = section.id in spinners.refreshingSectionIds,
+                        inProgress = edgeRefreshing,
                         onRefresh = { callbacks.onRefreshSection(section.id) },
                     )
                 } else {
@@ -1227,8 +1231,9 @@ private fun HomeSectionOnlinePosterRow(
     }
     // The dice-roll in-flight mirror, leaf-collected at row scope (the
     // `pendingSyncEntries` pattern — see the content list's edge-pull
-    // note): only the rolling row's arm recomposes when a roll spins up
-    // or down, never the content list above it.
+    // note): the membership read is wrapped in a per-row derivedStateOf,
+    // so only the rolling row's arm recomposes when a roll spins up or
+    // down — never the content list above it.
     val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
     // Dice affordance: RANDOM-sorted custom discover rows only
     // (the descriptor resolves the row id back out of the
@@ -1244,6 +1249,12 @@ private fun HomeSectionOnlinePosterRow(
     val diceRowAccessibilityLabel = if (diceRowId != null) {
         stringResource(Res.string.home_discover_reroll)
     } else null
+    // The tumble flag, read off the derived state (keyed on diceRowId — the
+    // closure captures it): recomposes this arm only when the row's
+    // membership in the rolling set flips.
+    val rollInProgress by remember(diceRowId) {
+        derivedStateOf { diceRowId != null && diceRowId in spinners.rollingDiscoverRowIds }
+    }
     HomeMediaRow(
         title = sectionTitle,
         items = section.items,
@@ -1271,7 +1282,7 @@ private fun HomeSectionOnlinePosterRow(
         onRollClick = if (diceRowId != null) {
             { rollDiscoverRow(diceRowId) }
         } else null,
-        rollInProgress = diceRowId != null && diceRowId in spinners.rollingDiscoverRowIds,
+        rollInProgress = rollInProgress,
         rollAccessibilityLabel = diceRowAccessibilityLabel,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         // Book progress bars: exact page fractions from the

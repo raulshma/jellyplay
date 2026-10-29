@@ -334,10 +334,10 @@ internal object ExternalRatingsEnrichmentModule {
  * registered into the host's similar pipeline (Jellyfin 12+ — there the stock
  * endpoint returns the same scored list and both rows would duplicate); on
  * pre-12 hosts / older plugins the lists differ and both render. The plugin
- * returns scored item ids only, so each id is hydrated through the same
- * per-item fetch the detail screen already uses, preserving score order;
- * per-id failures drop out and an empty hydration leaves the stock row in
- * place.
+ * returns scored item ids only, hydrated through ONE batched ids read (the
+ * home plugin-row seam — the row renders poster cards, so list-grade fields
+ * suffice) that restores the score order; ids the server no longer knows
+ * drop and an empty hydration leaves the stock row in place.
  */
 internal object PluginSimilarItemsEnrichmentModule {
     fun enrichments(
@@ -354,18 +354,18 @@ internal object PluginSimilarItemsEnrichmentModule {
                 .filter { it != inputs.itemId }
                 .distinct()
             if (scored.isEmpty()) return@DetailEnrichment
-            // The shared bounded-parallel hydration (DEFAULT_FANOUT_PARALLELISM,
-            // the arrqueue/heatmap idiom): per-id failures and null details drop
-            // out (mapConcurrentCatching's drop policy) instead of an unbounded
-            // async/awaitAll fan-out over the server.
-            val hydrated = host.mapConcurrent(scored) { candidate ->
-                plugin.mediaDetailItem(candidate)
-            }
+            // ONE batched ids read (the home plugin-row resolution pattern)
+            // instead of a per-id detail fan-out — twelve full-detail round
+            // trips for a poster-card row were pure waste. Ids the server no
+            // longer knows drop (found-only); a failed/empty read leaves the
+            // stock row in place. Deliberately a server-side read (no offline
+            // fallback — the old per-id detail path had one): offline, the
+            // row degrades to the stock similar row.
+            val hydrated = plugin.mediaDetailItems(scored)
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState {
                 it.copy(
                     pluginSimilarItems = hydrated
-                        .filterNotNull()
                         .filter { item -> item.id != inputs.itemId }
                         .distinctBy { item -> item.id },
                     // The probe ran synchronously inside pluginFeature above, so

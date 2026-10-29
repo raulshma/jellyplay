@@ -1220,25 +1220,37 @@ internal fun DetailSeasonsSection(
                 // bundle plus the episode interactions, which the screen
                 // bundles express one level up (play dispatch, item
                 // navigation, quick-action intake, per-episode delete).
-                val sectionCallbacks = SeasonsSectionCallbacks(
-                    onSeasonSelected = callbacks.seasons.onSeasonSelected,
-                    onSeasonPinned = callbacks.seasons.onSeasonPinned,
-                    onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
-                    onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
-                    onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
-                    onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
-                    onEpisodePlayClick = { episode ->
-                        val sourceId = null
-                        val startPos = episode.playbackPositionTicks ?: 0L
-                        callbacks.playback.onPlayClick(episode.id, sourceId, startPos)
-                    },
-                    onEpisodeDetailClick = { episode ->
-                        callbacks.navigation.onItemClick(episode.id)
-                    },
-                    onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
-                    onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
-                    onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
-                )
+                // Remembered on exactly the screen-level bundles its lambdas
+                // capture (each of them remembered on stable keys upstream),
+                // so sibling-section recompositions reuse the bundle instead
+                // of rebuilding its ten lambdas.
+                val sectionCallbacks = remember(
+                    callbacks.seasons,
+                    callbacks.playback,
+                    callbacks.navigation,
+                    callbacks.screen,
+                    callbacks.download,
+                ) {
+                    SeasonsSectionCallbacks(
+                        onSeasonSelected = callbacks.seasons.onSeasonSelected,
+                        onSeasonPinned = callbacks.seasons.onSeasonPinned,
+                        onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
+                        onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
+                        onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
+                        onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
+                        onEpisodePlayClick = { episode ->
+                            val sourceId = null
+                            val startPos = episode.playbackPositionTicks ?: 0L
+                            callbacks.playback.onPlayClick(episode.id, sourceId, startPos)
+                        },
+                        onEpisodeDetailClick = { episode ->
+                            callbacks.navigation.onItemClick(episode.id)
+                        },
+                        onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
+                        onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
+                        onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
+                    )
+                }
                 SeasonsSection(
                     presentation = presentation,
                     seriesItem = item,

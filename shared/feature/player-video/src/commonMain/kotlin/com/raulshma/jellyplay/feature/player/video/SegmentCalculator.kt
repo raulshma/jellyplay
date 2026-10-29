@@ -142,7 +142,12 @@ object SegmentCalculator {
         positionMs: Long,
     ): Boolean = isOutroNearEnd(input, computeActiveSegment(input, positionMs))
 
-    private fun isOutroNearEnd(
+    /**
+     * Precomputed-segment variant: the caller supplies the active segment from
+     * a single [computeActiveSegment] scan so the outro-near-end branch does
+     * not re-run the scan.
+     */
+    fun isOutroNearEnd(
         input: SegmentCalculatorInput,
         activeSegment: MediaSegment?,
     ): Boolean {

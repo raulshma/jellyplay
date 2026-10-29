@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.ResolvedSeriesArt
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -50,6 +51,7 @@ class DownloadsViewModelTest {
     private lateinit var policyRepository: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
     private lateinit var intake: com.raulshma.jellyplay.core.data.download.DownloadIntake
     private lateinit var offlineRepository: OfflineRepository
+    private lateinit var seriesArt: com.raulshma.jellyplay.core.data.repository.SeriesArtReads
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var viewModel: DownloadsViewModel
@@ -73,6 +75,7 @@ class DownloadsViewModelTest {
         policyRepository = mockk(relaxed = true)
         intake = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
+        seriesArt = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         progressFlow = MutableStateFlow(emptyMap())
@@ -94,7 +97,7 @@ class DownloadsViewModelTest {
         every { offlineRepository.getOfflineEpisodes() } returns offlineEpisodesFlow
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns storeSliceFlow
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
     }
 
     @AfterTest
@@ -181,7 +184,7 @@ class DownloadsViewModelTest {
         every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
-        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
+        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
 
         // Throwable.message == null must hit the fallback literal.
@@ -478,7 +481,7 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcher) {
         storeSliceFlow.value = DownloadsSlice(downloadsListFilter = "SERIES", downloadsListSort = "SIZE")
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
 
         assertEquals(DownloadListFilter.SERIES, seeded.filter.value)
@@ -488,16 +491,13 @@ class DownloadsViewModelTest {
     @Test
     fun rows_carry_series_poster_with_episode_still_fallback() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.rows.collect {} }
-        coEvery { offlineRepository.getOfflineItem("s1") } answers {
-            OfflineMediaItem(
-                id = "s1",
-                name = "Show",
-                mediaType = MediaType.SERIES,
-                posterPath = "/art/s1.jpg",
-                blurHashPrimary = "poster-bh",
-            )
-        }
-        coEvery { offlineRepository.getOfflineItem("s2") } answers { null }
+        // The batched series-art seam: s1 carries a saved (resolved) poster;
+        // s2's entry has a blank poster — the VM's filter drops it, so the
+        // header falls back to the group episode's still.
+        coEvery { seriesArt.getSeriesArt(listOf("s1", "s2")) } returns mapOf(
+            "s1" to ResolvedSeriesArt(posterPath = "/art/s1.jpg", blurHashPrimary = "poster-bh"),
+            "s2" to ResolvedSeriesArt(posterPath = null, blurHashPrimary = "bh-s2"),
+        )
         pushItems(
             listOf(
                 item("ep1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1)
@@ -534,7 +534,7 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcher) {
         storeSliceFlow.value = DownloadsSlice(selectionHintSeen = true)
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore, policyRepository, intake)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
         assertTrue(seeded.selectionHintSeen.value)
 

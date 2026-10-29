@@ -8,7 +8,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -158,27 +157,27 @@ internal fun MainContent(
     // recomposes frequently (it reads audioTitle/artist/... for the mini
     // player), so an eager `when{}` would allocate a fresh LinkedHashMap +
     // intermediate entry lists + KClass.simpleName lookups on every
-    // recomposition.
-    val activeTopLevelRoutes: LinkedHashMap<Route, String> by remember(
+    // recomposition. A plain `remember(keys) { fold }` — not a derivedStateOf:
+    // every captured input is already a remember key and no State is read
+    // inside, so the derived lambda would only add a layer.
+    val activeTopLevelRoutes: LinkedHashMap<Route, String> = remember(
         homeMode,
         preferences.hiddenNavItems,
         preferences.navItemOrder,
         isOffline,
     ) {
-        derivedStateOf {
-            // Pure fold (core/ui VisibleTopLevelRoutes): the homeMode base
-            // set + the offline hide-set (LiveTv) + nav customization
-            // composition — the same policy the desktop rail renders through.
-            visibleTopLevelRoutes(
-                when (homeMode) {
-                    HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
-                    HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
-                },
-                hiddenNavItems = preferences.hiddenNavItems,
-                navItemOrder = preferences.navItemOrder,
-                isOffline = isOffline,
-            )
-        }
+        // Pure fold (core/ui VisibleTopLevelRoutes): the homeMode base
+        // set + the offline hide-set (LiveTv) + nav customization
+        // composition — the same policy the desktop rail renders through.
+        visibleTopLevelRoutes(
+            when (homeMode) {
+                HomeMode.VIDEO -> VIDEO_TOP_LEVEL_ROUTES
+                HomeMode.MUSIC -> MUSIC_TOP_LEVEL_ROUTES
+            },
+            hiddenNavItems = preferences.hiddenNavItems,
+            navItemOrder = preferences.navItemOrder,
+            isOffline = isOffline,
+        )
     }
 
     // Stable on purpose: this is a key of the shellHost construction below
@@ -192,9 +191,14 @@ internal fun MainContent(
     val audioItemId by audioPlaybackManager.currentPlayingItemId.collectAsStateWithLifecycle()
     val libraryFolders by infra.sessionCoordinatorLazy.value.libraryFolders.collectAsStateWithLifecycle()
     var isMiniPlayerDismissed by remember { mutableStateOf(false) }
-    val showMiniPlayer by remember {
-        derivedStateOf { audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed }
-    }
+    // A plain composition val, NOT a `remember { derivedStateOf { ... } }`: the
+    // derived lambda had no keys, so it captured the plain `isFullScreenRoute`
+    // Boolean BY VALUE from the first composition forever — cold-starting on a
+    // full-screen route froze showMiniPlayer=false for the process lifetime
+    // (the mini player never returned after backing out). Three comparisons buy
+    // nothing from derivation, and the delegated state reads below recompose
+    // this scope naturally.
+    val showMiniPlayer = audioItemId != null && !isFullScreenRoute && !isMiniPlayerDismissed
 
     LaunchedEffect(audioItemId) {
         if (audioItemId != null) {
@@ -315,7 +319,12 @@ internal fun MainContent(
     // Stable lambdas for CompositionLocalProvider — `provides` compares by ==,
     // so a fresh lambda per recomposition forces downstream invalidation even
     // when the captured state hasn't changed. MainContent recomposes often
-    // (audio metadata, nav color, mini-player), so hoist these out.
+    // (audio metadata, nav color, mini-player), so hoist these out. The same
+    // discipline is the shell's capture rule for remembered/derived lambdas:
+    // they may capture State objects and rememberUpdatedState delegates (read
+    // live through the delegate), never plain composition locals — those are
+    // captured by value from the first composition and go stale (the
+    // showMiniPlayer derivedStateOf bug removed above).
 
     CompositionLocalProvider(
         LocalTvMode provides isTv,

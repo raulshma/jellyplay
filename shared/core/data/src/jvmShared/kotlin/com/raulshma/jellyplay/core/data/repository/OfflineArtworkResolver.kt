@@ -343,8 +343,12 @@ internal class OfflineArtworkResolver(
             .mapNotNull { File(it).parentFile }
             .firstOrNull()
 
-    /** True when [path] is absent or a server URL — i.e. not a local file. */
-    private fun needsArtworkResolution(path: String?): Boolean =
+    /**
+     * True when [path] is absent or a server URL — i.e. not a local file.
+     * Internal so the repository's batched reads can route exactly the rows
+     * the resolver would re-resolve to the per-item resolution step.
+     */
+    internal fun needsArtworkResolution(path: String?): Boolean =
         path.isNullOrBlank() || isRemoteUrl(path)
 
     private fun isRemoteUrl(path: String): Boolean =
