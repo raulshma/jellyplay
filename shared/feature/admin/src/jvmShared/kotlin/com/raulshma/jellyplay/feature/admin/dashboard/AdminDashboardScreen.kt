@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.font.FontWeight
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
@@ -43,6 +46,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.model.JellyPlayContractMismatch
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
@@ -59,6 +63,7 @@ import com.raulshma.jellyplay.feature.admin.dashboard.components.RecentActivityT
 import com.raulshma.jellyplay.feature.admin.dashboard.components.RunningTasksCard
 import com.raulshma.jellyplay.feature.admin.dashboard.components.ServerHeroHeader
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
+import com.raulshma.jellyplay.feature.admin.generated.resources.admin_plugin_contract_mismatch
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_cancel
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_dashboard_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_refresh
@@ -97,6 +102,8 @@ fun AdminDashboardScreen(
     val transcodesEnabled by viewModel.jellyPlayTranscodesEnabled.collectAsStateWithLifecycle()
     val broadcastEnabled by viewModel.jellyPlayBroadcastEnabled.collectAsStateWithLifecycle()
     val analyticsEnabled by viewModel.jellyPlayAnalyticsEnabled.collectAsStateWithLifecycle()
+    val contractMismatch by viewModel.jellyPlayContractMismatch.collectAsStateWithLifecycle()
+    val pluginVersion by viewModel.jellyPlayPluginVersion.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
@@ -277,6 +284,8 @@ fun AdminDashboardScreen(
                     showBroadcast = broadcastEnabled,
                     onAnalytics = onAnalytics,
                     showAnalytics = analyticsEnabled,
+                    contractMismatch = contractMismatch,
+                    pluginVersion = pluginVersion,
                     onStopSession = { viewModel.showStopSessionDialog(it) },
                     contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
@@ -312,6 +321,10 @@ private fun DashboardContent(
     /** Gated on the companion plugin's `analytics` feature; off = no tile. */
     onAnalytics: () -> Unit = {},
     showAnalytics: Boolean = false,
+    /** Non-null when the probe decoded a payload this client's contract gate refuses — the one-line drift hint (the plugin tiles gate closed). */
+    contractMismatch: JellyPlayContractMismatch? = null,
+    /** The plugin's served version from the last decoded probe (names the server's build in the hint). */
+    pluginVersion: String? = null,
     onStopSession: (SessionInfo) -> Unit = {},
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
@@ -406,6 +419,28 @@ private fun DashboardContent(
                     onViewAll = onLogs,
                 )
             }
+        }
+
+        // The one face a refused contract gets here: the plugin tiles above
+        // all gate closed, so without this line the drift would look like a
+        // stock server (the settings screen carries the full banner).
+        val mismatch = contractMismatch
+        if (mismatch != null) {
+            val supported = with(mismatch.supportedRange) {
+                if (first == last) "$first" else "$first–$last"
+            }
+            Text(
+                text = stringResource(
+                    Res.string.admin_plugin_contract_mismatch,
+                    mismatch.servedContractVersion.toString(),
+                    supported,
+                    pluginVersion ?: "",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
         }
 
         AnimatedSectionEntrance(visible = true) {

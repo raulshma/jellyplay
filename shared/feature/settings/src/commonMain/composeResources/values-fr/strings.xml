@@ -773,8 +773,12 @@
     <string name="settings_jellyplay_sync_op_pull">Réception</string>
     <string name="settings_jellyplay_sync_op_reset">Réinitialisation</string>
     <string name="settings_jellyplay_sync_op_unknown">Synchro</string>
+    <string name="settings_jellyplay_sync_tab_status">État</string>
+    <string name="settings_jellyplay_sync_tab_activity">Activité</string>
+    <string name="settings_jellyplay_sync_tab_backup">Sauvegarde</string>
     <string name="settings_jellyplay_sync_usage_title">Contenu synchronisé</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Détails d'utilisation indisponibles sur ce serveur</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Activité de synchronisation indisponible sur ce serveur</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s sur %2$s utilisés</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d clés sur %2$d</string>
     <string name="settings_jellyplay_sync_relative_days">il y a %1$d j</string>
@@ -845,6 +849,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Plugin serveur</string>
     <string name="settings_jellyplay_plugin_section_summary">Choisissez les fonctionnalités fournies par le plugin JellyPlay</string>
+    <string name="settings_jellyplay_plugin_version_summary">Plugin serveur v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Mise à jour du plugin requise</string>
+    <string name="settings_jellyplay_contract_mismatch_body">Le plugin serveur (v%3$s) utilise le contrat v%1$s ; cette app prend en charge v%2$s. Mettez à jour le plugin sur votre serveur Jellyfin — ou l'application si elle est plus ancienne.</string>
     <string name="settings_jellyplay_feature_locked">Défini par l'administrateur de votre serveur</string>
     <string name="settings_jellyplay_feature_events">Événements en direct</string>
     <string name="ss_jellyplay_feature_events_subtitle">Alertes de nouveaux médias et diffusions du serveur envoyées à cet appareil</string>

@@ -128,6 +128,32 @@ jobs:
           echo "build_tasks=$build_tasks" >> "$GITHUB_OUTPUT"
           echo "test_tasks=$test_tasks" >> "$GITHUB_OUTPUT"
 
+      - name: Warn on plugin/app version drift
+        # Tier-3 drift discipline: the contract-version gate makes a
+        # version-mismatched pair degrade gracefully (the capabilities probe
+        # refuses out-of-range contracts, the settings screen shows the
+        # mismatch banner), so this check is an ANNOTATION, not a gate — it
+        # only surfaces a forgotten submodule csproj bump early. Compares the
+        # release.yml branch-name derivation against the pinned plugin tree's
+        # <Version>; PR checkouts (NN/merge) carry no version segment and skip.
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -eu
+          csproj="jellyfin-plugin-jellyplay/src/Jellyfin.Plugin.JellyPlay/Jellyfin.Plugin.JellyPlay.csproj"
+          plugin_version=$(grep -oPm1 '(?<=<Version>)[^<]+' "$csproj")
+          base_version=$(echo "${GITHUB_REF_NAME}" | grep -oE '(^|/)[v]?[0-9]+\.[0-9]+(\.[0-9]+)?' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)
+          if [ -z "$base_version" ]; then
+            echo "Branch ${GITHUB_REF_NAME} carries no version segment — nothing to compare."
+            exit 0
+          fi
+          plugin_mm=$(echo "$plugin_version" | cut -d. -f1-2)
+          app_mm=$(echo "$base_version" | cut -d. -f1-2)
+          if [ "$plugin_mm" != "$app_mm" ]; then
+            echo "::warning::Plugin/app version drift: the pinned jellyfin-plugin-jellyplay csproj is ${plugin_version} but the branch name implies app version ${base_version}. The contract gate keeps a mismatched pair working, but users on the older side lose the plugin features — bump the csproj (or rename the branch) before release."
+          else
+            echo "Versions aligned: plugin ${plugin_version}, app ${base_version}."
+          fi
+
       - name: Build shared targets (JVM + Android)
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.

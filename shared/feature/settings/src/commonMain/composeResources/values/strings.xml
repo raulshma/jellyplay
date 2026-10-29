@@ -819,8 +819,13 @@
     <string name="settings_jellyplay_sync_op_pull">Pull</string>
     <string name="settings_jellyplay_sync_op_reset">Reset</string>
     <string name="settings_jellyplay_sync_op_unknown">Sync</string>
+    <!-- The sync screen's tab row (the non-TV layout's four content tabs). -->
+    <string name="settings_jellyplay_sync_tab_status">Status</string>
+    <string name="settings_jellyplay_sync_tab_activity">Activity</string>
+    <string name="settings_jellyplay_sync_tab_backup">Backup</string>
     <string name="settings_jellyplay_sync_usage_title">What’s synced</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Usage details unavailable on this server</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Sync activity unavailable on this server</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s of %2$s used</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d of %2$d keys</string>
     <string name="settings_jellyplay_sync_relative_days">%1$dd ago</string>
@@ -933,6 +938,9 @@
          capabilities probe exposes the feature (transcodes: admin users only). -->
     <string name="settings_jellyplay_plugin_section">Server plugin</string>
     <string name="settings_jellyplay_plugin_section_summary">Choose which features the JellyPlay plugin provides</string>
+    <string name="settings_jellyplay_plugin_version_summary">Server plugin v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Plugin update needed</string>
+    <string name="settings_jellyplay_contract_mismatch_body">The server plugin (v%3$s) speaks contract v%1$s; this app supports v%2$s. Update the plugin on your Jellyfin server — or the app if it is older.</string>
     <string name="settings_jellyplay_feature_locked">Set by your server admin</string>
     <string name="settings_jellyplay_feature_events">Live events</string>
     <string name="ss_jellyplay_feature_events_subtitle">New-media alerts and server broadcasts streamed to this device</string>

@@ -774,8 +774,12 @@
     <string name="settings_jellyplay_sync_op_pull">下载</string>
     <string name="settings_jellyplay_sync_op_reset">重置</string>
     <string name="settings_jellyplay_sync_op_unknown">同步</string>
+    <string name="settings_jellyplay_sync_tab_status">状态</string>
+    <string name="settings_jellyplay_sync_tab_activity">活动</string>
+    <string name="settings_jellyplay_sync_tab_backup">备份</string>
     <string name="settings_jellyplay_sync_usage_title">已同步的内容</string>
     <string name="settings_jellyplay_sync_usage_unavailable">此服务器不提供用量详情</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">此服务器不提供同步活动记录</string>
     <string name="settings_jellyplay_sync_quota_bytes">已用 %1$s / %2$s</string>
     <string name="settings_jellyplay_sync_quota_keys">已用 %1$d / %2$d 个键</string>
     <string name="settings_jellyplay_sync_relative_days">%1$d天前</string>
@@ -845,6 +849,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">服务器插件</string>
     <string name="settings_jellyplay_plugin_section_summary">选择由 JellyPlay 插件提供的功能</string>
+    <string name="settings_jellyplay_plugin_version_summary">服务器插件 v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">需要更新插件</string>
+    <string name="settings_jellyplay_contract_mismatch_body">服务器插件（v%3$s）使用的契约版本为 v%1$s，此应用支持 v%2$s。请更新 Jellyfin 服务器上的插件；若应用较旧，请更新应用。</string>
     <string name="settings_jellyplay_feature_locked">由服务器管理员设定</string>
     <string name="settings_jellyplay_feature_events">实时事件</string>
     <string name="ss_jellyplay_feature_events_subtitle">新媒体提醒和服务器广播推送到此设备</string>

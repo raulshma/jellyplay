@@ -11,21 +11,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
@@ -74,6 +81,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_canc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_action_failed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_actions_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_activity_unavailable
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_admin_section
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_admin_user_usage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_conflict_deleted_value
@@ -112,7 +120,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jell
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_last_sync
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_ns_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_ns_toggle_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_ns_usage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_pull
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_push
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_op_reset
@@ -135,6 +142,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jell
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_create_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_empty
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_tab_activity
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_tab_backup
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_tab_status
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_this_device
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_usage_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_usage_unavailable
@@ -145,26 +155,40 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_safety
 import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_snapshot_preview_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_now
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_subtitle
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
+/** The sync screen's tabs (the non-TV layout); each owns one slice of the content. */
+private enum class JellyPlaySyncTab(val labelRes: StringResource) {
+    Status(Res.string.settings_jellyplay_sync_tab_status),
+    Devices(Res.string.settings_jellyplay_sync_devices_title),
+    Activity(Res.string.settings_jellyplay_sync_tab_activity),
+    Backup(Res.string.settings_jellyplay_sync_tab_backup),
+}
+
 /**
- * The JellyPlay companion-plugin's settings-sync screen — the sync engine's
- * whole UI under one roof, top to bottom: the opt-in toggle + sync-now (the
- * settings-root rows' mechanism), the error banner (the
- * engine's `lastError`/`rejectedKeys` + the snapshot/export action
- * failures), the server-side usage (quota bars + the per-namespace
- * selective-sync toggles with their pending counts), the conflict list (the
- * last cycle's `stale-write` rejects with ours/theirs previews), the merged
- * device list (rename this device, revoke others), this device's resolved
- * profile, the sync history ledger with its retention footer, the server's
- * restore points (each opening the unified restore wizard), and the
- * namespace-reset / force-re-pull / export / restore-from-file actions (the
- * file arm reroutes into the wizard; the namespace reset captures a safety
- * restore point first).
+ * The JellyPlay companion-plugin's settings-sync screen. The non-TV layout is
+ * tabbed: the sync opt-in toggle, the manual sync cycle and the error banner
+ * stay pinned above the tab row (the master switch + the failure face are
+ * visible from every tab), and a [PrimaryTabRow] splits the content:
  *
- * TV (`LocalTvMode`) collapses the screen to its d-pad essentials: the status
- * + sync-now, the error banner, and the namespace toggles only.
+ *  - **Status** — the server-side usage face: the quota bars, the
+ *    per-namespace selective-sync toggles with their pending counts, and the
+ *    admin per-user overview. Degrades on the 404 to the quiet
+ *    "unavailable" line, never an error.
+ *  - **Devices** — the merged device list (rename this device, revoke
+ *    others) and this device's resolved profile.
+ *  - **Activity** — the last cycle's `stale-write` conflict rejects with
+ *    their ours/theirs resolutions, and the sync history ledger with its
+ *    retention footer (rows expand into their lazily-fetched per-key diff).
+ *  - **Backup** — the server's restore points (each opening the unified
+ *    restore wizard) and the namespace-reset / force-re-pull / export /
+ *    restore-from-file actions (the file arm reroutes into the wizard; the
+ *    namespace reset captures a safety restore point first).
+ *
+ * TV (`LocalTvMode`) keeps the untabbed d-pad essentials: the status +
+ * sync-now, the error banner, and the namespace toggles only.
  *
  * Reachability IS the gate — this screen is only navigated to from the
  * settings root's capability-gated "Sync" entry (plugin probe AVAILABLE + the
@@ -219,69 +243,53 @@ fun JellyPlaySyncScreen(
         onBack = onBack,
         backgroundColorState = backgroundColorState,
     ) { contentPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = contentPadding.calculateTopPadding() + 8.dp,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp,
-                start = 16.dp,
-                end = 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // ── a. Status: the opt-in toggle + the manual sync cycle (the
-            //      declared JellyPlaySyncGroup — one projection for the
-            //      admission total) ──
-            item {
-                SettingsItemList(total = rowTotalFor(JellyPlaySyncGroup, RowAdmissionFlags())) {
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Devices,
-                        title = stringResource(Res.string.settings_sync_across_devices),
-                        subtitle = stringResource(Res.string.ss_jellyplay_sync_enabled_subtitle),
-                        checked = syncState.enabled,
-                        onCheckedChange = { enabled -> viewModel.setSyncEnabled(enabled) },
-                    )
-                    SettingListItem(
-                        icon = Tabler.Outline.Refresh,
-                        title = stringResource(Res.string.settings_sync_now),
-                        subtitle = syncNowSubtitle(syncState, uiState.thisDeviceId, uiState.status),
-                        onClick = { viewModel.syncNow() },
-                    )
+        if (isTv) {
+            // TV: the untabbed d-pad essentials — status + sync-now, the
+            // error banner, and the namespace toggles only.
+            val tvListState = rememberLazyListState()
+            LazyColumn(
+                state = tvListState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    top = contentPadding.calculateTopPadding() + 8.dp,
+                    bottom = contentPadding.calculateBottomPadding() + 16.dp,
+                    start = 16.dp,
+                    end = 16.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    SettingsItemList(total = rowTotalFor(JellyPlaySyncGroup, RowAdmissionFlags())) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Devices,
+                            title = stringResource(Res.string.settings_sync_across_devices),
+                            subtitle = stringResource(Res.string.ss_jellyplay_sync_enabled_subtitle),
+                            checked = syncState.enabled,
+                            onCheckedChange = { enabled -> viewModel.setSyncEnabled(enabled) },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = stringResource(Res.string.settings_sync_now),
+                            subtitle = syncNowSubtitle(syncState, uiState.thisDeviceId, uiState.status),
+                            onClick = { viewModel.syncNow() },
+                        )
+                    }
                 }
-            }
-
-            // The error banner: the engine's failure face (fatal rejects,
-            // transport errors) beside the snapshot/export/import action
-            // failures — one banner, never two.
-            if (syncState.lastError != null || uiState.actionError) {
-                item(key = "error_banner") {
-                    ErrorBanner(text = syncState.lastError)
+                if (syncState.lastError != null || uiState.actionError) {
+                    item(key = "error_banner") { ErrorBanner(text = syncState.lastError) }
                 }
-            }
-
-            // ── b. What's synced: quota bars + per-namespace rows (usage +
-            //      pending + the selective-sync toggle per active namespace;
-            //      TV keeps ONLY the toggle rows — the d-pad essentials). The
-            //      section degrades on the 404 — the quiet line, never an
-            //      error. ──
-            item(key = "usage_label") { SectionLabel(
-                    stringResource(Res.string.settings_jellyplay_sync_usage_title),
-                    Modifier.padding(top = 8.dp, start = 4.dp),
-                ) }
-            val status = uiState.status
-            if (status == null) {
-                item(key = "usage_unavailable") {
-                    QuietLine(stringResource(Res.string.settings_jellyplay_sync_usage_unavailable))
-                }
-            } else {
-                if (!isTv) {
-                    item(key = "quota_card") { QuotaCard(status) }
-                }
-                val namespaceRows = if (isTv) uiState.namespaceRows.filter { it.toggleable } else uiState.namespaceRows
-                items(namespaceRows, key = { "ns_${it.ns}" }, contentType = { row ->
-                    if (row.toggleable) "namespaceToggle" else "namespaceInfo"
-                }) { namespace ->
-                    if (namespace.toggleable) {
+                item(key = "usage_label") { SectionLabel(
+                        stringResource(Res.string.settings_jellyplay_sync_usage_title),
+                        Modifier.padding(top = 8.dp, start = 4.dp),
+                    ) }
+                val status = uiState.status
+                if (status == null) {
+                    item(key = "usage_unavailable") {
+                        QuietLine(stringResource(Res.string.settings_jellyplay_sync_usage_unavailable))
+                    }
+                } else {
+                    val namespaceRows = uiState.namespaceRows.filter { it.toggleable }
+                    items(namespaceRows, key = { "ns_${it.ns}" }, contentType = { "namespaceToggle" }) { namespace ->
                         SettingToggleItem(
                             icon = Tabler.Outline.Database,
                             title = namespace.ns,
@@ -289,212 +297,106 @@ fun JellyPlaySyncScreen(
                             checked = namespace.enabled,
                             onCheckedChange = { enabled -> viewModel.setNamespaceEnabled(namespace.ns, enabled) },
                         )
-                    } else {
-                        SettingInfoItem(
-                            icon = Tabler.Outline.Database,
-                            title = namespace.ns,
-                            subtitle = namespaceSubtitle(namespace),
-                        )
-                    }
-                }
-                val adminUsers = uiState.adminUsers
-                if (!isTv && !adminUsers.isNullOrEmpty()) {
-                    item(key = "admin_label") { SectionLabel(
-                        stringResource(Res.string.settings_jellyplay_sync_admin_section),
-                        Modifier.padding(top = 8.dp, start = 4.dp),
-                    ) }
-                    items(adminUsers, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
-                        SettingInfoItem(
-                            icon = Tabler.Outline.Users,
-                            title = user.userName.ifBlank { user.userId },
-                            subtitle = stringResource(
-                                Res.string.settings_jellyplay_sync_admin_user_usage,
-                                user.keys,
-                                user.bytes.formatBytes(),
-                                user.deviceCount,
-                            ),
-                        )
                     }
                 }
             }
-
-            if (!isTv) {
-                // ── c. Conflicts: the last cycle's `stale-write` rejects with
-                //      both sides previewed; a row expands into the ours /
-                //      theirs pair + the two resolutions. ──
-                if (syncState.conflicts.isNotEmpty()) {
-                    item(key = "conflicts_label") { SectionLabel(
-                        stringResource(Res.string.settings_jellyplay_sync_conflicts_title),
-                        Modifier.padding(top = 8.dp, start = 4.dp),
-                    ) }
-                    items(syncState.conflicts, key = { "conflict_${it.ns}/${it.key}" }, contentType = { "conflictRow" }) { conflict ->
-                        val key = "${conflict.ns}/${conflict.key}"
-                        ConflictRow(
-                            conflict = conflict,
-                            expanded = expandedConflictKey == key,
-                            onToggle = { expandedConflictKey = if (expandedConflictKey == key) null else key },
-                            onKeepMine = { viewModel.resolveConflictKeepMine(conflict.ns, conflict.key) },
-                            onTakeTheirs = { viewModel.resolveConflictTakeTheirs(conflict.ns, conflict.key) },
+        } else {
+            // Non-TV: the master switch + the manual cycle + the error face
+            // pinned above the tab row (visible from every tab), the content
+            // split across tabs. Each tab keeps its own hoisted scroll state,
+            // so switching back restores the position.
+            var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+            val tab = JellyPlaySyncTab.entries.getOrElse(selectedTabIndex) { JellyPlaySyncTab.Status }
+            val statusListState = rememberLazyListState()
+            val devicesListState = rememberLazyListState()
+            val activityListState = rememberLazyListState()
+            val backupListState = rememberLazyListState()
+            Column(
+                modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding() + 8.dp),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    SettingsItemList(total = rowTotalFor(JellyPlaySyncGroup, RowAdmissionFlags())) {
+                        SettingToggleItem(
+                            icon = Tabler.Outline.Devices,
+                            title = stringResource(Res.string.settings_sync_across_devices),
+                            subtitle = stringResource(Res.string.ss_jellyplay_sync_enabled_subtitle),
+                            checked = syncState.enabled,
+                            onCheckedChange = { enabled -> viewModel.setSyncEnabled(enabled) },
+                        )
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = stringResource(Res.string.settings_sync_now),
+                            subtitle = syncNowSubtitle(syncState, uiState.thisDeviceId, uiState.status),
+                            onClick = { viewModel.syncNow() },
+                        )
+                    }
+                    // The error banner: the engine's failure face (fatal
+                    // rejects, transport errors) beside the snapshot/export/
+                    // import action failures — one banner, never two, visible
+                    // regardless of the active tab.
+                    if (syncState.lastError != null || uiState.actionError) {
+                        ErrorBanner(text = syncState.lastError)
+                    }
+                }
+                PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+                    JellyPlaySyncTab.entries.forEach { entry ->
+                        Tab(
+                            selected = tab == entry,
+                            onClick = { selectedTabIndex = entry.ordinal },
+                            text = { Text(stringResource(entry.labelRes)) },
                         )
                     }
                 }
-
-                // ── d. Devices: the registry merged with the server's
-                //      per-device ledger; this device first (rename), the
-                //      others revocable (the v7 revoke + wipe). Revoked rows
-                //      render destructive and inert. ──
-                item(key = "devices_label") { SectionLabel(
-                    stringResource(Res.string.settings_jellyplay_sync_devices_title),
-                    Modifier.padding(top = 8.dp, start = 4.dp),
-                ) }
-                items(uiState.devices, key = { it.deviceId }, contentType = { "deviceRow" }) { device ->
-                    val lastSync = device.lastSyncAt
-                        ?.let { stringResource(Res.string.settings_jellyplay_sync_device_last_sync, formatSyncTimestamp(it)) }
-                        ?: stringResource(Res.string.settings_sync_never)
-                    SettingListItem(
-                        icon = Tabler.Outline.Devices,
-                        title = buildList {
-                            add(device.name)
-                            if (device.revoked) add(stringResource(Res.string.settings_jellyplay_sync_device_revoked))
-                        }.joinToString(" • "),
-                        subtitle = buildList {
-                            if (device.platform.isNotBlank()) add(device.platform)
-                            device.model?.let { add(it) }
-                            add(lastSync)
-                            if (device.isThisDevice) add(stringResource(Res.string.settings_jellyplay_sync_this_device))
-                        }.joinToString(" • "),
-                        isDestructive = device.revoked,
-                        onClick = {
-                            when {
-                                device.isThisDevice -> {
-                                    renameText = device.name
-                                    showRenameDialog = true
-                                }
-                                !device.revoked -> revokeConfirm.request { viewModel.revokeDevice(device.deviceId) }
-                            }
+                when (tab) {
+                    JellyPlaySyncTab.Status -> SyncStatusTabContent(
+                        uiState = uiState,
+                        listState = statusListState,
+                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
+                        onNamespaceEnabled = { ns, enabled -> viewModel.setNamespaceEnabled(ns, enabled) },
+                    )
+                    JellyPlaySyncTab.Devices -> SyncDevicesTabContent(
+                        uiState = uiState,
+                        deviceProfile = viewModel.deviceProfile,
+                        listState = devicesListState,
+                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
+                        onRenameThisDevice = { name ->
+                            renameText = name
+                            showRenameDialog = true
+                        },
+                        onRevokeDevice = { deviceId ->
+                            revokeConfirm.request { viewModel.revokeDevice(deviceId) }
                         },
                     )
-                }
-
-                // ── e. Device profile: the resolved profile this device syncs under ──
-                item(key = "profile_row") {
-                    SettingInfoItem(
-                        icon = Tabler.Outline.DeviceDesktop,
-                        title = stringResource(Res.string.settings_jellyplay_sync_profile_title),
-                        subtitle = stringResource(Res.string.settings_jellyplay_sync_profile_subtitle, viewModel.deviceProfile),
+                    JellyPlaySyncTab.Activity -> SyncActivityTabContent(
+                        uiState = uiState,
+                        conflicts = syncState.conflicts,
+                        expandedConflictKey = expandedConflictKey,
+                        listState = activityListState,
+                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
+                        onConflictToggle = { key ->
+                            expandedConflictKey = if (expandedConflictKey == key) null else key
+                        },
+                        onKeepMine = { ns, key -> viewModel.resolveConflictKeepMine(ns, key) },
+                        onTakeTheirs = { ns, key -> viewModel.resolveConflictTakeTheirs(ns, key) },
+                        onToggleHistory = { seq -> viewModel.toggleHistoryEntryExpanded(seq) },
                     )
-                }
-
-                // ── f. History: the server's ledger, newest first. The
-                //      section rides the status payload — a plugin old enough
-                //      to 404 the status 404s the history too, so it hides
-                //      with it. Tapping a row expands its per-key diff
-                //      (fetched lazily per seq). ──
-                if (status != null) {
-                    item(key = "history_label") { SectionLabel(
-                        stringResource(Res.string.settings_jellyplay_sync_history_title),
-                        Modifier.padding(top = 8.dp, start = 4.dp),
-                    ) }
-                    if (uiState.history.isEmpty()) {
-                        item(key = "history_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_history_empty)) }
-                    } else {
-                        items(uiState.history, key = { it.seq }, contentType = { "historyRow" }) { entry ->
-                            HistoryRow(
-                                entry = entry,
-                                expanded = uiState.expandedHistorySeq == entry.seq,
-                                detail = uiState.historyKeyDetails[entry.seq],
-                                onToggle = { viewModel.toggleHistoryEntryExpanded(entry.seq) },
-                            )
-                        }
-                        item(key = "history_retention") {
-                            QuietLine(
-                                stringResource(Res.string.settings_jellyplay_sync_history_retention, status.historyRetentionDays),
-                            )
-                        }
-                    }
-                }
-
-                // ── g. Restore points: the server's rolling snapshots —
-                //      create one, restore one (confirmed). null (old plugin /
-                //      failed read) hides the section quietly. ──
-                val snapshots = uiState.snapshots
-                if (snapshots != null) {
-                    item(key = "snapshots_label") { SectionLabel(
-                        stringResource(Res.string.settings_jellyplay_sync_snapshots_title),
-                        Modifier.padding(top = 8.dp, start = 4.dp),
-                    ) }
-                    item(key = "snapshot_create") {
-                        SettingListItem(
-                            icon = Tabler.Outline.DeviceFloppy,
-                            title = stringResource(Res.string.settings_jellyplay_sync_snapshots_create_title),
-                            subtitle = stringResource(Res.string.settings_jellyplay_sync_snapshots_create_subtitle),
-                            onClick = { if (!uiState.actionInFlight) viewModel.createSnapshot() },
-                        )
-                    }
-                    if (snapshots.isEmpty()) {
-                        item(key = "snapshots_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_snapshots_empty)) }
-                    } else {
-                        items(snapshots, key = { "snapshot_${it.id}" }, contentType = { "snapshotRow" }) { snapshot ->
-                            SettingListItem(
-                                icon = Tabler.Outline.Clock,
-                                title = stringResource(
-                                    Res.string.settings_jellyplay_sync_snapshot_entry,
-                                    snapshot.origin.ifBlank { stringResource(Res.string.settings_jellyplay_sync_op_unknown) },
-                                    snapshot.keys,
-                                    snapshot.bytes.formatBytes(),
-                                ),
-                                subtitle = formatSyncTimestamp(snapshot.createdAt),
-                                trailingText = stringResource(Res.string.wizard_snapshot_preview_short),
-                                onClick = { onRestoreSnapshot(snapshot.id.toString()) },
-                            )
-                        }
-                    }
-                }
-
-                // ── h. Actions: the destructive namespace reset (confirmed;
-                //      safety capture inside the VM), the pull-dominant
-                //      recovery cycle, the JSON export, and the restore-from-
-                //      file entry (routed into the unified restore wizard). ──
-                item(key = "actions_label") { SectionLabel(
-                    stringResource(Res.string.settings_jellyplay_sync_actions_title),
-                    Modifier.padding(top = 8.dp, start = 4.dp),
-                ) }
-                item(key = "actions_group") {
-                    SettingsItemList(total = 4) {
-                        SettingListItem(
-                            icon = Tabler.Outline.Trash,
-                            title = stringResource(Res.string.settings_jellyplay_sync_reset_title),
-                            subtitle = stringResource(Res.string.settings_jellyplay_sync_reset_subtitle),
-                            isDestructive = true,
-                            onClick = {
-                                resetConfirm.request { viewModel.resetNamespace() }
-                            },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.History,
-                            title = stringResource(Res.string.settings_jellyplay_sync_force_repull_title),
-                            subtitle = stringResource(Res.string.settings_jellyplay_sync_force_repull_subtitle),
-                            onClick = { viewModel.forceRepull() },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.Share,
-                            title = stringResource(Res.string.settings_jellyplay_sync_export_title),
-                            subtitle = stringResource(Res.string.settings_jellyplay_sync_export_subtitle),
-                            onClick = {
-                                if (!uiState.actionInFlight) {
-                                    viewModel.exportSettings { json ->
-                                        platformIntents.shareJson(exportSubject, exportChooser, json)
-                                    }
+                    JellyPlaySyncTab.Backup -> SyncBackupTabContent(
+                        uiState = uiState,
+                        listState = backupListState,
+                        bottomPadding = contentPadding.calculateBottomPadding() + 16.dp,
+                        onCreateSnapshot = { if (!uiState.actionInFlight) viewModel.createSnapshot() },
+                        onRestoreSnapshot = onRestoreSnapshot,
+                        onResetNamespace = { resetConfirm.request { viewModel.resetNamespace() } },
+                        onForceRepull = { viewModel.forceRepull() },
+                        onExport = {
+                            if (!uiState.actionInFlight) {
+                                viewModel.exportSettings { json ->
+                                    platformIntents.shareJson(exportSubject, exportChooser, json)
                                 }
-                            },
-                        )
-                        SettingListItem(
-                            icon = Tabler.Outline.Download,
-                            title = stringResource(Res.string.settings_jellyplay_sync_import_title),
-                            subtitle = stringResource(Res.string.settings_jellyplay_sync_import_subtitle),
-                            onClick = onRestoreWizard,
-                        )
-                    }
+                            }
+                        },
+                        onRestoreWizard = onRestoreWizard,
+                    )
                 }
             }
         }
@@ -527,6 +429,323 @@ fun JellyPlaySyncScreen(
             },
             onDismiss = { showRenameDialog = false },
         )
+    }
+}
+
+/** The Status tab: the usage face — quota bars, per-namespace rows, the admin per-user overview. */
+@Composable
+private fun SyncStatusTabContent(
+    uiState: JellyPlaySyncUiState,
+    listState: LazyListState,
+    bottomPadding: Dp,
+    onNamespaceEnabled: (ns: String, enabled: Boolean) -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding,
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item(key = "usage_label") { SectionLabel(
+                stringResource(Res.string.settings_jellyplay_sync_usage_title),
+                Modifier.padding(top = 8.dp, start = 4.dp),
+            ) }
+        val status = uiState.status
+        if (status == null) {
+            // The 404 degrade — the quiet line, never an error.
+            item(key = "usage_unavailable") {
+                QuietLine(stringResource(Res.string.settings_jellyplay_sync_usage_unavailable))
+            }
+        } else {
+            item(key = "quota_card") { QuotaCard(status) }
+            items(uiState.namespaceRows, key = { "ns_${it.ns}" }, contentType = { row ->
+                if (row.toggleable) "namespaceToggle" else "namespaceInfo"
+            }) { namespace ->
+                if (namespace.toggleable) {
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Database,
+                        title = namespace.ns,
+                        subtitle = namespaceSubtitle(namespace),
+                        checked = namespace.enabled,
+                        onCheckedChange = { enabled -> onNamespaceEnabled(namespace.ns, enabled) },
+                    )
+                } else {
+                    SettingInfoItem(
+                        icon = Tabler.Outline.Database,
+                        title = namespace.ns,
+                        subtitle = namespaceSubtitle(namespace),
+                    )
+                }
+            }
+            val adminUsers = uiState.adminUsers
+            if (!adminUsers.isNullOrEmpty()) {
+                item(key = "admin_label") { SectionLabel(
+                    stringResource(Res.string.settings_jellyplay_sync_admin_section),
+                    Modifier.padding(top = 8.dp, start = 4.dp),
+                ) }
+                items(adminUsers, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
+                    SettingInfoItem(
+                        icon = Tabler.Outline.Users,
+                        title = user.userName.ifBlank { user.userId },
+                        subtitle = stringResource(
+                            Res.string.settings_jellyplay_sync_admin_user_usage,
+                            user.keys,
+                            user.bytes.formatBytes(),
+                            user.deviceCount,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The Devices tab: the registry merged with the server's per-device ledger;
+ * this device first (rename), the others revocable (the v7 revoke + wipe).
+ * Revoked rows render destructive and inert. Below: the resolved profile this
+ * device syncs under.
+ */
+@Composable
+private fun SyncDevicesTabContent(
+    uiState: JellyPlaySyncUiState,
+    deviceProfile: String,
+    listState: LazyListState,
+    bottomPadding: Dp,
+    onRenameThisDevice: (String) -> Unit,
+    onRevokeDevice: (String) -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding,
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(uiState.devices, key = { it.deviceId }, contentType = { "deviceRow" }) { device ->
+            val lastSync = device.lastSyncAt
+                ?.let { stringResource(Res.string.settings_jellyplay_sync_device_last_sync, formatSyncTimestamp(it)) }
+                ?: stringResource(Res.string.settings_sync_never)
+            SettingListItem(
+                icon = Tabler.Outline.Devices,
+                title = buildList {
+                    add(device.name)
+                    if (device.revoked) add(stringResource(Res.string.settings_jellyplay_sync_device_revoked))
+                }.joinToString(" • "),
+                subtitle = buildList {
+                    if (device.platform.isNotBlank()) add(device.platform)
+                    device.model?.let { add(it) }
+                    add(lastSync)
+                    if (device.isThisDevice) add(stringResource(Res.string.settings_jellyplay_sync_this_device))
+                }.joinToString(" • "),
+                isDestructive = device.revoked,
+                onClick = {
+                    when {
+                        device.isThisDevice -> onRenameThisDevice(device.name)
+                        !device.revoked -> onRevokeDevice(device.deviceId)
+                    }
+                },
+            )
+        }
+        item(key = "profile_row") {
+            SettingInfoItem(
+                icon = Tabler.Outline.DeviceDesktop,
+                title = stringResource(Res.string.settings_jellyplay_sync_profile_title),
+                subtitle = stringResource(Res.string.settings_jellyplay_sync_profile_subtitle, deviceProfile),
+            )
+        }
+    }
+}
+
+/**
+ * The Activity tab: the last cycle's conflict rejects (each expanding into
+ * the ours/theirs pair + the two resolutions) above the server's history
+ * ledger with its retention footer. The history rides the status payload — a
+ * plugin old enough to 404 the status 404s the history too; with no
+ * conflicts either, the tab degrades to the quiet "unavailable" line.
+ */
+@Composable
+private fun SyncActivityTabContent(
+    uiState: JellyPlaySyncUiState,
+    conflicts: List<ProfileSyncRepository.SyncConflict>,
+    expandedConflictKey: String?,
+    listState: LazyListState,
+    bottomPadding: Dp,
+    onConflictToggle: (String) -> Unit,
+    onKeepMine: (ns: String, key: String) -> Unit,
+    onTakeTheirs: (ns: String, key: String) -> Unit,
+    onToggleHistory: (Long) -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding,
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (conflicts.isNotEmpty()) {
+            item(key = "conflicts_label") { SectionLabel(
+                stringResource(Res.string.settings_jellyplay_sync_conflicts_title),
+                Modifier.padding(top = 8.dp, start = 4.dp),
+            ) }
+            items(conflicts, key = { "conflict_${it.ns}/${it.key}" }, contentType = { "conflictRow" }) { conflict ->
+                val key = "${conflict.ns}/${conflict.key}"
+                ConflictRow(
+                    conflict = conflict,
+                    expanded = expandedConflictKey == key,
+                    onToggle = { onConflictToggle(key) },
+                    onKeepMine = {
+                        onConflictToggle(key)
+                        onKeepMine(conflict.ns, conflict.key)
+                    },
+                    onTakeTheirs = {
+                        onConflictToggle(key)
+                        onTakeTheirs(conflict.ns, conflict.key)
+                    },
+                )
+            }
+        }
+        val status = uiState.status
+        if (status != null) {
+            item(key = "history_label") { SectionLabel(
+                stringResource(Res.string.settings_jellyplay_sync_history_title),
+                Modifier.padding(top = 8.dp, start = 4.dp),
+            ) }
+            if (uiState.history.isEmpty()) {
+                item(key = "history_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_history_empty)) }
+            } else {
+                items(uiState.history, key = { it.seq }, contentType = { "historyRow" }) { entry ->
+                    HistoryRow(
+                        entry = entry,
+                        expanded = uiState.expandedHistorySeq == entry.seq,
+                        detail = uiState.historyKeyDetails[entry.seq],
+                        onToggle = { onToggleHistory(entry.seq) },
+                    )
+                }
+                item(key = "history_retention") {
+                    QuietLine(
+                        stringResource(Res.string.settings_jellyplay_sync_history_retention, status.historyRetentionDays),
+                    )
+                }
+            }
+        } else if (conflicts.isEmpty()) {
+            item(key = "activity_unavailable") {
+                QuietLine(stringResource(Res.string.settings_jellyplay_sync_activity_unavailable))
+            }
+        }
+    }
+}
+
+/**
+ * The Backup tab: the server's rolling restore points — create one, restore
+ * one (routed into the unified wizard) — above the actions group: the
+ * destructive namespace reset (confirmed; safety capture inside the VM), the
+ * pull-dominant recovery cycle, the JSON export, and the restore-from-file
+ * entry. null snapshots (old plugin / failed read) hides that section
+ * quietly.
+ */
+@Composable
+private fun SyncBackupTabContent(
+    uiState: JellyPlaySyncUiState,
+    listState: LazyListState,
+    bottomPadding: Dp,
+    onCreateSnapshot: () -> Unit,
+    onRestoreSnapshot: (String) -> Unit,
+    onResetNamespace: () -> Unit,
+    onForceRepull: () -> Unit,
+    onExport: () -> Unit,
+    onRestoreWizard: () -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding,
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val snapshots = uiState.snapshots
+        if (snapshots != null) {
+            item(key = "snapshots_label") { SectionLabel(
+                stringResource(Res.string.settings_jellyplay_sync_snapshots_title),
+                Modifier.padding(top = 8.dp, start = 4.dp),
+            ) }
+            item(key = "snapshot_create") {
+                SettingListItem(
+                    icon = Tabler.Outline.DeviceFloppy,
+                    title = stringResource(Res.string.settings_jellyplay_sync_snapshots_create_title),
+                    subtitle = stringResource(Res.string.settings_jellyplay_sync_snapshots_create_subtitle),
+                    onClick = onCreateSnapshot,
+                )
+            }
+            if (snapshots.isEmpty()) {
+                item(key = "snapshots_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_snapshots_empty)) }
+            } else {
+                items(snapshots, key = { "snapshot_${it.id}" }, contentType = { "snapshotRow" }) { snapshot ->
+                    SettingListItem(
+                        icon = Tabler.Outline.Clock,
+                        title = stringResource(
+                            Res.string.settings_jellyplay_sync_snapshot_entry,
+                            snapshot.origin.ifBlank { stringResource(Res.string.settings_jellyplay_sync_op_unknown) },
+                            snapshot.keys,
+                            snapshot.bytes.formatBytes(),
+                        ),
+                        subtitle = formatSyncTimestamp(snapshot.createdAt),
+                        trailingText = stringResource(Res.string.wizard_snapshot_preview_short),
+                        onClick = { onRestoreSnapshot(snapshot.id.toString()) },
+                    )
+                }
+            }
+        }
+        item(key = "actions_label") { SectionLabel(
+            stringResource(Res.string.settings_jellyplay_sync_actions_title),
+            Modifier.padding(top = 8.dp, start = 4.dp),
+        ) }
+        item(key = "actions_group") {
+            SettingsItemList(total = 4) {
+                SettingListItem(
+                    icon = Tabler.Outline.Trash,
+                    title = stringResource(Res.string.settings_jellyplay_sync_reset_title),
+                    subtitle = stringResource(Res.string.settings_jellyplay_sync_reset_subtitle),
+                    isDestructive = true,
+                    onClick = onResetNamespace,
+                )
+                SettingListItem(
+                    icon = Tabler.Outline.History,
+                    title = stringResource(Res.string.settings_jellyplay_sync_force_repull_title),
+                    subtitle = stringResource(Res.string.settings_jellyplay_sync_force_repull_subtitle),
+                    onClick = onForceRepull,
+                )
+                SettingListItem(
+                    icon = Tabler.Outline.Share,
+                    title = stringResource(Res.string.settings_jellyplay_sync_export_title),
+                    subtitle = stringResource(Res.string.settings_jellyplay_sync_export_subtitle),
+                    onClick = onExport,
+                )
+                SettingListItem(
+                    icon = Tabler.Outline.Download,
+                    title = stringResource(Res.string.settings_jellyplay_sync_import_title),
+                    subtitle = stringResource(Res.string.settings_jellyplay_sync_import_subtitle),
+                    onClick = onRestoreWizard,
+                )
+            }
+        }
     }
 }
 

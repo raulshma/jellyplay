@@ -775,8 +775,12 @@
     <string name="settings_jellyplay_sync_op_pull">Ricezione</string>
     <string name="settings_jellyplay_sync_op_reset">Reimposta</string>
     <string name="settings_jellyplay_sync_op_unknown">Sincronizzazione</string>
+    <string name="settings_jellyplay_sync_tab_status">Stato</string>
+    <string name="settings_jellyplay_sync_tab_activity">Attività</string>
+    <string name="settings_jellyplay_sync_tab_backup">Backup</string>
     <string name="settings_jellyplay_sync_usage_title">Cosa viene sincronizzato</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Dettagli di utilizzo non disponibili su questo server</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Attività di sincronizzazione non disponibile su questo server</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s di %2$s in uso</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d di %2$d chiavi</string>
     <string name="settings_jellyplay_sync_relative_days">%1$d g fa</string>
@@ -847,6 +851,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Plugin del server</string>
     <string name="settings_jellyplay_plugin_section_summary">Scegli quali funzionalità offre il plugin JellyPlay</string>
+    <string name="settings_jellyplay_plugin_version_summary">Plugin del server v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Aggiornamento del plugin richiesto</string>
+    <string name="settings_jellyplay_contract_mismatch_body">Il plugin del server (v%3$s) usa il contratto v%1$s; questa app supporta v%2$s. Aggiorna il plugin sul tuo server Jellyfin — o l'app se è più vecchia.</string>
     <string name="settings_jellyplay_feature_locked">Impostato dall'amministratore del server</string>
     <string name="settings_jellyplay_feature_events">Eventi in diretta</string>
     <string name="ss_jellyplay_feature_events_subtitle">Avvisi sui nuovi contenuti e diffusioni del server inviati a questo dispositivo</string>

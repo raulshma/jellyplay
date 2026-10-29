@@ -773,8 +773,12 @@
     <string name="settings_jellyplay_sync_op_pull">Recepción</string>
     <string name="settings_jellyplay_sync_op_reset">Restablecer</string>
     <string name="settings_jellyplay_sync_op_unknown">Sincronizar</string>
+    <string name="settings_jellyplay_sync_tab_status">Estado</string>
+    <string name="settings_jellyplay_sync_tab_activity">Actividad</string>
+    <string name="settings_jellyplay_sync_tab_backup">Copia de seguridad</string>
     <string name="settings_jellyplay_sync_usage_title">Qué se sincroniza</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Detalles de uso no disponibles en este servidor</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Actividad de sincronización no disponible en este servidor</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s de %2$s usados</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d de %2$d claves</string>
     <string name="settings_jellyplay_sync_relative_days">hace %1$d d</string>
@@ -845,6 +849,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Plugin del servidor</string>
     <string name="settings_jellyplay_plugin_section_summary">Elige qué funciones proporciona el plugin JellyPlay</string>
+    <string name="settings_jellyplay_plugin_version_summary">Plugin del servidor v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Se necesita actualizar el plugin</string>
+    <string name="settings_jellyplay_contract_mismatch_body">El plugin del servidor (v%3$s) usa el contrato v%1$s; esta app es compatible con v%2$s. Actualiza el plugin en tu servidor Jellyfin, o la app si es más antigua.</string>
     <string name="settings_jellyplay_feature_locked">Definido por el administrador de tu servidor</string>
     <string name="settings_jellyplay_feature_events">Eventos en directo</string>
     <string name="ss_jellyplay_feature_events_subtitle">Alertas de contenido nuevo y difusiones del servidor enviadas a este dispositivo</string>

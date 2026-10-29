@@ -59,6 +59,17 @@ client family (ADR-0010 §5): settings sync routes, device registry + push,
 analytics, transcodes, ratings, markers. One family implementation satisfies
 all roles; consumers and test fakes depend on the one role they use.
 
+**Contract mismatch** — the refused-contract verdict of the capabilities
+probe: the plugin answered, but its `contractVersion` falls outside
+`JellyPlayPluginStatusStore`'s `KNOWN_CONTRACT_VERSIONS`. The status stays
+`UNAVAILABLE` (every gate fails closed, exactly like an absent plugin) while
+the `contractMismatch` side channel carries served version + supported range
++ plugin version — the settings screen's error banner and the admin
+dashboard's one-line hint consume it, so "update the plugin or the app" is
+visible instead of the section silently vanishing. `servedPluginVersion`
+(names the server's plugin build once any payload decoded) feeds the
+settings group's summary.
+
 **Library client families** — the impl-side counterpart of the consumer
 seams: `PlaylistApiClientImpl` (8 members), `CollectionApiClientImpl` (4) and
 the `HomeSectionsCachePortAdapter` are small ctor-injected adapters over the

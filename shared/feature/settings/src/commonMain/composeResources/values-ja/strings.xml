@@ -772,8 +772,12 @@
     <string name="settings_jellyplay_sync_op_pull">受信</string>
     <string name="settings_jellyplay_sync_op_reset">リセット</string>
     <string name="settings_jellyplay_sync_op_unknown">同期</string>
+    <string name="settings_jellyplay_sync_tab_status">状態</string>
+    <string name="settings_jellyplay_sync_tab_activity">アクティビティ</string>
+    <string name="settings_jellyplay_sync_tab_backup">バックアップ</string>
     <string name="settings_jellyplay_sync_usage_title">同期の内容</string>
     <string name="settings_jellyplay_sync_usage_unavailable">このサーバーでは使用状況の詳細を取得できません</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">このサーバーでは同期アクティビティを利用できません</string>
     <string name="settings_jellyplay_sync_quota_bytes">%2$s 中 %1$s 使用</string>
     <string name="settings_jellyplay_sync_quota_keys">%2$d 中 %1$d 個のキー</string>
     <string name="settings_jellyplay_sync_relative_days">%1$d日前</string>
@@ -843,6 +847,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">サーバープラグイン</string>
     <string name="settings_jellyplay_plugin_section_summary">JellyPlay プラグインが提供する機能を選択します</string>
+    <string name="settings_jellyplay_plugin_version_summary">サーバープラグイン v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">プラグインの更新が必要です</string>
+    <string name="settings_jellyplay_contract_mismatch_body">サーバープラグイン（v%3$s）はコントラクト v%1$s を使用しています。このアプリは v%2$s に対応しています。Jellyfin サーバーのプラグインを更新するか、アプリが古い場合はアプリを更新してください。</string>
     <string name="settings_jellyplay_feature_locked">サーバー管理者により設定済み</string>
     <string name="settings_jellyplay_feature_events">ライブイベント</string>
     <string name="ss_jellyplay_feature_events_subtitle">新着メディアのアラートとサーバー配信をこのデバイスへストリーミングします</string>

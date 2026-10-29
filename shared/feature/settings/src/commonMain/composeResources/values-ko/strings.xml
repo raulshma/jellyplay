@@ -772,8 +772,12 @@
     <string name="settings_jellyplay_sync_op_pull">가져오기</string>
     <string name="settings_jellyplay_sync_op_reset">초기화</string>
     <string name="settings_jellyplay_sync_op_unknown">동기화</string>
+    <string name="settings_jellyplay_sync_tab_status">상태</string>
+    <string name="settings_jellyplay_sync_tab_activity">활동</string>
+    <string name="settings_jellyplay_sync_tab_backup">백업</string>
     <string name="settings_jellyplay_sync_usage_title">동기화 항목</string>
     <string name="settings_jellyplay_sync_usage_unavailable">이 서버에서는 사용량 세부 정보를 볼 수 없습니다</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">이 서버에서는 동기화 활동을 사용할 수 없습니다</string>
     <string name="settings_jellyplay_sync_quota_bytes">%2$s 중 %1$s 사용</string>
     <string name="settings_jellyplay_sync_quota_keys">%2$d개 중 %1$d개 키</string>
     <string name="settings_jellyplay_sync_relative_days">%1$d일 전</string>
@@ -843,6 +847,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">서버 플러그인</string>
     <string name="settings_jellyplay_plugin_section_summary">JellyPlay 플러그인이 제공할 기능을 선택하세요</string>
+    <string name="settings_jellyplay_plugin_version_summary">서버 플러그인 v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">플러그인 업데이트 필요</string>
+    <string name="settings_jellyplay_contract_mismatch_body">서버 플러그인(v%3$s)은 컨트랙트 v%1$s를 사용하며, 이 앱은 v%2$s를 지원합니다. Jellyfin 서버의 플러그인을 업데이트하거나, 앱이 더 오래되었다면 앱을 업데이트하세요.</string>
     <string name="settings_jellyplay_feature_locked">서버 관리자가 설정함</string>
     <string name="settings_jellyplay_feature_events">실시간 이벤트</string>
     <string name="ss_jellyplay_feature_events_subtitle">새 미디어 알림과 서버 방송을 이 기기로 스트리밍합니다</string>

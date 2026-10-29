@@ -13,6 +13,21 @@ enum class JellyPlayPluginStatus {
 }
 
 /**
+ * Why the last capabilities probe was refused: the plugin answered, but its
+ * `contractVersion` falls outside the range this client understands (the
+ * plugin's docs/CONTRACT.md versioning rule, client side). The status stays
+ * UNAVAILABLE — every gate fails closed exactly as if the plugin were absent;
+ * this carries the diagnostic the plain status cannot: whether the server
+ * plugin needs an update (served version behind) or the app does (served
+ * version ahead).
+ */
+data class JellyPlayContractMismatch(
+    val servedContractVersion: Int,
+    val supportedRange: IntRange,
+    val pluginVersion: String,
+)
+
+/**
  * Stable feature keys reported by the plugin's capabilities handshake.
  * Keep byte-identical with the plugin's JellyPlayContract.Features (the
  * wire keys are the cross-repo contract — see the plugin repo's

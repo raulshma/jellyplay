@@ -771,8 +771,12 @@
     <string name="settings_jellyplay_sync_op_pull">Pull</string>
     <string name="settings_jellyplay_sync_op_reset">Zurücksetzen</string>
     <string name="settings_jellyplay_sync_op_unknown">Synchronisieren</string>
+    <string name="settings_jellyplay_sync_tab_status">Status</string>
+    <string name="settings_jellyplay_sync_tab_activity">Aktivität</string>
+    <string name="settings_jellyplay_sync_tab_backup">Backup</string>
     <string name="settings_jellyplay_sync_usage_title">Was synchronisiert wird</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Nutzungsdetails auf diesem Server nicht verfügbar</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Synchronisierungsaktivität auf diesem Server nicht verfügbar</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s von %2$s belegt</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d von %2$d Schlüsseln</string>
     <string name="settings_jellyplay_sync_relative_days">vor %1$d Tg.</string>
@@ -843,6 +847,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Server-Plugin</string>
     <string name="settings_jellyplay_plugin_section_summary">Wähle, welche Funktionen das JellyPlay-Plugin bereitstellt</string>
+    <string name="settings_jellyplay_plugin_version_summary">Server-Plugin v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Plugin-Update nötig</string>
+    <string name="settings_jellyplay_contract_mismatch_body">Das Server-Plugin (v%3$s) spricht Vertrag v%1$s; diese App unterstützt v%2$s. Aktualisiere das Plugin auf deinem Jellyfin-Server – oder die App, falls sie älter ist.</string>
     <string name="settings_jellyplay_feature_locked">Von deinem Serveradministrator festgelegt</string>
     <string name="settings_jellyplay_feature_events">Live-Ereignisse</string>
     <string name="ss_jellyplay_feature_events_subtitle">Benachrichtigungen zu neuen Medien und Server-Durchsagen werden an dieses Gerät gestreamt</string>

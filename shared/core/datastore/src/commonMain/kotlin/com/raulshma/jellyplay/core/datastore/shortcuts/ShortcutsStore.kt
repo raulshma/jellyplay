@@ -79,6 +79,13 @@ class ShortcutsStore constructor(
     // Read projection
     // ------------------------------------------------------------------
 
+    // Declared BEFORE the eager `shortcuts` flow below (the HomeDiscoveryStore
+    // launch-order NPE): the eager collector's first emission can reach
+    // [readerFor] while the constructor is still running.
+
+    /** The (userId, reader) pair [readerFor] publishes through a CAS. */
+    private val readerByUser = AtomicReference<Pair<String, UserReader>?>(null)
+
     private val sharedPrefs = dataStore.dataDegradingToDefaults()
 
     val shortcuts: StateFlow<ShortcutsSlice> = combine(
@@ -98,8 +105,6 @@ class ShortcutsStore constructor(
      * another user's cached parse (the `HomeDiscoveryStore`-precedent CAS
      * publication; a lost race merely re-parses, never a cross-user read).
      */
-    private val readerByUser = AtomicReference<Pair<String, UserReader>?>(null)
-
     private fun readerFor(uid: String): UserReader {
         while (true) {
             val current = readerByUser.load()

@@ -127,6 +127,24 @@ class AdminDashboardViewModel(
         pluginFeatureEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Analytics)
 
     /**
+     * The plugin's own version from the last decoded probe (null before it) —
+     * the dashboard's contract-mismatch line names it.
+     */
+    val jellyPlayPluginVersion: StateFlow<String?> =
+        jellyPlayStatusStore?.servedPluginVersion
+            ?: MutableStateFlow(null)
+
+    /**
+     * Non-null when the last probe decoded a capabilities payload whose
+     * contractVersion this client refuses — the dashboard's one-line drift
+     * hint (the settings screen carries the full banner; here the plugin
+     * tiles simply never render). Null without the plugin seam.
+     */
+    val jellyPlayContractMismatch: StateFlow<com.raulshma.jellyplay.core.model.JellyPlayContractMismatch?> =
+        jellyPlayStatusStore?.contractMismatch
+            ?: MutableStateFlow(null)
+
+    /**
      * Sends the composer's broadcast (POST jellyplay/broadcast; the server
      * answers 202 and fans the toast-style event out over the events stream).
      * Refused while either plugin seam is unwired or the gate is closed —

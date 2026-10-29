@@ -774,8 +774,12 @@
     <string name="settings_jellyplay_sync_op_pull">Receção</string>
     <string name="settings_jellyplay_sync_op_reset">Repor</string>
     <string name="settings_jellyplay_sync_op_unknown">Sincronização</string>
+    <string name="settings_jellyplay_sync_tab_status">Estado</string>
+    <string name="settings_jellyplay_sync_tab_activity">Atividade</string>
+    <string name="settings_jellyplay_sync_tab_backup">Backup</string>
     <string name="settings_jellyplay_sync_usage_title">O que está sincronizado</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Detalhes de utilização indisponíveis neste servidor</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Atividade de sincronização indisponível neste servidor</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s de %2$s utilizados</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d de %2$d chaves</string>
     <string name="settings_jellyplay_sync_relative_days">%1$d d atrás</string>
@@ -846,6 +850,9 @@
     <!-- JellyPlay companion plugin: per-feature switches -->
     <string name="settings_jellyplay_plugin_section">Plugin do servidor</string>
     <string name="settings_jellyplay_plugin_section_summary">Escolha que funcionalidades o plugin JellyPlay disponibiliza</string>
+    <string name="settings_jellyplay_plugin_version_summary">Plugin do servidor v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Atualização do plugin necessária</string>
+    <string name="settings_jellyplay_contract_mismatch_body">O plugin do servidor (v%3$s) usa o contrato v%1$s; este app suporta v%2$s. Atualize o plugin no seu servidor Jellyfin — ou o app, se ele for mais antigo.</string>
     <string name="settings_jellyplay_feature_locked">Definido pelo administrador do servidor</string>
     <string name="settings_jellyplay_feature_events">Eventos em direto</string>
     <string name="ss_jellyplay_feature_events_subtitle">Alertas de novos conteúdos e difusões do servidor transmitidos para este dispositivo</string>

@@ -403,6 +403,15 @@ class HomeDiscoveryStore constructor(
     // Read projection
     // ------------------------------------------------------------------
 
+    // Declared BEFORE the eager `homeDiscovery` flow below: property
+    // initialization runs in declaration order, and the eager collector's
+    // first emission can reach [readerFor] on a dispatcher worker while the
+    // constructor is still running — a field declared after the flow reads
+    // null there (the launch-time NPE this ordering closes).
+
+    /** The (userId, reader) pair [readerFor] publishes through a CAS. */
+    private val readerByUser = AtomicReference<Pair<String, UserReader>?>(null)
+
     private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
 
     val homeDiscovery: StateFlow<HomeDiscoverySlice> = combine(
@@ -427,9 +436,9 @@ class HomeDiscoveryStore constructor(
      * [readerFor] makes the check-then-set atomic: concurrent collectors for
      * the same user converge on ONE reader instead of racing to publish
      * lookalikes (a lost race merely re-parsed — never a cross-user read).
+     * The [readerByUser] field itself is declared above the eager flow —
+     * this function must never see it half-initialized.
      */
-    private val readerByUser = AtomicReference<Pair<String, UserReader>?>(null)
-
     private fun readerFor(uid: String): UserReader {
         while (true) {
             val current = readerByUser.load()
