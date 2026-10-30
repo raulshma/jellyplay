@@ -155,6 +155,10 @@ fun formatRelativeTime(isoTimestamp: String?): String? {
 /**
  * Whether the platform's time convention is 24-hour. Android reads the system
  * setting; desktop derives it from the locale's short time pattern.
+ *
+ * Public: this is the ONE 12/24-hour seam — the feature players (video
+ * controls header + both sleep-timer sheets) consume it instead of carrying
+ * per-module expect/actual twins of the same platform fact.
  */
 @Composable
-internal expect fun rememberIs24HourFormat(): Boolean
+public expect fun rememberIs24HourFormat(): Boolean

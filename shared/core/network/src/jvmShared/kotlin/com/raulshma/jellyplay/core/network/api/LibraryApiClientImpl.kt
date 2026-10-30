@@ -106,13 +106,8 @@ private val SEARCH_SUGGESTIONS_PROJECTION = SEARCH_SUGGESTIONS_FIELDS.map { toke
         ?: error("ItemFields has no serial name '$token' — SDK drift vs the search-suggestions projection")
 }
 
-/** Discover-row window bound (epoch millis) → the SDK getItems date param type (java.time.LocalDateTime on the JVM). */
-private fun Long?.toSdkLocalDateTime(): java.time.LocalDateTime? = this?.let {
-    java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault())
-}
 
-
-/** The default-zone wall clock through the seam — the ONE "now" derivation every seam read in this file shares (mirrors [toSdkLocalDateTime]). */
+/** The default-zone wall clock through the seam — the ONE "now" derivation every seam read in this file shares (mirrors [toSdkLocalDateTime], the resolver the query executor sends the window bounds through). */
 private fun TimeSource.nowLocalDateTime(): java.time.LocalDateTime =
     java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(nowEpochMillis()), java.time.ZoneId.systemDefault())
 
@@ -235,9 +230,13 @@ class LibraryApiClientImpl(
 
     override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> = engine.withApi { api ->
         // Query assembly (all shared + discover-only dimensions) lives in the
-        // commonMain [buildDiscoverRowQuerySpec]; this adapter resolves the
-        // spec against the SDK enums and the epoch-millis window bounds
-        // against java.time — same split as getMediaItems/getNextUp.
+        // commonMain [buildDiscoverRowQuerySpec]; the spec→wire expansion
+        // lives once in [getItemsPage] (LibraryItemsQueryExecutors). The row
+        // call opts out of the presence chips ([getItemsQuery]'s
+        // sendPresenceParams): the discover wire has never carried them (nor
+        // a searchTerm — the builder pins it null) even though a row's
+        // LibraryFilters CAN, so the opt-out keeps the row's wire
+        // byte-identical.
         val nowEpochMs = timeSource.nowEpochMillis()
         // Empty scope = ONE catalog-wide query (null parentId); otherwise one
         // query per library, merged in library order. mapConcurrentCatching
@@ -252,27 +251,11 @@ class LibraryApiClientImpl(
                 limit = row.limit,
                 nowEpochMs = nowEpochMs,
             )
-            val response = api.itemsApi.getItems(
-                parentId = spec.parentId?.toUUID(),
-                includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-                excludeItemTypes = spec.excludeKinds.toBaseItemKinds(),
-                genres = spec.genres,
-                years = spec.years,
-                studioIds = spec.studioIds?.map { it.toUUID() },
-                tags = spec.tags,
-                sortBy = spec.sortBy.toItemSortBys(),
-                sortOrder = spec.sortOrderDescending.toSortOrderList(),
-                startIndex = spec.startIndex,
-                limit = spec.limit,
-                recursive = spec.recursive,
-                filters = spec.itemFilters.toItemFilters(),
-                minCommunityRating = spec.minCommunityRating,
-                personIds = spec.personIds?.map { it.toUUID() },
-                minDateLastSaved = spec.minDateLastSavedMs.toSdkLocalDateTime(),
-                minPremiereDate = spec.minPremiereDateMs.toSdkLocalDateTime(),
-                fields = spec.fields.toItemFieldsList(),
-            ).content
-            (response.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
+            api.getItemsPage(
+                spec,
+                engine.currentMaxParentalRating,
+                sendPresenceParams = false,
+            ).items
         }
         perLibrary.flatten().distinctBy { it.id }.take(row.limit)
     }
@@ -499,9 +482,12 @@ class LibraryApiClientImpl(
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = engine.withApi { api ->
         // The filter/sort/kind/projection decisions live in the shared
-        // commonMain builder ([buildMediaItemsQuerySpec]); this adapter only
-        // resolves the spec's wire serial names against the SDK enums
-        // ([LibraryItemsQueryResolvers]).
+        // commonMain builder ([buildMediaItemsQuerySpec]); the spec→wire
+        // expansion lives once in [getItemsQuery]
+        // (LibraryItemsQueryExecutors). The fold stays HERE, bespoke: the
+        // empty-library fallback must observe the RAW response between the
+        // call and the parental filter (and re-queries via getLatestMedia),
+        // so this endpoint cannot take the pre-assembled [getItemsPage].
         val spec = buildMediaItemsQuerySpec(
             parentId = parentId,
             filters = filters,
@@ -511,26 +497,7 @@ class LibraryApiClientImpl(
             searchTerm = searchTerm,
             kindFilter = kindFilter,
         )
-        val response = api.itemsApi.getItems(
-            parentId = spec.parentId?.toUUID(),
-            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-            excludeItemTypes = spec.excludeKinds.toBaseItemKinds(),
-            genres = spec.genres,
-            years = spec.years,
-            studioIds = spec.studioIds?.map { it.toUUID() },
-            tags = spec.tags,
-            sortBy = spec.sortBy.toItemSortBys(),
-            sortOrder = spec.sortOrderDescending.toSortOrderList(),
-            startIndex = spec.startIndex,
-            limit = spec.limit,
-            recursive = spec.recursive,
-            searchTerm = spec.searchTerm,
-            filters = spec.itemFilters.toItemFilters(),
-            hasSubtitles = spec.hasSubtitles,
-            hasTrailer = spec.hasTrailer,
-            minCommunityRating = spec.minCommunityRating,
-            fields = spec.fields.toItemFieldsList(),
-        ).content
+        val response = api.getItemsQuery(spec)
         val rawItems = emptyLibraryFallback.resolve(
             primaryItems = response.items,
             parentId = parentId,
@@ -643,25 +610,21 @@ class LibraryApiClientImpl(
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> = engine.withApi { api ->
+        // Same spec→page shape as the drill-downs: the hints spec carries
+        // term + kind narrowing + paging + the list projection, and every
+        // dimension it leaves unset drops out of [getItemsQuery]'s full
+        // expansion as a null (wire-identical to the former 6-argument
+        // partial expansion — the UrlBuilder skips nulls).
         val spec = buildSearchHintsQuerySpec(query, mediaTypes, limit, startIndex)
-        val response = api.itemsApi.getItems(
-            searchTerm = spec.searchTerm,
-            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-            limit = spec.limit,
-            startIndex = spec.startIndex,
-            recursive = spec.recursive,
-            fields = spec.fields.toItemFieldsList(),
-        ).content
-        SearchResult(
-            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        api.getItemsPage(spec, engine.currentMaxParentalRating)
     }
 
     override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> = engine.withApi { api ->
         // The jellyfin-web useSearchSuggestions shape, held once in commonMain
         // (SEARCH_SUGGESTIONS_* and resolved above against the SDK enums).
+        // The query stays hand-assembled (no spec — a fixed single-path
+        // shape); only the page tail adopts the shared fold ([toSearchResult]
+        // with the literal 0 the fold has always echoed).
         val response = api.itemsApi.getItems(
             sortBy = SEARCH_SUGGESTIONS_SORT,
             includeItemTypes = SEARCH_SUGGESTIONS_KINDS,
@@ -669,11 +632,7 @@ class LibraryApiClientImpl(
             recursive = true,
             fields = SEARCH_SUGGESTIONS_PROJECTION,
         ).content
-        SearchResult(
-            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = 0,
-        )
+        response.toSearchResult(engine.currentMaxParentalRating, startIndex = 0)
     }
 
     override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
@@ -716,19 +675,11 @@ class LibraryApiClientImpl(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.withApi { api ->
+        // The genre spec deliberately projects NO fields (see its builder) —
+        // null fields drop out of the executor's expansion, the wire param
+        // the twins always omitted here.
         val spec = buildItemsByGenreQuerySpec(genreId, mediaTypes, startIndex, limit)
-        val response = api.itemsApi.getItems(
-            genreIds = spec.genreIds?.map { it.toUUID() },
-            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-            startIndex = spec.startIndex,
-            limit = spec.limit,
-            recursive = spec.recursive,
-        ).content
-        SearchResult(
-            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        api.getItemsPage(spec, engine.currentMaxParentalRating)
     }
 
     override suspend fun getStudios(
@@ -771,20 +722,9 @@ class LibraryApiClientImpl(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.withApi { api ->
+        // Like genre, but with the list projection the studio spec carries.
         val spec = buildItemsByStudioQuerySpec(studioId, mediaTypes, startIndex, limit)
-        val response = api.itemsApi.getItems(
-            studioIds = spec.studioIds?.map { it.toUUID() },
-            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-            startIndex = spec.startIndex,
-            limit = spec.limit,
-            recursive = spec.recursive,
-            fields = spec.fields.toItemFieldsList(),
-        ).content
-        SearchResult(
-            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        api.getItemsPage(spec, engine.currentMaxParentalRating)
     }
 
     override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> = engine.withApi { api ->
@@ -1003,20 +943,11 @@ class LibraryApiClientImpl(
         limit: Int,
         startIndex: Int,
     ): Result<SearchResult> = engine.withApi { api ->
+        // Same spec→page shape as the drill-downs: the favorites spec carries
+        // the IsFavorite ItemFilter over optionally-narrowed kinds, and the
+        // unset dimensions drop out of [getItemsQuery]'s expansion as nulls.
         val spec = buildFavoritesQuerySpec(mediaTypes, limit, startIndex)
-        val response = api.itemsApi.getItems(
-            includeItemTypes = spec.includeKinds.toBaseItemKinds(),
-            filters = spec.itemFilters.toItemFilters(),
-            limit = spec.limit,
-            startIndex = spec.startIndex,
-            recursive = spec.recursive,
-            fields = spec.fields.toItemFieldsList(),
-        ).content
-        SearchResult(
-            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        api.getItemsPage(spec, engine.currentMaxParentalRating)
     }
 
     override suspend fun getLyrics(itemId: String): Result<LyricsResult> = engine.apiResultWithRetry {

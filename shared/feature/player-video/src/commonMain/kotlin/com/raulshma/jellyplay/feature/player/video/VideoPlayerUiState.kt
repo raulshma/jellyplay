@@ -323,7 +323,7 @@ data class VideoPlayerUiState(
     /**
      * Ephemeral "Skipped Intro / …" confirmation, raised when an auto-skip
      * fires or a skip-on-seek clamp lands. `null` = nothing showing;
-     * the ViewModel owns the ~2.5 s auto-clear.
+     * the session's SegmentSkipDispatcher owns the ~2.5 s auto-clear.
      */
     val skippedSegmentNotice: SkippedSegmentNotice? = null,
 ) {

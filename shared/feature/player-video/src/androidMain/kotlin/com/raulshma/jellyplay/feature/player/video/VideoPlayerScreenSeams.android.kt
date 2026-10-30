@@ -313,12 +313,6 @@ internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input
 internal actual fun rememberIsPortraitOrientation(): Boolean =
     LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
 
-@Composable
-internal actual fun rememberIs24HourFormat(): Boolean {
-    val context = LocalContext.current
-    return remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
-}
-
 // ── Document picker ────────────────────────────────────────────────────────
 
 @Composable

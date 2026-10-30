@@ -16,7 +16,7 @@ package com.raulshma.jellyplay.core.model
  * `core:model`, so — same common-ancestor reasoning as [TtlCache] — the
  * canonical policy lives here.
  *
- * Passive-`now` API: like feature/home's `TtlCacheGate`, [isRoomSnapshotFresh]
+ * Passive-`now` API: like the sibling [TtlCacheGate], [isRoomSnapshotFresh]
  * takes the current time as a parameter instead of reading a clock. This
  * object owns policy, not time; each caller keeps whatever clock it already
  * owns (Koin-injected `TimeSource` in the repo, test fakes elsewhere).

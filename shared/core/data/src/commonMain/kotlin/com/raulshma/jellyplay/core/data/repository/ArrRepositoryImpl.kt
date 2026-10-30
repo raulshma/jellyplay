@@ -870,14 +870,12 @@ class ArrRepositoryImpl(
     }
 
     private fun matchesWindow(item: ArrCalendarItem, from: LocalDate, to: LocalDate): Boolean {
-        val dateStr = item.airDateUtc ?: return false
-        // take(10) == `yyyy-MM-dd`; kotlinx parses the same ISO shape the
-        // ISO_LOCAL_DATE formatter parsed (parse failures land in the same
-        // runCatching null path). Comparison via Comparable — kotlinx
-        // LocalDate has no isBefore/isAfter; the operators express the same
-        // inclusive window the old `!date.isBefore(from) && !date.isAfter(to)`
-        // did.
-        val date = runCatching { LocalDate.parse(dateStr.take(10)) }.getOrNull() ?: return false
+        // The parse is the item's own [ArrCalendarItem.airDateDay] — the one
+        // home of the rule (the Upcoming calendar's day grouping reads the
+        // same method). Comparison via Comparable — kotlinx LocalDate has no
+        // isBefore/isAfter; the operators express the same inclusive window
+        // the old `!date.isBefore(from) && !date.isAfter(to)` did.
+        val date = item.airDateDay() ?: return false
         return from <= date && date <= to
     }
 

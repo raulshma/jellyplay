@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.model.arr
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
 
 /**
@@ -268,6 +269,21 @@ data class ArrCalendarItem(
      */
     fun rowKey(): String =
         "$mediaType|${tvdbId ?: "_"}|${tmdbId ?: "_"}|${episodeId ?: "_"}|$title|${airDateUtc ?: "_"}"
+
+    /**
+     * The item's effective release DAY — the single home of the `airDateUtc`
+     * parse shared by the Upcoming calendar's day grouping and the
+     * repository's calendar window filter. `airDateUtc` is a full ISO-8601
+     * UTC timestamp; only the leading `yyyy-MM-dd` is meaningful for day
+     * grouping, so the parse takes the 10-char prefix and hands it to
+     * [LocalDate.parse] — strict ISO-8601 (the calendar's ISO format), so a
+     * malformed prefix throws [kotlinx.datetime.DateTimeFormatException] and
+     * the runCatching degrades to null — exactly the old
+     * `DateTimeFormatter.ISO_LOCAL_DATE` + `DateTimeParseException` contract
+     * both consumers carried as hand copies.
+     */
+    fun airDateDay(): LocalDate? =
+        airDateUtc?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
     /**
      * Adapts to [SeerrSearchItem] so Home's calendar row reuses the existing

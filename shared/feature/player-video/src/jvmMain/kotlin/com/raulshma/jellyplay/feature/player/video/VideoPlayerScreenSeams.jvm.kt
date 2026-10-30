@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import java.io.File
-import java.text.DateFormat
 import java.util.Locale
 import javax.swing.SwingUtilities
 import kotlin.concurrent.thread
@@ -21,8 +20,8 @@ import kotlinx.coroutines.CoroutineScope
  * seams. A desktop window has no system bars, no Activity
  * orientation lock and no OS brightness override, so the window-ops actual is
  * the interface's no-op default; the input/format facts have desktop-honest
- * values (hardware keyboard always present, 24-hour clock from the JDK's
- * default time format, landscape-style layout).
+ * values (hardware keyboard always present, landscape-style layout — the
+ * 24-hour clock fact rides core:ui's shared seam).
  */
 
 // ── Host window ────────────────────────────────────────────────────────────
@@ -83,16 +82,6 @@ internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input
 /** Resizable desktop player window — treated as the landscape-style layout. */
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean = false
-
-@Composable
-internal actual fun rememberIs24HourFormat(): Boolean =
-    remember {
-        // JDK heuristic: format 13:00 with the default SHORT time pattern —
-        // a 24-hour locale renders "13:…" while 12-hour locales render "1:… PM".
-        val formatted = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault())
-            .format(java.util.Date(13L * 60L * 60L * 1000L))
-        !formatted.contains("PM") && !formatted.contains("AM")
-    }
 
 // ── Document picker ────────────────────────────────────────────────────────
 

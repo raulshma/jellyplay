@@ -56,15 +56,10 @@ import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_delete
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_lower_priority
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_more_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_move_to_front
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_pause
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_resume
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_retry
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_stream
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_selection_hint
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_cancelled
@@ -79,8 +74,9 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_st
  * One download row: thumbnail, title/context line, status body, and the
  * per-status action cluster. The cluster's AVAILABILITY is the module's
  * [DownloadActions.availableActions] fold over the admission table (a status'
- * buttons exist exactly when the table admits them); only PLACEMENT — which
- * slot a button renders in, its icon, tint, and order — stays this file's
+ * buttons exist exactly when the table admits them); the buttons' FACES come
+ * from the module's face table ([DownloadActionFaces]); only PLACEMENT —
+ * which slot a button renders in, its tint, and order — stays this file's
  * per-status code, and dispatch flows through the single [onAction] sink
  * instead of a callback per verb.
  */
@@ -365,16 +361,14 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.PAUSE,
                                 available = available,
-                                icon = Tabler.Outline.PlayerPause,
-                                contentDescription = stringResource(Res.string.downloads_action_pause),
+                                face = DownloadBulkAction.PAUSE.face,
                                 tint = MaterialTheme.colorScheme.primary,
                                 onAction = onAction,
                             )
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -389,8 +383,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -405,8 +398,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -415,16 +407,14 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.RESUME,
                                 available = available,
-                                icon = Tabler.Outline.PlayerPlay,
-                                contentDescription = stringResource(Res.string.downloads_action_resume),
+                                face = DownloadBulkAction.RESUME.face,
                                 tint = MaterialTheme.colorScheme.primary,
                                 onAction = onAction,
                             )
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -433,8 +423,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.RETRY_FAILED,
                                 available = available,
-                                icon = Tabler.Outline.Refresh,
-                                contentDescription = stringResource(Res.string.downloads_action_retry),
+                                face = DownloadBulkAction.RETRY_FAILED.face,
                                 tint = MaterialTheme.colorScheme.primary,
                                 onAction = onAction,
                             )
@@ -450,8 +439,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.DELETE,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_delete),
+                                face = DownloadBulkAction.DELETE.face,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -472,22 +460,22 @@ internal fun DownloadItemRow(
  * One inline slot for a bulk action: renders [DownloadActionButton] only while
  * the module's admission fold ([available]) admits [action] for this row's
  * status, and dispatches it through the row's single sink. The per-status
- * branches above own placement (slot, icon, tint, order); this slot owns the
- * admission — a table change re-dresses rows without touching them.
+ * branches above own placement (slot, tint, order); the icon + label come
+ * from the module's face table via [face] — this slot owns the admission, a
+ * table change re-dresses rows without touching them.
  */
 @Composable
 private fun RowActionSlot(
     action: DownloadBulkAction,
     available: List<DownloadBulkAction>,
-    icon: ImageVector,
-    contentDescription: String,
+    face: DownloadActionFace,
     tint: Color,
     onAction: (DownloadBulkAction) -> Unit,
 ) {
     if (action in available) {
         DownloadActionButton(
-            icon = icon,
-            contentDescription = contentDescription,
+            icon = face.icon,
+            contentDescription = stringResource(face.labelRes),
             tint = tint,
             onClick = { onAction(action) },
         )

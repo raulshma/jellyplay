@@ -77,11 +77,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_clear_selection
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_suggestions_queued
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_pause
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_resume
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_select_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_close
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_delete
@@ -113,9 +110,6 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_fo
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_summary
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_force_resync_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_no_items_in_category
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_pause_all
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resume_all
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_cancel_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_action
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_empty
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_batch_title
@@ -123,7 +117,6 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_re
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_media_changed
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_progress
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_resync_resync_all
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_retry_failed
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_screen_title
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_season_n
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_selected_count
@@ -211,45 +204,34 @@ fun DownloadsScreen(
 
     val selectionMode = uiState.selectionMode
     val selectedIds = uiState.selectedIds
-    // Action-bar predicates folded into the pure [DownloadActions] admission
-    // table: a bulk control is enabled only when the current selection (or the
-    // full list, for the global actions) actually contains an item the action
-    // admits, so the bar never offers a no-op (e.g. Pause with only paused
-    // items selected).
+    // Action-bar admission folded into the pure [DownloadActions] admission
+    // table: each control cluster derives ONE available-action set per scope
+    // ([availableBulkActions] folds the whole vocabulary in a single pass,
+    // reusing [DownloadActions.supports] per action) and reads membership off
+    // it — a control exists only when the current selection (or the full
+    // visible list, for the global actions) actually contains an item the
+    // action admits, so the bars never offer a no-op (e.g. Pause with only
+    // paused items selected). Same remember keys as the per-button predicates
+    // this replaces.
     val selectedItems = remember(selectionMode, downloads, selectedIds) {
         if (selectionMode) downloads.filter { it.id in selectedIds } else emptyList()
     }
-    val hasPauseable = remember(downloads, selectedIds) {
-        DownloadActions.supports(DownloadBulkAction.PAUSE, downloads, selectedIds, DownloadActionScope.Selected)
+    val selectedBulkActions = remember(downloads, selectedIds) {
+        DownloadActions.availableBulkActions(downloads, selectedIds, DownloadActionScope.Selected)
     }
-    val hasResumable = remember(downloads, selectedIds) {
-        DownloadActions.supports(DownloadBulkAction.RESUME, downloads, selectedIds, DownloadActionScope.Selected)
-    }
-    val hasCancellable = remember(downloads, selectedIds) {
-        DownloadActions.supports(DownloadBulkAction.CANCEL, downloads, selectedIds, DownloadActionScope.Selected)
-    }
-    // Global action predicates: the app-bar Pause All / Resume All / Cancel All
-    // / Retry all failed buttons are enabled only when the matching status
-    // exists in the STATUS FILTER's view (the same visibility rule selectAll
-    // applies), and they act on exactly that view's ids — a filter that hides
-    // every paused row also hides Resume All, and a click can never touch rows
-    // the list isn't showing. Cancel All is destructive, so it confirms first
+    // Global actions: the app-bar Pause All / Resume All / Cancel All / Retry
+    // all failed buttons exist only when the matching status exists in the
+    // STATUS FILTER's view (the same visibility rule selectAll applies), and
+    // they act on exactly that view's ids — a filter that hides every paused
+    // row also hides Resume All, and a click can never touch rows the list
+    // isn't showing. Cancel All is destructive, so it confirms first
     // (pendingCancelAll, payload = the visible ids).
     val visibleDownloads = remember(downloads, listStatusFilter) {
         downloads.filter { listStatusFilter.accepts(it) }
     }
     val visibleIds = remember(visibleDownloads) { visibleDownloads.map { it.id } }
-    val hasAnyDownloading = remember(visibleDownloads) {
-        DownloadActions.supports(DownloadBulkAction.PAUSE, visibleDownloads, emptySet(), DownloadActionScope.All)
-    }
-    val hasAnyPaused = remember(visibleDownloads) {
-        DownloadActions.supports(DownloadBulkAction.RESUME, visibleDownloads, emptySet(), DownloadActionScope.All)
-    }
-    val hasAnyCancellable = remember(visibleDownloads) {
-        DownloadActions.supports(DownloadBulkAction.CANCEL, visibleDownloads, emptySet(), DownloadActionScope.All)
-    }
-    val hasAnyFailed = remember(visibleDownloads) {
-        DownloadActions.supports(DownloadBulkAction.RETRY_FAILED, visibleDownloads, emptySet(), DownloadActionScope.All)
+    val visibleBulkActions = remember(visibleDownloads) {
+        DownloadActions.availableBulkActions(visibleDownloads, emptySet(), DownloadActionScope.All)
     }
 
     val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
@@ -273,61 +255,31 @@ fun DownloadsScreen(
             // re-queues every Failed download. Each is disabled when there's
             // nothing to act on in the filter's view so none offers a no-op,
             // mirroring the selection-bar predicates.
-            if (hasAnyDownloading) {
-                val pauseFocus = rememberTvFocusState()
-                IconButton(
+            if (DownloadBulkAction.PAUSE in visibleBulkActions) {
+                TvActionIconButton(
+                    face = DownloadBulkAction.PAUSE.allFace,
                     onClick = { viewModel.applyBulkActionToIds(DownloadBulkAction.PAUSE, visibleIds) },
-                    modifier = Modifier
-                        .then(pauseFocus.focusModifier)
-                        .tvFocusIndicator(pauseFocus, CircleShape),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerPause,
-                        contentDescription = stringResource(Res.string.downloads_pause_all),
-                    )
-                }
+                )
             }
-            if (hasAnyPaused) {
-                val resumeFocus = rememberTvFocusState()
-                IconButton(
+            if (DownloadBulkAction.RESUME in visibleBulkActions) {
+                TvActionIconButton(
+                    face = DownloadBulkAction.RESUME.allFace,
                     onClick = { viewModel.applyBulkActionToIds(DownloadBulkAction.RESUME, visibleIds) },
-                    modifier = Modifier
-                        .then(resumeFocus.focusModifier)
-                        .tvFocusIndicator(resumeFocus, CircleShape),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerPlay,
-                        contentDescription = stringResource(Res.string.downloads_resume_all),
-                    )
-                }
+                )
             }
-            if (hasAnyCancellable) {
-                val cancelAllFocus = rememberTvFocusState()
-                IconButton(
+            if (DownloadBulkAction.CANCEL in visibleBulkActions) {
+                TvActionIconButton(
+                    face = DownloadBulkAction.CANCEL.allFace,
+                    // Cancel All is destructive: confirm over the visible ids
+                    // before dispatching (the confirm stays this surface's).
                     onClick = { viewModel.pendingCancelAll.show(visibleIds) },
-                    modifier = Modifier
-                        .then(cancelAllFocus.focusModifier)
-                        .tvFocusIndicator(cancelAllFocus, CircleShape),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerStop,
-                        contentDescription = stringResource(Res.string.downloads_cancel_all),
-                    )
-                }
+                )
             }
-            if (hasAnyFailed) {
-                val retryFocus = rememberTvFocusState()
-                IconButton(
+            if (DownloadBulkAction.RETRY_FAILED in visibleBulkActions) {
+                TvActionIconButton(
+                    face = DownloadBulkAction.RETRY_FAILED.allFace,
                     onClick = { viewModel.applyBulkActionToIds(DownloadBulkAction.RETRY_FAILED, visibleIds) },
-                    modifier = Modifier
-                        .then(retryFocus.focusModifier)
-                        .tvFocusIndicator(retryFocus, CircleShape),
-                ) {
-                    Icon(
-                        Tabler.Outline.Refresh,
-                        contentDescription = stringResource(Res.string.downloads_retry_failed),
-                    )
-                }
+                )
             }
             // Accumulated transfer ring (left of the resync action): one
             // determinate ring over EVERY in-flight download with the whole
@@ -721,9 +673,13 @@ fun DownloadsScreen(
                 // Selection-mode bottom action bar. The shared core/ui shell
                 // (smooth12 / surfaceContainerHigh / shadow 8) with the
                 // downloads-specific cluster slotted in: pause / resume /
-                // cancel lead (each gated on its own per-list predicate, the
-                // slot contract explicitly allows ignoring the folded boolean)
-                // and the destructive bulk delete trails.
+                // cancel lead (each gated on its own membership read off
+                // [selectedBulkActions], the slot contract explicitly allows
+                // ignoring the folded boolean) and the destructive bulk delete
+                // trails. The cluster keeps the bar's plain IconButton chrome —
+                // its own select-all/clear buttons carry no TV focus ring
+                // either, so the faces come from the table while the chrome
+                // stays the bar's.
                 if (selectionMode) {
                     SelectionActionBar(
                         countLabel = stringResource(Res.string.downloads_selected_count, selectedIds.size),
@@ -735,21 +691,21 @@ fun DownloadsScreen(
                         leadingActions = { _ ->
                             CompactIconButton(
                                 onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
-                                enabled = hasPauseable,
+                                enabled = DownloadBulkAction.PAUSE in selectedBulkActions,
                             ) {
-                                Icon(Tabler.Outline.PlayerPause, contentDescription = stringResource(Res.string.downloads_action_pause), modifier = Modifier.size(20.dp))
+                                SelectionBarActionIcon(DownloadBulkAction.PAUSE)
                             }
                             CompactIconButton(
                                 onClick = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
-                                enabled = hasResumable,
+                                enabled = DownloadBulkAction.RESUME in selectedBulkActions,
                             ) {
-                                Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(Res.string.downloads_action_resume), modifier = Modifier.size(20.dp))
+                                SelectionBarActionIcon(DownloadBulkAction.RESUME)
                             }
                             CompactIconButton(
                                 onClick = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                                enabled = hasCancellable,
+                                enabled = DownloadBulkAction.CANCEL in selectedBulkActions,
                             ) {
-                                Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(Res.string.downloads_action_cancel), modifier = Modifier.size(20.dp))
+                                SelectionBarActionIcon(DownloadBulkAction.CANCEL)
                             }
                         },
                         actions = { actionsEnabled ->
@@ -928,6 +884,22 @@ private fun DownloadsAggregateProgressRing(
             maxLines = 1,
         )
     }
+}
+
+/**
+ * The selection bar's leading-action icon at the bar's own 20dp size — the
+ * face table's icon + label with none of the TV chrome: the bar's in-shell
+ * select-all / clear buttons are plain IconButtons, so this cluster matches
+ * them instead of [TvActionIconButton]'s focus ring.
+ */
+@Composable
+private fun SelectionBarActionIcon(action: DownloadBulkAction) {
+    val face = action.face
+    Icon(
+        face.icon,
+        contentDescription = stringResource(face.labelRes),
+        modifier = Modifier.size(20.dp),
+    )
 }
 
 /**

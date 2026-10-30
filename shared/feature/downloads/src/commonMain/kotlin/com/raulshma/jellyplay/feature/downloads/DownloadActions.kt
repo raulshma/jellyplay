@@ -105,6 +105,24 @@ object DownloadActions {
     ): Boolean = targets(action, downloads, selectedIds, scope).isNotEmpty()
 
     /**
+     * The actions [supports] admits for [scope], folded once over the whole
+     * vocabulary. A control cluster derives ONE set per scope (in a remember
+     * keyed on its inputs) and reads membership — `PAUSE in bulkActions` —
+     * instead of spelling a [supports] remember per button: same verdicts,
+     * one fold, and adding an enum entry can't forget to re-dress a screen.
+     * Agreement with [supports] per action is pinned by
+     * DownloadActionFacesTest (the never-offer-a-no-op rule keeps one fold).
+     */
+    fun availableBulkActions(
+        downloads: List<DownloadItem>,
+        selectedIds: Set<String>,
+        scope: DownloadActionScope,
+    ): Set<DownloadBulkAction> =
+        DownloadBulkAction.entries.filter { action ->
+            supports(action, downloads, selectedIds, scope)
+        }.toSet()
+
+    /**
      * The items [action] would act on: intersect [scope]'s candidate set with
      * the live list (a selection that outlived its rows yields nothing), then
      * keep only statuses the admission table accepts, preserving list order.

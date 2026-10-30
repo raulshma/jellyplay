@@ -4,12 +4,13 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 
 /**
  * Pure decision logic for the "Skip Intro" / "Skip Credits" buttons,
- * extracted verbatim from `VideoPlayerViewModel` so the precedence ladder is
- * reachable by the JVM tests instead of living inline in the ViewModel (the
- * [PlayerScreenPolicies] precedent — the third sibling policy beside its
- * step-seek targets and the gesture path's
+ * extracted verbatim from `VideoPlayerViewModel` (then composed by the
+ * session, now by the session's `SegmentSkipDispatcher`) so the precedence
+ * ladder is reachable by the JVM tests instead of living inline at the call
+ * sites (the [PlayerScreenPolicies] precedent — the third sibling policy
+ * beside its step-seek targets and the gesture path's
  * [com.raulshma.jellyplay.feature.player.video.state.GestureSeekMath.seekTarget]).
- * The ViewModel keeps only the effect shells — the position-aware state
+ * The dispatcher keeps only the effect shells — the position-aware state
  * snapshot, the `canSkipToNext` evaluation and the seek / play-next-episode /
  * cinema-advance dispatch — and reduces each decision to a one-line call
  * here. No engine or session types in these signatures.
@@ -34,8 +35,8 @@ internal enum class SegmentSkipKind(val segmentType: MediaSegmentType) {
  * One snapshot type instead of per-fact lambdas is load-bearing: the active
  * segment and its end ticks MUST come from the same read — a fresh ui-state
  * read per fact could pair one read's segment with another read's end ticks.
- * The VM builds this in one place ([VideoPlayerViewModel]'s position-aware
- * snapshot fold); the dispatch halves consume it.
+ * The session's `SegmentSkipDispatcher` builds this in one place (its
+ * position-aware snapshot fold); the dispatch arms consume it.
  */
 internal data class SegmentDispatchFacts(
     val cinemaIntroActive: Boolean,
@@ -70,9 +71,10 @@ internal sealed interface SegmentSkipTarget {
 /**
  * Seek target for an already-resolved segment-end ticks value: the shared
  * `non-null and positive` guard plus the ticks→ms conversion. Used both by
- * the skip-button ladder below and by `VideoPlayerViewModel.skipSegment`
- * (the position-tick auto-skip path), which resolve their ticks against the
- * segment list on the ViewModel.
+ * the skip-button ladder below and by the dispatcher's per-segment arms
+ * (`skipSegment` — the overlay press — and `autoSkip` — the position-tick
+ * auto-skip path), which resolve their ticks against the segment list on the
+ * uiState.
  */
 internal fun segmentEndSeekTarget(endTicks: Long?): SegmentSkipTarget =
     if (endTicks != null && endTicks > 0L) {

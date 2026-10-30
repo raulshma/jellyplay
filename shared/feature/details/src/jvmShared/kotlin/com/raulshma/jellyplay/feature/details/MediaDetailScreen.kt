@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -19,11 +18,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
@@ -1165,33 +1161,10 @@ fun MediaDetailScreen(
         }
 
         activeTrailerKey?.let { key ->
-            Dialog(
-                onDismissRequest = { activeTrailerKey = null },
-                properties = DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    dismissOnBackPress = true,
-                    dismissOnClickOutside = true,
-                ),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    InlineTrailerPlayerHost(
-                        videoKey = key,
-                        modifier = Modifier.fillMaxSize(),
-                        muted = false,
-                        showControls = true,
-                        autoplay = true,
-                        onEmbedFailed = {
-                            activeTrailerKey = null
-                            uriHandler.openUri("https://www.youtube.com/watch?v=$key")
-                        },
-                    )
-                }
-            }
+            InlineTrailerDialog(
+                videoKey = key,
+                onDismiss = { activeTrailerKey = null },
+            )
         }
 
         // Long-press / TV-Menu quick actions for row cards — the shared

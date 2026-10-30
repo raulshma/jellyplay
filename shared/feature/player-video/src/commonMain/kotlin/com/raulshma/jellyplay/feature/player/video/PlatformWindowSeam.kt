@@ -169,13 +169,6 @@ internal expect fun rememberHasHardwareKeyboard(): Boolean
 internal expect fun rememberIsPortraitOrientation(): Boolean
 
 /**
- * Locale 24-hour clock preference for the controls' clock. Desktop derives it
- * from the default JDK time format pattern.
- */
-@Composable
-internal expect fun rememberIs24HourFormat(): Boolean
-
-/**
  * Whether the non-TV hardware-keyboard layer grabs focus onto its player Box
  * whenever it composes, not only on the controls-hidden edge (the screen's
  * at-HEAD focus-request condition, [VideoPlayerScreen]'s focus-request

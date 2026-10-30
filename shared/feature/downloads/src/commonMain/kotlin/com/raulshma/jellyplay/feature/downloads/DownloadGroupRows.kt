@@ -55,18 +55,12 @@ import com.composables.icons.tabler.outline.ChevronsDown
 import com.composables.icons.tabler.outline.ChevronsUp
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.ChevronRight
-import com.composables.icons.tabler.outline.PlayerPause
-import com.composables.icons.tabler.outline.PlayerPlay
-import com.composables.icons.tabler.outline.PlayerStop
 import com.composables.icons.tabler.outline.Photo
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_collapse_all_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_episode_count
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_expand_all_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_group_progress
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_pause_all
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_sort_cd
 
 /**
@@ -450,53 +444,35 @@ internal fun DownloadGroupHeader(
             // (null = nothing in the group admits the action). Outside
             // selection mode, alongside the group Play button. Cancel dispatches
             // directly — the per-row cancel carries no confirmation either;
-            // only DELETE and the appbar's Cancel All confirm.
+            // only DELETE and the appbar's Cancel All confirm. Faces come from
+            // the module's face table (pause kept the app bar's "pause all"
+            // voice; cancel the scoped one) with this card's chrome — smooth10
+            // ring, dimmed icon — passed per-surface.
             if (!selectionMode && onPauseGroup != null) {
-                val pauseFocus = rememberTvFocusState(focusedScale = 1.1f)
-                IconButton(
+                TvActionIconButton(
+                    face = DownloadBulkAction.PAUSE.allFace,
+                    shape = ShapeCache.smooth10,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = onPauseGroup,
-                    modifier = Modifier
-                        .then(pauseFocus.focusModifier)
-                        .tvFocusIndicator(pauseFocus, ShapeCache.smooth10),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerPause,
-                        contentDescription = stringResource(Res.string.downloads_pause_all),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                )
             }
             if (!selectionMode && onCancelGroup != null) {
-                val cancelFocus = rememberTvFocusState(focusedScale = 1.1f)
-                IconButton(
+                TvActionIconButton(
+                    face = DownloadBulkAction.CANCEL.face,
+                    shape = ShapeCache.smooth10,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = onCancelGroup,
-                    modifier = Modifier
-                        .then(cancelFocus.focusModifier)
-                        .tvFocusIndicator(cancelFocus, ShapeCache.smooth10),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerStop,
-                        contentDescription = stringResource(Res.string.downloads_action_cancel),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                )
             }
             // Group Play: outside selection mode, targets the next unwatched
             // episode in the group's playback order.
             if (onPlay != null && !selectionMode) {
-                val playFocus = rememberTvFocusState(focusedScale = 1.1f)
-                IconButton(
+                TvActionIconButton(
+                    face = DownloadActionFaces.groupPlay,
+                    shape = ShapeCache.smooth10,
+                    tint = MaterialTheme.colorScheme.primary,
                     onClick = onPlay,
-                    modifier = Modifier
-                        .then(playFocus.focusModifier)
-                        .tvFocusIndicator(playFocus, ShapeCache.smooth10),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerPlay,
-                        contentDescription = stringResource(Res.string.downloads_action_play),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                )
             }
         }
     }

@@ -33,7 +33,6 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
@@ -53,6 +52,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.toEngineEventSource
 import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.session.SegmentSkipDispatcher
 import com.raulshma.jellyplay.feature.player.video.session.SessionUiMirrors
 import com.raulshma.jellyplay.feature.player.video.session.playbackHandledFingerprint
 import com.raulshma.jellyplay.feature.player.video.state.InputBindingToggleController
@@ -68,7 +68,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,9 +96,6 @@ private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_i
 private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 
 private const val LOAD = "PlaybackSession.load"
-
-/** How long the "Skipped …" segment-skip confirmation caption stays up. */
-private const val SKIPPED_SEGMENT_NOTICE_MS = 2_500L
 
 /**
  * Up Next card + manual queue trace (the queue mirror's VM-side half, the
@@ -709,13 +705,32 @@ internal class PlaybackSession(
         playNextEpisode = { upNext.playNextManually() },
     )
 
+    /**
+     * The segment-skip family's module (wiring in
+     * session/SegmentSkipDispatcher.kt): the position-aware facts snapshot,
+     * the policy dispatch, the effect execution and the "Skipped …" notice
+     * lifecycle behind four arms. The session's [skipIntro] / [skipSegment]
+     * delegates and the transport-clamp / auto-skip callbacks all forward
+     * here.
+     */
+    internal val segmentSkip: SegmentSkipDispatcher = SegmentSkipDispatcher(
+        scope = scope,
+        uiState = uiState,
+        positionMs = { positionMs.value },
+        durationMs = { durationMs.value },
+        canSkipToNext = { nextEpisode -> autoplayController.canSkipToNext(nextEpisode) },
+        seekLocal = { position, userInitiated -> transport.seekLocal(position, userInitiated) },
+        playNextManually = { upNext.playNextManually() },
+        advanceCinemaIntro = { advanceCinemaIntro() },
+    )
+
     /** The session-owned transport routing module (ladders + local seek arm; wiring in TransportRouter.kt). */
     internal val transport = transportRouter(
         handles,
         stores,
         // The seek clamp's "Skipped …" notice — the SAME notice the
-        // auto-skip arm raises (see [showSkippedSegmentNotice]).
-        onSegmentSkippedNotice = ::showSkippedSegmentNotice,
+        // auto-skip arm raises (see [SegmentSkipDispatcher]).
+        onSegmentSkippedNotice = segmentSkip::onClampedSeek,
     )
 
     /**
@@ -726,43 +741,6 @@ internal class PlaybackSession(
      * the decode surface, not the timeline ownership).
      */
     internal val engineCommands = engineCommands(handles)
-
-    /** Bumped per notice so same-type consecutive skips re-trigger the UI. */
-    private var skippedSegmentNoticeSeq: Long = 0
-
-    /** The auto-clear job backing [showSkippedSegmentNotice]'s ~2.5 s window. */
-    private var skippedSegmentNoticeJob: Job? = null
-
-    /**
-     * Raises the ephemeral "Skipped …" caption on the uiState and
-     * re-arms the auto-clear. A notice replacing a live one restarts the
-     * window; the caption's [SkippedSegmentNotice.seq] makes the same-type
-     * consecutive case visible to the collector. Fired from BOTH segment-skip
-     * arms — the transport clamp's local seek and the position-tick
-     * auto-skip — so the notice has ONE home.
-     */
-    private fun showSkippedSegmentNotice(segmentType: MediaSegmentType) {
-        uiState.update {
-            it.copy(
-                skippedSegmentNotice = SkippedSegmentNotice(
-                    segmentType = segmentType,
-                    seq = ++skippedSegmentNoticeSeq,
-                ),
-            )
-        }
-        skippedSegmentNoticeJob?.cancel()
-        skippedSegmentNoticeJob = scope.launch {
-            delay(SKIPPED_SEGMENT_NOTICE_MS)
-            uiState.update { current ->
-                // Only clear OUR notice — a newer one may have replaced it.
-                if (current.skippedSegmentNotice?.seq == skippedSegmentNoticeSeq) {
-                    current.copy(skippedSegmentNotice = null)
-                } else {
-                    current
-                }
-            }
-        }
-    }
 
     /** The session-owned pref write choreography (wiring in PlayerUiCommands.kt). */
     internal val uiCommands = playerUiCommands(handles, stores, playbackStore)
@@ -803,7 +781,7 @@ internal class PlaybackSession(
             getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
             getMediaEngine = { playerSessionManager.engine },
             getIncognitoModeEnabled = uiMirrors.getIncognitoModeEnabled,
-            onAutoSkip = { segment -> autoSkipSegment(segment) },
+            onAutoSkip = { segment -> segmentSkip.autoSkip(segment) },
             onPlaybackEndedNoNext = { onEndedWithNoNext() },
             onWatchedThresholdReached = { itemId ->
                 // Forwarded into the episode-continuation controller declared
@@ -2077,99 +2055,23 @@ internal class PlaybackSession(
 
     // ── End-of-media + segment-skip dispatch ──────────────────────────────────
     //
-    //    The two dispatches the session-event forwarder and the progress
-    //    reporter arm — moved from the ViewModel, whose every fact and every
-    //    effect target here is session-owned: the autoplay/sleep/still-
-    //    watching controllers, the Up Next advance + #17 keep gate, the
-    //    cinema chain, the position/duration flows, the uiState sinks and
-    //    the #14 offer controller. The DECISION halves stay in their pure
-    //    modules ([EndOfMediaDecision], SegmentSkipPolicy.kt) — only the
-    //    composition lives here.
-
-    /**
-     * The ONE position-aware snapshot fold behind the segment-skip dispatch
-     * ([dispatchSegmentSkip]): every fact the skip ladder consults, read from
-     * a single snapshot that pairs the live position/duration from the
-     * dedicated high-frequency flows with the low-frequency uiState slices
-     * ([SegmentProjection]), so the active segment and its end ticks can never
-     * come from different reads (the pairing rule [SegmentDispatchFacts]
-     * exists to enforce). The active scan runs once (precomputed overloads);
-     * the intro/credit end-tick reads re-scan the short list per read.
-     */
-    private fun segmentDispatchFacts(): SegmentDispatchFacts {
-        val state = uiState.value
-        val input = SegmentProjection(state).toSegmentInput(durationMs.value)
-        val positionMsValue = positionMs.value
-        val seg = SegmentCalculator.computeActiveSegment(input, positionMsValue)
-        return SegmentDispatchFacts(
-            cinemaIntroActive = state.cinemaIntroState != null,
-            isOutroNearEnd = SegmentCalculator.isOutroNearEnd(input, seg),
-            canSkipToNext = autoplayController.canSkipToNext(state.episodes.nextEpisode),
-            segments = SegmentSnapshot(
-                activeType = seg?.type,
-                activeEndTicks = seg?.let { SegmentCalculator.segmentEndTicks(input, it) },
-                introEndTicks = SegmentCalculator.segmentEndTicksForType(input, positionMsValue, MediaSegmentType.INTRO),
-                creditEndTicks = SegmentCalculator.segmentEndTicksForType(input, positionMsValue, MediaSegmentType.OUTRO),
-            ),
-        )
-    }
+    //    The dispatches the session-event forwarder and the progress reporter
+    //    arm — moved from the ViewModel, whose every fact and every effect
+    //    target here is session-owned: the autoplay/sleep/still-watching
+    //    controllers, the Up Next advance + #17 keep gate, the cinema chain,
+    //    the position/duration flows, the uiState sinks and the #14 offer
+    //    controller. The DECISION halves stay in their pure modules
+    //    ([EndOfMediaDecision], SegmentSkipPolicy.kt); the segment-skip
+    //    COMPOSITION (the facts snapshot + the policy dispatch + the effect
+    //    execution + the notice lifecycle) lives in [segmentSkip] — the arms
+    //    below are one-line delegates so the VM's event funnel keeps its
+    //    surface.
 
     /** The "Skip Intro" button / menu arm (the VM's event funnel forwards). */
-    internal fun skipIntro() {
-        dispatchSegmentSkip(SegmentSkipKind.INTRO)
-    }
+    internal fun skipIntro() = segmentSkip.skipIntro()
 
-    /**
-     * The overlay button press for the active segment (user-initiated — the
-     * seek itself is the feedback, so no confirmation notice).
-     */
-    internal fun skipSegment(segment: MediaSegment) {
-        executeSegmentSkip(segmentEndSeekTarget(uiState.value.segmentEndTicks(segment)), userInitiated = true)
-    }
-
-    /**
-     * The position-tick auto-skip arm ([PlaybackProgressReporter]'s
-     * `onAutoSkip`): not user-initiated (never clamped) and confirmed with
-     * the "Skipped …" notice so an invisible automatic jump is explained.
-     */
-    private fun autoSkipSegment(segment: MediaSegment) {
-        executeSegmentSkip(segmentEndSeekTarget(uiState.value.segmentEndTicks(segment)), userInitiated = false)
-        showSkippedSegmentNotice(segment.type)
-    }
-
-    /**
-     * Shared dispatch for the skip buttons: snapshot the position-aware facts,
-     * reduce them to a [SegmentSkipTarget] via the pure policy in
-     * SegmentSkipPolicy.kt, then execute the one-line effect. The active
-     * segment's end ticks ride the snapshot ([SegmentSnapshot.activeEndTicks]
-     * — resolved against the same read the active segment came from); the
-     * policy sees only plain values.
-     */
-    private fun dispatchSegmentSkip(kind: SegmentSkipKind) {
-        val facts = segmentDispatchFacts()
-        executeSegmentSkip(
-            segmentSkipTarget(
-                kind = kind,
-                cinemaIntroActive = facts.cinemaIntroActive,
-                isOutroNearEnd = facts.isOutroNearEnd,
-                canSkipToNext = facts.canSkipToNext,
-                segments = facts.segments,
-            ),
-            userInitiated = true,
-        )
-    }
-
-    private fun executeSegmentSkip(target: SegmentSkipTarget, userInitiated: Boolean) {
-        when (target) {
-            // A LOCAL seek — the segment-skip dispatch never rides the
-            // SyncPlay/cast ladder (the group/receiver own their timelines).
-            is SegmentSkipTarget.SeekToPosition ->
-                transport.seekLocal(target.positionMs, userInitiated)
-            SegmentSkipTarget.SkipToNextEpisode -> upNext.playNextManually()
-            SegmentSkipTarget.AdvanceCinemaIntro -> advanceCinemaIntro()
-            SegmentSkipTarget.None -> Unit
-        }
-    }
+    /** The overlay button press for the active segment (the VM's event funnel forwards). */
+    internal fun skipSegment(segment: MediaSegment) = segmentSkip.skipSegment(segment)
 
     private fun handlePlaybackEnded() {
         // App-wide now-playing seam's Ended event (feature 4.2): fires before

@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.model.TtlCacheGate
 import com.raulshma.jellyplay.core.model.cacheThrough
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
@@ -322,7 +323,7 @@ public class HomeSectionsFetcher(
     // switch neither voids nor needs to void it.
     @Volatile
     private var lastKnownSeerrRows: List<HomeSection> = emptyList()
-    private val seerrRowsGate = DiscoverRowsTtlGate(HomeFreshness.DISCOVER_TTL_MS)
+    private val seerrRowsGate = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
 
     /**
      * The plugin content source module ([PluginHomeContent]) — the plugin
@@ -1038,39 +1039,3 @@ public class HomeSectionsFetcher(
 }
 
 
-/**
- * Whole-group freshness gate for the Seerr discover rows — the semantics of
- * feature/home's `TtlCacheGate`, ported (that one stays in the feature module
- * for its legacy discover-grid use; this copy serves the network-layer rows).
- * The @Volatile fields matter here: unlike the feature twin (single-writer on
- * a main-confined dispatcher), this gate is read/written from fetch
- * coroutines on the caller's dispatcher, so cross-thread visibility is
- * explicit. Racing fetchers may both pass [shouldFetch] and both stamp —
- * benign (both writes are valid fresh results; last writer wins), the same
- * not-single-flight doctrine as [TtlCache] itself.
- */
-private class DiscoverRowsTtlGate(
-    private val ttlMs: Long,
-    private val clock: () -> Long = ::monotonicNowMillis,
-) {
-    @Volatile
-    private var lastFetchEpochMs: Long = 0L
-
-    @Volatile
-    private var invalidated: Boolean = true
-
-    /** True when the group is stale (never fetched, invalidated, or past the TTL). */
-    fun shouldFetch(now: Long = clock()): Boolean =
-        invalidated || now - lastFetchEpochMs >= ttlMs
-
-    /** Records a successful fetch at [now]; clears any pending invalidation. */
-    fun markFetched(now: Long = clock()) {
-        lastFetchEpochMs = now
-        invalidated = false
-    }
-
-    /** Forces the next [shouldFetch] to return true regardless of age. */
-    fun invalidate() {
-        invalidated = true
-    }
-}

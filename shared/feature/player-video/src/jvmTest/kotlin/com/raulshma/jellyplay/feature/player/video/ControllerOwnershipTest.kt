@@ -233,9 +233,12 @@ class ControllerOwnershipTest {
         // segment-skip dispatch moving in from the ViewModel (with the #14
         // PostPlaybackActionsController construction and the Skipped-segment
         // notice) plus the engine-commands funnel, the playbackFacts()
-        // snapshot and the engine/warm aliases. Lower the ceiling when a
-        // cluster moves out; never raise it to admit growth.
-        val maxPlaybackSessionLines = 3_132
+        // snapshot and the engine/warm aliases. Lowered to 3_012 (2026-10-30)
+        // when the segment-skip composition (the facts snapshot + the policy
+        // dispatch + the effect execution + the Skipped-segment notice
+        // lifecycle) moved out to session/SegmentSkipDispatcher.kt. Lower the
+        // ceiling when a cluster moves out; never raise it to admit growth.
+        val maxPlaybackSessionLines = 3_012
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

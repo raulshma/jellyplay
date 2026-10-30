@@ -156,6 +156,21 @@ fetcher's cache-spec list stays total. The batch schedule, the discover
 generation memo and the Seerr TTL gate stay fetcher-side — the batch IS
 the fetcher's stated job.
 
+**Items query executor** — the /Items family's transport half:
+`LibraryItemsQueryExecutors.kt` (core/network api package, beside the
+resolvers) owns `getItemsQuery` (the ONE spec→SDK expansion over
+`LibraryItemsQuerySpec`, with the `sendPresenceParams` gate preserving the
+discover wire's absence of presence chips/searchTerm), `getItemsPage`
+(query + the `toFilteredMediaItems` parental fold + `SearchResult`
+assembly) and `toSearchResult` (the tail fold the bespoke sites share —
+suggestions, `CollectionApiClientImpl.getCollectionItems`). The
+spec-driven sites build → execute; a new query dimension is one spec
+field + one executor line. Sites with genuinely different semantics (the
+raw provider-id GET, the tags pager whose filter is intentionally not
+applied, the box-set enumerate+probe) stay bespoke.
+`LibraryItemsQueryExecutorsTest` pins the full wire map (UUIDs, serial
+names, the date-window derivation, the presence opt-out) and the fold.
+
 **Home write generation** — the data layer's home assembled-payload
 cache-write token: a repo-local monotonic counter
 (`MediaRepositoryImpl.homeWriteGeneration`), bumped by the funnel when the
@@ -280,6 +295,23 @@ the mapper's stated "DTOs stop at the client boundary"); presentation rules
 (dropping scoreless entries) stay in the section module arm, not the role;
 settings/admin roles keep their DTO-in-ViewModel convention.
 
+**Seerr detail view** — the movie/tv union of the Seerr detail screen as
+one pure fold: `SeerrDetailView.of(movie, tv)` (details commonMain,
+computed ONCE at the screen root and passed down — a descendant
+re-deriving it is a defect) carries the resolved verdicts with the
+precedence decided once: content fields movie-first (the sites' exact
+defaults), cast tv-first (`aggregateCredits` wins; an empty-but-nonnull
+aggregate does NOT fall through to movie credits), tv-only fields
+(seasons, `seasonsPosterUrl`, `usContentRating`, `tvdbId`) null/empty on
+the movie leg, the asymmetric `imdbId` arms, and the studios
+companies-vs-networks fold. Sections and body branches take the view
+(interfaces shrink from nullable pairs); layout stays the screen's.
+`toSeerrSearchItem()` conversions live in core:model beside the types
+(the `ArrCalendarItem.toSeerrSearchItem` precedent); the request-dialog
+dispatch stays movie-first. `SeerrDetailViewTest` pins the four shape
+cases + precedence. The `InlineTrailerDialog` twin (MediaDetailScreen /
+SeerrDetailScreen) is one composable now.
+
 **Detail load orchestrator** — the media-detail load graph behind one module
 (the `HomeRefresher` pattern): sole writer of the content state (VM-side UI
 writes cross a narrow `update` seam — patches, never a second writer), owner
@@ -308,6 +340,23 @@ The composite resume/retry+enqueue verb lives inside `DownloadRepositoryImpl`
 (the `DownloadRepositorySurfaceTest` member ratchet rules out a new queue
 verb); the notification receiver dispatches it alone. The effects fold stays
 VM-side — DELETE-only, single-sited.
+
+**Download action faces** — the presentation half of "what can I do to a
+download": `DownloadActionFaces` (beside `DownloadActions`, the "Request
+action table" idiom) carries icon + label res per action, split by VOICE,
+never merged across locales: `bulk` (scoped, "Pause"), `bulkAll`
+(whole-list, "Pause all" — no DELETE; the selection bar's delete is a text
+button), `rowCancel` (the row's Trash icon divergence), `groupPlay`.
+`TvActionIconButton` owns the TV focus chrome once
+(`rememberTvFocusState` + `focusModifier` + `tvFocusIndicator`, modifier
+order pinned); tint stays a per-surface parameter whose default rides
+`LocalContentColor` — passing `Color.Unspecified` means NO colorFilter
+(intrinsic black), not inherit. Admission gates, placement and onClick
+choreography stay per-surface code (the placement-flag-table rejection
+stands); the selection bar's buttons keep their plain chrome.
+`availableBulkActions` is the per-scope set the surfaces iterate;
+`supports` stays for one-off checks. `DownloadActionFacesTest` pins table
+totality and the set/supports agreement.
 
 **Downloads resync actions** — the resync/freshness family of the downloads
 screen as one constructed module: `DownloadsResyncActions` (built from
@@ -352,9 +401,11 @@ by `PlaybackSession`. The session's collaborators call the router directly,
 and the ViewModel's transport funnel arms are one-line
 forwards. The ladder is asserted behaviorally (recording arms), not by source
 text. `TransportRouter` sits beside `PipTransportController`; the
-skipped-segment notice is session-owned (the router's local arm and the
-auto-skip arm share it), as are the end-of-media fold and the segment-skip
-dispatch.
+skipped-segment notice and the segment-skip dispatch (the facts snapshot +
+policy dispatch + effect execution + notice lifecycle) live in
+`SegmentSkipDispatcher` — the session constructs it and its `skipIntro` /
+`skipSegment` arms are one-line delegates — while the end-of-media fold stays
+session-owned.
 
 **Engine commands funnel** — the DIRECT engine commands that never ride the
 transport ladder because they address the decode surface, not the timeline:
