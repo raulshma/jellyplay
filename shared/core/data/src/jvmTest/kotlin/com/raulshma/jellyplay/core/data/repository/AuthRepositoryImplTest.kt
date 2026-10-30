@@ -28,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -149,6 +150,40 @@ class AuthRepositoryImplTest {
 
         assertTrue(result.isFailure)
         coVerify(exactly = 0) { serverDao.insertServer(any()) }
+    }
+
+    @Test
+    fun `servers flow maps an undecryptable token row to a disconnected server instead of crashing`() = runTest {
+        // Keystore key wiped by an uninstall while the restored DB row kept
+        // the old ciphertext: TokenCipher.decrypt degrades to null (see
+        // TokenCipherTest). The servers flow — the one that used to crash the
+        // app from inside its map — must surface that as isConnected=false.
+        every { tokenCipher.decrypt(any()) } returns null
+        every { serverDao.getAllServers() } returns flowOf(listOf(testServerEntity))
+
+        // The hot stateIn flows share on the @ApplicationScope seam; build the
+        // repository against a scheduler-managed scope so the upstream delivery
+        // is deterministic under runTest (same pattern as the restore tests).
+        val repo = AuthRepositoryImpl(
+            authApiClient = authClient,
+            userApiClient = userClient,
+            webSocketClient = webSocketClient,
+            database = database,
+            serverDao = serverDao,
+            userDao = userDao,
+            serverIdentityStore = serverIdentityStore,
+            tokenCipher = tokenCipher,
+            json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
+            externalScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            timeSource = FakeTimeSource(),
+        )
+
+        val servers = repo.servers.first { it.isNotEmpty() }
+        advanceUntilIdle()
+
+        assertEquals(1, servers.size)
+        assertNull(servers.single().accessToken)
+        assertFalse(servers.single().isConnected)
     }
 
     @Test

@@ -13,6 +13,13 @@ package com.raulshma.jellyplay.core.database.crypto
  * - `decrypt` is forward-compatible: passing plaintext (e.g. a row not yet
  *   migrated) returns it unchanged. This makes the migration path safe — a row
  *   written before v25 still reads correctly.
+ * - `decrypt` degrades instead of throwing: ciphertext that cannot be read
+ *   with the current key (malformed, undecodable base64, or GCM tag
+ *   verification failure — e.g. the Keystore key was wiped by an uninstall
+ *   while a restored database row kept the old ciphertext) returns null.
+ *   Every caller already maps null to "no valid token" (isConnected=false /
+ *   signed-out), so a key rotation out from under stored rows costs a
+ *   re-login, never a crash loop.
  *
  * Null and empty inputs are passed through unchanged so callers don't need to
  * special-case missing tokens.
