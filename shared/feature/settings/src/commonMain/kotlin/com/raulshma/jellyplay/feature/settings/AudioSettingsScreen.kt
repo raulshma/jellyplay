@@ -817,6 +817,11 @@ fun AudioSettingsScreen(
         title = stringResource(Res.string.settings_audio_player_title),
         onBack = onBack,
         focusTag = "audio_init",
+        // The screen's ONE ordered declaration — built above (the audio group
+        // plus the capability-gated cache slot). Omitting this argument is the
+        // v0.11.6 regression the wiring guard pins: the declaration rendered
+        // nothing and the screen shipped blank.
+        groups = audioGroups,
         advancedToggle = PreferenceAdvancedToggle(
             showAdvanced = showAdvanced,
             onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
