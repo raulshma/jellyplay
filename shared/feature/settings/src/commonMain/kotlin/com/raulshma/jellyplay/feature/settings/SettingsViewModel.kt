@@ -186,6 +186,26 @@ class SettingsViewModel(
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())
 
     /**
+     * The plugin's own version string from the last decoded probe (null before
+     * the first probe) — the "Server plugin" section's version line. Set even
+     * when the contract gate refused the payload, so the mismatch banner can
+     * name what the server is running.
+     */
+    val jellyPlayPluginVersion: kotlinx.coroutines.flow.StateFlow<String?> =
+        jellyPlayStatusStore?.servedPluginVersion
+            ?: kotlinx.coroutines.flow.MutableStateFlow(null)
+
+    /**
+     * Non-null when the last probe decoded a capabilities payload whose
+     * contractVersion this client refuses (the drift diagnostic — "update the
+     * plugin or the app"), null for the ordinary UNAVAILABLE reasons. The
+     * section renders the update banner off it.
+     */
+    val jellyPlayContractMismatch: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.model.JellyPlayContractMismatch?> =
+        jellyPlayStatusStore?.contractMismatch
+            ?: kotlinx.coroutines.flow.MutableStateFlow(null)
+
+    /**
      * The per-feature USER toggles behind the "Server plugin" section's
      * switches: the set of
      * [JellyPlayFeatureGate.TOGGLEABLE_FEATURES]

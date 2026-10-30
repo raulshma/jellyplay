@@ -60,6 +60,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
 import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
@@ -176,6 +177,18 @@ internal data class HomeContentState(
      * own title/kicker slots, a miss renders item metadata as today.
      */
     val curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry> = emptyMap(),
+    /**
+     * The hero presentation fold ([homeHeroStyleDecision]) — the screen's
+     * resolution of the style pref against the form factor and the candidate
+     * pool. The hero slot branches on its render flags; the default instance
+     * IS the CAROUSEL output, so a default renders exactly the shipped hero.
+     */
+    val heroStyleDecision: HomeHeroStyleDecision = HomeHeroStyleDecision(),
+    /**
+     * The full rotation candidate pool (the screen's [selectHomeHeroCandidates]
+     * output) — the TV_SLIDER pager's pages; unused by every other style.
+     */
+    val heroCandidates: List<MediaItem> = emptyList(),
     val backgroundColor: Color,
     val contentPad: Dp,
     val headerHeight: Dp,
@@ -245,10 +258,12 @@ internal data class HomeContentState(
 
 /**
  * The content list's per-surface event sinks + the seams only it consumes
- * ([getImageUrl] for the series-art resolvers, the per-item photo-folder
- * URL slice). The shared render wiring (URL builders, click funnels,
- * prefetch/loading, hero focus) lives in [HomeRenderInputs] — passed beside
- * these callbacks so the two bundles never re-thread the same lambdas.
+ * (the per-item photo-folder URL slice). The shared render wiring (the
+ * artwork resolver, click funnels, prefetch/loading, hero focus) lives in
+ * [HomeRenderInputs] — passed beside these callbacks so the two bundles never
+ * re-thread the same lambdas; series art rode a `seriesPosterUrl` lambda here
+ * until the artwork fold moved it onto [HomeRenderInputs.artwork] (the row
+ * arms derive their resolver lambdas from the bundle now).
  */
 @Immutable
 internal data class HomeContentCallbacks(
@@ -258,8 +273,6 @@ internal data class HomeContentCallbacks(
     val onOfflineLibraryClick: () -> Unit,
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
-    /** Image URL for an item ID — the series-poster resolver's source. */
-    val getImageUrl: (String) -> String,
     /** Per-item slice of the photo-folder child-URL cache — collected at the
      * photo-folder card, not orchestrator scope, so a prefetch merge only
      * recomposes the card whose urls changed. */
@@ -334,6 +347,12 @@ internal fun HomeContentList(
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
     renderInputs: HomeRenderInputs,
+    /**
+     * The hero controller — the TV_SLIDER hero's pager syncs the settled page
+     * into it ([HeroController.snapToSliderPage]) so the ambient backdrop and
+     * the candidate state stay in step with what the slider shows.
+     */
+    heroController: HeroController,
     listState: LazyListState,
     density: Density,
     /**
@@ -493,27 +512,56 @@ internal fun HomeContentList(
                     // featured — absent/null fields render the item's own
                     // metadata exactly as the local hero always has.
                     val curated = state.curatedHeroOverlay[featured.id]
+                    // The presentation fold carried whole from the screen
+                    // ([homeHeroStyleDecision]); its default instance is the
+                    // CAROUSEL output, so the shipped hero is untouched.
+                    val decision = state.heroStyleDecision
+                    // The DETAILED spotlight renders taller than the adaptive base.
+                    val heroHeight = if (decision.chromeVisibility == HomeHeroChromeVisibility.RICH) {
+                        state.headerHeight + DetailedHeroHeightExtra
+                    } else {
+                        state.headerHeight
+                    }
                     // Online and offline heroes alike open the unified detail
                     // tree — it renders remote and downloaded items alike, so
                     // the id is all the routing needs.
-                    AnimatedHeroHeader(
-                        featuredItem = featured,
-                        headline = curated?.headline,
-                        subhead = curated?.subhead,
-                        getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
-                            { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
-                        },
-                        height = state.headerHeight,
-                        backgroundColor = state.backgroundColor,
-                        contentPadding = state.contentPad,
-                        homeBackdropEnabled = state.core.homeBackdropEnabled,
-                        listState = listState,
-                        onItemClick = callbacks.onItemClick,
-                        onDetailsClick = callbacks.onItemClick,
-                        requestInitialFocus = !savedRowIsValid,
-                        onFocusChange = callbacks.onFocusChange,
-                        focusRequester = renderInputs.heroFocusRequester,
-                    )
+                    if (decision.isSlider) {
+                        HeroSliderHeader(
+                            candidates = state.heroCandidates,
+                            controller = heroController,
+                            getBackdropUrl = renderInputs.heroBackdropUrlBuilder,
+                            height = heroHeight,
+                            backgroundColor = state.backgroundColor,
+                            contentPadding = state.contentPad,
+                            homeBackdropEnabled = state.core.homeBackdropEnabled,
+                            listState = listState,
+                            curatedHeroOverlay = state.curatedHeroOverlay,
+                            onItemClick = callbacks.onItemClick,
+                            onDetailsClick = callbacks.onItemClick,
+                            requestInitialFocus = !savedRowIsValid,
+                            onFocusChange = callbacks.onFocusChange,
+                            focusRequester = renderInputs.heroFocusRequester,
+                        )
+                    } else {
+                        AnimatedHeroHeader(
+                            featuredItem = featured,
+                            headline = curated?.headline,
+                            subhead = curated?.subhead,
+                            getBackdropUrl = renderInputs.heroBackdropUrlBuilder,
+                            height = heroHeight,
+                            backgroundColor = state.backgroundColor,
+                            contentPadding = state.contentPad,
+                            homeBackdropEnabled = state.core.homeBackdropEnabled,
+                            listState = listState,
+                            onItemClick = callbacks.onItemClick,
+                            onDetailsClick = callbacks.onItemClick,
+                            requestInitialFocus = !savedRowIsValid,
+                            onFocusChange = callbacks.onFocusChange,
+                            focusRequester = renderInputs.heroFocusRequester,
+                            chromeVisibility = decision.chromeVisibility,
+                            fullBleed = decision.fullBleed,
+                        )
+                    }
                 }
             } else {
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
@@ -667,13 +715,17 @@ internal fun HomeContentList(
                     } else null
                 }
 
-                // The per-row spinner mirrors, leaf-collected at row scope
+                // The per-row spinner mirror, leaf-collected at row scope
                 // (the `pendingSyncEntries` pattern): a single-row refresh's
                 // spin-up/data/spin-down emissions invalidate only THIS
-                // item's recompose scope, never the orchestrator above.
-                // Derivation is set membership on the small mirror sets
+                // item's recompose scope, never the orchestrator above — and
+                // the membership read is wrapped in a per-row derivedStateOf,
+                // so only the row whose id entered/left the set recomposes
                 // (see [HomeRefreshSpinnerState]).
                 val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
+                val edgeRefreshing by remember(section.id) {
+                    derivedStateOf { section.id in spinners.refreshingSectionIds }
+                }
 
                 // Edge-pull refresh wiring: online rows of the refreshable
                 // types only ([isEdgeRefreshableSection] — the same gate the
@@ -683,7 +735,7 @@ internal fun HomeContentList(
                 val edgeRefreshCtx = if (offlineContent == null && isEdgeRefreshableSection(section)) {
                     EdgeRefreshContext(
                         sectionId = section.id,
-                        inProgress = section.id in spinners.refreshingSectionIds,
+                        inProgress = edgeRefreshing,
                         onRefresh = { callbacks.onRefreshSection(section.id) },
                     )
                 } else {
@@ -907,7 +959,10 @@ private fun HomeSectionJellyPlayRow(
     JellyPlayHomeRow(
         title = ctx.title,
         entries = ctx.section.jellyPlayRowEntries,
-        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        // Artwork-backed lambdas are remembered ONCE per arm off the bundle's
+        // resolver — never per item — so the rows' `(MediaItem) -> String`
+        // params keep stable identities and the rows stay skippable.
+        imageUrlBuilder = rememberHomePosterUrl(renderInputs.artwork),
         fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
         onItemClick = rowItemClick,
         onPlayClick = renderInputs.mediaOnPlayClick,
@@ -950,7 +1005,7 @@ private fun HomeSectionOnlineTilesRow(
     HomeLibraryTilesRow(
         title = ctx.title,
         items = section.items,
-        imageUrlFor = renderInputs.mediaImageUrlBuilder,
+        imageUrlFor = rememberHomePosterUrl(renderInputs.artwork),
         onTileClick = tileClick,
         modifier = ctx.modifier,
         focusRequester = ctx.focusRequester,
@@ -1128,8 +1183,8 @@ private fun HomeSectionOnlineWideRow(
         title = sectionTitle,
         items = section.items,
         toMediaItem = { it },
-        imageUrl = renderInputs.mediaImageUrlBuilder,
-        backdropUrl = renderInputs.mediaBackdropUrlBuilder,
+        imageUrl = rememberHomePosterUrl(renderInputs.artwork),
+        backdropUrl = rememberHomeBackdropUrl(renderInputs.artwork),
         onItemClick = rowItemClick,
         onPlayClick = renderInputs.mediaOnPlayClick,
         modifier = sectionModifier,
@@ -1176,8 +1231,9 @@ private fun HomeSectionOnlinePosterRow(
     }
     // The dice-roll in-flight mirror, leaf-collected at row scope (the
     // `pendingSyncEntries` pattern — see the content list's edge-pull
-    // note): only the rolling row's arm recomposes when a roll spins up
-    // or down, never the content list above it.
+    // note): the membership read is wrapped in a per-row derivedStateOf,
+    // so only the rolling row's arm recomposes when a roll spins up or
+    // down — never the content list above it.
     val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
     // Dice affordance: RANDOM-sorted custom discover rows only
     // (the descriptor resolves the row id back out of the
@@ -1193,10 +1249,16 @@ private fun HomeSectionOnlinePosterRow(
     val diceRowAccessibilityLabel = if (diceRowId != null) {
         stringResource(Res.string.home_discover_reroll)
     } else null
+    // The tumble flag, read off the derived state (keyed on diceRowId — the
+    // closure captures it): recomposes this arm only when the row's
+    // membership in the rolling set flips.
+    val rollInProgress by remember(diceRowId) {
+        derivedStateOf { diceRowId != null && diceRowId in spinners.rollingDiscoverRowIds }
+    }
     HomeMediaRow(
         title = sectionTitle,
         items = section.items,
-        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        imageUrlBuilder = rememberHomePosterUrl(renderInputs.artwork),
         fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
         onItemClick = rowItemClick,
         onPlayClick = renderInputs.mediaOnPlayClick,
@@ -1220,7 +1282,7 @@ private fun HomeSectionOnlinePosterRow(
         onRollClick = if (diceRowId != null) {
             { rollDiscoverRow(diceRowId) }
         } else null,
-        rollInProgress = diceRowId != null && diceRowId in spinners.rollingDiscoverRowIds,
+        rollInProgress = rollInProgress,
         rollAccessibilityLabel = diceRowAccessibilityLabel,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         // Book progress bars: exact page fractions from the
@@ -1237,8 +1299,14 @@ private fun HomeSectionOnlinePosterRow(
         } else {
             null
         },
-        seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
-        seriesBackdropResolver = remember(renderInputs.onlineBackdropResolver) { { id: String -> renderInputs.onlineBackdropResolver(id) } },
+        // Item-level series-poster resolver (series id + image tag),
+        // remembered once off the bundle's [ArtworkUrls] (the callbacks
+        // bundle's former seriesPosterUrl lambda); the backdrop leg stays
+        // id-level (the model carries no series backdrop tag) — the raw read
+        // off [HomeRenderInputs.onlineBackdropResolver], passed as-is (the
+        // bundle already stabilizes its identity).
+        seriesPosterResolver = rememberHomeSeriesPosterUrl(renderInputs.artwork),
+        seriesBackdropResolver = renderInputs.onlineBackdropResolver,
         edgeRefresh = ctx.edgeRefresh,
     )
 }
@@ -1305,3 +1373,23 @@ private fun HomeStatusBannerRow(
         }
     }
 }
+
+/**
+ * The row arms' artwork-backed lambdas, remembered ONCE per arm off the
+ * bundle's [ArtworkUrls] resolver — never per item — so the rows'
+ * `(MediaItem) -> String` params keep stable identities and the rows stay
+ * skippable. One helper per slot (poster, backdrop, series poster); a
+ * hand-rolled `remember(artwork) { … }` at a call site is the duplication
+ * this trio retires.
+ */
+@Composable
+private fun rememberHomePosterUrl(artwork: ArtworkUrls): (MediaItem) -> String =
+    remember(artwork) { { item: MediaItem -> artwork.poster(item) } }
+
+@Composable
+private fun rememberHomeBackdropUrl(artwork: ArtworkUrls): (MediaItem) -> String =
+    remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
+
+@Composable
+private fun rememberHomeSeriesPosterUrl(artwork: ArtworkUrls): (MediaItem) -> String =
+    remember(artwork) { { item: MediaItem -> artwork.seriesPoster(item) } }

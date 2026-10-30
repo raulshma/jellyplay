@@ -13,10 +13,10 @@ import kotlinx.coroutines.flow.Flow
  * WebSocket echo cannot cover announce here; the no-op cases (empty ids, no
  * signed-in identity) are the impl's contract, shared by every caller.
  *
- * A SEPARATE leaf single rather than a view of [MediaRepository]: the write
+ * A SEPARATE leaf single rather than a view of the repository: the write
  * paths that announce ([PlayedStateSyncImpl], [PlaybackRepositoryImpl]) sit
- * upstream of the repository's construction graph, and a MediaRepository-typed
- * dependency there is exactly the cycle the former `lazy { get<MediaRepository>()
+ * upstream of the repository's construction graph, and a repository-typed
+ * dependency there is exactly the cycle the former `lazy { get<MediaRepositoryImpl>()
  * }` deferrals existed to break. Owning the fan-out (the synthetic flow + the
  * [RecentLocalUserDataWrites] record) in one leaf lets every one of those
  * lazies die. The repository funnels its own union member through the same

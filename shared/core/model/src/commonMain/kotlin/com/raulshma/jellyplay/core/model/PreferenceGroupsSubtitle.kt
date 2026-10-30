@@ -24,6 +24,7 @@ data class LanguagePreferences(
     val preferredSubtitleLanguage: String? = null,
     val preferredAudioLanguage: String? = null,
     val subtitlesForcedOnly: Boolean = false,
+    val showOnlyPreferredSubtitles: Boolean = false,
     val highContrastSubtitles: Boolean = false,
     val pgsSubtitleDirectPlay: Boolean = false,
     val hdrSubtitleStyleEnabled: Boolean = false,

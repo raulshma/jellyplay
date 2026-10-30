@@ -9,8 +9,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Shared owner of the two filter-sheet dimensions — genres and tags — that
- * library, search, and the Discover-row editor all load off [MediaRepository]/
- * `LibraryApiClient` the same way. Extracted from the three ViewModels'
+ * library, search, and the Discover-row editor all load off the browse
+ * family seam / `LibraryApiClient` the same way. Extracted from the three ViewModels'
  * byte-identical `_genres`/`_tags` StateFlow pairs + `loadListWithRetry`
  * launchers; each VM now holds one instance and exposes the holder's flows
  * (public exposure shape unchanged), so the retry policy and the

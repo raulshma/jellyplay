@@ -29,7 +29,9 @@ import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.cacheThrough
 import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.testfixtures.FakeHomeSectionSources
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -67,41 +69,38 @@ import kotlin.test.assertTrue
  * `MediaRepositoryHomeSectionsCacheTest` in core:data, `HomeSectionsFetcherTest`
  * in core:network) and NO test spanned the composition.
  *
- * STACK UNDER TEST — real feature layers over a protocol-faithful repo double:
+ * STACK UNDER TEST — real feature layers, the REAL network half, and a
+ * protocol-faithful repo double:
  *  * [HomeRefresher] (real) — the WHEN layer: fetchOnce's ordering, the
  *    book-fraction decode as the last suspension, the single sections write,
  *    the drain call site.
  *  * [DiscoverRowsCoordinator] (real, constructed inside the refresher) —
  *    race window 1: the roll registry and `drainRolls`.
- *  * [RollProtocolRepo] (test double) — windows 2 and 3, implemented per the
- *    protocol KDoc over the REAL shared cache engine (core:model
- *    [TtlCache] + [cacheThrough] with epoch write guards — the same engine
- *    the real `MediaRepositoryImpl.homeSectionsCache` and
- *    `HomeSectionsFetcher.homeDiscoverRowCache` both ride): an
- *    assembled-payload cache behind the repo token, a per-row memo behind
- *    the network mirror of that SAME token (production consolidated to ONE
- *    repo-owned cache-write generation — `MediaRepositoryImpl`'s funnel
- *    bumps it and hands the post-bump value to the fetcher through the port
- *    verbs' `generation` parameter — so the double's coordinated
- *    invalidate/commit bumps of both guards model the token plus its
- *    mirror), and a transport whose every raw call serves the
- *    NEXT shuffle (a RANDOM-sorted row re-rolls on every true server hit).
+ *  * [HomeSectionsFetcher] (real, over the shared :shared:core:test-fixtures
+ *    [FakeHomeSectionSources] transport double) — windows 2+3's NETWORK half:
+ *    the per-row memo (10 min, [HomeFreshness.DISCOVER_ROW_TTL_MS], key
+ *    `discover_<rowId>_<limit>`) behind the fetcher's own generation, whose
+ *    [HomeSectionsFetcher.rerollDiscoverRow] runs the invalidate → fetch →
+ *    seed choreography as ONE operation. Production's own op — no longer
+ *    re-stated here (the fetcher's constructor is public since the ADR-0008
+ *    extraction; its construction-scope KDoc sanctions exactly this kind of
+ *    test construction).
+ *  * [RollProtocolRepo] (test double) — the REPO half, implemented per the
+ *    protocol KDoc over the REAL shared cache engine (core:model [TtlCache] +
+ *    [cacheThrough] with the epoch write guard — the same engine the real
+ *    `MediaRepositoryImpl.homeSectionsCache` rides): an assembled-payload
+ *    cache bumped once AFTER the operation returns (production's funnel).
  *
- * HONEST GAP (why not the real `MediaRepositoryImpl` + `HomeSectionsFetcher`):
- * neither can join a test in this module — `MediaRepositoryImpl`'s primary
- * constructor is `internal` to core:data and `HomeSectionsFetcher` is
- * `internal` to core:network, and no module sees all three layers (core:data
- * cannot see the feature coordinator; the feature cannot construct the repo).
- * The double re-states the two lower layers' PROTOCOL behavior (the ordering
- * and bump rules their own suites pin) so the COMPOSITION is what fails if
- * any layer drifts from the contract; the per-layer suites above remain the
- * owners of each layer's implementation details (including the one-token
- * consolidation itself — the parameter threading is pinned by
- * `MediaRepositoryHomeSectionsCacheTest` and `HomeSectionsFetcherTest`).
- * (The repo + fetcher layers have their own real-stack
- * contract suite — `HomeFeedRealStackContractTest` in core:data's jvmTest;
- * this double covers the FEATURE-layer roll protocol, which is what it
- * actually doubles.)
+ * HONEST GAP (why not the real `MediaRepositoryImpl` too): its primary
+ * constructor is `internal` to core:data, so no module outside core:data can
+ * construct it — the real repo+fetcher pair IS pinned, on the real stack, by
+ * `HomeFeedRealStackContractTest` in core:data's jvmTest. The double
+ * re-states the REPO half's protocol behavior (the post-operation bump that
+ * repo's own suites pin) so the COMPOSITION is what fails if any layer
+ * drifts from the contract; the per-layer suites above remain the owners of
+ * each layer's implementation details (the operation hand-off is pinned by
+ * `MediaRepositoryHomeSectionsCacheTest` + `HomeFeedRealStackContractTest`
+ * and the fetcher's own suite).
  *
  * PINS (one user action — the dice re-roll — through refresh cycles on
  * virtual time):
@@ -116,7 +115,7 @@ import kotlin.test.assertTrue
  *  3. drainRolls ordering: a roll landing while the fetch is parked on the
  *     book-fraction decode (the fetch's LAST suspension before the drain)
  *     registers strictly before the drain point, so the fetch's single
- *     sections write re-applies it — and the double's caches agree with the
+ *     sections write re-applies it — and the double's cache agrees with the
  *     painted roll afterwards (the composition, not just the feature half).
  *
  * Harness mirrors [HomeRefresherTest]: MockK collaborators, inlined
@@ -142,21 +141,19 @@ class DiscoverRollContractTest {
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
 
     /**
-     * While set, the NEXT raw transport call parks on it (one-shot — the
-     * roll's own fresh fetch must not park behind the gate that holds the
-     * raced fetch). This is how a test deterministically suspends a fetch
-     * mid-transport, AFTER both epoch guards have captured their epochs.
-     */
-    private var transportGate: CompletableDeferred<Unit>? = null
-
-    /**
      * While set, the TOC fake's getToc parks — parks the fetch's
      * book-fraction decode, the fetch's LAST suspension before the
      * roll-registry drain (same idiom as [HomeRefresherTest]).
      */
     private var tocGate: CompletableDeferred<Unit>? = null
 
-    /** The protocol double — see the class KDoc. */
+    /** The shared transport double under the REAL fetcher — see the class KDoc. */
+    private lateinit var sources: FakeHomeSectionSources
+
+    /** The REAL network half of the roll protocol — see the class KDoc. */
+    private lateinit var fetcher: HomeSectionsFetcher
+
+    /** The repo-half double — see the class KDoc. */
     private lateinit var proto: RollProtocolRepo
 
     /** The one discover row every test here rolls. */
@@ -164,12 +161,11 @@ class DiscoverRollContractTest {
 
     private val discoverSectionId: String get() = HomeSectionType.DISCOVER.descriptor.idFor(row.id)
 
-    /** The pre-decoded shuffles the transport serves, one per raw call. */
-    private val shuffles = listOf(
-        listOf(item("m1"), item("m2"), item("m3")), // 1st raw hit (initial refresh)
-        listOf(item("r1"), item("r2")),             // 2nd raw hit (the roll)
-        listOf(item("s1"), item("s2")),             // 3rd raw hit (raced/stale response)
-    )
+    /** The discover sub-call's leaf key: the fake names every call `discover:<rowId>:<limit>`. */
+    private val discoverCallKey: String get() = "discover:${row.id}:${row.limit}"
+
+    /** True server hits against the discover row (a memo hit makes no raw call). */
+    private fun rawRowFetches(): Int = sources.calls.count { it.startsWith("discover:") }
 
     private val bookTocCacheRepository = object : BookTocCacheRepository {
         override fun observeToc(itemId: String): Flow<BookTocCache?> = flowOf(null)
@@ -191,11 +187,21 @@ class DiscoverRollContractTest {
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.isOffline } returns false
 
-        proto = RollProtocolRepo()
+        // The REAL network half over the shared transport double (no Seerr
+        // transport, no session — CacheIdentity.UNKNOWN, the pre-login state
+        // the repo double keys its own cache under too).
+        sources = FakeHomeSectionSources()
+        fetcher = HomeSectionsFetcher(
+            sources = sources,
+            seerrSources = null,
+            cacheIdentity = { CacheIdentity.UNKNOWN },
+            today = { "2026-01-01" },
+        )
+        proto = RollProtocolRepo(fetcher)
 
         // The HomeFeed seam: a relaxed mock with the roll-protocol members
-        // delegated to the double (its cache and epoch behavior is the code
-        // under test, not a stub echo); the change feed is its own seam.
+        // delegated to the double (its repo-half cache and epoch behavior is
+        // the code under test, not a stub echo); the change feed is its own seam.
         homeFeed = mockk(relaxed = true)
         userDataChanges = mockk(relaxed = true)
         every { userDataChanges.userDataChanges } returns userDataEvents
@@ -215,6 +221,28 @@ class DiscoverRollContractTest {
 
         Dispatchers.resetMain()
     }
+
+    /**
+     * Scripts the CONTINUE_READING row for the next [times] home fetches (one
+     * "cr" leaf call each): the fetch's book-fraction decode — its last
+     * suspension, pins 2/3's drain anchor — needs a CR row carrying an
+     * in-progress book to park on.
+     */
+    private fun scriptContinueReading(times: Int) {
+        repeat(times) {
+            sources.continueReadingResults += Result.success(
+                listOf(item("book1").copy(mediaType = MediaType.BOOK, playbackPositionTicks = 50_000L)),
+            )
+        }
+    }
+
+    /**
+     * One raw discover-row response, served in ISSUE order: the fake binds
+     * each scripted result to the next raw call, so every true server hit
+     * serves the next shuffle (a RANDOM-sorted row re-rolls on every hit —
+     * which is what makes a memo HIT distinguishable from a re-fetch).
+     */
+    private fun shuffle(vararg ids: String): Result<List<MediaItem>> = Result.success(ids.map { item(it) })
 
     private fun TestScope.buildRefresher(): HomeRefresher {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
@@ -269,30 +297,34 @@ class DiscoverRollContractTest {
     @Test
     fun `refresh roll refresh - the rolled row survives the next refresh without reverting or re-rolling`() = runTest {
         val refresher = buildRefresher()
+        scriptContinueReading(times = 2) // initial refresh + the post-roll refresh
+        sources.discoverRowResults += shuffle("m1", "m2", "m3") // 1st raw hit (initial refresh)
+        sources.discoverRowResults += shuffle("r1", "r2")       // 2nd raw hit (the roll)
 
         // Initial refresh: the transport's first raw hit (shuffle 1) is
-        // memoised into both caches.
+        // memoised into the fetcher's row memo and the repo's payload cache.
         refresher.fetchOnce()
         runCurrent()
         assertEquals(listOf("m1", "m2", "m3"), itemIds())
-        assertEquals(1, proto.rawRowFetches)
+        assertEquals(1, rawRowFetches())
 
-        // ONE user action: the dice roll. Per the protocol this is
-        // invalidate (repo epoch bump + row memo drop + assembled payload
-        // drop) → fresh fetch (shuffle 2) → seed (memo write + commit bump).
+        // ONE user action: the dice roll — the network half's complete
+        // operation (row memo drop → fresh fetch (shuffle 2) → memo write,
+        // behind its own two generation bumps) inside the REAL fetcher,
+        // answered by the repo double's post-op bump + assembled payload drop.
         refresher.rollDiscoverRow(row)
         runCurrent()
         assertEquals(listOf("r1", "r2"), itemIds(), "the roll patches the row in place")
-        assertEquals(2, proto.rawRowFetches)
-        assertEquals(listOf("r1", "r2"), proto.rowMemoItems(row).map { it.id }, "the rolled set is committed into the network row memo")
+        assertEquals(2, rawRowFetches())
 
         // The next refresh: must serve the ROLLED set. Not the pre-roll
         // memo (transient revert), not a fresh server hit (silent re-roll —
-        // the transport count staying put pins the memo HIT).
+        // the transport count staying put pins the memo HIT: the REAL
+        // fetcher's row memo committed the roll).
         refresher.fetchOnce()
         runCurrent()
         assertEquals(listOf("r1", "r2"), itemIds(), "the rolled content survives the next refresh")
-        assertEquals(2, proto.rawRowFetches, "the seeded memo serves the row — the RANDOM row must not re-roll on refresh")
+        assertEquals(2, rawRowFetches(), "the seeded memo serves the row — the RANDOM row must not re-roll on refresh")
         assertEquals(listOf("r1", "r2"), proto.cachedHomePayload()?.sections?.first { it.id == discoverSectionId }?.items?.map { it.id })
 
         // runTest's teardown advances the shared scheduler until idle — no
@@ -307,6 +339,10 @@ class DiscoverRollContractTest {
     @Test
     fun `a fetch in flight across a roll never resurrects stale rows`() = runTest {
         val refresher = buildRefresher()
+        scriptContinueReading(times = 3) // initial refresh + the raced forced pass + the next refresh
+        sources.discoverRowResults += shuffle("m1", "m2", "m3")   // 1st raw hit (initial refresh)
+        sources.discoverRowResults += shuffle("stale1", "stale2") // 2nd raw hit — the RACED fetch's stale response
+        sources.discoverRowResults += shuffle("r1", "r2")         // 3rd raw hit — the roll
 
         // Initial refresh caches shuffle 1 in both layers.
         refresher.fetchOnce()
@@ -316,23 +352,25 @@ class DiscoverRollContractTest {
         // A full refresh goes on the wire and parks INSIDE the transport —
         // past both epoch captures (repo assembled-payload epoch, network
         // row-memo epoch), exactly the in-flight window the protocol's
-        // bump-at-invalidate-AND-commit rule must stall-guard. The gate is
-        // one-shot and transport() nulls the field on consumption, so the
-        // parked fetch's own copy must be captured here.
-        val racedGate = CompletableDeferred<Unit>()
-        transportGate = racedGate
+        // post-operation bump + roll-op guards must stall-guard. The fake's
+        // gate is one-shot per call (the outcome was bound at this call's
+        // issue time), so the roll's own raw fetch — the NEXT call of the
+        // same name — runs ungated.
+        val racedGate = sources.gate(discoverCallKey)
         refresher.request(RefreshTrigger.PullToRefresh)
         runCurrent()
         assertTrue(refresher.state.value.isRefreshing, "the forced fetch is parked inside the transport")
 
-        // The roll completes while that fetch is parked: two epoch bumps per
-        // the rule (invalidate + commit), row memo re-seeded with shuffle 2.
+        // The roll completes while that fetch is parked: the REAL fetcher's
+        // two generation bumps (drop + seed) with the memo re-seeded to
+        // shuffle 3, then the repo's post-op bump.
         refresher.rollDiscoverRow(row)
         runCurrent()
         assertEquals(listOf("r1", "r2"), itemIds(), "the roll patches the row while the fetch is parked")
 
-        // Release the raced fetch: its transport response is the NEXT raw
-        // shuffle (shuffle 3) — PRE-roll content for the user's purposes.
+        // Release the raced fetch: its transport response is the shuffle
+        // bound at ITS issue (shuffle 2) — PRE-roll content for the user's
+        // purposes.
         racedGate.complete(Unit)
         runCurrent()
 
@@ -340,19 +378,17 @@ class DiscoverRollContractTest {
         // write re-applies the registered roll instead of reverting it.
         assertEquals(listOf("r1", "r2"), itemIds(), "the raced fetch's write must not revert the on-screen roll")
 
-        // Window 2 (repo epoch): the raced assembled payload (shuffle 3)
+        // Window 2 (repo epoch): the raced assembled payload (shuffle 2)
         // must NOT have been pinned into the repo cache.
         assertNull(proto.cachedHomePayload(), "the raced fetch's stale payload must not be cached")
 
-        // Window 3 (network row epoch): the raced row response (shuffle 3)
-        // must NOT have overwritten the seeded memo (shuffle 2).
-        assertEquals(listOf("r1", "r2"), proto.rowMemoItems(row).map { it.id }, "the raced row response must not over-seed the roll")
-
-        // The NEXT refresh serves the roll — the stale rows stay dead.
+        // Windows 2+3, positively: the NEXT refresh serves the roll — the
+        // raced stale rows stay dead and the raced row response (shuffle 2)
+        // did NOT overwrite the seeded memo (shuffle 3): zero new raw calls.
         refresher.fetchOnce()
         runCurrent()
         assertEquals(listOf("r1", "r2"), itemIds(), "the next refresh serves the rolled set, never the raced stale rows")
-        assertEquals(3, proto.rawRowFetches, "only the parked transport call served shuffle 3; the next refresh reads the seeded memo")
+        assertEquals(3, rawRowFetches(), "only the parked transport call served its stale shuffle; the next refresh reads the seeded memo")
 
         // Same in-body teardown rule as Pin 1.
         refresher?.stop()
@@ -364,6 +400,10 @@ class DiscoverRollContractTest {
     @Test
     fun `a roll landing during the book-fraction decode is reapplied by the drain and agrees with the caches`() = runTest {
         val refresher = buildRefresher()
+        scriptContinueReading(times = 3) // initial refresh + the parked forced pass + the next refresh
+        sources.discoverRowResults += shuffle("m1", "m2", "m3") // 1st raw hit (initial refresh)
+        sources.discoverRowResults += shuffle("r1", "r2")       // 2nd raw hit (the forced fetch)
+        sources.discoverRowResults += shuffle("s1", "s2")       // 3rd raw hit (the roll)
 
         // Initial refresh: shuffle 1 cached everywhere.
         refresher.fetchOnce()
@@ -378,14 +418,15 @@ class DiscoverRollContractTest {
         refresher.request(RefreshTrigger.PullToRefresh)
         runCurrent()
         assertTrue(refresher.state.value.isRefreshing, "the fetch is parked inside the book-fraction decode")
-        assertEquals(2, proto.rawRowFetches)
+        assertEquals(2, rawRowFetches())
 
         // The roll lands while the fetch is parked at the decode — strictly
-        // BEFORE the drain point. It fetches shuffle 3 and seeds it.
+        // BEFORE the drain point. It fetches shuffle 3 and seeds it (painted
+        // here by the roll's own row patch; the memo's committed set is what
+        // the composition-agreement refresh below reads back).
         refresher.rollDiscoverRow(row)
         runCurrent()
         assertEquals(listOf("s1", "s2"), itemIds(), "the roll patches the row while the fetch is parked mid-decode")
-        assertEquals(listOf("s1", "s2"), proto.rowMemoItems(row).map { it.id })
 
         // Release the decode: the fetch's single sections write carries the
         // payloads it captured (shuffle 2) — the drain must re-apply the
@@ -397,49 +438,38 @@ class DiscoverRollContractTest {
         assertEquals(listOf("s1", "s2"), itemIds(), "the fetch's write re-applies the roll registered before its drain point")
 
         // COMPOSITION agreement: the painted roll matches what the caches
-        // hold — the next plain refresh serves the same set with no further
-        // transport call.
+        // hold — the next plain refresh serves the same set (the REAL
+        // fetcher's row memo kept the roll) with no further transport call.
         refresher.fetchOnce()
         runCurrent()
         assertEquals(listOf("s1", "s2"), itemIds(), "the caches and the painted roll agree — the next refresh is stable")
-        assertEquals(3, proto.rawRowFetches)
+        assertEquals(3, rawRowFetches())
 
         // Same in-body teardown rule as Pin 1.
         refresher?.stop()
         refresherScope?.cancel()
     }
 
-    // ── The protocol double ──────────────────────────────────────────────────
+    // ── The repo-half double ─────────────────────────────────────────────────
 
     /**
-     * Windows 2 + 3 of the roll protocol over the REAL shared cache engine,
-     * shaped after the two production layers it stands in for:
-     *  * the REPO half mirrors `MediaRepositoryImpl`: a single-entry
-     *    assembled-payload [TtlCache] (60s, [HomeFreshness.REPO_MEMORY_TTL_MS])
-     *    behind `repoEpoch` (the one cache-write token; the funnel-shaped
-     *    bump+clear pair), with `rerollDiscoverRow` executing the
-     *    protocol's ordering verbatim (invalidate: bump → row memo drop →
-     *    payload drop; fetch: raw transport; seed: memo write + bump →
-     *    payload drop again).
-     *  * the NETWORK half mirrors `HomeSectionsFetcher`: a per-row memo
-     *    (10 min, [HomeFreshness.DISCOVER_ROW_TTL_MS], key
-     *    `discover_<rowId>_<limit>`) behind `rowEpoch` — the MIRROR of the
-     *    repo token production threads through the port verbs'
-     *    `generation` parameter; the double hands the value over at the
-     *    same two points (invalidate, commit) — consulted by every
-     *    home fetch with `force` acting as its invalidation.
-     * Every raw transport call serves the next shuffle — a RANDOM-sorted
-     * row re-rolls on every true server hit, which is what makes a memo HIT
-     * (stability) distinguishable from a re-fetch.
+     * The REPO half of the roll protocol (window 2's stall guard) over the
+     * REAL shared cache engine, shaped after the production layer it stands
+     * in for (`MediaRepositoryImpl`, whose primary constructor stays
+     * `internal` to core:data — the HONEST GAP in the class KDoc): a
+     * single-entry assembled-payload [TtlCache] (60s,
+     * [HomeFreshness.REPO_MEMORY_TTL_MS]) behind `repoEpoch` (the repo-local
+     * cache-write token; the funnel-shaped bump+clear pair, run ONCE after a
+     * roll operation returns — the row memo changed under the repo either
+     * way). The network half it stands beside is not doubled: the REAL
+     * [HomeSectionsFetcher] runs its own per-row memo, generation guard and
+     * roll choreography over the shared [FakeHomeSectionSources].
      */
-    private inner class RollProtocolRepo {
+    private inner class RollProtocolRepo(private val fetcher: HomeSectionsFetcher) {
         private val identity = CacheIdentity.UNKNOWN
 
-        /** Window 2's stall guard — the repo's assembled-payload cache epoch (the ONE cache-write token). */
+        /** Window 2's stall guard — the REPO half's assembled-payload cache epoch (the ONE repo-local cache-write token). */
         private val repoEpoch = AtomicLong(0L)
-
-        /** Window 3's stall guard — the network mirror of that same token (fed at invalidate and commit, as the port verbs' `generation` parameter is in production). */
-        private val rowEpoch = AtomicLong(0L)
 
         private val homeSectionsCache = TtlCache<HomeSectionsResult>(
             maxSize = 1,
@@ -447,48 +477,9 @@ class DiscoverRollContractTest {
             clock = { 0L }, // frozen: no TTL expiry — the ROLL path drives every cache miss here
         )
 
-        private val rowMemo = TtlCache<List<MediaItem>>(
-            ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS,
-            clock = { 0L },
-        )
-
-        /** Raw transport hits served (one per true server call). */
-        var rawRowFetches = 0
-            private set
-
         private var lastQuery: HomeSectionQuery = HomeSectionQuery()
 
-        /** One raw transport call: parks on the armed one-shot gate, then serves the next shuffle. */
-        private suspend fun transport(): List<MediaItem> {
-            val gate = transportGate
-            transportGate = null
-            gate?.await()
-            rawRowFetches++
-            return shuffles[rawRowFetches - 1]
-        }
-
-        /** The assembled home fetch — the network half's per-row memoized read. */
-        private suspend fun assemble(query: HomeSectionQuery, force: Boolean): HomeSectionsResult {
-            val continueReading = HomeSection(
-                id = HomeSectionType.CONTINUE_READING.name,
-                title = HomeSectionType.CONTINUE_READING.displayName,
-                type = HomeSectionType.CONTINUE_READING,
-                items = listOf(item("book1").copy(mediaType = MediaType.BOOK, playbackPositionTicks = 50_000L)),
-            )
-            val discoverSection = rowMemo.cacheThrough(
-                identity,
-                "discover_${row.id}_${row.limit}",
-                force = force,
-                currentEpoch = rowEpoch::get,
-            ) {
-                Result.success(transport())
-            }.getOrNull().orEmpty().let { rolled ->
-                HomeSection(id = discoverSectionId, title = row.title, type = HomeSectionType.DISCOVER, items = rolled)
-            }
-            return HomeSectionsResult(sections = listOf(continueReading, discoverSection))
-        }
-
-        /** The repo half's epoch-guarded assembled-payload read. */
+        /** The repo half's epoch-guarded assembled-payload read over the REAL fetch. */
         suspend fun getHomeSections(query: HomeSectionQuery, force: Boolean): Result<HomeSectionsResult> {
             lastQuery = query
             return homeSectionsCache.cacheThrough(
@@ -497,43 +488,27 @@ class DiscoverRollContractTest {
                 force = force,
                 currentEpoch = repoEpoch::get,
             ) {
-                Result.success(assemble(query, force))
+                Result.success(fetcher.fetch(query, force))
             }
         }
 
-        /** The roll's fresh fetch — always raw, no cache (production delegates straight to the client). */
-        suspend fun getDiscoverRowItems(): Result<List<MediaItem>> = Result.success(transport())
-
-        /** The protocol's ordering, verbatim from `MediaRepositoryImpl.rerollDiscoverRow`. */
-        suspend fun rerollDiscoverRow(rowConfig: DiscoverRowConfig): Result<List<MediaItem>> {
-            // invalidate: funnel bump (repo token → the network mirror, as
-            // production's port-verb `generation` parameter delivers it —
-            // HomeSectionsCachePort.invalidateDiscoverRow) → row memo drop →
-            // assembled payload drop
-            repoEpoch.incrementAndGet()
-            rowEpoch.incrementAndGet()
-            rowMemo.removeByKeyPrefix(identity, "discover_${rowConfig.id}")
-            homeSectionsCache.clear()
-            val result = getDiscoverRowItems()
-            // seed only a real roll: commit-time bump (delivered to the
-            // mirror the same way) + memo write + payload drop again
-            result.onSuccess { items ->
-                if (items.isNotEmpty()) {
-                    repoEpoch.incrementAndGet()
-                    rowEpoch.incrementAndGet()
-                    rowMemo.put(identity, "discover_${rowConfig.id}_${rowConfig.limit}", items)
-                    homeSectionsCache.clear()
-                }
+        /**
+         * The protocol's repo half — verbatim from
+         * `MediaRepositoryImpl.rerollDiscoverRow`: the REAL network operation
+         * runs to completion (the fetcher's drop → raw fetch → seed
+         * choreography behind its own generation), then ONE bump, AFTER the
+         * operation returns: the row memo changed under the repo either way
+         * (dropped, and on a real roll re-seeded), so the assembled payload
+         * must never survive to be replayed.
+         */
+        suspend fun rerollDiscoverRow(rowConfig: DiscoverRowConfig): Result<List<MediaItem>> =
+            fetcher.rerollDiscoverRow(rowConfig).also {
+                repoEpoch.incrementAndGet()
+                homeSectionsCache.clear()
             }
-            return result
-        }
 
         /** Test visibility: the repo's cached assembled payload (null = not cached / refused write). */
         fun cachedHomePayload(): HomeSectionsResult? = homeSectionsCache.get(identity, lastQuery.cacheKey())
-
-        /** Test visibility: the network row memo's current entry for [rowConfig]. */
-        fun rowMemoItems(rowConfig: DiscoverRowConfig): List<MediaItem> =
-            rowMemo.get(identity, "discover_${rowConfig.id}_${rowConfig.limit}").orEmpty()
     }
 
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)

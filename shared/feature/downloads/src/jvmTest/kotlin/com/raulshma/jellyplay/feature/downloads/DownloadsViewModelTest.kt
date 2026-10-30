@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.ResolvedSeriesArt
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -46,7 +47,11 @@ class DownloadsViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var downloadRepository: DownloadQueue
+    /** The gh-181 suggestion/policy seam (a separate mock from the queue view of the repository). */
+    private lateinit var policyRepository: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+    private lateinit var intake: com.raulshma.jellyplay.core.data.download.DownloadIntake
     private lateinit var offlineRepository: OfflineRepository
+    private lateinit var seriesArt: com.raulshma.jellyplay.core.data.repository.SeriesArtReads
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var viewModel: DownloadsViewModel
@@ -67,7 +72,10 @@ class DownloadsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
+        policyRepository = mockk(relaxed = true)
+        intake = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
+        seriesArt = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         progressFlow = MutableStateFlow(emptyMap())
@@ -89,7 +97,7 @@ class DownloadsViewModelTest {
         every { offlineRepository.getOfflineEpisodes() } returns offlineEpisodesFlow
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns storeSliceFlow
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
     }
 
     @AfterTest
@@ -176,7 +184,7 @@ class DownloadsViewModelTest {
         every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
-        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
 
         // Throwable.message == null must hit the fallback literal.
@@ -473,11 +481,67 @@ class DownloadsViewModelTest {
     @Test
     fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcher) {
         storeSliceFlow.value = DownloadsSlice(downloadsListFilter = "SERIES", downloadsListSort = "SIZE")
-        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
         advanceUntilIdle()
 
         assertEquals(DownloadListFilter.SERIES, seeded.filter.value)
         assertEquals(DownloadListSort.SIZE, seeded.sort.value)
+    }
+
+    @Test
+    fun rows_carry_series_poster_with_episode_still_fallback() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.rows.collect {} }
+        // The batched series-art seam: s1 carries a saved (resolved) poster;
+        // s2's entry has a blank poster — the VM's filter drops it, so the
+        // header falls back to the group episode's still.
+        coEvery { seriesArt.getSeriesArt(listOf("s1", "s2")) } returns mapOf(
+            "s1" to ResolvedSeriesArt(posterPath = "/art/s1.jpg", blurHashPrimary = "poster-bh"),
+            "s2" to ResolvedSeriesArt(posterPath = null, blurHashPrimary = "bh-s2"),
+        )
+        pushItems(
+            listOf(
+                item("ep1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1)
+                    .copy(imageUrl = "still-ep1", imageBlurHash = "still-bh1", status = DownloadStatus.COMPLETED),
+                item("ep2", mediaType = MediaType.EPISODE, seriesId = "s2", seriesName = "Other", seasonNumber = 1, episodeNumber = 1)
+                    .copy(imageUrl = "still-ep2", status = DownloadStatus.COMPLETED),
+            ),
+        )
+        awaitRows(listOf("series:s1", "series:s2"))
+
+        val headers = viewModel.rows.value.orEmpty().filterIsInstance<DownloadListRow.SeriesHeader>()
+        assertEquals("/art/s1.jpg", headers.first { it.key == "series:s1" }.imageUrl)
+        assertEquals("poster-bh", headers.first { it.key == "series:s1" }.imageBlurHash)
+        // No saved poster → the first completed episode's still, blurhash included.
+        assertEquals("still-ep2", headers.first { it.key == "series:s2" }.imageUrl)
+        assertNull(headers.first { it.key == "series:s2" }.imageBlurHash)
+    }
+
+    // ── Selection hint persistence ─────────────────────────────────────────
+
+    @Test
+    fun entering_selection_marks_the_hint_seen_and_persists_it() = runTest(mainDispatcher) {
+        pushItems(listOf(item("d1", status = DownloadStatus.DOWNLOADING)))
+        advanceUntilIdle()
+        assertFalse(viewModel.selectionHintSeen.value)
+
+        viewModel.toggleSelection(item("d1", status = DownloadStatus.DOWNLOADING))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.selectionHintSeen.value)
+        coVerify(exactly = 1) { downloadsStore.setSelectionHintSeen(true) }
+    }
+
+    @Test
+    fun persisted_hint_seen_seeds_the_vm_and_is_not_rewritten() = runTest(mainDispatcher) {
+        storeSliceFlow.value = DownloadsSlice(selectionHintSeen = true)
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
+        advanceUntilIdle()
+        assertTrue(seeded.selectionHintSeen.value)
+
+        // Already seen: further selection activity must not rewrite the pref.
+        seeded.toggleSelection(item("d1", status = DownloadStatus.DOWNLOADING))
+        advanceUntilIdle()
+        coVerify(exactly = 0) { downloadsStore.setSelectionHintSeen(any()) }
     }
 
     @Test
@@ -491,6 +555,13 @@ class DownloadsViewModelTest {
             ),
         )
         advanceUntilIdle()
+
+        // The rows derivation hops to Dispatchers.Default and back, so
+        // advanceUntilIdle cannot guarantee the post-push derivation has
+        // landed — and expandAll early-returns on stale rows (it reads the
+        // rendered headers). Await the collapsed baseline first; otherwise
+        // this races (observed 1-in-5 at HEAD under parallel test load).
+        awaitRows(listOf("series:s1", "series:sB"))
 
         // Everything expanded: the multi-season series discloses its season
         // headers AND their episodes; the single-season one lists directly.
@@ -736,43 +807,45 @@ class DownloadsViewModelTest {
         coVerify(exactly = 1) { downloadRepository.setDownloadPriority("c", 2) }
     }
 
-    // ── Freshness check / resync ──────────────────────────────────────────
+    // ── Freshness check / resync (the DownloadsResyncActions seam) ────────
+    // The VM keeps full construction here — these pin the accessor wiring
+    // (VM → holder → sync manager), not the holder in isolation.
 
     @Test
     fun checkAllForUpdates_checks_batch_with_downloaded_ids_and_resets_checking() = runTest(mainDispatcher) {
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("i1", "i2")
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { syncManager.checkForUpdatesBatch(listOf("i1", "i2")) }
-        assertFalse(viewModel.checking.value)
+        assertFalse(viewModel.resyncActions.checking.value)
     }
 
     @Test
     fun checkAllForUpdates_while_checking_is_a_noop() = runTest(mainDispatcher) {
         // Suspend the first batch check until the test releases it, so the
-        // second call observes _checking == true.
+        // second call observes checking == true.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("i1")
         coEvery { syncManager.checkForUpdatesBatch(any()) } coAnswers { gate.await(); emptyList() }
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
-        assertTrue(viewModel.checking.value)
+        assertTrue(viewModel.resyncActions.checking.value)
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
         coVerify(exactly = 1) { syncManager.checkForUpdatesBatch(any()) }
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertFalse(viewModel.checking.value)
+        assertFalse(viewModel.resyncActions.checking.value)
     }
 
     @Test
     fun resyncOne_delegates_single_id_batch() = runTest(mainDispatcher) {
-        viewModel.resyncOne("i1")
+        viewModel.resyncActions.resyncOne("i1")
         verify(exactly = 1) { syncManager.resyncBatch(listOf("i1")) }
     }
 
@@ -782,7 +855,7 @@ class DownloadsViewModelTest {
             listOf(update("u1"), update("u2")),
         )
 
-        viewModel.resyncAll()
+        viewModel.resyncActions.resyncAll()
         advanceUntilIdle()
 
         verify(exactly = 1) { syncManager.resyncBatch(listOf("u1", "u2")) }
@@ -790,10 +863,10 @@ class DownloadsViewModelTest {
 
     @Test
     fun resyncAll_with_explicit_ids_delegates_and_skips_empty() = runTest(mainDispatcher) {
-        viewModel.resyncAll(listOf("u1", "u2"))
+        viewModel.resyncActions.resyncAll(listOf("u1", "u2"))
         verify(exactly = 1) { syncManager.resyncBatch(listOf("u1", "u2")) }
 
-        viewModel.resyncAll(emptyList())
+        viewModel.resyncActions.resyncAll(emptyList())
         verify(exactly = 1) { syncManager.resyncBatch(any()) }
     }
 
@@ -801,17 +874,17 @@ class DownloadsViewModelTest {
     fun forceResync_delegates_with_options_and_skips_empty_selections() = runTest(mainDispatcher) {
         val options = ResyncOptions(categories = setOf(ResyncCategory.METADATA))
 
-        viewModel.forceResync(listOf("i1"), options)
+        viewModel.resyncActions.forceResync(listOf("i1"), options)
         verify(exactly = 1) { syncManager.resyncBatch(listOf("i1"), options) }
 
-        viewModel.forceResync(emptyList(), options)
-        viewModel.forceResync(listOf("i1"), ResyncOptions(categories = emptySet()))
+        viewModel.resyncActions.forceResync(emptyList(), options)
+        viewModel.resyncActions.forceResync(listOf("i1"), ResyncOptions(categories = emptySet()))
         verify(exactly = 1) { syncManager.resyncBatch(any(), any()) }
     }
 
     @Test
     fun clearResyncProgress_delegates_to_sync_manager() = runTest(mainDispatcher) {
-        viewModel.clearResyncProgress()
+        viewModel.resyncActions.clearResyncProgress()
         verify(exactly = 1) { syncManager.clearBatchProgress() }
     }
 
@@ -827,7 +900,7 @@ class DownloadsViewModelTest {
         )
         advanceUntilIdle()
 
-        val candidates = viewModel.forceResyncCandidates()
+        val candidates = viewModel.resyncActions.forceResyncCandidates()
         assertEquals(listOf("ep1", "m1"), candidates.map { it.id })
         // Episode context is carried so the picker renders the SxxExx line.
         assertEquals("Show", candidates.first().seriesName)

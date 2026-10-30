@@ -18,7 +18,15 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
-/** Supplementary tests for VideoPlayerUiState covering gaps in the existing suite. */
+/**
+ * Supplementary tests for VideoPlayerUiState covering gaps in the existing suite.
+ *
+ * The state carries no position/duration snapshot (those ride the ViewModel's
+ * dedicated flows), so every time-dependent verdict here feeds the
+ * position-explicit overloads: [VideoPlayerUiState.computeActiveSegment] takes
+ * the raw position, and the intro/credits/up-next verdicts run
+ * [SegmentCalculator] against `SegmentProjection(state).toSegmentInput(duration)`.
+ */
 class VideoPlayerUiStateExtendedTest {
 
     // ─── Chapter segment detection ─────────────────────────────────────────────
@@ -26,14 +34,12 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun detectChapterSegment_introChapterName_returnsIntroSegment() {
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,  // 5 seconds
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 600_000_000L), // 1 minute
             ),
         )
-        val seg = state.activeSegment
+        val seg = state.computeActiveSegment(positionMs = 5_000L, durationMs = 3_600_000L)
         assertNotNull(seg)
         assertEquals(MediaSegmentType.INTRO, seg!!.type)
     }
@@ -41,14 +47,12 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun detectChapterSegment_outroChapterName_returnsOutroSegment() {
         val state = VideoPlayerUiState(
-            currentPosition = 3_550_000L,  // near end, within credits chapter
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Main", startPositionTicks = 0L),
                 ChapterInfo(name = "Credits", startPositionTicks = 35_400_000_000L),
             ),
         )
-        val seg = state.activeSegment
+        val seg = state.computeActiveSegment(positionMs = 3_550_000L, durationMs = 3_600_000L)
         assertNotNull(seg)
         assertEquals(MediaSegmentType.OUTRO, seg!!.type)
     }
@@ -56,27 +60,23 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun detectChapterSegment_unrecognizedName_returnsNull() {
         val state = VideoPlayerUiState(
-            currentPosition = 30_000L,
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Act 1", startPositionTicks = 0L),
                 ChapterInfo(name = "Act 2", startPositionTicks = 600_000_000L),
             ),
         )
-        assertNull(state.activeSegment)
+        assertNull(state.computeActiveSegment(positionMs = 30_000L, durationMs = 3_600_000L))
     }
 
     @Test
     fun detectChapterSegment_usesNextChapterStartAsEnd() {
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L), // 30 seconds ticks
             ),
         )
-        val seg = state.activeSegment
+        val seg = state.computeActiveSegment(positionMs = 5_000L, durationMs = 3_600_000L)
         assertNotNull(seg)
         assertEquals(300_000_000L, seg!!.endTicks)
     }
@@ -85,22 +85,20 @@ class VideoPlayerUiStateExtendedTest {
     fun detectChapterSegment_lastChapter_usesDurationAsEnd() {
         val duration = 3_600_000L
         val state = VideoPlayerUiState(
-            currentPosition = 3_550_000L,
-            duration = duration,
             chapters = listOf(
                 ChapterInfo(name = "Main", startPositionTicks = 0L),
                 ChapterInfo(name = "Credits", startPositionTicks = 35_400_000_000L),
             ),
         )
-        val seg = state.activeSegment
+        val seg = state.computeActiveSegment(positionMs = 3_550_000L, durationMs = duration)
         assertNotNull(seg)
         assertEquals(duration * 10_000, seg!!.endTicks)
     }
 
     @Test
     fun detectChapterSegment_noChapters_returnsNull() {
-        val state = VideoPlayerUiState(currentPosition = 30_000L, chapters = emptyList())
-        assertNull(state.activeSegment)
+        val state = VideoPlayerUiState(chapters = emptyList())
+        assertNull(state.computeActiveSegment(positionMs = 30_000L))
     }
 
     // ─── isInSegmentType ──────────────────────────────────────────────────────
@@ -108,8 +106,6 @@ class VideoPlayerUiStateExtendedTest {
     @Test
     fun isInSegmentType_introWithShowBehavior_trueWhenInIntro() {
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
@@ -118,14 +114,13 @@ class VideoPlayerUiStateExtendedTest {
                 segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
             ),
         )
-        assertTrue(state.isInSegmentType(MediaSegmentType.INTRO))
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertTrue(SegmentCalculator.isInSegmentType(input, 5_000L, MediaSegmentType.INTRO))
     }
 
     @Test
     fun isInSegmentType_introWithIgnoreBehavior_falseEvenWhenInIntro() {
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
@@ -134,14 +129,13 @@ class VideoPlayerUiStateExtendedTest {
                 segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
             ),
         )
-        assertFalse(state.isInSegmentType(MediaSegmentType.INTRO))
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertFalse(SegmentCalculator.isInSegmentType(input, 5_000L, MediaSegmentType.INTRO))
     }
 
     @Test
     fun isInSegmentType_outro_falseWhenInIntro() {
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,
-            duration = 3_600_000L,
             chapters = listOf(
                 ChapterInfo(name = "Intro", startPositionTicks = 0L),
                 ChapterInfo(name = "Main", startPositionTicks = 300_000_000L),
@@ -150,7 +144,8 @@ class VideoPlayerUiStateExtendedTest {
                 segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
             ),
         )
-        assertFalse(state.isInSegmentType(MediaSegmentType.OUTRO))
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertFalse(SegmentCalculator.isInSegmentType(input, 5_000L, MediaSegmentType.OUTRO))
     }
 
     // ─── segmentEndTicksForType ────────────────────────────────────────────────
@@ -163,13 +158,13 @@ class VideoPlayerUiStateExtendedTest {
             startTicks = 0L, endTicks = 300_000_000L,
         )
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,
             segmentState = SegmentState(
                 segments = listOf(segment),
                 segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
             ),
         )
-        assertEquals(300_000_000L, state.segmentEndTicksForType(MediaSegmentType.INTRO))
+        val input = SegmentProjection(state).toSegmentInput(0L)
+        assertEquals(300_000_000L, SegmentCalculator.segmentEndTicksForType(input, 5_000L, MediaSegmentType.INTRO))
     }
 
     @Test
@@ -180,19 +175,20 @@ class VideoPlayerUiStateExtendedTest {
             startTicks = 0L, endTicks = 300_000_000L,
         )
         val state = VideoPlayerUiState(
-            currentPosition = 5_000L,
             segmentState = SegmentState(
                 segments = listOf(segment),
                 segmentBehaviors = mapOf(MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON),
             ),
         )
-        assertNull(state.segmentEndTicksForType(MediaSegmentType.OUTRO))
+        val input = SegmentProjection(state).toSegmentInput(0L)
+        assertNull(SegmentCalculator.segmentEndTicksForType(input, 5_000L, MediaSegmentType.OUTRO))
     }
 
     @Test
     fun segmentEndTicksForType_noActiveSegment_returnsNull() {
-        val state = VideoPlayerUiState(currentPosition = 30_000L, segmentState = SegmentState(segments = emptyList()))
-        assertNull(state.segmentEndTicksForType(MediaSegmentType.INTRO))
+        val state = VideoPlayerUiState(segmentState = SegmentState(segments = emptyList()))
+        val input = SegmentProjection(state).toSegmentInput(0L)
+        assertNull(SegmentCalculator.segmentEndTicksForType(input, 30_000L, MediaSegmentType.INTRO))
     }
 
     // ─── segmentEndTicks(segment) ─────────────────────────────────────────────
@@ -233,14 +229,13 @@ class VideoPlayerUiStateExtendedTest {
             endTicks = outroEndTicks,
         )
         val state = VideoPlayerUiState(
-            currentPosition = duration - 30_000L,
-            duration = duration,
             segmentState = SegmentState(
                 segments = listOf(segment),
                 segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
             ),
         )
-        assertTrue(state.isOutroNearEnd)
+        val input = SegmentProjection(state).toSegmentInput(duration)
+        assertTrue(SegmentCalculator.isOutroNearEnd(input, duration - 30_000L))
     }
 
     @Test
@@ -255,20 +250,20 @@ class VideoPlayerUiStateExtendedTest {
             endTicks = outroEndTicks,
         )
         val state = VideoPlayerUiState(
-            currentPosition = duration - 350_000L,
-            duration = duration,
             segmentState = SegmentState(
                 segments = listOf(segment),
                 segmentBehaviors = mapOf(MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON),
             ),
         )
-        assertFalse(state.isOutroNearEnd)
+        val input = SegmentProjection(state).toSegmentInput(duration)
+        assertFalse(SegmentCalculator.isOutroNearEnd(input, duration - 350_000L))
     }
 
     @Test
     fun isOutroNearEnd_zeroDuration_false() {
-        val state = VideoPlayerUiState(duration = 0L)
-        assertFalse(state.isOutroNearEnd)
+        val state = VideoPlayerUiState()
+        val input = SegmentProjection(state).toSegmentInput(0L)
+        assertFalse(SegmentCalculator.isOutroNearEnd(input, 0L))
     }
 
     // ─── hdrType ──────────────────────────────────────────────────────────────
@@ -403,10 +398,10 @@ class VideoPlayerUiStateSyncPlayTest {
                 ),
             ),
             media = MediaContentState(seriesId = "series1"),
-            duration = 3_600_000L,
-            currentPosition = 3_570_000L, // would normally show up-next
         )
-        assertFalse(state.shouldShowUpNext)
+        // 3_570_000 on a 3_600_000 runtime — would normally show up-next.
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertFalse(SegmentCalculator.shouldShowUpNext(input, 3_570_000L))
     }
 
     @Test
@@ -415,10 +410,9 @@ class VideoPlayerUiStateSyncPlayTest {
             isInSyncPlaySession = false,
             episodes = EpisodeBrowserState(nextEpisode = null),
             media = MediaContentState(seriesId = "series1"),
-            duration = 3_600_000L,
-            currentPosition = 3_570_000L,
         )
-        assertFalse(state.shouldShowUpNext)
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertFalse(SegmentCalculator.shouldShowUpNext(input, 3_570_000L))
     }
 
     @Test
@@ -438,10 +432,10 @@ class VideoPlayerUiStateSyncPlayTest {
                 ),
             ),
             media = MediaContentState(seriesId = null),
-            duration = 3_600_000L,
-            currentPosition = 3_570_000L, // within the 30s pre-roll
         )
-        assertTrue(state.shouldShowUpNext)
+        // 3_570_000 on a 3_600_000 runtime — within the 30s pre-roll.
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertTrue(SegmentCalculator.shouldShowUpNext(input, 3_570_000L))
     }
 
     @Test
@@ -453,10 +447,9 @@ class VideoPlayerUiStateSyncPlayTest {
             episodes = EpisodeBrowserState(nextEpisode = null),
             hasQueuedNext = true,
             media = MediaContentState(seriesId = null),
-            duration = 3_600_000L,
-            currentPosition = 3_570_000L,
         )
-        assertTrue(state.shouldShowUpNext)
+        val input = SegmentProjection(state).toSegmentInput(3_600_000L)
+        assertTrue(SegmentCalculator.shouldShowUpNext(input, 3_570_000L))
     }
 
     @Test

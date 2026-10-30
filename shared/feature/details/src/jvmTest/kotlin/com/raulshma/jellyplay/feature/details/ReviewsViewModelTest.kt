@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -46,15 +46,15 @@ class ReviewsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var viewModel: ReviewsViewModel
 
     @BeforeTest
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
-        viewModel = ReviewsViewModel(mediaRepository, seerrRepository)
+        viewModel = ReviewsViewModel(detailFeed, seerrRepository)
     }
 
     private fun movieDetail(tmdbId: String? = "123") = MediaDetail(
@@ -70,7 +70,7 @@ class ReviewsViewModelTest {
     @Test
     fun `load success resolves the tmdb id and fetches the full review list`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
         val reviews = (1..8).map { TmdbReview(id = "r$it", author = "A$it", content = "B$it") }
         coEvery { seerrRepository.getTmdbReviews(123, MediaType.MOVIE) } returns Result.success(reviews)
 
@@ -87,7 +87,7 @@ class ReviewsViewModelTest {
     @Test
     fun `a failed reviews leg degrades to an empty list, not an error`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.failure(RuntimeException("tmdb down"))
 
         viewModel.load("m1")
@@ -101,7 +101,7 @@ class ReviewsViewModelTest {
     @Test
     fun `a series resolves through the tv wire media type`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("s1", any()) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "s1", name = "Series 1", mediaType = MediaType.SERIES),
                 providerIds = mapOf("tmdbid" to "555"),
@@ -119,7 +119,7 @@ class ReviewsViewModelTest {
     @Test
     fun `detail failure emits Error and never reaches the reviews fetch`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(RuntimeException("boom"))
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.failure(RuntimeException("boom"))
 
         viewModel.load("m1")
         advanceUntilIdle()
@@ -131,7 +131,7 @@ class ReviewsViewModelTest {
     @Test
     fun `an item without a tmdb id yields an empty success without a reviews fetch`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail(tmdbId = null))
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail(tmdbId = null))
 
         viewModel.load("m1")
         advanceUntilIdle()
@@ -145,7 +145,7 @@ class ReviewsViewModelTest {
     @Test
     fun `a non-rated media type (episode) yields an empty success without a reviews fetch`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("e1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("e1", any()) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "e1", name = "Episode 1", mediaType = MediaType.EPISODE),
                 providerIds = mapOf("tmdb" to "123"),
@@ -164,7 +164,7 @@ class ReviewsViewModelTest {
     @Test
     fun `load resets a prior Success state to Loading before resolving`() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+        coEvery { detailFeed.getMediaDetail("m1", any()) } returns Result.success(movieDetail())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns
             Result.success(listOf(TmdbReview(id = "r1", author = "A", content = "B")))
 
@@ -175,7 +175,7 @@ class ReviewsViewModelTest {
         // A second load for another item must flip back to Loading first —
         // the previous item's reviews must never bleed into the new screen.
         val gate = kotlinx.coroutines.CompletableDeferred<Result<MediaDetail>>()
-        coEvery { mediaRepository.getMediaDetail("m2") } coAnswers { gate.await() }
+        coEvery { detailFeed.getMediaDetail("m2", any()) } coAnswers { gate.await() }
         viewModel.load("m2")
         advanceUntilIdle()
 

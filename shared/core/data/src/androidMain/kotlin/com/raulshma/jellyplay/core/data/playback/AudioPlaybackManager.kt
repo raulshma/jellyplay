@@ -17,12 +17,13 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.MusicFocusPolicyInput
 import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -62,16 +63,15 @@ import kotlin.math.pow
  * [AudioNowPlayingFace] members below are by-reference re-exposures of the
  * same overrides plus the [hasActiveSession] pull, and the remote-session
  * flag the verdict owns is read here only through the [remoteSessionActive]
- * gate lambda (the former manager-local `@Volatile var` — its storage and
- * single-writer contract moved into the verdict; the audio side never
- * writes it). [ShellAudioSurface] — the app shell's narrowed
- * metadata+transport parameter — folds onto the same overrides with no
- * member of its own; the Koin alias binds the same single.
+ * gate lambda; the audio side never writes it. [ShellAudioSurface] - the app
+ * shell's narrowed metadata+transport parameter — folds onto the same
+ * overrides with no member of its own; the Koin alias binds the same single.
  */
 @Stable
 class AudioPlaybackManager(
     private val context: Context,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     /**
      * The library/browse ladder (detail+local resolve, playable-[MediaItem]
      * building, the [androidx.media3.session.MediaLibrarySession] builder) —
@@ -129,7 +129,12 @@ class AudioPlaybackManager(
      * the flag's resting value was `false` too.
      */
     private val remoteSessionActive: () -> Boolean = { false },
-) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace, ShellAudioSurface {
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace, ShellAudioSurface,
+    // The narrow androidMain consumer faces (the Audio shell seam's role-split,
+    // beside ShellAudioSurface): the remote-control dispatcher, the media3
+    // service host and the focus executor each read the one role they use —
+    // same single, Koin aliases in androidPlaybackStackModule.
+    AudioRemoteControlSurface, AudioServiceSurface, AudioFocusCommands {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
@@ -327,13 +332,13 @@ class AudioPlaybackManager(
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
 
     // Crossfade duration lives in the chassis core (one of its eleven cells,
-    // written through AudioQueueStateCore.setCrossfadeDurationMs — the former
-    // manager-local duplicate cell folded so the chassis is the one owner on
-    // both adapters; same 0L initial value, so the fold is unobservable).
+    // written through AudioQueueStateCore.setCrossfadeDurationMs), so the
+    // chassis is the one owner on both adapters; initial value 0L.
     override val crossfadeDurationMs: StateFlow<Long> get() = state.crossfadeDurationMs
 
-    private val _isCrossfading = MutableStateFlow(false)
-    val isCrossfading: StateFlow<Boolean> = _isCrossfading.asStateFlow()
+    // The crossfade flag lives in [AudioCrossfadeHandoff] (it owns the
+    // crossfader construction the flag feeds) — re-exposed by reference.
+    val isCrossfading: StateFlow<Boolean> get() = crossfadeHandoff.isCrossfading
 
     // Load/error/undo surfaces live in the chassis core; re-exposed by
     // reference (same instances the desktop adapter exposes).
@@ -360,35 +365,15 @@ class AudioPlaybackManager(
     val currentAudioBitrateTier: StateFlow<com.raulshma.jellyplay.core.model.AudioBitrateTier> = _currentAudioBitrateTier.asStateFlow()
     override val isLoadingItem: StateFlow<Boolean> get() = state.isLoadingItem
 
-    private val crossfader = AudioCrossfader(
-        scope = scope,
-        context = context,
-        effectsProcessor = effectsProcessor,
-        mediaRepository = mediaRepository,
-        imageUrlProvider = imageUrlProvider,
-        playbackSourceResolver = playbackSourceResolver,
-        repeatModeProvider = { state.repeatMode.value },
-        crossfadeDurationMsProvider = { crossfadeDurationMs.value },
-        isCrossfadingProvider = { _isCrossfading.value },
-        isCrossfadingSetter = { _isCrossfading.value = it },
-        exoPlayerProvider = { exoPlayer },
-        queueSizeProvider = { state.queue.value.size },
-        onGetNextItem = { idx -> state.queue.value.getOrNull(idx) },
-        speedProvider = { state.speed.value },
-        audioBufferProvider = {
-            val buf = currentAudio.audioPreloadBufferSize
-            buf.minBufferMs to buf.maxBufferMs
-        },
-        onCrossfadeTransition = { secondary, nextIndex, nextItem ->
-            onCrossfadeTransition(secondary, nextIndex, nextItem)
-        },
-        detachPrimaryListener = { primary -> primary.removeListener(playerListener) },
-        onCrossfadeError = { error -> playerListener.onPlayerError(error) },
-        onCrossfadeFailed = { nextIndex -> onCrossfadeFailed(nextIndex) },
-        dataSourceFactoryProvider = {
-            audioStreamCache.getCacheDataSourceFactory(audioStreamCache.buildUpstreamFactory())
-        },
-    )
+    // The crossfade decision/execution split (the Engine event verdict's
+    // shape): [AudioCrossfader] is the decision half (trigger gates + volume
+    // ramp); [AudioCrossfadeHandoff] owns the construction wiring and the
+    // transition tail (swap + session rebuild + reports + reconciliation).
+    // Constructed below, once [playerListener] exists — the handoff takes it
+    // as a plain value (it detaches it from the dying primary and adds it to
+    // the promoted secondary). Every call site reads it through the
+    // delegating property.
+    private val crossfader: AudioCrossfader get() = crossfadeHandoff.crossfader
 
     // The remote-session flag that used to live here (@Volatile var,
     // internal set) is the [NowPlayingVerdict]'s cell now — the manager
@@ -466,6 +451,14 @@ class AudioPlaybackManager(
                 isPlaying = isPlaying,
                 onDenied = { pause() },
             )
+            // The play edge doubles as the session-reclaim edge: when this
+            // session was refused at creation (the manager's priority guard
+            // releases an idle challenger against a then-playing video) the
+            // granted claim has since paused that holder — without a rebuild
+            // music would play sessionless (no notification, media buttons
+            // routing to the paused video session). The video twin rides
+            // PlaybackSession.onVideoPlayEdge.
+            if (isPlaying) reclaimAudioSessionIfDisplaced()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -517,6 +510,45 @@ class AudioPlaybackManager(
     }
 
     /**
+     * The crossfade execution half ([AudioCrossfadeHandoff]) — the wiring +
+     * transition tail of the decision/execution split. Its manager-cell
+     * ports: the live engine read/write (the swap), the MediaSession
+     * release/replace (the rebuild), the preload-buffer pair and the
+     * byte-cache data source factory, and the two shared blocks both
+     * transition sites read ([commitTrackTransition], [startReportFor]).
+     */
+    private val crossfadeHandoff = AudioCrossfadeHandoff(
+        scope = scope,
+        context = context,
+        effectsProcessor = effectsProcessor,
+        detailFeed = detailFeed,
+        imageUrlProvider = imageUrlProvider,
+        playbackSourceResolver = playbackSourceResolver,
+        playbackRepository = playbackRepository,
+        progressReporter = progressReporter,
+        libraryBrowser = libraryBrowser,
+        sessionManager = sessionManager,
+        queueMirror = queueMirror,
+        state = state,
+        playerListener = playerListener,
+        exoPlayerProvider = { exoPlayer },
+        exoPlayerSetter = { exoPlayer = it },
+        mediaSessionProvider = { mediaSession },
+        mediaSessionSetter = { mediaSession = it },
+        audioBufferProvider = {
+            val buf = currentAudio.audioPreloadBufferSize
+            buf.minBufferMs to buf.maxBufferMs
+        },
+        dataSourceFactoryProvider = {
+            audioStreamCache.getCacheDataSourceFactory(audioStreamCache.buildUpstreamFactory())
+        },
+        commitTransition = { nextIndex, nextItem, reapplyReplayGain ->
+            commitTrackTransition(nextIndex, nextItem, reapplyReplayGain)
+        },
+        startReport = { item -> startReportFor(item) },
+    )
+
+    /**
      * [AudioNowPlayingFace.hasActiveSession] — a live engine AND a claimed
      * item. A PULL on purpose (the face's one non-flow member): the item
      * CLAIM is a chassis cell written synchronously at `play()` entry,
@@ -547,7 +579,18 @@ class AudioPlaybackManager(
             }
         }
         scope.launch {
-            playbackStore.playback.collect { playback -> currentPlayback = playback }
+            playbackStore.playback.collect { playback ->
+                currentPlayback = playback
+                // The music half of the shared "Duck on Phone Call" pref:
+                // every emission pushes the MUSIC row's loss ruling into the
+                // process-singleton policy holder (latest write wins), so a
+                // phone call ducks the music instead of pausing it whenever
+                // this manager owns the floor. Video pushes its own policy
+                // from the video session's prefs fanout; read-aloud has no
+                // duck upgrade.
+                (playbackFocus as? MusicFocusPolicyInput)
+                    ?.onMusicDuckPolicy(playback.duckOnTransientFocusLoss)
+            }
         }
         // Poll-cadence governor: 250 ms only while a position collector exists
         // (subscriptionCount rises on every subscribe — mini-player, now-
@@ -643,7 +686,7 @@ class AudioPlaybackManager(
      * recreate after [stopAndRelease], matching the play path). Main thread
      * only — [createPlayer] builds the ExoPlayer on the calling looper.
      */
-    fun ensureAudioSession() {
+    override fun ensureAudioSession() {
         getOrCreatePlayer()
     }
 
@@ -713,10 +756,10 @@ class AudioPlaybackManager(
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
             // ADR-0004 music OS-leg migration: the attributes still describe
-            // the stream for routing, but the OS focus seat is NOT taken here
-            // anymore — PlaybackFocus owns it (FocusArbiter, claimed on the
-            // is-playing edge). Built-in handling would fight the module's
-            // seat: two requests for one surface.
+            // the stream for routing, but the OS focus seat is NOT taken here -
+            // PlaybackFocus owns it (FocusArbiter, claimed on the is-playing
+            // edge). Built-in handling would fight the module's seat: two
+            // requests for one surface.
             .setAudioAttributes(audioAttributes, false)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -735,6 +778,30 @@ class AudioPlaybackManager(
         effectsProcessor.attachAudioEffects(player.audioSessionId)
 
         return player
+    }
+
+    /**
+     * The session-reclaim half of the music play edge. [createPlayer]'s
+     * session can be refused at birth: the manager's priority guard releases
+     * an idle challenger against a then-playing holder (the mini-player video
+     * still playing when the user starts a track). The granted focus claim
+     * has paused that holder by the time the is-playing edge fires, so the
+     * floor is free — without this rebuild music would play sessionless (no
+     * now-playing notification, media buttons routing to the paused video
+     * session). Identity-checks the active session's player, so an already
+     * ours-and-active session is never rebuilt.
+     */
+    private fun reclaimAudioSessionIfDisplaced() {
+        val player = exoPlayer ?: return
+        val current = sessionManager.currentSession
+        if (current != null && current.player === player) return
+        mediaSession?.release()
+        // Same shared audio-session builder as createPlayer / the crossfade
+        // rebuild — the MediaLibrarySession requirement is the onGetSession
+        // cast documented at the crossfade site.
+        val session = libraryBrowser.buildMediaSession(context, player, playSessionId)
+        mediaSession = session
+        sessionManager.setActiveSession(session)
     }
 
     private fun restorePersistedQueue() {
@@ -858,7 +925,7 @@ class AudioPlaybackManager(
      * recorded desktop parity note; resume is server-ticks only).
      */
     private suspend fun resolvePlayTrack(itemId: String): AudioPlayTrack? {
-        val detailResult = mediaRepository.getMediaDetail(itemId)
+        val detailResult = detailFeed.getMediaDetail(itemId, force = false)
         val detail = detailResult.getOrNull()
 
         if (detail != null) {
@@ -1311,8 +1378,9 @@ class AudioPlaybackManager(
 
     /**
      * Resume the audio player if a session is active.
+     * [AudioRemoteControlSurface.resume] — the Playstate "Unpause".
      */
-    fun resume() {
+    override fun resume() {
         assertMainThread("resume")
         exoPlayer?.takeIf { !it.isPlaying }?.play()
     }
@@ -1322,8 +1390,9 @@ class AudioPlaybackManager(
      * system [android.media.AudioManager.STREAM_MUSIC] stream so remote
      * "SetVolume" is actually audible (the player software gain alone is
      * silent when the system stream is muted or at zero).
+     * [AudioRemoteControlSurface.setVolume] — the USER volume path.
      */
-    fun setVolume(volume: Float) {
+    override fun setVolume(volume: Float) {
         assertMainThread("setVolume")
         val pct = volume.coerceIn(0f, 1f)
         exoPlayer?.volume = pct
@@ -1354,8 +1423,9 @@ class AudioPlaybackManager(
 
     /**
      * Convenience: 5% increment.
+     * [AudioRemoteControlSurface.increaseVolume] — the remote "VolumeUp".
      */
-    fun increaseVolume() {
+    override fun increaseVolume() {
         assertMainThread("increaseVolume")
         val current = exoPlayer?.volume ?: 1f
         setVolume(current + 0.05f)
@@ -1363,8 +1433,9 @@ class AudioPlaybackManager(
 
     /**
      * Convenience: 5% decrement.
+     * [AudioRemoteControlSurface.decreaseVolume] — the remote "VolumeDown".
      */
-    fun decreaseVolume() {
+    override fun decreaseVolume() {
         assertMainThread("decreaseVolume")
         val current = exoPlayer?.volume ?: 1f
         setVolume(current - 0.05f)
@@ -1376,7 +1447,11 @@ class AudioPlaybackManager(
      */
     private var preMuteVolume: Float = 1f
 
-    fun setMuted(muted: Boolean) {
+    /** The level captured at [duck] time, restored by [restoreFromDuck]. */
+    private var preDuckVolume: Float? = null
+
+    /** [AudioRemoteControlSurface.setMuted] — the remote Mute/Unmute arms. */
+    override fun setMuted(muted: Boolean) {
         assertMainThread("setMuted")
         val current = exoPlayer?.volume ?: 1f
         if (muted) {
@@ -1387,10 +1462,41 @@ class AudioPlaybackManager(
         }
     }
 
-    fun toggleMute() {
+    override fun toggleMute() {
         assertMainThread("toggleMute")
         val current = exoPlayer?.volume ?: 1f
         setMuted(current > 0f)
+    }
+
+    /**
+     * The transient-focus-loss duck — the [focus.AudioPlaybackManagerSurface]
+     * command when the shared "Duck on Phone Call" pref upgrades the MUSIC
+     * row. Software gain only (the same `isUserChange = false` write the
+     * sleep-timer fade uses, so the level never lands in user-volume
+     * memory); a muted player stays silent (volume ≤ 0 is never re-raised —
+     * the video surface's mute rule); re-ducks are idempotent and re-capture
+     * only a level louder than the duck target, so a stale marker from a
+     * suspended-then-resumed session can never store the duck level itself.
+     */
+    override fun duck(volume: Float) {
+        assertMainThread("duck")
+        val player = exoPlayer ?: return
+        val target = volume.coerceIn(0f, 1f)
+        if (player.volume <= 0f) return
+        if (player.volume > target) preDuckVolume = player.volume
+        setVolume(target, isUserChange = false)
+    }
+
+    /**
+     * The regain half of the duck: restore the level captured at [duck]
+     * time. No marker (never ducked, or the loss was permanent and no regain
+     * ever followed) is a no-op — resume stays manual either way.
+     */
+    override fun restoreFromDuck() {
+        assertMainThread("restoreFromDuck")
+        val pre = preDuckVolume ?: return
+        preDuckVolume = null
+        setVolume(pre.coerceIn(0f, 1f), isUserChange = false)
     }
 
     override fun playFromQueue(index: Int) {
@@ -1441,7 +1547,7 @@ class AudioPlaybackManager(
     /**
      * The ONE track-handoff reconcile block shared by the natural-transition
      * path ([onTrackTransitioned]) and the crossfade swap
-     * ([onCrossfadeTransition]): moves the cursor to [nextIndex], rotates the
+     * ([AudioCrossfadeHandoff.onCrossfadeTransition]): moves the cursor to [nextIndex], rotates the
      * current-item claim, publishes the row to the now-playing tracker and —
      * on request — re-applies ReplayGain for the incoming row.
      *
@@ -1531,7 +1637,7 @@ class AudioPlaybackManager(
                 )
 
                 coroutineScope {
-                    val detailJob = async { mediaRepository.getMediaDetail(nextItem.id) }
+                    val detailJob = async { detailFeed.getMediaDetail(nextItem.id, force = false) }
                     val startJob = async {
                         playbackRepository.reportPlaybackStart(startReportFor(nextItem))
                     }
@@ -1546,88 +1652,6 @@ class AudioPlaybackManager(
                     startJob.await()
                 }
             }
-        }
-    }
-
-    private suspend fun onCrossfadeTransition(secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) {
-        val prevItemId = currentItemId
-        val prevSessionId = playSessionId
-        val prevPosTicks = AudioQueuePolicy.finalStopPositionTicks(
-            positionMs = state.currentPosition.value,
-            durationMs = state.duration.value,
-        )
-
-        // The crossfade site's load-bearing ordering: the stop report runs
-        // SYNCHRONOUSLY before the swap/writes below (see
-        // commitTrackTransition's KDoc for why this is not folded in).
-        progressReporter.reportStopped(
-            itemId = prevItemId,
-            sessionId = prevSessionId,
-            positionTicks = prevPosTicks,
-        )
-
-        commitTrackTransition(
-            nextIndex = nextIndex,
-            nextItem = nextItem,
-            // The wholesale effects re-attach below stands in for the
-            // single-row ReplayGain re-apply the natural-transition site does.
-            reapplyReplayGain = false,
-        )
-
-        exoPlayer = secondary
-
-        mediaSession?.release()
-        // Rebuild via the shared audio-session builder (AudioLibraryBrowser is
-        // the single construction path for both the initial session and the
-        // crossfade rebuild). JellyPlayPlaybackService.onGetSession casts the
-        // active session to MediaLibrarySession; a plain MediaSession rebuild
-        // — the pre-fix behaviour — cast to null, so the service rejected
-        // controller connections, killing the now-playing notification and
-        // headset buttons until app restart. Mirrors the video fix
-        // (MediaSessionController).
-        val newSession = libraryBrowser.buildMediaSession(context, secondary, playSessionId)
-        mediaSession = newSession
-        sessionManager.setActiveSession(newSession)
-
-        secondary.addListener(playerListener)
-        effectsProcessor.applyNightMode()
-        effectsProcessor.applyDialogueBoost()
-        effectsProcessor.applyEqualizer()
-        effectsProcessor.applyBassBoost()
-        effectsProcessor.applyVirtualizer()
-        effectsProcessor.reattachForCrossfade(secondary.audioSessionId)
-
-        _isCrossfading.value = false
-
-        // Same windowed mirror as the play-path pre-warm: full prefix
-        // below the crossfaded row, bounded lookahead ahead of it.
-        queueMirror.prewarmAround(secondary, nextIndex)
-
-        playbackRepository.reportPlaybackStart(startReportFor(nextItem))
-    }
-
-    /**
-     * Invoked by [AudioCrossfader] when a crossfade setup fails (e.g. a
-     * network error fetching the next item's detail). In that case the primary
-     * ExoPlayer keeps playing the current track to its end and reaches
-     * `STATE_ENDED`; under `REPEAT_MODE_OFF` ExoPlayer neither auto-advances
-     * nor fires `onMediaItemTransition`, so `_currentIndex` would otherwise
-     * stay stuck on the ended item and desync from the queue/UI highlight.
-     *
-     * We proactively advance the primary player to [nextIndex], which fires
-     * `onMediaItemTransition` → [onTrackTransitioned] for full reconciliation
-     * (title/artist/lyrics/replayGain/index). Mirrors the manual
-     * [skipToNext] advance path.
-     */
-    private fun onCrossfadeFailed(nextIndex: Int) {
-        scope.launch(Dispatchers.Main) {
-            val player = exoPlayer ?: return@launch
-            val q = state.queue.value
-            if (nextIndex !in q.indices) return@launch
-            state._currentIndex.value = nextIndex
-            player.seekTo(nextIndex, 0L)
-            player.prepare()
-            player.playWhenReady = true
         }
     }
 
@@ -1663,14 +1687,11 @@ class AudioPlaybackManager(
         // bounded reactive paused-wait and the player-less exponential
         // backoff; this is only the tick body. Paused ticks still reach
         // [onActive] on a play→pause edge — the body's own gate keeps them
-        // no-ops, exactly as before the unification. The ticker's
-        // synchronous first-tick prime (primeFirstTick) is the fix this
-        // manager was missing: the first position/duration publish now
-        // lands BEFORE startPositionTracking() returns instead of up to one
-        // 250 ms interval later — so a skip in that window no longer
-        // reports the stop position against duration == 0 (the desktop twin
-        // has primed since it adopted the ticker; the regression story is
-        // on EnginePositionTicker's primeFirstTick KDoc).
+        // no-ops. The ticker's synchronous first-tick prime (primeFirstTick)
+        // publishes the first position/duration BEFORE startPositionTracking()
+        // returns instead of up to one 250 ms interval later, so a skip in
+        // that window cannot report the stop position against duration == 0
+        // (see EnginePositionTicker's primeFirstTick KDoc).
         positionJob = EnginePositionTicker(
             scopeProvider = { scope },
             // Mutable on purpose — the init-block governor downgrades/restores

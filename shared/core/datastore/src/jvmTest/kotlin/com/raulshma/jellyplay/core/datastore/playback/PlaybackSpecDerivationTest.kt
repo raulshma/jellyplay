@@ -41,6 +41,10 @@ class PlaybackSpecDerivationTest {
         "preferred_external_player" to String::class,
         "streaming_quality" to String::class,
         "cellular_streaming_quality" to String::class,
+        "hdr_format_preference" to String::class,
+        "force_transcode_above_height" to Int::class,
+        "preferred_transcode_video_codec" to String::class,
+        "preferred_transcode_audio_codec" to String::class,
         "force_direct_play" to Boolean::class,
         "playback_mode" to String::class,
         "decoder_mode" to String::class,
@@ -60,6 +64,11 @@ class PlaybackSpecDerivationTest {
         "auto_play_countdown_sec" to Int::class,
         "background_video_audio_enabled" to Boolean::class,
         "auto_enter_pip" to Boolean::class,
+        "session_restore_mode" to String::class,
+        "session_restore_dismissed" to String::class,
+        "offer_delete_after_playback_movies" to Boolean::class,
+        "offer_delete_after_playback_episodes" to Boolean::class,
+        "custom_device_profile_json" to String::class,
         "pgs_subtitle_direct_play" to Boolean::class,
         "user_data_sync_enabled" to Boolean::class,
         "android_tv_watch_next_enabled" to Boolean::class,
@@ -106,16 +115,20 @@ class PlaybackSpecDerivationTest {
     fun `resetKeysFor returns exactly the PLAYBACK-category keys`() {
         val store = PlaybackStore(TestDataStoreProvider.get(), scope)
         val playbackKeys = store.resetKeysFor(PreferenceResetCategory.PLAYBACK).map { it.name }
-        // The exact 20 keys the hand-written pre-spec reset list carried
-        // (force_direct_play included — the legacy surface still resets with
-        // its category; live_stream_option and the subtitle/sync toggles are
-        // other categories').
+        // The exact keys the hand-written pre-spec reset list carried plus the
+        // new rows (force_direct_play included — the legacy surface still
+        // resets with its category; live_stream_option and the subtitle/sync
+        // toggles are other categories').
         assertEquals(
             listOf(
                 "preferred_player",
                 "preferred_external_player",
                 "streaming_quality",
                 "cellular_streaming_quality",
+                "hdr_format_preference",
+                "force_transcode_above_height",
+                "preferred_transcode_video_codec",
+                "preferred_transcode_audio_codec",
                 "force_direct_play",
                 "playback_mode",
                 "offline_playback_preference",
@@ -134,6 +147,11 @@ class PlaybackSpecDerivationTest {
                 "auto_play_countdown_sec",
                 "background_video_audio_enabled",
                 "auto_enter_pip",
+                "session_restore_mode",
+                "session_restore_dismissed",
+                "offer_delete_after_playback_movies",
+                "offer_delete_after_playback_episodes",
+                "custom_device_profile_json",
             ).sorted(),
             playbackKeys.sorted(),
         )
@@ -197,6 +215,10 @@ class PlaybackSpecDerivationTest {
         assertEquals(PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.default, slice.preferredExternalPlayer)
         assertEquals(PlaybackPreferenceSpecs.STREAMING_QUALITY.default, slice.streamingQuality)
         assertEquals(PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.default, slice.cellularStreamingQuality)
+        assertEquals(PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.default, slice.hdrFormatPreference)
+        assertEquals(PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.default, slice.forceTranscodeAboveHeight)
+        assertEquals(PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_VIDEO_CODEC.default, slice.preferredTranscodeVideoCodec)
+        assertEquals(PlaybackPreferenceSpecs.PREFERRED_TRANSCODE_AUDIO_CODEC.default, slice.preferredTranscodeAudioCodec)
         assertEquals(PlaybackPreferenceSpecs.PLAYBACK_MODE.default, slice.playbackMode)
         assertEquals(PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.default, slice.liveStreamOption)
         assertEquals(PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.default, slice.offlinePlaybackPreference)
@@ -215,17 +237,21 @@ class PlaybackSpecDerivationTest {
         assertEquals(PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.default, slice.autoPlayCountdownSec)
         assertEquals(PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.default, slice.backgroundVideoAudioEnabled)
         assertEquals(PlaybackPreferenceSpecs.AUTO_ENTER_PIP.default, slice.autoEnterPip)
+        assertEquals(PlaybackPreferenceSpecs.SESSION_RESTORE_MODE.default, slice.sessionRestoreMode)
+        assertEquals(PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_MOVIES.default, slice.offerDeleteAfterPlaybackMovies)
+        assertEquals(PlaybackPreferenceSpecs.OFFER_DELETE_AFTER_PLAYBACK_EPISODES.default, slice.offerDeleteAfterPlaybackEpisodes)
+        assertEquals(PlaybackPreferenceSpecs.CUSTOM_DEVICE_PROFILE_JSON.default, slice.customDeviceProfileJson)
         assertEquals(PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.default, slice.pgsSubtitleDirectPlay)
         assertEquals(PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.default, slice.userDataSyncEnabled)
         assertEquals(PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.default, slice.androidTvWatchNextEnabled)
-        // Totality: the 25 pinned properties are ALL the slice's fields (26
+        // Totality: the 33 pinned properties are ALL the slice's fields (34
         // rows - the legacy-only force_direct_play with no slice property). A
         // field added without a spec-default pin above (and without bumping
         // this count) fails here. Statics (the @Serializable Companion,
         // Compose's $stable) don't count.
         val instanceFields = PlaybackSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(25, instanceFields)
+        assertEquals(33, instanceFields)
     }
 
     /** Writes [spec]'s default through its derived write (the default IS the row's T). */

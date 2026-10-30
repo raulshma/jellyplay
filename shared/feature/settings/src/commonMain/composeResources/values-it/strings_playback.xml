@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">Metti in pausa quando il sistema segnala perdita di focus</string>
     <string name="settings_pause_on_focus_loss_off">Continua la riproduzione alla perdita di focus</string>
     <string name="settings_resume_headset_plug">Riprendi al ricollegamento delle cuffie</string>
-    <string name="settings_resume_headset_plug_subtitle">Riprendi la riproduzione quando le cuffie vengono ricollegate dopo la pausa automatica</string>
+    <string name="settings_resume_headset_plug_subtitle">Riprendi la riproduzione quando le cuffie si riconnettono dopo la pausa automatica (cablate o Bluetooth)</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Corrispondenza frequenza</string>
@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">Ripristina tutte le impostazioni ExoPlayer</string>
     <string name="settings_media_segments">Segmenti media</string>
     <string name="settings_media_segments_summary">%1$d salto automatico, %2$d mostra pulsante</string>
-    <string name="settings_skip_segments_on_seek">Salta segmenti durante la ricerca</string>
+        <string name="settings_skip_prompt_duration">Durata del pulsante Salta</string>
+    <string name="settings_skip_prompt_duration_subtitle">Quanto tempo resta visibile il pulsante salta intro/segmento</string>
+<string name="settings_skip_segments_on_seek">Salta segmenti durante la ricerca</string>
     <string name="settings_skip_segments_on_seek_on">Le ricerche in avanti saltano i segmenti con salto automatico</string>
     <string name="settings_segment_skip_delay">Ritardo salto automatico</string>
     <string name="settings_segment_skip_delay_off">Disattivato</string>

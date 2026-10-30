@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -17,6 +19,8 @@ import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * The session-owned pref write choreography (the [TransportRouter] shape):
@@ -87,6 +91,13 @@ internal class PlayerUiCommands(
     /** The effects controller's settle-gated per-item persist ([setVideoEffectsSettled]). */
     private val persistVideoEffects: (VideoEffectsConfig) -> Unit,
 ) {
+
+    /**
+     * Serializes the mode/quality persist-then-reload sequence: the options
+     * sheet stays open across picks, and without the mutex a quick second tap
+     * could let the first change's reload resolve against the stale mirror.
+     */
+    private val playbackPreferenceMutex = Mutex()
 
     fun setAspectRatio(ratio: AspectRatio) {
         updateVideoFx { it.copy(aspectRatio = ratio) }
@@ -168,8 +179,12 @@ internal class PlayerUiCommands(
         persist: suspend () -> Unit,
     ) {
         scope.launch {
-            persist()
-            reloadPlaybackForMode(mode = mode, quality = quality)
+            // The options sheet stays open across picks. Keep mode and quality
+            // reloads ordered so an older server response cannot win the race.
+            playbackPreferenceMutex.withLock {
+                persist()
+                reloadPlaybackForMode(mode = mode, quality = quality)
+            }
         }
     }
 
@@ -238,6 +253,31 @@ internal class PlayerUiCommands(
         updateAutoplay { it.copy(videoAutoplayNext = enabled) }
         setAutoplayEnabled(enabled)
         scope.launch { videoPlayerStore.setVideoAutoplayNext(enabled) }
+    }
+
+    /**
+     * The Rendering sheet's persisted mpv render prefs (the same
+     * mirror-write-then-persist choreography as [setVideoAutoplayNext]): the
+     * eager uiPrefs mirror keeps the sheet's chips responsive, the store
+     * write re-emits the aggregate, and the fanout's render-pref diff
+     * rebuilds the engine config so the running engine applies the pick
+     * through its config diff caches (no reload).
+     */
+    fun setMpvToneMappingCurve(curve: MpvToneMappingCurve) {
+        updateUiPrefs { it.copy(mpvToneMappingCurve = curve) }
+        scope.launch { videoPlayerStore.setMpvToneMappingCurve(curve) }
+    }
+
+    /** The deband strength pick — same choreography as [setMpvToneMappingCurve]. */
+    fun setMpvDebandMode(mode: MpvDebandMode) {
+        updateUiPrefs { it.copy(mpvDebandMode = mode) }
+        scope.launch { videoPlayerStore.setMpvDebandMode(mode) }
+    }
+
+    /** The motion-interpolation toggle — same choreography as [setMpvToneMappingCurve]. */
+    fun setMpvMotionInterpolation(enabled: Boolean) {
+        updateUiPrefs { it.copy(mpvMotionInterpolation = enabled) }
+        scope.launch { videoPlayerStore.setMpvMotionInterpolation(enabled) }
     }
 }
 

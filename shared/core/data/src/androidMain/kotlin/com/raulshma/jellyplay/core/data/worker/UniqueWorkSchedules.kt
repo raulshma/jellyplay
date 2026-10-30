@@ -15,7 +15,7 @@ import java.time.Duration
 /**
  * The ONE WorkManager enqueue ladder (I3 fold). The five scheduler shells —
  * [PlaybackSyncSchedulerImpl], [UserDataSyncSchedulerImpl],
- * [AutoDownloadScheduler], NotificationScheduler,
+ * [AutoDownloadSchedulerImpl], NotificationScheduler,
  * [TvWatchNextSchedulerImpl] — each used to restate this choreography by
  * hand: a CONNECTED constraint, a request builder carrying the worker's
  * WORK_TAG, and an enqueueUniquePeriodicWork / enqueueUniqueWork call under

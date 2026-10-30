@@ -3,8 +3,10 @@ package com.raulshma.jellyplay.core.data.playback
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.isLocalServerHost
 
 /**
  * Moved from the legacy `:core:data` shim (playback flips): the
@@ -82,13 +84,30 @@ class AdaptiveBitrateManager(
      * regardless of the user-selected quality — this matches the "Data Saver"
      * toggle description (reduce data usage on streaming).
      */
-    fun resolveEffectiveMaxBitrate(): Long? {
+    fun resolveEffectiveMaxBitrate(): Long? = resolveEffectiveMaxBitrate(serverHost = null)
+
+    /**
+     * The network-split twin (#19): when the caller knows the server host and
+     * it classifies LOCAL (RFC1918/loopback/link-local/`.local`/bare hostname
+     * — [isLocalServerHost]), a non-AUTO `homeStreamingQuality` tier replaces
+     * the network ladder — the home network's abundant bandwidth honours the
+     * user's explicit home tier instead of the WiFi-quality selection. AUTO
+     * (or an unparseable value) falls through to the existing unmetered
+     * behaviour, and a null/unknown/REMOTE host keeps the wifi/cellular
+     * ladder exactly as before, so every existing caller is unchanged.
+     *
+     * The data-saver clamp below still applies to the home tier (it is a
+     * frugal-usage guarantee, not a network measurement) — matching how it
+     * caps every other resolved tier.
+     */
+    fun resolveEffectiveMaxBitrate(serverHost: String?): Long? {
         val net = networkOfflineStore.networkOffline.value
         val pb = playbackStore.playback.value
-        val quality = if (isUnmeteredConnection()) {
-            pb.streamingQuality
-        } else {
-            pb.cellularStreamingQuality
+        val homeTier = net.homeStreamingQuality.toEnumOrNull<StreamingQuality>()
+            ?.takeUnless { it == StreamingQuality.AUTO }
+        val quality = when {
+            serverHost != null && homeTier != null && isLocalServerHost(serverHost) -> homeTier
+            else -> effectiveQuality(pb.streamingQuality, pb.cellularStreamingQuality)
         }
         val resolved = resolveMaxBitrate(quality)
         // Data saver forces an upper bound independent of the selected quality.
@@ -99,6 +118,15 @@ class AdaptiveBitrateManager(
             resolved
         }
     }
+
+    /**
+     * The base network-split fold shared by every quality consumer (#19): the
+     * wifi tier on an unmetered connection, the cellular tier on metered.
+     * [resolveEffectiveMaxBitrate] layers the home-host tier and the
+     * data-saver clamp on top of this base.
+     */
+    fun effectiveQuality(unmetered: StreamingQuality, metered: StreamingQuality): StreamingQuality =
+        if (isUnmeteredConnection()) unmetered else metered
 
     fun isUnmeteredConnection(): Boolean = !networkMonitor.isMetered.value
 

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotation
@@ -60,7 +60,7 @@ import okio.Path.Companion.toPath
 class BookReaderViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var readerStore: ReaderStore
@@ -72,7 +72,7 @@ class BookReaderViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk()
+        detailFeed = mockk()
         playbackRepository = mockk()
         playbackIdentity = mockk()
         readerStore = mockk()
@@ -119,7 +119,7 @@ class BookReaderViewModelTest {
         playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
             com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
     ): BookReaderViewModel = BookReaderViewModel(
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         playbackRepository = playbackRepository,
         playbackIdentity = playbackIdentity,
         preferences = readerPreferences,
@@ -140,7 +140,7 @@ class BookReaderViewModelTest {
         )
 
     private fun stubDetail(path: String, positionTicks: Long = 0L) {
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail(path, positionTicks))
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(detail(path, positionTicks))
     }
 
     // ------------------------------------------------------------------

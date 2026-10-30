@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import java.io.File
 import com.raulshma.jellyplay.desktop.DesktopPaths
 import com.raulshma.jellyplay.desktop.player.audio.DesktopAudioDeviceEnumerator
 import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
@@ -86,11 +88,17 @@ val desktopPlayerModule: Module = module {
     // so a first-run startup extraction is picked up on the next session.
     single<PlayerEngineFactory> {
         val engineStore = get<PlayerEngineStore>()
+        val videoPlayerStore = get<VideoPlayerStore>()
         val paths = get<DesktopPaths>()
         DesktopMpvPlayerEngineFactory(
             recorder = get(),
             hdrPassthroughProvider = { engineStore.playerEngine.first().mpvConfig.hdrPassthrough },
             shaderDirProvider = { paths.shadersDirNio.toFile().takeIf { it.isDirectory }?.absolutePath },
+            // The raw input.conf text (`input-conf` is an INIT-time option, so
+            // like vo/wid it applies on next playback) read off the video-player
+            // slice, synced by the factory into the app data dir's mpv folder.
+            inputConfProvider = { videoPlayerStore.videoPlayer.first().mpvInputConf.ifBlank { null } },
+            inputConfDirProvider = { File(paths.dataDir.toFile(), "mpv") },
         )
     }
 
@@ -111,7 +119,7 @@ val desktopPlayerModule: Module = module {
     single<AudioTrackResolver> {
         val playbackStore = get<PlaybackStore>()
         DesktopAudioSourceResolver(
-            mediaRepository = get(),
+            detailFeed = get(),
             playbackRepository = get(),
             playbackSourceResolver = get(),
             adaptiveBitrateSelector = get(),

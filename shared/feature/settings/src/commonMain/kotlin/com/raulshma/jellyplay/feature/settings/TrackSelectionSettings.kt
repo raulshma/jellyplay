@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.LanguageRule
 import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.RuleContentType
+import com.raulshma.jellyplay.core.model.SubtitleContentKindFilter
 import com.raulshma.jellyplay.core.model.SubtitleTrackMode
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
@@ -57,6 +58,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trac
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_any_language
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_applies_to
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_audio_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_commentary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_commentary_allowed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_commentary_ranked_down
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_content_kind
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_content_kind_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_delete
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_edit
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rule_subtitle_language
@@ -344,11 +350,17 @@ internal fun TrackRulesEditorSheet(
     SettingsPickerDialog(state = activePicker, onDismiss = { activePicker = null })
 }
 
-/** "eng → deu, full dialogue" — one line per card. */
+/** "eng → deu, full dialogue · Signs / songs" — one line per card (the v2
+ *  content-kind suffix appears only when the rule targets a specific kind). */
 private fun ruleSummarised(rule: LanguageRule, anyLanguage: String): String {
     val audio = rule.audioLanguages.firstOrNull() ?: anyLanguage
     val subtitle = rule.subtitleLanguages.firstOrNull() ?: anyLanguage
-    return "$audio → $subtitle · ${rule.subtitleMode.displayName}"
+    val kind = if (rule.subtitleContentKind == SubtitleContentKindFilter.ANY) {
+        ""
+    } else {
+        " · ${rule.subtitleContentKind.displayName}"
+    }
+    return "$audio → $subtitle · ${rule.subtitleMode.displayName}$kind"
 }
 
 /** One [LanguageRule]'s editor: pickers per axis + the title-pattern text sheet. */
@@ -369,6 +381,11 @@ private fun TrackRuleEditSheet(
     val audioLangTitle = stringResource(Res.string.settings_track_rule_audio_language)
     val subtitleLangTitle = stringResource(Res.string.settings_track_rule_subtitle_language)
     val subtitleModeTitle = stringResource(Res.string.settings_track_rule_subtitle_mode)
+    val contentKindTitle = stringResource(Res.string.settings_track_rule_content_kind)
+    val contentKindHelper = stringResource(Res.string.settings_track_rule_content_kind_helper)
+    val commentaryTitle = stringResource(Res.string.settings_track_rule_commentary)
+    val commentaryRankedDown = stringResource(Res.string.settings_track_rule_commentary_ranked_down)
+    val commentaryAllowed = stringResource(Res.string.settings_track_rule_commentary_allowed)
     val editTitle = stringResource(Res.string.settings_track_rule_edit)
     val languageCodes = languages.mapNotNull { it.first }
 
@@ -461,6 +478,36 @@ private fun TrackRuleEditSheet(
                         label = { it.displayName },
                         isSelected = { it == rule.subtitleMode },
                         onSelect = { mode -> onSave(rule.copy(subtitleMode = mode)) },
+                    )
+                },
+            )
+            SettingListItem(
+                icon = Tabler.Outline.Filter,
+                title = contentKindTitle,
+                subtitle = contentKindHelper,
+                trailingText = rule.subtitleContentKind.displayName,
+                onClick = {
+                    activePicker = PickerState.List(
+                        title = contentKindTitle,
+                        items = SubtitleContentKindFilter.entries,
+                        label = { it.displayName },
+                        isSelected = { it == rule.subtitleContentKind },
+                        onSelect = { kind -> onSave(rule.copy(subtitleContentKind = kind)) },
+                    )
+                },
+            )
+            SettingListItem(
+                icon = Tabler.Outline.Music,
+                title = commentaryTitle,
+                subtitle = "",
+                trailingText = if (rule.commentary) commentaryAllowed else commentaryRankedDown,
+                onClick = {
+                    activePicker = PickerState.List(
+                        title = commentaryTitle,
+                        items = listOf(false, true),
+                        label = { allowed -> if (allowed) commentaryAllowed else commentaryRankedDown },
+                        isSelected = { it == rule.commentary },
+                        onSelect = { allowed -> onSave(rule.copy(commentary = allowed)) },
                     )
                 },
             )

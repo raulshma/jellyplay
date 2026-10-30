@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
@@ -95,7 +95,8 @@ internal class SubtitleManager(
     /** Content-URI IO seam: androidMain impl reads via ContentResolver. */
     private val contentGateway: SubtitleContentGateway,
     private val playbackRepository: PlaybackRepository,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val subtitleProviderRepository: SubtitleProviderRepository,
     private val streamingSubtitleStore: StreamingSubtitleStore,
     /** User-feedback seam: androidMain bridge posts to the legacy UserMessageBus. */
@@ -270,10 +271,9 @@ internal class SubtitleManager(
      *
      * The wait is two-phase. The fast phase (~9 s) covers the common case; if
      * it expires the row flips to DELAYED ("taking a while") **but the poll
-     * keeps running on a slower cadence** — previously we gave up entirely
-     * here, which left the session without the refreshed detail/track list and
-     * forced the user to exit and reopen the player to see the subtitle even
-     * though the download had actually succeeded server-side. A late arrival
+     * keeps running on a slower cadence**, so a late arrival still refreshes
+     * the detail/track list instead of leaving the user to exit and reopen the
+     * player for a subtitle that already succeeded server-side. A late arrival
      * in the slow phase runs exactly the same success path as a fast one
      * (refresh + select + DOWNLOADED + toast).
      *
@@ -355,7 +355,7 @@ internal class SubtitleManager(
         val subtitleId = subtitleInfo.id
         // Force the read so a stale single-flight cache hit can't mask the
         // new stream the server has just attached.
-        val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+        val detail = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
         currentCoroutineContext().ensureActive()
         // A retry of an id we already downloaded once: its stream index is in
         // the snapshot now (the server already had it when the snapshot was
@@ -456,7 +456,7 @@ internal class SubtitleManager(
      * plain language match, as before.
      */
     private suspend fun seedPreDownloadStreamIndices(itemId: String): Set<Int> =
-        mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+        detailFeed.getMediaDetail(itemId, force = true).getOrNull()
             ?.mediaSources
             ?.flatMap { it.mediaStreams }
             ?.filter { it.type == StreamType.SUBTITLE }
@@ -724,7 +724,7 @@ internal class SubtitleManager(
             // with "Could not load item details", needlessly blocking Wyzie and
             // OpenSubtitles.
             val detail = getCurrentMediaDetail()
-                ?: mediaRepository.getMediaDetail(itemId).getOrNull()
+                ?: detailFeed.getMediaDetail(itemId, force = false).getOrNull()
             val query = detail?.let { SubtitleProviderIds.buildQuery(it) }
                 // No detail at all (e.g. playback started without one and the
                 // fetch failed): search external providers by title only. With
@@ -867,7 +867,7 @@ internal class SubtitleManager(
                                     // cached read, so without the force flag it
                                     // would keep returning the pre-upload
                                     // snapshot.
-                                    mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
+                                    detailFeed.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
                                         // attachToEngine = false: the provider
                                         // download already side-loaded its local
                                         // copy above; attaching the server echo
@@ -979,7 +979,7 @@ internal class SubtitleManager(
                     // Forced refresh so the uploaded stream lands in the cached
                     // detail + track picker now (single-flight cache otherwise
                     // serves the pre-upload snapshot — see uploadSubtitle).
-                    mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
+                    detailFeed.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
                         onMediaDetailRefreshed(MediaDetailRefresh(detail, attachToEngine = false))
                         detail.mediaSources.firstOrNull()?.mediaStreams?.let { streams ->
                             streamingSubtitleStore.attributeUploadedSubtitle(
@@ -1071,7 +1071,7 @@ internal class SubtitleManager(
                 // Forced: getMediaDetail is a single-flight cached read, and
                 // without the force flag the cache keeps serving the
                 // pre-upload snapshot (see waitForSubtitleToAppear).
-                mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
+                detailFeed.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
                     onMediaDetailRefreshed(MediaDetailRefresh(detail))
                 }
                 userMessageBus.info("Subtitle uploaded")

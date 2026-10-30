@@ -20,7 +20,8 @@ import com.google.common.util.concurrent.SettableFuture
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -74,17 +75,19 @@ private const val MAIN_ACTIVITY_CLASS_NAME = "com.raulshma.jellyplay.MainActivit
 class AudioLibraryBrowser(
     private val scope: CoroutineScope,
     /**
-     * The detail read only ([getMediaDetail], the playable-node resolver) —
-     * the browser is a mixed consumer. Its catalogue reads (artist albums,
+     * The browse reads (genres, search) of the library/browse family seam.
+     * The browser is a mixed consumer: its catalogue reads (artist albums,
      * album tracks) ride [musicCatalogue], the repository's narrow music
      * family seam.
      */
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
+    /** The detail read only ([DetailFeed.getMediaDetail], the playable-node resolver). */
+    private val detailFeed: DetailFeed,
     private val musicCatalogue: MusicCatalogue,
     /**
      * The SearchResult-shaped collection reads (the union's getMediaItems /
      * getFavorites retired to this seam). The browser is otherwise a mixed
-     * consumer — catalogue + detail reads still ride [mediaRepository].
+     * consumer — catalogue + detail reads still ride the family seams above.
      */
     private val libraryApiClient: LibraryApiClient,
     private val playlistRepository: PlaylistRepository,
@@ -228,7 +231,7 @@ class AudioLibraryBrowser(
                     parentId == "GENRES" -> {
                         // The genres endpoint is unpaginated server-side; the
                         // set is small, so page it locally.
-                        val genres = mediaRepository.getGenres().getOrNull() ?: emptyList()
+                        val genres = libraryFeed.getGenres(parentId = null, force = false).getOrNull() ?: emptyList()
                         genres.drop(page * pageSize).take(pageSize).forEach { genre ->
                             list.add(genreFolder(genre))
                         }
@@ -343,7 +346,7 @@ class AudioLibraryBrowser(
             params: MediaLibraryService.LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             return resolveFuture {
-                val result = mediaRepository.search(
+                val result = libraryFeed.search(
                     query = query,
                     filters = LibraryFilters(
                         mediaTypes = listOf(MediaType.ARTIST, MediaType.ALBUM, MediaType.AUDIO, MediaType.MUSIC),
@@ -464,11 +467,11 @@ class AudioLibraryBrowser(
                     val item = when {
                         mediaId.startsWith(ARTIST_ID_PREFIX) -> {
                             val id = mediaId.removePrefix(ARTIST_ID_PREFIX)
-                            mediaRepository.getMediaDetail(id).getOrNull()?.let { mapArtistToMediaItem(it.item) }
+                            detailFeed.getMediaDetail(id, force = false).getOrNull()?.let { mapArtistToMediaItem(it.item) }
                         }
                         mediaId.startsWith(ALBUM_ID_PREFIX) -> {
                             val id = mediaId.removePrefix(ALBUM_ID_PREFIX)
-                            mediaRepository.getMediaDetail(id).getOrNull()?.let { mapAlbumToMediaItem(it.item) }
+                            detailFeed.getMediaDetail(id, force = false).getOrNull()?.let { mapAlbumToMediaItem(it.item) }
                         }
                         mediaId.startsWith(PLAYLIST_ID_PREFIX) -> {
                             val id = mediaId.removePrefix(PLAYLIST_ID_PREFIX)
@@ -476,7 +479,7 @@ class AudioLibraryBrowser(
                             // id + name, so a synthetic Playlist from the detail
                             // is equivalent without pulling every playlist from
                             // the server (the sibling ARTIST_/ALBUM_ approach).
-                            mediaRepository.getMediaDetail(id).getOrNull()?.let { detail ->
+                            detailFeed.getMediaDetail(id, force = false).getOrNull()?.let { detail ->
                                 mapPlaylistToMediaItem(
                                     Playlist(
                                         id = detail.item.id,
@@ -486,7 +489,7 @@ class AudioLibraryBrowser(
                             }
                         }
                         mediaId.startsWith(GENRE_ID_PREFIX) -> {
-                            mediaRepository.getGenres().getOrNull()
+                            libraryFeed.getGenres(parentId = null, force = false).getOrNull()
                                 ?.firstOrNull { it.id == mediaId.removePrefix(GENRE_ID_PREFIX) }
                                 ?.let(::genreFolder)
                         }
@@ -525,7 +528,7 @@ class AudioLibraryBrowser(
      * paged audio query. An unresolvable genre id yields an empty list.
      */
     private suspend fun genreTracks(genreId: String, limit: Int, offset: Int): List<com.raulshma.jellyplay.core.model.MediaItem> {
-        val genreName = mediaRepository.getGenres().getOrNull()?.firstOrNull { it.id == genreId }?.name
+        val genreName = libraryFeed.getGenres(parentId = null, force = false).getOrNull()?.firstOrNull { it.id == genreId }?.name
             ?: return emptyList()
         return libraryApiClient.getMediaItems(
             filters = LibraryFilters(
@@ -694,7 +697,7 @@ class AudioLibraryBrowser(
             null
         }
         return download?.toDomainTrack()
-            ?: mediaRepository.getMediaDetail(itemId).getOrNull()?.item
+            ?: detailFeed.getMediaDetail(itemId, force = false).getOrNull()?.item
     }
 
     private fun <T> resolveFuture(block: suspend () -> T): ListenableFuture<T> {
@@ -842,7 +845,7 @@ class AudioLibraryBrowser(
 
     internal suspend fun buildPlayableMediaItem(itemId: String, startPositionMs: Long = 0L): MediaItem? {
         val (detail, local) = coroutineScope {
-            val detailJob = async { mediaRepository.getMediaDetail(itemId).getOrNull() }
+            val detailJob = async { detailFeed.getMediaDetail(itemId, force = false).getOrNull() }
             // The completed-download predicate lives once in PlaybackSourceResolver.
             // resolveLocalSource returns the file URI + title (offlineItem name
             // preferred) without a getMediaDetail round-trip; artist/album still

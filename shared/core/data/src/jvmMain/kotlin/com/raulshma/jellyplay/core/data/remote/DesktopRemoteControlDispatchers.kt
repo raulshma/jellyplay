@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
@@ -159,7 +159,8 @@ class DesktopVideoRemoteControlDispatcher(
 class DesktopAudioRemoteControlDispatcher(
     private val audioQueueManager: AudioQueueManager,
     private val audioPlayerEngine: AudioPlayerEngine,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val remoteNavigationBridge: RemoteNavigationBridge,
 ) : AudioRemoteControlDispatcher {
 
@@ -271,7 +272,7 @@ class DesktopAudioRemoteControlDispatcher(
     private suspend fun buildQueueItems(itemIds: List<String>): List<AudioQueueItem> = coroutineScope {
         itemIds.map { id ->
             async {
-                mediaRepository.getMediaDetail(id).getOrNull()?.let { detail ->
+                detailFeed.getMediaDetail(id, force = false).getOrNull()?.let { detail ->
                     AudioQueueItem(
                         id = id,
                         name = detail.item.name,

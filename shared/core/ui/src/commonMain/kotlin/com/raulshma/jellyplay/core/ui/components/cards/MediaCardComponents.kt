@@ -63,7 +63,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import coil3.compose.LocalPlatformContext
-import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 
@@ -72,6 +71,7 @@ import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.image.PhotoFolderPoster
+import com.raulshma.jellyplay.core.ui.image.rowCardDecodeSize
 import com.raulshma.jellyplay.core.ui.preview.rememberMediaPeek
 import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -372,11 +372,10 @@ fun PosterCard(
                     contentScale = ContentScale.Crop,
                     crossfade = false,
                     // Poster cards fill a dynamic column width. Decode bounds
-                    // follow the card's aspect ratio (~2× density for typical
-                    // grid card sizes ≤180 dp wide) without the over-decode of
-                    // the 512×512 default; clamped so extreme ratios can't
-                    // request huge decodes.
-                    size = CoilSize(360, (360 / aspectRatio).toInt().coerceIn(240, 810)),
+                    // follow the card's aspect ratio (360 ≈ 2× density for
+                    // typical grid card sizes ≤180 dp wide, clamped against
+                    // extreme ratios) — the shared rowCardDecodeSize policy.
+                    size = rowCardDecodeSize(width = 360, aspectRatio = aspectRatio),
                 )
             }
         },

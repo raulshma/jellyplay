@@ -96,7 +96,7 @@ val homeModule: Module = module {
         HomeHeroVideoLoader(
             libraryApiClient = get(),
             playbackRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             seerrRepository = get(),
             clock = { get<HomeClock>().nowEpochMillis() },
         )
@@ -120,6 +120,7 @@ val homeModule: Module = module {
             mediaSearchEngine = get(),
             homeFeed = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             photoFolderPrefetcher = get(),
             downloadIntake = get(),
             quickDownloadActions = get(),
@@ -134,6 +135,7 @@ val homeModule: Module = module {
                 experimental = get(),
                 playback = get(),
                 seerrPreferences = get(),
+                shortcuts = get(),
             ),
             preferencesEditor = get(),
             seerrRequestDelegate = get(),
@@ -141,6 +143,7 @@ val homeModule: Module = module {
             homeSession = get(),
             userMessageBus = get(),
             settingsSearchProvider = get(),
+            shortcutCatalog = get(),
             homeRefresherFactory = get(),
             syncStatusStateHolderFactory = get(),
             homeSheetsFactory = get(),
@@ -153,15 +156,15 @@ val homeModule: Module = module {
         NextUpExcludedViewModel(
             homeDiscoveryStore = get(),
             editor = get(),
-            mediaRepository = get(),
-            imageUrlProvider = get(),
+            detailFeed = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {
         MyMediaHiddenViewModel(
             homeDiscoveryStore = get(),
             editor = get(),
-            mediaRepository = get(),
+            libraryFeed = get(),
         )
     }
 }

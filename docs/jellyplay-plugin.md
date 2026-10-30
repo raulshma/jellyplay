@@ -162,6 +162,24 @@ DERIVED from the same `SyncExcludedKeys` sets the sync adapter excludes, and
 the excluded prefixes come from the same shared `PreferenceSyncPolicy`
 constant, so the catalog cannot drift from what actually syncs.
 
+### Contract versions & the mismatch banner
+
+The capabilities probe is the one versioned handshake: the plugin serves
+`contractVersion` (its `JellyPlayContract.ContractVersion`, pinned to the doc
+by its `ContractTruthApiTests`) and `pluginVersion`; the client's
+`JellyPlayPluginStatusStore` refuses payloads whose `contractVersion` falls
+outside `KNOWN_CONTRACT_VERSIONS` — same fail-closed verdict as a missing
+plugin (`UNAVAILABLE`, every gate shut), so a mismatched pair can never
+half-work. The refusal is not silent, though: the store publishes it on the
+`contractMismatch` side channel (served version, supported range, plugin
+version), which the settings screen renders as an error banner ("update the
+plugin on your server — or the app") where the section would otherwise
+vanish, and the admin dashboard as a one-line hint above the plugin tiles.
+`servedPluginVersion` feeds the settings group's summary line. Breaking wire
+changes bump the plugin's constant (and `CONTRACT.md` in the same commit —
+its tests enforce both); additive changes never do, and the client's wire
+decode tolerates unknown keys (`JellyPlayCapabilitiesWireDecodeTest`).
+
 ## Live events
 
 `JellyPlayEventsRepository.start()` registers the device, then holds the

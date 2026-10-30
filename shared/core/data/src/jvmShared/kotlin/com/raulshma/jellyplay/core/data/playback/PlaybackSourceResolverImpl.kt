@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -33,7 +33,8 @@ import java.io.File
  */
 class PlaybackSourceResolverImpl(
     private val downloadRepository: DownloadRepository,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playbackRepository: PlaybackRepository,
     private val offlineRepository: OfflineRepository,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
@@ -45,12 +46,12 @@ class PlaybackSourceResolverImpl(
         startPositionTicks: Long,
     ): ResolvedPlaybackSource? {
         // Local-first: a completed download with an existing file short-circuits
-        // the server round-trip. Preserves MainViewModel's disk-staleness
-        // behaviour — resolveUsableDownload returns null when the file is gone,
-        // so we transparently fall through to the stream path below.
+        // the server round-trip; resolveUsableDownload returns null when the
+        // file is gone, so we transparently fall through to the stream path
+        // below.
         resolveLocalSource(itemId)?.let { return it }
 
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return null
+        val detail = detailFeed.getMediaDetail(itemId, force = false).getOrNull() ?: return null
         val source = if (mediaSourceId != null) {
             detail.mediaSources.find { it.id == mediaSourceId }
         } else {

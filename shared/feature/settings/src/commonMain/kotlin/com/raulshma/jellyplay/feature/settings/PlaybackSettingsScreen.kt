@@ -5,8 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import kotlinx.coroutines.CoroutineScope
 import org.koin.compose.viewmodel.koinViewModel
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -16,24 +19,137 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rese
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_playback_message
 
 /**
- * The declared screen sections in LazyColumn order — the derivation source the
- * deep-link scroll resolver consumes (see HighlightScroll.kt): passing the
- * same declaration the rows are built from means the scroll target can never
- * drift from the UI. Index 0 is the always-visible player group; indices 1-3
- * (advanced video, engine config, media segments) only compose when advanced
- * settings are shown (their [SettingsScreenSection] carries
- * `advancedOnly = true`); 4-6 (SyncPlay, casting, DVR) always render. The
- * advanced shape folds into the scroll adjust via [deriveAdjustForAdvanced].
+ * The playback screen's ONE ordered group declaration — parameterized by the
+ * preferred player because the engine slot's content-count hook is the one
+ * runtime-keyed shape the flags vocabulary cannot express (only the preferred
+ * player's rows exist at runtime, so the declared all-engines group
+ * contributes its delta for that prefix alone; the screen-local reset row
+ * cancels in the delta). The screen passes the live preference, and the
+ * contract test pins the shipped JVM shape (LIBVLC — the desktop seam backs
+ * the mpv device rows) plus the MPV honesty pin against the SAME
+ * declaration, so the per-engine hook is stated exactly once (ADR-0009's
+ * amendment). Per-group row emission stays hand-written: the screen maps
+ * each slot to its body inline in [playbackScreenGroups].
  */
-private val playbackScreenSections: List<SettingsScreenSection> = listOf(
-    SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
-    SettingsScreenSection(SettingsScreenGroups.playbackAdvancedVideo.itemIdSet, advancedOnly = true),
-    SettingsScreenSection(SettingsScreenGroups.playbackEngine.itemIdSet, advancedOnly = true),
-    SettingsScreenSection(SettingsScreenGroups.playbackMediaSegments.itemIdSet, advancedOnly = true),
-    SettingsScreenSection(SettingsScreenGroups.playbackSyncPlay.itemIdSet),
-    SettingsScreenSection(SettingsScreenGroups.playbackCasting.itemIdSet),
-    SettingsScreenSection(SettingsScreenGroups.playbackDvr.itemIdSet),
+internal fun PlaybackSettingsScreenSlots(
+    preferredPlayer: PlayerType,
+): List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.playbackPlayer.asScreenGroup(),
+    SettingsScreenGroups.playbackAdvancedVideo.asScreenGroup(advancedOnly = true),
+    SettingsScreenGroups.playbackEngine.asScreenGroup(
+        advancedOnly = true,
+        emittedRows = { flags ->
+            when (preferredPlayer) {
+                PlayerType.MPV -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("mpv_") }
+                PlayerType.LIBVLC -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("vlc_") }
+                PlayerType.EXO_PLAYER -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id.startsWith("exo_") }
+                PlayerType.EXTERNAL -> rowTotalFor(SettingsScreenGroups.playbackEngine, flags) { it.id == PlaybackRows.ExternalPlayerApp.id }
+                else -> 0
+            }
+        },
+    ),
+    SettingsScreenGroups.playbackMediaSegments.asScreenGroup(advancedOnly = true),
+    SettingsScreenGroups.playbackSyncPlay.asScreenGroup(),
+    SettingsScreenGroups.playbackCasting.asScreenGroup(),
+    SettingsScreenGroups.playbackDvr.asScreenGroup(),
 )
+
+/**
+ * The playback screen's group bodies, mapped onto the ONE ordered
+ * declaration ([PlaybackSettingsScreenSlots], in LazyColumn order — the
+ * shell derives the deep-link scroll resolution, the whole-group advanced
+ * gating (indices 1-3: advanced video, engine config, media segments only
+ * compose behind the advanced toggle) and the hidden-settings hint count
+ * from it, and the contract test pins the same declaration, so the scroll
+ * target and the hint can never drift from the UI. The advanced shape folds
+ * into the scroll adjust in the shell) with each slot's hand-written body
+ * attached inline — the bodies close over the screen's state (preferences,
+ * flags, view model) and the shell only reads the derived shape (ADR-0009:
+ * per-row emission stays hand-written).
+ */
+@Composable
+private fun playbackScreenGroups(
+    preferences: PlaybackPreferences,
+    rowFlags: RowAdmissionFlags,
+    highlightSettingId: String?,
+    viewModel: PlaybackSettingsViewModel,
+    scope: CoroutineScope,
+    navActions: SettingsNavActions,
+): List<PreferenceScreenGroup> {
+    val slots = PlaybackSettingsScreenSlots(preferredPlayer = preferences.preferredPlayer)
+    return slots.withContent(
+        bodies = listOf(
+        { activePicker ->
+            PlaybackPlayerGroup(
+                preferences = preferences,
+                showAdvanced = rowFlags.showAdvanced,
+                rowFlags = rowFlags,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+                navActions = navActions,
+            )
+        },
+        { activePicker ->
+            PlaybackAdvancedVideoGroup(
+                preferences = preferences,
+                rowFlags = rowFlags,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackEngineGroup(
+                preferences = preferences,
+                rowFlags = rowFlags,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackMediaSegmentsGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackSyncPlayGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackCastingGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        { activePicker ->
+            PlaybackDvrGroup(
+                preferences = preferences,
+                highlightSettingId = highlightSettingId,
+                viewModel = viewModel,
+                scope = scope,
+                activePicker = activePicker,
+            )
+        },
+        ),
+    )
+}
 
 /**
  * The playback screen's admission flags — the declared row admissions both
@@ -55,6 +171,9 @@ internal fun playbackRowAdmissionFlags(
         PlaybackRows.VideoAutoplayNext.id to preferences.videoAutoplayNext,
         PlaybackRows.AudioPassthrough.id to preferences.audioPassthrough,
         PlaybackRows.SpatialAudio.id to preferences.spatialAudioEnabled,
+        // The pause-screensaver delay rides the mode row: any non-OFF
+        // screensaver counts as the parent being on.
+        PlaybackRows.PauseScreensaver.id to (preferences.pauseScreensaverMode != PauseScreensaverMode.OFF),
     ),
 )
 
@@ -80,11 +199,26 @@ fun PlaybackSettingsScreen(
         onBack = onBack,
         focusTag = "playback_init",
         highlightSettingId = highlightSettingId,
-        highlightGroups = playbackScreenSections.map { it.idSet },
-        adjustForAdvanced = deriveAdjustForAdvanced(playbackScreenSections, showAdvanced),
+        groups = playbackScreenGroups(
+            preferences = preferences,
+            rowFlags = rowFlags,
+            highlightSettingId = highlightSettingId,
+            viewModel = viewModel,
+            scope = scope,
+            navActions = navActions,
+        ),
         advancedToggle = PreferenceAdvancedToggle(
             showAdvanced = showAdvanced,
             onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above: the player
+            // group's advanced rows, the advanced-video group, the preferred
+            // engine's branch rows and the media-segments group — honest
+            // across the (isTv, engine, parent-toggle) combos the frozen
+            // literal silently approximated.
+            rowFlags = rowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
         ),
         reset = PreferenceResetAction(
             iconContentDescription = stringResource(Res.string.settings_reset_playback_cd),
@@ -93,103 +227,5 @@ fun PlaybackSettingsScreen(
             onReset = { viewModel.resetPlaybackSettings() },
         ),
         pickerHost = true,
-    ) { activePickerState ->
-            item {
-                PlaybackPlayerGroup(
-                    preferences = preferences,
-                    showAdvanced = showAdvanced,
-                    rowFlags = rowFlags,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                    navActions = navActions,
-                )
-            }
-
-            // The three advanced-only groups (declared indices 1-3 in
-            // playbackScreenSections, advancedOnly = true) compose behind the
-            // advanced toggle, the same gate deriveAdjustForAdvanced's drift
-            // fix reads.
-            if (showAdvanced) {
-                item {
-                PlaybackAdvancedVideoGroup(
-                    preferences = preferences,
-                    rowFlags = rowFlags,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                )
-                }
-                item {
-                PlaybackEngineGroup(
-                    preferences = preferences,
-                    rowFlags = rowFlags,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                )
-                }
-                item {
-                PlaybackMediaSegmentsGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                )
-                }
-            }
-
-            item {
-                PlaybackSyncPlayGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                )
-            }
-
-            item {
-                PlaybackCastingGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                )
-            }
-
-            item {
-                PlaybackDvrGroup(
-                    preferences = preferences,
-                    highlightSettingId = highlightSettingId,
-                    viewModel = viewModel,
-                    scope = scope,
-                    activePicker = activePickerState,
-                )
-            }
-
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // FROZEN hand approximation — the one hiddenCount the
-                        // hiddenRowsFor derivation does not own: the real
-                        // hidden-row count varies by platform, engine and the
-                        // dialogue-boost toggle (the three advanced-only
-                        // groups alone hide anywhere from 7 to 19+ rows), so
-                        // no derivation via rowTotalFor reproduces 9 across
-                        // the (isTv, engine) combos. Its source rows are the
-                        // advanced-only blocks: the player group's advanced
-                        // rows, the advanced-video group, the engine group
-                        // and the media-segments group.
-                        hiddenCount = 9,
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-    }
+    )
 }

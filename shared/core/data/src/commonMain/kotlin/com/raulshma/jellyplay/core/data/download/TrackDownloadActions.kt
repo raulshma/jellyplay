@@ -69,7 +69,7 @@ interface TrackDownloadStatusWindow {
  * and the album screen, replacing the per-ViewModel copies that had drifted
  * into paste: hand the item id to [DownloadIntake.flipTrack], which owns the
  * whole resolve→start leg (detail resolution included — this class used to
- * re-implement that resolve leg with a [com.raulshma.jellyplay.core.data.repository.MediaRepository]
+ * re-implement that resolve leg with a repository-typed
  * fetch beside the intake; the fold into the intake removed the repository
  * from the constructor). Constructed over the intake, the owning screen's
  * [CoroutineScope] (RecordActions pattern) and the host's

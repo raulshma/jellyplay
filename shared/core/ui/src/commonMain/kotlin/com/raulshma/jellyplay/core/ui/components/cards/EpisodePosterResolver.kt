@@ -26,27 +26,29 @@ data class PosterCardImage(
 /**
  * Series-artwork fallback for a season whose own poster isn't available (e.g.
  * a season whose library scan never generated season artwork). Returns the
- * parent series' poster URL (resolved via [resolve]) when [item] is a season
- * with a [MediaItem.seriesId]; an empty list otherwise. Used by card/list
- * paths that don't go through [rememberEpisodeCardImage] (list rows, thumb card).
+ * parent series' poster URL (resolved from [item] — the resolver picks the
+ * series id and its image tag) when [item] is a season with a
+ * [MediaItem.seriesId]; an empty list otherwise. Used by card/list paths that
+ * don't go through [rememberEpisodeCardImage] (list rows, thumb card).
  */
-fun MediaItem.seriesImageFallback(resolve: (String) -> String): List<String> =
-    if (mediaType == MediaType.SEASON) {
-        seriesId?.let { listOf(resolve(it)) } ?: emptyList()
+fun MediaItem.seriesImageFallback(resolve: (MediaItem) -> String): List<String> =
+    if (mediaType == MediaType.SEASON && !seriesId.isNullOrBlank()) {
+        listOf(resolve(this))
     } else {
         emptyList()
     }
 
 /**
  * [remember]-wrapped [seriesImageFallback] for the list/thumb card paths. The
- * memo is keyed on the only fields that affect the result (the item's type and
- * [MediaItem.seriesId]) so a prefetch merge that produces a new item reference
- * doesn't invalidate the fallback list each pass. Returns an empty list for
- * non-seasons, so callers can pass it unconditionally as a `fallbackUrls` arg.
+ * memo is keyed on the fields that affect the result (the item's type, its
+ * [MediaItem.seriesId], and the resolver identity) so a prefetch merge that
+ * produces a new item reference doesn't invalidate the fallback list each
+ * pass. Returns an empty list for non-seasons, so callers can pass it
+ * unconditionally as a `fallbackUrls` arg.
  */
 @Composable
-fun MediaItem.rememberSeriesImageFallback(getImageUrl: (String) -> String): List<String> =
-    remember(mediaType, seriesId) { seriesImageFallback(getImageUrl) }
+fun MediaItem.rememberSeriesImageFallback(seriesPosterResolver: (MediaItem) -> String): List<String> =
+    remember(mediaType, seriesId, seriesPosterResolver) { seriesImageFallback(seriesPosterResolver) }
 
 /**
  * Picks the image shown on a poster card. Shared by the home rows and the
@@ -75,11 +77,14 @@ fun MediaItem.rememberSeriesImageFallback(getImageUrl: (String) -> String): List
  *
  * @param itemImageUrl resolves the item's own primary image URL (e.g.
  *  `viewModel.getImageUrl(item.id)`).
- * @param seriesPosterResolver resolves a series' poster URL by id (e.g.
- *  `viewModel.getImageUrl(seriesId)`).
+ * @param seriesPosterResolver resolves the series' poster URL FROM [item] —
+ *  the resolver picks the series id AND its image tag (e.g.
+ *  `artwork::seriesPoster` over [com.raulshma.jellyplay.core.data.util.ArtworkUrls]),
+ *  so a re-uploaded series poster mints a new URL on these cards too.
  * @param seriesBackdropResolver resolves a series' backdrop URL by id, used as
  *  the middle fallback when a series has no Primary image. Pass `{ "" }` to
- *  skip the backdrop step.
+ *  skip the backdrop step. (Id-level by design: the model carries no series
+ *  backdrop tag, so there is nothing to thread here.)
  * @param fallbackImageUrls builder-supplied fallbacks (e.g. album art for
  *  music). Empty by default.
  * @param showEpisodeSeriesBadge the caller's default badge preference; ignored
@@ -89,7 +94,7 @@ fun MediaItem.rememberSeriesImageFallback(getImageUrl: (String) -> String): List
 fun rememberEpisodeCardImage(
     item: MediaItem,
     itemImageUrl: String,
-    seriesPosterResolver: (String) -> String,
+    seriesPosterResolver: (MediaItem) -> String,
     seriesBackdropResolver: (String) -> String = { "" },
     fallbackImageUrls: List<String> = emptyList(),
     showEpisodeSeriesBadge: Boolean = false,
@@ -100,7 +105,7 @@ fun rememberEpisodeCardImage(
         val seriesId = item.seriesId
         val usesSeriesImage = isEpisode || isSeason
         val seriesPoster = if (usesSeriesImage && !seriesId.isNullOrBlank()) {
-            seriesPosterResolver(seriesId)
+            seriesPosterResolver(item)
         } else ""
         val seriesBackdrop = if (usesSeriesImage && !seriesId.isNullOrBlank() && seriesPoster.isBlank()) {
             seriesBackdropResolver(seriesId)

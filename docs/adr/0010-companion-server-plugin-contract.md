@@ -70,6 +70,17 @@ the same one-family-per-server-surface idiom as every other client family.
 > push, analytics, transcodes, ratings, markers) still rides the one
 > family.
 
+> **Amendment (2026-10-28, composite retirement).** The `JellyfinApiClient`
+> composite union this section named as the registration site was retired
+> with zero production consumers (every injector already took the family
+> seams; a census found only DI wiring, test mocks, and KDoc references
+> left). The registration role moved to the family singles:
+> `single<JellyPlayPluginApiClient>` — beside the per-role re-exposures — in
+> the network module's Koin owner is where the plugin family is bound now.
+> Nothing about the contract changes: the one impl
+> (`JellyPlayPluginApiClientImpl` over `JellyfinRawRequester`) and the
+> one-family-per-server-surface idiom stand exactly as written.
+
 **6. Future in-app extension SPI.** The capability registry
 (`features: StateFlow<Set<String>>`) is deliberately the ONLY gating
 mechanism. A future in-app extension system plugs in at the same seam:

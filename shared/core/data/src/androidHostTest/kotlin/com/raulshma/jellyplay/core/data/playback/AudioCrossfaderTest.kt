@@ -6,7 +6,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -56,7 +56,7 @@ import org.robolectric.annotation.Config
 class AudioCrossfaderTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val effectsProcessor: AudioEffectsProcessor = mockk(relaxed = true) {
@@ -88,7 +88,7 @@ class AudioCrossfaderTest {
 
         crossfader().maybeStart()
 
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         assertFalse(crossfading)
     }
 
@@ -98,7 +98,7 @@ class AudioCrossfaderTest {
 
         crossfader().maybeStart()
 
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
@@ -108,7 +108,7 @@ class AudioCrossfaderTest {
 
         crossfader().maybeStart()
 
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
@@ -120,7 +120,7 @@ class AudioCrossfaderTest {
 
         crossfader().maybeStart()
 
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
@@ -132,7 +132,7 @@ class AudioCrossfaderTest {
 
         crossfader().maybeStart()
 
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
@@ -141,7 +141,7 @@ class AudioCrossfaderTest {
         every { primaryPlayer.currentPosition } returns 29_500L
         every { primaryPlayer.currentMediaItemIndex } returns 0
         every { primaryPlayer.volume = any<Float>() } answers { primaryVolumes += firstArg<Float>() }
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns detailResult
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns detailResult
         coEvery { playbackSourceResolver.resolvePlaybackSource(any(), any(), any()) } returns
             ResolvedPlaybackSource.Stream(itemId = "next", url = "http://stream", title = "Next Song", mediaSourceId = "ms1")
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "http://img"
@@ -167,7 +167,7 @@ class AudioCrossfaderTest {
         every { primaryPlayer.duration } returns 30_000L
         every { primaryPlayer.currentPosition } returns 29_500L
         every { primaryPlayer.currentMediaItemIndex } returns 0
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(IllegalStateException("down"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(IllegalStateException("down"))
 
         val crossfader = crossfader()
         crossfader.maybeStart()
@@ -201,7 +201,7 @@ class AudioCrossfaderTest {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
         context = context,
         effectsProcessor = effectsProcessor,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { repeatMode },

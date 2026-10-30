@@ -8,9 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -28,6 +26,21 @@ import kotlinx.serialization.Serializable
  * keys, its setters, its read projection, and its reset-key list end-to-end.
  * Mirrors the `PlaybackStore` / `AppearanceStore` shape.
  *
+ * **Spec derivation:** every key this store owns is declared exactly once as a
+ * row in [SyncPlayCastPreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding (or
+ * [PreferenceSpec.readStored] for the declaration-only string rows), the
+ * encoded single-key setters and [restore] rows delegate to the rows' derived
+ * writes, and [resetKeysFor] filters the rows by reset category.
+ *
+ * **Hand-written residuals (the documented opt-outs — the declaration-only
+ * string rows have no derived write):** [setPreferredRenderer] writes the
+ * renderer or REMOVES the key for null, [setDvrRecordingQuality] keeps its
+ * hand write line, and [restore]'s `preferred_renderer` row keeps the same
+ * nullable guard — a removal / a guard cannot be a row encoding.
+ *
  * **Note:** `live_stream_option` is intentionally NOT owned here — it belongs to
  * [com.raulshma.jellyplay.core.datastore.playback.PlaybackStore].
  *
@@ -40,61 +53,72 @@ class SyncPlayCastStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [SyncPlayCastPreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key of
+     * the same name). Kept as a plain object rather than folded into the rows
+     * because it is the reflection anchor for the JVM reset-coverage guard.
+     */
     internal object Keys {
-        val SYNC_PLAY_JOIN_BEHAVIOR = stringPreferencesKey("sync_play_join_behavior")
-        val SYNC_PLAY_TOLERANCE_MS = longPreferencesKey("sync_play_tolerance_ms")
-        val SYNC_PLAY_AUTO_ACCEPT_INVITES = booleanPreferencesKey("sync_play_auto_accept_invites")
-        val DEFAULT_CASTING_STRATEGY = stringPreferencesKey("default_casting_strategy")
-        val BACKGROUND_CASTING_ENABLED = booleanPreferencesKey("background_casting_enabled")
-        val PREFERRED_RENDERER = stringPreferencesKey("preferred_renderer")
-        val DVR_PRE_PADDING_MINUTES = intPreferencesKey("dvr_pre_padding_minutes")
-        val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
-        val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
+        val SYNC_PLAY_JOIN_BEHAVIOR = stringPreferencesKey(SyncPlayCastPreferenceSpecs.SYNC_PLAY_JOIN_BEHAVIOR.keyName)
+        val SYNC_PLAY_TOLERANCE_MS = longPreferencesKey(SyncPlayCastPreferenceSpecs.SYNC_PLAY_TOLERANCE_MS.keyName)
+        val SYNC_PLAY_AUTO_ACCEPT_INVITES = booleanPreferencesKey(SyncPlayCastPreferenceSpecs.SYNC_PLAY_AUTO_ACCEPT_INVITES.keyName)
+        val DEFAULT_CASTING_STRATEGY = stringPreferencesKey(SyncPlayCastPreferenceSpecs.DEFAULT_CASTING_STRATEGY.keyName)
+        val BACKGROUND_CASTING_ENABLED = booleanPreferencesKey(SyncPlayCastPreferenceSpecs.BACKGROUND_CASTING_ENABLED.keyName)
+        val PREFERRED_RENDERER = stringPreferencesKey(SyncPlayCastPreferenceSpecs.PREFERRED_RENDERER.keyName)
+        val DVR_PRE_PADDING_MINUTES = intPreferencesKey(SyncPlayCastPreferenceSpecs.DVR_PRE_PADDING_MINUTES.keyName)
+        val DVR_POST_PADDING_MINUTES = intPreferencesKey(SyncPlayCastPreferenceSpecs.DVR_POST_PADDING_MINUTES.keyName)
+        val DVR_RECORDING_QUALITY = stringPreferencesKey(SyncPlayCastPreferenceSpecs.DVR_RECORDING_QUALITY.keyName)
     }
 
     val syncPlayCast: StateFlow<SyncPlayCastSlice> =
         dataStore.sliceStateFlow(scope, seed = SyncPlayCastSlice(), read = ::read)
 
+    /**
+     * Pure read of the SyncPlay + casting + DVR fields from a raw [Preferences]
+     * snapshot, each field delegated to its [SyncPlayCastPreferenceSpecs] row
+     * encoding. Exposed so the facade can fold these into the
+     * whole-`UserPreferences` projection without duplicating the read logic.
+     */
     internal fun read(prefs: Preferences): SyncPlayCastSlice = SyncPlayCastSlice(
-        syncPlayJoinBehavior = readSyncPlayJoinBehavior(prefs),
-        syncPlayToleranceMs = prefs[Keys.SYNC_PLAY_TOLERANCE_MS] ?: 100L,
-        syncPlayAutoAcceptInvites = PreferenceCodec.readBool(prefs, Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, "sync_play_auto_accept_invites", false),
-        defaultCastingStrategy = readDefaultCastingStrategy(prefs),
-        backgroundCastingEnabled = PreferenceCodec.readBool(prefs, Keys.BACKGROUND_CASTING_ENABLED, "background_casting_enabled", true),
-        preferredRenderer = prefs[Keys.PREFERRED_RENDERER],
-        dvrPrePaddingMinutes = PreferenceCodec.readInt(prefs, Keys.DVR_PRE_PADDING_MINUTES, "dvr_pre_padding_minutes", 0),
-        dvrPostPaddingMinutes = PreferenceCodec.readInt(prefs, Keys.DVR_POST_PADDING_MINUTES, "dvr_post_padding_minutes", 0),
-        dvrRecordingQuality = prefs[Keys.DVR_RECORDING_QUALITY] ?: "AUTO",
+        syncPlayJoinBehavior = SyncPlayCastPreferenceSpecs.SYNC_PLAY_JOIN_BEHAVIOR.readFrom(prefs),
+        syncPlayToleranceMs = SyncPlayCastPreferenceSpecs.SYNC_PLAY_TOLERANCE_MS.readFrom(prefs),
+        syncPlayAutoAcceptInvites = SyncPlayCastPreferenceSpecs.SYNC_PLAY_AUTO_ACCEPT_INVITES.readFrom(prefs),
+        defaultCastingStrategy = SyncPlayCastPreferenceSpecs.DEFAULT_CASTING_STRATEGY.readFrom(prefs),
+        backgroundCastingEnabled = SyncPlayCastPreferenceSpecs.BACKGROUND_CASTING_ENABLED.readFrom(prefs),
+        preferredRenderer = SyncPlayCastPreferenceSpecs.PREFERRED_RENDERER.readStored(prefs),
+        dvrPrePaddingMinutes = SyncPlayCastPreferenceSpecs.DVR_PRE_PADDING_MINUTES.readFrom(prefs),
+        dvrPostPaddingMinutes = SyncPlayCastPreferenceSpecs.DVR_POST_PADDING_MINUTES.readFrom(prefs),
+        dvrRecordingQuality = SyncPlayCastPreferenceSpecs.DVR_RECORDING_QUALITY.readStored(prefs),
     )
 
-    private fun readSyncPlayJoinBehavior(prefs: Preferences): SyncPlayJoinBehavior =
-        prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR].toEnumOrNull() ?: SyncPlayJoinBehavior.ASK
-
-    private fun readDefaultCastingStrategy(prefs: Preferences): CastingStrategy =
-        prefs[Keys.DEFAULT_CASTING_STRATEGY].toEnumOrNull() ?: CastingStrategy.ASK
-
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, the typed slots — is the row's, not
+    // re-declared here); the declaration-only string rows keep their
+    // hand-written lines (the documented opt-outs).
     // ------------------------------------------------------------------
 
     suspend fun setSyncPlayJoinBehavior(behavior: SyncPlayJoinBehavior) {
-        dataStore.edit { it[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = behavior.name }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.SYNC_PLAY_JOIN_BEHAVIOR.writeTo(it, behavior) }
     }
 
     suspend fun setSyncPlayToleranceMs(ms: Long) {
-        dataStore.edit { it[Keys.SYNC_PLAY_TOLERANCE_MS] = ms }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.SYNC_PLAY_TOLERANCE_MS.writeTo(it, ms) }
     }
 
     suspend fun setSyncPlayAutoAcceptInvites(enabled: Boolean) {
-        dataStore.edit { it[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = enabled }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.SYNC_PLAY_AUTO_ACCEPT_INVITES.writeTo(it, enabled) }
     }
 
     suspend fun setDefaultCastingStrategy(strategy: CastingStrategy) {
-        dataStore.edit { it[Keys.DEFAULT_CASTING_STRATEGY] = strategy.name }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.DEFAULT_CASTING_STRATEGY.writeTo(it, strategy) }
     }
 
     suspend fun setBackgroundCastingEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BACKGROUND_CASTING_ENABLED] = enabled }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.BACKGROUND_CASTING_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setPreferredRenderer(renderer: String?) {
@@ -104,11 +128,11 @@ class SyncPlayCastStore constructor(
     }
 
     suspend fun setDvrPrePaddingMinutes(minutes: Int) {
-        dataStore.edit { it[Keys.DVR_PRE_PADDING_MINUTES] = minutes }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.DVR_PRE_PADDING_MINUTES.writeTo(it, minutes) }
     }
 
     suspend fun setDvrPostPaddingMinutes(minutes: Int) {
-        dataStore.edit { it[Keys.DVR_POST_PADDING_MINUTES] = minutes }
+        dataStore.edit { SyncPlayCastPreferenceSpecs.DVR_POST_PADDING_MINUTES.writeTo(it, minutes) }
     }
 
     suspend fun setDvrRecordingQuality(quality: String) {
@@ -128,57 +152,57 @@ class SyncPlayCastStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. Every key owned here descends under
-     * `PreferenceResetCategory.SYNCPLAY_CASTING`. `LIVE_STREAM_OPTION` is owned
-     * by `PlaybackStore`, and the runtime recall slots (favorite channels,
-     * recent DLNA devices, live-TV last channel) are excluded from category
-     * reset by the facade, so none appear in any category list here.
+     * [category] — the [SyncPlayCastPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. Every key owned here
+     * descends under `PreferenceResetCategory.SYNCPLAY_CASTING`.
+     * `LIVE_STREAM_OPTION` is owned by `PlaybackStore`, and the runtime recall
+     * slots (favorite channels, recent DLNA devices, live-TV last channel) are
+     * excluded from category reset by the facade, so none appear in any
+     * category list here.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(
-            Keys.SYNC_PLAY_JOIN_BEHAVIOR, Keys.SYNC_PLAY_TOLERANCE_MS,
-            Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
-            Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
-            Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
-            Keys.DVR_RECORDING_QUALITY,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        SyncPlayCastPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences] (including the
-     * nullable [Keys.PREFERRED_RENDERER] guard).
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with) — except [Keys.PREFERRED_RENDERER], whose nullable guard stays the
+     * hand-written line (an absent-key restore cannot be a row write).
      */
     suspend fun restore(slice: SyncPlayCastSlice) {
         dataStore.edit { prefs ->
-            prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = slice.syncPlayJoinBehavior.name
-            prefs[Keys.SYNC_PLAY_TOLERANCE_MS] = slice.syncPlayToleranceMs
-            prefs[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = slice.syncPlayAutoAcceptInvites
-            prefs[Keys.DEFAULT_CASTING_STRATEGY] = slice.defaultCastingStrategy.name
-            prefs[Keys.BACKGROUND_CASTING_ENABLED] = slice.backgroundCastingEnabled
+            SyncPlayCastPreferenceSpecs.SYNC_PLAY_JOIN_BEHAVIOR.writeTo(prefs, slice.syncPlayJoinBehavior)
+            SyncPlayCastPreferenceSpecs.SYNC_PLAY_TOLERANCE_MS.writeTo(prefs, slice.syncPlayToleranceMs)
+            SyncPlayCastPreferenceSpecs.SYNC_PLAY_AUTO_ACCEPT_INVITES.writeTo(prefs, slice.syncPlayAutoAcceptInvites)
+            SyncPlayCastPreferenceSpecs.DEFAULT_CASTING_STRATEGY.writeTo(prefs, slice.defaultCastingStrategy)
+            SyncPlayCastPreferenceSpecs.BACKGROUND_CASTING_ENABLED.writeTo(prefs, slice.backgroundCastingEnabled)
             slice.preferredRenderer?.let { prefs[Keys.PREFERRED_RENDERER] = it }
-            prefs[Keys.DVR_PRE_PADDING_MINUTES] = slice.dvrPrePaddingMinutes
-            prefs[Keys.DVR_POST_PADDING_MINUTES] = slice.dvrPostPaddingMinutes
+            SyncPlayCastPreferenceSpecs.DVR_PRE_PADDING_MINUTES.writeTo(prefs, slice.dvrPrePaddingMinutes)
+            SyncPlayCastPreferenceSpecs.DVR_POST_PADDING_MINUTES.writeTo(prefs, slice.dvrPostPaddingMinutes)
             prefs[Keys.DVR_RECORDING_QUALITY] = slice.dvrRecordingQuality
         }
     }
 }
 
 /**
- * The SyncPlay + casting + DVR preference slice. Plain data class. Defaults
- * mirror the projection defaults in [SyncPlayCastStore.read].
+ * The SyncPlay + casting + DVR preference slice. Plain data class.
+ * Every default IS its [SyncPlayCastPreferenceSpecs] row's declared default —
+ * read off the row via a plain accessor, so a preference's default is stated
+ * exactly once, in its spec, and cannot drift between the spec (what an absent
+ * key reads) and the slice (what a fresh in-memory instance serves). The
+ * spec-default equality is pinned field-for-field by
+ * `SyncPlayCastSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class SyncPlayCastSlice(
-    val syncPlayJoinBehavior: SyncPlayJoinBehavior = SyncPlayJoinBehavior.ASK,
-    val syncPlayToleranceMs: Long = 100L,
-    val syncPlayAutoAcceptInvites: Boolean = false,
-    val defaultCastingStrategy: CastingStrategy = CastingStrategy.ASK,
-    val backgroundCastingEnabled: Boolean = true,
-    val preferredRenderer: String? = null,
-    val dvrPrePaddingMinutes: Int = 0,
-    val dvrPostPaddingMinutes: Int = 0,
-    val dvrRecordingQuality: String = "AUTO",
+    val syncPlayJoinBehavior: SyncPlayJoinBehavior = SyncPlayCastPreferenceSpecs.SYNC_PLAY_JOIN_BEHAVIOR.default,
+    val syncPlayToleranceMs: Long = SyncPlayCastPreferenceSpecs.SYNC_PLAY_TOLERANCE_MS.default,
+    val syncPlayAutoAcceptInvites: Boolean = SyncPlayCastPreferenceSpecs.SYNC_PLAY_AUTO_ACCEPT_INVITES.default,
+    val defaultCastingStrategy: CastingStrategy = SyncPlayCastPreferenceSpecs.DEFAULT_CASTING_STRATEGY.default,
+    val backgroundCastingEnabled: Boolean = SyncPlayCastPreferenceSpecs.BACKGROUND_CASTING_ENABLED.default,
+    val preferredRenderer: String? = SyncPlayCastPreferenceSpecs.PREFERRED_RENDERER.default,
+    val dvrPrePaddingMinutes: Int = SyncPlayCastPreferenceSpecs.DVR_PRE_PADDING_MINUTES.default,
+    val dvrPostPaddingMinutes: Int = SyncPlayCastPreferenceSpecs.DVR_POST_PADDING_MINUTES.default,
+    val dvrRecordingQuality: String = SyncPlayCastPreferenceSpecs.DVR_RECORDING_QUALITY.default,
 )

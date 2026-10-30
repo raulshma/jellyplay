@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.concurrency.RestartableJob
 import com.raulshma.jellyplay.core.data.network.ServerHealthMonitor
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -51,7 +51,7 @@ class SessionCoordinator(
     private val remoteControlReceiver: RemoteControlReceiver,
     private val widgetWorkScheduler: WidgetWorkScheduler,
     private val cacheMaintenanceInitializer: CacheMaintenanceInitializer,
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
 ) : ShellCoordinator() {
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
@@ -185,7 +185,7 @@ class SessionCoordinator(
     /** Re-fetches library folders for the TV navigation drawer. */
     fun refreshLibraryFolders() {
         commandScope.launch {
-            mediaRepository.getLibraryFolders()
+            libraryFeed.getLibraryFolders(force = false)
                 .onSuccess { _libraryFolders.value = it }
         }
     }

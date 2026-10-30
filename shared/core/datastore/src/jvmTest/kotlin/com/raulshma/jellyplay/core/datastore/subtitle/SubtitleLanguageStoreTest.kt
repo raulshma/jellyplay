@@ -172,4 +172,61 @@ class SubtitleLanguageStoreTest {
         assertFalse(store.subtitle.first().languageRules.isActive)
         assertEquals(com.raulshma.jellyplay.core.model.LanguageRuleSet(), store.subtitle.first().languageRules)
     }
+
+    // ── migrateLegacyFontPaths: the one-shot, gated font-path rename ─────────
+
+    private fun style(path: String?) = SubtitleStyle(fontFamilyPath = path)
+
+    @Test
+    fun `migrateLegacyFontPaths rewrites every selected-font path under the legacy prefix`() = runTest {
+        store.setSubtitleStyle(style("/data/user/0/app/cache/subtitle-fonts/user.ttf"))
+        store.setHdrSubtitleStyle(style("/data/user/0/app/cache/subtitle-fonts/hdr.ttf"))
+        store.setSubtitleStylePresets(
+            listOf(
+                com.raulshma.jellyplay.core.model.SubtitleStylePreset("kept", style("/other/dir/keep.ttf")),
+                com.raulshma.jellyplay.core.model.SubtitleStylePreset(
+                    "moved",
+                    style("/data/user/0/app/cache/subtitle-fonts/preset.ttf"),
+                ),
+            ),
+        )
+
+        store.migrateLegacyFontPaths(
+            legacyPathPrefix = "/data/user/0/app/cache/subtitle-fonts",
+            newPathPrefix = "/data/user/0/app/files/subtitle-fonts",
+        )
+
+        val slice = store.subtitle.first()
+        assertEquals("/data/user/0/app/files/subtitle-fonts/user.ttf", slice.subtitleStyle.fontFamilyPath)
+        assertEquals("/data/user/0/app/files/subtitle-fonts/hdr.ttf", slice.hdrSubtitleStyle.fontFamilyPath)
+        assertEquals(
+            listOf(
+                "/other/dir/keep.ttf",
+                "/data/user/0/app/files/subtitle-fonts/preset.ttf",
+            ),
+            slice.userStylePresets.map { it.style.fontFamilyPath },
+        )
+    }
+
+    @Test
+    fun `migrateLegacyFontPaths latches - a second call is a no-op even with stale paths`() = runTest {
+        val legacy = "/data/user/0/app/cache/subtitle-fonts"
+        store.setSubtitleStyle(style("$legacy/a.ttf"))
+        store.migrateLegacyFontPaths(legacy, "/data/user/0/app/files/subtitle-fonts")
+        assertEquals("/data/user/0/app/files/subtitle-fonts/a.ttf", store.subtitle.first().subtitleStyle.fontFamilyPath)
+
+        // The gate is persisted, not in-memory: a NEW store instance over the
+        // same file (what the next process looks like) also skips the rewrite.
+        val freshStore = SubtitleLanguageStore(dataStore, scope)
+        freshStore.migrateLegacyFontPaths(legacy, "/somewhere/else")
+        assertEquals("/data/user/0/app/files/subtitle-fonts/a.ttf", freshStore.subtitle.first().subtitleStyle.fontFamilyPath)
+    }
+
+    @Test
+    fun `migrateLegacyFontPaths leaves non-legacy paths and runs once across processes`() = runTest {
+        // A user-picked font that never lived in the legacy dir stays put.
+        store.setSubtitleStyle(style("/storage/emulated/0/Download/font.ttf"))
+        store.migrateLegacyFontPaths("/cache/nowhere", "/files/nowhere")
+        assertEquals("/storage/emulated/0/Download/font.ttf", store.subtitle.first().subtitleStyle.fontFamilyPath)
+    }
 }

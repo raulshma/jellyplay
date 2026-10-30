@@ -224,7 +224,7 @@ fun MusicHomeScreen(
                             MusicHomeSpotlight(
                                 item = spotlightItem,
                                 eyebrow = stringResource(spotlightSection.type.displayNameRes),
-                                imageUrl = viewModel.getImageUrl(spotlightItem.id),
+                                imageUrl = viewModel.artworkUrls.poster(spotlightItem),
                                 isExpanded = isExpanded,
                                 isTv = isTv,
                                 playFocusRequester = initialFocusRequester,
@@ -292,6 +292,9 @@ fun MusicHomeScreen(
                                         viewModel.playArtist(artistId)
                                     },
                                     onViewAllClick = onArtistsClick,
+                                    // The section rows' builders stay raw-id: the section
+                                    // components resolve by item id internally, so no
+                                    // MediaItem (hence no tag) is in hand at this call site.
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
                                     modifier = Modifier.fillMaxWidth().widthIn(max = 1440.dp),
                                     headerFocusRequester = artistsHeader,

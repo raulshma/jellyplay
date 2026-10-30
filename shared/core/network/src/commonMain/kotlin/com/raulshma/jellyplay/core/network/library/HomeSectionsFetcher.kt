@@ -1,3 +1,5 @@
+@file:OptIn(kotlin.concurrent.atomics.ExperimentalAtomicApi::class)
+
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
@@ -12,7 +14,6 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
-import com.raulshma.jellyplay.core.model.JellyPlayRowEntry
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -22,16 +23,16 @@ import com.raulshma.jellyplay.core.model.RecommendationResult
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.model.TtlCacheGate
 import com.raulshma.jellyplay.core.model.cacheThrough
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.network.api.JellyPlayHeroCandidate
 import com.raulshma.jellyplay.core.network.api.JellyPlayHeroResult
-import com.raulshma.jellyplay.core.network.api.JellyPlayRowItem
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowResult
 import kotlin.concurrent.Volatile
+import kotlin.concurrent.atomics.AtomicLong
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -55,10 +56,10 @@ import kotlinx.coroutines.sync.Semaphore
  * Construction scope (ADR-0008): implemented by `LibraryApiClientImpl` in
  * production (for free — the signatures above are borrowed verbatim from its
  * [LibraryApiClient] supertype, so the same overrides serve both interfaces)
- * and by test fakes — the real-stack contract suite in core:data's jvmTest
- * (`HomeFeedRealStackContractTest`) builds the fetcher on a module-local
- * fake of this interface. Public only because the fetcher's constructor
- * exposes it; direct implementations elsewhere are not supported.
+ * and by the shared test-fixtures double — the real-stack contract suite in
+ * core:data's jvmTest (`HomeFeedRealStackContractTest`) builds the fetcher on
+ * it. Public only because the fetcher's constructor exposes it; direct
+ * implementations elsewhere are not supported.
  */
 public interface HomeSectionSources {
     suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>>
@@ -200,9 +201,9 @@ public interface JellyPlayHomeSectionSources {
  *    `/Items/Latest` calls and collects in folder order.
  *  - Custom discover rows of BOTH sources fetch in one path (see
  *    [fetchDiscoverRows]): Jellyfin rows per-row memoised behind the
- *    dice-roll generation guard (the repo-owned cache-write token this
- *    class mirrors — see [observedGeneration]), Seerr rows behind a
- *    whole-group TTL gate +
+ *    dice-roll generation guard (this class's own [discoverRowGeneration]
+ *    counter, bumped by the roll operation — see [rerollDiscoverRow]),
+ *    Seerr rows behind a whole-group TTL gate +
  *    last-known-good (the policy the feature layer's
  *    `fetchCustomSeerrRows` used to own, moved here when the parallel
  *    reimplementation died), emitting the DISCOVER block ALREADY ordered by
@@ -284,7 +285,7 @@ public class HomeSectionsFetcher(
      * Custom discover rows. Longer TTL than the latest/similar caches
      * ([HomeFreshness.DISCOVER_ROW_TTL_MS]): a RANDOM-sorted row must stay
      * stable across the 60s periodic refresh (no per-minute reshuffle); the
-     * dice affordance ([invalidateDiscoverRow]) and a forced fetch re-roll.
+     * dice affordance ([rerollDiscoverRow]) and a forced fetch re-roll.
      */
     private val homeDiscoverRowCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS)
 
@@ -293,25 +294,20 @@ public class HomeSectionsFetcher(
 
     /**
      * The write guard for the Jellyfin discover-row memo reads
-     * ([fetchJellyfinDiscoverRows] and [refreshSection]'s DISCOVER arm): a
-     * MIRROR of the data layer's ONE home cache-write generation token,
-     * delivered as [HomeWriteGeneration] by the two mutating
-     * [HomeSectionsCachePort] verbs ([invalidateDiscoverRow] /
-     * [seedDiscoverRow]). This class owns no counter — the mirror is provably
-     * fed by the token's single owner (the repo funnel; the roll protocol's
-     * rules live on `HomeFeed.rerollDiscoverRow`). `@Volatile` because the
-     * writers arrive through port calls on the caller's thread while the
-     * guard reads ride fetch coroutines — the same explicit-visibility idiom
-     * as [lastKnownSeerrRows]. The guard compares captured-vs-current values
-     * only (never against a constant), so the mirror skipping the repo bump
-     * that has no port verb (the single-row refetch's) changes no outcome.
-     * One decision window is deliberately tighter than the retired internal
-     * counter: the seed verb also advances the mirror, so a row writer that
-     * captured between the roll's invalidate and its seed is rejected instead
-     * of pinning a pre-roll payload — strictly safer, never looser.
+     * ([fetchJellyfinDiscoverRows] and [refreshSection]'s DISCOVER arm) and
+     * for the roll's own two memo mutations: ONE fetcher-owned monotonic
+     * counter, bumped by [rerollDiscoverRow]'s drop and seed halves — the
+     * two points where the memo's ordering matters (the bump-at-invalidate-
+     * AND-commit rule, owned HERE where the memo and its choreography live;
+     * the data layer's assembled-payload cache keeps its own repo-local
+     * generation, bumped when an operation hands back "the row changed" — no
+     * token crosses the module seam). Atomic because concurrent rolls of
+     * different rows bump from different callers' contexts. The guard
+     * compares captured-vs-current values only (never against a constant),
+     * so the data layer's other bumps (which never touched this counter)
+     * change no outcome.
      */
-    @Volatile
-    private var observedGeneration: HomeWriteGeneration = HomeWriteGeneration.INITIAL
+    private val discoverRowGeneration = AtomicLong(0L)
 
     // ── Seerr discover rows (moved from the feature layer's ─────────────────
     // fetchCustomSeerrRows) ─────────────────────────────────────────────────
@@ -327,30 +323,21 @@ public class HomeSectionsFetcher(
     // switch neither voids nor needs to void it.
     @Volatile
     private var lastKnownSeerrRows: List<HomeSection> = emptyList()
-    private val seerrRowsGate = DiscoverRowsTtlGate(HomeFreshness.DISCOVER_TTL_MS)
+    private val seerrRowsGate = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
 
     /**
-     * Plugin rows (PLUGIN_ROW — the seasonal row today). Identity-scoped like
-     * every entry (a user/server switch misses by construction) with the
-     * sibling sub-call TTL ([HomeFreshness.NETWORK_SUBCALL_TTL_MS]): the row
-     * carries resolved MediaItems with per-item UserData, so it rides the
-     * same 2-minute memo the latest/similar rows ride and the same
-     * user-data-write invalidation ([invalidateCaches]). Session-scoped by
-     * construction — the fetcher lives as long as the client single. The
-     * cached VALUE is the mapped row (title + resolved entries), so a cache
-     * hit costs zero port calls and the plugin's row title survives the
-     * memo.
+     * The plugin content source module ([PluginHomeContent]) — the plugin
+     * family's leaves (the seasonal + titled custom rows and the curated
+     * hero: gate → TTL memo → fetch → resolve → map, plus the two memos'
+     * wholesale drop). Constructed through the already-declared
+     * [JellyPlayHomeSectionSources] port; the fetcher keeps the schedule
+     * (the two plugin deferreds below + the single-row refresh arms) and
+     * delegates the leaves to it.
      */
-    private val homePluginRowCache = TtlCache<PluginRowValue>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
-
-    /**
-     * The plugin-curated hero: identity-scoped like every entry with the
-     * sibling sub-call TTL — the cached VALUE is the resolved entry list (full
-     * MediaItems with per-item UserData), so a hit costs zero port calls and a
-     * watched/favorite write must not let the memo serve the pre-write hero
-     * (cleared in [invalidateCaches] with the plugin-row memo).
-     */
-    private val homeCuratedHeroCache = TtlCache<List<CuratedHeroEntry>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
+    private val pluginHomeContent = PluginHomeContent(
+        jellyPlaySources = jellyPlaySources,
+        cacheIdentity = cacheIdentity,
+    )
 
     /**
      * The registry the wholesale drop iterates — this class's cacheSpecs
@@ -366,9 +353,7 @@ public class HomeSectionsFetcher(
         homeLatestMediaCache,
         homeSimilarCache,
         homeDiscoverRowCache,
-        homePluginRowCache,
-        homeCuratedHeroCache,
-    )
+    ) + pluginHomeContent.subcallCaches
 
     /**
      * Drops every home sub-call cache in [homeSubcallCaches] so the next home
@@ -384,47 +369,52 @@ public class HomeSectionsFetcher(
     }
 
     /**
-     * Drops ONE discover row's memoised items (dice affordance): the next home
-     * fetch re-queries that row — re-rolling a RANDOM sort — while sibling
-     * rows keep their cached items. Identity-scoped like every entry, so the
-     * evict can never touch another user's row. Ordering and the generation
-     * value are roll-protocol concerns owned by the data layer's funnel —
-     * [generation] IS the repo's post-bump cache-write token, mirrored BEFORE
-     * the drop (the same bump-then-drop order this guard always observed);
-     * see `HomeFeed.rerollDiscoverRow`.
+     * The dice re-roll as ONE complete operation — the invalidate → fetch →
+     * seed choreography owned HERE, where the row memo it choreographs (and
+     * its write guard) live. The ordering, the race windows and the bump rule
+     * are this operation's own; the data layer runs its assembled-payload
+     * bump when this returns (see `HomeFeed.rerollDiscoverRow`):
+     *
+     *  1. drop-half bump ([discoverRowGeneration]) + the row's memo drop —
+     *     identity-scoped like every entry, so the evict can never touch
+     *     another user's row; the next memo read re-queries the row (re-rolling
+     *     a RANDOM sort) instead of replaying pre-roll items, while sibling
+     *     rows keep theirs.
+     *  2. the RAW row fetch — the memo's own cache-through read is bypassed
+     *     by construction (a roll must not serve the memo it is about to
+     *     replace).
+     *  3. commit-half bump + the memo write, ONLY on a non-empty success —
+     *     the rolled set is memoised as if fetched, so it survives the
+     *     periodic refresh; a failed or empty fetch leaves nothing behind but
+     *     the pre-fetch drop (the next home fetch re-queries the row instead
+     *     of replaying or pinning pre-roll items).
+     *
+     * A sub-call already on the wire when the roll lands captured a
+     * pre-roll generation and is refused at its write (captured ≠ current
+     * after either bump) — returned to its caller, never pinned; one that
+     * captured between the drop and the seed is rejected too (the commit bump)
+     * — the deliberately tighter window.
      */
-    fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
-        observedGeneration = generation
+    suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
+        discoverRowGeneration.addAndFetch(1L)
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_$rowId")
+        homeDiscoverRowCache.removeByKeyPrefix(identity, "discover_${row.id}")
+        val result = sources.getDiscoverRowItems(row)
+        val items = result.getOrNull()
+        if (!items.isNullOrEmpty()) {
+            discoverRowGeneration.addAndFetch(1L)
+            homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
+        }
+        return result
     }
 
     /**
      * The discover-row sub-call cache key (minus identity scoping, which
      * [TtlCache] applies): the single home of the key grammar — both the
-     * fetch path ([fetchDiscoverRows]) and [seedDiscoverRow] resolve their
-     * keys through it, so the two writers cannot drift.
+     * fetch path ([fetchDiscoverRows]) and [rerollDiscoverRow]'s commit
+     * resolve their keys through it, so the two writers cannot drift.
      */
     private fun discoverRowCacheKey(rowId: String, limit: Int): String = "discover_${rowId}_$limit"
-
-    /**
-     * Memoises a discover row's freshly fetched items as if the fetcher had
-     * fetched them (the dice roll's commit): the next home fetch serves the
-     * rolled items from this cache instead of re-querying the server, so the
-     * row the user sees survives the next periodic refresh rather than
-     * reverting to the pre-roll payload (or silently re-rolling again).
-     * No-op on an empty list (which also skips the mirror write — an empty
-     * commit advances no generation, matching the repo funnel's early
-     * return); the commit-time generation arrives as the [generation]
-     * parameter — the repo funnel's post-bump token, a roll-protocol rule
-     * owned by the data layer (see `HomeFeed.rerollDiscoverRow`).
-     */
-    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
-        if (items.isEmpty()) return
-        observedGeneration = generation
-        val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        homeDiscoverRowCache.put(identity, discoverRowCacheKey(row.id, row.limit), items)
-    }
 
     suspend fun fetch(query: HomeSectionQuery, force: Boolean = false): HomeSectionsResult = coroutineScope {
         // Only enabledSections earns a local (gates every deferred launch
@@ -694,7 +684,7 @@ public class HomeSectionsFetcher(
         identity,
         discoverRowCacheKey(row.id, row.limit),
         force = force,
-        currentEpoch = { observedGeneration.value },
+        currentEpoch = { discoverRowGeneration.load() },
     ) {
         sources.getDiscoverRowItems(row)
     }
@@ -710,9 +700,9 @@ public class HomeSectionsFetcher(
      * two implementations this unified):
      *  - JELLYFIN rows: semaphore-bounded at 3, memoised per row in
      *    [homeDiscoverRowCache] (RANDOM stability — see its KDoc) behind the
-     *    dice-roll generation guard ([observedGeneration] — the repo-owned
-     *    token mirrored in), degraded per row (a failing row is dropped,
-     *    never fatal — the pinned-section policy).
+     *    dice-roll generation guard ([discoverRowGeneration] — bumped by the
+     *    roll operation, [rerollDiscoverRow]), degraded per row (a failing
+     *    row is dropped, never fatal — the pinned-section policy).
      *  - SEERR rows: semaphore-bounded at 3 behind the whole-group TTL gate
      *    ([seerrRowsGate]) with last-known-good on total failure — an outage
      *    neither blanks the rows nor pins the blank; partial success keeps
@@ -843,204 +833,37 @@ public class HomeSectionsFetcher(
         )
     }
 
-    // ── Plugin rows (PLUGIN_ROW — the companion server plugin, ADR 0010) ────
+    // ── Plugin rows + curated hero (the companion server plugin, ADR 0010) ──
     //
-    // The WHAT gate is the capability registry (the port's suspend gates —
-    // UNKNOWN probes once per session, UNAVAILABLE is trusted), the TTL memo
-    // is [homePluginRowCache], and failures degrade to a dropped row (the
-    // pinned-section policy: a curated plugin row must never fail home, and a
-    // plugin 404 legitimately means "no row this season"). The cached value
-    // is the MAPPED row (title + resolved entries), so a hit costs zero port
-    // calls.
+    // The plugin family's leaves (the WHAT capability gates, the two TTL
+    // memos, the fetch→resolve→map arms) live on [PluginHomeContent] —
+    // everything one plugin content source knows about itself (the home row
+    // module's shape). These delegates keep every existing call site — the
+    // batch schedule below, the single-row refresh arms' context lambdas and
+    // the leaf-test suite — on the fetcher surface.
 
-    /**
-     * The seasonal row for the batch home fetch: gate → TTL memo →
-     * [pluginRowCacheThrough] under the `seasonal` instance id. Empty list =
-     * gated off / unconfigured / empty payload / failed — silently absent,
-     * never an error (the assembler emits nothing for it).
-     */
-    private suspend fun fetchSeasonalPluginRow(force: Boolean, identity: CacheIdentity): List<HomeSection> {
-        if (jellyPlaySources == null || !jellyPlaySources.seasonalRowsEnabled()) return emptyList()
-        val section = pluginRowCacheThrough(
-            cacheKey = "jellyplay_seasonal",
-            force = force,
-            identity = identity,
-        ) { jellyPlaySources.getSeasonalRow(keyword = null) }
-        return listOfNotNull(section)
-    }
+    /** The seasonal row for the batch home fetch — [PluginHomeContent.fetchSeasonalPluginRow]. */
+    private suspend fun fetchSeasonalPluginRow(force: Boolean, identity: CacheIdentity): List<HomeSection> =
+        pluginHomeContent.fetchSeasonalPluginRow(force = force, identity = identity)
 
-    /**
-     * The admin-defined titled custom rows, in the plugin's configured order:
-     * the enumerate endpoint (`GET jellyplay/rows`) lists the titles, each is
-     * mapped through [fetchPluginCustomRow] (same gate, same TTL memo, same
-     * batched id resolution). A catalog failure or empty catalog = no rows,
-     * silently absent. Public for the leaf-test suite.
-     */
+    /** The admin-defined titled custom rows in plugin config order — [PluginHomeContent.fetchTitledPluginRows]. */
     public suspend fun fetchTitledPluginRows(
         force: Boolean = false,
         identity: CacheIdentity? = null,
-    ): List<HomeSection> {
-        if (jellyPlaySources == null || !jellyPlaySources.customRowsEnabled()) return emptyList()
-        val resolvedIdentity = identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN
-        val catalog = runCatchingRethrowingCancellation {
-            jellyPlaySources.getCustomRowCatalog().getOrNull()
-        }.getOrNull() ?: return emptyList()
-        return catalog.rows.mapNotNull { definition ->
-            fetchPluginCustomRow(title = definition.title, force = force, identity = resolvedIdentity)
-        }
-    }
+    ): List<HomeSection> = pluginHomeContent.fetchTitledPluginRows(force = force, identity = identity)
 
-    /**
-     * ONE admin-defined titled custom row, keyed by its exact title — mapped
-     * through the enumerate catalog by [fetchTitledPluginRows] for the batch
-     * home path; also public for direct single-row consumers (deep links).
-     */
+    /** ONE titled custom row by its exact title — [PluginHomeContent.fetchPluginCustomRow]. */
     public suspend fun fetchPluginCustomRow(
         title: String,
         force: Boolean = false,
         identity: CacheIdentity? = null,
-    ): HomeSection? {
-        if (jellyPlaySources == null || !jellyPlaySources.customRowsEnabled()) return null
-        return pluginRowCacheThrough(
-            cacheKey = "jellyplay_custom_$title",
-            force = force,
-            identity = identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN,
-        ) { jellyPlaySources.getCustomRow(title = title) }
-    }
+    ): HomeSection? = pluginHomeContent.fetchPluginCustomRow(title = title, force = force, identity = identity)
 
-    /**
-     * The one cache-through + section-builder shape both plugin row reads
-     * share: a miss fetches the raw payload, resolves every `localItemId`
-     * through one batched [JellyPlayHomeSectionSources.getItemsByIds] call,
-     * and maps to the PLUGIN_ROW [HomeSection] under [cacheKey]'s instance
-     * id. A null payload (plugin 404 — no such row), an empty item list, or a
-     * failed read yields null (no section); a resolution failure degrades the
-     * affected entries to fallback tiles instead of dropping the row.
-     */
-    private suspend fun pluginRowCacheThrough(
-        cacheKey: String,
-        force: Boolean,
-        identity: CacheIdentity,
-        fetch: suspend () -> Result<JellyPlayRowResult?>,
-    ): HomeSection? {
-        val value = homePluginRowCache.cacheThrough(identity, cacheKey, force = force) {
-            // A failed plugin read is a dropped row, not a fetch failure —
-            // normalize to an empty success so the memo policy (cache-through,
-            // drop-empty) stays the pinned-section one.
-            val payload = runCatchingRethrowingCancellation { fetch().getOrNull() }
-            Result.success(payload.getOrNull()?.let { row ->
-                PluginRowValue(
-                    title = row.title,
-                    entries = resolvePluginRowEntries(row.items),
-                )
-            } ?: PluginRowValue.EMPTY)
-        }.getOrDefault(PluginRowValue.EMPTY)
-        if (value.entries.isEmpty()) return null
-        val instanceId = cacheKey.removePrefix("jellyplay_")
-        return HomeSection(
-            id = HomeSectionType.PLUGIN_ROW.descriptor.idFor(instanceId),
-            // The plugin's row title is authoritative (it names the curated
-            // list, e.g. a Letterboxd collection); the descriptor's
-            // displayName is only the degenerate fallback.
-            title = value.title.ifBlank { HomeSectionType.PLUGIN_ROW.descriptor.displayName },
-            type = HomeSectionType.PLUGIN_ROW,
-            items = emptyList(),
-            jellyPlayRowEntries = value.entries,
-        )
-    }
-
-    /**
-     * Maps the raw wire items to [JellyPlayRowEntry]s in payload order,
-     * resolving the entries that carry a `localItemId` through ONE batched
-     * ids read. Per-entry resolution failure (or an id the server no longer
-     * knows) degrades that entry to a fallback tile — the row's shape is the
-     * plugin's curation order, preserved end-to-end.
-     */
-    private suspend fun resolvePluginRowEntries(items: List<JellyPlayRowItem>): List<JellyPlayRowEntry> {
-        if (items.isEmpty()) return emptyList()
-        val localIds = items.mapNotNull { it.localItemId }.distinct()
-        val resolved: Map<String, MediaItem> =
-            if (localIds.isEmpty()) {
-                emptyMap()
-            } else {
-                // Degrade, not fail: a lost ids read must not drop the row —
-                // every entry falls back to its title+year tile (the same
-                // policy as the classic-latest ids read in the client impl).
-                jellyPlaySources?.getItemsByIds(localIds)
-                    ?.getOrDefault(emptyList())
-                    .orEmpty()
-                    .associateBy { it.id }
-            }
-        return items.map { item ->
-            JellyPlayRowEntry(
-                title = item.title,
-                year = item.year,
-                localItem = item.localItemId?.let(resolved::get),
-            )
-        }
-    }
-
-    // ── Plugin-curated hero (the `hero` feature, beside the rows) ────
-    //
-    // The same leaf shape as the rows: the capability registry is the WHAT
-    // gate, the TTL memo is [homeCuratedHeroCache], and every failure mode
-    // degrades to an empty list — a curated hero must never fail home, and
-    // the hero's fallback IS the local candidate pool (there are no fallback
-    // tiles to keep, unlike a row).
-
-    /**
-     * The plugin-curated hero for the batch home fetch: gate → TTL memo →
-     * resolve under the `jellyplay_hero` cache key. Empty list = gated off /
-     * unconfigured / failed / nothing resolvable — silently absent, never an
-     * error. Public for the leaf-test suite (the rows' convention).
-     */
+    /** The plugin-curated hero — [PluginHomeContent.fetchCuratedHero]. */
     public suspend fun fetchCuratedHero(
         force: Boolean = false,
         identity: CacheIdentity? = null,
-    ): List<CuratedHeroEntry> {
-        if (jellyPlaySources == null || !jellyPlaySources.curatedHeroEnabled()) return emptyList()
-        return homeCuratedHeroCache.cacheThrough(
-            identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN,
-            "jellyplay_hero",
-            force = force,
-        ) {
-            // A failed plugin read is an empty hero, not a fetch failure —
-            // normalize to an empty success (the plugin-row arm's policy).
-            runCatchingRethrowingCancellation {
-                jellyPlaySources.getCuratedHero().getOrNull()
-                    ?.let { payload -> resolveCuratedHeroEntries(payload.candidates) }
-                    .orEmpty()
-            }
-        }.getOrDefault(emptyList())
-    }
-
-    /**
-     * Maps the wire candidates to [CuratedHeroEntry]s in serve order: the ids
-     * resolve through ONE batched [JellyPlayHomeSectionSources.getItemsByIds]
-     * read (the plugin rows' resolution pattern), and an id the server no
-     * longer knows DROPS — a curated hero never renders a fallback tile. The
-     * serve order is authoritative end-to-end; a duplicated id keeps its
-     * FIRST slot (the earlier candidate wins) and resolves once.
-     */
-    private suspend fun resolveCuratedHeroEntries(candidates: List<JellyPlayHeroCandidate>): List<CuratedHeroEntry> {
-        val deduped = candidates
-            .filter { it.itemId.isNotBlank() }
-            .distinctBy { it.itemId }
-        if (deduped.isEmpty()) return emptyList()
-        val resolved = jellyPlaySources?.getItemsByIds(deduped.map { it.itemId })
-            ?.getOrDefault(emptyList())
-            .orEmpty()
-            .associateBy { it.id }
-        return deduped.mapNotNull { candidate ->
-            resolved[candidate.itemId]?.let { item ->
-                CuratedHeroEntry(
-                    item = item,
-                    headline = candidate.headline?.takeIf { it.isNotBlank() },
-                    subhead = candidate.subhead?.takeIf { it.isNotBlank() },
-                )
-            }
-        }
-    }
+    ): List<CuratedHeroEntry> = pluginHomeContent.fetchCuratedHero(force = force, identity = identity)
 
     /**
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
@@ -1215,54 +1038,4 @@ public class HomeSectionsFetcher(
     }
 }
 
-/**
- * One mapped plugin row as the [homePluginRowCache] memo value: the plugin's
- * row title (authoritative header; [JellyPlayRowResult.title]) plus the
- * local-library-resolved entries. [EMPTY] is the "no row" memo (a null
- * payload or an all-dropped item list) — the section builder drops it.
- */
-private data class PluginRowValue(
-    val title: String,
-    val entries: List<JellyPlayRowEntry>,
-) {
-    companion object {
-        val EMPTY = PluginRowValue(title = "", entries = emptyList())
-    }
-}
 
-/**
- * Whole-group freshness gate for the Seerr discover rows — the semantics of
- * feature/home's `TtlCacheGate`, ported (that one stays in the feature module
- * for its legacy discover-grid use; this copy serves the network-layer rows).
- * The @Volatile fields matter here: unlike the feature twin (single-writer on
- * a main-confined dispatcher), this gate is read/written from fetch
- * coroutines on the caller's dispatcher, so cross-thread visibility is
- * explicit. Racing fetchers may both pass [shouldFetch] and both stamp —
- * benign (both writes are valid fresh results; last writer wins), the same
- * not-single-flight doctrine as [TtlCache] itself.
- */
-private class DiscoverRowsTtlGate(
-    private val ttlMs: Long,
-    private val clock: () -> Long = ::monotonicNowMillis,
-) {
-    @Volatile
-    private var lastFetchEpochMs: Long = 0L
-
-    @Volatile
-    private var invalidated: Boolean = true
-
-    /** True when the group is stale (never fetched, invalidated, or past the TTL). */
-    fun shouldFetch(now: Long = clock()): Boolean =
-        invalidated || now - lastFetchEpochMs >= ttlMs
-
-    /** Records a successful fetch at [now]; clears any pending invalidation. */
-    fun markFetched(now: Long = clock()) {
-        lastFetchEpochMs = now
-        invalidated = false
-    }
-
-    /** Forces the next [shouldFetch] to return true regardless of age. */
-    fun invalidate() {
-        invalidated = true
-    }
-}

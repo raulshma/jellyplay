@@ -753,7 +753,7 @@ internal fun SearchScreen(
                                         contentPadding = contentPad,
                                         spacing = spacing,
                                         cardWidth = seerrCardWidth,
-                                        getImageUrl = viewModel::getImageUrl,
+                                        posterUrl = viewModel::posterUrl,
                                         onItemClick = { item ->
                                             onItemClick(item.id, item.mediaType, item.parentId, item.name)
                                         },
@@ -912,9 +912,12 @@ internal fun SearchScreen(
                                         val itemProgress = item.progressFraction()
                                         // Memoize the per-item URL + click lambda (LibraryScreen
                                         // already does this) so a results re-emit (paging,
-                                        // typing) doesn't recompute getImageUrl or allocate a
-                                        // fresh onClick lambda per visible item.
-                                        val imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) }
+                                        // typing) doesn't recompute posterUrl or allocate a
+                                        // fresh onClick lambda per visible item. Keyed on the
+                                        // item (not its id): the URL carries the item's image
+                                        // tag, so a refreshed result with new artwork must
+                                        // re-resolve it.
+                                        val imageUrl = remember(item) { viewModel.posterUrl(item) }
                                         val onClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                             { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                         }
@@ -1289,7 +1292,8 @@ private fun SuggestionSection(
     contentPadding: androidx.compose.ui.unit.Dp,
     spacing: androidx.compose.ui.unit.Dp,
     cardWidth: androidx.compose.ui.unit.Dp,
-    getImageUrl: (String) -> String,
+    /** Poster URL for a suggestion — resolved from the item so its image tag rides along. */
+    posterUrl: (com.raulshma.jellyplay.core.model.MediaItem) -> String,
     onItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
     onFocusedItemChange: (com.raulshma.jellyplay.core.model.MediaItem?) -> Unit = {},
 ) {
@@ -1323,7 +1327,10 @@ private fun SuggestionSection(
             contentPadding = PaddingValues(end = contentPadding),
             onFocusedIndexChange = { index -> onFocusedItemChange(items.getOrNull(index)) },
         ) { _, item, itemModifier ->
-            val imageUrl = remember(item.id) { getImageUrl(item.id) }
+            // Keyed on the item (not its id): the URL carries the item's
+            // image tag, so a refreshed suggestion with new artwork must
+            // re-resolve it.
+            val imageUrl = remember(item) { posterUrl(item) }
             PosterCard(
                 item = item,
                 imageUrl = imageUrl,

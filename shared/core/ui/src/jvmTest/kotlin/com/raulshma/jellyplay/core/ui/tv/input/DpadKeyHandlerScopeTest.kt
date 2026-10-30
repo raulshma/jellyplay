@@ -137,7 +137,8 @@ class DpadKeyHandlerScopeTest {
             setOf(
                 DpadAction.Left, DpadAction.Right, DpadAction.Up, DpadAction.Down,
                 DpadAction.Select, DpadAction.Back, DpadAction.PlayPause,
-                DpadAction.FastForward, DpadAction.Rewind, DpadAction.Menu,
+                DpadAction.FastForward, DpadAction.Rewind, DpadAction.Next,
+                DpadAction.Previous, DpadAction.Menu,
             ),
             DpadAction.entries.toSet(),
         )

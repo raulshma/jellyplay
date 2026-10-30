@@ -854,6 +854,40 @@ private fun SeerrMediaInfo?.withPendingStatus(tmdbId: Int): SeerrMediaInfo =
     (this ?: SeerrMediaInfo(tmdbId = tmdbId))
         .copy(status = SeerrMediaStatus.PENDING)
 
+/**
+ * Adapts the movie detail payload to [SeerrSearchItem] for the request-dialog
+ * handoff (the Seerr detail screen's request button): the dialog and the
+ * request flow speak the search-item shape, so the detail rides the same card
+ * model the search/discover rows render. Only the fields the dialog reads are
+ * carried — the detail-only payload (credits, keywords, watch providers) has
+ * no counterpart there. The movie shape fills `title`/`releaseDate` (the TV
+ * adapter fills `name`/`firstAirDate`), so [SeerrSearchItem.displayName]
+ * picks the right column either way.
+ */
+fun SeerrMovieDetails.toSeerrSearchItem(): SeerrSearchItem = SeerrSearchItem(
+    id = id,
+    mediaType = "movie",
+    title = title,
+    overview = overview,
+    posterPath = posterPath,
+    releaseDate = releaseDate,
+    mediaInfo = mediaInfo,
+)
+
+/**
+ * TV counterpart of [SeerrMovieDetails.toSeerrSearchItem] — same dialog
+ * handoff, `name`/`firstAirDate` columns per the TV wire shape.
+ */
+fun SeerrTvDetails.toSeerrSearchItem(): SeerrSearchItem = SeerrSearchItem(
+    id = id,
+    mediaType = "tv",
+    name = name,
+    overview = overview,
+    posterPath = posterPath,
+    firstAirDate = firstAirDate,
+    mediaInfo = mediaInfo,
+)
+
 @Immutable
 @Serializable
 enum class SeerrRequestStatus(val value: Int) {

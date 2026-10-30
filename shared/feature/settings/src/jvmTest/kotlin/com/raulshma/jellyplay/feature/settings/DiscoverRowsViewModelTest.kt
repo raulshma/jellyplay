@@ -2,8 +2,9 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -98,7 +99,7 @@ class DiscoverRowsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var editor: PreferencesEditor
 
@@ -108,36 +109,39 @@ class DiscoverRowsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
-        coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
-        coEvery { mediaRepository.getGenres() } returns Result.success(emptyList())
-        coEvery { mediaRepository.getStudios() } returns Result.success(emptyList())
+        coEvery { libraryFeed.getLibraryFolders(force = false) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(null, false) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getStudios(parentId = null) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(emptyList())
         editor = PreferencesEditor(
             scope = CoroutineScope(testDispatcher + Job()),
             editScope = PreferencesEditScope(
-                playback = mockk<PlaybackStore>(relaxed = true),
-                appearance = mockk<AppearanceStore>(relaxed = true),
-                videoPlayer = mockk<VideoPlayerStore>(relaxed = true),
-                downloads = mockk<DownloadsStore>(relaxed = true),
-                engine = mockk<PlayerEngineStore>(relaxed = true),
-                homeDiscovery = homeDiscovery,
-                audio = mockk<AudioStore>(relaxed = true),
-                audioEffects = mockk<AudioEffectsStore>(relaxed = true),
-                audioCache = mockk<AudioCacheStore>(relaxed = true),
-                library = mockk<LibraryStore>(relaxed = true),
-                navigation = mockk<NavigationStore>(relaxed = true),
-                networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
-                notification = mockk<NotificationStore>(relaxed = true),
-                screensaver = mockk<ScreensaverStore>(relaxed = true),
-                security = mockk<SecurityStore>(relaxed = true),
-                subtitle = mockk<SubtitleLanguageStore>(relaxed = true),
-                syncPlayCast = mockk<SyncPlayCastStore>(relaxed = true),
-                experimental = mockk<ExperimentalStore>(relaxed = true),
-                volumeProfile = mockk<VolumeProfileStore>(relaxed = true),
+                stores = PreferenceStores(
+                    playback = mockk<PlaybackStore>(relaxed = true),
+                    videoPlayer = mockk<VideoPlayerStore>(relaxed = true),
+                    engine = mockk<PlayerEngineStore>(relaxed = true),
+                    subtitle = mockk<SubtitleLanguageStore>(relaxed = true),
+                    audio = mockk<AudioStore>(relaxed = true),
+                    audioEffects = mockk<AudioEffectsStore>(relaxed = true),
+                    audioCache = mockk<AudioCacheStore>(relaxed = true),
+                    appearance = mockk<AppearanceStore>(relaxed = true),
+                    homeDiscovery = homeDiscovery,
+                    library = mockk<LibraryStore>(relaxed = true),
+                    navigation = mockk<NavigationStore>(relaxed = true),
+                    shortcuts = mockk(relaxed = true),
+                    downloads = mockk<DownloadsStore>(relaxed = true),
+                    networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
+                    notification = mockk<NotificationStore>(relaxed = true),
+                    syncPlayCast = mockk<SyncPlayCastStore>(relaxed = true),
+                    security = mockk<SecurityStore>(relaxed = true),
+                    experimental = mockk<ExperimentalStore>(relaxed = true),
+                    screensaver = mockk<ScreensaverStore>(relaxed = true),
+                    volumeProfile = mockk<VolumeProfileStore>(relaxed = true),
+                ),
                 appRuntimeState = mockk<AppRuntimeStateStore>(relaxed = true),
             ),
             store = mockk<UserPreferencesStore>(relaxed = true),
@@ -150,7 +154,7 @@ class DiscoverRowsViewModelTest {
     }
 
     private fun viewModel(): DiscoverRowsViewModel =
-        DiscoverRowsViewModel(homeDiscovery, editor, mediaRepository, catalogueEnrichments, libraryApiClient)
+        DiscoverRowsViewModel(homeDiscovery, editor, libraryFeed, catalogueEnrichments, libraryApiClient)
 
     private fun item(name: String): MediaItem =
         MediaItem(id = name.lowercase().replace(' ', '-'), name = name, mediaType = MediaType.MOVIE)

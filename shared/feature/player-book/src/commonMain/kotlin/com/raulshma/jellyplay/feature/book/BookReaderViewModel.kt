@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.book
 import androidx.compose.ui.graphics.ImageBitmap
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.NoopBookmarksSyncRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
@@ -88,7 +88,8 @@ import kotlin.math.roundToInt
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookReaderViewModel(
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playbackRepository: PlaybackRepository,
     private val playbackIdentity: PlaybackIdentity,
     /**
@@ -179,7 +180,7 @@ class BookReaderViewModel(
      * the context request) and to the screen-owned choreography (paragraph
      * follow, auto-scroll stop). Null until the reader composes; a disposed
      * screen's session keeps the port but nulls its own host, so every call
-     * degrades to a no-op — the old channel-without-collector semantics.
+     * is a no-op - the same semantics as a channel without a collector.
      */
     private var readerSession: ReaderSessionPort? = null
 
@@ -364,7 +365,7 @@ class BookReaderViewModel(
      */
     private val sessionLoader = BookSessionLoader(
         scope = scope,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         playbackRepository = playbackRepository,
         playbackIdentity = playbackIdentity,
         contentResolver = contentResolver,
@@ -424,9 +425,8 @@ class BookReaderViewModel(
      * Session-scoped state reset for a re-load (new book, same VM): the
      * previous book's document, cached page bitmaps and per-book position
      * tracking must not leak into the new reader. Invoked by
-     * [BookSessionLoader.open] at exactly the old position — right after the
-     * loading veil, before the detail fetch. (Per-book pref state dies in
-     * [preferences.attach].)
+     * [BookSessionLoader.open] right after the loading veil, before the detail
+     * fetch. (Per-book pref state dies in [preferences.attach].)
      */
     private fun resetForNewSession() {
         document?.close()

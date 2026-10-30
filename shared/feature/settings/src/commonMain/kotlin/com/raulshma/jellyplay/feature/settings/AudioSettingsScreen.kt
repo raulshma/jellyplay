@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
@@ -179,21 +180,19 @@ fun AudioSettingsScreen(
     // EqualizerEditorSheet.
     var showEqualizerEditor by remember { mutableStateOf(false) }
 
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_audio_player_title),
-        onBack = onBack,
-        focusTag = "audio_init",
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-            item {
+    // The screen's ONE group declaration, in LazyColumn order — the shell
+    // derives the hidden-settings hint count from it (this screen takes no
+    // deep-link highlight scroll). The cache slot exists only where the
+    // audio-cache capability holds — the ONE conditional the emission used to
+    // repeat beside the hint's group list. Slots stop at GROUP grain: the row
+    // emission inside each slot is the hand-written body, unchanged
+    // (ADR-0009).
+    val audioGroups = buildList {
+        val audioSlot = SettingsScreenGroups.audio.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Music,
                     title = stringResource(Res.string.settings_audio_player_title),
-                    summary = { stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x") },
+                    summary = { stringResource(Res.string.settings_default_speed_value, PlaybackSpeedLadder.format(preferences.audioDefaultSpeed)) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
@@ -202,16 +201,18 @@ fun AudioSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,
                         title = rowTitle(AudioRows.AudioDefaultSpeed),
-                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) stringResource(Res.string.settings_audio_default_speed_normal) else stringResource(Res.string.settings_audio_default_speed_value, "${preferences.audioDefaultSpeed}x"),
-                        trailingText = if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x",
+                        subtitle = if (preferences.audioDefaultSpeed == 1.0f) stringResource(Res.string.settings_audio_default_speed_normal) else stringResource(Res.string.settings_audio_default_speed_value, PlaybackSpeedLadder.format(preferences.audioDefaultSpeed)),
+                        trailingText = PlaybackSpeedLadder.format(preferences.audioDefaultSpeed),
                         highlighted = highlightSettingId == AudioRows.AudioDefaultSpeed.id,
                         onClick = {
-                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+                // The audio settings picker's deliberate subset (no 0.25x/1.75x
+                // — fullRungs keeps those), read from the shared speed ladder.
+                val speeds = PlaybackSpeedLadder.audioSettingsRungs
                 activePicker.value = pickerChip(
                     title = audioDefaultSpeedTitle,
                     values = speeds,
                     current = preferences.audioDefaultSpeed,
-                    label = { if (it == 1.0f) "1x" else "${it}x" },
+                    label = { PlaybackSpeedLadder.format(it) },
                     onSelect = { speed -> viewModel.edit { it.audio.setAudioDefaultSpeed(speed) } },
                 )
             },
@@ -697,31 +698,12 @@ fun AudioSettingsScreen(
                 }
                     } // SettingsItemList
             }
-            }
-
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // Derived from the fused declarations (hiddenRowsFor):
-                        // the audio group's 17 plain-advanced rows plus the
-                        // parent-gated effect rows whose toggle is on, and the
-                        // cache group's three advanced rows where that group
-                        // composes.
-                        hiddenCount = hiddenRowsFor(
-                            buildList {
-                                add(SettingsScreenGroups.audio)
-                                if (settingsCapabilities.supportsAudioCache) add(SettingsScreenGroups.audioCache)
-                            },
-                            rowFlags,
-                        ),
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-            // No desktop audio cache exists (the AudioCacheClearer seam no-ops
-            // there) — the whole group stays off the surface.
-            if (settingsCapabilities.supportsAudioCache) {
-                item {
+        }
+        add(audioSlot)
+        // No desktop audio cache exists (the AudioCacheClearer seam no-ops
+        // there) — the whole group stays off the surface.
+        if (settingsCapabilities.supportsAudioCache) {
+            val cacheSlot = SettingsScreenGroups.audioCache.asScreenGroup { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Database,
                     title = stringResource(Res.string.settings_audio_caching_title),
@@ -827,8 +809,28 @@ fun AudioSettingsScreen(
                         }
                     }
                 }
-            }
+            add(cacheSlot)
+        }
     }
+
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_audio_player_title),
+        onBack = onBack,
+        focusTag = "audio_init",
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above: the audio
+            // slot's 17 plain-advanced rows plus the parent-gated effect rows
+            // whose toggle is on, and the cache slot's three advanced rows
+            // where that slot composes.
+            rowFlags = rowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+        ),
+        pickerHost = true,
+    )
 
     EqualizerEditorSheet(
         visible = showEqualizerEditor,

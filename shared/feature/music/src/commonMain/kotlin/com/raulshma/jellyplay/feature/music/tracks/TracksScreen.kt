@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
+import com.raulshma.jellyplay.feature.music.collection.musicArtUrl
 import com.raulshma.jellyplay.feature.music.components.MusicSortMenuButton
 import com.raulshma.jellyplay.core.ui.components.PagedCollectionList
 import com.raulshma.jellyplay.feature.music.components.TrackRow
@@ -77,10 +78,10 @@ fun TracksScreen(
             errorFallbackMessage = stringResource(kind.errorFallbackRes),
             tvInitialFocusTag = "tracks_init",
         ) { track ->
-            // Memoize per-item so getImageUrl + the click lambdas aren't
+            // Memoize per-item so the poster URL + the click lambdas aren't
             // rebuilt on every recomposition of this visible row (matches
             // Search/Library).
-            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
+            val imageUrl = remember(track, viewModel.artworkUrls) { viewModel.artworkUrls.musicArtUrl(track) }
             val onClick = remember(track.id) {
                 {
                     val loadedTracks = tracks.itemSnapshotList.items

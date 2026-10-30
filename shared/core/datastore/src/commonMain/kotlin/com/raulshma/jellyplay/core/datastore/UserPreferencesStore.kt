@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
@@ -94,36 +95,19 @@ import kotlinx.serialization.json.Json
 class UserPreferencesStore constructor(
     private val externalScope: CoroutineScope,
     private val dataStore: DataStore<Preferences>,
-    // Domain stores: the facade forwards invariant-bearing setters to these so
-    // the cross-key mutex / coerce / LRU / migration logic has a single owner.
-    // All stores share the same `"user_prefs"` DataStore, so writes are
-    // consistent regardless of which entry point a consumer uses.
+    // The domain stores arrive as the ONE [PreferenceStores] aggregate — the
+    // same bundle the settings read lanes consume — instead of a positional
+    // re-enumeration that every new domain store widened twice (here + the
+    // edit scope). All stores share the same `"user_prefs"` DataStore, so
+    // writes are consistent regardless of which entry point a consumer uses.
     // (The Widget / ServerIdentity / PinRateLimiter collaborators were pruned
     // — those consumers now inject those stores directly.)
-    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
-    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
-    private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
-    private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
-    private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
-    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
-    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
-    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
-    private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
-    private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
-    private val navigationStore: com.raulshma.jellyplay.core.datastore.navigation.NavigationStore,
-    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
-    private val notificationStore: com.raulshma.jellyplay.core.datastore.notification.NotificationStore,
-    private val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore,
-    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
-    private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
-    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
-    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
-    // Per-content-type volume memory (two keys; rides PLAYBACK for
-    // reset and its own backup slice).
-    private val volumeProfileStore: com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore,
+    private val stores: com.raulshma.jellyplay.core.datastore.settings.PreferenceStores,
     // Owns the 5 app-runtime-state keys (favorite channels, last live-TV channel,
     // watch-later playlist, onboarding flag, recent DLNA devices). Injected here
     // so backup export/import can fan out to it alongside the 19 domain stores.
+    // Deliberately NOT inside the aggregate — it is the backup-extras store,
+    // not a settings-read-lane slice (same split as PreferencesEditScope's).
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
     // Backup slices contributed OUTSIDE the domain-store fan-out (Room
     // config, integration settings, widget config) — see
@@ -317,9 +301,10 @@ class UserPreferencesStore constructor(
     /**
      * The 19 domain slices in [BackupSliceKey] order — snapshot keys, restore
      * fan-out and reset-key flattening all follow this order. Adding a domain
-     * store means adding one row here (plus its constructor parameter); every
-     * fan-out below picks it up. Extras (`AppRuntimeState`) stay orthogonal:
-     * they have no category and are written by the restore entry points.
+     * store means adding one row here (plus its [com.raulshma.jellyplay.core.datastore.settings.PreferenceStores]
+     * field); every fan-out below picks it up. Extras (`AppRuntimeState`) stay
+     * orthogonal: they have no category and are written by the restore entry
+     * points.
      */
     private val sliceBindings: List<SliceBinding<*>> = listOf(
         SliceBinding(
@@ -329,161 +314,169 @@ class UserPreferencesStore constructor(
                 PreferenceResetCategory.SUBTITLES_LANGUAGE,
                 PreferenceResetCategory.MISC_APP,
             ),
-            read = { playbackStore.playback.first() },
+            read = { stores.playback.playback.first() },
             serializer = PlaybackSlice.serializer(),
-            restore = { playbackStore.restore(it) },
+            restore = { stores.playback.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
-            resetKeys = { playbackStore.resetKeysFor(it) },
+            resetKeys = { stores.playback.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.APPEARANCE,
             categories = setOf(PreferenceResetCategory.APPEARANCE, PreferenceResetCategory.MISC_APP),
-            read = { appearanceStore.appearance.first() },
+            read = { stores.appearance.appearance.first() },
             serializer = AppearanceSlice.serializer(),
-            restore = { appearanceStore.restore(it) },
+            restore = { stores.appearance.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
-            resetKeys = { appearanceStore.resetKeysFor(it) },
+            resetKeys = { stores.appearance.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.VIDEO_PLAYER,
             categories = setOf(PreferenceResetCategory.PLAYBACK),
-            read = { videoPlayerStore.videoPlayer.first() },
+            read = { stores.videoPlayer.videoPlayer.first() },
             serializer = VideoPlayerSlice.serializer(),
-            restore = { videoPlayerStore.restore(it) },
-            resetKeys = { videoPlayerStore.resetKeysFor(it) },
+            restore = { stores.videoPlayer.restore(it) },
+            resetKeys = { stores.videoPlayer.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.DOWNLOADS,
             categories = setOf(PreferenceResetCategory.DOWNLOADS_NETWORK),
-            read = { downloadsStore.downloads.first() },
+            read = { stores.downloads.downloads.first() },
             serializer = DownloadsSlice.serializer(),
-            restore = { downloadsStore.restore(it) },
-            resetKeys = { downloadsStore.resetKeysFor(it) },
+            restore = { stores.downloads.restore(it) },
+            resetKeys = { stores.downloads.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.PLAYER_ENGINE,
             categories = setOf(PreferenceResetCategory.PLAYER_ENGINES),
-            read = { engineStore.playerEngine.first() },
+            read = { stores.engine.playerEngine.first() },
             serializer = PlayerEngineSlice.serializer(),
-            restore = { engineStore.restore(it) },
-            resetKeys = { engineStore.resetKeysFor(it) },
+            restore = { stores.engine.restore(it) },
+            resetKeys = { stores.engine.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.HOME_DISCOVERY,
             categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
-            read = { homeDiscoveryStore.homeDiscovery.first() },
+            read = { stores.homeDiscovery.homeDiscovery.first() },
             serializer = HomeDiscoverySlice.serializer(),
-            restore = { homeDiscoveryStore.restore(it) },
-            resetKeys = { homeDiscoveryStore.resetKeysFor(it) },
+            restore = { stores.homeDiscovery.restore(it) },
+            resetKeys = { stores.homeDiscovery.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.AUDIO,
             categories = setOf(PreferenceResetCategory.PLAYBACK, PreferenceResetCategory.AUDIO),
-            read = { audioStore.audio.first() },
+            read = { stores.audio.audio.first() },
             serializer = AudioSlice.serializer(),
-            restore = { audioStore.restore(it) },
+            restore = { stores.audio.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
-            resetKeys = { audioStore.resetKeysFor(it) },
+            resetKeys = { stores.audio.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.AUDIO_EFFECTS,
             categories = setOf(PreferenceResetCategory.AUDIO),
-            read = { audioEffectsStore.audioEffects.first() },
+            read = { stores.audioEffects.audioEffects.first() },
             serializer = AudioEffectsSlice.serializer(),
-            restore = { audioEffectsStore.restore(it) },
-            resetKeys = { audioEffectsStore.resetKeysFor(it) },
+            restore = { stores.audioEffects.restore(it) },
+            resetKeys = { stores.audioEffects.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.AUDIO_CACHE,
             categories = setOf(PreferenceResetCategory.AUDIO_CACHE),
-            read = { audioCacheStore.audioCache.first() },
+            read = { stores.audioCache.audioCache.first() },
             serializer = AudioCacheSlice.serializer(),
-            restore = { audioCacheStore.restore(it) },
-            resetKeys = { audioCacheStore.resetKeysFor(it) },
+            restore = { stores.audioCache.restore(it) },
+            resetKeys = { stores.audioCache.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.LIBRARY,
             categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
-            read = { libraryStore.library.first() },
+            read = { stores.library.library.first() },
             serializer = LibrarySlice.serializer(),
-            restore = { libraryStore.restore(it) },
-            resetKeys = { libraryStore.resetKeysFor(it) },
+            restore = { stores.library.restore(it) },
+            resetKeys = { stores.library.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.NAVIGATION,
             categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
-            read = { navigationStore.navigation.first() },
+            read = { stores.navigation.navigation.first() },
             serializer = NavigationSlice.serializer(),
-            restore = { navigationStore.restore(it) },
-            resetKeys = { navigationStore.resetKeysFor(it) },
+            restore = { stores.navigation.restore(it) },
+            resetKeys = { stores.navigation.resetKeysFor(it) },
+        ),
+        SliceBinding(
+            key = BackupSliceKey.SHORTCUTS,
+            categories = setOf(PreferenceResetCategory.HOME_DISCOVERY),
+            read = { stores.shortcuts.shortcuts.first() },
+            serializer = ShortcutsSlice.serializer(),
+            restore = { stores.shortcuts.restore(it) },
+            resetKeys = { stores.shortcuts.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.NETWORK_OFFLINE,
             categories = setOf(PreferenceResetCategory.DOWNLOADS_NETWORK),
-            read = { networkOfflineStore.networkOffline.first() },
+            read = { stores.networkOffline.networkOffline.first() },
             serializer = NetworkOfflineSlice.serializer(),
-            restore = { networkOfflineStore.restore(it) },
-            resetKeys = { networkOfflineStore.resetKeysFor(it) },
+            restore = { stores.networkOffline.restore(it) },
+            resetKeys = { stores.networkOffline.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.NOTIFICATION,
             categories = setOf(PreferenceResetCategory.NOTIFICATIONS, PreferenceResetCategory.NEWSLETTER),
-            read = { notificationStore.notification.first() },
+            read = { stores.notification.notification.first() },
             serializer = NotificationSlice.serializer(),
-            restore = { notificationStore.restore(it) },
+            restore = { stores.notification.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
-            resetKeys = { notificationStore.resetKeysFor(it) },
+            resetKeys = { stores.notification.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.SCREENSAVER,
             categories = setOf(PreferenceResetCategory.SCREENSAVER),
-            read = { screensaverStore.screensaver.first() },
+            read = { stores.screensaver.screensaver.first() },
             serializer = ScreensaverSlice.serializer(),
-            restore = { screensaverStore.restore(it) },
-            resetKeys = { screensaverStore.resetKeysFor(it) },
+            restore = { stores.screensaver.restore(it) },
+            resetKeys = { stores.screensaver.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.SECURITY,
             categories = setOf(PreferenceResetCategory.SECURITY),
-            read = { securityStore.security.first() },
+            read = { stores.security.security.first() },
             serializer = SecuritySlice.serializer(),
-            restore = { securityStore.restore(it) },
-            restoreSensitive = { securityStore.restoreSecuritySensitive(it) },
-            resetKeys = { securityStore.resetKeysFor(it) },
+            restore = { stores.security.restore(it) },
+            restoreSensitive = { stores.security.restoreSecuritySensitive(it) },
+            resetKeys = { stores.security.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.SUBTITLE,
             categories = setOf(PreferenceResetCategory.SUBTITLES_LANGUAGE, PreferenceResetCategory.MISC_APP),
-            read = { subtitleLanguageStore.subtitle.first() },
+            read = { stores.subtitle.subtitle.first() },
             serializer = SubtitleSlice.serializer(),
-            restore = { subtitleLanguageStore.restore(it) },
+            restore = { stores.subtitle.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
-            resetKeys = { subtitleLanguageStore.resetKeysFor(it) },
+            resetKeys = { stores.subtitle.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.SYNC_PLAY_CAST,
             categories = setOf(PreferenceResetCategory.SYNCPLAY_CASTING),
-            read = { syncPlayCastStore.syncPlayCast.first() },
+            read = { stores.syncPlayCast.syncPlayCast.first() },
             serializer = SyncPlayCastSlice.serializer(),
-            restore = { syncPlayCastStore.restore(it) },
-            resetKeys = { syncPlayCastStore.resetKeysFor(it) },
+            restore = { stores.syncPlayCast.restore(it) },
+            resetKeys = { stores.syncPlayCast.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.EXPERIMENTAL,
             categories = setOf(PreferenceResetCategory.EXPERIMENTAL, PreferenceResetCategory.MISC_APP),
-            read = { experimentalStore.experimental.first() },
+            read = { stores.experimental.experimental.first() },
             serializer = ExperimentalSlice.serializer(),
-            restore = { experimentalStore.restore(it) },
+            restore = { stores.experimental.restore(it) },
             merge = { current, incoming, selected -> current.mergeWith(incoming, selected) },
-            resetKeys = { experimentalStore.resetKeysFor(it) },
+            resetKeys = { stores.experimental.resetKeysFor(it) },
         ),
         SliceBinding(
             key = BackupSliceKey.VOLUME_PROFILE,
             categories = setOf(PreferenceResetCategory.PLAYBACK),
-            read = { volumeProfileStore.volumeProfile.first() },
+            read = { stores.volumeProfile.volumeProfile.first() },
             serializer = VolumeProfileSlice.serializer(),
-            restore = { volumeProfileStore.restore(it) },
-            resetKeys = { volumeProfileStore.resetKeysFor(it) },
+            restore = { stores.volumeProfile.restore(it) },
+            resetKeys = { stores.volumeProfile.resetKeysFor(it) },
         ),
     )
 
@@ -647,7 +640,7 @@ class UserPreferencesStore constructor(
         // Forwarded to NotificationStore: the 10-key atomic read-modify-write
         // (decode aggregate → apply transform → re-encode) has a single owner
         // there.
-        notificationStore.updateNotificationPreferences(transform)
+        stores.notification.updateNotificationPreferences(transform)
     }
 
     /**
@@ -675,10 +668,13 @@ class UserPreferencesStore constructor(
             // dynamic, so they cannot sit in the static key list. The owning
             // store strips every user's entries (plus its migration marker)
             // itself; it no-ops for every other category.
-            homeDiscoveryStore.removeDynamicResetKeys(category, prefs)
+            stores.homeDiscovery.removeDynamicResetKeys(category, prefs)
             // Same shape for the downloads store's one namespaced key (the
             // auto-download server allow-list); no-ops for every other category.
-            downloadsStore.removeDynamicResetKeys(category, prefs)
+            stores.downloads.removeDynamicResetKeys(category, prefs)
+            // Same shape for the shortcuts store (every key is per-user
+            // namespaced); no-ops for every other category.
+            stores.shortcuts.removeDynamicResetKeys(category, prefs)
         }
     }
 

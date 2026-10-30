@@ -26,7 +26,6 @@ class ApplyNavCustomizationTest {
         assertEquals("Search", Route.Search.navKey)
         assertEquals("LiveTv", Route.LiveTv.navKey)
         assertEquals("MusicBrowse", Route.MusicBrowse.navKey)
-        assertEquals("Shortcuts", SHORTCUTS_NAV_KEY)
         assertEquals("Shortcuts", Route.Shortcuts.navKey)
     }
 

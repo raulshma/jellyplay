@@ -27,7 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -49,12 +52,10 @@ import com.composables.icons.tabler.outline.World
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
-import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateRegion
 import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
-import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrWatchProvider
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.FocusRestoringItemRow
@@ -93,6 +94,12 @@ import org.jetbrains.compose.resources.stringResource
  * behaviour change beyond the deep-linking chips. The video CARD body is the
  * shared [YouTubeVideoCard] (DetailSectionVocabulary) — collapsed with the
  * media family's identical copy; only the row scaffolding stays family-local.
+ *
+ * [MediaInfoCondensed] / [MediaInformationSection] take the screen's
+ * [SeerrDetailView] fold instead of the raw `movieDetail`/`tvDetail` pair:
+ * they used to re-derive the union themselves (release date, runtime, genres,
+ * status, studios, watch providers) — a third copy of ladders the screen
+ * already carried. The precedence lives once in [SeerrDetailView.of].
  */
 @Composable
 internal fun VideosSection(
@@ -168,6 +175,8 @@ internal fun RatingsRow(
     rtUrl: String? = null,
     imdbUrl: String? = null,
     tmdbUrl: String? = null,
+    /** The OMDb awards line — rendered as the row's last badge when non-null. */
+    awards: String? = null,
 ) {
     val chips = externalRatingChipSources(
         DetailExternalRatings(
@@ -180,7 +189,7 @@ internal fun RatingsRow(
             tmdbUrl = tmdbUrl,
         ),
     )
-    if (chips.isEmpty()) return
+    if (chips.isEmpty() && awards == null) return
     val uriHandler = LocalUriHandler.current
 
     FlowRow(
@@ -266,18 +275,45 @@ internal fun RatingsRow(
                 }
             }
         }
+
+        // The OMDb awards badge — the row's last chip, truncated to one line
+        // (the full line rides the content description for screen readers;
+        // a tap without a deep link reads nothing more). Only composed when
+        // the plugin's awards leg answered — no empty badge, ever.
+        if (awards != null) {
+            RatingChip(
+                url = null,
+                contentDescription = awards,
+            ) {
+                Text(text = "🏆", modifier = Modifier.padding(end = 4.dp))
+                Text(
+                    text = awards,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = AwardsBadgeMaxWidth),
+                )
+            }
+        }
     }
 }
+
+/** The awards badge's one-line width cap — long award lists ellipsize inside it. */
+private val AwardsBadgeMaxWidth = 220.dp
 
 /**
  * One chip shell of the shared strip: a vertically-centered row that gains the
  * click + TV-focus vocabulary only when it carries a deep link (the
  * [DetailExternalLinksRow] pattern); url-less chips render exactly as the
- * former non-clickable strip did.
+ * former non-clickable strip did. [contentDescription] (the awards badge's
+ * full-text leg) replaces the chip's screen-reader text when set.
  */
 @Composable
 private fun RatingChip(
     url: String?,
+    contentDescription: String? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
@@ -294,6 +330,13 @@ private fun RatingChip(
                 } else {
                     Modifier
                 },
+            )
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
+                },
             ),
         content = content,
     )
@@ -301,8 +344,7 @@ private fun RatingChip(
 
 @Composable
 internal fun MediaInfoCondensed(
-    movieDetail: SeerrMovieDetails?,
-    tvDetail: SeerrTvDetails?,
+    view: SeerrDetailView,
     ratings: SeerrRatings?,
     modifier: Modifier = Modifier
 ) {
@@ -317,7 +359,7 @@ internal fun MediaInfoCondensed(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            val releaseDate = movieDetail?.releaseDate ?: tvDetail?.firstAirDate
+            val releaseDate = view.releaseDate
             releaseDate?.take(4)?.let {
                 Text(
                     text = it,
@@ -327,7 +369,7 @@ internal fun MediaInfoCondensed(
                 )
             }
 
-            val runtime = movieDetail?.runtime ?: tvDetail?.episodeRunTime?.firstOrNull()
+            val runtime = view.runtime
             if (runtime != null && runtime > 0) {
                 Surface(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
@@ -342,7 +384,7 @@ internal fun MediaInfoCondensed(
                 }
             }
 
-            val genres = movieDetail?.genres ?: tvDetail?.genres ?: emptyList()
+            val genres = view.genres
             if (genres.isNotEmpty()) {
                 Text(
                     text = genres.take(2).joinToString(", ") { it.name },
@@ -358,8 +400,7 @@ internal fun MediaInfoCondensed(
 
 @Composable
 internal fun MediaInformationSection(
-    movie: SeerrMovieDetails?,
-    tv: SeerrTvDetails?,
+    view: SeerrDetailView,
     streamingRegion: String = "US",
     discoverRegion: String = "US",
     seerrServerUrl: String = "",
@@ -377,30 +418,30 @@ internal fun MediaInformationSection(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            MediaInfoRow(stringResource(Res.string.detail_seerr_status), movie?.status ?: tv?.status ?: stringResource(Res.string.detail_seerr_unknown), Tabler.Outline.InfoCircle)
+            MediaInfoRow(stringResource(Res.string.detail_seerr_status), view.status ?: stringResource(Res.string.detail_seerr_unknown), Tabler.Outline.InfoCircle)
 
-            val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
-            if (movie != null) {
-                ReleaseDateRow(releaseDate, movie.releases, discoverRegion)
+            val releaseDate = view.releaseDate
+            if (view.isMovie) {
+                ReleaseDateRow(releaseDate, view.releases, discoverRegion)
             } else {
                 MediaInfoRow(stringResource(Res.string.detail_seerr_release_date), releaseDate ?: stringResource(Res.string.detail_seerr_unknown), Tabler.Outline.CalendarEvent)
             }
 
-            if (movie != null) {
-                movie.revenue?.takeIf { it > 0 }?.let {
+            if (view.isMovie) {
+                view.revenue?.takeIf { it > 0 }?.let {
                     MediaInfoRow(stringResource(Res.string.detail_seerr_revenue), formatUsCurrency(it), Tabler.Outline.Cash)
                 }
-                movie.budget?.takeIf { it > 0 }?.let {
+                view.budget?.takeIf { it > 0 }?.let {
                     MediaInfoRow(stringResource(Res.string.detail_seerr_budget), formatUsCurrency(it), Tabler.Outline.Wallet)
                 }
             }
 
-            val language = movie?.originalLanguage ?: tv?.originalLanguage
+            val language = view.language
             if (language != null) {
                 MediaInfoRow(stringResource(Res.string.detail_seerr_language), languageDisplayName(language) ?: language, Tabler.Outline.Language)
             }
 
-            val productionCountries = movie?.productionCountries ?: emptyList()
+            val productionCountries = view.productionCountries
             if (productionCountries.isNotEmpty()) {
                 val countryText = productionCountries.joinToString(", ") { country ->
                     val flag = getFlagEmoji(country.iso31661)
@@ -409,14 +450,14 @@ internal fun MediaInformationSection(
                 MediaInfoRow(stringResource(Res.string.detail_seerr_country), countryText, Tabler.Outline.World)
             }
 
-            val studios = remember(movie, tv) {
-                movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
-            }
+            // The name-mapping moved into SeerrDetailView.of (the studios
+            // fold) — the section renders the folded list as-is.
+            val studios = view.studios
             if (studios.isNotEmpty()) {
                 MediaInfoRow(stringResource(Res.string.detail_seerr_studios), studios.joinToString(", "), Tabler.Outline.Building)
             }
 
-            val watchProviders = movie?.watchProviders ?: tv?.watchProviders ?: emptyList()
+            val watchProviders = view.watchProviders
             val regionProviders = watchProviders.find { it.iso31661 == streamingRegion }
             val streamingProviders = regionProviders?.streaming.orEmpty()
             if (streamingProviders.isNotEmpty()) {

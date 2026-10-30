@@ -163,6 +163,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_musi
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_scheduler_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_scheduler_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_awards_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_awards_badges_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_awards_badges_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_awards_badges_title
 
 /**
  * The appearance domain's fused row declarations — the feature-side single
@@ -610,6 +614,19 @@ internal object AppearanceRows {
         gate = RowAdmission.Always,
     )
 
+    // Spec-backed (appearance store), gated [RowAdmission.Always] — see
+    // [HapticsEnabled]. Renders beside [ShowReviews] — the other details-page
+    // ratings/awards display toggle.
+    val AwardsBadges = SettingsRow(
+        id = "awards_badges",
+        icon = Tabler.Outline.Star,
+        titleRes = Res.string.settings_awards_badges,
+        subtitleRes = Res.string.settings_awards_badges_subtitle,
+        searchTitleRes = Res.string.ss_awards_badges_title,
+        searchSubtitleRes = Res.string.ss_awards_badges_subtitle,
+        gate = RowAdmission.Always,
+    )
+
     val PreferLocalTrailers = SettingsRow(
         id = "prefer_local_trailers",
         icon = Tabler.Outline.Movie,
@@ -905,6 +922,7 @@ internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.ShowShareMedia,
     AppearanceRows.ShowExternalLinks,
     AppearanceRows.ShowReviews,
+    AppearanceRows.AwardsBadges,
     AppearanceRows.PreferLocalTrailers,
     AppearanceRows.TrailerPreviewOnFocus,
     AppearanceRows.ShowPromotedActionsLandscape,

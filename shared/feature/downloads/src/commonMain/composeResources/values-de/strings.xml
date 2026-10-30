@@ -129,4 +129,24 @@
     <string name="downloads_force_resync_in_progress">Synchronisiere %1$d von %2$d…</string>
     <string name="downloads_force_resync_done">%1$d von %2$d synchronisiert.</string>
     <string name="downloads_force_resync_no_data">Wähle mindestens einen Datentyp zum Synchronisieren.</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="downloads_cancel_all">Alle abbrechen</string>
+    <string name="downloads_cancel_all_message">Dies stoppt alle aktiven Übertragungen und entfernt pausierte Downloads aus der Warteschlange. Teilweise heruntergeladene Dateien werden gelöscht.</string>
+    <string name="downloads_cancel_all_title">Alle Downloads abbrechen?</string>
+    <string name="downloads_resume_all">Alle fortsetzen</string>
+    <string name="downloads_status_active">Aktiv</string>
+    <string name="downloads_status_completed">Abgeschlossen</string>
+
+    <!-- Ask-mode suggestion shade (gh-181). -->
+    <plurals name="downloads_suggestions_count">
+        <item quantity="one">%1$d neue Episode bereit zum Herunterladen</item>
+        <item quantity="other">%1$d neue Episoden bereit zum Herunterladen</item>
+    </plurals>
+    <string name="downloads_suggestions_title">Neue Episoden zum Herunterladen bereit</string>
+    <string name="downloads_suggestions_subtitle">Auto-Download ist auf „Vor dem Download nachfragen“ eingestellt.</string>
+    <string name="downloads_suggestions_download">Herunterladen</string>
+    <string name="downloads_suggestions_download_all">Alle herunterladen</string>
+    <string name="downloads_suggestions_dismiss">Ausblenden</string>
+    <string name="downloads_suggestions_queued">Neue Episoden in Warteschlange</string>
 </resources>

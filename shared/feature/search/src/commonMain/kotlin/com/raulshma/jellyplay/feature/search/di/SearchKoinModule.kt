@@ -18,11 +18,13 @@ import org.koin.dsl.module
 val searchModule: Module = module {
     viewModel {
         SearchViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
+            userDataChanges = get(),
             mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             seerrRepository = get(),
             seerrRequestDelegate = get(),
             mediaSearchEngine = get(),

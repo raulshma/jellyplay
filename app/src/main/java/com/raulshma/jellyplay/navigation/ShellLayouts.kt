@@ -42,6 +42,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.PlayOnViewModel
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Wifi
+import com.composables.icons.tabler.outline.WifiOff
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.ShellAudioSurface
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
@@ -51,7 +54,6 @@ import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.navigation.NavigationState
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.core.ui.navigation.navIcon
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks
@@ -157,20 +159,26 @@ internal fun TvContent(
             // player). Re-running .map{} here would allocate a fresh list + N
             // fresh TvNavItem instances each time, invalidating the drawer.
             // Shortcuts is not a top-level tab on phone (it lives in the
-            // ⋮ overflow). The TV drawer has no overflow menu, so keep Shortcuts
-            // reachable here as an explicit primary item — positioned by the
-            // stored nav order like every other item.
+            // ⋮ overflow); the TV drawer has no overflow, so tvPrimaryRoutes
+            // derives it from the registry's placement descriptor
+            // (NavPrimarySurface.TvDrawer) and ranks it by the stored nav
+            // order like every other item.
             val shortcutsLabel = stringResource(R.string.menu_shortcuts)
             val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel, hiddenNavItems, navItemOrder) {
                 tvPrimaryRoutes(
                     baseRoutes = activeTopLevelRoutes.keys.toList(),
-                    includeShortcuts = SHORTCUTS_NAV_KEY !in hiddenNavItems,
+                    hiddenNavItems = hiddenNavItems,
                     navItemOrder = navItemOrder,
                 ).map { route ->
-                    // Shortcuts's label is a real string resource; the other
-                    // routes carry their display label in activeTopLevelRoutes.
                     TvNavItem(
                         route = route,
+                        // The base routes' labels arrive pre-resolved inside
+                        // activeTopLevelRoutes; the placement extras ride
+                        // outside that map, so Shortcuts resolves its label
+                        // HERE — per-destination presentation (a localized
+                        // resource; the registry railLabels are English
+                        // constants), not placement eligibility, which is why
+                        // it stays at the call site instead of the registry.
                         label = if (route == Route.Shortcuts) {
                             shortcutsLabel
                         } else {
@@ -240,8 +248,10 @@ internal fun PhoneContent(
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
     isGoingOnline: Boolean = false,
     downloadCount: Int = 0,
-    onSurpriseClick: () -> Unit = {},
-    onToggleOffline: () -> Unit = {},
+    /** The user's resolved overflow shortcuts (MainContent resolves; this wiring clicks). */
+    overflowShortcuts: List<com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut> = emptyList(),
+    /** Increments when a shortcut (or elsewhere) requests the Play On device sheet. */
+    playOnOpenRequests: Int = 0,
 ) {
     val navigationState = shellParams.navigationState
     val currentTopLevel = shellParams.currentTopLevel
@@ -264,7 +274,6 @@ internal fun PhoneContent(
     val playOnState by playOn.uiState.collectAsStateWithLifecycle()
     var showPlayOnSheet by remember { mutableStateOf(false) }
     val playOnContext = LocalContext.current
-    val onPlayOnClick: () -> Unit = { showPlayOnSheet = true }
     // Current top-of-stack route — hides the persistent Play On mini bar
     // while its full-screen companion is open (avoid a bar floating over its own
     // expanded view).
@@ -272,6 +281,11 @@ internal fun PhoneContent(
     val isPlayOnCompanionOpen = currentRoute is Route.PlayOnCompanion
     androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
         if (showPlayOnSheet) playOn.startDiscovery(playOnContext)
+    }
+    // Header-shortcut Play On requests land here (the sheet state lives in
+    // this scope; the shell handler only bumps the counter).
+    androidx.compose.runtime.LaunchedEffect(playOnOpenRequests) {
+        if (playOnOpenRequests > 0) showPlayOnSheet = true
     }
 
     // Global "More" overflow — a DotsVertical toggle docked in the nav bar
@@ -288,6 +302,70 @@ internal fun PhoneContent(
     // stops the back-gesture preview indicator from freezing mid-screen when the
     // scrim's full-screen clickable intercepts the edge swipe.
     BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
+
+    // The customized overflow entries: resolved shortcuts folded with this
+    // scope's click wiring + the shared decoration fold (OverflowShortcutDecoration
+    // — the offline icon/label/progress trio, downloads badge, highlight and
+    // menu-dismiss policy). Remembered on every captured input — the build-site
+    // half of the @Immutable OverflowMenuItem convention (the ShellNavParams
+    // idiom): without it the list identity changed on every PhoneContent
+    // recomposition (audio ticks, nav color) and re-executed every pill entry.
+    // The closures stay live between rebuilds: isOverflowExpanded is captured
+    // through its delegate, and navigator/shortcutActions are identity-stable.
+    // The action EXECUTION is the shell's ShortcutActionSurface
+    // (shellHost.home.shortcutActions) — the same dispatcher the header dock
+    // uses; the only per-action nuance left here is the going-online re-tap
+    // guard, which reads presentation state this scope owns.
+    val isOfflineActive = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+    val shortcutActions = shellParams.shellHost.home.shortcutActions
+    val overflowEntries = remember(
+        overflowShortcuts,
+        isOfflineActive,
+        isGoingOnline,
+        downloadCount,
+        navigator,
+        shortcutActions,
+    ) {
+        overflowShortcuts.map { shortcut ->
+            val closeMenu = { isOverflowExpanded = false }
+            val decoration = overflowShortcutDecoration(
+                target = shortcut.target,
+                isOfflineActive = isOfflineActive,
+                isGoingOnline = isGoingOnline,
+                downloadCount = downloadCount,
+            )
+            com.raulshma.jellyplay.navigation.components.OverflowMenuItem(
+                key = shortcut.id,
+                shortcut = shortcut,
+                onClick = {
+                    if (decoration.closesMenu) closeMenu()
+                    when (val target = shortcut.target) {
+                        is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen ->
+                            navigator.navigate(target.route)
+                        is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action -> {
+                            // Guard re-taps while the offline→online transition is
+                            // in flight (the spinner pill is already up — a second
+                            // tap would flip the direction mid-flight).
+                            if (target.action != com.raulshma.jellyplay.core.ui.navigation.ShortcutAction.TOGGLE_OFFLINE ||
+                                !isGoingOnline
+                            ) {
+                                shortcutActions.execute(target.action)
+                            }
+                        }
+                    }
+                },
+                iconOverride = when (decoration.iconSlot) {
+                    OverflowOfflineIcon.Wifi -> Tabler.Outline.Wifi
+                    OverflowOfflineIcon.WifiOff -> Tabler.Outline.WifiOff
+                    null -> null
+                },
+                labelOverrideRes = decoration.labelOverrideRes,
+                badgeCount = decoration.badgeCount,
+                isHighlighted = decoration.isHighlighted,
+                isProgressing = decoration.isProgressing,
+            )
+        }
+    }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
@@ -460,67 +538,39 @@ internal fun PhoneContent(
                 // (both Classic and Expressive styles) expands an animated list
                 // of destinations upward, so Settings/Downloads/SyncPlay/Play On
                 // are reachable from anywhere. The items render as an
-                // overlay above the nav bar (see OverflowMenuItems below).
+                // overlay above the nav bar with macOS dock item maximize/minimize
+                // transitions anchored at the 3-dot icon (see OverflowMenuItems below).
                 // On tablet the toggle lives in the NavigationRail (left edge),
                 // so the pills dock top-start beside the rail and flow top-down;
                 // on phone they dock bottom-end beside the floating nav toggle.
-                if (isOverflowExpanded) {
-                    com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
-                        onDismiss = { isOverflowExpanded = false },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                    // The placement fold (ShellChromePlacement): the bare
-                    // numbers below are named there; the alignment fork
-                    // (top-start beside the rail vs bottom-end beside the
-                    // nav toggle) stays here — a compose-side concern.
-                    val overflowInsets = overflowMenuInsets(isExpanded = isExpanded, statusBarTop = statusBarTop)
-                    com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
-                        onSurpriseClick = {
-                            isOverflowExpanded = false
-                            onSurpriseClick()
-                        },
-                        onSyncPlayClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.SyncPlay)
-                        },
-                        onDownloadsClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.Downloads)
-                        },
-                        onToggleOffline = {
-                            // Guard re-taps while the offline→online transition is in flight.
-                            if (!isGoingOnline) onToggleOffline()
-                        },
-                        onPlayOnClick = {
-                            isOverflowExpanded = false
-                            onPlayOnClick()
-                        },
-                        onShortcutsClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.Shortcuts)
-                        },
-                        onSettingsClick = {
-                            isOverflowExpanded = false
-                            navigator.navigate(Route.Settings)
-                        },
-                        offlineMode = offlineMode,
-                        isGoingOnline = isGoingOnline,
-                        downloadCount = downloadCount,
-                        alignToStart = isExpanded,
-                        modifier = if (isExpanded) {
-                            // The scaffold body already starts beside the rail, so the
-                            // folded margin keeps the pills flush to the drawer. Anchor
-                            // at the top (under the status bar) so the list flows
-                            // top-down.
-                            Modifier.align(Alignment.TopStart)
-                                .padding(start = overflowInsets.start, top = overflowInsets.top)
-                        } else {
-                            Modifier.align(Alignment.BottomEnd)
-                                .clearFloatingNav(extraBottom = 0.dp)
-                                .padding(end = overflowInsets.end, bottom = overflowInsets.bottom)
-                        },
-                    )
-                }
+                com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
+                    visible = isOverflowExpanded,
+                    exitDurationMillis = com.raulshma.jellyplay.navigation.components.overflowMenuTotalExitDurationMs(overflowEntries.size),
+                    onDismiss = { isOverflowExpanded = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+                // The placement fold (ShellChromePlacement): the bare
+                // numbers below are named there; the alignment fork
+                // (top-start beside the rail vs bottom-end beside the
+                // nav toggle) stays here — a compose-side concern.
+                val overflowInsets = overflowMenuInsets(isExpanded = isExpanded, statusBarTop = statusBarTop)
+                com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
+                    entries = overflowEntries,
+                    visible = isOverflowExpanded,
+                    alignToStart = isExpanded,
+                    modifier = if (isExpanded) {
+                        // The scaffold body already starts beside the rail, so the
+                        // folded margin keeps the pills flush to the drawer. Anchor
+                        // at the top (under the status bar) so the list flows
+                        // top-down.
+                        Modifier.align(Alignment.TopStart)
+                            .padding(start = overflowInsets.start, top = overflowInsets.top)
+                    } else {
+                        Modifier.align(Alignment.BottomEnd)
+                            .clearFloatingNav(extraBottom = 0.dp)
+                            .padding(end = overflowInsets.end, bottom = overflowInsets.bottom)
+                    },
+                )
                 if (!isExpanded) {
                     val navBarModifier = Modifier
                         .align(Alignment.BottomCenter)

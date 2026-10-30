@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 
@@ -14,16 +15,20 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowBarToDown
 import com.composables.icons.tabler.outline.Menu2
+import com.composables.icons.tabler.outline.Wand
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
+import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_auto_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_bar_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_customize_shortcuts
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_customize_shortcuts_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll_on
@@ -54,6 +59,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
  * [com.raulshma.jellyplay.core.ui.navigation.applyNavCustomization].
  */
 private data class NavItemDescriptor(
+    val route: Route,
     val key: String,
     val labelRes: StringResource,
     val icon: ImageVector,
@@ -93,6 +99,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = NAV_DESTINATIONS
     .filter { it.route in NAV_ITEM_LABEL_RES }
     .map { row ->
         NavItemDescriptor(
+            route = row.route,
             // row.key is the same string Route.navKey resolves to
             // (NAV_KEYS_BY_ROUTE derives from these rows) — the persisted
             // vocabulary is unchanged.
@@ -119,10 +126,20 @@ fun NavigationCustomizationGroup(
     preferences: NavigationCustomizationPreferences,
     viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
+    onCustomizeShortcuts: () -> Unit = {},
 ) {
     val isTv = LocalTvMode.current
+    // The row set per form factor derives from the registry's placement
+    // descriptor (NavDestination.primarySurfaces): the TV form factor
+    // customizes the TV drawer's primary set (NavPrimarySurface.TvDrawer —
+    // which adds Shortcuts, the drawer has no overflow), every other form
+    // factor customizes the phone bar's (PhoneBar — Shortcuts lives in the ⋮
+    // overflow there; the desktop rail, like the phone bar, exposes only the
+    // bar vocabulary to this UI). Same stored hidden/order preferences either
+    // way; in registry row order both forks.
     val navItems = remember(isTv) {
-        if (isTv) NAV_ITEMS else NAV_ITEMS.filter { it.key != SHORTCUTS_NAV_KEY }
+        val surface = if (isTv) NavPrimarySurface.TvDrawer else NavPrimarySurface.PhoneBar
+        NAV_ITEMS.filter { surface in NAV_DESTINATION_BY_ROUTE.getValue(it.route).primarySurfaces }
     }
 
     SettingsGroup(
@@ -183,6 +200,15 @@ fun NavigationCustomizationGroup(
                 onDragEnd = navOrder::onDragEnd,
             )
         }
+
+        // The user-shortcuts editor — the sibling customization surface (the
+        // home header dock + the overflow menu's pinned shortcuts).
+        SettingListItem(
+            icon = Tabler.Outline.Wand,
+            title = stringResource(Res.string.settings_nav_customize_shortcuts),
+            subtitle = stringResource(Res.string.settings_nav_customize_shortcuts_subtitle),
+            onClick = onCustomizeShortcuts,
+        )
         }
     }
 }

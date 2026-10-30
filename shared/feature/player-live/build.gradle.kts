@@ -70,6 +70,11 @@ kotlin {
             implementation(libs.media3.exoplayer.hls)
             implementation(libs.media3.datasource)
             implementation(libs.media3.datasource.okhttp)
+            // AndroidLiveMediaSessionController (gh-178): the live system
+            // MediaLibrarySession. player-video's own session dependency is
+            // `implementation`-scoped there, so it does not leak onto this
+            // module's compile classpath.
+            implementation(libs.media3.session)
             implementation(libs.okhttp)
             // PlayerWindowOps / PlayerOrientationLock / rememberPlayerWindowOps
             // — the host-window seam (system bars, keep-screen-on, orientation

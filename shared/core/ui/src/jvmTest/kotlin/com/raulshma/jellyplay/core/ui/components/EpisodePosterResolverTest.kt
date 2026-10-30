@@ -9,9 +9,10 @@ import kotlin.test.assertTrue
 /**
  * Pins the pure [MediaItem.seriesImageFallback] contract: ONLY a SEASON with a
  * non-null [MediaItem.seriesId] produces a fallback list, and that list is
- * exactly `[resolve(seriesId)]` — the parent series' poster and nothing else.
- * Every other media type (and a series-less season) yields an empty list so
- * callers can pass the result unconditionally as `fallbackUrls`.
+ * exactly `[resolve(item)]` — the parent series' poster (the resolver picks
+ * the series id and its tag off the item) and nothing else. Every other media
+ * type (and a series-less season) yields an empty list so callers can pass the
+ * result unconditionally as `fallbackUrls`.
  *
  * The `remember*` composables in the same file
  * ([rememberSeriesImageFallback], [rememberEpisodeCardImage]) are
@@ -27,22 +28,23 @@ class EpisodePosterResolverTest {
 
     @Test
     fun season_withSeriesId_fallsBackToParentSeriesPoster() {
-        val resolvedIds = mutableListOf<String>()
+        val resolvedItems = mutableListOf<MediaItem>()
         val fallbacks = item("season-1", MediaType.SEASON, seriesId = "series-7")
-            .seriesImageFallback { id ->
-                resolvedIds += id
-                "url/$id/primary"
+            .seriesImageFallback { resolved ->
+                resolvedItems += resolved
+                "url/${resolved.seriesId}/primary"
             }
 
         assertEquals(listOf("url/series-7/primary"), fallbacks)
-        // The resolver is invoked with exactly the parent series id, once.
-        assertEquals(listOf("series-7"), resolvedIds)
+        // The resolver is invoked with exactly the season item (it picks the
+        // series id and tag from it), once.
+        assertEquals(listOf("season-1"), resolvedItems.map { it.id })
     }
 
     @Test
     fun season_withoutSeriesId_yieldsEmptyFallback() {
         val fallbacks = item("season-1", MediaType.SEASON, seriesId = null)
-            .seriesImageFallback { "url/$it" }
+            .seriesImageFallback { "url/${it.seriesId}" }
 
         assertTrue(fallbacks.isEmpty(), "a season with no seriesId has nothing to fall back to")
     }
@@ -52,7 +54,7 @@ class EpisodePosterResolverTest {
         // The poster-card episode path is rememberEpisodeCardImage's job;
         // seriesImageFallback is season-only by contract.
         val fallbacks = item("ep-1", MediaType.EPISODE, seriesId = "series-7")
-            .seriesImageFallback { "url/$it" }
+            .seriesImageFallback { "url/${it.seriesId}" }
 
         assertTrue(fallbacks.isEmpty())
     }
@@ -60,7 +62,7 @@ class EpisodePosterResolverTest {
     @Test
     fun movie_yieldsEmptyFallback() {
         val fallbacks = item("m-1", MediaType.MOVIE, seriesId = null)
-            .seriesImageFallback { "url/$it" }
+            .seriesImageFallback { "url/${it.seriesId}" }
 
         assertTrue(fallbacks.isEmpty())
     }
@@ -70,7 +72,7 @@ class EpisodePosterResolverTest {
         // A SERIES resolves to itself for detail routing; it is not a season,
         // so this helper must not inject its own id as a fallback.
         val fallbacks = item("series-7", MediaType.SERIES, seriesId = null)
-            .seriesImageFallback { "url/$it" }
+            .seriesImageFallback { "url/${it.seriesId}" }
 
         assertTrue(fallbacks.isEmpty())
     }
@@ -78,7 +80,7 @@ class EpisodePosterResolverTest {
     @Test
     fun photo_yieldsEmptyFallback() {
         val fallbacks = item("p-1", MediaType.PHOTO, seriesId = null)
-            .seriesImageFallback { "url/$it" }
+            .seriesImageFallback { "url/${it.seriesId}" }
 
         assertTrue(fallbacks.isEmpty())
     }

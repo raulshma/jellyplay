@@ -1,5 +1,8 @@
 plugins {
     id("jellyplay.kmp.library.compose")
+    // The custom on-screen player buttons (issue #27) parse their JSON schema
+    // with kotlinx.serialization in commonMain.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -60,6 +63,8 @@ kotlin {
             // androidx.collection.LruCache memoization in VttTagParser
             // (KMP artifact — shared/core:data precedent).
             implementation(libs.androidx.collection)
+            // CustomPlayerButtons' JSON schema parse (issue #27).
+            implementation(libs.kotlinx.serialization.json)
         }
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
@@ -186,6 +191,10 @@ kotlin.sourceSets.configureEach {
             implementation(libs.junit)
             implementation(libs.robolectric)
             implementation(libs.androidx.test.core)
+            // MediaSessionReclaimTest's engine/player stubs (the mockk
+            // multi-supertype mock is how the test fakes a Media3PlayerHost
+            // engine without a 164-member hand stub).
+            implementation(libs.mockk)
             // Compose UI tests under Robolectric (the rehomed sheet/overlay
             // regression suites; media3's @UnstableApi opt-in rides the
             // androidMain runtime classpath).

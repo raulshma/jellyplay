@@ -45,4 +45,64 @@
     <string name="shortcuts_item_setup_wizard_description">Den anfänglichen Konfigurationsablauf ausführen.</string>
     <string name="shortcuts_item_about_title">Über</string>
     <string name="shortcuts_item_about_description">Version, Lizenzen und App-Informationen.</string>
+
+    <!-- Custom shortcuts -->
+    <string name="shortcuts_category_actions">Aktionen</string>
+    <string name="shortcuts_item_library_title">Bibliothek</string>
+    <string name="shortcuts_item_library_description">Alle Medienbibliotheken durchsuchen.</string>
+    <string name="shortcuts_item_search_title">Suche</string>
+    <string name="shortcuts_item_search_description">Filme, Serien, Musik und mehr durchsuchen.</string>
+    <string name="shortcuts_item_music_title">Musik</string>
+    <string name="shortcuts_item_music_description">Künstler, Alben und Playlists.</string>
+    <string name="shortcuts_item_shortcuts_title">Shortcuts</string>
+    <string name="shortcuts_item_shortcuts_description">Der gesamte Katalog aus Bildschirmen und Aktionen.</string>
+    <string name="shortcuts_action_surprise_title">Überraschung</string>
+    <string name="shortcuts_action_play_on_title">Auf Gerät wiedergeben</string>
+    <string name="shortcuts_action_offline_title">Offline-Modus</string>
+    <string name="shortcuts_customize_title">Shortcuts anpassen</string>
+    <string name="shortcuts_customize_header_section">Start-Kopfzeile</string>
+    <string name="shortcuts_customize_overflow_section">Übergänge-Menü</string>
+    <string name="shortcuts_customize_unpinned_section">Nicht angeheftet</string>
+    <string name="shortcuts_customize_add">Shortcut hinzufügen</string>
+    <string name="shortcuts_customize_empty_header">Nichts an der Start-Kopfzeile angeheftet.</string>
+    <string name="shortcuts_customize_empty_overflow">Nichts am Übergänge-Menü angeheftet.</string>
+    <string name="shortcuts_customize_empty_unpinned">Alle Shortcuts sind angeheftet.</string>
+    <string name="shortcuts_customize_pin_header">An Start-Kopfzeile anheften</string>
+    <string name="shortcuts_customize_pin_overflow">An Übergänge-Menü anheften</string>
+    <string name="shortcuts_customize_edit">Bearbeiten</string>
+    <string name="shortcuts_customize_remove">Entfernen</string>
+    <string name="shortcuts_customize_move_up">Nach oben</string>
+    <string name="shortcuts_customize_move_down">Nach unten</string>
+    <string name="shortcuts_customize_reset">Auf Standard zurücksetzen</string>
+    <string name="shortcuts_customize_reset_confirm_title">Shortcuts zurücksetzen?</string>
+    <string name="shortcuts_customize_reset_confirm_message">Deine benutzerdefinierten Shortcuts werden entfernt und die Standardmenüs kehren zurück.</string>
+    <string name="shortcuts_customize_search_targets">Ziele durchsuchen</string>
+    <string name="shortcuts_customize_no_matches">Keine Treffer.</string>
+    <string name="shortcuts_customize_pick_target">Ziel auswählen</string>
+    <string name="shortcuts_customize_pick_icon">Symbol auswählen</string>
+    <string name="shortcuts_customize_use_default_icon">Standardsymbol verwenden</string>
+    <string name="shortcuts_customize_label_hint">Eigener Name (optional)</string>
+    <string name="shortcuts_customize_save">Speichern</string>
+    <string name="shortcuts_customize_header_full">Die Start-Kopfzeile ist voll – hebe zuerst einen Shortcut ab.</string>
+    <string name="shortcuts_customize_overflow_full">Das Übergänge-Menü ist voll – hebe zuerst einen Shortcut ab.</string>
+    <string name="shortcuts_customize_header_capacity">%1$d von %2$d angeheftet</string>
+    <string name="shortcuts_customize_overflow_capacity">%1$d von %2$d angeheftet</string>
+    <string name="shortcuts_customize_screen_badge">Bildschirm</string>
+    <string name="shortcuts_customize_action_badge">Aktion</string>
+    <string name="shortcuts_customize_pin_section">Anheften an</string>
+    <string name="shortcuts_customize_clear_search">Suche löschen</string>
+
+    <!-- Customize editor -->
+    <string name="shortcuts_customize_tab_header">Kopfzeilen-Dock</string>
+    <string name="shortcuts_customize_tab_menu">Menü</string>
+    <string name="shortcuts_customize_pinned_section">Angepinnt</string>
+    <string name="shortcuts_customize_available_section">Verfügbar</string>
+    <string name="shortcuts_customize_preview">Vorschau</string>
+    <string name="shortcuts_customize_preview_more">+%1$d weitere</string>
+    <string name="shortcuts_customize_cancel">Abbrechen</string>
+    <string name="shortcuts_customize_also_in_header">In der Kopfzeile</string>
+    <string name="shortcuts_customize_also_in_menu">Im Überlaufmenü</string>
+    <string name="shortcuts_customize_empty_no_definitions">Noch keine Shortcuts — füge oben einen hinzu.</string>
+    <string name="shortcuts_customize_header_empty_title">Keine Kopfzeilen-Shortcuts</string>
+    <string name="shortcuts_customize_header_empty_message">Pinne bis zu %1$d Shortcuts an die Kapsel am oberen Rand des Startbildschirms.</string>
 </resources>

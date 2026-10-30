@@ -5,6 +5,7 @@ import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.data.session.settingsSyncGateOpen
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.datastore.BackupParser
 import com.raulshma.jellyplay.core.datastore.BackupSecrets
@@ -16,8 +17,6 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
 import com.raulshma.jellyplay.core.datastore.settings.buildPreferenceSliceSnapshotFromBackup
-import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
@@ -149,6 +148,41 @@ data class RestoreWizardUiState(
     /** One-shot success signal — the screen navigates back on it. */
     val completed: Boolean = false,
 )
+
+/**
+ * The ONE selection verb's payload: which wizard group a toggle addresses.
+ * A target routes through [RestoreWizardViewModel.toggle]; the selection MATH
+ * stays in the model folds ([FileSelection.toggledCategory] and siblings) —
+ * this type only routes the tap.
+ */
+sealed interface WizardSelectionTarget {
+    /** One backup-file diff category (the Preferences children). */
+    data class Category(val category: PreferenceResetCategory) : WizardSelectionTarget
+
+    /** The Preferences parent tier: all-or-none over the declared categories. */
+    data object AllCategories : WizardSelectionTarget
+
+    /** The "App State" extras card. */
+    data object Extras : WizardSelectionTarget
+
+    /** One external slice card. */
+    data class Slice(val key: String) : WizardSelectionTarget
+
+    /** The external-slices parent tier: all-or-none over the offered slices. */
+    data object AllSlices : WizardSelectionTarget
+
+    /** The lock-config opt-in (a state flag, not a selection fold — flips it). */
+    data object SecuritySensitive : WizardSelectionTarget
+
+    /** One snapshot namespace group. */
+    data class Namespace(val id: String) : WizardSelectionTarget
+
+    /** The snapshot prefs parent tier: all-or-none over the offered domains. */
+    data object Prefs : WizardSelectionTarget
+
+    /** One prefs domain group (the snapshot prefs children). */
+    data class PrefDomain(val id: String) : WizardSelectionTarget
+}
 
 /**
  * The unified restore wizard's model: ONE flow for restoring settings
@@ -530,60 +564,46 @@ class RestoreWizardViewModel(
     // Selection (parent/child consistency lives in the pure model)
     // ---------------------------------------------------------------------------
 
-    fun toggleCategory(category: PreferenceResetCategory) {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(file = file.copy(selection = file.selection.toggledCategory(category)))
+    /**
+     * The ONE selection verb: routes [target] to its model fold
+     * ([WizardSelectionTarget]) and lands the folded selection back in the
+     * staged diff's state. A step with nothing staged ignores the tap.
+     */
+    fun toggle(target: WizardSelectionTarget) {
+        when (target) {
+            is WizardSelectionTarget.Category ->
+                updateStagedFile { it.copy(selection = it.selection.toggledCategory(target.category)) }
+            WizardSelectionTarget.AllCategories ->
+                updateStagedFile {
+                    it.copy(selection = it.selection.toggledAllCategories(PreferenceCategoryViews.map { view -> view.category }))
+                }
+            WizardSelectionTarget.Extras ->
+                updateStagedFile { it.copy(selection = it.selection.toggledExtras()) }
+            is WizardSelectionTarget.Slice ->
+                updateStagedFile { it.copy(selection = it.selection.toggledSlice(target.key)) }
+            WizardSelectionTarget.AllSlices ->
+                updateStagedFile { it.copy(selection = it.selection.toggledAllSlices(it.externalSlices.map { slice -> slice.key })) }
+            WizardSelectionTarget.SecuritySensitive ->
+                updateStagedFile { it.copy(restoreSecuritySensitive = !it.restoreSecuritySensitive) }
+            is WizardSelectionTarget.Namespace ->
+                updateStagedSnapshot { it.copy(selection = it.selection.toggledNamespace(target.id)) }
+            WizardSelectionTarget.Prefs ->
+                updateStagedSnapshot { it.copy(selection = it.selection.toggledPrefs(it.groups.prefDomains)) }
+            is WizardSelectionTarget.PrefDomain ->
+                updateStagedSnapshot { it.copy(selection = it.selection.toggledDomain(target.id)) }
+        }
     }
 
-    fun toggleAllCategories() {
+    /** A file-diff-step selection write: no-op while nothing is staged. */
+    private inline fun updateStagedFile(transform: (FileRestoreState) -> FileRestoreState) {
         val file = uiState.file ?: return
-        uiState = uiState.copy(
-            file = file.copy(
-                selection = file.selection.toggledAllCategories(PreferenceCategoryViews.map { it.category }),
-            ),
-        )
+        uiState = uiState.copy(file = transform(file))
     }
 
-    fun toggleExtras() {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(file = file.copy(selection = file.selection.toggledExtras()))
-    }
-
-    fun toggleSlice(key: String) {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(file = file.copy(selection = file.selection.toggledSlice(key)))
-    }
-
-    /** The external-slices parent's toggle: all-or-none over the offered slices. */
-    fun toggleAllSlices() {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(
-            file = file.copy(
-                selection = file.selection.toggledAllSlices(file.externalSlices.map { it.key }),
-            ),
-        )
-    }
-
-    fun toggleRestoreSecuritySensitive(enabled: Boolean) {
-        val file = uiState.file ?: return
-        uiState = uiState.copy(file = file.copy(restoreSecuritySensitive = enabled))
-    }
-
-    fun toggleNamespace(ns: String) {
+    /** A snapshot-diff-step selection write: no-op while nothing is staged. */
+    private inline fun updateStagedSnapshot(transform: (SnapshotRestoreState) -> SnapshotRestoreState) {
         val snapshot = uiState.snapshot ?: return
-        uiState = uiState.copy(snapshot = snapshot.copy(selection = snapshot.selection.toggledNamespace(ns)))
-    }
-
-    fun togglePrefs() {
-        val snapshot = uiState.snapshot ?: return
-        uiState = uiState.copy(
-            snapshot = snapshot.copy(selection = snapshot.selection.toggledPrefs(snapshot.groups.prefDomains)),
-        )
-    }
-
-    fun togglePrefDomain(domain: String) {
-        val snapshot = uiState.snapshot ?: return
-        uiState = uiState.copy(snapshot = snapshot.copy(selection = snapshot.selection.toggledDomain(domain)))
+        uiState = uiState.copy(snapshot = transform(snapshot))
     }
 
     /** The confirm dialog's count face: how many top groups the restore touches. */
@@ -882,15 +902,13 @@ class RestoreWizardViewModel(
     // ---------------------------------------------------------------------------
 
     /**
-     * The ONE gate seam for the server arm (the sync screen's pattern): probe
-     * AVAILABLE AND the `settings-sync` meta key. Meta keys carry no user
-     * toggle, so the gate is probe-only.
+     * The server arm's gate: [settingsSyncGateOpen] (the sync screen's
+     * pattern) behind the wizard's nullable status-store seam — and the api
+     * client is never touched while unwired.
      */
     private fun syncGateOpen(): Boolean {
         val store = statusStore ?: return false
-        return pluginApiClient != null &&
-            store.status.value == JellyPlayPluginStatus.AVAILABLE &&
-            store.hasFeature(JellyPlayPluginFeatures.SettingsSync)
+        return pluginApiClient != null && store.settingsSyncGateOpen()
     }
 
     /** The wizard's own texts through the injectable seam (see [textResolver]). */

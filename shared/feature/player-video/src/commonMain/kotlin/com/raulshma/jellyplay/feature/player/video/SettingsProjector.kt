@@ -3,34 +3,32 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 
 /**
- * Projects the user-preferences slice of [VideoPlayerUiState]: reads the latest
- * [VideoPlayerAggregate] + the current uiState and applies only the fields that
- * actually changed, preserving the distinct-until-changed guards the inline
- * collector previously hand-wrote per field.
+ * The change-time strategy over [PLAYER_PREF_LEAVES]: reads the latest
+ * [VideoPlayerAggregate] + the current uiState and applies only the PROJECTED
+ * rows (those with a state read — the same leaves the seed applies at load
+ * time, plus the input map) that actually changed, preserving the
+ * distinct-until-changed guards the inline collector previously hand-wrote
+ * per field. One uiState copy per changed leaf; an unchanged leaf performs
+ * no copy at all.
  *
- * Extracted from the `init { preferencesStore.preferences.collect { … } }`
- * block of [VideoPlayerViewModel]. That collector mixed two concerns:
- *  1. **Pure projection** of ~12 prefs → uiState fields (this class), and
- *  2. **Side effects** triggered by pref changes — rebuilding the engine
- *     config (`updateConfigWithUiState`), toggling autoplay
- *     (`autoplayController.setEnabled`), and registering/unregistering audio
- *     focus. Those stay in the VM: they are reactions, not state copies.
+ * Two projections stay hand-written because they are not table rows (see the
+ * table's KDoc): the HDR-aware subtitle-style resolution below, and the PIN
+ * pair (two uiPrefs leaves from one pref + one derived flag, written in ONE
+ * guarded copy).
  *
- * [project] returns the set of fields the VM must still react to (today: only
- * a subtitle-style change needs an engine-config rebuild) so the VM keeps its
- * side-effect block without re-deriving the diff.
+ * [project] returns `true` when the resolved subtitle style changed — the VM
+ * must then rebuild the engine config (`updateConfigWithUiState`); every
+ * other projected field has no downstream side effect (the render-pref
+ * rebuild triggers are [PlayerPrefsFanout]'s, derived from the same table's
+ * rebuild flags).
  *
  * Engine + session access is via lambdas so this class stays ViewModel-agnostic.
  * The `getItemId` / `getMediaStreams` reads feed the per-item audio/subtitle
  * override + HDR-aware subtitle-style resolution.
  *
- * The *load-time* counterpart of this *change-time* projection is
- * [PlayerPrefsSeed]: the single home of which pref feeds which uiState leaf at
- * session start (one unguarded copy per load). Seven leaves are mapped in both
- * places (showPlaybackMetadata, showClock, showTimeRemaining, tvZoomModePercent,
- * keepScreenOnDuringVideo, passOutProtectionHours, autoPlayCountdownSec) — when
- * moving or adding a leaf, update both or drop one side deliberately. This
- * class's guarded-diff semantics are intentionally NOT merged into the seed.
+ * The *load-time* counterpart strategy is [PlayerPrefsSeed]; both read the
+ * same leaf table, so a row moves between them by editing its row, not two
+ * files.
  */
 internal class SettingsProjector(
     private val getUiState: () -> VideoPlayerUiState,
@@ -40,24 +38,11 @@ internal class SettingsProjector(
 ) {
 
     /**
-     * Apply the prefs-derived uiState slice. Each field is guarded so an
-     * unrelated pref write (dozens emit UserPreferences) does not allocate a
-     * fresh uiState copy or re-emit to every collector.
-     *
-     * Returns `true` when the resolved subtitle style changed — the VM must
-     * then rebuild the engine config (`updateConfigWithUiState`); every other
-     * projected field has no downstream side effect.
+     * Apply the prefs-derived uiState slice, one guarded write per changed
+     * projected row. Returns `true` when the resolved subtitle style changed.
      */
     fun project(agg: VideoPlayerAggregate): Boolean {
         var subtitleStyleChanged = false
-
-        // Note: three former projections moved out when their fields' homes
-        // moved to the owning controllers — the per-item audio/subtitle
-        // override flags (now TrackSelectionHelper.onStoredSelectionChanged),
-        // `sleepTimerLastUsedDurationMs` (now SleepTimerController
-        // .seedLastUsedDurationMs) and `defaultSearchLanguage` (now
-        // SubtitleManager.seedDefaultSearchLanguage). The VM's aggregate
-        // collector routes those.
 
         // HDR-aware subtitle style: the resolved style depends on whether the
         // current streams carry HDR, so re-derive on every prefs tick. The VM
@@ -81,80 +66,28 @@ internal class SettingsProjector(
             subtitleStyleChanged = true
         }
 
-        // Distinct-until-changed guards, all through the one generic
-        // [syncPref]: the selector/updater lambdas compose the slice
-        // traversal (KProperty1<VideoPlayerUiState,*> does not traverse the
-        // slice, so a property-ref helper cannot reach stored slice leaves),
-        // preserving the single-copy guard for a leaf in any slice.
-        syncPref(
-            selector = { it.uiPrefs.showPlaybackMetadata },
-            newValue = agg.videoPlayer.videoShowPlaybackMetadata,
-            updater = { v -> copy(uiPrefs = uiPrefs.copy(showPlaybackMetadata = v)) },
-        )
-        syncPref(
-            selector = { it.uiPrefs.showClock },
-            newValue = agg.videoPlayer.showClockInPlayer,
-            updater = { v -> copy(uiPrefs = uiPrefs.copy(showClock = v)) },
-        )
-        syncPref(
-            selector = { it.uiPrefs.showTimeRemaining },
-            newValue = agg.videoPlayer.showTimeRemaining,
-            updater = { v -> copy(uiPrefs = uiPrefs.copy(showTimeRemaining = v)) },
-        )
-        syncPref(
-            selector = { it.videoFx.tvZoomModePercent },
-            newValue = agg.videoPlayer.tvZoomModePercent,
-            updater = { v -> copy(videoFx = videoFx.copy(tvZoomModePercent = v)) },
-        )
-        syncPref(
-            selector = { it.uiPrefs.keepScreenOnDuringVideo },
-            newValue = agg.playback.keepScreenOnDuringVideo,
-            updater = { v -> copy(uiPrefs = uiPrefs.copy(keepScreenOnDuringVideo = v)) },
-        )
-        syncPref(
-            selector = { it.uiPrefs.passOutProtectionHours },
-            newValue = agg.videoPlayer.videoPassOutProtectionHours,
-            updater = { v -> copy(uiPrefs = uiPrefs.copy(passOutProtectionHours = v)) },
-        )
-        syncPref(
-            selector = { it.autoplay.autoPlayCountdownSec },
-            newValue = agg.playback.autoPlayCountdownSec,
-            updater = { v -> copy(autoplay = autoplay.copy(autoPlayCountdownSec = v)) },
-        )
-        // The input mapping: settings-side editor writes + in-player quick
-        // toggles both land here change-time (the seed owns the load-time
-        // copy), so a mapping edit applies to a live player without reload.
-        syncPref(
-            selector = { it.gestures.inputMap },
-            newValue = agg.videoPlayer.videoInputBindings,
-            updater = { v -> copy(gestures = gestures.copy(inputMap = v)) },
-        )
+        // The projected rows: the same leaves the seed applies at load time,
+        // guarded so an unrelated pref write (dozens emit UserPreferences)
+        // does not allocate a fresh uiState copy or re-emit to every
+        // collector. The state reads / writes come from the table's rows —
+        // adding a change-time leaf is adding (or projecting) a row, not a
+        // hand-written syncPref block.
+        for (leaf in PLAYER_PREF_LEAVES) {
+            val readState = leaf.readStateAny ?: continue
+            val newValue = leaf.readAggregateAny(agg)
+            if (readState(getUiState()) != newValue) {
+                val write = leaf.writeAny
+                updateUiState { it.write(newValue) }
+            }
+        }
 
-        // PIN lock: two uiPrefs leaves driven by one pref + one derived flag.
+        // PIN lock: two uiPrefs leaves driven by one pref + one derived flag,
+        // written in ONE guarded copy (a table row pair would write two).
         val hasPin = agg.security.pinHash != null
         if (getUiState().uiPrefs.usePinForPlayerLock != agg.security.usePinForPlayerLock || getUiState().uiPrefs.hasPin != hasPin) {
             updateUiState { it.copy(uiPrefs = it.uiPrefs.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin)) }
         }
 
         return subtitleStyleChanged
-    }
-
-    /**
-     * The one distinct-until-changed guard shared by every leaf above, any
-     * slice: [selector] reads the current leaf and [updater] writes it back,
-     * each composing the slice traversal a property reference cannot express
-     * (`KProperty1<VideoPlayerUiState, *>` does not reach stored slice
-     * leaves, and slice `val`s are read-only). An unchanged value performs
-     * no copy at all; a changed one rewrites the leaf inside a single
-     * uiState copy built from the state `updateUiState` hands over.
-     */
-    private inline fun <V> syncPref(
-        selector: (VideoPlayerUiState) -> V,
-        newValue: V,
-        crossinline updater: VideoPlayerUiState.(V) -> VideoPlayerUiState,
-    ) {
-        if (selector(getUiState()) != newValue) {
-            updateUiState { it.updater(newValue) }
-        }
     }
 }

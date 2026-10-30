@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.util.DownloadResult
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -71,7 +72,9 @@ class TrackDownloadActionsTest {
         override suspend fun startSeries(
             seriesId: String,
             episodeIds: Map<String, List<String>>?,
+            policyChoice: DownloadIntake.SeriesPolicyChoice,
         ): Result<List<String>> = Result.success(emptyList())
+        override suspend fun seriesPolicy(seriesId: String): AutoDownloadMode? = null
         override suspend fun startFromItem(item: MediaItem): DownloadRequestResult =
             DownloadRequestResult.Started
         override suspend fun flipTrack(itemId: String): TrackFlipResult {

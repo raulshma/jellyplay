@@ -45,7 +45,10 @@ import kotlinx.coroutines.flow.first
  */
 internal class DetailContentResolver(
     private val itemId: String,
-    private val mediaRepository: MediaRepository,
+    /** The detail fetch of the detail-read family seam. */
+    private val detailFeed: DetailFeed,
+    /** The album-tracks read of the music-catalogue family seam. */
+    private val musicCatalogue: MusicCatalogue,
     /** The per-type "which caches does this detail affect" dispatch. */
     private val cacheInvalidation: MediaRepositoryCacheInvalidation,
     private val offlineRepository: OfflineRepository,
@@ -99,7 +102,7 @@ internal class DetailContentResolver(
             // resolveUsableDownload needs only itemId — start it before the
             // detail fetch so the Room read overlaps the network round-trip.
             val usableDeferred = async { playbackSourceResolver.resolveUsableDownload(itemId) != null }
-            val result = mediaRepository.getMediaDetail(itemId, force = force)
+            val result = detailFeed.getMediaDetail(itemId, force = force)
             result.fold(
                 onSuccess = { detail ->
                     if (force) cacheInvalidation.invalidateFor(detail)
@@ -291,7 +294,7 @@ internal class DetailContentResolver(
         return if (offline) {
             offlineRepository.getChildren(detail.item.id).first().map { it.toMediaItem() }
         } else {
-            mediaRepository.getAlbumTracks(detail.item.id).getOrDefault(emptyList())
+            musicCatalogue.getAlbumTracks(detail.item.id, force = false).getOrDefault(emptyList())
         }
     }
 

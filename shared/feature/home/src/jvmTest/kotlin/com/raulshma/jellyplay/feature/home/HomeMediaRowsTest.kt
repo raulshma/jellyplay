@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -60,6 +63,21 @@ class HomeMediaRowsTest {
 
     // ── fallbackImageUrls truth table ──
 
+    /**
+     * The production [ArtworkUrls] over a bare-URL [ImageUrlProvider] — the
+     * fallback legs resolve raw and untagged through `posterFor`'s
+     * different-id fold, so the URLs read exactly like the id-shaped lambda
+     * the helper took before the artwork fold.
+     */
+    private val artwork: ArtworkUrls = DefaultArtworkUrls(
+        object : ImageUrlProvider {
+            override fun getImageUrl(itemId: String, maxWidth: Int?, tag: String?): String = "img/$itemId"
+            override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String = ""
+            override fun getBackdropUrl(itemId: String, maxWidth: Int, tag: String?): String = ""
+            override fun getLogoUrl(itemId: String, tag: String?): String = ""
+        },
+    )
+
     private fun audioItem(
         parentId: String? = null,
         artistIds: List<String> = emptyList(),
@@ -75,7 +93,7 @@ class HomeMediaRowsTest {
     fun fallbackImageUrls_audioWithParent_resolvesParentArtOnly() {
         val urls = fallbackImageUrls(
             audioItem(parentId = "album-1"),
-            getImageUrl = { id -> "img/$id" },
+            artwork = artwork,
         )
 
         assertEquals(listOf("img/album-1"), urls)
@@ -85,7 +103,7 @@ class HomeMediaRowsTest {
     fun fallbackImageUrls_audioWithoutParentButWithArtist_resolvesArtistArt() {
         val urls = fallbackImageUrls(
             audioItem(artistIds = listOf("artist-1")),
-            getImageUrl = { id -> "img/$id" },
+            artwork = artwork,
         )
 
         assertEquals(listOf("img/artist-1"), urls)
@@ -95,7 +113,7 @@ class HomeMediaRowsTest {
     fun fallbackImageUrls_audioWithBoth_parentFirstThenArtist() {
         val urls = fallbackImageUrls(
             audioItem(parentId = "album-1", artistIds = listOf("artist-1")),
-            getImageUrl = { id -> "img/$id" },
+            artwork = artwork,
         )
 
         assertEquals(listOf("img/album-1", "img/artist-1"), urls)
@@ -105,7 +123,7 @@ class HomeMediaRowsTest {
     fun fallbackImageUrls_nonAudio_isEmpty() {
         val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE, parentId = "p")
 
-        assertEquals(emptyList(), fallbackImageUrls(item, getImageUrl = { "img/$it" }))
+        assertEquals(emptyList(), fallbackImageUrls(item, artwork = artwork))
     }
 
     @Test
@@ -120,7 +138,7 @@ class HomeMediaRowsTest {
 
         assertEquals(
             listOf("img/album-1", "img/artist-1"),
-            fallbackImageUrls(item, getImageUrl = { id -> "img/$id" }),
+            fallbackImageUrls(item, artwork = artwork),
         )
     }
 
@@ -128,7 +146,7 @@ class HomeMediaRowsTest {
     fun fallbackImageUrls_audioWithNoParentNorArtist_isEmpty() {
         assertEquals(
             emptyList(),
-            fallbackImageUrls(audioItem(), getImageUrl = { "img/$it" }),
+            fallbackImageUrls(audioItem(), artwork = artwork),
         )
     }
 

@@ -168,4 +168,7 @@
     <string name="settings_next_up_hidden_brief">Aus der „Als Nächstes“-Reihe entfernte Serien ansehen und wiederherstellen</string>
     <string name="settings_hidden_libraries">Ausgeblendete Bibliotheken</string>
     <string name="settings_hidden_libraries_brief">Aus der Mediathek-Reihe ausgeblendete Bibliotheken ansehen und wiederherstellen</string>
+
+    <string name="settings_home_header_shortcuts">Kopfzeilen-Shortcuts</string>
+    <string name="settings_home_header_shortcuts_subtitle">Die Shortcuts im Dock der Kopfzeile anpassen</string>
 </resources>

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -95,7 +95,7 @@ class PlaybackSessionLifecycleTest {
     private lateinit var pipeline: SessionLoadPipeline
     private lateinit var hooks: RecordingHooks
     private lateinit var positionStore: FakePositionStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
 
     private val events = mutableListOf<SessionEvent>()
     private val startedRequests = mutableListOf<LoadRequest>()
@@ -123,7 +123,7 @@ class PlaybackSessionLifecycleTest {
         playbackStore = graph.playbackStore
         progressReporter = graph.progressReporter
         mediaSessionController = graph.mediaSessionController
-        mediaRepository = graph.mediaRepository
+        detailFeed = graph.detailFeed
         positionStore = graph.positionStore
         pipeline = graph.pipeline
         every { pipeline.start(any(), any()) } answers {
@@ -221,17 +221,27 @@ class PlaybackSessionLifecycleTest {
 
     @Test
     fun initialize_resetsTheSeekStopAndReleaseLatches() = runTest {
-        buildSession()
-        session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = System.currentTimeMillis()
-        session.stopReportedForSession = "server-old"
+        buildSession(currentItemId = "item-1", playSessionId = "server-1")
+        engine.advanceTo(30_000L)
+        session.seekPersisted(42_000L) // arms the seek latch, fresh within the 3 s window
+        session.reportCurrentPlaybackStopped() // latches the Stop dedup for server-1
         session.released = true
 
         session.initialize(request())
 
-        assertNull(session.lastSeekPositionMs)
-        assertEquals(0L, session.lastSeekTimestamp)
-        assertNull(session.stopReportedForSession)
+        // The seek latch was dropped: the report position falls back to the
+        // engine's (the dropped latch cannot win).
+        assertEquals(30_000L, session.getReportPositionMs())
+        // The Stop dedup was cleared: the outgoing-session report inside
+        // initialize (step 7 — after the reset) went out as a SECOND stop for
+        // the same session id, at the ENGINE position — a stale latch would
+        // have deduped it against the pre-initialize report.
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 420_000_000L)
+        }
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 300_000_000L)
+        }
         assertFalse(session.released)
     }
 
@@ -385,11 +395,14 @@ class PlaybackSessionLifecycleTest {
         positionStore.savedPlaySessionIdValue = "srv-9"
 
         session.initialize(request(itemId = "item-9"))
-        assertEquals("srv-9", session.playSessionId)
+        // The resolver falls back to the local id (the graph's state carries
+        // no server-issued id), which the item-loaded verb rebound to the
+        // restored one.
+        assertEquals("srv-9", session.positionLedger.currentPlaySessionId)
 
         // A different item must allocate a FRESH local session id.
         session.initialize(request(itemId = "item-8"))
-        assertNotEquals("srv-9", session.playSessionId)
+        assertNotEquals("srv-9", session.positionLedger.currentPlaySessionId)
     }
 
     // ── 2. Mini-player reclaim body ──────────────────────────────────────────
@@ -404,7 +417,7 @@ class PlaybackSessionLifecycleTest {
         sessionStateFlow.value = sessionStateFlow.value.copy(title = "Mini Title", subtitle = "Sub")
         val reclaimedEngine = FakeMediaEngine()
         hooks.reclaimEngine = { reclaimedEngine }
-        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("item-1", any()) } returns
             Result.success(detail("item-1"))
 
         session.initialize(request(itemId = "item-1"))
@@ -436,7 +449,7 @@ class PlaybackSessionLifecycleTest {
     fun initialize_reclaimGate_detailFailure_skipsHydration() = runTest {
         buildSession()
         hooks.reclaimEngine = { FakeMediaEngine() }
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns
             Result.failure(RuntimeException("offline"))
 
         session.initialize(request(itemId = "item-1"))
@@ -829,9 +842,8 @@ class PlaybackSessionLifecycleTest {
         }
     }
 
-    // [FakePositionStore] is the recording double (player-video jvmTest, the
-    // the test-placement rule move out of test-fixtures — its only consumers were
-    // this module's suites) — this file's former private variant (records
-    // persists, serves settable saved values) IS its behavior; the tests
-    // below set only the saved*Value fields the resume path reads.
+    // [FakePositionStore] is the recording double (player-video jvmTest, per
+    // the test-placement rule): records persists and serves settable saved
+    // values; the tests below set only the saved*Value fields the resume path
+    // reads.
 }

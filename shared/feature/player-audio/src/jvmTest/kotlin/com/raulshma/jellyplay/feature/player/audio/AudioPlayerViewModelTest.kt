@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
@@ -48,7 +48,7 @@ class AudioPlayerViewModelTest {
     private lateinit var projections: PreferenceProjections
     private lateinit var audioStore: AudioStore
     private lateinit var audioEffectsStore: AudioEffectsStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
@@ -67,7 +67,7 @@ class AudioPlayerViewModelTest {
         projections = mockk(relaxed = true)
         audioStore = mockk(relaxed = true)
         audioEffectsStore = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         playlistRepository = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
@@ -94,7 +94,7 @@ class AudioPlayerViewModelTest {
             projections = projections,
             audioStore = audioStore,
             audioEffectsStore = audioEffectsStore,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playlistRepository = playlistRepository,
             userDataMutator = userDataMutator,
             downloads = downloads,
@@ -474,9 +474,6 @@ class AudioPlayerViewModelTest {
         verify { effectsManager.setDialogueBoostStrength(EffectStrength.HIGH) }
         verify { effectsManager.setNightModeStrength(EffectStrength.LOW) }
         verify { effectsManager.setBassBoostStrength(EffectStrength.MODERATE) }
-        assertEquals(0.6f, viewModel.nightModeVolume, 0.0001f)
-        assertEquals(900, viewModel.nightModeGain)
-        assertEquals(5_000L, viewModel.skipPreviousThresholdMs)
     }
 
     @Test

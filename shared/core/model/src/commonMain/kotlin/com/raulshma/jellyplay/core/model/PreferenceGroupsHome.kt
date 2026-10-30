@@ -16,6 +16,10 @@ import kotlinx.serialization.Serializable
 data class HomeScreenPreferences(
     val homeMode: HomeMode = HomeMode.VIDEO,
     val homeHeroEnabled: Boolean = true,
+    /** The hero block's presentation: carousel, slideshow, detailed spotlight or TV slider. Default CAROUSEL. */
+    val homeHeroStyle: HomeHeroStyle = HomeHeroStyle.CAROUSEL,
+    /** The slideshow hero's auto-advance pacing in seconds (3–60). Default 8. */
+    val homeHeroSlideshowIntervalSec: Int = 8,
     /** Video hero billboard (touch/default form factors). Default off. */
     val homeHeroVideoEnabled: Boolean = false,
     /** Video hero billboard (TV form factor). Default off. */

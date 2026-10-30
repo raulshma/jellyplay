@@ -18,6 +18,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.size.Size
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -38,19 +39,30 @@ private val colorCache = LruCache<String, ArtworkColors>(100)
 @Composable
 actual fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
     val context = LocalContext.current
-    val cached = imageUrl?.let { colorCache.get(it) }
-    // Keyed on imageUrl so a navigation to a different artwork resets the state
-    // immediately — otherwise the previous item's palette shows until the async
-    // extraction for the new image lands.
-    var artworkColors by remember(imageUrl) { mutableStateOf(cached) }
+    // Extraction results land here; the RETURNED palette below never drops to
+    // null while a new image extracts. The palette drives ArtworkThemeWrapper's
+    // whole MaterialTheme (and the home backdrop/background pipelines), so a
+    // null window re-renders the entire app in the DEFAULT color scheme for
+    // the extraction's duration — a full-screen theme flash on every hero
+    // rotation or data refresh that lands on an uncached image.
+    var extractedColors by remember { mutableStateOf<ArtworkColors?>(null) }
+    // The returned palette: the new URL's cached swatches the moment they're
+    // known (cache hits swap in the same frame, no effect round-trip), the
+    // in-flight extraction's result once it lands, and the PREVIOUS artwork's
+    // palette as the hold while that extraction runs or when it fails. A
+    // null/blank URL is an explicit reset (theming off / no artwork), not a
+    // hold.
+    val cachedNow = imageUrl?.let { colorCache.get(it) }
+    val artworkColors = when {
+        imageUrl.isNullOrBlank() -> null
+        cachedNow != null -> cachedNow
+        else -> extractedColors
+    }
     val loader = coil3.SingletonImageLoader.get(context)
 
     LaunchedEffect(imageUrl) {
         if (imageUrl.isNullOrBlank()) return@LaunchedEffect
-        colorCache.get(imageUrl)?.let {
-            artworkColors = it
-            return@LaunchedEffect
-        }
+        if (colorCache.get(imageUrl) != null) return@LaunchedEffect
         withContext(Dispatchers.Default) {
             try {
                 val request = ImageRequest.Builder(context)
@@ -74,9 +86,18 @@ actual fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
                     // this request from evicting a display painter's bitmap.
                     val colors = AndroidArtworkPalette.extractColors(bitmap)
                     colorCache.put(imageUrl, colors)
-                    artworkColors = colors
+                    // A rotation that raced this extraction cancelled this
+                    // effect; adopting the finished palette would pin the
+                    // outgone artwork's colors over the new one until the next
+                    // rotation. An isActive read, not ensureActive — the
+                    // surrounding catch swallows exceptions and must not
+                    // swallow a thrown CancellationException.
+                    if (isActive) extractedColors = colors
                 }
             } catch (_: Exception) {
+                // Extraction failure keeps the held palette — dropping to null
+                // (and with it the themed scheme) is the flash this retain
+                // exists to prevent. A later visit to this URL retries.
             }
         }
     }

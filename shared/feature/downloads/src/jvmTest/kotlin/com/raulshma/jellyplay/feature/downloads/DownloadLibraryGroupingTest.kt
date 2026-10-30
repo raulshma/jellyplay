@@ -1,11 +1,13 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.ui.state.ToggleableState
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -151,6 +153,26 @@ class DownloadLibraryGroupingTest {
             expandedKeys = setOf("series:s1"),
         )
         assertEquals(listOf("S(Show)", "I(Episode e1)", "I(Episode e2)"), shape(rows))
+    }
+
+    @Test
+    fun disclosed_group_episodes_carry_the_inside_group_flag() {
+        val rows = downloadListRows(
+            downloads = listOf(
+                episode("e1", episodeNumber = 1),
+                flat("m1"),
+                episode("x", seriesId = null, seriesName = null, episodeNumber = 1),
+            ),
+            filter = DownloadListFilter.ALL,
+            sort = DownloadListSort.RECENT,
+            expandedKeys = setOf("series:s1"),
+        )
+        val flagged = rows.filterIsInstance<DownloadListRow.Item>()
+            .associate { it.download.id to it.insideGroup }
+        // The group member indents; standalone episodes and movies don't.
+        assertEquals(true, flagged["e1"])
+        assertEquals(false, flagged["x"])
+        assertEquals(false, flagged["m1"])
     }
 
     @Test
@@ -472,5 +494,114 @@ class DownloadLibraryGroupingTest {
         assertEquals(DownloadListSort.SIZE, DownloadListSort.fromName("SIZE"))
         assertEquals(DownloadListSort.RECENT, DownloadListSort.fromName(null))
         assertEquals(DownloadListSort.RECENT, DownloadListSort.fromName("WHATEVER"))
+    }
+
+    // ── Series header artwork ─────────────────────────────────────────────
+
+    @Test
+    fun series_header_prefers_the_saved_poster_and_falls_back_to_episode_stills() {
+        val rows = downloadListRows(
+            listOf(
+                episode("ep1").copy(imageUrl = "still-ep1", imageBlurHash = "bh1"),
+                episode("ep2", seriesId = "s2", seriesName = "Other").copy(imageUrl = "still-ep2"),
+                // A series with no saved poster and no stills renders artwork-less.
+                episode("ep3", seriesId = "s3", seriesName = "Bare"),
+            ),
+            DownloadListFilter.ALL,
+            DownloadListSort.RECENT,
+            emptySet(),
+            seriesArt = mapOf("s1" to SeriesArt("poster-s1", "poster-bh")),
+        )
+        val headers = rows.filterIsInstance<DownloadListRow.SeriesHeader>()
+        val s1 = headers.first { it.key == "series:s1" }
+        assertEquals("poster-s1", s1.imageUrl)
+        assertEquals("poster-bh", s1.imageBlurHash)
+        val s2 = headers.first { it.key == "series:s2" }
+        assertEquals("still-ep2", s2.imageUrl)
+        assertNull(s2.imageBlurHash)
+        val s3 = headers.first { it.key == "series:s3" }
+        assertNull(s3.imageUrl)
+    }
+
+    @Test
+    fun still_fallback_prefers_a_completed_episode() {
+        val rows = downloadListRows(
+            listOf(
+                episode("epA", episodeNumber = 1).copy(status = DownloadStatus.DOWNLOADING, imageUrl = "still-downloading"),
+                episode("epB", episodeNumber = 2).copy(imageUrl = "still-completed"),
+            ),
+            DownloadListFilter.ALL,
+            DownloadListSort.RECENT,
+            emptySet(),
+        )
+        val header = rows.filterIsInstance<DownloadListRow.SeriesHeader>().single()
+        assertEquals("still-completed", header.imageUrl)
+    }
+
+    // ── Aggregate transfer fraction (collapsed headers + app-bar ring) ────
+
+    @Test
+    fun aggregate_fraction_is_null_when_no_item_qualifies() {
+        val items = listOf(
+            episode("ep1").copy(status = DownloadStatus.PAUSED),
+            episode("ep2"),
+        )
+        assertNull(aggregateProgressFraction(items, setOf(DownloadStatus.DOWNLOADING), emptyMap()))
+    }
+
+    @Test
+    fun collapsed_group_fraction_is_null_without_an_actively_downloading_episode() {
+        // Paused + completed-only groups hide the header's aggregate bar —
+        // "downloads in progress" gates it.
+        val items = listOf(
+            episode("ep1").copy(status = DownloadStatus.PAUSED, downloadedBytes = 200),
+            episode("ep2"),
+        )
+        assertNull(downloadGroupProgressFraction(items, emptyMap()))
+    }
+
+    @Test
+    fun collapsed_group_fraction_blends_completed_structural_and_live_bytes() {
+        // ep1 landed whole (500/500); ep2 is half-way by LIVE bytes (250/500)
+        // — its stale structural bytes are overridden by the live value — and
+        // ep3's unprobed total contributes to neither sum: 750/1000.
+        val items = listOf(
+            episode("ep1", totalBytes = 500),
+            episode("ep2", totalBytes = 500).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 100),
+            episode("ep3").copy(status = DownloadStatus.PENDING),
+        )
+        val fraction = downloadGroupProgressFraction(
+            items,
+            mapOf("ep2" to DownloadProgress(id = "ep2", downloadedBytes = 250, speedBytesPerSec = 0, totalSizeBytes = 500)),
+        )
+        assertEquals(0.75f, fraction)
+    }
+
+    @Test
+    fun aggregate_fraction_excludes_items_outside_the_status_set_and_unknown_totals() {
+        // A paused row (outside the DOWNLOADING gate) and a pending row with
+        // no probed size yet contribute to neither sum — only ep3's 100/400
+        // shapes the fraction.
+        val items = listOf(
+            episode("ep1", totalBytes = 400).copy(status = DownloadStatus.PAUSED),
+            episode("ep2").copy(status = DownloadStatus.PENDING),
+            episode("ep3", totalBytes = 400).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 100),
+        )
+        val fraction = aggregateProgressFraction(items, setOf(DownloadStatus.DOWNLOADING), emptyMap())
+        assertEquals(0.25f, fraction)
+    }
+
+    @Test
+    fun aggregate_fraction_covers_the_whole_active_set_for_the_app_bar_ring() {
+        // The app-bar ring gates on the Active set: a paused row counts with
+        // its structural bytes, a queued row without a probed size costs
+        // nothing — (300 + 150) / 1200.
+        val items = listOf(
+            episode("ep1", totalBytes = 600).copy(status = DownloadStatus.PAUSED, downloadedBytes = 300),
+            episode("ep2", totalBytes = 600).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 150),
+            episode("ep3").copy(status = DownloadStatus.QUEUED),
+        )
+        val fraction = aggregateProgressFraction(items, DownloadStatusFilter.ACTIVE_STATUSES, emptyMap())
+        assertEquals(0.375f, fraction)
     }
 }

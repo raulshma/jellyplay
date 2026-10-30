@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.feature.home
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
@@ -71,7 +73,7 @@ class NextUpExcludedViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var editor: PreferencesEditor
 
@@ -81,32 +83,35 @@ class NextUpExcludedViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
         every { imageUrlProvider.getImageUrl(any()) } answers { "https://server/Items/${firstArg<String>()}/Images/Primary" }
         editor = PreferencesEditor(
             scope = CoroutineScope(testDispatcher + Job()),
             editScope = PreferencesEditScope(
-                playback = mockk<PlaybackStore>(relaxed = true),
-                appearance = mockk<AppearanceStore>(relaxed = true),
-                videoPlayer = mockk<VideoPlayerStore>(relaxed = true),
-                downloads = mockk<DownloadsStore>(relaxed = true),
-                engine = mockk<PlayerEngineStore>(relaxed = true),
-                homeDiscovery = homeDiscovery,
-                audio = mockk<AudioStore>(relaxed = true),
-                audioEffects = mockk<AudioEffectsStore>(relaxed = true),
-                audioCache = mockk<AudioCacheStore>(relaxed = true),
-                library = mockk<LibraryStore>(relaxed = true),
-                navigation = mockk<NavigationStore>(relaxed = true),
-                networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
-                notification = mockk<NotificationStore>(relaxed = true),
-                screensaver = mockk<ScreensaverStore>(relaxed = true),
-                security = mockk<SecurityStore>(relaxed = true),
-                subtitle = mockk<SubtitleLanguageStore>(relaxed = true),
-                syncPlayCast = mockk<SyncPlayCastStore>(relaxed = true),
-                experimental = mockk<ExperimentalStore>(relaxed = true),
-                volumeProfile = mockk<VolumeProfileStore>(relaxed = true),
+                stores = PreferenceStores(
+                    playback = mockk<PlaybackStore>(relaxed = true),
+                    videoPlayer = mockk<VideoPlayerStore>(relaxed = true),
+                    engine = mockk<PlayerEngineStore>(relaxed = true),
+                    subtitle = mockk<SubtitleLanguageStore>(relaxed = true),
+                    audio = mockk<AudioStore>(relaxed = true),
+                    audioEffects = mockk<AudioEffectsStore>(relaxed = true),
+                    audioCache = mockk<AudioCacheStore>(relaxed = true),
+                    appearance = mockk<AppearanceStore>(relaxed = true),
+                    homeDiscovery = homeDiscovery,
+                    library = mockk<LibraryStore>(relaxed = true),
+                    navigation = mockk<NavigationStore>(relaxed = true),
+                    shortcuts = mockk(relaxed = true),
+                    downloads = mockk<DownloadsStore>(relaxed = true),
+                    networkOffline = mockk<NetworkOfflineStore>(relaxed = true),
+                    notification = mockk<NotificationStore>(relaxed = true),
+                    syncPlayCast = mockk<SyncPlayCastStore>(relaxed = true),
+                    security = mockk<SecurityStore>(relaxed = true),
+                    experimental = mockk<ExperimentalStore>(relaxed = true),
+                    screensaver = mockk<ScreensaverStore>(relaxed = true),
+                    volumeProfile = mockk<VolumeProfileStore>(relaxed = true),
+                ),
                 appRuntimeState = mockk<AppRuntimeStateStore>(relaxed = true),
             ),
             store = mockk<UserPreferencesStore>(relaxed = true),
@@ -122,7 +127,7 @@ class NextUpExcludedViewModelTest {
         MediaItem(id = id, name = name, mediaType = MediaType.SERIES, year = year)
 
     private fun viewModel(): NextUpExcludedViewModel =
-        NextUpExcludedViewModel(homeDiscovery, editor, mediaRepository, imageUrlProvider)
+        NextUpExcludedViewModel(homeDiscovery, editor, detailFeed, DefaultArtworkUrls(imageUrlProvider))
 
     // ---------------------------------------------------------------- hydration
 
@@ -131,9 +136,9 @@ class NextUpExcludedViewModelTest {
         homeDiscoverySlice.value = HomeDiscoverySlice(
             nextUpExcludedSeriesIds = setOf("s1", "s2"),
         )
-        coEvery { mediaRepository.getMediaDetail("s1") } returns
+        coEvery { detailFeed.getMediaDetail("s1", force = false) } returns
             Result.success(MediaDetail(item = series("s1", "Series One", 2020)))
-        coEvery { mediaRepository.getMediaDetail("s2") } returns
+        coEvery { detailFeed.getMediaDetail("s2", force = false) } returns
             Result.success(MediaDetail(item = series("s2", "Series Two", 1999)))
 
         val vm = viewModel()
@@ -151,9 +156,9 @@ class NextUpExcludedViewModelTest {
     @Test
     fun `a failed detail fetch keeps the row as a still-restorable placeholder`() = runTest(testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(nextUpExcludedSeriesIds = setOf("s1", "s2"))
-        coEvery { mediaRepository.getMediaDetail("s1") } returns
+        coEvery { detailFeed.getMediaDetail("s1", force = false) } returns
             Result.success(MediaDetail(item = series("s1", "Series One", 2020)))
-        coEvery { mediaRepository.getMediaDetail("s2") } returns Result.failure(IllegalStateException("offline"))
+        coEvery { detailFeed.getMediaDetail("s2", force = false) } returns Result.failure(IllegalStateException("offline"))
 
         val vm = viewModel()
         advanceUntilIdle()
@@ -171,7 +176,7 @@ class NextUpExcludedViewModelTest {
         advanceUntilIdle()
 
         assertTrue(vm.state.value.series.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     // ---------------------------------------------------------------- restore commands
@@ -179,7 +184,7 @@ class NextUpExcludedViewModelTest {
     @Test
     fun `restore routes through includeSeriesInNextUp and the row leaves the list`() = runTest(testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(nextUpExcludedSeriesIds = setOf("s1", "s2"))
-        coEvery { mediaRepository.getMediaDetail(any()) } answers {
+        coEvery { detailFeed.getMediaDetail(any(), force = false) } answers {
             Result.success(MediaDetail(item = series(firstArg(), "Series", 2020)))
         }
         // Mirror the write back into the slice, the way the real store's edit
@@ -204,7 +209,7 @@ class NextUpExcludedViewModelTest {
     @Test
     fun `restoreAll routes through clearNextUpExclusions and empties the list`() = runTest(testDispatcher) {
         homeDiscoverySlice.value = HomeDiscoverySlice(nextUpExcludedSeriesIds = setOf("s1", "s2"))
-        coEvery { mediaRepository.getMediaDetail(any()) } answers {
+        coEvery { detailFeed.getMediaDetail(any(), force = false) } answers {
             Result.success(MediaDetail(item = series(firstArg(), "Series", 2020)))
         }
         coEvery { homeDiscovery.clearNextUpExclusions() } coAnswers {

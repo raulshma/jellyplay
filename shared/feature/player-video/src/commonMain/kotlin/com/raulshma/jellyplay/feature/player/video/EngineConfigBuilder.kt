@@ -4,7 +4,9 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -122,12 +124,13 @@ internal object EngineConfigBuilder {
                 audioSlice = agg.audio,
                 audioEffectsSlice = agg.audioEffects,
             ),
-            engineSpecific = engineSpecific,
+            engineSpecific = foldEngineSpecific(engineSpecific, agg),
             // the session-scoped deinterlace override + the per-item HDR
             // gate ride every runtime build (the UI-state path has the streams).
             deinterlace = deinterlace,
             hdrSource = hdrContent.isHdr,
             hdrContent = hdrContent,
+            hdrFormatPreference = agg.playback.hdrFormatPreference,
         )
     }
 
@@ -185,11 +188,64 @@ internal object EngineConfigBuilder {
                 audioSlice = agg.audio,
                 audioEffectsSlice = agg.audioEffects,
             ),
-            engineSpecific = engineSpecific,
+            engineSpecific = foldEngineSpecific(engineSpecific, agg),
             deinterlace = com.raulshma.jellyplay.core.model.DeinterlaceMode.AUTO,
             hdrSource = isHdr,
             hdrContent = hdrContent,
+            hdrFormatPreference = agg.playback.hdrFormatPreference,
         )
+    }
+
+    /**
+     * The engine-specific prefs the persisted [VideoPlayerAggregate] slices
+     * own, folded UNCONDITIONALLY into the effective engine config:
+     *
+     *  - mpv ([MpvEngineConfig]): the video-player slice's render prefs
+     *    (tone-mapping curve, deband strength, motion interpolation,
+     *    bitmap-subtitle scaling) plus the raw `input.conf` key-bindings text
+     *    (blank → `null` = nothing applied). The stored config blob never
+     *    carries them (the settings rows live on the video-player slice), and
+     *    the pref defaults ARE the mpv no-ops (curve `auto`, deband `no`,
+     *    interpolation off, FIT scaling, empty input.conf), so an
+     *    unconditional write changes nothing until the user picks something.
+     *    Nullable `null`-means-unset config fields are not used here: the
+     *    prefs are the source of truth, always present, so the engine diff
+     *    caches see a deterministic config per pref state. NOTE: the
+     *    input.conf text is applied by the engine layer at handle-INIT time
+     *    (mpv reads `input.conf` during `mpv_initialize`), so a mid-session
+     *    edit lands on the next engine rebuild/playback, not live.
+     *  - Exo ([ExoPlayerEngineConfig]): the playback slice's
+     *    [com.raulshma.jellyplay.core.model.HdrFormatPreference] rides the
+     *    blob's `hdrFormatPreference` — the DECODER-side half of the posture
+     *    the engine's MIME ordering consumes
+     *    (`ExoPassthroughOffload.preferredMimeTypes`; the OUTPUT half rides
+     *    the shared [EngineConfig.hdrFormatPreference]). The blob field is
+     *    nullable (`null` = the engine's default negotiation stands), so
+     *    AUTO folds to `null` and the arms fold to themselves — the same
+     *    AUTO/`null` equivalence the MIME table applies. The bitmap-subtitle
+     *    scale mode rides along too (nullable: `null` = FIT) — the Exo side
+     *    is FIT-only today (see the field's KDoc for the Media3 constraint).
+     *
+     * Any other engine-specific payload passes through untouched.
+     */
+    private fun foldEngineSpecific(
+        engineSpecific: EngineSpecificConfig?,
+        agg: VideoPlayerAggregate,
+    ): EngineSpecificConfig? = when (engineSpecific) {
+        is MpvEngineConfig -> engineSpecific.copy(
+            toneMappingCurve = agg.videoPlayer.mpvToneMappingCurve,
+            debandMode = agg.videoPlayer.mpvDebandMode,
+            motionInterpolation = agg.videoPlayer.mpvMotionInterpolation,
+            bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
+            userInputConf = agg.videoPlayer.mpvInputConf.ifBlank { null },
+        )
+        is ExoPlayerEngineConfig -> engineSpecific.copy(
+            hdrFormatPreference = agg.playback.hdrFormatPreference.takeUnless {
+                it == com.raulshma.jellyplay.core.model.HdrFormatPreference.AUTO
+            },
+            bitmapSubtitleScaleMode = agg.videoPlayer.bitmapSubtitleScaleMode,
+        )
+        else -> engineSpecific
     }
 
     /**

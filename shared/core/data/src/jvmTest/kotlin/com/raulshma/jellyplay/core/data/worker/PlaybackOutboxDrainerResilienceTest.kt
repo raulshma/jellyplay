@@ -6,7 +6,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -23,10 +24,8 @@ import kotlin.test.assertTrue
 
 /**
  * Drain-loop resilience companions to [PlaybackOutboxDrainerTest]: the seams
- * the happy-path suite leaves open — every one of them a way a real device
- * has of breaking an offline→online sync (ported from the legacy
- * `PlaybackSyncWorkerResilienceTest` minus the WorkManager notification
- * cases, which stayed Android-side):
+ * the happy-path suite leaves open, each one a way a real device can break an
+ * offline/online sync:
  *
  *  1. suppression is ORDER-INDEPENDENT — a STOP captured before the watched
  *     flip must still be dropped when a PLAYED intent is staged for the item
@@ -53,7 +52,8 @@ class PlaybackOutboxDrainerResilienceTest {
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val userDataSyncTrigger: PlaybackOutboxDrainer.UserDataSyncTrigger = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataWrites: UserDataWriteOperations = mockk(relaxed = true)
+    private val userDataAnnouncer: UserDataAnnouncer = mockk(relaxed = true)
     private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
 
     @BeforeTest
@@ -66,7 +66,6 @@ class PlaybackOutboxDrainerResilienceTest {
         coEvery { outbox.hasUnsyncedUnplayedIntent(any()) } returns false
         coEvery { offlineRepository.getOfflineItem(any()) } returns null
         coEvery { outbox.isPlayedStateIntentDelivered(any(), any()) } returns true
-        coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
         coEvery { playedStateSync.reconcileOfflineRow(any()) } returns
             PlayedStateSync.ReconcileOutcome.NoChange
     }
@@ -78,7 +77,8 @@ class PlaybackOutboxDrainerResilienceTest {
             offlineModeManager = offlineModeManager,
             playedStateSync = playedStateSync,
             offlineRepository = offlineRepository,
-            mediaRepository = mediaRepository,
+            userDataWrites = userDataWrites,
+            userDataAnnouncer = userDataAnnouncer,
             cacheInvalidator = cacheInvalidator,
             userDataSyncTrigger = userDataSyncTrigger,
             notifier = notifier,
@@ -126,8 +126,8 @@ class PlaybackOutboxDrainerResilienceTest {
         assertFalse(result.retriesPending)
         coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
-        // No mirror row → no derivation; markPlayed must not fire blind.
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        // No mirror row → no derivation; the deep write must not fire blind.
+        coVerify(exactly = 0) { userDataWrites.recordDrainedPlays(any()) }
     }
 
     // ── 3. A failing intent probe replays instead of suppressing ────────
@@ -148,7 +148,7 @@ class PlaybackOutboxDrainerResilienceTest {
         assertFalse(result.retriesPending)
         coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        coVerify(exactly = 0) { userDataWrites.recordDrainedPlays(any()) }
     }
 
     // ── 4. Notifier protocol (the Android notification adapter's seam) ──

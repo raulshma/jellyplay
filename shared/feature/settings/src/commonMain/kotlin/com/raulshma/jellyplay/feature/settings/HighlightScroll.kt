@@ -40,14 +40,12 @@ fun rememberHighlightScrollIndex(
 }
 
 /**
- * One screen's group slot in LazyColumn order — the payload-free projection a
- * screen declares next to its groups so [deriveAdjustForAdvanced] can read the
- * advanced shape instead of each screen hand-writing an adjust lambda. Pure
- * data: the group's id set plus whether the group only composes behind the
- * advanced toggle. Payload-free BY DESIGN — a composable slot here would
- * reintroduce a slot registry at group grain: the emission bodies stay
- * hand-written in the screens; this type carries only the shape the scroll
- * resolver needs.
+ * One screen's group slot in LazyColumn order — the payload-free projection
+ * the [PreferenceScreenScaffold] shell derives from a screen's
+ * [PreferenceScreenGroup] declaration so [deriveAdjustForAdvanced] can read
+ * the advanced shape without any screen hand-writing an adjust lambda (or a
+ * twin id-set list). Pure data: the group's id set plus whether the group
+ * only composes behind the advanced toggle.
  */
 internal data class SettingsScreenSection(
     val idSet: Set<String>,

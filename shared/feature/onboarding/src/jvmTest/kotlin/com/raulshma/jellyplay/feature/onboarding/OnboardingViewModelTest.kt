@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.ColorStyle
@@ -124,27 +125,30 @@ class OnboardingViewModelTest {
     private fun TestScope.buildEditor() = PreferencesEditor(
         scope = this,
         editScope = PreferencesEditScope(
-            playback = playbackStore,
-            appearance = appearanceStore,
-            videoPlayer = videoPlayerStore,
-            // Stores the wizard never touches — relaxed filler for the
-            // 20-store scope ctor.
-            downloads = mockk(relaxed = true),
-            engine = mockk(relaxed = true),
-            homeDiscovery = homeDiscoveryStore,
-            audio = audioStore,
-            audioEffects = mockk(relaxed = true),
-            audioCache = mockk(relaxed = true),
-            library = mockk(relaxed = true),
-            navigation = navigationStore,
-            networkOffline = mockk(relaxed = true),
-            notification = mockk(relaxed = true),
-            screensaver = mockk(relaxed = true),
-            security = securityStore,
-            subtitle = subtitleStore,
-            syncPlayCast = mockk(relaxed = true),
-            experimental = mockk(relaxed = true),
-            volumeProfile = mockk(relaxed = true),
+            stores = PreferenceStores(
+                playback = playbackStore,
+                videoPlayer = videoPlayerStore,
+                // Stores the wizard never touches — relaxed filler for the
+                // 20-store bundle.
+                engine = mockk(relaxed = true),
+                subtitle = subtitleStore,
+                audio = audioStore,
+                audioEffects = mockk(relaxed = true),
+                audioCache = mockk(relaxed = true),
+                appearance = appearanceStore,
+                homeDiscovery = homeDiscoveryStore,
+                library = mockk(relaxed = true),
+                navigation = navigationStore,
+                shortcuts = mockk(relaxed = true),
+                downloads = mockk(relaxed = true),
+                networkOffline = mockk(relaxed = true),
+                notification = mockk(relaxed = true),
+                syncPlayCast = mockk(relaxed = true),
+                security = securityStore,
+                experimental = mockk(relaxed = true),
+                screensaver = mockk(relaxed = true),
+                volumeProfile = mockk(relaxed = true),
+            ),
             appRuntimeState = appRuntimeStateStore,
         ),
         store = mockk<UserPreferencesStore>(relaxed = true),

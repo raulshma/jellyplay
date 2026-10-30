@@ -168,4 +168,7 @@
     <string name="settings_next_up_hidden_brief">查看并恢复从“接下来播放”栏移除的剧集</string>
     <string name="settings_hidden_libraries">已隐藏的媒体库</string>
     <string name="settings_hidden_libraries_brief">查看并恢复从“我的媒体”行中隐藏的媒体库</string>
+
+    <string name="settings_home_header_shortcuts">顶栏快捷方式</string>
+    <string name="settings_home_header_shortcuts_subtitle">自定义主页顶栏停靠区的快捷方式</string>
 </resources>

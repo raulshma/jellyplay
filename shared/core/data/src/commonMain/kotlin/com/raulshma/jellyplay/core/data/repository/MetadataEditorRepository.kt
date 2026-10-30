@@ -48,4 +48,19 @@ interface MetadataEditorRepository : MetadataApiClient {
 
     /** Downloads a remote subtitle onto the item (the playback family's route). */
     suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit>
+
+    companion object {
+        /**
+         * How long a surface waits after an ACCEPTED metadata refresh before
+         * re-fetching the item: [refreshItemMetadata] is server-ASYNC (the
+         * request returning means accepted, not applied), so an immediate
+         * reload would read pre-refresh state. Late enough that a small
+         * item's refresh has usually landed, short enough to feel
+         * responsive; bigger libraries may still be mid-refresh — pull to
+         * refresh (or re-enter) after that. Every post-refresh reload
+         * schedules against this one constant, so the editor and the details
+         * admin actions cannot drift apart.
+         */
+        const val REFRESH_APPLY_DELAY_MS = 4_000L
+    }
 }

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.runtime.Immutable
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -141,6 +142,10 @@ data class HomeUiState(
     val renderSource: HomeRenderSource = HomeRenderSource.Online,
     val discoverEnabled: Boolean = false,
     val homeHeroEnabled: Boolean = true,
+    /** The hero block's presentation (`home_hero_style` pref mirror). */
+    val homeHeroStyle: com.raulshma.jellyplay.core.model.HomeHeroStyle = com.raulshma.jellyplay.core.model.HomeHeroStyle.CAROUSEL,
+    /** The SLIDESHOW auto-advance pacing in seconds (`home_hero_slideshow_interval_sec` mirror). */
+    val homeHeroSlideshowIntervalSec: Int = 8,
     val homeBackdropEnabled: Boolean = true,
     val showClock: Boolean = false,
     /**
@@ -174,23 +179,6 @@ data class HomeUiState(
      * [SectionConfigState]. Read only by the sheet's capabilities derivation.
      */
     val sectionConfig: SectionConfigState = SectionConfigState(),
-    /**
-     * Non-null while the offline home's advanced "delete downloaded episodes"
-     * sheet is open for a series card. Carries the seasons/episodes loaded for
-     * the targeted series (only downloaded episodes), the aggregate size, and a
-     * brief loading flag while that data is being read from the offline store.
-     * Rendered by [MainHomeContent] as a `DeleteDownloadedEpisodesSheet`.
-     */
-    val seriesDelete: HomeSeriesDeleteState? = null,
-
-    /**
-     * Non-null while the series download sheet is open for a series card's
-     * quick-action Download. Carries the seasons/episodes loaded for the
-     * targeted series (server catalogue) plus which episodes are already
-     * downloaded. Rendered by [MainHomeContent] as a `SeriesDownloadSheet` —
-     * the same sheet the media-detail screen hosts.
-     */
-    val seriesDownload: HomeSeriesDownloadState? = null,
     /**
      * Visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
      * never stamped), read ONCE per home session — before this session's
@@ -304,6 +292,8 @@ data class HomeSeriesDownloadState(
     val episodesBySeason: Map<String, List<MediaItem>>,
     val loadingSeasons: Set<String>,
     val downloadedEpisodeIds: Set<String>,
+    /** The series' stored policy override (null = Default), pre-loaded so the sheet's chips open on it. */
+    val storedPolicy: AutoDownloadMode? = null,
 )
 
 @Immutable

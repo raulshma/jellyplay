@@ -4,7 +4,7 @@ package com.raulshma.jellyplay.core.data.repository
  * In-memory log of the item ids THIS device recently wrote (playback
  * progress saves, played/favorite flips — everything funnelling through
  * [UserDataWriteOperations] and the outbox drain's
- * [MediaRepository.notifyUserDataChanged]).
+ * [UserDataAnnouncer.notifyUserDataChanged]).
  *
  * Sole consumer: the home refresher's user-data-push chain. A
  * `UserDataChanged` push carries only user + item ids, so a socket echo of

@@ -5,9 +5,11 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
@@ -18,11 +20,9 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.preferredMediaSource
-import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -107,7 +107,8 @@ data class WarmNextStream(
 
 internal class PlayerSessionManager(
     private val scope: CoroutineScope,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val playbackRepository: PlaybackRepository,
     /** Detail artwork URL for the external-player hand-off (the ImageUrlProvider seam). */
     private val imageUrlProvider: ImageUrlProvider,
@@ -172,6 +173,13 @@ internal class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * The artwork resolver over [imageUrlProvider]: the engine hand-off's
+     * artwork URI carries the item's own primary image tag, so a re-uploaded
+     * poster mints a new URL (and a new cache key) on the next load.
+     */
+    private val artworkUrls: ArtworkUrls = DefaultArtworkUrls(imageUrlProvider)
 
     /**
      * The position the current load started at (ms) — the now-playing
@@ -299,10 +307,9 @@ internal class PlayerSessionManager(
     }
 
     /**
-     * Legacy entry point — preserved for binary compatibility with existing
-     * call-sites ([VideoPlayerViewModel.initializeInternal],
-     * [VideoPlayerViewModel.loadCinemaIntro]). Delegates to
-     * [loadMedia] with a [PlaybackSource.Auto].
+     * Convenience overload for [VideoPlayerViewModel.initializeInternal] and
+     * [VideoPlayerViewModel.loadCinemaIntro]: delegates to [loadMedia] with a
+     * [PlaybackSource.Auto].
      */
     suspend fun loadMedia(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
         loadMedia(PlaybackSource.Auto(itemId, mediaSourceId), startPositionTicks)
@@ -335,8 +342,8 @@ internal class PlayerSessionManager(
 
         // The download lookup is needed both for Auto resolution and for
         // metadata enrichment during offline playback, so it is performed
-        // unconditionally — identical to the pre-refactor behaviour. The
-        // shared resolver owns the COMPLETED + file-exists predicate.
+        // unconditionally. The shared resolver owns the COMPLETED +
+        // file-exists predicate.
         val download = playbackSourceResolver.resolveUsableDownload(itemId)
 
         val resolved = when (source) {
@@ -517,7 +524,7 @@ internal class PlayerSessionManager(
         // on `mediaStreams` staying empty (see refreshMediaDetail).
         if (!offlineModeManager.isOffline) {
             sidecarCatchUpJob = scope.launch {
-                val detail = mediaRepository.getMediaDetail(itemId, force = true).getOrNull()
+                val detail = detailFeed.getMediaDetail(itemId, force = true).getOrNull()
                 // The session may have moved on (item switch, release) while the
                 // fetch was in flight — attachNewSubtitleStreams re-checks the
                 // item id, but skip the work entirely when it is no longer ours.
@@ -586,7 +593,7 @@ internal class PlayerSessionManager(
         // (single-flight detail read, session-scoped segments cache), so the
         // warming call is the exact call loadOnline/fetchMediaSegments make —
         // they hit the warm entries with no integration.
-        val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: run {
+        val detail = detailFeed.getMediaDetail(itemId, force = false).getOrNull() ?: run {
             // Offline miss / vanished item: drop the slot so a later trigger
             // can re-attempt, and stay silent (autoplay re-resolves anyway).
             warmNextItemId = null
@@ -645,25 +652,49 @@ internal class PlayerSessionManager(
         source: MediaSource?,
         startTimeTicks: Long,
         agg: VideoPlayerAggregate,
-    ): PlaybackResolveRequest = PlaybackResolveRequest(
-        itemId = itemId,
-        mediaSourceId = source?.id ?: "",
-        startTimeTicks = startTimeTicks,
-        maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
-        mode = agg.playback.playbackMode,
-        playerType = agg.playback.preferredPlayer,
-        staticFallbackLiveStreamId = source?.liveStreamId,
-    )
+    ): PlaybackResolveRequest {
+        // The resolution cap follows the network: the cellular tier on
+        // metered connections, the wifi tier otherwise (same split the
+        // effective bitrate uses).
+        val quality = adaptiveBitrateManager.effectiveQuality(
+            agg.playback.streamingQuality,
+            agg.playback.cellularStreamingQuality,
+        )
+        return PlaybackResolveRequest(
+            itemId = itemId,
+            mediaSourceId = source?.id ?: "",
+            startTimeTicks = startTimeTicks,
+            // The server host rides the bitrate resolution (#19): a LOCAL
+            // server honours the home-network quality tier; remote keeps the
+            // wifi/cellular ladder. The host is the pure string parse of the
+            // session's server URL (the identity seam's platform-neutral read).
+            maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                sessionServerHost(),
+            ),
+            maxVideoHeight = quality.maxHeight,
+            mode = agg.playback.playbackMode,
+            playerType = agg.playback.preferredPlayer,
+            staticFallbackLiveStreamId = source?.liveStreamId,
+        )
+    }
+
+    /**
+     * The pure host parse of the session's server URL — the #19 input to the
+     * bitrate resolution (a LOCAL host honours the home tier). One read for
+     * every resolve path so they cannot drift.
+     */
+    private fun sessionServerHost(): String? =
+        com.raulshma.jellyplay.core.model.serverHostOf(playbackIdentity.serverUrl())
 
     private suspend fun loadOnline(
         itemId: String,
         mediaSourceId: String?,
         startPositionTicks: Long,
     ) {
-        val detailResult = mediaRepository.getMediaDetail(itemId)
+        val detailResult = detailFeed.getMediaDetail(itemId, force = false)
         val detail = detailResult.getOrElse {
-            // Surface the failure — the old silent bail left the user staring
-            // at a "loading" veil that had lifted over nothing.
+            // Surface the failure rather than leaving the user staring
+            // at a "loading" veil that has lifted over nothing.
             // KMP seam: compose-resources' suspend resolver replaces
             // context.getString (loadOnline is suspend).
             failLoad(getString(Res.string.player_video_error_loading_media))
@@ -786,70 +817,32 @@ internal class PlayerSessionManager(
 
         val externalSubtitles = sessionSubtitleSources.buildExternalSubtitles(detail, source, playMethod)
 
-        val artworkUri = imageUrlProvider.getImageUrl(detail.item.id, maxWidth = 300)
+        val artworkUri = artworkUrls.poster(detail.item, maxWidth = 300)
 
-        val headers = mutableMapOf<String, String>()
-        val serverUrl = playbackIdentity.serverUrl()
-        val token = playbackIdentity.accessToken()
-        if (!token.isNullOrBlank()) {
-            headers += playbackIdentity.authorizationHeader(token)
-        }
-
-        // When the language rule engine resolves languages for this
-        // item, seed the request's preferred languages so the engine's native
-        // track selection (ExoPlayer track-selection parameters) starts out in
-        // agreement with the helper's restore ladder. A null resolution axis
-        // falls back to the global preferred language — the exact precedence
-        // the ladder applies (per-item/series manual preferences are the
-        // helper's rung and outrank both).
-        val ruleResolution = TrackResolutionEngine.resolve(
-            agg.subtitle.languageRules,
-            TrackRuleContext(
-                contentType = mediaRuleContentType(detail.item.mediaType),
-                titles = listOfNotNull(
-                    detail.item.seriesName?.takeIf { it.isNotBlank() },
-                    detail.item.name?.takeIf { it.isNotBlank() },
-                ),
-                streams = _sessionState.value.mediaStreams,
-            ),
-        )
-
-        val request = PlaybackRequest(
-            uri = url,
-            title = detail.item.name,
-            startPositionMs = startPositionTicks / 10_000,
-            artworkUri = artworkUri,
-            externalSubtitles = externalSubtitles,
-            headers = headers,
-            preferredAudioLanguage = ruleResolution?.audioLanguage
-                ?: agg.subtitle.preferredAudioLanguage,
-            preferAudioDescription = agg.subtitle.preferAudioDescription,
-            // A rule-driven OFF keeps the engine's native subtitle preference
-            // unset — the helper's ladder enforces the Off itself.
-            preferredSubtitleLanguage = if (ruleResolution?.subtitleDisabled == true) {
-                null
-            } else {
-                ruleResolution?.subtitleLanguage ?: agg.subtitle.preferredSubtitleLanguage
-            },
-            maxVideoBitrate = if (agg.playback.playbackMode == PlaybackMode.AUTO)
-                adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
-                else null,
-            serverUrl = serverUrl,
-            authToken = token,
-            playMethod = playMethod,
-            minBufferMs = agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
-            maxBufferMs = agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
-            serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
-            // The per-engine request payload (core:model's
-            // PlaybackRequestSpecific behind the contract's engineSpecific
-            // slot): Exo unpacks the ReplayGain + MIME hint; the mpv engines
-            // unpack the app-level client-certificate paths (null when no
-            // certificate is enabled — OkHttp-backed engines inherit it via
-            // the shared TLS layer instead).
-            engineSpecific = PlaybackRequestSpecific(
-                normalizationGain = detail.item.normalizationGain,
+        // The 20-field request as one pure fold (the MpvLoadOptionsPlan
+        // precedent, PlaybackRequestPlan.kt): header/token resolution, the
+        // language-rule resolution with its subtitle-disabled fallback, the
+        // AUTO-mode bitrate cap, buffer sizing and the engineSpecific payload
+        // are the plan's; the impure projections (the identity reads, the
+        // side-loaded subtitle set, the bitrate-cap source) arrive as plain
+        // inputs, captured once per request exactly as the inline form read
+        // them.
+        val request = PlaybackRequestPlan.of(
+            PlaybackRequestPlan.Inputs(
+                url = url,
+                startPositionTicks = startPositionTicks,
+                playMethod = playMethod,
                 mimeType = mimeType,
-                tls = playbackIdentity.clientTls(),
+                detail = detail,
+                agg = agg,
+                streams = _sessionState.value.mediaStreams,
+                externalSubtitles = externalSubtitles,
+                artworkUri = artworkUri,
+                serverUrl = playbackIdentity.serverUrl(),
+                token = playbackIdentity.accessToken(),
+                clientTls = playbackIdentity.clientTls(),
+                authorizationHeader = playbackIdentity::authorizationHeader,
+                resolveServerBitrate = { host -> adaptiveBitrateManager.resolveEffectiveMaxBitrate(host) },
             ),
         )
 
@@ -975,6 +968,7 @@ internal class PlayerSessionManager(
         return reresolveAndSwap(
             mode = mode,
             maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality),
+            quality = quality,
             selection = selection,
             startPositionMs = currentPositionMs,
             // The mode/quality reload owns the forced-direct-play badge: it is
@@ -1004,7 +998,9 @@ internal class PlayerSessionManager(
         if (_sessionState.value.currentItemId == null) return null
         return reresolveAndSwap(
             mode = aggregateStore.aggregate.value.playback.playbackMode,
-            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                sessionServerHost(),
+            ),
             selection = selection,
             startPositionMs = currentPositionMs,
             // A stream-index re-POST is orthogonal to the forced-direct-play
@@ -1039,7 +1035,9 @@ internal class PlayerSessionManager(
         }
         return reresolveAndSwap(
             mode = aggregateStore.aggregate.value.playback.playbackMode,
-            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+            maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate(
+                sessionServerHost(),
+            ),
             selection = null,
             startPositionMs = currentPositionMs,
             markForced = false,
@@ -1071,6 +1069,10 @@ internal class PlayerSessionManager(
         selection: MediaStreamSelection?,
         startPositionMs: Long,
         markForced: Boolean,
+        quality: com.raulshma.jellyplay.core.model.StreamingQuality = adaptiveBitrateManager.effectiveQuality(
+            aggregateStore.aggregate.value.playback.streamingQuality,
+            aggregateStore.aggregate.value.playback.cellularStreamingQuality,
+        ),
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
@@ -1088,15 +1090,26 @@ internal class PlayerSessionManager(
                 audioStreamIndex = selection?.audioStreamIndex,
                 subtitleStreamIndex = selection?.subtitleStreamIndex,
                 maxStreamingBitrateBits = maxBitrate,
+                maxVideoHeight = quality.maxHeight,
                 mode = mode,
                 playerType = playerType,
             ),
         )
-        val resolved = (resolution as? PlaybackResolution.Resolved)?.playback
-        val url = resolved?.streamUrl
-            ?: (resolution as? PlaybackResolution.StaticFallback)?.streamUrl
-            ?: ""
-        val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
+        // A static direct URL is a successful swap too. Returning null after
+        // loading it prevents the caller from rebinding position/stats tracking.
+        val resolved = when (resolution) {
+            is PlaybackResolution.Resolved -> resolution.playback
+            is PlaybackResolution.StaticFallback -> ResolvedPlayback(
+                mediaSourceId = sourceId,
+                streamUrl = resolution.streamUrl,
+                playMethod = PlayMethod.DIRECT_PLAY,
+                playSessionId = null,
+                maxStreamingBitrate = maxBitrate,
+            )
+            PlaybackResolution.Unplayable -> return null
+        }
+        val url = resolved.streamUrl
+        val playMethod = resolved.playMethod
 
         _sessionState.update {
             it.copy(
@@ -1104,7 +1117,7 @@ internal class PlayerSessionManager(
                 playMethod = playMethod,
                 isDirectPlayForced =
                     if (markForced) mode == PlaybackMode.FORCE_DIRECT_PLAY else it.isDirectPlayForced,
-                playSessionId = resolved?.playSessionId,
+                playSessionId = resolved.playSessionId,
                 streamUrl = url,
             )
         }

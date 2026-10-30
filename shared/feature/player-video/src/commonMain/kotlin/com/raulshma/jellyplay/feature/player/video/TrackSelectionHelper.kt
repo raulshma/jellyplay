@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.RuleContentType
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.SubtitleContentKindFilter
 import com.raulshma.jellyplay.core.model.SubtitleTrackMode
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
@@ -592,7 +593,11 @@ internal class TrackSelectionHelper(
                         ?: sub.preferredSubtitleLanguage ?: "eng"
                     // FORCED_ONLY maps onto the existing forced-only path;
                     // FULL / FULL_PREFER_SIGNS only bias full-vs-signs
-                    // tie-breaking inside the matcher.
+                    // tie-breaking inside the matcher. The rule's v2
+                    // dimensions (content kind + commentary opt-in) ride the
+                    // same resolution — the matcher applies them as tier
+                    // biases (ANY + allowed for the preset/global rungs, so
+                    // old-dimension paths keep their behavior).
                     val forcedOnly = sub.subtitlesForcedOnly ||
                         resolution?.subtitleMode == SubtitleTrackMode.FORCED_ONLY
                     // The full precedence ladder — scoring pre-pass (non-forced
@@ -614,6 +619,8 @@ internal class TrackSelectionHelper(
                             remembered = if (forcedOnly) null else rememberedSubtitleTrack,
                             preferFullSubtitle = resolution?.subtitleMode == SubtitleTrackMode.FULL,
                             preferSignsSubtitle = resolution?.subtitleMode == SubtitleTrackMode.FULL_PREFER_SIGNS,
+                            contentKind = resolution?.subtitleContentKind ?: SubtitleContentKindFilter.ANY,
+                            allowCommentary = resolution?.allowCommentary ?: true,
                         ),
                     )
                 }

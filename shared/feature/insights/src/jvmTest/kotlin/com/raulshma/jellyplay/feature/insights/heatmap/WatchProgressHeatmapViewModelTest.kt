@@ -2,8 +2,9 @@ package com.raulshma.jellyplay.feature.insights.heatmap
 
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -52,7 +53,7 @@ class WatchProgressHeatmapViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var watchHistoryRepository: WatchHistoryRepository
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
 
     /** Backing flow behind WatchHistoryRepository.playbackReportingStatus. */
@@ -65,7 +66,7 @@ class WatchProgressHeatmapViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         watchHistoryRepository = mockk()
-        mediaRepository = mockk()
+        detailFeed = mockk()
         imageUrlProvider = mockk()
         playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.AVAILABLE)
         every { watchHistoryRepository.playbackReportingStatus } returns playbackReportingStatus
@@ -93,8 +94,8 @@ class WatchProgressHeatmapViewModelTest {
 
     private fun newViewModel(): WatchProgressHeatmapViewModel = WatchProgressHeatmapViewModel(
         watchHistoryRepository = watchHistoryRepository,
-        mediaRepository = mediaRepository,
-        imageUrlProvider = imageUrlProvider,
+        detailFeed = detailFeed,
+        artworkUrls = DefaultArtworkUrls(imageUrlProvider),
     )
 
     private fun activity(date: LocalDate, value: Long) =
@@ -245,7 +246,7 @@ class WatchProgressHeatmapViewModelTest {
     fun selectDay_resolves_media_details_and_builds_selected_day_info() = runTest(mainDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "a", name = "Movie A", mediaType = MediaType.MOVIE)),
         )
 
@@ -271,7 +272,7 @@ class WatchProgressHeatmapViewModelTest {
     fun selectDay_media_detail_failure_falls_back_to_no_resolution() = runTest(mainDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
 
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -290,7 +291,7 @@ class WatchProgressHeatmapViewModelTest {
     fun selectDay_reuses_resolved_items_across_selections() = runTest(mainDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "a", name = "Movie A", mediaType = MediaType.MOVIE)),
         )
 
@@ -303,7 +304,7 @@ class WatchProgressHeatmapViewModelTest {
         advanceUntilIdle()
 
         // The second selection hit the VM's cache — one detail fetch total.
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("a", any()) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("a", any()) }
         assertNotNull(viewModel.uiState.value.selectedDay?.resolvedItems?.get("a"))
     }
 
@@ -311,7 +312,7 @@ class WatchProgressHeatmapViewModelTest {
     fun selectDay_null_clears_the_selection() = runTest(mainDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
 
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -362,7 +363,7 @@ class WatchProgressHeatmapViewModelTest {
     fun setFilter_forwards_the_filter_and_clears_the_selected_day() = runTest(mainDispatcher) {
         val today = LocalDate.now()
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns listOf(session("a", "Session A"))
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns Result.failure(RuntimeException("gone"))
 
         val viewModel = newViewModel()
         advanceUntilIdle()

@@ -18,6 +18,9 @@
     <string name="settings_forced_subtitles">Sous-titres forcés uniquement</string>
     <string name="settings_forced_subtitles_on">Afficher les sous-titres uniquement lorsque des pistes forcées sont présentes</string>
     <string name="settings_forced_subtitles_off">Afficher les sous-titres selon la langue préférée</string>
+    <string name="settings_show_only_preferred_subtitles">Sous-titres préférés uniquement</string>
+    <string name="settings_show_only_preferred_subtitles_on">Masquer les pistes hors de vos langues préférées</string>
+    <string name="settings_show_only_preferred_subtitles_off">Afficher toutes les pistes de sous-titres</string>
     <string name="settings_high_contrast_subtitles">Sous-titres à contraste élevé</string>
     <string name="settings_high_contrast_on">Style de sous-titres le plus lisible pour l'accessibilité</string>
     <string name="settings_high_contrast_off">Utiliser le style de sous-titres configuré</string>

@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.data.remote
 
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.playback.AudioRemoteControlSurface
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -36,7 +36,7 @@ import org.junit.Test
 
 /**
  * Pins the [AudioRemoteControlDispatcher] routing invariant: playstate and
- * general commands drive the singleton [AudioPlaybackManager] on the main
+ * general commands drive the audio family's [AudioRemoteControlSurface] face on the main
  * thread (`withContext(Main.immediate)`), Stop is terminal
  * (`stopAndRelease` + [NavigationTarget.ClosePlayer]), and a fresh "Play"
  * opens the audio player: a single-item request plays that item directly,
@@ -51,13 +51,13 @@ class AudioRemoteControlDispatcherTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val audioPlaybackManager: AudioPlaybackManager = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val audioPlaybackManager: AudioRemoteControlSurface = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val bridge = RemoteNavigationBridge()
 
     private fun dispatcher() = AndroidAudioRemoteControlDispatcher(
         audioPlaybackManager = audioPlaybackManager,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         remoteNavigationBridge = bridge,
     )
 
@@ -85,11 +85,11 @@ class AudioRemoteControlDispatcherTest {
     )
 
     private fun stubDetail(item: MediaDetail) {
-        coEvery { mediaRepository.getMediaDetail(item.item.id, any()) } returns Result.success(item)
+        coEvery { detailFeed.getMediaDetail(item.item.id, any()) } returns Result.success(item)
     }
 
     private fun stubDetailFailure(id: String) {
-        coEvery { mediaRepository.getMediaDetail(id, any()) } returns Result.failure(IOException("404"))
+        coEvery { detailFeed.getMediaDetail(id, any()) } returns Result.failure(IOException("404"))
     }
 
     private suspend fun CoroutineScope.collectTargets(block: suspend () -> Unit): List<NavigationTarget> {

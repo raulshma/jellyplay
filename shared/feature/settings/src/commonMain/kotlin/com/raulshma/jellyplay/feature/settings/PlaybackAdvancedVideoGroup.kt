@@ -10,10 +10,14 @@ import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.LiveStreamOption
+import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
+import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
@@ -22,10 +26,15 @@ import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.CoroutineScope
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_device_profile_helper
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_device_profile_placeholder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resolution_switching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_video
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_running
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_speed_test_result
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_on
@@ -42,6 +51,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spat
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_only_headphones_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_matching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_downloaded
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_streaming
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_desc_downloaded
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_desc_streaming
@@ -282,6 +292,28 @@ internal fun PlaybackAdvancedVideoGroup(
                             )
                         },
                     )
+                    // The delivery-method row (Issue #1): the same posture the
+                    // in-player Playback Options sheet's Delivery picker edits,
+                    // now reachable from Settings — it governs whether the
+                    // quality row below applies at all (forced direct play
+                    // ignores the cap).
+                    val playbackModeTitle = rowTitle(PlaybackRows.PlaybackMode)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.PlaybackMode),
+                        title = playbackModeTitle,
+                        subtitle = stringResource(Res.string.ss_playback_mode_subtitle),
+                        trailingText = preferences.playbackMode.displayName,
+                        highlighted = highlightSettingId == PlaybackRows.PlaybackMode.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = playbackModeTitle,
+                                items = PlaybackMode.entries,
+                                label = { it.displayName },
+                                isSelected = { it == preferences.playbackMode },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setPlaybackMode(it) } },
+                            )
+                        },
+                    )
                     val qualityLabels = StreamingQuality.entries.associateWith { stringResource(streamingQualityLabelRes(it)) }
                     val qualityShorts = StreamingQuality.entries.associateWith { stringResource(streamingQualityShortRes(it)) }
                     val streamingQualityTitle = rowTitle(PlaybackRows.StreamingQuality)
@@ -300,6 +332,153 @@ internal fun PlaybackAdvancedVideoGroup(
                                 onSelect = { viewModel.edit { scope -> scope.playback.setStreamingQuality(it) } },
                             )
                         },
+                    )
+                    // The transcode-decision cluster — renders beside
+                    // [StreamingQuality], the knobs that steer the same
+                    // direct-play-vs-transcode choice.
+                    val hdrFormatTitle = rowTitle(PlaybackRows.HdrFormatPreference)
+                    val hdrFormatLabels = HdrFormatPreference.entries.associateWith { stringResource(hdrFormatPreferenceLabelRes(it)) }
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.HdrFormatPreference),
+                        title = hdrFormatTitle,
+                        subtitle = rowSubtitle(PlaybackRows.HdrFormatPreference),
+                        trailingText = hdrFormatLabels[preferences.hdrFormatPreference]
+                            ?: preferences.hdrFormatPreference.name,
+                        highlighted = highlightSettingId == PlaybackRows.HdrFormatPreference.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = hdrFormatTitle,
+                                items = HdrFormatPreference.entries,
+                                label = { hdrFormatLabels.getValue(it) },
+                                isSelected = { it == preferences.hdrFormatPreference },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setHdrFormatPreference(it) } },
+                            )
+                        },
+                    )
+                    val transcodeCapTitle = rowTitle(PlaybackRows.ForceTranscodeAboveHeight)
+                    val transcodeCapOffLabel = stringResource(Res.string.settings_off)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.ForceTranscodeAboveHeight),
+                        title = transcodeCapTitle,
+                        subtitle = rowSubtitle(PlaybackRows.ForceTranscodeAboveHeight),
+                        trailingText = if (preferences.forceTranscodeAboveHeight == 0) transcodeCapOffLabel else "${preferences.forceTranscodeAboveHeight}p",
+                        highlighted = highlightSettingId == PlaybackRows.ForceTranscodeAboveHeight.id,
+                        onClick = {
+                            val heights = listOf(0, 720, 1080, 1440, 2160)
+                            activePicker.value = PickerState.List(
+                                title = transcodeCapTitle,
+                                items = heights,
+                                label = { if (it == 0) transcodeCapOffLabel else "${it}p" },
+                                isSelected = { it == preferences.forceTranscodeAboveHeight },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setForceTranscodeAboveHeight(it) } },
+                            )
+                        },
+                    )
+                    val transcodeVideoCodecTitle = rowTitle(PlaybackRows.PreferredTranscodeVideoCodec)
+                    val transcodeVideoCodecLabels = TranscodeVideoCodecPreference.entries.associateWith { stringResource(transcodeVideoCodecLabelRes(it)) }
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.PreferredTranscodeVideoCodec),
+                        title = transcodeVideoCodecTitle,
+                        subtitle = rowSubtitle(PlaybackRows.PreferredTranscodeVideoCodec),
+                        trailingText = transcodeVideoCodecLabels[preferences.preferredTranscodeVideoCodec]
+                            ?: preferences.preferredTranscodeVideoCodec.name,
+                        highlighted = highlightSettingId == PlaybackRows.PreferredTranscodeVideoCodec.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = transcodeVideoCodecTitle,
+                                items = TranscodeVideoCodecPreference.entries,
+                                label = { transcodeVideoCodecLabels.getValue(it) },
+                                isSelected = { it == preferences.preferredTranscodeVideoCodec },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setPreferredTranscodeVideoCodec(it) } },
+                            )
+                        },
+                    )
+                    val transcodeAudioCodecTitle = rowTitle(PlaybackRows.PreferredTranscodeAudioCodec)
+                    val transcodeAudioCodecLabels = TranscodeAudioCodecPreference.entries.associateWith { stringResource(transcodeAudioCodecLabelRes(it)) }
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.PreferredTranscodeAudioCodec),
+                        title = transcodeAudioCodecTitle,
+                        subtitle = rowSubtitle(PlaybackRows.PreferredTranscodeAudioCodec),
+                        trailingText = transcodeAudioCodecLabels[preferences.preferredTranscodeAudioCodec]
+                            ?: preferences.preferredTranscodeAudioCodec.name,
+                        highlighted = highlightSettingId == PlaybackRows.PreferredTranscodeAudioCodec.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = transcodeAudioCodecTitle,
+                                items = TranscodeAudioCodecPreference.entries,
+                                label = { transcodeAudioCodecLabels.getValue(it) },
+                                isSelected = { it == preferences.preferredTranscodeAudioCodec },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setPreferredTranscodeAudioCodec(it) } },
+                            )
+                        },
+                    )
+                    // The hand-tuned device-profile escape hatch — the
+                    // mpv.conf multi-line text-editor shape.
+                    val deviceProfileTitle = rowTitle(PlaybackRows.CustomDeviceProfileJson)
+                    val deviceProfileHelper = stringResource(Res.string.settings_custom_device_profile_helper)
+                    val deviceProfilePlaceholder = stringResource(Res.string.settings_custom_device_profile_placeholder)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.CustomDeviceProfileJson),
+                        title = deviceProfileTitle,
+                        subtitle = rowSubtitle(PlaybackRows.CustomDeviceProfileJson),
+                        trailingText = if (preferences.customDeviceProfileJson.isBlank()) "" else "JSON",
+                        highlighted = highlightSettingId == PlaybackRows.CustomDeviceProfileJson.id,
+                        onClick = {
+                            activePicker.value = PickerState.Text(
+                                title = deviceProfileTitle,
+                                initialText = preferences.customDeviceProfileJson,
+                                helperText = deviceProfileHelper,
+                                placeholder = deviceProfilePlaceholder,
+                                onSave = { viewModel.edit { scope -> scope.playback.setCustomDeviceProfileJson(it) } },
+                            )
+                        },
+                    )
+                    // RESIDUAL (NetworkOfflineStore): the LAN quality cap —
+                    // the picker reuses the streaming-quality labels; the
+                    // wire value is the enum name.
+                    val homeQualityTitle = rowTitle(PlaybackRows.HomeNetworkQuality)
+                    val homeQualityNames = StreamingQuality.entries.map { it.name }
+                    val homeQualityByName = StreamingQuality.entries.associate { it.name to it }
+                    val currentHomeQuality = homeQualityByName[preferences.homeStreamingQuality]
+                        ?: StreamingQuality.AUTO
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.HomeNetworkQuality),
+                        title = homeQualityTitle,
+                        subtitle = rowSubtitle(PlaybackRows.HomeNetworkQuality),
+                        trailingText = qualityShorts[currentHomeQuality] ?: preferences.homeStreamingQuality,
+                        highlighted = highlightSettingId == PlaybackRows.HomeNetworkQuality.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = homeQualityTitle,
+                                items = homeQualityNames,
+                                label = { name -> homeQualityByName[name]?.let { qualityLabels[it] ?: name } ?: name },
+                                isSelected = { it == preferences.homeStreamingQuality },
+                                onSelect = { name -> viewModel.edit { it.networkOffline.setHomeStreamingQuality(name) } },
+                            )
+                        },
+                    )
+                    // RESIDUAL action row: the connection-speed probe (the
+                    // quality feature agent implements the measurement; the
+                    // row renders the proposed cap when one exists).
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.SpeedTest),
+                        title = rowTitle(PlaybackRows.SpeedTest),
+                        subtitle = rowSubtitle(PlaybackRows.SpeedTest),
+                        trailingText = when (val state = viewModel.speedTestResult) {
+                            null -> ""
+                            SpeedTestState.Running -> stringResource(Res.string.settings_speed_test_running)
+                            SpeedTestState.Failed -> stringResource(Res.string.settings_speed_test_failed)
+                            is SpeedTestState.Measured -> {
+                                val oneDecimal = ((state.mbps * 10f).toInt()) / 10f
+                                stringResource(
+                                    Res.string.settings_speed_test_result,
+                                    oneDecimal.toString(),
+                                    state.suggestedTier.displayName,
+                                )
+                            }
+                        },
+                        highlighted = highlightSettingId == PlaybackRows.SpeedTest.id,
+                        onClick = { viewModel.runSpeedTest() },
                     )
                     val liveLabels = LiveStreamOption.entries.associateWith { stringResource(liveStreamOptionLabelRes(it)) }
                     val liveTvStreamTitle = rowTitle(PlaybackRows.LiveStreamOption)

@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">システムがフォーカス消失を報告した時に一時停止</string>
     <string name="settings_pause_on_focus_loss_off">フォーカス消失時も再生を継続</string>
     <string name="settings_resume_headset_plug">ヘッドホン再接続時に再生を再開</string>
-    <string name="settings_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンを再接続すると再生を再開します</string>
+    <string name="settings_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンが再接続されると再生を再開します（有線・Bluetooth）</string>
     <string name="settings_decoder_summary">デコーダー：%1$s</string>
     <string name="settings_decoder">デコーダー</string>
     <string name="settings_refresh_rate_match">リフレッシュレート一致</string>
@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">すべての ExoPlayer 設定を復元</string>
     <string name="settings_media_segments">メディアセグメント</string>
     <string name="settings_media_segments_summary">%1$d 自動スキップ、%2$d ボタン表示</string>
-    <string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
+        <string name="settings_skip_prompt_duration">スキップボタンの表示時間</string>
+    <string name="settings_skip_prompt_duration_subtitle">スキップボタンの表示時間（イントロ/セグメント）</string>
+<string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
     <string name="settings_skip_segments_on_seek_on">前方シークが自動スキップ対象に重なった場合にスキップします</string>
     <string name="settings_segment_skip_delay">自動スキップの遅延</string>
     <string name="settings_segment_skip_delay_off">オフ</string>

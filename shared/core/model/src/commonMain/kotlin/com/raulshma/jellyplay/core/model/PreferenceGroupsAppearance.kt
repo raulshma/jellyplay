@@ -76,6 +76,8 @@ data class AppearanceScreenPreferences(
     val scheduledThemeStartHour: Int = 22,
     val scheduledThemeEndHour: Int = 7,
     val backdropThemeMusicEnabled: Boolean = false,
+    /** The details screen's external-award badges (OMDb/oscars-derived). Default on. */
+    val detailsAwardsBadgesEnabled: Boolean = true,
     val homeMode: HomeMode = HomeMode.VIDEO,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,

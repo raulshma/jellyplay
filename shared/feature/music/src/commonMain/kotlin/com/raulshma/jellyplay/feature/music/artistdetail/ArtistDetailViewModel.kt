@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.music.artistdetail
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
@@ -24,13 +26,17 @@ private data class ArtistContent(
 )
 
 class ArtistDetailViewModel(
+    /** The artist's detail read (the detail-read family seam). */
+    private val detailFeed: DetailFeed,
+    /** The server user-data change feed (the deferred reload arming). */
+    private val userDataChanges: UserDataChanges,
     /**
-     * The detail read + user-data feed only — the artist's album row rides
-     * [libraryApiClient], the catalogue's uncached client read.
+     * The artist's album row — the catalogue's uncached client read.
      */
-    private val mediaRepository: MediaRepository,
     private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the album row renders through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 
@@ -44,7 +50,7 @@ class ArtistDetailViewModel(
      * [DeferredFetchCoordinator], same chassis as the album host.
      */
     private val fetchCoordinator = DeferredFetchCoordinator<String, ArtistContent>(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
         fetch = ::fetchArtistData,
     )
@@ -136,7 +142,7 @@ class ArtistDetailViewModel(
      */
     private suspend fun fetchArtistData(artistId: String, force: Boolean): ArtistContent {
         return coroutineScope {
-            val detailDeferred = async { mediaRepository.getMediaDetail(artistId, force = force) }
+            val detailDeferred = async { detailFeed.getMediaDetail(artistId, force = force) }
             val albumsDeferred = async { libraryApiClient.getArtistAlbums(artistId, limit = 50) }
             val detailResult = detailDeferred.await()
             val albumsResult = albumsDeferred.await()

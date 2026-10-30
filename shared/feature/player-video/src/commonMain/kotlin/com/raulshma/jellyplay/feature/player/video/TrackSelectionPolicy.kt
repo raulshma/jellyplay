@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.SubtitleContentKindFilter
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
@@ -152,6 +153,8 @@ internal class TrackSelectionPolicy {
             hearingImpaired = args.hearingImpaired,
             preferFull = args.preferFullSubtitle,
             preferSigns = args.preferSignsSubtitle,
+            contentKind = args.contentKind,
+            allowCommentary = args.allowCommentary,
         )
     }
 
@@ -409,6 +412,12 @@ internal class TrackSelectionPolicy {
  *   same-language tracks win their tier.
  * @param preferSignsSubtitle rule-engine signs/songs bias — signs
  *   same-language tracks win their tier.
+ * @param contentKind the matched rule's v2 content-kind target
+ *   ([SubtitleContentKindFilter.ANY] default — no kind bias; the finer
+ *   title-heuristics fold REPLACES the two boolean biases when set, see
+ *   [SubtitleTrackMatcher.match]).
+ * @param allowCommentary the matched rule's commentary opt-in — `false` (the
+ *   v2 default for a matched rule) ranks non-commentary tracks ahead.
  */
 @Immutable
 data class SubtitleResolutionArgs(
@@ -421,6 +430,8 @@ data class SubtitleResolutionArgs(
     val remembered: RememberedTrack?,
     val preferFullSubtitle: Boolean = false,
     val preferSignsSubtitle: Boolean = false,
+    val contentKind: SubtitleContentKindFilter = SubtitleContentKindFilter.ANY,
+    val allowCommentary: Boolean = true,
 )
 
 /**

@@ -51,8 +51,8 @@ import java.util.concurrent.atomic.AtomicReference
 class SyncPlayManager(
     /**
      * Group lifecycle + info + ping (the PlaybackRepositoryImpl ctor
-     * precedent: family seams, not the JellyfinApiClient union — the family
-     * singles compose the same impls the union delegates to).
+     * precedent: family seams — the family singles compose the same impls
+     * the retired JellyfinApiClient union delegated to).
      */
     private val syncPlayApiClient: SyncPlayApiClient,
     /** The pre-join capability broadcast (postCapabilities). */

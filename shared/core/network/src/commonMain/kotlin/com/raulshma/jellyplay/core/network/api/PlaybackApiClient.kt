@@ -87,6 +87,7 @@ interface PlaybackApiClient {
         mode: PlaybackMode,
         playerType: PlayerType,
         liveStreamOption: LiveStreamOption? = null,
+        maxVideoHeight: Int? = null,
     ): Result<PlaybackInfoResult>
 
     /**

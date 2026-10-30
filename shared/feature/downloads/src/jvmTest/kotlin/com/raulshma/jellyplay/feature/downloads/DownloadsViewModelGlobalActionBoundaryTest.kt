@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
@@ -39,7 +40,8 @@ import kotlin.test.assertTrue
  * 2. [DownloadsViewModel.moveToFront] / [DownloadsViewModel.lowerPriority]
  *    against an EMPTY list fall back to the 0 baseline (`maxOfOrNull`/`minOfOrNull`
  *    → null → 0), i.e. +1 / −1 respectively.
- * 3. [DownloadsViewModel.checkAllForUpdates] forwards an EMPTY downloaded-id
+ * 3. [DownloadsResyncActions.checkAllForUpdates] (via the VM's
+ *    `resyncActions` accessor) forwards an EMPTY downloaded-id
  *    batch (the sync manager, not the VM, decides what an empty batch means).
  * 4. DELETE/Selected on a selection whose ids no longer match the current
  *    list (list changed under the selection) is a no-op — the target fold
@@ -53,7 +55,11 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var downloadRepository: DownloadQueue
+    /** The gh-181 suggestion/policy seam (a separate mock from the queue view of the repository). */
+    private lateinit var policyRepository: com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+    private lateinit var intake: com.raulshma.jellyplay.core.data.download.DownloadIntake
     private lateinit var offlineRepository: OfflineRepository
+    private lateinit var seriesArt: SeriesArtReads
     private lateinit var syncManager: OfflineResync
     private lateinit var downloadsStore: DownloadsStore
     private lateinit var viewModel: DownloadsViewModel
@@ -64,7 +70,10 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         downloadRepository = mockk<DownloadQueue>(relaxed = true)
+        policyRepository = mockk(relaxed = true)
+        intake = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
+        seriesArt = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
@@ -75,7 +84,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
         downloadsStore = mockk(relaxed = true)
         every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, seriesArt, syncManager, downloadsStore, policyRepository, intake)
     }
 
     @AfterTest
@@ -152,11 +161,11 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     fun checkAllForUpdates_forwardsAnEmptyDownloadedIdBatch() = runTest(mainDispatcher) {
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
 
-        viewModel.checkAllForUpdates()
+        viewModel.resyncActions.checkAllForUpdates()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { syncManager.checkForUpdatesBatch(emptyList()) }
-        assertTrue(viewModel.checking.value.not())
+        assertTrue(viewModel.resyncActions.checking.value.not())
     }
 
     @Test

@@ -60,8 +60,6 @@ import com.raulshma.jellyplay.core.data.playback.NightModeHelper
 import com.raulshma.jellyplay.core.data.playback.ReplayGainAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.ReverbHelper
 import com.raulshma.jellyplay.core.data.playback.VirtualizerHelper
-import com.raulshma.jellyplay.core.model.DecoderMode
-import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
@@ -339,6 +337,7 @@ class ExoPlayerEngine(
      */
     @Volatile
     private var videoDecoderCounters: DecoderCounters? = null
+    private var videoDecoderName: String? = null
     // audioEffectsAttached / lastAudioEffectsConfig / lastAppliedReverbPreset
     // moved into AudioEffectChain.
 
@@ -415,6 +414,9 @@ class ExoPlayerEngine(
                 audioPipelineReconfiguring = false
             }
             updateSpatialState()
+            // The active audio codec just resolved (or moved) — reconcile the
+            // passthrough offload posture with the per-codec allow-list.
+            refreshAudioOffloadSelection()
         }
 
         override fun onCues(cueGroup: CueGroup) {
@@ -445,6 +447,7 @@ class ExoPlayerEngine(
             // A track switch can move the playing audio format — the
             // canBeSpatialized answer rides the format.
             updateSpatialState()
+            refreshAudioOffloadSelection()
         }
 
         override fun onVolumeChanged(volume: Float) {
@@ -473,8 +476,18 @@ class ExoPlayerEngine(
             videoDecoderCounters = decoderCounters
         }
 
+        override fun onVideoDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            videoDecoderName = decoderName
+        }
+
         override fun onVideoDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
             videoDecoderCounters = null
+            videoDecoderName = null
         }
     }
 
@@ -543,22 +556,38 @@ class ExoPlayerEngine(
         release()
         lastRebuildInputs = inputs
 
+        // The rebuild's ordered build decisions, folded once (the plan owns
+        // the DECISIONS — sink shape, ASS session, extractor pairing, buffer
+        // numbers — jvmTest-pinned in ExoBuildPlanTest; this body is the
+        // plan executor: a when per verdict over Exo API assembly).
+        val plan = ExoBuildPlan.of(
+            ExoBuildInputs(
+                decoderMode = currentConfig.decoderMode,
+                audioPassthrough = currentConfig.audioPassthrough,
+                assSession = assForRequest,
+                minBufferMs = request.minBufferMs,
+                maxBufferMs = request.maxBufferMs,
+                backBufferDurationMs = exoCfg.backBufferDurationMs,
+            ),
+        )
+
         val selector = DefaultTrackSelector(context)
         applyRequestTrackSelection(selector, request, exoCfg)
         trackSelector = selector
 
-        val rendererMode = when (currentConfig.decoderMode) {
-            DecoderMode.HW_PREFERRED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-            DecoderMode.HW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-            DecoderMode.SW_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-        }
         // Custom renderers factory injects the in-sink AudioProcessor chain
         // (channel mix → dynamics → ReplayGain → high-pass) into the video
         // ExoPlayer path. Kept as the base; the ASS path wraps it below so the
         // AudioProcessor chain is preserved on both paths.
         val baseRenderersFactory = object : DefaultRenderersFactory(context) {
             init {
-                setExtensionRendererMode(rendererMode)
+                setExtensionRendererMode(
+                    when (plan.extensionRendererMode) {
+                        ExoBuildPlan.ExtensionRendererMode.ON -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+                        ExoBuildPlan.ExtensionRendererMode.OFF -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
+                        ExoBuildPlan.ExtensionRendererMode.PREFER -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                    },
+                )
                 setEnableDecoderFallback(exoCfg.enableDecoderFallback)
             }
 
@@ -567,40 +596,65 @@ class ExoPlayerEngine(
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): DefaultAudioSink {
-                return DefaultAudioSink.Builder(context)
-                    // ONE in-sink chain order, shared with the music sink
-                    // (core:data `inSinkAudioChain`): channel mix first — it
-                    // may change the channel count, so every downstream
-                    // processor must see the remixed layout — then
-                    // dynamics/ReplayGain and the dialogue-boost high-pass.
-                    // No balance processor: video has no L/R balance surface
-                    // (the declared divergence from music's in-sink balance,
-                    // recorded on the factory's KDoc).
-                    .setAudioProcessors(
-                        inSinkAudioChain(
-                            channelMixProcessor = channelMixProcessor,
-                            dynamicsProcessor = dynamicsProcessor,
-                            replayGainProcessor = replayGainProcessor,
-                            highPassProcessor = highPassFilter,
-                        ),
-                    )
-                    .setEnableFloatOutput(enableFloatOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .build()
+                // The plan's sink shape (see ExoBuildPlan.SinkShape): the
+                // passthrough arm builds the bare sink, the in-sink arm the
+                // processor chain. CONSTRUCTION-time split: the renderer set
+                // (and its sink) is fixed at player build, so a mid-session
+                // passthrough flip applies on the next player rebuild (the
+                // mode/decoder reload path), while the track-selection half
+                // re-pushes live.
+                return when (plan.sinkShape) {
+                    ExoBuildPlan.SinkShape.PassthroughBitstream ->
+                        DefaultAudioSink.Builder(context)
+                            .setEnableFloatOutput(enableFloatOutput)
+                            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                            .build()
+                    ExoBuildPlan.SinkShape.InSinkProcessorChain ->
+                        DefaultAudioSink.Builder(context)
+                            // ONE in-sink chain order, shared with the music sink
+                            // (core:data `inSinkAudioChain`): channel mix first — it
+                            // may change the channel count, so every downstream
+                            // processor must see the remixed layout — then
+                            // dynamics/ReplayGain and the dialogue-boost high-pass.
+                            // No balance processor: video has no L/R balance surface
+                            // (the declared divergence from music's in-sink balance,
+                            // recorded on the factory's KDoc).
+                            .setAudioProcessors(
+                                inSinkAudioChain(
+                                    channelMixProcessor = channelMixProcessor,
+                                    dynamicsProcessor = dynamicsProcessor,
+                                    replayGainProcessor = replayGainProcessor,
+                                    highPassProcessor = highPassFilter,
+                                ),
+                            )
+                            .setEnableFloatOutput(enableFloatOutput)
+                            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                            .build()
+                }
             }
         }
 
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(request.minBufferMs, request.maxBufferMs, 1_000, 3_000)
-            .setTargetBufferBytes(-1)
-            .setBackBuffer(exoCfg.backBufferDurationMs.coerceAtLeast(0), false)
-            .build()
+        val loadControl = with(plan.loadControl) {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    minBufferMs,
+                    maxBufferMs,
+                    bufferForPlaybackMs,
+                    bufferForPlaybackAfterRebufferMs,
+                )
+                .setTargetBufferBytes(targetBufferBytes)
+                .setBackBuffer(backBufferDurationMs, retainBackBuffer)
+                .build()
+        }
 
-        // Decide whether this session needs the libass (ass-media) path: only
-        // when an ASS/SSA subtitle source is present. Non-ASS sessions keep the
-        // existing DefaultSubtitleParserFactory path untouched, so the existing
-        // engine tests (which never carry ASS sources) are unaffected.
-        assEnabledForSession = assForRequest
+        // The plan's ASS session verdict executes: only the engage arm creates
+        // the handler; non-ASS sessions keep the existing
+        // DefaultSubtitleParserFactory path untouched, so the existing engine
+        // tests (which never carry ASS sources) are unaffected.
+        assEnabledForSession = when (plan.assSession) {
+            ExoBuildPlan.AssSessionVerdict.LibassEngages -> true
+            ExoBuildPlan.AssSessionVerdict.Discharges -> false
+        }
         // Reset the active-track ASS flag: a reused engine (load() called again
         // without release()) must not carry over stale activeTrackIsAss=true from
         // a prior ASS track, which would hide subtitles until the next select.
@@ -644,49 +698,46 @@ class ExoPlayerEngine(
             enableStreamCache = streamCacheEligible,
         )
 
-        // On the ASS path, wrap the extractors with Matroska+ASS support (for
-        // ASS embedded in MKV) and the renderers with the libass text renderer;
-        // otherwise the plain base factories reproduce the pre-ASS build exactly.
-        // The extractor swap mirrors ass-media's withAssMkvSupport extension but
-        // takes the style-override wrapper: AssMatroskaExtractor accepts the
-        // SubtitleParser.Factory INTERFACE, so the FORCE-mode header rewrite
-        // reaches embedded ASS too (the library's extension only accepts the
-        // concrete AssSubtitleParserFactory).
-        //
-        // KNOWN LIMITATION: embedded ASS-in-MKV extraction still bypasses the
-        // OffsettingSubtitleParserFactory — the subtitle-delay slider has no
-        // effect on embedded MKV ASS tracks in this engine. Preserved from the
-        // previous wiring (which passed the bare concrete factory) rather than
-        // destabilizing the working ASS path; mpv and libVLC render embedded
-        // ASS at the correct offset via sub-delay/setSpuDelay regardless.
-        val (finalRenderersFactory, msf) = if (assEnabledForSession) {
-            val assExtractors = AssStyleOverrideExtractorsFactory(
-                extractorsFactory,
-                delegateParserFactory,
-                assHandler!!,
-            )
-            // Own clock-pump factory instead of ass-media's AssRenderersFactory:
-            // the library's appended AssRenderer derives the render clock from
-            // the renderer position minus a hardcoded 10¹² µs base, and the
-            // player's own position cannot be queried from the playback thread —
-            // see [AssClockPumpRenderersFactory] for the delta-integration
-            // approach used instead.
-            val renderers = AssClockPumpRenderersFactory(
-                assHandler!!,
-                baseRenderersFactory,
-                startMediaTimeUs = request.startPositionMs * 1000L,
-            )
-            val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, assExtractors)
-                .setSubtitleParserFactory(offsetFactory)
-            renderers to sourceFactory
-        } else {
-            // setSubtitleParserFactory on the MediaSourceFactory so that side-
-            // loaded (side-car SubtitleConfiguration) text subs are also parsed
-            // through the offset wrapper. The extractors-level factory set above
-            // only covers embedded text tracks; side-car subs are parsed by the
-            // MSF's own factory, which must be the offset factory too.
-            baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
-                .setSubtitleParserFactory(offsetFactory)
+        // The plan's extractor pairing: on the ASS arm, wrap the extractors
+        // with Matroska+ASS support (for ASS embedded in MKV) and the
+        // renderers with the libass text renderer; the plain arm reproduces
+        // the pre-ASS build exactly. The extractor swap mirrors ass-media's
+        // withAssMkvSupport extension but takes the style-override wrapper:
+        // AssMatroskaExtractor accepts the SubtitleParser.Factory INTERFACE,
+        // so the FORCE-mode header rewrite reaches embedded ASS too (the
+        // library's extension only accepts the concrete
+        // AssSubtitleParserFactory).
+        val (finalRenderersFactory, msf) = when (plan.extractorPairing) {
+            ExoBuildPlan.ExtractorPairing.AssAwareExtractors -> {
+                val assExtractors = AssStyleOverrideExtractorsFactory(
+                    extractorsFactory,
+                    delegateParserFactory,
+                    assHandler!!,
+                )
+                // Own clock-pump factory instead of ass-media's AssRenderersFactory:
+                // the library's appended AssRenderer derives the render clock from
+                // the renderer position minus a hardcoded 10¹² µs base, and the
+                // player's own position cannot be queried from the playback thread —
+                // see [AssClockPumpRenderersFactory] for the delta-integration
+                // approach used instead.
+                val renderers = AssClockPumpRenderersFactory(
+                    assHandler!!,
+                    baseRenderersFactory,
+                    startMediaTimeUs = request.startPositionMs * 1000L,
+                )
+                val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, assExtractors)
+                    .setSubtitleParserFactory(offsetFactory)
+                renderers to sourceFactory
+            }
+            ExoBuildPlan.ExtractorPairing.PlainExtractors -> {
+                // setSubtitleParserFactory on the MediaSourceFactory so that side-
+                // loaded (side-car SubtitleConfiguration) text subs are also parsed
+                // through the offset wrapper. The extractors-level factory set above
+                // only covers embedded text tracks; side-car subs are parsed by the
+                // MSF's own factory, which must be the offset factory too.
+                baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+                    .setSubtitleParserFactory(offsetFactory)
+            }
         }
 
         // DRM: attach a DrmSessionManager only when the caller supplied one via
@@ -834,6 +885,7 @@ class ExoPlayerEngine(
         // first stats tick must never be suppressed by the previous one.
         statsGuard.reset()
         videoDecoderCounters = null
+        videoDecoderName = null
         wasPlayingBeforeActivityPause = false
     }
 
@@ -908,21 +960,68 @@ class ExoPlayerEngine(
             // the null-check branch, so !! is provably safe.
             params.setMaxVideoBitrate(request.maxVideoBitrate!!)
         }
-        if (exoCfg.preferredVideoMimeTypes.isNotEmpty()) {
-            params.setPreferredVideoMimeTypes(*exoCfg.preferredVideoMimeTypes.toTypedArray())
+        // The HDR delivery posture (HdrFormatPreference) owns the preferred
+        // MIME ordering when set — it is the finer settings surface over the
+        // raw list. See ExoPassthroughOffload.preferredMimeTypes for the
+        // fold (DV / HEVC ordering; SDR_ONLY and AUTO leave the raw list).
+        val mimeOrder = ExoPassthroughOffload.preferredMimeTypes(
+            pref = exoCfg.hdrFormatPreference,
+            base = exoCfg.preferredVideoMimeTypes,
+        )
+        if (mimeOrder.isNotEmpty()) {
+            params.setPreferredVideoMimeTypes(*mimeOrder.toTypedArray())
         }
-        if (exoCfg.audioOffloadMode != com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED) {
-            // Media3 surfaces audio offload through the track selector, not the
-            // ExoPlayer.Builder. Map the pref onto AudioOffloadPreferences and
-            // push it into the parameters so the selector prefers offload-decodable
-            // tracks when the user has enabled (or required) the mode.
+        // Media3 surfaces audio offload through the track selector, not the
+        // ExoPlayer.Builder. The mode composes the user's plain offload pref
+        // with the bitstream-passthrough gate (passthrough requested + the
+        // active codec allow-listed → REQUIRED). The sink half of the
+        // posture is construction-time (see buildAudioSink); the selection
+        // half is re-pushed live as the active codec resolves (see
+        // refreshAudioOffloadSelection).
+        val offloadMode = ExoPassthroughOffload.offloadMode(
+            passthroughRequested = currentConfig.audioPassthrough,
+            passthroughCodecs = currentConfig.audioPassthroughCodecs,
+            activeAudioMime = null, // nothing is selected yet at apply time
+            configuredMode = exoCfg.audioOffloadMode,
+        )
+        if (offloadMode != androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED) {
             params.setAudioOffloadPreferences(
                 androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                    .setAudioOffloadMode(exoCfg.audioOffloadMode.value)
+                    .setAudioOffloadMode(offloadMode)
                     .build(),
             )
         }
         selector.setParameters(params)
+    }
+
+    /**
+     * The live half of the passthrough posture: re-pushes the track
+     * selector's offload mode once the ACTIVE audio codec resolves (tracks
+     * changed / audio session re-bound). When the resolved codec is excluded
+     * from the passthrough allow-list, the REQUIRED posture drops back to
+     * the plain pref (or disabled) so decode-to-PCM stands; when the codec
+     * is allow-listed, REQUIRED pursues the bitstream path. Change-guarded
+     * on the selector's current mode so an unrelated parameter push does not
+     * churn selections.
+     */
+    private fun refreshAudioOffloadSelection() {
+        val selector = trackSelector ?: return
+        val exoCfg = currentExoConfig
+        val mode = ExoPassthroughOffload.offloadMode(
+            passthroughRequested = currentConfig.audioPassthrough,
+            passthroughCodecs = currentConfig.audioPassthroughCodecs,
+            activeAudioMime = player?.audioFormat?.sampleMimeType,
+            configuredMode = exoCfg.audioOffloadMode,
+        )
+        if (selector.parameters.audioOffloadPreferences.audioOffloadMode == mode) return
+        selector.setParameters(
+            selector.buildUponParameters()
+                .setAudioOffloadPreferences(
+                    androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                        .setAudioOffloadMode(mode)
+                        .build(),
+                ),
+        )
     }
 
     private fun buildSubtitleConfigurations(
@@ -1246,6 +1345,45 @@ class ExoPlayerEngine(
                 refreshSubtitlesForOffsetChange()
             }
         }
+
+        if (delta.sharedPairsChanged) {
+            // The HDR delivery posture's preferred-MIME ordering — the one
+            // shared pair a RUNNING Exo session can honor (Issue #11 / test
+            // 3.18). Without this arm the delta was recorded and silently
+            // dropped, so the posture only ever reached the engine on the
+            // next load.
+            applyHdrMimePreference()
+        }
+    }
+
+    /**
+     * Live re-push of the HDR posture's preferred video MIME ordering: the
+     * same fold [applyRequestTrackSelection] stamps at load, rewritten through
+     * the running track selector (the [setMaxVideoBitrate] live-selector
+     * shape). The posture's GL tone-mapping engagement half is deliberately
+     * NOT re-evaluated here — it is load-time and sticky per rebuild
+     * ([LoadRebuildInputs.hdrGlEngaged]); the MIME ordering is the part a
+     * running session can adopt without one.
+     */
+    private fun applyHdrMimePreference() {
+        runOnPlayerThread {
+            // Read on the player thread: a config flip racing the hop must not
+            // stamp a stale snapshot into the running selector.
+            val exoCfg = currentExoConfig
+            val selector = trackSelector ?: return@runOnPlayerThread
+            val mimeOrder = ExoPassthroughOffload.preferredMimeTypes(
+                pref = exoCfg.hdrFormatPreference,
+                base = exoCfg.preferredVideoMimeTypes,
+            )
+            val params = selector.buildUponParameters()
+            // Empty order = CLEAR the preference (AUTO / SDR_ONLY fall back to
+            // the engine's default negotiation). The load path skips when
+            // empty because a fresh builder holds no preference; the running
+            // selector may still carry one stamped at load, so flipping back
+            // must remove it.
+            params.setPreferredVideoMimeTypes(*mimeOrder.toTypedArray())
+            selector.setParameters(params)
+        }
     }
 
     /**
@@ -1499,6 +1637,18 @@ class ExoPlayerEngine(
 
     override fun applySubtitleStyle(style: SubtitleStyle) {
         val pv = playerView ?: return
+        // Bitmap-subtitle (PGS/VobSub) scale mode (issue #29): the Exo side is
+        // FIT-ONLY. Media3 1.11.1's SubtitleView draws Cue.bitmap planes at
+        // intrinsic size inside its package-private CanvasSubtitleOutput /
+        // SubtitlePainter, and its public surface (text size + style only)
+        // exposes no scaling hook — honoring STRETCH/COVER here would mean
+        // forking Media3 internals, which JellyPlay deliberately does not do.
+        // The pref still folds into ExoPlayerEngineConfig.bitmapSubtitleScaleMode
+        // (see the field's KDoc) so the seam is symmetric with mpv — which
+        // fully honors the mode via `sub-scale-with-window` — and a future
+        // Media3 hook can consume it without another fold change. Nothing to
+        // read at this site: FIT is Media3's own behavior, so the correct
+        // implementation is the absence of any scaling write.
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or
             (com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveBackgroundColor(style) and 0x00FFFFFF)
@@ -1713,9 +1863,8 @@ class ExoPlayerEngine(
 
         val counters = videoDecoderCounters
         counters?.ensureUpdated()
-        val dropped = (counters?.droppedInputBufferCount ?: 0)
-            .coerceAtLeast(counters?.droppedToKeyframeCount ?: 0)
-            .toLong()
+        // droppedBufferCount includes input and output drops; droppedToKeyframeCount counts events.
+        val dropped = (counters?.droppedBufferCount ?: 0).toLong()
         val rendered = (counters?.renderedOutputBufferCount ?: 0).toLong()
 
         // The HDR fold is computed BEFORE the dedup guard and compared by its
@@ -1775,7 +1924,7 @@ class ExoPlayerEngine(
 
         val newStats = EngineVideoStats(
             videoCodec = videoFormat?.sampleMimeType?.let { codecFromMime(it) },
-            videoDecoder = videoFormat?.codecs,
+            videoDecoder = videoDecoderName,
             videoResolution = videoFormat?.let { f ->
                 val w = f.width
                 val h = f.height
@@ -1892,8 +2041,15 @@ class ExoPlayerEngine(
             inputs = SpatialAudioInputs(
                 userEnabled = currentConfig.audioEffects.spatialAudioEnabled,
                 onlyHeadphones = currentConfig.audioEffects.spatialAudioOnlyHeadphones,
-                offloadActive = currentExoConfig.audioOffloadMode !=
-                    com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED,
+                // The same composed posture the track selector runs (the
+                // plain offload pref OR the passthrough gate) — an offloaded
+                // (or bitstreamed) session disqualifies spatialization.
+                offloadActive = ExoPassthroughOffload.offloadMode(
+                    passthroughRequested = currentConfig.audioPassthrough,
+                    passthroughCodecs = currentConfig.audioPassthroughCodecs,
+                    activeAudioMime = format?.sampleMimeType,
+                    configuredMode = currentExoConfig.audioOffloadMode,
+                ) != androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
             ),
         )
     }

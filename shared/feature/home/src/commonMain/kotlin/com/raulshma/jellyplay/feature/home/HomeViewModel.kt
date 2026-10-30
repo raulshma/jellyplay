@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.session.HomeSessionTransition
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -70,6 +71,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -89,6 +91,8 @@ internal class HomeViewModel(
     /** Read here only for the offline home's cached-layout mirror (see [offlineHomeGate]). */
     private val homeFeed: HomeFeed,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-level artwork resolver ([ArtworkUrls]) exposed read-side as [artwork]. */
+    private val artworkUrls: ArtworkUrls,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadIntake: DownloadIntake,
     private val quickDownloadActions: QuickDownloadActions,
@@ -127,6 +131,13 @@ internal class HomeViewModel(
      * feature/settings, only on the core/ui interface.
      */
     private val settingsSearchProvider: SettingsSearchProvider,
+    /**
+     * The shortcut catalog, injected through the core/ui seam. The binding
+     * lives in feature/shortcuts (its `DefaultShortcutCatalog`) and resolves
+     * at app level — this module keeps no dependency on feature/shortcuts
+     * (the SettingsSearchProvider precedent).
+     */
+    private val shortcutCatalog: com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalog,
     /**
      * The construction seams for the two big sub-modules below: each factory
      * owns its module's pure-DI collaborators so they never surface on this
@@ -182,6 +193,75 @@ internal class HomeViewModel(
 
     /** The presence chips' source of truth — collected at the chip row (see the KDoc for why this is not [HomeUiState]). */
     val presenceChips: StateFlow<List<HomePresenceChip>> get() = _presenceChips.flow
+
+    /**
+     * The header fold's memoized
+     * [com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver] and
+     * the gating snapshot it was built for (admin, offline): construction
+     * allocates (the default `activeTopLevelRoutes` set), so the resolver is
+     * rebuilt only when a gating fact changes — never per shortcuts emission.
+     * The offline fact rides the key because the resolver takes it as a
+     * constructor parameter too; both are booleans, so at most four instances
+     * ever exist. Written only from the fold's collector (combine invokes its
+     * transform sequentially), so plain vars suffice.
+     */
+    private var headerShortcutsResolver: com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver =
+        com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver(
+            catalog = shortcutCatalog,
+            isAdmin = false,
+            isOffline = false,
+        )
+    private var headerShortcutsResolverGating: Pair<Boolean, Boolean> = false to false
+
+    private fun shortcutsResolverFor(isAdmin: Boolean, isOffline: Boolean): com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver {
+        val gating = isAdmin to isOffline
+        if (headerShortcutsResolverGating != gating) {
+            headerShortcutsResolver = com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver(
+                catalog = shortcutCatalog,
+                isAdmin = isAdmin,
+                isOffline = isOffline,
+            )
+            headerShortcutsResolverGating = gating
+        }
+        return headerShortcutsResolver
+    }
+
+    /**
+     * The user's resolved header shortcuts (ordered, admin/offline-gated,
+     * icon/label final) — deliberately OUT of [HomeUiState] (the
+     * presence-chips precedent): the shortcuts store's slice + the admin flag
+     * + the offline mode combine into a list only the dock's end capsule
+     * reads, and folding it into the ~45-field state would copy the whole
+     * aggregate on every unrelated shortcuts emission. The offline input is
+     * narrowed to the boolean the resolver consumes (map + distinct off the
+     * bag), so unrelated [HomeUiState] churn never re-runs this fold — the
+     * same justification as keeping the fold out of the bag in the first
+     * place. The resolution goes through the shared
+     * [com.raulshma.jellyplay.core.ui.navigation.ShortcutSurfaceResolver]
+     * (one owner for resolved-shortcuts-per-surface, same module as the fold
+     * itself): this fold supplies the gating facts it owns — admin, offline —
+     * and reads the header surface's list; no reachability input, the header
+     * never consults it (the resolver's default models that posture — see
+     * [shortcutsResolverFor] for why the resolver is memoized).
+     */
+    val headerShortcuts: StateFlow<List<com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut>> =
+        combine(
+            prefs.shortcuts.shortcuts,
+            authRepository.currentUser,
+            _uiState.flow
+                .map { it.offlineMode != OfflineMode.ONLINE }
+                .distinctUntilChanged(),
+        ) { slice, user, isOffline ->
+            shortcutsResolverFor(isAdmin = user?.isAdmin == true, isOffline = isOffline)
+                .resolve(slice.definitions, slice.headerOrder, slice.overflowOrder)
+                .header
+        }
+            .distinctUntilChanged()
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList(),
+            )
 
     /**
      * Ids whose quick actions must flip to "Remove download" — completed
@@ -456,9 +536,8 @@ internal class HomeViewModel(
      * The offline home's advanced "delete downloaded episodes" sheet for a
      * series card — sheet state plus its four actions, behind one holder (see
      * [SeriesDeleteStateHolder]; the snapshot-before-dismiss invariant is
-     * documented and pinned there). [state][SeriesDeleteStateHolder.state] is
-     * folded into [HomeUiState.seriesDelete] by the init collector; [onEvent]
-     * routes the sheet's events straight to the holder's methods.
+     * documented and pinned there). [onEvent] routes the sheet's events
+     * straight to the holder's methods.
      *
      * Both series-sheet holders are constructed through [homeSheetsFactory]
      * (the [HomeRefresherFactory] pattern — see its KDoc).
@@ -467,14 +546,25 @@ internal class HomeViewModel(
     private val seriesDeleteStateHolder get() = sheets.seriesDelete
 
     /**
+     * The series-delete sheet's state, leaf-collected by the tail-sheets
+     * composable at its own scope — deliberately NOT folded into
+     * [HomeUiState] (the presence-chips precedent): each sheet emission
+     * (open, load sentinel, snapshot, per-season expand) would copy the
+     * ~45-field bag and re-run the orchestrator while a modal sheet covers
+     * the screen. Dismissal is the holder's own null write — no bag reset.
+     */
+    val seriesDeleteSheet: StateFlow<HomeSeriesDeleteState?> get() = seriesDeleteStateHolder.state
+
+    /**
      * The series download sheet opened from a series card's quick-action
      * Download — the same `SeriesDownloadSheet` the media-detail screen hosts,
      * fed here from the [EpisodeCatalogue] seam instead of a detail session.
-     * [state][SeriesDownloadStateHolder.state] is folded into
-     * [HomeUiState.seriesDownload] by the init collector; [onEvent] routes
-     * the sheet's callbacks straight to the holder's methods.
+     * [onEvent] routes the sheet's callbacks straight to the holder's methods.
      */
     private val seriesDownloadStateHolder get() = sheets.seriesDownload
+
+    /** The series-download sheet's state — see [seriesDeleteSheet]. */
+    val seriesDownloadSheet: StateFlow<HomeSeriesDownloadState?> get() = seriesDownloadStateHolder.state
 
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
@@ -648,6 +738,8 @@ internal class HomeViewModel(
                     // query rides).
                     hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                     homeHeroEnabled = prefs.home.homeHeroEnabled,
+                    homeHeroStyle = prefs.home.homeHeroStyle,
+                    homeHeroSlideshowIntervalSec = prefs.home.homeHeroSlideshowIntervalSec,
                     homeBackdropEnabled = prefs.home.homeBackdropEnabled,
                     showClock = prefs.home.showClockOnHome,
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
@@ -854,22 +946,6 @@ internal class HomeViewModel(
             }
         }
 
-        // Fold the series-delete sheet holder into HomeUiState.seriesDelete
-        // (same fold pattern) so the sheet keeps observing one state object.
-        launch {
-            seriesDeleteStateHolder.state.collect { seriesDelete ->
-                _uiState.update { it.copy(seriesDelete = seriesDelete) }
-            }
-        }
-
-        // Fold the series download sheet holder into HomeUiState.seriesDownload
-        // (same fold pattern).
-        launch {
-            seriesDownloadStateHolder.state.collect { seriesDownload ->
-                _uiState.update { it.copy(seriesDownload = seriesDownload) }
-            }
-        }
-
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
         // observes a single state object. The refresher is the SOLE writer of
@@ -994,7 +1070,7 @@ internal class HomeViewModel(
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
             is HomeUiEvent.RequestSeriesDownload -> seriesDownloadStateHolder.requestSeriesDownload(event.series)
             is HomeUiEvent.LoadSeriesDownloadEpisodes -> seriesDownloadStateHolder.loadSeasonEpisodes(event.seasonId)
-            is HomeUiEvent.DownloadSeries -> seriesDownloadStateHolder.downloadSeries(event.selectedEpisodes)
+            is HomeUiEvent.DownloadSeries -> seriesDownloadStateHolder.downloadSeries(event.selectedEpisodes, event.policy)
             is HomeUiEvent.DismissSeriesDownload -> seriesDownloadStateHolder.dismiss()
             is HomeUiEvent.RequestSeriesDelete -> seriesDeleteStateHolder.requestSeriesDelete(event.series)
             is HomeUiEvent.DismissSeriesDelete -> seriesDeleteStateHolder.dismiss()
@@ -1018,11 +1094,29 @@ internal class HomeViewModel(
         }
     }
 
-    fun getImageUrl(itemId: String): String =
-        imageUrlProvider.getImageUrl(itemId)
-
+    /**
+     * The RAW untagged backdrop read by item id — the one retained
+     * [ImageUrlProvider] getter (the detail VM's retained-getter precedent).
+     * It backs the series-backdrop leg of the episode/season cards: a bare
+     * series id the screen holds no [MediaItem] for, and the model carries no
+     * series backdrop tag, so [ArtworkUrls] cannot resolve it (its slots all
+     * select a tag). Every item-backed slot goes through [artwork]; only bare
+     * ids land here.
+     */
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
+
+    /**
+     * The item/tag-aware artwork resolver (the [ArtworkUrls] seam): one
+     * MediaItem in, the URL for the slot it renders with the right image tag
+     * already selected — the read-side accessor the screen's rows consume.
+     * The detail VM's `artwork` precedent: it replaced this VM's
+     * posterUrl/seriesPosterUrl/backdropUrl pass-throughs (whose per-slot
+     * wrappers were a transposition waiting to happen) and the raw
+     * `getImageUrl` poster read (the fallback chain resolves its bare
+     * parent/artist ids through the `posterFor` fold instead).
+     */
+    internal val artwork: ArtworkUrls get() = artworkUrls
 
     fun getHomeScrollPosition(): HomeScrollPosition = scrollPositionStore.get()
 

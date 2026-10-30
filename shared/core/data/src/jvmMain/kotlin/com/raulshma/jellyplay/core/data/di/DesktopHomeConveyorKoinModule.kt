@@ -66,7 +66,8 @@ internal val desktopHomeConveyorModule: Module = module {
             offlineModeManager = get(),
             playedStateSync = get(),
             offlineRepository = get(),
-            mediaRepository = get(),
+            userDataWrites = get(),
+            userDataAnnouncer = get(),
             cacheInvalidator = get(),
             userDataSyncTrigger = get(),
             // Desktop has no notification surface for a headless drain.

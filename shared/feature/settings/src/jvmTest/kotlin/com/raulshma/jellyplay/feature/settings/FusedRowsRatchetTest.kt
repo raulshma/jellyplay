@@ -414,13 +414,15 @@ class FusedRowsRatchetTest {
     // ── 6. The hidden-settings hints derive from the declarations ───────
 
     /**
-     * The five screens' HiddenSettingsHint counts, derived through
+     * The screens' HiddenSettingsHint counts, derived through
      * [hiddenRowsFor] from the same declarations the emission `if`s read —
-     * the derived values below are the declarations' truth. Playback's
-     * 9 is the documented FROZEN exception (engine-/platform-dependent; the
-     * flags vocabulary cannot express it) and is deliberately NOT pinned
-     * here. Capabilities are passed explicitly so the pins are hermetic —
-     * the hints' runtime values ride the same flags the screens build.
+     * the derived values below are the declarations' truth. Playback's hint
+     * is the one NOT pinned here: it derives through the screen shell's
+     * slot declaration (its engine slot's per-engine content-count hook is
+     * the term the flags vocabulary cannot express), pinned shape-wise in
+     * `SettingsCatalogScreenContractTest`. Capabilities are passed
+     * explicitly so the pins are hermetic — the hints' runtime values ride
+     * the same flags the screens build.
      */
     @Test
     fun `the hidden-settings hint counts derive from the row declarations`() {

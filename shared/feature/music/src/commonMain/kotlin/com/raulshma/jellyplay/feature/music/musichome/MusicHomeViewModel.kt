@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -38,6 +39,8 @@ class MusicHomeViewModel(
     /** The SearchResult-shaped reads (favorites + browse queries — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the spotlight card renders through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
     private val activeDownloads: ActiveDownloadCount,
     private val homeDiscoveryStore: HomeDiscoveryStore,

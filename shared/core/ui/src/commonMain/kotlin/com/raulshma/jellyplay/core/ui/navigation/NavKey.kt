@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.navigation
 
 import androidx.compose.runtime.Immutable
 import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.model.ShortcutSurface
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkTarget
 import kotlinx.serialization.Serializable
 
@@ -667,6 +668,22 @@ sealed class Route : NavKey {
     }
 
     @Serializable data object Shortcuts : Route() {
+        override val isModal = true
+    }
+
+    /**
+     * The shortcuts-customization editor (the pinned header/overflow lists,
+     * per-shortcut icon + label), presented as two tabs — one per surface.
+     * Modal like [Shortcuts]; reachable from the Shortcuts screen's Customize
+     * action, the Settings rows (Home Screen's header-shortcuts row, the
+     * Navigation group's customize row), and a header shortcut's touch
+     * long-press. [initialSurface] is the tab the editor opens on, so each
+     * Settings entry point lands on its own surface; the default matches the
+     * shipped defaults (the overflow menu is what's pinned out of the box).
+     */
+    @Serializable data class ShortcutsCustomize(
+        val initialSurface: ShortcutSurface = ShortcutSurface.OVERFLOW,
+    ) : Route() {
         override val isModal = true
     }
 

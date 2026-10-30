@@ -3,11 +3,13 @@ package com.raulshma.jellyplay.feature.search
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.FilterCodec
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
@@ -81,7 +83,8 @@ class SearchViewModelFilterPersistenceTest {
     // has no access to that module (SearchViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -100,7 +103,8 @@ class SearchViewModelFilterPersistenceTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
 
         libraryApiClient = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
@@ -117,7 +121,7 @@ class SearchViewModelFilterPersistenceTest {
         every { searchFiltersStore.searchFiltersJson } returns persistedJson
         every { quickDownloadActions.downloadedIds } returns downloadedIds
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
-        coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
@@ -132,11 +136,13 @@ class SearchViewModelFilterPersistenceTest {
     }
 
     private fun createViewModel() = SearchViewModel(
-        mediaRepository,
+        libraryFeed,
+        userDataChanges,
         catalogueEnrichments,
         libraryApiClient,
         userDataMutator,
         imageUrlProvider,
+        DefaultArtworkUrls(imageUrlProvider),
         seerrRepository,
         seerrRequestDelegate,
         mediaSearchEngine,

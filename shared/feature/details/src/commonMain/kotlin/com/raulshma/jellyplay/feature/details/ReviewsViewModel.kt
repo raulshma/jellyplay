@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
@@ -19,10 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * ([SeerrRepository.getTmdbReviews], TMDB-direct and detail-cache-backed), so
  * returning here after the detail screen already loaded is a cache hit, not a
  * refetch. Unlike the detail screen's take-limited leg, the full list lands —
- * that is the screen's whole point.
+ * that is the screen's whole point. Injects only [DetailFeed] — the detail
+ * read is this screen's whole repository need.
  */
 class ReviewsViewModel constructor(
-    private val mediaRepository: MediaRepository,
+    private val detailFeed: DetailFeed,
     private val seerrRepository: SeerrRepository,
 ) : JellyPlayViewModel() {
 
@@ -34,7 +35,7 @@ class ReviewsViewModel constructor(
         launch {
             // No feature-level retry: the repository paths already retry
             // (and coordinate retry with address failover) in the engine.
-            val detail = mediaRepository.getMediaDetail(itemId)
+            val detail = detailFeed.getMediaDetail(itemId, force = false)
             val resolved = detail.fold(
                 onSuccess = { loaded ->
                     val mediaType = loaded.item.mediaType

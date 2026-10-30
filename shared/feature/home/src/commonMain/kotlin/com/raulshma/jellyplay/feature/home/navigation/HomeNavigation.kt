@@ -23,13 +23,14 @@ fun EntryProviderScope<NavKey>.homeSection(
     playOnStrategy: HomePlayOnRedirect? = null,
     musicContent: @Composable () -> Unit,
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit = {},
 ) {
     entry<Route.Home> {
         // Build the callbacks once per navigator lifetime so the HomeScreen subtree
         // sees a single stable `HomeCallbacks` instance (treated as @Immutable by
         // the Compose compiler) instead of fresh lambda allocations on every
         // recomposition — eliminates cascading recompositions of the home content.
-        val callbacks = remember(navigator) {
+        val callbacks = remember(navigator, onShortcutAction) {
             HomeCallbacks(
                 onItemClick = { itemId, mediaType, parentId, itemName ->
                     navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
@@ -76,6 +77,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                 // genre chips → filtered library section) — one generic
                 // Route-carrier beside the settings-search carrier above.
                 onOpenRoute = { route -> navigator.navigate(route) },
+                onShortcutAction = onShortcutAction,
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
                 onConfigureHomeLayout = { navigator.navigate(Route.HomeSettings("pinned_home_sections")) },
                 onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },

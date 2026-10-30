@@ -18,6 +18,9 @@
     <string name="settings_forced_subtitles">강제 자막만</string>
     <string name="settings_forced_subtitles_on">강제 트랙이 있을 때만 자막 표시</string>
     <string name="settings_forced_subtitles_off">선호 언어에 따라 자막 표시</string>
+    <string name="settings_show_only_preferred_subtitles">선호 자막만 표시</string>
+    <string name="settings_show_only_preferred_subtitles_on">선호 언어가 아닌 자막 트랙을 숨깁니다</string>
+    <string name="settings_show_only_preferred_subtitles_off">모든 자막 트랙 표시</string>
     <string name="settings_high_contrast_subtitles">고대비 자막</string>
     <string name="settings_high_contrast_on">접근성을 위한 최대 가독성 자막 스타일</string>
     <string name="settings_high_contrast_off">구성된 자막 스타일 사용</string>

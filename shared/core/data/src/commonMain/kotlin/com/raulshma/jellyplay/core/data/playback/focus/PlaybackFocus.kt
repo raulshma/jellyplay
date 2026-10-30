@@ -141,12 +141,15 @@ interface PlaybackSurface {
 /**
  * What the executor does when the OS takes focus from a held claim — the
  * per-claimant loss ruling (the matrix's loss-vocabulary growth the ADR
- * consequences record; the interface did not grow). MUSIC and READ_ALOUD
- * stay [Pause]-only with manual resume; VIDEO is the one row the duck
- * upgrade applies to (the user's `duckOnTransientFocusLoss` pref), keeping
+ * consequences record; the interface did not grow). READ_ALOUD stays
+ * [Pause]-only with manual resume; VIDEO is the row the original duck
+ * upgrade applied to (the user's `duckOnTransientFocusLoss` pref), keeping
  * its legacy transient-loss semantics alive: duck, never pause, and the
  * claim stays HELD through the duck (a regain restores; nothing else
- * changes).
+ * changes). MUSIC joins with the shared-pref upgrade: when the same pref is
+ * pushed through [MusicFocusPolicyInput] the MUSIC row ducks-and-holds too
+ * — a phone call lowers the music instead of stopping it. Both upgrades are
+ * INJECTED inputs; the matrix's own ruling stays pause-everywhere.
  */
 sealed interface FocusLossDirective {
 

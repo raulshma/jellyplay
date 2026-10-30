@@ -67,14 +67,14 @@ data class EngineConfigDelta(
     val engineSpecificChanged: Boolean,
     /**
      * The shared mpv pair re-diff group: `engineSpecific`,
-     * `audioPassthrough`, `audioPassthroughCodecs`, `deinterlace` or
-     * `hdrSource` moved. The passthrough/codec-set/deinterlace/HDR inputs
-     * ride the SHARED [EngineConfig] on both hosts — the spdif list is
-     * composed from the master boolean AND the enabled codec set, the
-     * session-scoped deinterlace cycle rides the base config, and an
-     * HDR-source change flips the tone-mapping suppression gate — so any of
-     * them must reach the pair diff even when the engine-specific slice did
-     * not move.
+     * `audioPassthrough`, `audioPassthroughCodecs`, `deinterlace`,
+     * `hdrSource` or `hdrFormatPreference` moved. The passthrough/codec-set/
+     * deinterlace/HDR inputs ride the SHARED [EngineConfig] on both hosts —
+     * the spdif list is composed from the master boolean AND the enabled
+     * codec set, the session-scoped deinterlace cycle rides the base config,
+     * and an HDR-source or HDR-format-preference change flips the HDR output
+     * posture — so any of them must reach the pair diff even when the
+     * engine-specific slice did not move.
      */
     val sharedPairsChanged: Boolean,
     /**
@@ -134,7 +134,8 @@ data class EngineConfigDelta(
                     old.audioPassthrough != new.audioPassthrough ||
                     old.audioPassthroughCodecs != new.audioPassthroughCodecs ||
                     old.deinterlace != new.deinterlace ||
-                    old.hdrSource != new.hdrSource,
+                    old.hdrSource != new.hdrSource ||
+                    old.hdrFormatPreference != new.hdrFormatPreference,
                 audioEffectsChanged = old.audioEffects != new.audioEffects,
                 channelMixChanged = oldAudioFx.channelMixMode != newAudioFx.channelMixMode ||
                     oldAudioFx.channelMixEnabled != newAudioFx.channelMixEnabled ||

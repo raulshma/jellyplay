@@ -70,7 +70,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         coEvery {
             playbackSourceResolver.resolveStartPositionTicks("item-1", resumeTicks)
         } returns resumeTicks
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(
             itemDetail("item-1", "Test Movie", runtimeTicks)
         )
 
@@ -90,7 +90,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         setExternalPlayer()
         val storedTicks = 5L * 60L * 1000L * 10_000L // 5 min resume in the offline mirror
         coEvery { playbackSourceResolver.resolveStartPositionTicks("item-1", 0L) } returns storedTicks
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(
             itemDetail("item-1", "Test Movie", 54_000_000_000L)
         )
 
@@ -229,7 +229,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
     private fun loadCurrentEpisodeExternally() {
         setExternalPlayer()
         coEvery { playbackSourceResolver.resolveStartPositionTicks("item-1", 0L) } returns 0L
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(
                     id = "item-1",
@@ -296,7 +296,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         coEvery {
             playbackSourceResolver.resolveStartPositionTicks("item-2", 0L)
         } coAnswers { seedGate.await() }
-        coEvery { mediaRepository.getMediaDetail("item-2") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item-2", force = false) } returns Result.success(
             itemDetail("item-2", "Episode Two")
         )
 

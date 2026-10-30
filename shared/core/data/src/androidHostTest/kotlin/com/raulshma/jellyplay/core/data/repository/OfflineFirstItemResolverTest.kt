@@ -29,7 +29,7 @@ import org.junit.Test
 class OfflineFirstItemResolverTest {
 
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
@@ -43,7 +43,7 @@ class OfflineFirstItemResolverTest {
         every { imageUrlProvider.getImageUrl(any<String>()) } returns "http://server/img"
         resolver = OfflineFirstItemResolverImpl(
             offlineRepository = offlineRepository,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             offlineModeManager = offlineModeManager,
             imageUrlProvider = imageUrlProvider,
         )
@@ -65,13 +65,13 @@ class OfflineFirstItemResolverTest {
         // Offline hit must prefer the local poster path over the server URL.
         assertEquals("file:///offline/poster.jpg", ref.posterUrl)
         // Network fallback must not fire when the offline store had the row.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail("item-1") }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail("item-1", force = false) }
     }
 
     @Test
     fun `offline miss while online falls back to getMediaDetail`() = runTest {
         coEvery { offlineRepository.getOfflineItem("item-2") } returns null
-        coEvery { mediaRepository.getMediaDetail("item-2") } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item-2", force = false) } returns Result.success(
             MediaDetail(item = MediaItem(id = "item-2", name = "Online Only", mediaType = MediaType.MOVIE))
         )
 
@@ -93,13 +93,13 @@ class OfflineFirstItemResolverTest {
         assertNull(ref.item)
         assertEquals("http://server/img", ref.posterUrl)
         // The guaranteed-failing network call must never fire while offline.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
     }
 
     @Test
     fun `both-miss online returns the id-derived url with a null item`() = runTest {
         coEvery { offlineRepository.getOfflineItem("item-4") } returns null
-        coEvery { mediaRepository.getMediaDetail("item-4") } returns Result.failure(RuntimeException("net"))
+        coEvery { detailFeed.getMediaDetail("item-4", force = false) } returns Result.failure(RuntimeException("net"))
 
         val ref = resolver.resolveMediaRef("item-4")
 

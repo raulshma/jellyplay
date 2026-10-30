@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.network.api
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
 import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginOmdbAwards
 import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import java.io.BufferedReader
@@ -313,6 +314,12 @@ class JellyPlayPluginApiClientImpl(
                 )
             }
         }
+    }
+
+    override suspend fun getOmdbAwards(imdbId: String): Result<JellyPlayPluginOmdbAwards?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/omdb/awards?imdbId=" + java.net.URLEncoder.encode(imdbId, "UTF-8"))
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlayOmdbAwards>(text).toModel()
     }
 
     // ------------------------------------------------------------------

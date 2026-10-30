@@ -247,7 +247,7 @@ class DownloadLifecycleActionsTest {
         val detail = MediaDetail(
             item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES),
         )
-        coEvery { downloadIntake.startSeries("series-1", null) } returns
+        coEvery { downloadIntake.startSeries("series-1", null, any()) } returns
             Result.success(listOf("d1", "d2", "d3"))
 
         val h = makeActions(scope = helperScope(), detail = detail)
@@ -490,7 +490,7 @@ class DownloadLifecycleActionsTest {
     fun `downloadSeries intake failure emits queue-failed error`() = runTest {
         val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
         // A throwable with no message exercises the strings-fallback path.
-        coEvery { downloadIntake.startSeries("series-1", null) } returns Result.failure(RuntimeException())
+        coEvery { downloadIntake.startSeries("series-1", null, any()) } returns Result.failure(RuntimeException())
         val h = makeActions(scope = helperScope(), detail = seriesDetail)
 
         h.downloadSeries()

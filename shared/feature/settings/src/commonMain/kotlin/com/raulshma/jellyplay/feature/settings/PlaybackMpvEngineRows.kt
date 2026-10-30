@@ -4,6 +4,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
@@ -46,10 +48,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hwde
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_options
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_mpv_config
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_fonts_helper_text
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_helper_text
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_config_placeholder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_raw_mpv_options
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_mpv
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_custom_buttons_helper
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_custom_buttons_placeholder
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_input_conf_helper
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_input_conf_placeholder
 
 /** The `playback.engine` group's MPV branch rows. */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -115,6 +122,27 @@ internal fun PlaybackMpvEngineRows(
                                 highlighted = highlightSettingId == PlaybackRows.MpvDebanding.id,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(deband = it)) } },
                             )
+                            // The shared mpv deband level (the VideoPlayerStore
+                            // knob beside the engine-config toggle above).
+                            val mpvDebandTitle = rowTitle(PlaybackRows.MpvDeband)
+                            val mpvDebandLabels = MpvDebandMode.entries.associateWith { stringResource(mpvDebandModeLabelRes(it)) }
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.MpvDeband),
+                                title = mpvDebandTitle,
+                                subtitle = rowSubtitle(PlaybackRows.MpvDeband),
+                                trailingText = mpvDebandLabels[preferences.mpvDebandMode]
+                                    ?: preferences.mpvDebandMode.name,
+                                highlighted = highlightSettingId == PlaybackRows.MpvDeband.id,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = mpvDebandTitle,
+                                        items = MpvDebandMode.entries,
+                                        label = { mpvDebandLabels.getValue(it) },
+                                        isSelected = { it == preferences.mpvDebandMode },
+                                        onSelect = { viewModel.edit { scope -> scope.videoPlayer.setMpvDebandMode(it) } },
+                                    )
+                                },
+                            )
                             SettingToggleItem(
                                 icon = rowIcon(PlaybackRows.MpvInterpolation),
                                 title = rowTitle(PlaybackRows.MpvInterpolation),
@@ -122,6 +150,19 @@ internal fun PlaybackMpvEngineRows(
                                 checked = mpvCfg.interpolation,
                                 highlighted = highlightSettingId == PlaybackRows.MpvInterpolation.id,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(interpolation = it)) } },
+                            )
+                            // The shared mpv motion-interpolation toggle (the
+                            // VideoPlayerStore knob beside the engine-config
+                            // toggle above).
+                            SettingToggleItem(
+                                icon = rowIcon(PlaybackRows.MpvMotionInterpolation),
+                                title = rowTitle(PlaybackRows.MpvMotionInterpolation),
+                                subtitle = rowSubtitle(PlaybackRows.MpvMotionInterpolation),
+                                checked = preferences.mpvMotionInterpolation,
+                                highlighted = highlightSettingId == PlaybackRows.MpvMotionInterpolation.id,
+                                onCheckedChange = { enabled ->
+                                    viewModel.edit { scope -> scope.videoPlayer.setMpvMotionInterpolation(enabled) }
+                                },
                             )
                             val audioOutputTitle = rowTitle(PlaybackRows.MpvAudioOutput)
                             SettingListItem(
@@ -296,6 +337,28 @@ internal fun PlaybackMpvEngineRows(
                                     },
                                 )
                             }
+                            // The shared tone-mapping curve — the
+                            // VideoPlayerStore knob beside the engine-config
+                            // tone-mapping target above.
+                            val toneMappingCurveTitle = rowTitle(PlaybackRows.MpvToneMappingCurve)
+                            val toneMappingCurveLabels = MpvToneMappingCurve.entries.associateWith { stringResource(mpvToneMappingCurveLabelRes(it)) }
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.MpvToneMappingCurve),
+                                title = toneMappingCurveTitle,
+                                subtitle = rowSubtitle(PlaybackRows.MpvToneMappingCurve),
+                                trailingText = toneMappingCurveLabels[preferences.mpvToneMappingCurve]
+                                    ?: preferences.mpvToneMappingCurve.name,
+                                highlighted = highlightSettingId == PlaybackRows.MpvToneMappingCurve.id,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = toneMappingCurveTitle,
+                                        items = MpvToneMappingCurve.entries,
+                                        label = { toneMappingCurveLabels.getValue(it) },
+                                        isSelected = { it == preferences.mpvToneMappingCurve },
+                                        onSelect = { viewModel.edit { scope -> scope.videoPlayer.setMpvToneMappingCurve(it) } },
+                                    )
+                                },
+                            )
                             if (SettingsScreenGroups.playbackEngine.rowAdmitted(PlaybackRows.MpvRenderQuality.id, rowFlags)) {
                                 val renderQualityTitle = rowTitle(PlaybackRows.MpvRenderQuality)
                                 SettingListItem(
@@ -431,6 +494,7 @@ internal fun PlaybackMpvEngineRows(
                             val customOptionsSuffix = stringResource(Res.string.settings_custom_options)
                             val advancedMpvConfigTitle = stringResource(Res.string.settings_advanced_mpv_config)
                             val mpvHelperText = stringResource(Res.string.settings_mpv_helper_text)
+                            val mpvFontsHelperText = stringResource(Res.string.settings_mpv_fonts_helper_text)
                             val mpvConfigPlaceholder = stringResource(Res.string.settings_mpv_config_placeholder)
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.MpvExtraConfig),
@@ -446,9 +510,50 @@ internal fun PlaybackMpvEngineRows(
                                     activePicker.value = PickerState.Text(
                                         title = advancedMpvConfigTitle,
                                         initialText = mpvCfg.mpvExtraConfig,
-                                        helperText = mpvHelperText,
+                                        helperText = mpvHelperText + "\n\n" + mpvFontsHelperText,
                                         placeholder = mpvConfigPlaceholder,
                                         onSave = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(mpvExtraConfig = it)) } },
+                                    )
+                                },
+                            )
+                            // The input.conf / custom-buttons escape hatches —
+                            // the same multi-line text-editor shape beside the
+                            // raw mpv.conf editor above.
+                            val inputConfTitle = rowTitle(PlaybackRows.MpvInputConf)
+                            val inputConfHelper = stringResource(Res.string.settings_mpv_input_conf_helper)
+                            val inputConfPlaceholder = stringResource(Res.string.settings_mpv_input_conf_placeholder)
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.MpvInputConf),
+                                title = inputConfTitle,
+                                subtitle = rowSubtitle(PlaybackRows.MpvInputConf),
+                                trailingText = "input.conf",
+                                highlighted = highlightSettingId == PlaybackRows.MpvInputConf.id,
+                                onClick = {
+                                    activePicker.value = PickerState.Text(
+                                        title = inputConfTitle,
+                                        initialText = preferences.mpvInputConf,
+                                        helperText = inputConfHelper,
+                                        placeholder = inputConfPlaceholder,
+                                        onSave = { viewModel.edit { scope -> scope.videoPlayer.setMpvInputConf(it) } },
+                                    )
+                                },
+                            )
+                            val customButtonsTitle = rowTitle(PlaybackRows.MpvCustomButtons)
+                            val customButtonsHelper = stringResource(Res.string.settings_mpv_custom_buttons_helper)
+                            val customButtonsPlaceholder = stringResource(Res.string.settings_mpv_custom_buttons_placeholder)
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.MpvCustomButtons),
+                                title = customButtonsTitle,
+                                subtitle = rowSubtitle(PlaybackRows.MpvCustomButtons),
+                                trailingText = if (preferences.mpvCustomButtons.isBlank()) "" else "JSON",
+                                highlighted = highlightSettingId == PlaybackRows.MpvCustomButtons.id,
+                                onClick = {
+                                    activePicker.value = PickerState.Text(
+                                        title = customButtonsTitle,
+                                        initialText = preferences.mpvCustomButtons,
+                                        helperText = customButtonsHelper,
+                                        placeholder = customButtonsPlaceholder,
+                                        onSave = { viewModel.edit { scope -> scope.videoPlayer.setMpvCustomButtons(it) } },
                                     )
                                 },
                             )

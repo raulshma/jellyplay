@@ -30,15 +30,20 @@ import kotlin.math.roundToInt
  *    ordering, same mode→processor mapping, same equalizer/boost
  *    co-enabling rule.
  *
+ * The equalizer/dialogue-boost/night-mode session effects ride the shared
+ * [AudioSessionEffectTrio] (mpv's engine-agnostic half of this split); the
+ * bass/virtualizer/reverb/loudness session effects and the in-sink
+ * AudioProcessor chain are the Exo-only remainder that stays here.
+ *
  * Not a Hilt type: the engine constructs it directly because the helpers
  * and in-sink processors are engine-private instances (the processors are
  * also installed into the renderers factory, so they must be the same
  * instances the chain applies state to).
  */
 internal class AudioEffectChain(
-    private val dialogueBoost: DialogueBoostHelper,
-    private val nightMode: NightModeHelper,
-    private val equalizerHelper: EqualizerHelper,
+    dialogueBoost: DialogueBoostHelper,
+    nightMode: NightModeHelper,
+    equalizerHelper: EqualizerHelper,
     private val bassBoostHelper: BassBoostHelper,
     private val virtualizerHelper: VirtualizerHelper,
     private val reverbHelper: ReverbHelper,
@@ -47,6 +52,12 @@ internal class AudioEffectChain(
     private val dynamicsProcessor: DynamicsCompressorAudioProcessor,
     private val replayGainProcessor: ReplayGainAudioProcessor,
 ) {
+    private val sessionTrio = AudioSessionEffectTrio(
+        equalizerHelper = equalizerHelper,
+        dialogueBoost = dialogueBoost,
+        nightMode = nightMode,
+    )
+
     private var attached: Boolean = false
     private var lastAppliedConfig: AudioEffectsConfig? = null
     private var lastAppliedReverbPreset: ReverbPreset? = null
@@ -78,9 +89,7 @@ internal class AudioEffectChain(
         lastAppliedSpatialActive = spatialAudioActive
 
         if (!attached) {
-            dialogueBoost.attach(sid)
-            nightMode.attach(sid)
-            equalizerHelper.attach(sid)
+            sessionTrio.attach(sid)
             bassBoostHelper.attach(sid)
             virtualizerHelper.attach(sid)
             reverbHelper.attach(sid)
@@ -88,22 +97,10 @@ internal class AudioEffectChain(
             attached = true
         }
 
-        dialogueBoost.setStrength(config.dialogueBoostStrength)
-        dialogueBoost.setEnabled(config.dialogueBoostEnabled)
-        // dialogueBoost also toggles its rumble-cut high-pass internally.
-
-        nightMode.setStrength(config.nightModeStrength)
-        nightMode.setEnabled(config.nightModeEnabled)
-
-        // equalizerHelper owns the single priority-0 Equalizer for this
-        // session and DialogueBoostHelper overlays its vocal-band gains on
-        // top. The co-enabling rule (on while EITHER is on) lives inside
-        // [EqualizerHelper.setEnabled] — callers pass both flags.
-        equalizerHelper.setSettings(config.equalizerSettings)
-        equalizerHelper.setEnabled(
-            equalizerEnabled = config.equalizerEnabled,
-            dialogueBoostEnabled = config.dialogueBoostEnabled,
-        )
+        // The engine-agnostic session-effect trio: dialogue boost, night
+        // mode and the equalizer with its co-enabling call (one choreography
+        // home, shared with mpv — see [AudioSessionEffectTrio]).
+        sessionTrio.apply(config)
 
         // Normalization modes — handled by the in-sink AudioProcessor chain
         // (consistent with the audio/music + MPV paths):
@@ -188,9 +185,7 @@ internal class AudioEffectChain(
     }
 
     fun release() {
-        dialogueBoost.detach()
-        nightMode.detach()
-        equalizerHelper.detach()
+        sessionTrio.release()
         bassBoostHelper.detach()
         virtualizerHelper.detach()
         reverbHelper.detach()

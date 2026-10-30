@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
@@ -54,7 +55,7 @@ open class VideoPlayerViewModelHarness {
 
     val testDispatcher = UnconfinedTestDispatcher()
 
-    lateinit var mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository
+    lateinit var detailFeed: com.raulshma.jellyplay.core.data.repository.DetailFeed
     lateinit var playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository
     lateinit var aggregateStore: VideoPlayerAggregateStore
     lateinit var aggregateFlow: MutableStateFlow<VideoPlayerAggregate>
@@ -69,7 +70,7 @@ open class VideoPlayerViewModelHarness {
     fun setUpHarness() {
         Dispatchers.setMain(testDispatcher)
 
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository =
             mockk<com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository>(relaxed = true)
@@ -94,7 +95,7 @@ open class VideoPlayerViewModelHarness {
         // poisons whichever sibling test class runs next (the
         // SyncPlayTestSupport precedent). Resolve to failure: the sidecar's
         // null guard skips the work entirely.
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns
             Result.failure(RuntimeException("no sidecar refresh in the harness"))
 
         // Every store: relaxed mock over REAL slice flows — the collaborator
@@ -158,25 +159,10 @@ open class VideoPlayerViewModelHarness {
         every { offlineModeManager.networkStatus } returns
             MutableStateFlow(com.raulshma.jellyplay.core.model.NetworkStatus.Online)
 
+        val imageUrlProviderMock = mockk<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>(relaxed = true)
+
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
-            mediaRepository = mediaRepository,
-            libraryApiClient = mockk(relaxed = true),
-            lyricsRepository = mockk(relaxed = true),
-            playbackRepository = playbackRepository,
-            playbackIdentity = mockk<PlaybackIdentity>(relaxed = true).apply {
-                every { serverUrl() } returns "https://jellyfin.test"
-                every { accessToken() } returns "token"
-            },
-            subtitleProviderRepository = mockk(relaxed = true),
-            streamingSubtitleStore = noOpStreamingSubtitleStore(),
-            imageUrlProvider = mockk(relaxed = true),
-            downloadRepository = mockk(relaxed = true),
-            offlineRepository = mockk(relaxed = true),
-            offlinePlaybackFacade = mockk(relaxed = true),
-            playbackSourceResolver = playbackSourceResolver,
-            episodeCatalogue = episodeCatalogue,
-            itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             stores = PlayerStores(
                 aggregateStore = aggregateStore,
                 engine = engineStore,
@@ -192,28 +178,60 @@ open class VideoPlayerViewModelHarness {
                 networkOffline = networkOfflineStore,
                 volumeProfile = volumeProfileStore,
             ),
-            mediaSessionFactory = NoOpMediaSessionFactory,
+            subtitleSources = PlayerSubtitleSources(
+                subtitleProviderRepository = mockk(relaxed = true),
+                streamingSubtitleStore = noOpStreamingSubtitleStore(),
+                subtitlePreviewRepository = mockk(relaxed = true),
+                fontProvider = NoOpFontProvider,
+            ),
+            offlineSources = PlayerOfflineSources(
+                downloadRepository = mockk(relaxed = true),
+                offlineRepository = mockk(relaxed = true),
+                offlineModeManager = offlineModeManager,
+            ),
+            sessionStack = PlayerSessionStackSources(
+                playbackIdentity = mockk<PlaybackIdentity>(relaxed = true).apply {
+                    every { serverUrl() } returns "https://jellyfin.test"
+                    every { accessToken() } returns "token"
+                },
+                playerLifecycleManager = PlayerLifecycleManager(playbackStore),
+                playerEngineFactory = object : com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory {
+                    override suspend fun create(playerType: PlayerType): MediaEngine =
+                        com.raulshma.jellyplay.feature.player.video.JvmNoOpEngine()
+                },
+                mediaSessionFactory = NoOpMediaSessionFactory,
+            ),
+            itemContent = PlayerItemContentSources(
+                libraryApiClient = mockk(relaxed = true),
+                episodeCatalogue = episodeCatalogue,
+                lyricsRepository = mockk(relaxed = true),
+            ),
+            sessionSources = PlayerSessionSources(
+                detailFeed = detailFeed,
+                playbackRepository = playbackRepository,
+                offlinePlaybackFacade = mockk(relaxed = true),
+                playbackSourceResolver = playbackSourceResolver,
+                itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
+                jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
+                adaptiveBitrateManager = mockk(relaxed = true),
+                networkMonitor = networkMonitor,
+                userDataMutator = userDataMutator,
+                nowPlayingReporter = mockk(relaxed = true),
+                sleepCountdown = SleepCountdown(SleepCountdownClock.perTick(1_000L)),
+                videoMiniPlayerState = videoMiniPlayerState,
+            ),
+            imageUrlProvider = imageUrlProviderMock,
+            // The real resolver over the same relaxed provider mock — its
+            // getImageUrl answers "" (mockk's relaxed String default), the
+            // exact URL shape the pre-tag seams produced.
+            artworkUrls = DefaultArtworkUrls(imageUrlProviderMock),
             castManager = mockk(relaxed = true),
-            jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
             syncPlayManager = syncPlayManager,
-            adaptiveBitrateManager = mockk(relaxed = true),
-            networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
-            playerLifecycleManager = PlayerLifecycleManager(playbackStore),
             pipController = pipController,
-            videoMiniPlayerState = videoMiniPlayerState,
-            sleepCountdown = SleepCountdown(SleepCountdownClock.perTick(1_000L)),
-            userMessageBus = NoOpPlayerVideoMessageBus,
-            playerEngineFactory = object : com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory {
-                override suspend fun create(playerType: PlayerType): MediaEngine =
-                    com.raulshma.jellyplay.feature.player.video.JvmNoOpEngine()
-            },
             fontProvider = NoOpFontProvider,
+            userMessageBus = NoOpPlayerVideoMessageBus,
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
-            subtitlePreviewRepository = mockk(relaxed = true),
-            userDataMutator = userDataMutator,
-            offlineModeManager = offlineModeManager,
-            nowPlayingReporter = mockk(relaxed = true),
         )
     }
 

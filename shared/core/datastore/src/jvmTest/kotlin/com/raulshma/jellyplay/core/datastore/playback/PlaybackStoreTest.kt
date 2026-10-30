@@ -58,11 +58,10 @@ class PlaybackStoreTest {
     /**
      * The Eagerly-cached slice is updated by a collector racing this test, so
      * a plain `playback.first()` samples whatever is current — the stateIn
-     * seed (whose defaults differ from an empty-store read, e.g. playbackMode
-     * AUTO vs the FORCE_DIRECT_PLAY legacy migration), or the previous test's
-     * leftovers. Await until the cached slice equals the projection of the
-     * CURRENT disk state and return it. The wait runs off runTest's virtual
-     * clock: the collector it races lives on real dispatchers.
+     * seed (whose defaults differ from an empty-store read), or the previous
+     * test's leftovers. Await until the cached slice equals the projection of
+     * the CURRENT disk state and return it. The wait runs off runTest's
+     * virtual clock: the collector it races lives on real dispatchers.
      */
     private suspend fun settledSlice(): PlaybackSlice {
         val expected = store.read(dataStore.data.first())
@@ -72,15 +71,29 @@ class PlaybackStoreTest {
     }
 
     @Test
+    fun `session restore dismissal marker round-trips outside the slice`() = runTest {
+        // Per-device ephemeral state, deliberately NOT a PlaybackSlice field —
+        // the direct accessors are its only surface (and keep it out of the
+        // serialized backup envelope).
+        assertEquals("", store.sessionRestoreDismissalNow())
+        store.setSessionRestoreDismissal("item-1|123")
+        assertEquals("item-1|123", store.sessionRestoreDismissalNow())
+        store.setSessionRestoreDismissal("")
+        assertEquals("", store.sessionRestoreDismissalNow())
+    }
+
+    @Test
     fun `defaults when empty`() = runTest {
         val slice = settledSlice()
         // The raw stored default is EXO_PLAYER; the read clamps it to whatever
         // engine this binary actually ships (desktop → MPV).
         assertEquals(platformEngineSupport.default, slice.preferredPlayer)
         assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
-        // Empty store migrates the legacy `force_direct_play` default (true)
-        // to FORCE_DIRECT_PLAY — the historical "always static stream" behaviour.
-        assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, slice.playbackMode)
+        // Empty store → AUTO: the legacy `force_direct_play` key's historical
+        // `true` default used to migrate fresh installs into FORCE_DIRECT_PLAY,
+        // silently defeating the quality cap (Issue #1). Only an EXPLICIT
+        // legacy `true` preserves the forced posture.
+        assertEquals(PlaybackMode.AUTO, slice.playbackMode)
         assertEquals(RefreshRateMode.OFF, slice.refreshRateMode)
         assertFalse(slice.frameRateMatching)
         assertFalse(slice.audioPassthrough)

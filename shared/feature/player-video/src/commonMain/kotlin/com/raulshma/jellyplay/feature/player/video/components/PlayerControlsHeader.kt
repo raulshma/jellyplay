@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
-import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
+import com.raulshma.jellyplay.core.ui.components.rememberIs24HourFormat
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ends_at
 import java.text.SimpleDateFormat

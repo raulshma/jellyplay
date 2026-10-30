@@ -3,8 +3,10 @@ package com.raulshma.jellyplay.feature.library
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -19,9 +21,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 
 internal class FavoritesViewModel(
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
+    /** The user-data change feed the quick actions' watched/download mirrors ride. */
+    private val userDataChanges: Flow<UserDataChange>,
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the favorites grid renders through. */
+    val artworkUrls: ArtworkUrls,
     private val quickDownloadActions: QuickDownloadActions,
     photoFolderPrefetcher: PhotoFolderPrefetcher,
 ) : JellyPlayViewModel() {
@@ -35,7 +41,7 @@ internal class FavoritesViewModel(
      * this VM keeps only its media-type-keyed paged source.
      */
     private val quickActions = pagedGridQuickActions(
-        mediaRepository = mediaRepository,
+        userDataChanges = userDataChanges,
         userDataMutator = userDataMutator,
         quickDownloadActions = quickDownloadActions,
     )
@@ -58,7 +64,7 @@ internal class FavoritesViewModel(
         source = { trigger ->
             combine(_mediaTypeFilter.flow, trigger) { type, _ -> type }
                 .flatMapLatest { type ->
-                    mediaRepository.getFavoritesPaged(
+                    libraryFeed.getFavoritesPaged(
                         mediaTypes = type?.let { listOf(it) },
                     )
                 }

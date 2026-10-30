@@ -9,9 +9,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
@@ -31,8 +29,25 @@ import kotlinx.serialization.Serializable
  * keys, setters, read projection, and reset-key list end-to-end. Mirrors the
  * `PlaybackStore` / `AppearanceStore` shape.
  *
+ * **Spec derivation:** every key this store owns is declared exactly once as
+ * a row in [AudioPreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding, the single-key
+ * setters and [restore] delegate to the rows' derived writes, and
+ * [resetKeysFor] filters the rows by reset category. The legacy `REPLAYGAIN`
+ * → `TRACK` normalization-mode alias lives in the
+ * [AudioPreferenceSpecs.AUDIO_NORMALIZATION_MODE] row's read now, next to the
+ * key it applies to.
+ *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [AudioPreferenceSpecs] row + one [AudioSlice] property + one [read] /
+ * [restore] row (and its setter) + one write-through test line. See the spec
+ * KDoc.
  */
 class AudioStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -40,136 +55,143 @@ class AudioStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [AudioPreferenceSpecs] row — the member rebuilds the row's typed key
+     * from the row's single-declared wire name (`Preferences.Key` equality is
+     * name-based, so these interoperate with any hand-built key of the same
+     * name). Kept as a plain object rather than folded into the rows because
+     * it is the reflection anchor for the JVM reset-coverage guard.
+     */
     internal object Keys {
-        val AUDIO_DEFAULT_SPEED = floatPreferencesKey("audio_default_speed")
-        val AUDIO_NIGHT_MODE_VOLUME = floatPreferencesKey("audio_night_mode_volume")
-        val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey("audio_night_mode_gain")
-        val AUDIO_SKIP_PREVIOUS_THRESHOLD_MS = longPreferencesKey("audio_skip_previous_threshold_ms")
-        val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey("audio_autoplay_next")
-        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
-        val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
-        val AUDIO_NORMALIZATION_ENABLED = booleanPreferencesKey("audio_normalization_enabled")
-        val REPLAYGAIN_PRE_AMP_DB = floatPreferencesKey("replaygain_pre_amp_db")
-        val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
-        val CHANNEL_MIX_ENABLED = booleanPreferencesKey("channel_mix_enabled")
-        val AUDIO_GAPLESS_ENABLED = booleanPreferencesKey("audio_gapless_enabled")
-        val AUDIO_CROSSFADE_DURATION_MS = longPreferencesKey("audio_crossfade_duration_ms")
-        val AUDIO_DELAY_MS = longPreferencesKey("audio_delay_ms")
-        val AUDIO_LYRICS_VISIBLE = booleanPreferencesKey("audio_lyrics_visible")
-        val AUDIO_VISUALIZER_ENABLED = booleanPreferencesKey("audio_visualizer_enabled")
-        val SLEEP_TIMER_DURATION_MS = longPreferencesKey("sleep_timer_duration_ms")
-        val SLEEP_TIMER_END_OF_EPISODE = booleanPreferencesKey("sleep_timer_end_of_episode")
+        val AUDIO_DEFAULT_SPEED = floatPreferencesKey(AudioPreferenceSpecs.AUDIO_DEFAULT_SPEED.keyName)
+        val AUDIO_NIGHT_MODE_VOLUME = floatPreferencesKey(AudioPreferenceSpecs.AUDIO_NIGHT_MODE_VOLUME.keyName)
+        val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey(AudioPreferenceSpecs.AUDIO_NIGHT_MODE_GAIN.keyName)
+        val AUDIO_SKIP_PREVIOUS_THRESHOLD_MS =
+            longPreferencesKey(AudioPreferenceSpecs.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS.keyName)
+        val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey(AudioPreferenceSpecs.AUDIO_AUTOPLAY_NEXT.keyName)
+        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey(AudioPreferenceSpecs.AUDIO_PRELOAD_BUFFER_SIZE.keyName)
+        val AUDIO_NORMALIZATION_MODE = stringPreferencesKey(AudioPreferenceSpecs.AUDIO_NORMALIZATION_MODE.keyName)
+        val AUDIO_NORMALIZATION_ENABLED = booleanPreferencesKey(AudioPreferenceSpecs.AUDIO_NORMALIZATION_ENABLED.keyName)
+        val REPLAYGAIN_PRE_AMP_DB = floatPreferencesKey(AudioPreferenceSpecs.REPLAYGAIN_PRE_AMP_DB.keyName)
+        val CHANNEL_MIX_MODE = stringPreferencesKey(AudioPreferenceSpecs.CHANNEL_MIX_MODE.keyName)
+        val CHANNEL_MIX_ENABLED = booleanPreferencesKey(AudioPreferenceSpecs.CHANNEL_MIX_ENABLED.keyName)
+        val AUDIO_GAPLESS_ENABLED = booleanPreferencesKey(AudioPreferenceSpecs.AUDIO_GAPLESS_ENABLED.keyName)
+        val AUDIO_CROSSFADE_DURATION_MS =
+            longPreferencesKey(AudioPreferenceSpecs.AUDIO_CROSSFADE_DURATION_MS.keyName)
+        val AUDIO_DELAY_MS = longPreferencesKey(AudioPreferenceSpecs.AUDIO_DELAY_MS.keyName)
+        val AUDIO_LYRICS_VISIBLE = booleanPreferencesKey(AudioPreferenceSpecs.AUDIO_LYRICS_VISIBLE.keyName)
+        val AUDIO_VISUALIZER_ENABLED = booleanPreferencesKey(AudioPreferenceSpecs.AUDIO_VISUALIZER_ENABLED.keyName)
+        val SLEEP_TIMER_DURATION_MS = longPreferencesKey(AudioPreferenceSpecs.SLEEP_TIMER_DURATION_MS.keyName)
+        val SLEEP_TIMER_END_OF_EPISODE = booleanPreferencesKey(AudioPreferenceSpecs.SLEEP_TIMER_END_OF_EPISODE.keyName)
     }
 
     val audio: StateFlow<AudioSlice> =
         dataStore.sliceStateFlow(scope, seed = AudioSlice(), read = ::read)
 
+    /**
+     * Pure read of the audio-player fields from a raw [Preferences] snapshot,
+     * each field delegated to its [AudioPreferenceSpecs] row encoding.
+     * Exposed so the facade can fold these into the whole-`UserPreferences`
+     * projection without duplicating the read logic.
+     */
     internal fun read(prefs: Preferences): AudioSlice = AudioSlice(
-        audioDefaultSpeed = PreferenceCodec.readFloat(prefs, Keys.AUDIO_DEFAULT_SPEED, "audio_default_speed", 1.0f),
-        audioNightModeVolume = PreferenceCodec.readFloat(prefs, Keys.AUDIO_NIGHT_MODE_VOLUME, "audio_night_mode_volume", 0.4f),
-        audioNightModeGain = PreferenceCodec.readInt(prefs, Keys.AUDIO_NIGHT_MODE_GAIN, "audio_night_mode_gain", 1200),
-        audioSkipPreviousThresholdMs = PreferenceCodec.readLong(prefs, Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, "audio_skip_previous_threshold_ms", 3_000L),
-        audioAutoplayNext = PreferenceCodec.readBool(prefs, Keys.AUDIO_AUTOPLAY_NEXT, "audio_autoplay_next", true),
-        audioPreloadBufferSize = prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE].toEnumOrNull() ?: PreloadBufferSize.MEDIUM,
-        audioNormalizationMode = readNormalizationMode(prefs),
-        audioNormalizationEnabled = PreferenceCodec.readBool(prefs, Keys.AUDIO_NORMALIZATION_ENABLED, "audio_normalization_enabled", false),
-        replayGainPreAmpDb = PreferenceCodec.readFloat(prefs, Keys.REPLAYGAIN_PRE_AMP_DB, "replaygain_pre_amp_db", 0f),
-        channelMixMode = prefs[Keys.CHANNEL_MIX_MODE].toEnumOrNull() ?: ChannelMixMode.AUTO,
-        channelMixEnabled = PreferenceCodec.readBool(prefs, Keys.CHANNEL_MIX_ENABLED, "channel_mix_enabled", false),
-        audioGaplessEnabled = PreferenceCodec.readBool(prefs, Keys.AUDIO_GAPLESS_ENABLED, "audio_gapless_enabled", true),
-        audioCrossfadeDurationMs = PreferenceCodec.readLong(prefs, Keys.AUDIO_CROSSFADE_DURATION_MS, "audio_crossfade_duration_ms", 0L),
-        audioDelayMs = PreferenceCodec.readLong(prefs, Keys.AUDIO_DELAY_MS, "audio_delay_ms", 0L),
-        audioLyricsVisible = PreferenceCodec.readBool(prefs, Keys.AUDIO_LYRICS_VISIBLE, "audio_lyrics_visible", false),
-        audioVisualizerEnabled = PreferenceCodec.readBool(prefs, Keys.AUDIO_VISUALIZER_ENABLED, "audio_visualizer_enabled", false),
-        sleepTimerDurationMs = PreferenceCodec.readLong(prefs, Keys.SLEEP_TIMER_DURATION_MS, "sleep_timer_duration_ms", 0L),
-        sleepTimerEndOfEpisode = PreferenceCodec.readBool(prefs, Keys.SLEEP_TIMER_END_OF_EPISODE, "sleep_timer_end_of_episode", false),
+        audioDefaultSpeed = AudioPreferenceSpecs.AUDIO_DEFAULT_SPEED.readFrom(prefs),
+        audioNightModeVolume = AudioPreferenceSpecs.AUDIO_NIGHT_MODE_VOLUME.readFrom(prefs),
+        audioNightModeGain = AudioPreferenceSpecs.AUDIO_NIGHT_MODE_GAIN.readFrom(prefs),
+        audioSkipPreviousThresholdMs = AudioPreferenceSpecs.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS.readFrom(prefs),
+        audioAutoplayNext = AudioPreferenceSpecs.AUDIO_AUTOPLAY_NEXT.readFrom(prefs),
+        audioPreloadBufferSize = AudioPreferenceSpecs.AUDIO_PRELOAD_BUFFER_SIZE.readFrom(prefs),
+        audioNormalizationMode = AudioPreferenceSpecs.AUDIO_NORMALIZATION_MODE.readFrom(prefs),
+        audioNormalizationEnabled = AudioPreferenceSpecs.AUDIO_NORMALIZATION_ENABLED.readFrom(prefs),
+        replayGainPreAmpDb = AudioPreferenceSpecs.REPLAYGAIN_PRE_AMP_DB.readFrom(prefs),
+        channelMixMode = AudioPreferenceSpecs.CHANNEL_MIX_MODE.readFrom(prefs),
+        channelMixEnabled = AudioPreferenceSpecs.CHANNEL_MIX_ENABLED.readFrom(prefs),
+        audioGaplessEnabled = AudioPreferenceSpecs.AUDIO_GAPLESS_ENABLED.readFrom(prefs),
+        audioCrossfadeDurationMs = AudioPreferenceSpecs.AUDIO_CROSSFADE_DURATION_MS.readFrom(prefs),
+        audioDelayMs = AudioPreferenceSpecs.AUDIO_DELAY_MS.readFrom(prefs),
+        audioLyricsVisible = AudioPreferenceSpecs.AUDIO_LYRICS_VISIBLE.readFrom(prefs),
+        audioVisualizerEnabled = AudioPreferenceSpecs.AUDIO_VISUALIZER_ENABLED.readFrom(prefs),
+        sleepTimerDurationMs = AudioPreferenceSpecs.SLEEP_TIMER_DURATION_MS.readFrom(prefs),
+        sleepTimerEndOfEpisode = AudioPreferenceSpecs.SLEEP_TIMER_END_OF_EPISODE.readFrom(prefs),
     )
 
-    /**
-     * Reads [AudioSlice.audioNormalizationMode]. Maps the legacy `"REPLAYGAIN"`
-     * stored value to [AudioNormalizationMode.TRACK] (the closest modern
-     * equivalent) before the enum parse.
-     */
-    private fun readNormalizationMode(prefs: Preferences): AudioNormalizationMode =
-        when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE]) {
-            "REPLAYGAIN" -> AudioNormalizationMode.TRACK
-            else -> stored.toEnumOrNull() ?: AudioNormalizationMode.NONE
-        }
-
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, plain slot — is the row's, not
+    // re-declared here).
     // ------------------------------------------------------------------
 
     suspend fun setAudioDefaultSpeed(speed: Float) {
-        dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_DEFAULT_SPEED.writeTo(it, speed) }
     }
 
     suspend fun setAudioNightModeVolume(volume: Float) {
-        dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_NIGHT_MODE_VOLUME.writeTo(it, volume) }
     }
 
     suspend fun setAudioNightModeGain(gain: Int) {
-        dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_NIGHT_MODE_GAIN.writeTo(it, gain) }
     }
 
     suspend fun setAudioSkipPreviousThresholdMs(ms: Long) {
-        dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS.writeTo(it, ms) }
     }
 
     suspend fun setAudioAutoplayNext(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_AUTOPLAY_NEXT.writeTo(it, enabled) }
     }
 
     suspend fun setAudioPreloadBufferSize(size: PreloadBufferSize) {
-        dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_PRELOAD_BUFFER_SIZE.writeTo(it, size) }
     }
 
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
-        dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_NORMALIZATION_MODE.writeTo(it, mode) }
     }
 
     suspend fun setAudioNormalizationEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_NORMALIZATION_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setReplayGainPreAmpDb(db: Float) {
-        dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db }
+        dataStore.edit { AudioPreferenceSpecs.REPLAYGAIN_PRE_AMP_DB.writeTo(it, db) }
     }
 
     suspend fun setChannelMixMode(mode: ChannelMixMode) {
-        dataStore.edit { it[Keys.CHANNEL_MIX_MODE] = mode.name }
+        dataStore.edit { AudioPreferenceSpecs.CHANNEL_MIX_MODE.writeTo(it, mode) }
     }
 
     suspend fun setChannelMixEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.CHANNEL_MIX_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setAudioGaplessEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_GAPLESS_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setAudioCrossfadeDurationMs(ms: Long) {
-        dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_CROSSFADE_DURATION_MS.writeTo(it, ms) }
     }
 
     suspend fun setAudioDelay(ms: Long) {
-        dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_DELAY_MS.writeTo(it, ms) }
     }
 
     suspend fun setAudioLyricsVisible(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_LYRICS_VISIBLE] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_LYRICS_VISIBLE.writeTo(it, enabled) }
     }
 
     suspend fun setAudioVisualizerEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_VISUALIZER_ENABLED] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.AUDIO_VISUALIZER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setSleepTimerDurationMs(ms: Long) {
-        dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms }
+        dataStore.edit { AudioPreferenceSpecs.SLEEP_TIMER_DURATION_MS.writeTo(it, ms) }
     }
 
     suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
-        dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
+        dataStore.edit { AudioPreferenceSpecs.SLEEP_TIMER_END_OF_EPISODE.writeTo(it, enabled) }
     }
 
     /**
@@ -184,76 +206,73 @@ class AudioStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. A single store can own keys across several categories
-     * ([Keys.AUDIO_DELAY_MS] sits in `PLAYBACK` in the legacy mapping while the
-     * rest are `AUDIO`), so each store scopes its own keys per category. The
-     * facade aggregates these lists instead of a central `when` switch.
+     * [category] — the [AudioPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. A single store can own
+     * keys across several categories ([Keys.AUDIO_DELAY_MS] sits in `PLAYBACK`
+     * in the legacy mapping while the rest are `AUDIO`), so each store scopes
+     * its own keys per category. The facade aggregates these lists instead of
+     * a central `when` switch.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.PLAYBACK -> listOf(Keys.AUDIO_DELAY_MS)
-        PreferenceResetCategory.AUDIO -> listOf(
-            Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_NIGHT_MODE_VOLUME, Keys.AUDIO_NIGHT_MODE_GAIN,
-            Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
-            Keys.AUDIO_NORMALIZATION_MODE, Keys.AUDIO_NORMALIZATION_ENABLED, Keys.REPLAYGAIN_PRE_AMP_DB,
-            Keys.CHANNEL_MIX_MODE, Keys.CHANNEL_MIX_ENABLED, Keys.AUDIO_GAPLESS_ENABLED,
-            Keys.AUDIO_CROSSFADE_DURATION_MS, Keys.AUDIO_LYRICS_VISIBLE,
-            Keys.AUDIO_VISUALIZER_ENABLED, Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        AudioPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences], plus the
-     * `audio_lyrics_visible` gap key that [restorePreferences] omits.
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with).
      */
     suspend fun restore(slice: AudioSlice) {
-        dataStore.edit { it ->
-            it[Keys.AUDIO_DEFAULT_SPEED] = slice.audioDefaultSpeed
-            it[Keys.AUDIO_NIGHT_MODE_VOLUME] = slice.audioNightModeVolume
-            it[Keys.AUDIO_NIGHT_MODE_GAIN] = slice.audioNightModeGain
-            it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = slice.audioSkipPreviousThresholdMs
-            it[Keys.AUDIO_AUTOPLAY_NEXT] = slice.audioAutoplayNext
-            it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = slice.audioPreloadBufferSize.name
-            it[Keys.AUDIO_NORMALIZATION_MODE] = slice.audioNormalizationMode.name
-            it[Keys.AUDIO_NORMALIZATION_ENABLED] = slice.audioNormalizationEnabled
-            it[Keys.REPLAYGAIN_PRE_AMP_DB] = slice.replayGainPreAmpDb
-            it[Keys.CHANNEL_MIX_MODE] = slice.channelMixMode.name
-            it[Keys.CHANNEL_MIX_ENABLED] = slice.channelMixEnabled
-            it[Keys.AUDIO_GAPLESS_ENABLED] = slice.audioGaplessEnabled
-            it[Keys.AUDIO_CROSSFADE_DURATION_MS] = slice.audioCrossfadeDurationMs
-            it[Keys.AUDIO_DELAY_MS] = slice.audioDelayMs
-            it[Keys.AUDIO_LYRICS_VISIBLE] = slice.audioLyricsVisible
-            it[Keys.AUDIO_VISUALIZER_ENABLED] = slice.audioVisualizerEnabled
-            it[Keys.SLEEP_TIMER_DURATION_MS] = slice.sleepTimerDurationMs
-            it[Keys.SLEEP_TIMER_END_OF_EPISODE] = slice.sleepTimerEndOfEpisode
+        dataStore.edit { prefs ->
+            AudioPreferenceSpecs.AUDIO_DEFAULT_SPEED.writeTo(prefs, slice.audioDefaultSpeed)
+            AudioPreferenceSpecs.AUDIO_NIGHT_MODE_VOLUME.writeTo(prefs, slice.audioNightModeVolume)
+            AudioPreferenceSpecs.AUDIO_NIGHT_MODE_GAIN.writeTo(prefs, slice.audioNightModeGain)
+            AudioPreferenceSpecs.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS.writeTo(prefs, slice.audioSkipPreviousThresholdMs)
+            AudioPreferenceSpecs.AUDIO_AUTOPLAY_NEXT.writeTo(prefs, slice.audioAutoplayNext)
+            AudioPreferenceSpecs.AUDIO_PRELOAD_BUFFER_SIZE.writeTo(prefs, slice.audioPreloadBufferSize)
+            AudioPreferenceSpecs.AUDIO_NORMALIZATION_MODE.writeTo(prefs, slice.audioNormalizationMode)
+            AudioPreferenceSpecs.AUDIO_NORMALIZATION_ENABLED.writeTo(prefs, slice.audioNormalizationEnabled)
+            AudioPreferenceSpecs.REPLAYGAIN_PRE_AMP_DB.writeTo(prefs, slice.replayGainPreAmpDb)
+            AudioPreferenceSpecs.CHANNEL_MIX_MODE.writeTo(prefs, slice.channelMixMode)
+            AudioPreferenceSpecs.CHANNEL_MIX_ENABLED.writeTo(prefs, slice.channelMixEnabled)
+            AudioPreferenceSpecs.AUDIO_GAPLESS_ENABLED.writeTo(prefs, slice.audioGaplessEnabled)
+            AudioPreferenceSpecs.AUDIO_CROSSFADE_DURATION_MS.writeTo(prefs, slice.audioCrossfadeDurationMs)
+            AudioPreferenceSpecs.AUDIO_DELAY_MS.writeTo(prefs, slice.audioDelayMs)
+            AudioPreferenceSpecs.AUDIO_LYRICS_VISIBLE.writeTo(prefs, slice.audioLyricsVisible)
+            AudioPreferenceSpecs.AUDIO_VISUALIZER_ENABLED.writeTo(prefs, slice.audioVisualizerEnabled)
+            AudioPreferenceSpecs.SLEEP_TIMER_DURATION_MS.writeTo(prefs, slice.sleepTimerDurationMs)
+            AudioPreferenceSpecs.SLEEP_TIMER_END_OF_EPISODE.writeTo(prefs, slice.sleepTimerEndOfEpisode)
         }
     }
 }
 
 /**
  * The audio-player preference slice. Plain data class.
- * Defaults mirror the projection defaults in [AudioStore.read].
+ * Every default IS its [AudioPreferenceSpecs] row's declared default — read
+ * off the row via a plain accessor, so a preference's default is stated
+ * exactly once, in its spec, and cannot drift between the spec (what an
+ * absent key reads) and the slice (what a fresh in-memory instance serves).
+ * The spec-default equality is pinned field-for-field by
+ * `AudioSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class AudioSlice(
-    val audioDefaultSpeed: Float = 1.0f,
-    val audioNightModeVolume: Float = 0.4f,
-    val audioNightModeGain: Int = 1200,
-    val audioSkipPreviousThresholdMs: Long = 3_000L,
-    val audioAutoplayNext: Boolean = true,
-    val audioPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
-    val audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
-    val audioNormalizationEnabled: Boolean = false,
-    val replayGainPreAmpDb: Float = 0f,
-    val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
-    val channelMixEnabled: Boolean = false,
-    val audioGaplessEnabled: Boolean = true,
-    val audioCrossfadeDurationMs: Long = 0L,
-    val audioDelayMs: Long = 0L,
-    val audioLyricsVisible: Boolean = false,
-    val audioVisualizerEnabled: Boolean = false,
-    val sleepTimerDurationMs: Long = 0L,
-    val sleepTimerEndOfEpisode: Boolean = false,
+    val audioDefaultSpeed: Float = AudioPreferenceSpecs.AUDIO_DEFAULT_SPEED.default,
+    val audioNightModeVolume: Float = AudioPreferenceSpecs.AUDIO_NIGHT_MODE_VOLUME.default,
+    val audioNightModeGain: Int = AudioPreferenceSpecs.AUDIO_NIGHT_MODE_GAIN.default,
+    val audioSkipPreviousThresholdMs: Long = AudioPreferenceSpecs.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS.default,
+    val audioAutoplayNext: Boolean = AudioPreferenceSpecs.AUDIO_AUTOPLAY_NEXT.default,
+    val audioPreloadBufferSize: PreloadBufferSize = AudioPreferenceSpecs.AUDIO_PRELOAD_BUFFER_SIZE.default,
+    val audioNormalizationMode: AudioNormalizationMode = AudioPreferenceSpecs.AUDIO_NORMALIZATION_MODE.default,
+    val audioNormalizationEnabled: Boolean = AudioPreferenceSpecs.AUDIO_NORMALIZATION_ENABLED.default,
+    val replayGainPreAmpDb: Float = AudioPreferenceSpecs.REPLAYGAIN_PRE_AMP_DB.default,
+    val channelMixMode: ChannelMixMode = AudioPreferenceSpecs.CHANNEL_MIX_MODE.default,
+    val channelMixEnabled: Boolean = AudioPreferenceSpecs.CHANNEL_MIX_ENABLED.default,
+    val audioGaplessEnabled: Boolean = AudioPreferenceSpecs.AUDIO_GAPLESS_ENABLED.default,
+    val audioCrossfadeDurationMs: Long = AudioPreferenceSpecs.AUDIO_CROSSFADE_DURATION_MS.default,
+    val audioDelayMs: Long = AudioPreferenceSpecs.AUDIO_DELAY_MS.default,
+    val audioLyricsVisible: Boolean = AudioPreferenceSpecs.AUDIO_LYRICS_VISIBLE.default,
+    val audioVisualizerEnabled: Boolean = AudioPreferenceSpecs.AUDIO_VISUALIZER_ENABLED.default,
+    val sleepTimerDurationMs: Long = AudioPreferenceSpecs.SLEEP_TIMER_DURATION_MS.default,
+    val sleepTimerEndOfEpisode: Boolean = AudioPreferenceSpecs.SLEEP_TIMER_END_OF_EPISODE.default,
 )

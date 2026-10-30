@@ -153,7 +153,7 @@ class PreferenceProjections constructor(
                 downloadConnections = downloads.downloadConnections,
                 downloadQuality = downloads.downloadQuality,
                 smartDownloadsEnabled = downloads.smartDownloadsEnabled,
-                autoDownloadNewEpisodes = downloads.autoDownloadNewEpisodes,
+                autoDownloadMode = downloads.autoDownloadMode,
                 maxDownloadStorageGb = downloads.maxDownloadStorageGb,
                 downloadStorageLocation = downloads.downloadStorageLocation,
                 manualOfflineEnabled = network.manualOfflineEnabled,
@@ -205,10 +205,17 @@ class PreferenceProjections constructor(
                 stores.playback.playback,
                 stores.videoPlayer.videoPlayer,
                 stores.audioEffects.audioEffects,
-                combine(stores.subtitle.subtitle, stores.audio.audio) { sub, au -> sub to au },
+                // The network slice rides the subtitle/audio pair so the
+                // combine stays within Flow's 5-arg arity (the bundle's
+                // `network` field is the home-streaming quality's source).
+                combine(
+                    stores.subtitle.subtitle,
+                    stores.audio.audio,
+                    stores.networkOffline.networkOffline,
+                ) { sub, au, net -> Triple(sub, au, net) },
                 stores.engine.playerEngine,
-            ) { playback, video, effects, (subtitle, audio), engine ->
-                PlaybackCoreBundle(playback, video, effects, subtitle, audio, engine)
+            ) { playback, video, effects, (subtitle, audio, network), engine ->
+                PlaybackCoreBundle(playback, video, effects, subtitle, audio, engine, network)
             },
             stores.syncPlayCast.syncPlayCast,
             stores.volumeProfile.volumeProfile,
@@ -242,7 +249,7 @@ class PreferenceProjections constructor(
                 maxConcurrentDownloads = downloads.maxConcurrentDownloads,
                 downloadQuality = downloads.downloadQuality,
                 smartDownloadsEnabled = downloads.smartDownloadsEnabled,
-                autoDownloadNewEpisodes = downloads.autoDownloadNewEpisodes,
+                autoDownloadMode = downloads.autoDownloadMode,
                 autoDownloadLookahead = downloads.autoDownloadLookahead,
                 autoDownloadMaxPerPass = downloads.autoDownloadMaxPerPass,
                 autoDownloadKeepDays = downloads.autoDownloadKeepDays,
@@ -289,6 +296,7 @@ class PreferenceProjections constructor(
                 preferredSubtitleLanguage = subtitle.preferredSubtitleLanguage,
                 preferredAudioLanguage = subtitle.preferredAudioLanguage,
                 subtitlesForcedOnly = subtitle.subtitlesForcedOnly,
+                showOnlyPreferredSubtitles = subtitle.showOnlyPreferredSubtitles,
                 highContrastSubtitles = subtitle.highContrastSubtitles,
                 pgsSubtitleDirectPlay = playback.pgsSubtitleDirectPlay,
                 hdrSubtitleStyleEnabled = subtitle.hdrSubtitleStyleEnabled,
@@ -346,6 +354,8 @@ class PreferenceProjections constructor(
             HomeScreenPreferences(
                 homeMode = home.homeMode,
                 homeHeroEnabled = home.homeHeroEnabled,
+                homeHeroStyle = home.homeHeroStyle,
+                homeHeroSlideshowIntervalSec = home.homeHeroSlideshowIntervalSec,
                 homeHeroVideoEnabled = home.homeHeroVideoEnabled,
                 homeHeroVideoTvEnabled = home.homeHeroVideoTvEnabled,
                 homeBackdropEnabled = home.homeBackdropEnabled,

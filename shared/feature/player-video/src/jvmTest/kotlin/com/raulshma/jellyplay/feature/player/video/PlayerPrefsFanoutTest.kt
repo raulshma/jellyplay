@@ -1,7 +1,13 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
+import com.raulshma.jellyplay.core.model.TrickplayMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -88,6 +94,91 @@ class PlayerPrefsFanoutTest {
         val fakes = RecordingFanout(projectResult = false)
         val old = VideoPlayerAggregate()
         val new = old.copy(videoPlayer = old.videoPlayer.copy(showClockInPlayer = true))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertFalse(fakes.log.contains("rebuildConfig"))
+    }
+
+    // ─── mpv render-pref rebuild trigger (C) ─────────────────────────────────
+
+    @Test
+    fun `mpv tone mapping curve change rebuilds the engine config once`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(videoPlayer = old.videoPlayer.copy(mpvToneMappingCurve = MpvToneMappingCurve.BT_2390))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertEquals(1, fakes.log.count { it == "rebuildConfig" })
+    }
+
+    @Test
+    fun `mpv deband mode change rebuilds the engine config`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(videoPlayer = old.videoPlayer.copy(mpvDebandMode = MpvDebandMode.LIGHT))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertTrue(fakes.log.contains("rebuildConfig"))
+    }
+
+    @Test
+    fun `mpv motion interpolation flip rebuilds the engine config`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(videoPlayer = old.videoPlayer.copy(mpvMotionInterpolation = true))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertTrue(fakes.log.contains("rebuildConfig"))
+    }
+
+    @Test
+    fun `bitmap subtitle scale mode change rebuilds the engine config`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(videoPlayer = old.videoPlayer.copy(bitmapSubtitleScaleMode = BitmapSubtitleScaleMode.STRETCH))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertTrue(fakes.log.contains("rebuildConfig"))
+    }
+
+    // ─── HDR-format rebuild trigger (D, #5) ────────────────────────────────
+
+    @Test
+    fun `hdr format preference change rebuilds the engine config once`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(playback = old.playback.copy(hdrFormatPreference = HdrFormatPreference.SDR_ONLY))
+        fakes.fanout.onAggregateChanged(old, new)
+        assertEquals(1, fakes.log.count { it == "rebuildConfig" })
+    }
+
+    @Test
+    fun `unchanged hdr format preference fires no rebuild`() {
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(
+            playback = old.playback.copy(
+                // An unrelated playback-slice write must not rebuild.
+                pauseOnAudioFocusLoss = false,
+            ),
+        )
+        fakes.fanout.onAggregateChanged(old, new)
+        assertFalse(fakes.log.contains("rebuildConfig"))
+    }
+
+    @Test
+    fun `non-engine render prefs fire no rebuild`() {
+        // The pause/continuation leaves are presentation-only — no engine
+        // config consumes them, so their diffs must not rebuild.
+        val fakes = RecordingFanout(projectResult = false)
+        val old = VideoPlayerAggregate()
+        val new = old.copy(
+            videoPlayer = old.videoPlayer.copy(
+                trickplayMode = TrickplayMode.FILMSTRIP,
+                pauseScreensaverMode = PauseScreensaverMode.CLOCK,
+                pauseScreensaverAfterMinutes = 15,
+                ambientBlurEnabled = true,
+                pauseDetailsEnabled = true,
+                nextUpButtonPrerollSec = 60,
+                autoplayEpisodeLimit = 4,
+                showNextEpisodeDetailsAfterFinish = false,
+            ),
+        )
         fakes.fanout.onAggregateChanged(old, new)
         assertFalse(fakes.log.contains("rebuildConfig"))
     }

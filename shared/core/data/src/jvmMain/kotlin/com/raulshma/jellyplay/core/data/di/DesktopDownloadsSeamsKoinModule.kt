@@ -8,9 +8,11 @@ import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadSuggestionNotifier
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -39,6 +41,12 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
 
     single<DownloadProgressNotifier> { DownloadProgressNotifier { /* no summary surface on desktop */ } }
 
+    // gh-181: no system-notification path for Ask-mode suggestions on desktop
+    // — the Downloads screen's suggestion card is the only surface there.
+    single<AutoDownloadSuggestionNotifier> {
+        AutoDownloadSuggestionNotifier { /* in-app card only */ }
+    }
+
     single<OfflineImagePreloader> { OfflineImagePreloader { /* no shared preload cache on desktop */ } }
 
     //  MediaRepository cluster flip: MediaRepository is now
@@ -48,7 +56,7 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
     // documented throwing-lazy (no desktop definition): downloadSeries
     // failed loudly and episode series-seeding degraded to the minimal
     // parent-row fallback.
-    single<MediaRepositoryAccess> { MediaRepositoryAccess { get<MediaRepository>() } }
+    single<MediaRepositoryAccess> { MediaRepositoryAccess { get<DetailFeed>() } }
 
     // The in-process download manager: construction is side-effect free;
     // the composition root resolves + start()s it after startKoin.
@@ -76,7 +84,8 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
         DesktopDownloadIntake(
             delegate = get(),
             downloadRepository = get(),
-            mediaRepository = get(),
+            policyStore = get(),
+            detailFeed = get(),
             downloadsStore = get(),
         )
     }
@@ -106,10 +115,12 @@ internal fun desktopDownloadsSeamsModule(dataDir: Path): Module = module {
         DesktopAutoDownloadScheduler(
             downloadsStore = get(),
             downloadRepository = get(),
+            policyStore = get(),
             downloadIntake = get(),
             episodeCatalogue = get(),
             serverIdentityStore = get(),
             scope = get(DatastoreQualifiers.applicationScope),
         )
     }
+    single<AutoDownloadScheduler> { get<DesktopAutoDownloadScheduler>() }
 }

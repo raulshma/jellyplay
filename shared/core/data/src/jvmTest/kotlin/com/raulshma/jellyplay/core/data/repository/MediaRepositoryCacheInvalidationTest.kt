@@ -1,23 +1,13 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
-import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -32,65 +22,22 @@ import kotlin.test.Test
  * shared module's 8-arg MediaRepositoryImpl constructor.
  *
  * The cache-invalidation observer runs on `Dispatchers.Default` (a real dispatcher, not the
- * test dispatcher), so tests use [runBlocking] + a short [delay] to let the collector process
- * each flow emission before asserting.
+ * test dispatcher — [mediaRepoStackFor]'s default), so tests use [runBlocking] + a short [delay]
+ * to let the collector process each flow emission before asserting.
  */
 class MediaRepositoryCacheInvalidationTest {
-
-    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
-    private var built: MediaRepositoryImpl? = null
 
     // Atomic (server, user) session flow consumed by the shared HomeSession
     // detector — one value per identity step (see JellyfinApiEngine.session).
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
 
     private fun buildRepository(): MediaRepositoryImpl {
-        every { apiClient.session } returns sessionFlow
         coEvery { apiClient.getMediaDetail(any()) } returns Result.success(mockk<MediaDetail>(relaxed = true))
-        val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
-        val playedStateSync: PlayedStateSync = mockk(relaxed = true)
-        val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        val homeSession = HomeSession(
-            apiClient,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        )
-        // Real registry on a real dispatcher — the invalidation chain the
-        // suite pins (session emission → transition → cache drop) runs on
-        // Dispatchers.Default exactly like the per-repo observers it replaced.
-        val sessionCacheRegistry = SessionCacheRegistry(
-            homeSession,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        )
-        val episodeCatalogue = EpisodeCatalogueImpl(
-            apiClient,
-            offlineRepository,
-            homeSession,
-            sessionCacheRegistry,
-        )
-        return MediaRepositoryImpl(
-            // One union mock covers both family seams (the JellyfinApiClient
-            // mock implements each of them).
+        return mediaRepoStackFor(
             libraryApiClient = apiClient,
-            collectionApiClient = apiClient,
-            // The home cache-maintenance port (inert here — this suite pins
-            // the detail/series cache choreography).
-            homeSectionsCachePort = mockk(relaxed = true),
-            // The persisted home pipeline is the store single the Koin graph
-            // wires (inert here — this
-            // suite pins the detail/series cache choreography).
-            homeSnapshotStore = HomeSectionsSnapshotStore(homeSectionCacheDao, homeSession, SystemTimeSource()),
-            playedStateSync = playedStateSync,
-            episodeCatalogue = episodeCatalogue,
-            userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
-            timeSource = SystemTimeSource(),
-            homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built },
-            sessionCacheRegistry = sessionCacheRegistry,
-            // Facade split: the detail cluster now lives on the shared
-            // internals holder (construction-only ctor re-point).
-            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        ).also { built = it }
+            sessionFlow = sessionFlow,
+        ).repository
     }
 
     /** Waits long enough for the `Dispatchers.Default` collector to observe the latest emission. */
@@ -101,8 +48,8 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `getMediaDetail caches result on repeat calls`() = runBlocking {
         val repository = buildRepository()
-        repository.getMediaDetail("item-1")
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -112,15 +59,15 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
+        repository.getMediaDetail("item-1", force = false)
 
         // Re-emit the same identity (new pair object, same ids) — no
         // invalidation expected.
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -130,13 +77,13 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-B"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -146,13 +93,13 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         sessionFlow.value = ActiveSession(serverInfo("server-2"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -166,7 +113,7 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         // Re-emit the same identity (new pair object, same ids) — still a
@@ -174,7 +121,7 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
     }
 
@@ -184,13 +131,13 @@ class MediaRepositoryCacheInvalidationTest {
         sessionFlow.value = ActiveSession(serverInfo("server-1"), userInfo("user-A"))
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
         sessionFlow.value = null
         waitForCacheObserver()
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
 

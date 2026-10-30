@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.feature.player.live.di.playerLiveModule
 import com.raulshma.jellyplay.feature.requests.di.requestsModule
 import com.raulshma.jellyplay.feature.search.di.searchModule
 import com.raulshma.jellyplay.feature.settings.di.settingsModule
+import com.raulshma.jellyplay.feature.shell.di.shellBroadcastMessengerModule
 import com.raulshma.jellyplay.feature.shortcuts.di.shortcutsModule
 import com.raulshma.jellyplay.feature.syncplay.di.syncPlayModule
 import org.koin.core.module.Module
@@ -234,4 +235,12 @@ val sharedFeatureModules: List<Module> = listOf(
     // seam binds Media3LivePlayerAudio, the VIDEO-family focus surface;
     // the transcode-reasons renderer delegates to the core:ui formatter.
     playerLiveModule,
+
+    // The companion-plugin broadcast messenger (ADR 0010): core:data's
+    // JellyPlayBroadcastMessenger seam bridged to the shared UserMessageBus.
+    // Registered ONCE here — the bridge is a plain bus.info forward with
+    // zero per-shell content, so the byte-identical per-shell copies (the
+    // Android interop-adapter module's, desktop's inline def) are gone and
+    // both graphs resolve this single def.
+    shellBroadcastMessengerModule,
 )

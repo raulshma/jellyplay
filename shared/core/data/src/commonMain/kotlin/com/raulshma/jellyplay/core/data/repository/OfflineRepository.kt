@@ -53,6 +53,7 @@ interface OfflineRepository {
     fun getChildren(parentId: String): Flow<List<OfflineMediaItem>>
 
     suspend fun getOfflineItem(id: String): OfflineMediaItem?
+
     fun getOfflineItemCount(): Flow<Int>
     suspend fun deleteOfflineItem(id: String)
     suspend fun deleteOfflineSeries(seriesId: String)
@@ -147,3 +148,36 @@ interface OfflineRepository {
     /** Snapshot ids of all offline items (top-level + episodes), for batch checks. */
     suspend fun getDownloadedItemIds(): List<String>
 }
+
+/**
+ * The downloads screen's series-artwork read family: one batched projection
+ * read instead of a [OfflineRepository.getOfflineItem] round-trip per series.
+ * A narrow collaborator beside [OfflineRepository] (its surface ratchet keeps
+ * the offline-library seam closed), implemented by the same
+ * [OfflineRepositoryImpl] single.
+ */
+interface SeriesArtReads {
+    /**
+     * The resolved series-artwork values behind the downloads screen's group
+     * headers, keyed by raw series id. Rows whose persisted
+     * poster is blank or a remote URL still ride the artwork resolver's
+     * fallback ladder (the series artifact beside a downloaded episode's dir,
+     * the original value preserved when no artifact exists), so an entry
+     * carries exactly what [OfflineRepository.getOfflineItem] would render; a
+     * series with no offline row is simply absent.
+     */
+    suspend fun getSeriesArt(seriesIds: List<String>): Map<String, ResolvedSeriesArt>
+}
+
+/**
+ * The resolved artwork values for one series row — the repository-boundary
+ * shape behind [SeriesArtReads.getSeriesArt]: [posterPath] as the artwork
+ * resolver leaves it (a local path when the row or its artifact fallback has
+ * one, the row's original value — possibly a still-working remote URL —
+ * preserved otherwise) and the row's [blurHashPrimary], which resolution
+ * never touches.
+ */
+data class ResolvedSeriesArt(
+    val posterPath: String?,
+    val blurHashPrimary: String?,
+)

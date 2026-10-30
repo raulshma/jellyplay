@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">系统报告失焦时暂停播放</string>
     <string name="settings_pause_on_focus_loss_off">失焦时继续播放</string>
     <string name="settings_resume_headset_plug">耳机重新连接时恢复播放</string>
-    <string name="settings_resume_headset_plug_subtitle">拔出自动暂停后重新插入耳机时恢复播放</string>
+    <string name="settings_resume_headset_plug_subtitle">拔出自动暂停后耳机重新连接时恢复播放（有线或蓝牙）</string>
     <string name="settings_decoder_summary">解码器：%1$s</string>
     <string name="settings_decoder">解码器</string>
     <string name="settings_refresh_rate_match">刷新率匹配</string>
@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">还原所有 ExoPlayer 设置</string>
     <string name="settings_media_segments">媒体片段</string>
     <string name="settings_media_segments_summary">%1$d 自动跳过，%2$d 显示按钮</string>
-    <string name="settings_skip_segments_on_seek">跳转时跳过片段</string>
+        <string name="settings_skip_prompt_duration">跳过按钮显示时长</string>
+    <string name="settings_skip_prompt_duration_subtitle">跳过片头/片段按钮在屏幕上停留的时间</string>
+<string name="settings_skip_segments_on_seek">跳转时跳过片段</string>
     <string name="settings_skip_segments_on_seek_on">向前跳转落在自动跳过片段内时自动跳过</string>
     <string name="settings_segment_skip_delay">自动跳过延迟</string>
     <string name="settings_segment_skip_delay_off">关闭</string>

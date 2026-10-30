@@ -3,12 +3,11 @@ package com.raulshma.jellyplay.core.network.di
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.model.CACHE_SIZE_DISABLED
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrCredentials
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.ServerDiscoveryService
@@ -19,12 +18,19 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClientImpl
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClientImpl
 import com.raulshma.jellyplay.core.network.api.DeviceProfileProvider
+import com.raulshma.jellyplay.core.network.api.HomeLayoutApiClient
+import com.raulshma.jellyplay.core.network.api.HomeLayoutApiClientImpl
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClientImpl
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.LazyProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
 import com.raulshma.jellyplay.core.network.api.PlaylistApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
+import com.raulshma.jellyplay.core.network.api.UserDataApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataApiClientImpl
+import com.raulshma.jellyplay.core.network.api.currentCacheIdentity
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
@@ -126,25 +132,6 @@ val networkJvmModule: Module = module {
             addressRouter = get(),
         )
     }
-    single {
-        JellyfinApiClientImpl(
-            authClient = get(),
-            libraryClient = get(),
-            playlistClient = get(),
-            collectionClient = get(),
-            playbackClient = get(),
-            syncPlayClient = get(),
-            liveTvClient = get(),
-            adminClient = get(),
-            metadataClient = get(),
-            mediaInfoClient = get(),
-            jellyPlayPluginClient = get(),
-            pluginClient = get(),
-            userClient = get(),
-        )
-    }
-    single<JellyfinApiClient> { get<JellyfinApiClientImpl>() }
-
     single { AuthApiClientImpl(get(), get()) }
     single<AuthApiClient> { get<AuthApiClientImpl>() }
     // The get()-resolved TimeSource single is dataJvmModule's SystemTimeSource
@@ -176,16 +163,31 @@ val networkJvmModule: Module = module {
         )
     }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
-    // The two library family seams are their own impl singles now (the
-    // families moved off LibraryApiClientImpl): each adapter is constructed
+    // The library family seams are their own impl singles (the families
+    // moved off LibraryApiClientImpl): each adapter is constructed
     // over the SAME engine single — no duplicate network state — and
     // single-family consumers (PlaylistRepositoryImpl, MediaRepositoryImpl's
-    // collection reads/writes) inject the seam, never the wide library
+    // collection reads/writes, the outbox drain's user-data writes,
+    // HomeLayoutSyncController's DisplayPreferences pair, the image-URL
+    // builders' memoising provider) inject the seam, never the wide library
     // surface.
     single { PlaylistApiClientImpl(get()) }
     single<PlaylistApiClient> { get<PlaylistApiClientImpl>() }
     single { CollectionApiClientImpl(get()) }
     single<CollectionApiClient> { get<CollectionApiClientImpl>() }
+    single {
+        UserDataApiClientImpl(
+            engine = get(),
+            // The same atomic-session identity the wide client's home caches
+            // key off (the shared engine extension — one derivation).
+            cacheIdentity = { get<JellyfinApiEngine>().currentCacheIdentity() },
+        )
+    }
+    single<UserDataApiClient> { get<UserDataApiClientImpl>() }
+    single { HomeLayoutApiClientImpl(get(), get()) }
+    single<HomeLayoutApiClient> { get<HomeLayoutApiClientImpl>() }
+    single { ImageUrlApiClientImpl(get()) }
+    single<ImageUrlApiClient> { get<ImageUrlApiClientImpl>() }
     // The home cache-maintenance verbs ride their own port (beside the fetcher
     // that owns the caches): the data layer's write/roll paths drop/seed the
     // home hot-path sub-call caches through this seam instead of the wide
@@ -407,16 +409,19 @@ internal fun baseOkHttpClient(
 ): OkHttpClient {
     // Read config synchronously via StateFlow.value — no runBlocking.
     // On a cold start the Eagerly-shared StateFlow may still hold the
-    // initialValue sentinel (maxCacheSizeMb = 0), in which case the cache
-    // falls back to 50 MB below. The real preference lands in .value
+    // initialValue sentinel (maxCacheSizeMb = 0, read as "Unlimited" below).
+    // The real preference lands in .value
     // within tens of ms (DataStore disk read) and is picked up on the
     // next process start; timeouts are re-applied per request by the
     // interceptor below, so only the (rarely-changed) cache size is
     // affected, and only on the very first launch.
     val initialConfig = okHttpConfigProvider.config.value
     cacheDir.mkdirs()
+    // max_cache_size_mb semantics (mirrors the Coil side in
+    // JellyPlayImageLoader): >0 sizes the cache in MB, 0 is the picker's
+    // "Unlimited", and the -1 "Disabled" sentinel
+    // (core:model CACHE_SIZE_DISABLED) installs no cache at all.
     val cacheMb = initialConfig.maxCacheSizeMb
-    val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 50L * 1024 * 1024
     val initialTimeout = initialConfig.networkTimeoutPreset
 
     // Custom logger that strips Jellyfin access tokens from log lines.
@@ -454,7 +459,13 @@ internal fun baseOkHttpClient(
         .connectTimeout(initialTimeout.connectSec, TimeUnit.SECONDS)
         .readTimeout(initialTimeout.readSec, TimeUnit.SECONDS)
         .writeTimeout(initialTimeout.writeSec, TimeUnit.SECONDS)
-        .cache(Cache(cacheDir, cacheSize))
+        .apply {
+            when {
+                cacheMb == CACHE_SIZE_DISABLED -> Unit // "Disabled" — no response cache installed.
+                cacheMb == 0 -> cache(Cache(cacheDir, Long.MAX_VALUE))
+                else -> cache(Cache(cacheDir, cacheMb * 1024L * 1024L))
+            }
+        }
         // RANDOM-sorted /Items queries (dice re-roll, Random library sort) must
         // never be served from the response cache above: the query is
         // byte-identical every time and the shuffle happens server-side, so a

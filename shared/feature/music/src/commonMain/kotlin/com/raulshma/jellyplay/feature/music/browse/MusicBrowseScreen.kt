@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_playlists
 import com.raulshma.jellyplay.feature.music.generated.resources.music_tracks
 import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
 import com.raulshma.jellyplay.feature.music.collection.MusicSortOption
+import com.raulshma.jellyplay.feature.music.collection.musicArtUrl
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -207,7 +208,7 @@ private fun ArtistsPage(
             contentPadding = PaddingValues(contentPad),
             spacing = spacing,
         ) { artist, itemModifier ->
-            val imageUrl = remember(artist.id) { viewModel.getImageUrl(artist.id) }
+            val imageUrl = remember(artist, viewModel.artworkUrls) { viewModel.artworkUrls.musicArtUrl(artist) }
             ArtistCard(
                 name = artist.name,
                 imageUrl = imageUrl,
@@ -244,7 +245,7 @@ private fun AlbumsPage(
             contentPadding = PaddingValues(contentPad),
             spacing = spacing,
         ) { album, itemModifier ->
-            val imageUrl = remember(album.id) { viewModel.getImageUrl(album.id) }
+            val imageUrl = remember(album, viewModel.artworkUrls) { viewModel.artworkUrls.musicArtUrl(album) }
             AlbumCard(
                 name = album.name,
                 artist = album.albumArtist,
@@ -287,7 +288,7 @@ private fun TracksPage(
             appendErrorFallbackMessage = stringResource(Res.string.music_failed_load_more),
             tvInitialFocusTag = "browse_tracks_init",
         ) { track ->
-            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
+            val imageUrl = remember(track, viewModel.artworkUrls) { viewModel.artworkUrls.musicArtUrl(track) }
             TrackRow(
                 name = track.name,
                 artist = track.albumArtist,
@@ -391,6 +392,8 @@ private fun PlaylistsPage(
             emptyIcon = kind.emptyIcon,
             emptyTitle = stringResource(kind.emptyTitleRes),
         ) { _, playlist, itemModifier ->
+            // Playlists are their own model (no MediaItem image tags in hand),
+            // so this URL stays raw-id and untagged.
             val imageUrl = remember(playlist.id) { viewModel.getImageUrl(playlist.id) }
             AlbumCard(
                 name = playlist.name,

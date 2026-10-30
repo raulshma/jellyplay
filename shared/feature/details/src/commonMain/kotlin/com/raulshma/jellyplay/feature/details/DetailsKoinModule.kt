@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -52,22 +52,26 @@ val detailsModule: Module = module {
     // jvmShared) ctor deps, so both moved to jvmShared with their screens and
     // their defs moved to the per-platform registration modules — same
     // treatment as DetailViewModel above.
+    // The detail-read family seam (the same MediaRepositoryImpl single the
+    // union exposes — the family-seam aliasing): the four detail-read-only
+    // VMs inject it instead of the union.
     viewModel {
         CastAndCrewViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
         )
     }
     viewModel {
         ReviewsViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
             seerrRepository = get(),
         )
     }
     viewModel {
         ManageSeriesViewModel(
             strings = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             // The Sonarr series-management seam — resolved as the
             // ArrRepositoryImpl single (dataSeerrArrModule binds
             // SonarrSeriesOperations over it, the same over-the-impl pattern
@@ -77,7 +81,7 @@ val detailsModule: Module = module {
     }
     viewModel {
         MediaInfoViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
         )
     }
     viewModel {

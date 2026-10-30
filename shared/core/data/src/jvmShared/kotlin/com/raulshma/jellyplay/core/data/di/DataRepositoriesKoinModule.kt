@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.RealtimeConnection
@@ -139,7 +140,7 @@ internal val dataRepositoriesModule: Module = module {
     // Session-scoped by design (no persistence) — see VideoQueueController.
     single { com.raulshma.jellyplay.core.data.playback.VideoQueueController() }
 
-    single { MetadataEditorRepositoryImpl(get(), get(), get()) }
+    single { MetadataEditorRepositoryImpl(get(), get(), get(), get()) }
     single<MetadataEditorRepository> { get<MetadataEditorRepositoryImpl>() }
 
     single { SeenMediaRepositoryImpl(get()) }
@@ -157,7 +158,7 @@ internal val dataRepositoriesModule: Module = module {
 
     // Companion-plugin bookmark sync (ADR 0010, `bookmarks` feature) over the
     // SAME book_bookmarks rows the marks repo owns — shares the BookBookmarkDao
-    // single. The status store resolves from dataSessionPlaybackModule (one
+    // single. The status store resolves from dataProfileSyncModule (one
     // graph); the network api client from the network modules.
     single {
         BookmarksSyncRepositoryImpl(
@@ -188,6 +189,7 @@ internal val dataRepositoriesModule: Module = module {
 
     single { OfflineRepositoryImpl(get(), get(), get(), get(), get(), timeSource = get()) }
     single<OfflineRepository> { get<OfflineRepositoryImpl>() }
+    single<SeriesArtReads> { get<OfflineRepositoryImpl>() }
 
     single { PlaybackOutboxRepositoryImpl(get(), get()) }
     single<PlaybackOutboxRepository> { get<PlaybackOutboxRepositoryImpl>() }

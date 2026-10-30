@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.DesktopLocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
 import java.nio.file.Path
@@ -23,10 +25,12 @@ internal fun desktopMediaSupportModule(dataDir: Path): Module = module {
         // The shared jvmShared impl — the desktop twin (DesktopImageUrlProvider)
         // was deleted once the policy lived in one class next to the interface.
         ImageUrlProviderImpl(
-            libraryApiClient = get(),
+            imageApiClient = get(),
             appearanceStore = get(),
         )
     }
+
+    single<ArtworkUrls> { DefaultArtworkUrls(get()) }
 
     single<LocalStreamProbe> { DesktopLocalStreamProbe() }
 

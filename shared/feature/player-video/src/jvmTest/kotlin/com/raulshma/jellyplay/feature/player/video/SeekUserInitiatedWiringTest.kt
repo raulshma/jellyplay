@@ -12,11 +12,10 @@ import java.io.File
  * [TransportRouter.seekLocal] (its every read arrives as the ctor lambdas the
  * session wiring supplies), the resume-skip funnel is
  * [TransportRouter.applyResumeSkip] — and the
- * segment-skip dispatch arms (skipSegment / autoSkipSegment /
- * dispatchSegmentSkip / executeSegmentSkip) were extracted into
- * SegmentDispatchController and have since been folded back into the VM
- * (the pure decision halves stay in SegmentSkipPolicy.kt), so the guard is
- * pinned across the three sources:
+ * segment-skip dispatch arms (skipSegment / autoSkip / execute) have since
+ * moved onto the session's SegmentSkipDispatcher beside it (the pure decision
+ * halves stay in SegmentSkipPolicy.kt), so the guard is pinned across the
+ * three sources:
  *
  *  1. the router's `seekLocal` carries the `userInitiated: Boolean`
  *     parameter and only the user-initiated branch consults the clamp
@@ -27,10 +26,10 @@ import java.io.File
  *     — the auto-skip execution, the SyncPlay group position sync and the
  *     resume-skip (A-B repeat seeks the engine directly and can never route
  *     through the funnel);
- *  3. the auto-skip arm (`VideoPlayerViewModel.autoSkipSegment`, the
+ *  3. the auto-skip arm (`SegmentSkipDispatcher.autoSkip`, the
  *     position-tick path) raises the "Skipped …" notice and seeks
  *     non-user-initiated, while the overlay-button arm
- *     (`VideoPlayerViewModel.skipSegment`) stays user-initiated.
+ *     (`SegmentSkipDispatcher.skipSegment`) stays user-initiated.
  *
  * If a reformat trips a regex here, the assertion message names the contract
  * to restore — never delete an assertion to make a reformat pass.
@@ -51,6 +50,10 @@ class SeekUserInitiatedWiringTest {
 
     private val vmSource: String by lazy {
         moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/VideoPlayerViewModel.kt")
+    }
+
+    private val dispatcherSource: String by lazy {
+        moduleSource("src/commonMain/kotlin/com/raulshma/jellyplay/feature/player/video/session/SegmentSkipDispatcher.kt")
     }
 
     private val sessionSource: String by lazy {
@@ -100,8 +103,8 @@ class SeekUserInitiatedWiringTest {
     @Test
     fun `auto-skip execution passes userInitiated = false`() {
         assertMatchesIn(
-            vmSource,
-            Regex("""fun autoSkipSegment\(segment: MediaSegment\) \{\s*executeSegmentSkip\(.*?, userInitiated = false\)"""),
+            dispatcherSource,
+            Regex("""fun autoSkip\(segment: MediaSegment\) \{\s*execute\([\s\S]*?, userInitiated = false\)"""),
             "the position-tick auto-skip is app-driven — its seek must not be clamped",
         )
     }
@@ -130,21 +133,28 @@ class SeekUserInitiatedWiringTest {
 
     @Test
     fun `segment-skip dispatch threads the flag through to the local seek arm`() {
-        // executeSegmentSkip is the shared executor of the folded dispatch
-        // arms; the flag must survive the hop into the local seek funnel
-        // unchanged.
+        // execute is the shared executor of the folded dispatch arms; the
+        // flag must survive the hop into the local seek funnel unchanged —
+        // the dispatcher's seekLocal EFFECT is the session's transport local
+        // arm (wired `seekLocal = { position, userInitiated ->
+        // transport.seekLocal(...) }` on the session).
         assertMatchesIn(
-            vmSource,
-            Regex("""is SegmentSkipTarget\.SeekToPosition ->\s*playbackSession\.transport\.seekLocal\(target\.positionMs, userInitiated\)"""),
-            "executeSegmentSkip must forward its userInitiated flag to the session's local seek arm",
+            dispatcherSource,
+            Regex("""is SegmentSkipTarget\.SeekToPosition -> seekLocal\(target\.positionMs, userInitiated\)"""),
+            "execute must forward its userInitiated flag to the local seek effect",
+        )
+        assertMatchesIn(
+            sessionSource,
+            Regex("""seekLocal = \{ position, userInitiated -> transport\.seekLocal\(position, userInitiated\) \}"""),
+            "the dispatcher's seek effect must route through the session's transport local arm",
         )
     }
 
     @Test
     fun `overlay-button skip stays user-initiated`() {
         assertMatchesIn(
-            vmSource,
-            Regex("""fun skipSegment\(segment: MediaSegment\) \{\s*executeSegmentSkip\(.*?, userInitiated = true\)"""),
+            dispatcherSource,
+            Regex("""fun skipSegment\(segment: MediaSegment\) \{\s*execute\([\s\S]*?, userInitiated = true\)"""),
             "the overlay button press is a user action",
         )
     }
@@ -152,17 +162,18 @@ class SeekUserInitiatedWiringTest {
     @Test
     fun `the progress reporter routes auto-skips through the notice-raising arm`() {
         // The reporter's construction lives on the session since the
-        // PlayerWiring → PlaybackSession move; the route still ends at the
-        // VM's autoSkipSegment arm through the host seam.
+        // PlayerWiring → PlaybackSession move; the auto-skip arm now lives on
+        // the SegmentSkipDispatcher, so the route is the session's forward to
+        // the dispatcher's notice-raising arm.
         assertMatchesIn(
             sessionSource,
-            Regex("""onAutoSkip = \{ segment -> host\.autoSkipSegment\(segment\) \}"""),
-            "PlaybackProgressReporter's onAutoSkip must route to the VM's autoSkipSegment arm " +
+            Regex("""onAutoSkip = \{ segment -> segmentSkip\.autoSkip\(segment\) \}"""),
+            "PlaybackProgressReporter's onAutoSkip must route to the dispatcher's autoSkip arm " +
                 "(notice + non-user seek), not the button arm",
         )
         assertMatchesIn(
-            vmSource,
-            Regex("""fun autoSkipSegment[\s\S]*?showSkippedSegmentNotice\(segment\.type\)"""),
+            dispatcherSource,
+            Regex("""fun autoSkip[\s\S]*?showSkippedSegmentNotice\(segment\.type\)"""),
             "the auto-skip arm must raise the Skipped-segment notice",
         )
     }
@@ -171,8 +182,8 @@ class SeekUserInitiatedWiringTest {
     fun `the clamp seek raises the Skipped-segment notice too`() {
         // [a] avoids the bell-character trap of \a — the raw string keeps
         // backslashes literal, so \a in a regex here would match BEL, not a dot.
-        // The notice itself stays VM-owned; the router's clamp fires it
-        // through the onSegmentSkippedNotice ctor seam.
+        // The notice is session-owned (the auto-skip arm raises the same one);
+        // the router's clamp fires it through the wiring's narrow lambda seam.
         assertMatchesIn(
             routerSource,
             Regex("""\?\.[a]lso \{ onSegmentSkippedNotice\(it\.segmentType\) \}"""),

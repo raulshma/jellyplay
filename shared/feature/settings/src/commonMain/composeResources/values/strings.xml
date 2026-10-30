@@ -217,7 +217,9 @@
     <string name="settings_disable_pin_message">Enter your current PIN to disable PIN lock.</string>
     <string name="settings_current_pin">Current PIN</string>
     <string name="settings_incorrect_pin">Incorrect PIN</string>
-    <string name="settings_confirm">Confirm</string>
+        <string name="settings_picker_search">Search</string>
+    <string name="settings_picker_no_results">No matching options</string>
+<string name="settings_confirm">Confirm</string>
     <string name="settings_authorize_quick_connect">Authorize Quick Connect</string>
     <string name="settings_authorize_quick_connect_message">Enter the 6-digit code displayed on the other device.</string>
     <string name="settings_authorization_failed">Authorization failed</string>
@@ -474,6 +476,7 @@
     <string name="settings_auto_delete_off">Manual cache management</string>
     <string name="settings_max_cache_size">Max Cache Size</string>
     <string name="settings_max_cache_size_subtitle">Maximum disk space for caching</string>
+    <string name="settings_max_cache_applies_after_restart">Applies the next time the app starts</string>
     <string name="settings_unlimited">Unlimited</string>
     <string name="settings_network_offline">Network &amp; Offline</string>
     <string name="settings_status_value">Status: %1$s</string>
@@ -630,8 +633,13 @@
     <string name="settings_downloads_summary">Quality: %1$s</string>
     <string name="settings_download_quality">Download Quality</string>
     <string name="settings_download_quality_subtitle">Preferred video quality for downloads</string>
-    <string name="settings_auto_download_new">Auto-Download New Episodes</string>
-    <string name="settings_auto_download_new_subtitle">Automatically download next episode of active series</string>
+    <string name="settings_auto_download_mode">Auto-Download New Episodes</string>
+    <string name="settings_auto_download_mode_subtitle">What to do when a downloaded series gets new episodes</string>
+    <string name="settings_auto_download_mode_instant">Instantly</string>
+    <string name="settings_auto_download_mode_ask">Ask before download</string>
+    <string name="settings_auto_download_mode_never">Never</string>
+    <string name="settings_auto_download_check_now">Check for New Episodes Now</string>
+    <string name="settings_auto_download_check_now_subtitle">Run an auto-download pass immediately</string>
     <string name="settings_auto_download_lookahead">Download Lookahead</string>
     <string name="settings_auto_download_lookahead_subtitle">Episodes kept ahead of the newest watched or downloaded one</string>
     <string name="settings_auto_download_max_per_pass">Max Downloads Per Check</string>
@@ -719,7 +727,7 @@
     <string name="diff_synthwave_mode">Synthwave Mode</string>
     <string name="diff_soothing_mode">Soothing Mode</string>
     <string name="diff_monochrome_mode">Monochrome Mode</string>
-    <string name="diff_playback_mode">Playback Mode</string>
+    <string name="settings_playback_mode">Playback Mode</string>
     <string name="diff_hold_to_speed">Hold-To-Speed</string>
     <string name="diff_auto_skip_intro">Auto Skip Intro</string>
     <string name="diff_auto_skip_outro">Auto Skip Outro</string>
@@ -811,8 +819,13 @@
     <string name="settings_jellyplay_sync_op_pull">Pull</string>
     <string name="settings_jellyplay_sync_op_reset">Reset</string>
     <string name="settings_jellyplay_sync_op_unknown">Sync</string>
+    <!-- The sync screen's tab row (the non-TV layout's four content tabs). -->
+    <string name="settings_jellyplay_sync_tab_status">Status</string>
+    <string name="settings_jellyplay_sync_tab_activity">Activity</string>
+    <string name="settings_jellyplay_sync_tab_backup">Backup</string>
     <string name="settings_jellyplay_sync_usage_title">What’s synced</string>
     <string name="settings_jellyplay_sync_usage_unavailable">Usage details unavailable on this server</string>
+    <string name="settings_jellyplay_sync_activity_unavailable">Sync activity unavailable on this server</string>
     <string name="settings_jellyplay_sync_quota_bytes">%1$s of %2$s used</string>
     <string name="settings_jellyplay_sync_quota_keys">%1$d of %2$d keys</string>
     <string name="settings_jellyplay_sync_relative_days">%1$dd ago</string>
@@ -855,6 +868,32 @@
     <string name="settings_jellyplay_sync_conflict_deleted_value">(deleted)</string>
     <string name="settings_jellyplay_sync_ns_toggle_subtitle">Sync “%1$s” on this device — %2$d keys • %3$s</string>
     <string name="settings_jellyplay_sync_ns_off">Sync off on this device</string>
+    <string name="settings_jellyplay_sync_master_off_hint">Sync paused on this device</string>
+    <string name="settings_jellyplay_sync_key_singular">%1$d key • %2$s</string>
+    <string name="settings_jellyplay_sync_keys_plural">%1$d keys • %2$s</string>
+    <string name="settings_jellyplay_sync_ns_prefs_title">General Settings</string>
+    <string name="settings_jellyplay_sync_ns_prefs_desc">Preferences, controls &amp; player options</string>
+    <string name="settings_jellyplay_sync_ns_books_title">Books &amp; Audiobooks</string>
+    <string name="settings_jellyplay_sync_ns_books_desc">Reading progress and library options</string>
+    <string name="settings_jellyplay_sync_ns_search_title">Search &amp; Filters</string>
+    <string name="settings_jellyplay_sync_ns_search_desc">Search filters and query history</string>
+    <string name="settings_jellyplay_sync_ns_cw_title">Continue Watching</string>
+    <string name="settings_jellyplay_sync_ns_cw_desc">Media resume points and playback progress</string>
+    <string name="settings_jellyplay_sync_ns_reader_title">Reader Settings</string>
+    <string name="settings_jellyplay_sync_ns_reader_desc">Book &amp; comic viewer layout and display</string>
+    <string name="settings_jellyplay_sync_ns_homelayout_title">Home Screen Layout</string>
+    <string name="settings_jellyplay_sync_ns_homelayout_desc">Section order and row arrangement</string>
+    <string name="settings_jellyplay_sync_ns_integrations_title">Integrations</string>
+    <string name="settings_jellyplay_sync_ns_integrations_desc">Third-party services &amp; companion plugins</string>
+    <string name="settings_jellyplay_sync_ns_itemprefs_title">Media &amp; Playback Preferences</string>
+    <string name="settings_jellyplay_sync_ns_itemprefs_desc">Audio tracks, subtitles &amp; item settings</string>
+    <string name="settings_jellyplay_sync_ns_playlists_title">Playlists</string>
+    <string name="settings_jellyplay_sync_ns_playlists_desc">Custom and saved playlists</string>
+    <string name="settings_jellyplay_sync_ns_ui_title">Appearance &amp; Display</string>
+    <string name="settings_jellyplay_sync_ns_ui_desc">Themes, dark mode &amp; interface style</string>
+    <string name="settings_jellyplay_sync_origin_manual">Manual backup</string>
+    <string name="settings_jellyplay_sync_origin_safety">Pre-reset snapshot</string>
+    <string name="settings_jellyplay_sync_origin_auto">Automatic snapshot</string>
     <string name="settings_jellyplay_sync_device_rename_title">Rename device</string>
     <string name="settings_jellyplay_sync_device_rename_label">Device name</string>
     <string name="settings_jellyplay_sync_device_rename_confirm">Rename</string>
@@ -925,6 +964,9 @@
          capabilities probe exposes the feature (transcodes: admin users only). -->
     <string name="settings_jellyplay_plugin_section">Server plugin</string>
     <string name="settings_jellyplay_plugin_section_summary">Choose which features the JellyPlay plugin provides</string>
+    <string name="settings_jellyplay_plugin_version_summary">Server plugin v%1$s</string>
+    <string name="settings_jellyplay_contract_mismatch_title">Plugin update needed</string>
+    <string name="settings_jellyplay_contract_mismatch_body">The server plugin (v%3$s) speaks contract v%1$s; this app supports v%2$s. Update the plugin on your Jellyfin server — or the app if it is older.</string>
     <string name="settings_jellyplay_feature_locked">Set by your server admin</string>
     <string name="settings_jellyplay_feature_events">Live events</string>
     <string name="ss_jellyplay_feature_events_subtitle">New-media alerts and server broadcasts streamed to this device</string>
@@ -961,4 +1003,6 @@
     <string name="settings_jellyplay_push_state_server_off">Server push disabled</string>
     <string name="settings_jellyplay_feature_analytics">Analytics</string>
     <string name="ss_jellyplay_feature_analytics_subtitle">The play-history dashboard in the admin area (admin only)</string>
+    <string name="settings_nav_customize_shortcuts">Customize shortcuts</string>
+    <string name="settings_nav_customize_shortcuts_subtitle">Header and overflow menu shortcuts</string>
 </resources>

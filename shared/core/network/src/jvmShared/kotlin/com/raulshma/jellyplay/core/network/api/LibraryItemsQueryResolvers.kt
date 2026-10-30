@@ -8,8 +8,10 @@ import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 
 /**
- * The JVM half of the [LibraryItemsQuerySpec] seam: wire serial names → the
- * Jellyfin SDK enums `itemsApi.getItems` accepts. The shared commonMain
+ * The JVM half of the [LibraryItemsQuerySpec] seam: the spec's wire vocabulary
+ * → what `itemsApi.getItems` accepts — wire serial names → the Jellyfin SDK
+ * enums, and the discover windows' epoch-millis bounds → java.time
+ * ([toSdkLocalDateTime]). The shared commonMain
  * builders hold the per-endpoint request DECISIONS in wire vocabulary; these
  * resolvers are the adapter
  * that proves the seam — one spec, one transport. Same serialName-lookup
@@ -47,4 +49,9 @@ private fun <E : Enum<E>> List<String>?.mapNotNullToSerial(
  */
 internal fun Boolean?.toSortOrderList(): List<SortOrder>? = this?.let { descending ->
     listOf(if (descending) SortOrder.DESCENDING else SortOrder.ASCENDING)
+}
+
+/** Discover-row window bound (epoch millis) → the SDK getItems date param type (java.time.LocalDateTime on the JVM). */
+internal fun Long?.toSdkLocalDateTime(): java.time.LocalDateTime? = this?.let {
+    java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(it), java.time.ZoneId.systemDefault())
 }

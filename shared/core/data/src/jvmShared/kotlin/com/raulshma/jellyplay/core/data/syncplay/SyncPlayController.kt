@@ -10,9 +10,9 @@ import kotlinx.coroutines.CancellationException
  * The ONE fire-and-forget wrapper home for SyncPlay wire commands that player
  * plumbing issues without awaiting a result (`SyncPlayBridge`,
  * `SyncPlayPlaybackCore`, `VideoPlayerViewModel`): every member is a
- * [safe]-wrapped one-liner over [SyncPlayApiClient] (the family seam, not the
- * JellyfinApiClient union — the PlaybackRepositoryImpl ctor precedent; the
- * family single composes the same impl the union delegates to), and nothing
+ * [safe]-wrapped one-liner over [SyncPlayApiClient] (the family seam — the
+ * PlaybackRepositoryImpl ctor precedent; the family single composes the same
+ * impl the retired JellyfinApiClient union delegated to), and nothing
  * else in the app wraps these calls. Group lifecycle (join/leave) is NOT
  * here — `SyncPlayManager` calls the api client directly because it must
  * observe the results — and the repository seam (`SyncPlayRepository`) only

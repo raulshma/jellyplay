@@ -81,7 +81,6 @@ class PlaybackProgressReporterTest {
 
         every { mediaEngine.positionFlow } returns flowOf(0L, 5_000L, 95_000L)
         every { mediaEngine.durationMs } returns 100_000L
-        every { mediaEngine.bufferedPositionMs } returns MutableStateFlow(100_000L)
         every { mediaEngine.videoStats } returns MutableStateFlow(EngineVideoStats())
         every { mediaEngine.isPlaying } returns MutableStateFlow(true)
         every { mediaEngine.currentPositionMs } returns 5_000L
@@ -107,7 +106,7 @@ class PlaybackProgressReporterTest {
         onPlaybackEndedNoNext = { endedNoNextCount++ },
         onWatchedThresholdReached = { watchedThresholdItemIds.add(it) },
         onPositionPersisted = { positionTicks.add(it) },
-        onEnginePositionUpdate = { _, _, _, _ -> },
+        onEnginePositionUpdate = { _, _, _ -> },
         nowProvider = { nowMs },
     )
 

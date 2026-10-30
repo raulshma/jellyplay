@@ -2,13 +2,18 @@ package com.raulshma.jellyplay.feature.player.video.session
 
 import com.raulshma.jellyplay.core.data.playback.VideoQueueController
 import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
+import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleStylePreset
@@ -19,6 +24,8 @@ import com.raulshma.jellyplay.feature.player.video.AbRepeatState
 import com.raulshma.jellyplay.feature.player.video.PlaybackSession
 import com.raulshma.jellyplay.feature.player.video.PlayerCastController
 import com.raulshma.jellyplay.feature.player.video.PlayerSessionManager
+import com.raulshma.jellyplay.feature.player.video.PlayerUiCommands
+import com.raulshma.jellyplay.feature.player.video.PostPlaybackActionsController
 import com.raulshma.jellyplay.feature.player.video.RenderControls
 import com.raulshma.jellyplay.feature.player.video.SessionRenderState
 import com.raulshma.jellyplay.feature.player.video.StillWatchingController
@@ -37,9 +44,15 @@ import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
 import com.raulshma.jellyplay.feature.player.video.state.SubtitleState
 import com.raulshma.jellyplay.feature.player.video.state.SyncPlayUiState
 import com.raulshma.jellyplay.feature.player.video.state.TrackState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 // ── Session slices (the GLOSSARY "Session slice" seam) ───────────────────
 //
@@ -163,12 +176,23 @@ interface CastRouteButton {
 
 /**
  * Center-overlay region: the up-next card family and the "Still watching?"
- * confirm — the projections [PlayerCenterOverlayTier] renders. All
- * low-frequency (card resolves / load settles / prompt raises).
+ * confirm — the projections [PlayerCenterOverlayTier] renders — plus the
+ * binge-controls surface (the autoplay-cap verdict and the countdown's expiry
+ * arm) and the #14 offer-delete-after-playback dialog state + commands. All
+ * low-frequency (card resolves / load settles / prompt raises / cap flips /
+ * offer arms).
  */
 internal class OverlaySessionSlice(
-    upNext: UpNextController,
+    private val upNext: UpNextController,
     stillWatching: StillWatchingController,
+    /**
+     * The #14 post-playback controller — constructed session-side (every
+     * fact it reads is session-owned; see [PlaybackSession.postPlaybackActions])
+     * and projected here by [createSessionSlices]. Null in graphs without
+     * the delete seams: the commands no-op and the offer flow stays
+     * permanently null.
+     */
+    private val postPlayback: PostPlaybackActionsController? = null,
 ) {
     /**
      * The Up Next card — the controller's projection, already resolved with
@@ -182,6 +206,38 @@ internal class OverlaySessionSlice(
 
     /** The "Still watching?" confirm overlay's state surface; null = hidden (feature 1.3). */
     val stillWatchingPrompt: StateFlow<StillWatchingPromptState?> = stillWatching.prompt
+
+    /**
+     * The autoplay episode-cap verdict (#17): true once the unattended
+     * auto-advance streak reached the configured cap — the Up Next overlay
+     * renders MANUAL (no countdown, no autoplay toggle) while it holds.
+     */
+    val isAutoplayLimitReached: StateFlow<Boolean> = upNext.isAutoplayLimitReached
+
+    /**
+     * The Up Next countdown's EXPIRY arm (#17): a countdown that ran out is
+     * an AUTO advance — the binge streak grows before the advance fires (the
+     * manual "Watch now" taps keep riding the manual event, which resets the
+     * streak instead).
+     */
+    fun onUpNextCountdownFinished() = upNext.advanceUnattended()
+
+    /**
+     * The #14 offer-delete-after-playback dialog's state; `null` = hidden.
+     * Null controller (no delete seams) → a permanently-null flow.
+     */
+    val deleteOffer: StateFlow<PostPlaybackActionsController.DeleteOffer?> =
+        postPlayback?.deleteOffer ?: kotlinx.coroutines.flow.MutableStateFlow(null)
+
+    /**
+     * #14 "Keep" — dismiss the offer for good (the per-item latch holds) and
+     * release the end-of-media close hold (the #17 card gate decides whether
+     * the player closes).
+     */
+    fun keepPlayedItem() = postPlayback?.keepItem()
+
+    /** #14 "Delete" — server delete + cache invalidation, then close. */
+    fun deletePlayedItem() = postPlayback?.deleteOfferedItem()
 }
 
 /**
@@ -294,12 +350,15 @@ internal class ControlsSessionSlice(
 
 /**
  * Modal-sheet region: every session read the sheet router's branches make —
- * the subtitle hub (state + remote-subtitle workflow), the named style
- * presets, the audio/subtitle/version pickers, the queue sheet, the AV-sync
- * and decoder sheets, the SyncPlay and sleep-timer sheets, and the Rendering
- * sheet's session + global render facts.
+ * the subtitle hub (state + remote-subtitle workflow + language-pref filter),
+ * the named style presets, the audio/subtitle/version pickers, the queue
+ * sheet, the AV-sync and decoder sheets, the SyncPlay and sleep-timer sheets,
+ * the Rendering sheet's session + global render facts and its persisted
+ * render prefs, and the PlaybackMode sheet's engine-swap + local-control
+ * verdicts.
  */
 internal class SheetsSessionSlice(
+    scope: CoroutineScope,
     private val subtitles: SubtitleManager,
     private val subtitleStyleController: SubtitleStyleController,
     trackSelectionHelper: TrackSelectionHelper,
@@ -310,14 +369,72 @@ internal class SheetsSessionSlice(
     private val renderControls: RenderControls,
     sessionRender: SessionRenderState,
     private val playerSessionManager: PlayerSessionManager,
+    /**
+     * The cast controller — the local-control verdict's connectivity input
+     * only; the cast region's own reads and commands stay on
+     * [CastSessionSlice].
+     */
+    cast: PlayerCastController,
+    /** The playback session's UI-commands module (the render-prefs commands project below). */
+    private val uiCommands: PlayerUiCommands,
+    /** The subtitle-language preference store slice (the hub's display filter). */
+    subtitlePreferences: StateFlow<SubtitleSlice>,
+    /** The engines this platform can construct (the engine-swap verdict's universe). */
+    private val availablePlayerTypes: List<PlayerType>,
 ) {
     /** Reactive engine handle — the hub's custom-mpv-config ownership snapshot. */
     val engineFlow: StateFlow<MediaEngine?> = playerSessionManager.engineFlow
+
+    // ── Playback-mode verdicts (engine swap + local control) ─────────────
+
+    /**
+     * True while the session is NOT under local control: a cast receiver is
+     * connected, or a SyncPlay session is active. The PlaybackMode sheet's
+     * quality section disables under it (the delivery-side half of that
+     * gate — the VM-state terms, forced direct play and the downloaded
+     * badge, stay VM-side, folded at the sheet), and it is one arm of the
+     * engine-swap verdict below.
+     */
+    val localControlBlocked: StateFlow<Boolean> = combine(
+        cast.isConnectedFlow,
+        syncPlay.state.map { it.isInSyncPlaySession }.distinctUntilChanged(),
+    ) { castConnected, syncPlayActive -> castConnected || syncPlayActive }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /**
+     * The engine-swap verdict — the ONE fold of the PlaybackMode sheet's
+     * engine section: the platform's available engine types minus the
+     * currently-bound engine, EMPTY while [localControlBlocked] holds or no
+     * engine is bound. The sheet renders it and the ViewModel's
+     * SwitchPlayerEngine arm consumes it as a one-line membership check — a
+     * second site re-folding the policy (cast connectivity, SyncPlay,
+     * engine identity, availability) is the defect shape the slice exists
+     * to retire. The SyncPlay term reads the manager flag, not the uiState
+     * mirror: the Up Next module's display-on-mirror split is per-verdict,
+     * and this verdict is deliberately ONE source for both the sheet's
+     * display and the VM's advance guard.
+     */
+    val switchableEngines: StateFlow<List<PlayerType>> = combine(
+        playerSessionManager.engineFlow,
+        localControlBlocked,
+    ) { engine, blocked ->
+        when {
+            blocked || engine == null -> emptyList()
+            else -> availablePlayerTypes.filter { it.displayName != engine.displayName }
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     // ── Subtitle hub ──────────────────────────────────────────────────────
 
     /** The subtitle workflow's state slice (search/download/upload + hub flags). */
     val subtitleState: StateFlow<SubtitleState> = subtitles.state
+
+    /**
+     * The subtitle-language preference slice the hub's track list filters
+     * against (picker presentation only — automatic selection never
+     * consults it).
+     */
+    val subtitlePreferences: StateFlow<SubtitleSlice> = subtitlePreferences
 
     /** The hub's single open-load trigger (reset-first intent rides in from the entry click). */
     fun openSubtitleHub(resetFirst: Boolean) = subtitles.openSubtitleHub(resetFirst)
@@ -431,6 +548,23 @@ internal class SheetsSessionSlice(
 
     /** The HDR sheet's ExoPlayer tone-mapping pick (global pick — applies on next playback). */
     fun setExoHdrToneMapping(mode: ExoHdrToneMappingMode) = renderControls.setExoHdrToneMapping(mode)
+
+    /** The playback slice's HDR delivery posture — the HDR sheet's format picker starts from it (#5). */
+    val hdrFormatPreference: HdrFormatPreference get() = renderControls.hdrFormatPreference
+
+    /** The HDR sheet's HDR-format pick (persisted playback pref — the fanout's diff trigger re-applies it). */
+    fun setHdrFormatPreference(preference: HdrFormatPreference) = renderControls.setHdrFormatPreference(preference)
+
+    // ── Persisted render prefs (the Render sheet's store-writing picks) ──
+
+    /** The tone-mapping-curve pick — the prefs-write choreography stays in [PlayerUiCommands]. */
+    fun setMpvToneMappingCurve(curve: MpvToneMappingCurve) = uiCommands.setMpvToneMappingCurve(curve)
+
+    /** The deband-strength pick — same choreography as [setMpvToneMappingCurve]. */
+    fun setMpvDebandMode(mode: MpvDebandMode) = uiCommands.setMpvDebandMode(mode)
+
+    /** The motion-interpolation toggle — same choreography as [setMpvToneMappingCurve]. */
+    fun setMpvMotionInterpolation(enabled: Boolean) = uiCommands.setMpvMotionInterpolation(enabled)
 }
 
 /**
@@ -447,6 +581,7 @@ internal fun PlaybackSession.createSessionSlices(
     overlay = OverlaySessionSlice(
         upNext = upNext,
         stillWatching = stillWatching,
+        postPlayback = postPlaybackActions,
     ),
     status = StatusSessionSlice(
         abRepeat = abRepeat,
@@ -461,6 +596,7 @@ internal fun PlaybackSession.createSessionSlices(
         sessionRender = sessionRender,
     ),
     sheets = SheetsSessionSlice(
+        scope = scope,
         subtitles = subtitles,
         subtitleStyleController = subtitleStyleController,
         trackSelectionHelper = trackSelectionHelper,
@@ -471,5 +607,9 @@ internal fun PlaybackSession.createSessionSlices(
         renderControls = render,
         sessionRender = sessionRender,
         playerSessionManager = playerSessionManager,
+        cast = cast,
+        uiCommands = uiCommands,
+        subtitlePreferences = subtitlePreferences,
+        availablePlayerTypes = availablePlayerTypes,
     ),
 )

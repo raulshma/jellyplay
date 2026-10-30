@@ -61,6 +61,8 @@ data class PlaybackResolveRequest(
     val liveStreamOption: LiveStreamOption? = null,
     val staticFallbackLiveStreamId: String? = null,
     val forceLiveStreamFallback: Boolean = false,
+    /** Maximum video dimensions; ignored by forced direct playback and live TV. */
+    val maxVideoHeight: Int? = null,
 )
 
 /**

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
 import com.raulshma.jellyplay.core.model.UtcTimeResponse
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +34,9 @@ import kotlin.test.assertTrue
  */
 class TimeSyncProjectionTest {
 
-    private lateinit var apiClient: JellyfinApiClient
+    // The playback family seam (getServerTime lives there — the union this
+    // mock replaced was a pure delegation over the same family single).
+    private lateinit var apiClient: PlaybackApiClient
     private lateinit var manager: TimeSyncManager
     private val handler = SyncPlayEventHandler()
 

@@ -67,6 +67,11 @@ internal object SubtitleHubSheetModule : PlayerSheetModule {
         // branch — only this hub consumes them while the sheet is open.
         val trackState by sheets.trackState.collectAsStateWithLifecycle()
         val subtitleState by sheets.subtitleState.collectAsStateWithLifecycle()
+        // Display-filter prefs: the picker list may hide tracks outside the
+        // preferred languages (presentation only — auto-selection and the
+        // series-off label below always see the full list). The slice rides
+        // the sheets slice (the GLOSSARY "Session slice" seam).
+        val subtitlePrefs by sheets.subtitlePreferences.collectAsStateWithLifecycle()
         // named style presets: the hub's Style tab is the apply/save/
         // delete surface. Presets are pure data over the style-controller
         // slice behind the sheets slice; the list rides the slice.
@@ -81,7 +86,12 @@ internal object SubtitleHubSheetModule : PlayerSheetModule {
             initialTab = scope.inputs.subtitleHubInitialTab,
             onDismiss = scope.inputs.dismissSheet,
             tracks = SubtitleHubTracksTab(
-                subtitleTracks = trackState.subtitleTracks,
+                subtitleTracks = visibleSubtitleTracks(
+                    tracks = trackState.subtitleTracks,
+                    showOnlyPreferred = subtitlePrefs.showOnlyPreferredSubtitles,
+                    preferredLanguage = subtitlePrefs.preferredSubtitleLanguage,
+                    orderedLanguages = subtitlePrefs.languageRules.subtitleLanguages,
+                ),
                 onSelectSubtitleTrack = { scope.viewModel.onEvent(VideoPlayerUiEvent.SelectSubtitleTrack(it)) },
                 onResetSubtitleTrack = if (trackState.hasSubtitleOverride) {
                     { scope.viewModel.onEvent(VideoPlayerUiEvent.ResetSubtitleTrack) }

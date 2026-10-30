@@ -30,7 +30,7 @@ devices. This doc explains how that flow works **online**, what happens
         │ online + failure → enqueue     │ coalesce PROGRESS per item
         │ offline        → enqueue       │
         ▼                                ▼
- JellyfinApiClient            PlaybackSyncWorker  (drain + reconcile)
+ family ApiClients            PlaybackSyncWorker  (drain + reconcile)
                                        ▲
                                        │  enqueue on reconnect + periodic
                             PlaybackSyncReconnectListener
@@ -53,7 +53,7 @@ Each reporter (`PlaybackProgressReporter` for video,
 `AudioProgressReporter` for audio, `ExternalPlayerReports` for external
 players) calls
 the matching `PlaybackRepository` method, which delegates to
-`JellyfinApiClient`. The result is fire-and-forget from the reporter's
+the playback family client (`PlaybackApiClient`). The result is fire-and-forget from the reporter's
 perspective — the repository absorbs failures.
 
 ### Incognito mode
@@ -154,7 +154,7 @@ which maps the outcome to WorkManager retry/success:
    completed" bug), and `markPlayedItem` already records a full-runtime
    position, so the telemetry carries nothing the flip needs.
 3. **Drain** the outbox (oldest-first). For each entry, replay directly through
-   `JellyfinApiClient` (bypassing the repository — a retry must not recurse into
+   the family ApiClients (bypassing the repository — a retry must not recurse into
    the outbox). On success, `outbox.delete(id)`. On failure, leave it and mark
    the run as failed.
 4. **Push derived watched flips**: items with no undelivered `PLAYED`/`UNPLAYED`

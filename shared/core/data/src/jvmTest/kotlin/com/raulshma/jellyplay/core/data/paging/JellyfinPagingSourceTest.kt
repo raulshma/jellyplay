@@ -4,7 +4,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -32,17 +32,17 @@ import kotlinx.coroutines.test.runTest
  * error mapping) run over EVERY flavor's fetch seam; the per-flavor
  * pass-throughs (library parameters, favorites mediaTypes, search query plus
  * the blank-query guard) are pinned on top. Search builds its source through
- * the production [MediaRepository.searchPagingSource] extension, so the guard
+ * the production [LibraryFeed.searchPagingSource] extension, so the guard
  * is exercised exactly where it lives.
  */
 class JellyfinPagingSourceTest {
 
-    private val repository: MediaRepository = mockk()
+    private val repository: LibraryFeed = mockk()
 
     // The items-query family left the union (LibraryApiClient): the MEDIA
     // and FAVORITES flavors build over the seam mock — the same shape the
     // migrated production sites use — while SEARCH stays on the union
-    // (searchPagingSource remains MediaRepository's projection).
+    // (searchPagingSource remains the browse family's projection).
     private val libraryApiClient: LibraryApiClient = mockk()
 
     private enum class Flavor { MEDIA, FAVORITES, SEARCH }

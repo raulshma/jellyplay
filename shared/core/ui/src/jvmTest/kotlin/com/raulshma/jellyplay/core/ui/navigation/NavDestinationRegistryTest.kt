@@ -123,6 +123,100 @@ class NavDestinationRegistryTest {
     }
 
     @Test
+    fun primarySurfaces_pinPerSurfacePlacement() {
+        // The placement descriptor is what the TV drawer candidates, the
+        // desktop rail eligibility filter and the customization row fork
+        // derive from, so pin every row's effective set against today's
+        // behavior: bar tabs are primary everywhere; rail-only destinations
+        // default to the rail; Shortcuts is the one explicit deviation
+        // (TV-drawer primary, never a phone-bar tab).
+        val everywhere = setOf(
+            NavPrimarySurface.PhoneBar,
+            NavPrimarySurface.TvDrawer,
+            NavPrimarySurface.DesktopRail,
+        )
+        val railOnly = setOf(NavPrimarySurface.DesktopRail)
+        val expectedPlacements = mapOf(
+            Route.Home to everywhere,
+            Route.Library to everywhere,
+            Route.Search to everywhere,
+            Route.LiveTv to everywhere,
+            Route.MusicBrowse to everywhere,
+            Route.Shortcuts to setOf(NavPrimarySurface.TvDrawer, NavPrimarySurface.DesktopRail),
+            Route.Downloads to railOnly,
+            Route.Newsletter to railOnly,
+            Route.WatchProgressHeatmap to railOnly,
+            Route.SyncPlay to railOnly,
+            Route.Requests to railOnly,
+            Route.UpcomingCalendar to railOnly,
+            Route.ArrQueue to railOnly,
+            Route.Settings to railOnly,
+            Route.AdminDashboard to railOnly,
+        )
+        NAV_DESTINATIONS.forEach { row ->
+            assertEquals(
+                expectedPlacements[row.route],
+                row.primarySurfaces,
+                "${row.route::class.simpleName} carries unexpected primarySurfaces",
+            )
+        }
+        // Exactly one row deviates from the derived default — a second
+        // explicit placement must be a conscious registry decision.
+        assertEquals(
+            setOf(Route.Shortcuts),
+            NAV_DESTINATIONS.filter { it.topLevelGroups.isEmpty() && NavPrimarySurface.TvDrawer in it.primarySurfaces }
+                .map { it.route }.toSet(),
+            "only Shortcuts may be TV-drawer primary without being a bar tab",
+        )
+    }
+
+    @Test
+    fun hiddenOfflineFlags_pinTheOfflineHideSet() {
+        // The offline hide-set derives from these flags now (visibleTopLevelRoutes
+        // and the shortcut catalog both read them), so the flag set is pinned row
+        // by row: exactly LiveTv lacks an offline fallback — a second flag must
+        // be a conscious registry decision.
+        assertEquals(
+            listOf(Route.LiveTv),
+            NAV_DESTINATIONS.filter { it.hiddenOffline }.map { it.route },
+            "exactly LiveTv may be hiddenOffline — a second row needs an offline-fallback rationale",
+        )
+    }
+
+    @Test
+    fun railOrderPresenceEqualsDesktopRailPlacement() {
+        // The desktop rail derives its items from the rows' railOrder
+        // positions, so the presence of an order IS the rail membership: a
+        // DesktopRail-placed row without an order would silently drop off the
+        // rail, and an ordered row without the placement is dead order data.
+        // (The exact sequence is apps/desktop's DesktopRailRegistryContractTest
+        // pin — this module cannot see that derivation.)
+        val ordered = NAV_DESTINATIONS.filter { it.railOrder != null }.map { it.route }.toSet()
+        val railPlaced = NAV_DESTINATIONS
+            .filter { NavPrimarySurface.DesktopRail in it.primarySurfaces }
+            .map { it.route }.toSet()
+        assertEquals(
+            railPlaced,
+            ordered,
+            "railOrder presence must equal the DesktopRail placement set — " +
+                "a placed row without an order drops off the rail, an order without the placement is dead data",
+        )
+    }
+
+    @Test
+    fun railOrderPositionsAreDense() {
+        // Same density rule as topLevelGroups: the rail's derived order sorts
+        // these positions, so a gap or duplicate would silently re-order or
+        // collide on the rail.
+        val positions = NAV_DESTINATIONS.mapNotNull { it.railOrder }.sorted()
+        assertEquals(
+            List(positions.size) { it },
+            positions,
+            "railOrder positions must be dense 0..n-1 — a gap or duplicate breaks the derived rail order",
+        )
+    }
+
+    @Test
     fun everyLabelOverrideTargetsARegisteredRoute() {
         // (b): an override whose key has no registry row would be dead at
         // best and a silent re-label of a route the registry doesn't know at

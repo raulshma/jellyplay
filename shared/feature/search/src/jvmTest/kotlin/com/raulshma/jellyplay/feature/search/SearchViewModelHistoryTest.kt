@@ -2,10 +2,12 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import io.mockk.coEvery
@@ -54,7 +56,8 @@ class SearchViewModelHistoryTest {
     // viewModelScope work advances with advanceUntilIdle.
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val libraryFeed: LibraryFeed = mockk(relaxed = true)
+    private val userDataChanges: UserDataChanges = mockk(relaxed = true)
     private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
@@ -77,18 +80,20 @@ class SearchViewModelHistoryTest {
         )
         // Stub the init-time repository calls so relaxed-mock defaults don't
         // break the List casts in loadGenres()/loadTags()/loadSuggestions().
-        coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getSearchSuggestions(any()) } returns Result.success(
             com.raulshma.jellyplay.core.model.SearchResult(emptyList(), 0, 0)
         )
 
         viewModel = SearchViewModel(
-            mediaRepository,
+            libraryFeed,
+            userDataChanges,
             catalogueEnrichments,
             libraryApiClient,
             mockk(relaxed = true),
             imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository,
             seerrRequestDelegate,
             mediaSearchEngine,

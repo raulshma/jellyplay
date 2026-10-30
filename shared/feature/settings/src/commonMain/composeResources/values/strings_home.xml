@@ -39,6 +39,14 @@
     <string name="settings_show_hero_section">Show Hero Section</string>
     <string name="settings_show_hero_on">Featured content banner on home</string>
     <string name="settings_show_hero_off">Compact home layout</string>
+    <string name="settings_home_hero_style">Hero Style</string>
+    <string name="settings_home_hero_style_subtitle">How the home hero renders</string>
+    <string name="settings_home_hero_style_carousel">Carousel</string>
+    <string name="settings_home_hero_style_slideshow">Slideshow</string>
+    <string name="settings_home_hero_style_detailed">Detailed</string>
+    <string name="settings_home_hero_style_tv_slider">TV slider</string>
+    <string name="settings_home_hero_slideshow_interval">Hero Slideshow Interval</string>
+    <string name="settings_home_hero_slideshow_interval_subtitle">Seconds each slideshow hero stays on screen</string>
     <string name="settings_home_backdrop">Home Backdrop</string>
     <string name="settings_home_backdrop_on">Blur the hero artwork as an ambient background</string>
     <string name="settings_home_backdrop_off">Solid background colour</string>
@@ -219,6 +227,8 @@
     <string name="settings_home_layout_restore_title">Restore Layout from Server?</string>
     <string name="settings_home_layout_restore_message">The server copy (saved %1$s) has %2$s sections enabled. This device has %3$s sections enabled. Restoring replaces the layout on this device.</string>
     <string name="settings_home_layout_presets_server_note">The current layout also syncs to your Jellyfin server</string>
+    <string name="settings_home_header_shortcuts">Header Shortcuts</string>
+    <string name="settings_home_header_shortcuts_subtitle">Customize the shortcuts in the top header's dock</string>
     <string name="settings_home_trickplay_preview">Trickplay Preview</string>
     <string name="settings_home_trickplay_preview_subtitle">Android TV: show a preview frame on focused Continue Watching cards</string>
     <string name="settings_home_trickplay_preview_on">Preview frames shown on focus</string>

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.datastore.spec
 
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -48,15 +49,21 @@ object PreferenceSyncPolicy {
             WidgetDataStore.SyncExcludedKeys
 
     /**
-     * Install-global bookkeeping keys — one-time migration/baseline markers
-     * that persist under their RAW canonical names. Every OTHER spec row is
-     * written namespaced (`u_<userId>::`, covered by [EXCLUDED_PREFIXES]);
-     * these markers live outside any namespace, so without this face they
-     * would sync raw — and a synced marker claims, or rather SKIPS, another
-     * device's one-time fold (`home_ns_migrated=true` arriving on an
-     * updating device would fast-path its namespace migration past claiming
-     * that device's legacy keys; `home_v3_upgrade_baseline_done=true` would
-     * skip its v3 baseline and turn the new home sections on after all).
+     * Install-global / per-device bookkeeping keys — spec rows that persist
+     * under their RAW canonical names and describe state that must never roam:
+     * the home store's one-time migration/baseline markers, and the playback
+     * store's per-device UX latches (see
+     * [PlaybackPreferenceSpecs.perDeviceRowNames]).
+     *
+     * Every OTHER spec row's storage is user state the prefs adapter mirrors
+     * (per-user rows it carries ride the `u_<userId>::` namespacing grammar,
+     * covered by [EXCLUDED_PREFIXES]); these keys live outside any namespace,
+     * so without this face they would sync raw — and a synced marker claims,
+     * or rather SKIPS, another device's one-time fold
+     * (`home_ns_migrated=true` arriving on an updating device would fast-path
+     * its namespace migration past claiming that device's legacy keys;
+     * `home_v3_upgrade_baseline_done=true` would skip its v3 baseline), while
+     * a synced UX latch would silence another device's prompt.
      *
      * A separate face from [EXCLUDED_KEYS] on purpose: those are keys that
      * must never EXIST as spec rows (the generator hard-errors if one
@@ -64,10 +71,12 @@ object PreferenceSyncPolicy {
      * declared for factory-reset coverage and the derivation-integrity
      * reflection — so the sync registration excludes them alongside
      * [EXCLUDED_KEYS] while the catalog walk SKIPS them. Derived from the
-     * specs' own global-marker declarations so a future marker joins
+     * specs' own per-store declarations so a future row joins
      * automatically (pinned byte-for-byte in PreferenceSyncPolicyTest).
      */
-    val EXCLUDED_BOOKKEEPING_KEYS: Set<String> = HomeDiscoveryPreferenceSpecs.globalMarkerKeys
+    val EXCLUDED_BOOKKEEPING_KEYS: Set<String> =
+        HomeDiscoveryPreferenceSpecs.globalMarkerKeys +
+            PlaybackPreferenceSpecs.perDeviceRowNames
 
     /**
      * The key-level set the sync adapter's registration consumes:

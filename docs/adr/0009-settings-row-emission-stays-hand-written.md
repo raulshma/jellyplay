@@ -72,3 +72,32 @@ onto the row declaration.**
   slot registry for settings screens; the measured cost of the maximal
   version buys a shallow module. A future proposal must start from why
   the three dualities above are insufficient.
+
+## Amendment (2026-10-28) — the GROUP-grain slot registry is accepted
+
+Measuring the residual friction this ADR left in place showed that every
+screen stated its group
+order three to four times (twin section lists for the scroll resolver and
+the hidden hint, plus the emission sequence), whole-group `advancedOnly`
+gating was a two-place invariant kept in sync only by a source-scan guard
+test, and the engine-dependent hidden count was a frozen literal that
+silently lied (Playback's own comment admitted 19 to 38+ across the
+(isTv, engine) combos). These are GROUP-shape dualities, not
+row-emission dualities — the rejection above was scoped to a per-row
+registry, and this amendment does not reopen it.
+
+Accepted: `PreferenceScreenScaffold` carries
+`PreferenceScreenGroup(idSet, advancedOnly, emittedRows, content)` — one
+composable slot per GROUP, rendered by the shell's single group iterator.
+The shell derives scroll adjustment, whole-group advanced gating and the
+hidden-row count from that one declaration; per-ROW emission bodies stay
+hand-written inside the group slots, exactly as before. The
+`SettingsScreenSectionsGuardTest` source scan is deleted — its invariant
+is now structural (the shell cannot emit an advanced-only group without
+the flag, and cannot misstate a count without the `emittedRows` hook
+lying in the same file as the slot) — and
+`SettingsCatalogScreenContractTest` section 7 pins that slot
+declarations and group declarations agree, plus the playback honesty
+pin. The prohibition tightens rather than loosens: row-grain slot
+registries remain rejected, and a group slot must stay a group — no row
+ids in the registry.

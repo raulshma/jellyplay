@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -11,6 +10,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import com.raulshma.jellyplay.core.data.download.toSeriesPolicyChoice
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,11 +18,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
@@ -171,12 +168,18 @@ fun MediaDetailScreen(
     // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
     // scroll-derived state change funnelling through ArtworkThemeWrapper).
     // Books have no Backdrop image — the hero (and the cover-tinted theme)
-    // source the PRIMARY (cover) art instead.
-    val backdropUrl = remember(targetBackdropId, currentItem?.mediaType) {
-        if (currentItem?.mediaType == MediaType.BOOK) {
-            viewModel.getImageUrl(targetBackdropId)
-        } else {
-            viewModel.getBackdropUrl(targetBackdropId)
+    // source the PRIMARY (cover) art instead. Item-backed ids resolve through
+    // the tag-aware resolver (keyed on the ITEM, not its id, so a re-tagged
+    // artwork remints the URL); the parent-series leg (episodes render the
+    // SERIES backdrop) has no series backdrop tag on MediaImageTags, so it
+    // stays the raw untagged getter — same target id as before.
+    val backdropUrl = remember(currentItem) {
+        when {
+            currentItem == null -> viewModel.getBackdropUrl(targetBackdropId)
+            currentItem.mediaType == MediaType.BOOK -> viewModel.artwork.poster(currentItem)
+            currentItem.mediaType == MediaType.EPISODE ->
+                viewModel.getBackdropUrl(currentItem.seriesId ?: currentItem.id)
+            else -> viewModel.artwork.backdrop(currentItem)
         }
     }
 
@@ -248,8 +251,7 @@ fun MediaDetailScreen(
      * double-fire structurally impossible and leaves the machine's in-flight
      * guard arm unreachable here (dismiss/confirm are called with
      * `inFlight = false`). Settle arm: an explicit [PendingConfirmation.clear]
-     * at confirm — these dialogs previously never cleared (the pending item
-     * died with navigation).
+     * at confirm, so the pending item never outlives the dialog.
      */
     var pendingDelete by remember { mutableStateOf(PendingConfirmation<PendingDelete>()) }
     /** Pending delete of a downloaded episode from the seasons section. */
@@ -258,9 +260,9 @@ fun MediaDetailScreen(
     // Series/season mark-played cascades recurse into every episode and clear
     // all resume positions, so they're gated behind a confirm. ONE machine:
     // the shared [ConfirmState] holds the deferred call, and the ONE pending
-    // [MarkPlayedConfirmRequest] carries what the dialog must say (scope ×
-    // direction) — the former four hand-synced vars (series/season confirm ×
-    // their toWatched mirrors) folded into a single value.
+    // [MarkPlayedConfirmRequest] carries what the dialog must say (scope x
+    // direction) - one value covers series/season confirm and the watched
+    // mirror.
     val markPlayedConfirm = rememberConfirmState()
     var markPlayedRequest by remember { mutableStateOf<MarkPlayedConfirmRequest?>(null) }
 
@@ -452,12 +454,9 @@ fun MediaDetailScreen(
                     viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType, onDone)
                 }
             ) {
-                val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
-                val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
                 val rememberedGetChapterImageUrl = remember(viewModel) {
                     { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
                 }
-                val rememberedGetLogoUrl = remember(viewModel) { { id: String -> viewModel.getLogoUrl(id) } }
 
                 // Series id used by season-episode fetches. Keyed on BOTH the
                 // item id and the resolved series id so it recomputes once the
@@ -495,9 +494,15 @@ fun MediaDetailScreen(
                     ),
                 )
 
+                // Remembered with no keys: the lambda captures the delegated
+                // MutableState itself, so the assignment resolves at invocation
+                // and stays correct across recompositions. A fresh lambda per
+                // pass would re-key rememberVideoClickHandler — and every
+                // bundle downstream that captures its result — each time.
+                val onPlayYouTube = remember { { key: String -> activeTrailerKey = key } }
                 val onVideoClick = rememberVideoClickHandler(
                     uriHandler = uriHandler,
-                    onPlayYouTube = { key -> activeTrailerKey = key },
+                    onPlayYouTube = onPlayYouTube,
                 )
 
                 // ── Per-concern callback bundles. Each bundle is remembered on
@@ -506,27 +511,30 @@ fun MediaDetailScreen(
                 // constructor. Two bundles additionally key on plain local vals
                 // their lambdas capture (`detail`, `seriesIdForSeasons`): the
                 // former single remember was effectively refreshed every
-                // recomposition (its `onVideoClick` key is unstable), and these
-                // captures must not go stale now that the other bundles' keys
-                // are stable. Delegated reads (`uiState`, `var … by remember`)
-                // resolve at invocation time and need no keys. ──
-                val artworkCallbacks = remember(
-                    rememberedGetImageUrl,
-                    rememberedGetBackdropUrl,
-                    rememberedGetChapterImageUrl,
-                    rememberedGetLogoUrl,
-                ) {
+                // recomposition, and these captures must not go stale now that
+                // every bundle key (incl. `onVideoClick`, stable since
+                // `onPlayYouTube` was remembered) is stable. Delegated reads
+                // (`uiState`, `var … by remember`) resolve at invocation time
+                // and need no keys. ──
+                // The resolver itself is the stateless core:data single the VM
+                // holds — sections tag URLs off the MediaItems they already
+                // render; only the chapter getter (coordinates, no id) stays a
+                // lambda.
+                val artworkCallbacks = remember(viewModel, rememberedGetChapterImageUrl) {
                     ArtworkCallbacks(
-                        getImageUrl = rememberedGetImageUrl,
-                        getBackdropUrl = rememberedGetBackdropUrl,
+                        urls = viewModel.artwork,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
-                        getLogoUrl = rememberedGetLogoUrl,
+                        // The raw untagged backdrop getter — the parent-series
+                        // leg of the content tree's backdrop fold (an id with
+                        // no MediaItem in scope). The same read the screen's
+                        // own backdropUrl fold makes below.
+                        getBackdropUrl = viewModel::getBackdropUrl,
                     )
                 }
 
                 // The process-wide playback seams arrive as ONE constructor
-                // bundle ([MediaDetailPlaybackSeams]) — the former mid-body
-                // koinInject pulls, hoisted to the screen's signature.
+                // bundle ([MediaDetailPlaybackSeams]), hoisted to the screen's
+                // signature.
                 val playbackCallbacks = remember(viewModel, seams, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
@@ -548,7 +556,12 @@ fun MediaDetailScreen(
                                     remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
                                     audioStreamIndex = viewModel.selectedAudioIndex,
                                     trailers = uiState.trailers,
-                                    currentItemPosterUrl = viewModel.getImageUrl(itemId),
+                                    // The loaded detail item IS the route id; fall
+                                    // back to the raw getter for the pre-load window.
+                                    currentItemPosterUrl = uiState.detail?.item
+                                        ?.takeIf { it.id == itemId }
+                                        ?.let { viewModel.artwork.poster(it) }
+                                        ?: viewModel.getImageUrl(itemId),
                                     playTrailerBeforeMovie = seams.videoPlayerStore.videoPlayer.value.playTrailerBeforeMovie,
                                     isSyncPlayActive = seams.syncPlayManager.isInSyncPlaySession,
                                 ),
@@ -648,7 +661,7 @@ fun MediaDetailScreen(
                                             itemId = member.id,
                                             title = member.name,
                                             subtitle = member.seriesName ?: member.year?.toString(),
-                                            imageUrl = viewModel.getImageUrl(member.id),
+                                            imageUrl = viewModel.artwork.poster(member),
                                             runTimeTicks = member.runTimeTicks,
                                         ),
                                     )
@@ -855,6 +868,11 @@ fun MediaDetailScreen(
                             state = state,
                             callbacks = callbacks,
                             availableStorageProvider = availableStorageProvider,
+                            // The process-wide playback seams ride the screen's
+                            // one bundle down to the content tree (the queue
+                            // seeding + SyncPlay veto reads) — no mid-body
+                            // koinInject pulls below the screen signature.
+                            seams = seams,
                         )
                     }
                 }
@@ -944,6 +962,12 @@ fun MediaDetailScreen(
             // sheet cache, not the slim root projection; this subscription
             // lives only while the sheet is composed.
             val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+            // Seed the policy chips from the series' stored override (the
+            // open reset put them on Default; the stored value wins once the
+            // read lands).
+            LaunchedEffect(detailItem.id) {
+                dialogSession.seedSeriesDownloadPolicy(viewModel.downloads.seriesPolicy())
+            }
             TvSafeSheet(
                 onDismissRequest = { dialogSession.dismissSeriesDownloadSheet() },
                 sheetState = downloadSheetState,
@@ -957,10 +981,12 @@ fun MediaDetailScreen(
                         viewModel.downloads.loadDownloadSheetEpisodes(seasonId)
                     },
                     isDownloading = sheetDownloads.isDownloadingSeries,
-                    onDownload = { selectedEpisodes ->
+                    selectedPolicy = dialogSession.seriesDownloadPolicy,
+                    onPolicySelect = { dialogSession.selectSeriesDownloadPolicy(it) },
+                    onDownload = { selectedEpisodes, policy ->
                         val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
                         dialogSession.seriesDownloadConfirmed {
-                            viewModel.downloads.downloadSeries(nonEmpty)
+                            viewModel.downloads.downloadSeries(nonEmpty, policy.toSeriesPolicyChoice())
                         }
                     },
                     onDismiss = { dialogSession.dismissSeriesDownloadSheet() },
@@ -1135,33 +1161,10 @@ fun MediaDetailScreen(
         }
 
         activeTrailerKey?.let { key ->
-            Dialog(
-                onDismissRequest = { activeTrailerKey = null },
-                properties = DialogProperties(
-                    usePlatformDefaultWidth = false,
-                    dismissOnBackPress = true,
-                    dismissOnClickOutside = true,
-                ),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    InlineTrailerPlayerHost(
-                        videoKey = key,
-                        modifier = Modifier.fillMaxSize(),
-                        muted = false,
-                        showControls = true,
-                        autoplay = true,
-                        onEmbedFailed = {
-                            activeTrailerKey = null
-                            uriHandler.openUri("https://www.youtube.com/watch?v=$key")
-                        },
-                    )
-                }
-            }
+            InlineTrailerDialog(
+                videoKey = key,
+                onDismiss = { activeTrailerKey = null },
+            )
         }
 
         // Long-press / TV-Menu quick actions for row cards — the shared
@@ -1237,11 +1240,18 @@ fun MediaDetailScreen(
             // Sheet-scoped full-state collect (inventory fields aren't on
             // the slim root projection); lives only while the sheet is composed.
             val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+            // Episode/season sheets render the SERIES backdrop — MediaImageTags
+            // carries no series backdrop tag, so that leg stays the raw untagged
+            // getter; every item-backed id resolves through the tag-aware
+            // resolver (same target ids as before, + the item's own tag).
             val sheetBackdropUrl = uiState.assets.backdropPath
-                ?: viewModel.getBackdropUrl(detailsItem.seriesId ?: detailsItem.id)
+                // Smart-cast hoist: seriesId is a public API property of another
+                // module, so the null check can't smart-cast it inline.
+                ?: detailsItem.seriesId?.let { seriesId -> viewModel.getBackdropUrl(seriesId) }
+                ?: viewModel.artwork.backdrop(detailsItem)
 
             val sheetPosterUrl = uiState.assets.posterPath
-                ?: viewModel.getImageUrl(detailsItem.id)
+                ?: viewModel.artwork.poster(detailsItem)
 
             DownloadDetailsSheet(
                 download = uiState.detailContext?.download,

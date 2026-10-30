@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.navigation.playbackhost
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -42,7 +42,8 @@ import kotlinx.coroutines.withTimeout
  */
 class ExternalPlayerReports(
     private val playbackRepository: PlaybackRepository,
-    private val mediaRepository: MediaRepository,
+    /** The user-data write family seam. */
+    private val userDataWrites: UserDataWriteOperations,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val playbackStore: PlaybackStore,
 ) {
@@ -159,7 +160,7 @@ class ExternalPlayerReports(
                     // report completion without a position (MPV/mpvKt). The
                     // stop report still ends the playback session.
                     if (outcome is ExternalPlaybackOutcome.Completed) {
-                        mediaRepository.markPlayed(playerLaunch.itemId)
+                        userDataWrites.markPlayed(playerLaunch.itemId)
                     }
                     playbackRepository.reportPlaybackStopped(
                         itemId = playerLaunch.itemId,

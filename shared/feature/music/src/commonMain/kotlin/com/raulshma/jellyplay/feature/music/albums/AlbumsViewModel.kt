@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.music.albums
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -19,12 +20,14 @@ import kotlinx.coroutines.flow.StateFlow
  * type would leak sort state across the three routes.
  */
 class AlbumsViewModel(
-    mediaRepository: MediaRepository,
+    libraryFeed: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the albums grid renders through. */
+    val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     /** Sorted paged albums — sort state, pager and declared sort set live in the collection. */
-    private val collection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.ALBUMS)
+    private val collection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.ALBUMS)
 
     val selectedSort: StateFlow<MusicSortOption> = collection.selectedSort
 

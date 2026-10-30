@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.ui.components.UndoableAction
@@ -27,7 +28,10 @@ private data class PlaylistContent(
 )
 
 class PlaylistDetailViewModel(
-    private val mediaRepository: MediaRepository,
+    /** The playlist's detail read (the name hint's fallback fetch). */
+    private val detailFeed: DetailFeed,
+    /** The server user-data change feed (the deferred reload arming). */
+    private val userDataChanges: UserDataChanges,
     private val playlistRepository: PlaylistRepository,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
@@ -42,7 +46,7 @@ class PlaylistDetailViewModel(
      * [DeferredFetchCoordinator], same chassis as the album host.
      */
     private val fetchCoordinator = DeferredFetchCoordinator<String, PlaylistContent>(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
         fetch = ::fetchPlaylistData,
     )
@@ -157,7 +161,7 @@ class PlaylistDetailViewModel(
         return coroutineScope {
             val itemsDeferred = async { playlistRepository.getPlaylistItems(playlistId, limit = 200) }
             val nameDeferred =
-                if (hint == null) async { mediaRepository.getMediaDetail(playlistId, force = force) } else null
+                if (hint == null) async { detailFeed.getMediaDetail(playlistId, force = force) } else null
             val itemsResult = itemsDeferred.await()
             val nameResult = nameDeferred?.await()
 
@@ -234,7 +238,7 @@ class PlaylistDetailViewModel(
     /**
      * Reorders the playlist: moves [item] from its current position to
      * [newIndex]. Applies the swap optimistically so the list reacts instantly,
-     * then persists it via [MediaRepository.movePlaylistItem]. On failure the
+     * then persists it via [PlaylistRepository.movePlaylistItem]. On failure the
      * list is reloaded from the server so it reflects the true order.
      */
     fun moveItem(item: PlaylistItem, newIndex: Int) {

@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">Sincronizza la frequenza di aggiornamento del display con i fotogrammi video (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Qualità streaming</string>
     <string name="ss_streaming_quality_subtitle">Imposta la qualità video predefinita per lo streaming: 1080p, 4K, SD, Auto</string>
+    <string name="ss_playback_mode_title">Modalità di riproduzione</string>
+    <string name="ss_playback_mode_subtitle">Automatico, forzza riproduzione diretta o forzza la transcodifica — il metodo di consegna degli stream</string>
     <string name="ss_audio_delay_title">Ritardo sincronia audio</string>
     <string name="ss_audio_delay_subtitle">Regola l'offset di latenza di sincronia audio (ms)</string>
     <string name="ss_live_stream_option_title">Stream TV in diretta</string>
@@ -198,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Mostra il tempo rimanente invece di quello trascorso</string>
     <string name="ss_pause_on_focus_loss_title">Sospendi in caso di perdita di focus</string>
     <string name="ss_pause_on_focus_loss_subtitle">Sospendi la riproduzione quando il sistema segnala la perdita di focus audio</string>
-    <string name="ss_resume_headset_plug_subtitle">Riprende la riproduzione quando le cuffie vengono ricollegate dopo la pausa automatica</string>
+    <string name="ss_resume_headset_plug_subtitle">Riprende la riproduzione quando le cuffie si riconnettono dopo la pausa automatica (cablate o Bluetooth)</string>
     <string name="ss_mpv_video_output_title">Output video MPV</string>
     <string name="ss_mpv_video_output_subtitle">Driver di output video MPV</string>
     <string name="ss_mpv_scaler_title">Scaler MPV</string>
@@ -343,6 +345,8 @@
     <string name="ss_subtitle_font_size_subtitle">Dimensione dei testi dei sottotitoli durante la riproduzione video</string>
     <string name="ss_subtitle_forced_only_title">Solo sottotitoli forzati</string>
     <string name="ss_subtitle_forced_only_subtitle">Mostra i sottotitoli solo quando sono presenti tracce forzate</string>
+    <string name="ss_show_only_preferred_subtitles_title">Solo sottotitoli preferiti</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Mostra solo le tracce sottotitoli nelle lingue preferite</string>
     <string name="ss_pgs_direct_play_title">Riproduzione diretta PGS</string>
     <string name="ss_pgs_direct_play_subtitle">Renderizza i sottotitoli PGS nativamente invece di incorporarli</string>
     <string name="ss_hdr_subtitle_style_title">Stile sottotitoli HDR</string>
@@ -537,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando da eseguire al termine della riproduzione</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando da eseguire quando l'app diventa inattiva</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando da eseguire quando l'app esce dall'inattività</string>
+
+    <string name="ss_auto_download_mode_title">Scarica automaticamente i nuovi episodi</string>
+    <string name="ss_auto_download_mode_subtitle">Scarica immediatamente, chiedi prima di scaricare o non scaricare mai i nuovi episodi delle serie scaricate</string>
+    <string name="ss_auto_download_check_now_subtitle">Esegui subito un passaggio di download automatico</string>
 </resources>

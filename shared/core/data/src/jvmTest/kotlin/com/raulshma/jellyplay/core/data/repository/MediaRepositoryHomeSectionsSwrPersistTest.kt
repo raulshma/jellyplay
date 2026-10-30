@@ -13,17 +13,12 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.UserDataChange
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
-import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
-import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,10 +44,12 @@ import kotlin.test.assertTrue
  *     [HomeSectionsSnapshotStore.clearIdentity] (privacy: the just-logged-out
  *     user's home payload must not cold-open for the next user), while a
  *     first sign-in clears nothing;
- *  3. [MediaRepositoryImpl.notifyUserDataChanged] — the synthetic push the
+ *  3. [UserDataAnnouncerImpl.notifyUserDataChanged] — the synthetic push the
  *     offline outbox drain uses to refresh open screens without a WS echo:
  *     distinct item ids under the current identity, and a silent no-op for
- *     an empty list or a missing identity.
+ *     an empty list or a missing identity. (The announce rides the
+ *     [UserDataAnnouncerImpl] leaf directly — the funnel the former union
+ *     member provided retired with the union.)
  *
  * The DAO mock is backed by an in-memory map so the persist path observes
  * the rows it itself persisted (a plain relaxed mock would answer `get` with
@@ -60,11 +57,13 @@ import kotlin.test.assertTrue
  */
 class MediaRepositoryHomeSectionsSwrPersistTest {
 
-    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
-    private var built: MediaRepositoryImpl? = null
+    /** The announcer leaf the build wires (tests announce through it directly). */
+    private lateinit var announcer: UserDataAnnouncerImpl
 
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    // The library family seam (the home fetch surface the suite stubs); the
+    // remaining ctor seams take the harness's inert defaults.
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
 
     /** In-memory stand-in for the Room table, keyed like the DAO's PK. */
     private val storedRows = mutableMapOf<Triple<String, String, String>, HomeSectionCacheEntity>()
@@ -90,55 +89,21 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
     private fun buildRepository(realtimeChannel: UserDataRealtimeChannel = mockk {
         every { changes } returns emptyFlow()
     }): MediaRepositoryImpl {
-        every { apiClient.session } returns sessionFlow
-        val playedStateSync: PlayedStateSync = mockk(relaxed = true)
-        val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        val homeSession = HomeSession(
-            apiClient,
-            // Unconfined (not Dispatchers.Default): the session assignment then
-            // drives HomeSession's classifier AND the registry's reactions
-            // synchronously on the setter's stack, so signIn/switch* need no
-            // settle delay — the observers cannot lag the assertion.
-            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-        )
-        val sessionCacheRegistry = SessionCacheRegistry(
-            homeSession,
-            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-        )
-        val episodeCatalogue = EpisodeCatalogueImpl(
-            apiClient,
-            offlineRepository,
-            homeSession,
-            sessionCacheRegistry,
-        )
-        // The repo delegates the persisted half of
-        // the home pipeline to this store (the same single the Koin graph
-        // wires); the suite's pins stay end-to-end through the real store.
-        val homeSnapshotStore = HomeSectionsSnapshotStore(
-            homeSectionCacheDao,
-            homeSession,
-            fakeTimeSource,
-        )
-        return MediaRepositoryImpl(
-            // One union mock covers both family seams (the JellyfinApiClient
-            // mock implements each of them).
+        val stack = mediaRepoStackFor(
             libraryApiClient = apiClient,
-            collectionApiClient = apiClient,
-            // The home cache-maintenance port (inert here — this suite pins
-            // the persisted SWR half through the real store).
-            homeSectionsCachePort = mockk(relaxed = true),
-            homeSnapshotStore = homeSnapshotStore,
-            playedStateSync = playedStateSync,
-            episodeCatalogue = episodeCatalogue,
-            userDataRealtimeChannel = realtimeChannel,
+            sessionFlow = sessionFlow,
+            // Unconfined (not the harness's Default): the session assignment
+            // then drives HomeSession's classifier AND the registry's
+            // reactions synchronously on the setter's stack, so
+            // signIn/switch* need no settle delay — the observers cannot lag
+            // the assertion.
+            scopeDispatcher = Dispatchers.Unconfined,
             timeSource = fakeTimeSource,
-            homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built },
-            sessionCacheRegistry = sessionCacheRegistry,
-            // Facade split: the detail cluster now lives on the shared
-            // internals holder (construction-only ctor re-point).
-            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
-        ).also { built = it }
+            homeSectionCacheDao = homeSectionCacheDao,
+            userDataRealtimeChannel = realtimeChannel,
+        )
+        announcer = stack.announcer
+        return stack.repository
     }
 
     private fun homeResult() = Result.success(
@@ -276,7 +241,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         }
         delay(150)
 
-        repository.notifyUserDataChanged(listOf("item-1", "item-1", "item-2"))
+        announcer.notifyUserDataChanged(listOf("item-1", "item-1", "item-2"))
         delay(150) // let the shared-flow emission reach the collector
 
         assertEquals(listOf(UserDataChange(userId = "user-A", itemIds = listOf("item-1", "item-2"))), received)
@@ -293,7 +258,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         }
         delay(150) // subscription must land first or the test proves nothing
 
-        repository.notifyUserDataChanged(emptyList())
+        announcer.notifyUserDataChanged(emptyList())
         delay(150)
 
         assertTrue(received.isEmpty())
@@ -311,7 +276,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         }
         delay(150) // subscription must land first or the test proves nothing
 
-        repository.notifyUserDataChanged(listOf("item-1"))
+        announcer.notifyUserDataChanged(listOf("item-1"))
         delay(150)
 
         assertTrue(received.isEmpty())

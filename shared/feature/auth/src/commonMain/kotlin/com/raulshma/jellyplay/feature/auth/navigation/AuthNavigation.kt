@@ -13,6 +13,9 @@ import com.raulshma.jellyplay.feature.auth.UserSelectionScreen
 fun EntryProviderScope<NavKey>.authSection(
     navigator: Navigator,
     onAuthenticated: () -> Unit,
+    /** Hosts the restore-from-backup wizard (Route.RestoreWizard); null keeps
+     *  the ServerList affordances hidden — only the signed-out host passes it. */
+    onRestoreBackup: (() -> Unit)? = null,
 ) {
     entry<Route.ServerList> {
         ServerListScreen(
@@ -26,6 +29,7 @@ fun EntryProviderScope<NavKey>.authSection(
                     )
                 )
             },
+            onRestoreBackup = onRestoreBackup,
         )
     }
     entry<Route.AddServer> {

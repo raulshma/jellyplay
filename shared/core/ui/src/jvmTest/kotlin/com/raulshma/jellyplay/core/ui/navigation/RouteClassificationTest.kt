@@ -23,8 +23,8 @@ import kotlin.test.assertTrue
  *    Detail > top-level tab > Default, with null -> DEFAULT;
  *  - [withHighlightSettingId] rewrites only [HighlightableRoute]s and returns
  *    the SAME instance for everything else;
- *  - the top-level tab maps and [SHORTCUTS_NAV_KEY] stay consistent with the
- *    route hierarchy; and
+ *  - the top-level tab maps and the persisted nav keys stay consistent with
+ *    the route hierarchy; and
  *  - a representative route survives a kotlinx-serialization round-trip (the
  *    back-stack restore contract).
  */
@@ -278,8 +278,8 @@ class RouteClassificationTest {
 
     @Test
     fun shortcutsNavKey_matchesRouteSimpleName() {
-        assertEquals("Shortcuts", SHORTCUTS_NAV_KEY)
-        assertEquals(Route.Shortcuts::class.simpleName, SHORTCUTS_NAV_KEY)
+        assertEquals("Shortcuts", Route.Shortcuts.navKey)
+        assertEquals(Route.Shortcuts::class.simpleName, Route.Shortcuts.navKey)
     }
 
     // ── Serialization restore contract ───────────────────────────────────

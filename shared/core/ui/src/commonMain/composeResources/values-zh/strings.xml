@@ -406,4 +406,10 @@
          (ADR 0010 wave), translated together with the default file. -->
     <string name="core_action_hide_from_continue_watching">从“继续观看”中移除</string>
     <string name="core_action_show_from_continue_watching">在“继续观看”中显示</string>
+
+    <string name="download_sheet_new_episodes">新剧集：</string>
+    <string name="download_sheet_policy_default">默认</string>
+    <string name="download_sheet_policy_instant">立即</string>
+    <string name="download_sheet_policy_ask">询问</string>
+    <string name="download_sheet_policy_never">从不</string>
 </resources>

@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">Pausar la reproducción cuando el sistema informa de pérdida de foco</string>
     <string name="settings_pause_on_focus_loss_off">Continuar la reproducción al perder el foco</string>
     <string name="settings_resume_headset_plug">Reanudar al reconectar los auriculares</string>
-    <string name="settings_resume_headset_plug_subtitle">Reanudar la reproducción al volver a conectar los auriculares tras la pausa automática</string>
+    <string name="settings_resume_headset_plug_subtitle">Reanudar la reproducción cuando los auriculares se reconecten tras la pausa automática (con cable o Bluetooth)</string>
     <string name="settings_decoder_summary">Descodificador: %1$s</string>
     <string name="settings_decoder">Descodificador</string>
     <string name="settings_refresh_rate_match">Coincidencia de tasa de refresco</string>
@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">Restaurar todos los ajustes de ExoPlayer</string>
     <string name="settings_media_segments">Segmentos de medios</string>
     <string name="settings_media_segments_summary">%1$d auto-saltar, %2$d mostrar botón</string>
-    <string name="settings_skip_segments_on_seek">Omitir segmentos al buscar</string>
+        <string name="settings_skip_prompt_duration">Duración del botón de salto</string>
+    <string name="settings_skip_prompt_duration_subtitle">Cuánto tiempo permanece en pantalla el botón de saltar intro/segmento</string>
+<string name="settings_skip_segments_on_seek">Omitir segmentos al buscar</string>
     <string name="settings_skip_segments_on_seek_on">Las búsquedas hacia adelante saltan los segmentos con auto-omisión</string>
     <string name="settings_segment_skip_delay">Retardo de salto automático</string>
     <string name="settings_segment_skip_delay_off">No</string>

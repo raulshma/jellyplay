@@ -42,13 +42,19 @@ data class StorageSizeEstimate(
 )
 
 /**
- * Platform seam for the auto-download work-manager sync
- * (`AutoDownloadScheduler.sync()`: Android WorkManager enqueue/cancel;
- * non-suspend, fire-and-forget). Desktop has no scheduler — the desktop module
- * registers a no-op at the Koin edge.
+ * Platform seam over the auto-download scheduler family (core:data's
+ * `AutoDownloadScheduler` interface; non-suspend, fire-and-forget):
+ * [sync] reconciles the periodic schedule with the preference (Android
+ * WorkManager enqueue/cancel; the desktop loop poke), [checkNow] is the
+ * storage screen's "Check for new episodes now" action — an immediate
+ * off-cycle discovery pass (Android's KEEP one-shot; the desktop in-process
+ * pass beside the loop). Both platform bindings delegate to the bound
+ * scheduler interface and state both members explicitly — no default checkNow
+ * that would silently degrade the manual action back into the schedule poke.
  */
-fun interface AutoDownloadSync {
+interface AutoDownloadSync {
     fun sync()
+    fun checkNow()
 }
 
 /** What one keep-days retention pass reclaimed — the "Clean up now" summary. */
@@ -62,9 +68,9 @@ data class AutoDownloadCleanupSummary(
  * the auto-download keep-days retention sweep
  * (`DownloadRepository.sweepExpiredAutoDownloads` — watched completed downloads
  * older than the keep-days window; unwatched ones are never deleted). Bound at
- * the Koin edge like [AutoDownloadSync]: the Android app module wraps the
- * repository single; the desktop platform module resolves it directly
- * (feature/settings cannot see core:data's repository types from its common
+ * the Koin edge like [AutoDownloadSync]: both platform modules wrap the
+ * repository single (feature/settings cannot see core:data's repository types
+ * from its common
  * source set — the same visibility split [StorageAreas] documents).
  */
 fun interface AutoDownloadCleanup {

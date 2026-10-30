@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -54,12 +54,20 @@ data class NextUpExcludedUiState(
 class NextUpExcludedViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: MediaRepository,
-    private val imageUrlProvider: ImageUrlProvider,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
+    private val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
-    /** The row poster's URL (primary image at the provider's default width). */
-    fun posterUrl(itemId: String): String = imageUrlProvider.getImageUrl(itemId)
+    /**
+     * The row poster's URL. Once the series' metadata has hydrated, the URL is
+     * resolved from the [MediaItem] in hand so it carries the item's image tag
+     * (the etag cache-buster — re-uploaded artwork gets a fresh cache key);
+     * before hydration succeeds the raw id-level URL is returned untagged (the
+     * row renders its placeholder anyway).
+     */
+    fun posterUrl(itemId: String): String =
+        artworkUrls.posterFor(resolvedItems[itemId], itemId)
 
     private val _state = MutableStateFlow(NextUpExcludedUiState())
     val state: StateFlow<NextUpExcludedUiState> = _state.asStateFlow()
@@ -88,7 +96,7 @@ class NextUpExcludedViewModel(
         scope = scope,
         concurrency = 1,
         retry = IdEnricher.Retry.NEVER,
-        fetch = { id -> mediaRepository.getMediaDetail(id).getOrNull()?.item },
+        fetch = { id -> detailFeed.getMediaDetail(id, force = false).getOrNull()?.item },
         merge = { id, item ->
             resolvedItems[id] = item
             publish(publishedIds, loading = false)

@@ -96,9 +96,12 @@ internal fun DetailBodyLandscape(
             ) {
                 FadingItem {
                     // Prefer the on-disk poster (DetailAssets.posterPath) for a
-                    // LOCAL origin before the server getImageUrl fallback.
+                    // LOCAL origin before the server fallback; the loaded item's
+                    // id IS state.itemId, so the resolver tags the URL with the
+                    // item's own Primary tag.
                     val posterImageUrl = state.core.assets.posterPath
-                        ?: callbacks.artwork.getImageUrl(state.itemId)
+                        ?: item?.let { callbacks.artwork.urls.poster(it) }
+                        ?: ""
                     DetailPoster(
                         itemId = state.itemId,
                         primaryBlurHash = item?.blurHashes?.primary,
@@ -218,9 +221,12 @@ internal fun DetailBodyPortrait(
                             // tapped (PosterCard) decoded this same poster URL
                             // at 360×540 — pass that request's memory-cache key
                             // so Coil paints the tile's cached bitmap as the
-                            // placeholder while this larger decode runs.
+                            // placeholder while this larger decode runs. The
+                            // loaded item's id IS state.itemId, so the resolver
+                            // tags the URL with the item's own Primary tag.
                             val posterUrl = state.core.assets.posterPath
-                                ?: callbacks.artwork.getImageUrl(state.itemId)
+                                ?: item?.let { callbacks.artwork.urls.poster(it) }
+                                ?: ""
                             MediaImage(
                                 // Prefer the on-disk poster (DetailAssets.posterPath)
                                 // for a LOCAL origin before the server fallback.

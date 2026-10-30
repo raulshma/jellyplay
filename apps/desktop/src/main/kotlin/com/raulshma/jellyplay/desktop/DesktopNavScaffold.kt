@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -52,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.components.PullToRefreshRegistry
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.ShortcutAction
 import com.raulshma.jellyplay.core.ui.navigation.navKey
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
 import com.raulshma.jellyplay.core.ui.navigation.visibleTopLevelRoutes
@@ -60,19 +62,18 @@ import com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport
 import com.raulshma.jellyplay.feature.player.video.DesktopPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorePromptApplier
+import com.raulshma.jellyplay.feature.player.video.session.toPlayerRoute
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
+import com.raulshma.jellyplay.feature.shell.navigation.ShellCompositionArms
 import com.raulshma.jellyplay.feature.shell.navigation.shellEntryProvider
-import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAdminGate
-import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
-import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
+import com.raulshma.jellyplay.feature.shell.navigation.rememberShellComposition
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * The nav scaffold: rail on the left, NavDisplay on the right, snackbar for
@@ -310,67 +311,77 @@ internal fun DesktopNavScaffold(
     // sets this flow.
     val pendingSearchQuery = remember { MutableStateFlow<String?>(null) }
 
-    // Shell-supplied surface behind the shared section graph (ShellHostHooks),
-    // built through the shared rememberShellHost factory — the ONE
-    // construction site for the hooks (Android's MainContent feeds the same
-    // five group bundles; the bundle-by-bundle wiring lives there). Every
-    // factory parameter is a remember key, so each bundle below may be built
-    // fresh per recomposition (the groups are data classes and compare
-    // structurally) as long as its members are remembered/stable (the
-    // discipline the factory's KDoc states): the audio bundle comes from the
-    // shared rememberShellAudioClicks over the desktop audio core —
-    // DesktopAudioQueueManager, which IS the shared NowPlayingSurface
-    // (click-time reads, never collected values) — and the session
-    // bundles wrap the shared ShellSessionController the holder constructed —
-    // the same values, same lazy reads the old inline entryProvider captured.
-    // The graph below rebuilds only when these identities change (the
-    // guarded navigator, homeMode, a DesktopShellServices rebuild re-issuing
-    // them).
-    val audioClicks = rememberShellAudioClicks(guardedNavigator, audioQueueManager)
-    val onCheckForUpdates: () -> Unit = remember(services) {
-        services.updateCheckController::checkForUpdate
-    }
-    // The admin reads are the shared rememberShellAdminGate outputs — LAZY on
-    // purpose ("Lazy reads — admin refreshes don't rebuild the graph"): the
-    // read lambdas capture the collected State (the gate remembers on them),
-    // so admin refreshes re-compose entries without rebuilding the hooks or
-    // the section graph.
+    // Shell-supplied arms behind the shared section graph (ShellHostHooks),
+    // built through the shared rememberShellComposition — the ONE
+    // construction site for the audio clicks, the admin gate's lazy reads,
+    // the ShortcutActionSurface and the five hook bundles (Android's
+    // MainContent feeds the same arms through its ShellHostArms holder; the
+    // construction lives in shared/feature/shell beside the rememberShellHost
+    // factory). The arms are remembered on their captures (the
+    // ShellCompositionArms stability contract — a fresh lambda per
+    // recomposition would rebuild the hooks and the section graph behind
+    // them), so the graph below rebuilds only when these identities change
+    // (the guarded navigator, homeMode, a DesktopShellServices rebuild
+    // re-issuing them):
+    //  - the audio bundle comes from the shared composition over the desktop
+    //    audio core — DesktopAudioQueueManager, which IS the shared
+    //    NowPlayingSurface (click-time reads, never collected values);
+    //  - the admin reads are the shared rememberShellAdminGate outputs — LAZY
+    //    on purpose ("Lazy reads — admin refreshes don't rebuild the graph"):
+    //    the read lambdas capture the collected State (the gate remembers on
+    //    them), so admin refreshes re-compose entries without rebuilding the
+    //    hooks or the section graph;
+    //  - the shortcut-action surface's REAL desktop arms —
+    //    SURPRISE_ME: the shell-owned buffered channel below, fed into
+    //    ShellHomeHooks.surpriseRequests (the same shape Android's
+    //    MainViewModel flow has; the home hero collects it — the surface's
+    //    focusHome-before-arm invariant keeps Home composed when the signal
+    //    lands);
+    //    TOGGLE_OFFLINE: the platform OfflineModeManager's manual toggle
+    //    (its documented only path to OFFLINE_MANUAL on desktop);
+    //    PLAY_ON: NOT armed — this shell has no cast strategy
+    //    (HomePlayOnRedirect stays null), so the action is unsupported: the
+    //    customize editor never offers it, and a stored definition that
+    //    predates the capability surfaces a snackbar instead of silently
+    //    doing nothing (the dead-end-guard philosophy).
     val isAdminState = sessionController.isAdmin.collectAsState()
     val isRefreshingAdminState = sessionController.isRefreshingAdmin.collectAsState()
-    val adminGate = rememberShellAdminGate(isAdminState, isRefreshingAdminState)
-    val onHomeModeChange = remember(sessionController) { sessionController::setHomeMode }
-    val onLogout: (Boolean) -> Unit = remember(sessionController) { sessionController::logout }
-    val onRefreshAdmin: () -> Unit = remember(sessionController) {
-        sessionController::refreshAdminStatusNow
-    }
-    val onConsumeSearchQuery: () -> Unit = remember(pendingSearchQuery) {
-        { pendingSearchQuery.value = null }
-    }
-    val shellHost = rememberShellHost(
+    val shortcutActionScope = rememberCoroutineScope()
+    val surpriseRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val shellHost = rememberShellComposition(
         navigator = guardedNavigator,
-        home = ShellHomeHooks(
-            homeMode = homeMode,
-            onHomeModeChange = onHomeModeChange,
-            // Android-only slots: no cast strategy and no shortcut-armed
-            // "Surprise Me" flow on desktop; emptyFlow() is an
-            // identity-stable singleton so the factory's remember keys
-            // never churn.
+        arms = ShellCompositionArms(
+            audioSurface = audioQueueManager,
+            surpriseRequests = surpriseRequests,
+            armSurprise = remember(surpriseRequests) { { surpriseRequests.tryEmit(Unit) } },
+            // Android-only slots: no cast strategy on desktop — the Play On
+            // redirect stays null and the PLAY_ON arm is unarmed (the
+            // shortcut-action surface owns the Play On capability verdict now).
             playOnRedirect = null,
-            surpriseRequests = emptyFlow(),
-        ),
-        audio = audioClicks,
-        settings = ShellSettingsHooks(
-            onLogout = onLogout,
-            onCheckForUpdates = onCheckForUpdates,
-        ),
-        admin = ShellAdminHooks(
-            isAdmin = adminGate.isAdmin,
-            isRefreshingAdmin = adminGate.isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ),
-        search = ShellSearchHooks(
+            requestPlayOn = null,
+            toggleOffline = remember(services) { services.offlineModeManager::toggleManualOffline },
+            onUnsupportedShortcutAction = remember(shortcutActionScope, snackbarHostState) {
+                { action: ShortcutAction ->
+                    shortcutActionScope.launch {
+                        snackbarHostState.showSnackbar(desktopUnsupportedShortcutActionMessage(action))
+                    }
+                }
+            },
+            homeMode = homeMode,
+            onHomeModeChange = remember(sessionController) { sessionController::setHomeMode },
+            isAdminState = isAdminState,
+            isRefreshingAdminState = isRefreshingAdminState,
+            onRefreshAdmin = remember(sessionController) {
+                sessionController::refreshAdminStatusNow
+            },
+            onLogout = remember(sessionController) { sessionController::logout },
+            onCheckForUpdates = remember(services) {
+                services.updateCheckController::checkForUpdate
+            },
             pendingSearchQuery = pendingSearchQuery,
-            onConsumeSearchQuery = onConsumeSearchQuery,
+            onConsumeSearchQuery = remember(pendingSearchQuery) {
+                { pendingSearchQuery.value = null }
+            },
         ),
     )
 
@@ -594,6 +605,30 @@ internal fun DesktopNavScaffold(
             }
         }
     }
+
+    // ── cold-start session restoration ("resume last watched?") ─────
+    // ONE evaluation per process (the controller's latch), applied by the
+    // shared applier — the prompt lives HERE, over everything the scaffold
+    // renders (a window dialog — tree placement carries no visual weight;
+    // rendered last like the AppRoot About dialog), not in the player screen.
+    // Launch fact: an argv link at boot is an explicit launch destination
+    // that must never be hijacked by the prompt; a plain launch is ColdStart.
+    // Two deliberate skips ride the gate, in the effect's original order:
+    // (1) no video surface story — an AutoRestore would push an unregistered
+    // Route.VideoPlayer into the dead-end guard; (2) a not-yet-onboarded
+    // session — the first-run wizard push above owns that boot. Either skip
+    // is total for the session (the effect runs once per process — the
+    // latch).
+    SessionRestorePromptApplier(
+        controller = services.sessionRestoration,
+        launchedWithExplicitDestination = linkOpens?.launchCarriedLink == true,
+        navigate = { snapshot -> guardedNavigator.navigate(snapshot.toPlayerRoute()) },
+        gate = {
+            (DesktopVideoSurfaceBridge.isWindowsVideoSurfaceSupported ||
+                DesktopVideoSurfaceBridge.isSoftwareVideoSurfaceSupported) &&
+                services.appRuntimeStateStore.isOnboardingCompleted()
+        },
+    )
 }
 
 @Composable
@@ -610,4 +645,17 @@ private fun DesktopRailItem(
         icon = { Icon(icon, contentDescription = label) },
         label = { Text(label) },
     )
+}
+
+/**
+ * The unsupported shortcut action's snackbar wording — the last line behind a
+ * stored action definition this shell cannot execute (the customize editor
+ * filters unsupported actions; the editor's open-prune clears the stragglers,
+ * and until then a click says so instead of doing nothing silently). Pure, in
+ * the [desktopDeadEndMessage] idiom.
+ */
+internal fun desktopUnsupportedShortcutActionMessage(action: ShortcutAction): String = when (action) {
+    ShortcutAction.PLAY_ON -> "Play On is not available on desktop."
+    ShortcutAction.SURPRISE_ME -> "Surprise Me is not available on desktop."
+    ShortcutAction.TOGGLE_OFFLINE -> "Offline mode is not available on desktop."
 }

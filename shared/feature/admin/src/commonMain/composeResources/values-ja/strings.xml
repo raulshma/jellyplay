@@ -379,6 +379,7 @@
 
     <!-- Plugin / catalog metadata labels (batch) -->
     <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_contract_mismatch">JellyPlay プラグイン（v%3$s）はコントラクト v%1$s を使用しています。このアプリは v%2$s に対応しています。サーバーのプラグインかアプリを更新してください。</string>
     <string name="admin_plugin_by_author">から %1$s</string>
 
     <!-- Statistics time-unit suffixes (compact chart labels) -->

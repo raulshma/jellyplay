@@ -14,7 +14,8 @@ import kotlinx.serialization.json.JsonElement
  * contract area) and adds nothing of its own. ADR-0010 §5 stands — all routes
  * ride the one family impl ([JellyPlayPluginApiClientImpl]) over the raw
  * requester — while consumers and test fakes depend on the single narrow
- * role they use. The composite stays what `JellyfinApiClient` registers.
+ * role they use. The composite is what the network module's family singles
+ * register (the retired `JellyfinApiClient` composite's registration role).
  *
  * Availability contract: every call 404s when the plugin is absent. The
  * capability probe ([JellyPlayCapabilitiesRoutes.getCapabilities]) is the ONE
@@ -53,6 +54,15 @@ data class JellyPlayRatingsResult(
 data class JellyPlayEpisodeRatings(
     val tmdbScore: Double? = null,
     val tmdbVotes: Int? = null,
+)
+
+/** The OMDb awards enrichment (`GET jellyplay/omdb/awards`) — fields absent upstream decode null. */
+@Serializable
+data class JellyPlayOmdbAwards(
+    val imdbId: String,
+    val awards: String? = null,
+    val boxOffice: String? = null,
+    val imdbRating: String? = null,
 )
 
 @Serializable

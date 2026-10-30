@@ -16,6 +16,12 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
  * Exclusive slices (AudioEffects, AudioCache, Screensaver, Security, etc.)
  * are not listed here — callers can wholesale-restore them when their single
  * owning category is selected.
+ *
+ * These `copy()` chains are hand-maintained per field, so a field added to a
+ * co-owned slice can silently drop out of restore (the wizard's diff would
+ * still advertise it). `SliceCategoryMergersTest` guards every merger
+ * reflectively: each declared slice field must survive a full-category
+ * merge, so a drift fails the suite instead of the user's restore.
  */
 internal fun AppearanceSlice.mergeWith(
     incoming: AppearanceSlice,
@@ -45,12 +51,15 @@ internal fun AppearanceSlice.mergeWith(
         blueLightFilterEnabled = if (importAppearance) incoming.blueLightFilterEnabled else blueLightFilterEnabled,
         blueLightFilterStrength = if (importAppearance) incoming.blueLightFilterStrength else blueLightFilterStrength,
         backdropThemeMusicEnabled = if (importAppearance) incoming.backdropThemeMusicEnabled else backdropThemeMusicEnabled,
+        detailsAwardsBadgesEnabled = if (importAppearance) incoming.detailsAwardsBadgesEnabled else detailsAwardsBadgesEnabled,
         dateFormatPreference = if (importAppearance) incoming.dateFormatPreference else dateFormatPreference,
         appFontScale = if (importAppearance) incoming.appFontScale else appFontScale,
         scheduledThemeStartHour = if (importAppearance) incoming.scheduledThemeStartHour else scheduledThemeStartHour,
         scheduledThemeEndHour = if (importAppearance) incoming.scheduledThemeEndHour else scheduledThemeEndHour,
         colorBlindMode = if (importAppearance) incoming.colorBlindMode else colorBlindMode,
         handMode = if (importAppearance) incoming.handMode else handMode,
+        layoutMode = if (importAppearance) incoming.layoutMode else layoutMode,
+        tvOverscan = if (importAppearance) incoming.tvOverscan else tvOverscan,
         hapticsEnabled = if (importMisc) incoming.hapticsEnabled else hapticsEnabled,
     )
 }
@@ -69,12 +78,19 @@ internal fun PlaybackSlice.mergeWith(
         preferredExternalPlayer = if (importPlayback) incoming.preferredExternalPlayer else preferredExternalPlayer,
         streamingQuality = if (importPlayback) incoming.streamingQuality else streamingQuality,
         cellularStreamingQuality = if (importPlayback) incoming.cellularStreamingQuality else cellularStreamingQuality,
+        hdrFormatPreference = if (importPlayback) incoming.hdrFormatPreference else hdrFormatPreference,
+        forceTranscodeAboveHeight = if (importPlayback) incoming.forceTranscodeAboveHeight else forceTranscodeAboveHeight,
+        preferredTranscodeVideoCodec = if (importPlayback) incoming.preferredTranscodeVideoCodec else preferredTranscodeVideoCodec,
+        preferredTranscodeAudioCodec = if (importPlayback) incoming.preferredTranscodeAudioCodec else preferredTranscodeAudioCodec,
         playbackMode = if (importPlayback) incoming.playbackMode else playbackMode,
+        offlinePlaybackPreference = if (importPlayback) incoming.offlinePlaybackPreference else offlinePlaybackPreference,
         decoderMode = if (importPlayback) incoming.decoderMode else decoderMode,
         audioPassthrough = if (importPlayback) incoming.audioPassthrough else audioPassthrough,
         audioPassthroughCodecs = if (importPlayback) incoming.audioPassthroughCodecs else audioPassthroughCodecs,
         maxAudioChannels = if (importPlayback) incoming.maxAudioChannels else maxAudioChannels,
         downmixBoostDb = if (importPlayback) incoming.downmixBoostDb else downmixBoostDb,
+        spatialAudioEnabled = if (importPlayback) incoming.spatialAudioEnabled else spatialAudioEnabled,
+        spatialAudioOnlyHeadphones = if (importPlayback) incoming.spatialAudioOnlyHeadphones else spatialAudioOnlyHeadphones,
         frameRateMatching = if (importPlayback) incoming.frameRateMatching else frameRateMatching,
         refreshRateMode = if (importPlayback) incoming.refreshRateMode else refreshRateMode,
         keepScreenOnDuringVideo = if (importPlayback) incoming.keepScreenOnDuringVideo else keepScreenOnDuringVideo,
@@ -83,6 +99,10 @@ internal fun PlaybackSlice.mergeWith(
         autoPlayCountdownSec = if (importPlayback) incoming.autoPlayCountdownSec else autoPlayCountdownSec,
         backgroundVideoAudioEnabled = if (importPlayback) incoming.backgroundVideoAudioEnabled else backgroundVideoAudioEnabled,
         autoEnterPip = if (importPlayback) incoming.autoEnterPip else autoEnterPip,
+        sessionRestoreMode = if (importPlayback) incoming.sessionRestoreMode else sessionRestoreMode,
+        offerDeleteAfterPlaybackMovies = if (importPlayback) incoming.offerDeleteAfterPlaybackMovies else offerDeleteAfterPlaybackMovies,
+        offerDeleteAfterPlaybackEpisodes = if (importPlayback) incoming.offerDeleteAfterPlaybackEpisodes else offerDeleteAfterPlaybackEpisodes,
+        customDeviceProfileJson = if (importPlayback) incoming.customDeviceProfileJson else customDeviceProfileJson,
         pgsSubtitleDirectPlay = if (importSubtitles) incoming.pgsSubtitleDirectPlay else pgsSubtitleDirectPlay,
         liveStreamOption = if (importSync) incoming.liveStreamOption else liveStreamOption,
         userDataSyncEnabled = if (importMisc) incoming.userDataSyncEnabled else userDataSyncEnabled,
@@ -167,13 +187,16 @@ internal fun SubtitleSlice.mergeWith(
     return copy(
         preferredSubtitleLanguage = if (importSubs) incoming.preferredSubtitleLanguage else preferredSubtitleLanguage,
         subtitlesForcedOnly = if (importSubs) incoming.subtitlesForcedOnly else subtitlesForcedOnly,
+        showOnlyPreferredSubtitles = if (importSubs) incoming.showOnlyPreferredSubtitles else showOnlyPreferredSubtitles,
         preferredAudioLanguage = if (importSubs) incoming.preferredAudioLanguage else preferredAudioLanguage,
         subtitleDelayByItem = if (importSubs) incoming.subtitleDelayByItem else subtitleDelayByItem,
+        languageRules = if (importSubs) incoming.languageRules else languageRules,
         subtitleStyle = if (importSubs) incoming.subtitleStyle else subtitleStyle,
         subtitlePreviewInSettings = if (importSubs) incoming.subtitlePreviewInSettings else subtitlePreviewInSettings,
         highContrastSubtitles = if (importSubs) incoming.highContrastSubtitles else highContrastSubtitles,
         hdrSubtitleStyleEnabled = if (importSubs) incoming.hdrSubtitleStyleEnabled else hdrSubtitleStyleEnabled,
         hdrSubtitleStyle = if (importSubs) incoming.hdrSubtitleStyle else hdrSubtitleStyle,
+        userStylePresets = if (importSubs) incoming.userStylePresets else userStylePresets,
         // SubtitleSlice also carries appLanguage/preferAudioDescription for MISC_APP,
         // but those duplicate ExperimentalSlice's fields — keep MISC_APP there.
         // This slice's MISC_APP keys are appLanguage/preferAudioDescription as well;

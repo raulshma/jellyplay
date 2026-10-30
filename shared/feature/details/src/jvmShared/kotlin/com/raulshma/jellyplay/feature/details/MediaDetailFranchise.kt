@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -74,7 +75,7 @@ internal fun FranchiseCollectionRow(
     onSeeAll: () -> Unit,
     onItemClick: (String) -> Unit,
     onItemFocus: (MediaItem) -> Unit,
-    getImageUrl: (String) -> String,
+    urls: ArtworkUrls,
 ) {
     Column {
         FadingItem {
@@ -168,7 +169,8 @@ internal fun FranchiseCollectionRow(
                 },
             ) { _, member, focusModifier ->
                 val memberClick = remember(member.id) { { onItemClick(member.id) } }
-                val memberImageUrl = remember(member.id) { getImageUrl(member.id) }
+                // Keyed on the item (not its id) so a tag change re-keys.
+                val memberImageUrl = remember(member) { urls.poster(member) }
                 PosterCard(
                     item = member,
                     imageUrl = memberImageUrl,

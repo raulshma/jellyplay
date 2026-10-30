@@ -41,6 +41,10 @@
     <string name="downloads_action_more_cd">More actions</string>
     <string name="downloads_pause_all">Pause all</string>
     <string name="downloads_retry_failed">Retry all failed</string>
+    <string name="downloads_resume_all">Resume all</string>
+    <string name="downloads_cancel_all">Cancel all</string>
+    <string name="downloads_cancel_all_title">Cancel all downloads?</string>
+    <string name="downloads_cancel_all_message">This stops every active transfer and removes paused downloads from the queue. Partial files are deleted.</string>
     <string name="downloads_clear_cd">Clear</string>
     <string name="downloads_search_cd">Search</string>
     <string name="downloads_sort_cd">Sort</string>
@@ -60,6 +64,12 @@
     <string name="downloads_frees_up_sentence"> This frees up %1$s.</string>
     <string name="downloads_deleted">Deleted</string>
     <string name="downloads_deleted_message">Download removed</string>
+    <string name="downloads_suggestions_title">New episodes ready to download</string>
+    <string name="downloads_suggestions_subtitle">Auto-download is set to ask before downloading these.</string>
+    <string name="downloads_suggestions_queued">New episodes queued</string>
+    <string name="downloads_suggestions_download">Download</string>
+    <string name="downloads_suggestions_dismiss">Dismiss</string>
+    <string name="downloads_suggestions_download_all">Download all</string>
 
     <!-- Download statuses -->
     <string name="downloads_status_queued">Queued</string>
@@ -92,6 +102,9 @@
     <string name="downloads_filter_series">Series</string>
     <string name="downloads_filter_music">Music</string>
     <string name="downloads_filter_books">Books</string>
+    <!-- Status filter (gh-178) -->
+    <string name="downloads_status_active">Active</string>
+    <string name="downloads_status_completed">Completed</string>
 
     <!-- Offline download resync -->
     <string name="downloads_resync">Resync</string>
@@ -130,4 +143,8 @@
     <string name="downloads_force_resync_in_progress">Syncing %1$d of %2$d…</string>
     <string name="downloads_force_resync_done">Synced %1$d of %2$d.</string>
     <string name="downloads_force_resync_no_data">Select at least one type of data to sync.</string>
+    <plurals name="downloads_suggestions_count">
+        <item quantity="one">%1$d new episode ready to download</item>
+        <item quantity="other">%1$d new episodes ready to download</item>
+    </plurals>
 </resources>

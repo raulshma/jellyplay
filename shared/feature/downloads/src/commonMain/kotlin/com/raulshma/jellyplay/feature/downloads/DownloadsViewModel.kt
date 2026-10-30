@@ -1,17 +1,17 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesArtReads
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.DownloadItem
-import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
-import com.raulshma.jellyplay.core.model.ResyncBatchProgress
-import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
@@ -54,27 +54,16 @@ data class DownloadsUiState(
         get() = selection.active
 }
 
-/**
- * A downloaded item eligible for a force resync (completed, or stalled after
- * partial artifacts landed), with enough episode context (series name + SxxExx)
- * to render the same identification line the downloads list shows, so episodes
- * are distinguishable in the force-resync picker.
- */
-@Immutable
-data class ForceResyncCandidate(
-    val id: String,
-    val name: String,
-    val mediaType: com.raulshma.jellyplay.core.model.MediaType,
-    val seriesName: String? = null,
-    val seasonNumber: Int? = null,
-    val episodeNumber: Int? = null,
-)
-
 class DownloadsViewModel(
     private val queue: DownloadQueue,
     private val offlineRepository: OfflineRepository,
+    private val seriesArt: SeriesArtReads,
     private val resync: OfflineResync,
     private val downloadsStore: DownloadsStore,
+    /** The gh-181 Ask-mode suggestion surface (observe/confirm/dismiss). */
+    private val policyStore: SeriesDownloadPolicyStore,
+    /** The confirm path: confirmed prompts enqueue through the normal series intake (no policy write). */
+    private val intake: DownloadIntake,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
@@ -99,6 +88,19 @@ class DownloadsViewModel(
     val pendingBulkDelete = ConfirmationHost<Unit>()
 
     /**
+     * Pending Cancel All (the appbar action — gh-178). Cancel is destructive
+     * (in-flight workers stop, partial files are deleted) and this one sweep
+     * touches every active/paused row at once, so unlike the per-row cancel it
+     * confirms first. Same synchronous settle arm as the delete hosts.
+     */
+    /**
+     * The Cancel All arm (gh-178): the payload is the status filter's visible
+     * id set — the sweep the dialog confirms is exactly the list the user is
+     * looking at, never hidden rows.
+     */
+    val pendingCancelAll = ConfirmationHost<List<String>>()
+
+    /**
      * One-shot delete feedback, screen-forward seam. Buffered, single
      * collector, never replayed — [DownloadsScreen] resolves the
      * resource text and posts it to the shared UserMessageBus.
@@ -106,21 +108,83 @@ class DownloadsViewModel(
     private val messageChannel = Channel<DownloadsUserMessage>(Channel.BUFFERED)
     val messages: Flow<DownloadsUserMessage> = messageChannel.receiveAsFlow()
 
-    /** Live count of items flagged for a metadata/image resync — appbar badge. */
-    val updatesAvailable: StateFlow<Int> =
-        offlineRepository.getUpdatesCount().stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+    // ── Resync / freshness (DownloadsResyncActions) ──────────────────────
 
-    /** Items with updates, reactive — drives the resync sheet content. */
-    val updateRows: StateFlow<List<OfflineSyncUpdate>> =
-        offlineRepository.getItemsWithUpdates()
+    /**
+     * The resync/freshness family — the reactive update surface, the
+     * TTL-gated check-for-updates sweep, the batch resync verbs, the force
+     * resync eligibility policy and the candidate fold — behind one
+     * constructed module ([DownloadsResyncActions], built from the
+     * queue/repository/resync constructor deps this VM already owns). The
+     * holder is a read/refresh family; the POST-action UI effects (the
+     * messages fold, selection clears) stay VM-side per the DownloadActions
+     * recorded rule.
+     */
+    internal val resyncActions = DownloadsResyncActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+        resync = resync,
+        queue = queue,
+    )
+
+    /**
+     * The pending Ask-mode prompts (gh-181), newest first — the suggestion
+     * card's content. Empty when the user has nothing to answer.
+     */
+    val suggestions: StateFlow<List<AutoDownloadSuggestion>> =
+        policyStore.observeAutoDownloadSuggestions()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Live batch resync progress (per-item phase + aggregate counts). */
-    val resyncProgress: StateFlow<ResyncBatchProgress> = resync.batchProgress
+    /**
+     * Confirms suggestions: groups the prompts by series → season (episodes
+     * in numeric order), enqueues each season's batch through the normal
+     * series download path, then clears the answered rows. [episodeIds] is
+     * the confirmed selection — a per-row Download passes one id, the card's
+     * Download all passes every id. A failed batch is surfaced (Raw message)
+     * instead of silently reporting success; its prompts stay pending so the
+     * user can retry.
+     */
+    fun downloadSuggestions(episodeIds: List<String>) {
+        if (episodeIds.isEmpty()) return
+        launch {
+            val rows = policyStore.autoDownloadSuggestionsByIds(episodeIds)
+            if (rows.isEmpty()) return@launch
+            val confirmed = mutableListOf<AutoDownloadSuggestion>()
+            rows.groupBy { it.seriesId }
+                .forEach { (_, seriesEpisodes) ->
+                    seriesEpisodes.groupBy { it.seasonId }
+                        .forEach { (seasonId, seasonEpisodes) ->
+                            val result = intake.startSeries(
+                                seriesId = seriesEpisodes.first().seriesId,
+                                episodeIds = mapOf(
+                                    seasonId to seasonEpisodes
+                                        .sortedBy { it.episodeNumber }
+                                        .map { it.episodeId },
+                                ),
+                            )
+                            if (result.isSuccess) {
+                                confirmed += seasonEpisodes
+                            } else {
+                                messageChannel.trySend(
+                                    DownloadsUserMessage.Raw(
+                                        result.exceptionOrNull()?.message ?: "Download failed",
+                                    ),
+                                )
+                            }
+                        }
+                }
+            if (confirmed.isNotEmpty()) {
+                policyStore.dismissAutoDownloadSuggestions(confirmed.map { it.episodeId })
+                messageChannel.trySend(DownloadsUserMessage.SuggestionsQueued)
+            }
+        }
+    }
 
-    /** True while a batch freshness check is running. */
-    private val _checking = MutableStateFlow(false)
-    val checking: StateFlow<Boolean> = _checking.asStateFlow()
+    /** Dismisses suggestions without downloading. */
+    fun dismissSuggestions(episodeIds: List<String>) {
+        if (episodeIds.isEmpty()) return
+        launch { policyStore.dismissAutoDownloadSuggestions(episodeIds) }
+    }
 
     /**
      * Structural (status-change-only) projection of the list, shared between
@@ -136,29 +200,15 @@ class DownloadsViewModel(
      * costly; rows read their moving values from here while the
      * list itself only re-emits on structural change. The backing StateFlow
      * is conflated by construction (stateIn), so a burst of ticks collapses
-     * to the latest map.
-     *
-     * Exit-transition retention: the live query drops a row the moment its
-     * status leaves the in-flight set, which can land a frame BEFORE the
-     * structural list re-emits with the row's new status — without retention
-     * the still-DOWNLOADING row would flash back to its stale structural
-     * bytes for that frame. The scan accumulator keeps the last live value
-     * for every row the structural list still shows as DOWNLOADING and
-     * forgets a row once its structural status moves on (or it leaves the
-     * list).
+     * to the latest map. The scan accumulator is [retainedDownloadProgress]
+     * — the exit-transition retention rule (one-frame retain-then-forget)
+     * lives there.
      */
     val progressById: StateFlow<Map<String, DownloadProgress>> =
         queue.getActiveDownloadProgress()
             .combine(structuralItems) { live, items -> live to items }
             .scan(emptyMap<String, DownloadProgress>()) { retained, (live, structural) ->
-                val stillDownloading = structural
-                    .asSequence()
-                    .filter { it.status == DownloadStatus.DOWNLOADING }
-                    .mapTo(HashSet()) { it.id }
-                val merged = HashMap(retained)
-                merged.keys.retainAll(stillDownloading)
-                merged.putAll(live)
-                merged
+                retainedDownloadProgress(retained, live, structural)
             }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -209,6 +259,22 @@ class DownloadsViewModel(
     private val _sort = MutableStateFlow(DownloadListSort.RECENT)
     val sort: StateFlow<DownloadListSort> = _sort.asStateFlow()
 
+    /**
+     * Status filter for the downloads list — All / Active / Completed / Failed
+     * (gh-178). Persisted through [DownloadsStore] so the choice survives app
+     * restarts.
+     */
+    private val _statusFilter = MutableStateFlow(DownloadStatusFilter.ALL)
+    val statusFilter: StateFlow<DownloadStatusFilter> = _statusFilter.asStateFlow()
+
+    /**
+     * Whether the long-press selection hint was already dismissed once — the
+     * banner renders only while this is false and no selection is active.
+     * Flips (and persists) the first time a selection becomes active.
+     */
+    private val _selectionHintSeen = MutableStateFlow(false)
+    val selectionHintSeen: StateFlow<Boolean> = _selectionHintSeen.asStateFlow()
+
     fun setFilter(value: DownloadListFilter) {
         _filter.value = value
         launch { downloadsStore.setDownloadsListFilter(value.name) }
@@ -217,6 +283,11 @@ class DownloadsViewModel(
     fun setSort(value: DownloadListSort) {
         _sort.value = value
         launch { downloadsStore.setDownloadsListSort(value.name) }
+    }
+
+    fun setStatusFilter(value: DownloadStatusFilter) {
+        _statusFilter.value = value
+        launch { downloadsStore.setDownloadsListStatusFilter(value.name) }
     }
 
     /** Expanded series/season group keys — groups start collapsed (session-only). */
@@ -271,11 +342,28 @@ class DownloadsViewModel(
      * emptyList would flash "nothing in this category" while downloads exist.
      */
     internal val rows: StateFlow<List<DownloadListRow>?> =
-        combine(structuralItems, _filter, _sort, _expandedKeys) { items, filter, sort, expanded ->
+        combine(structuralItems, _filter, _statusFilter, _sort, _expandedKeys) { items, filter, statusFilter, sort, expanded ->
             withContext(Dispatchers.Default) {
-                downloadListRows(items, filter, sort, expanded)
+                val filtered = items.filter { statusFilter.accepts(it) }
+                downloadListRows(filtered, filter, sort, expanded, resolveSeriesArt(filtered))
             }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * The locally-saved series posters for [items]' series groups — one
+     * batched offline-DB read keyed by raw series id (the [downloadListRows]
+     * lookup shape; the former per-series getOfflineItem round-trip cost one
+     * uncached PK read + artwork resolution per series on every rows
+     * rebuild), blank-poster entries dropped so the group header falls back
+     * to an episode still inside the grouping. Runs on every rows rebuild.
+     */
+    private suspend fun resolveSeriesArt(items: List<DownloadItem>): Map<String, SeriesArt> =
+        seriesArt.getSeriesArt(
+            items.mapNotNull { it.seriesId?.takeIf(String::isNotBlank) }.distinct(),
+        ).mapNotNull { (seriesId, art) ->
+            art.posterPath?.takeIf(String::isNotBlank)
+                ?.let { seriesId to SeriesArt(it, art.blurHashPrimary) }
+        }.toMap()
 
     init {
         launch {
@@ -292,6 +380,10 @@ class DownloadsViewModel(
             if (_sort.value == DownloadListSort.RECENT) {
                 _sort.value = DownloadListSort.fromName(slice.downloadsListSort)
             }
+            if (_statusFilter.value == DownloadStatusFilter.ALL) {
+                _statusFilter.value = DownloadStatusFilter.fromName(slice.downloadsListStatusFilter)
+            }
+            _selectionHintSeen.value = slice.selectionHintSeen
         }
         launch {
             // Change-filtering lives in two layers. The repository's filter
@@ -352,6 +444,39 @@ class DownloadsViewModel(
         val state = _uiState.value
         val targets = DownloadActions.targets(action, state.downloads, state.selectedIds, scope)
         if (targets.isEmpty()) return
+        dispatchBulk(action, targets) {
+            if (action == DownloadBulkAction.DELETE) {
+                if (scope == DownloadActionScope.Selected) clearSelection()
+                // Only claim success where deletions are real — a
+                // fabricated "Deleted" toast would lie.
+                if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
+            }
+        }
+    }
+
+    /**
+     * Ids-scoped dispatch behind the series/season headers' pause/cancel and
+     * the app bar's filter-aware global actions (gh-178): the caller hands its
+     * target ids in (a header's episodes, or the status filter's visible set),
+     * [DownloadActions.targets] intersects them with the live list and the
+     * admission table via the Selected scope (ids ∩ list ∩ admission — no
+     * selection mode needed), and the same verb fold as [applyBulkAction]
+     * runs. An id set in terminal states dispatches nothing.
+     */
+    fun applyBulkActionToIds(action: DownloadBulkAction, targetIds: Collection<String>) {
+        val state = _uiState.value
+        val targets = DownloadActions.targets(action, state.downloads, targetIds.toSet(), DownloadActionScope.Selected)
+        if (targets.isEmpty()) return
+        dispatchBulk(action, targets)
+    }
+
+    /**
+     * The one verb fold both dispatches share: [bulkMap] over the targets
+     * inside a single launch, [onDone] running after every verb completed
+     * (DELETE's selection clear + message ride it to keep their post-delete
+     * timing).
+     */
+    private fun dispatchBulk(action: DownloadBulkAction, targets: List<DownloadItem>, onDone: () -> Unit = {}) {
         launch {
             bulkMap(targets) { item ->
                 when (action) {
@@ -362,12 +487,7 @@ class DownloadsViewModel(
                     DownloadBulkAction.DELETE -> queue.deleteDownload(item.id)
                 }
             }
-            if (action == DownloadBulkAction.DELETE) {
-                if (scope == DownloadActionScope.Selected) clearSelection()
-                // Only claim success where deletions are real — a
-                // fabricated "Deleted" toast would lie.
-                if (queue.isSupported) messageChannel.trySend(DownloadsUserMessage.Deleted)
-            }
+            onDone()
         }
     }
 
@@ -396,6 +516,17 @@ class DownloadsViewModel(
 
     fun toggleSelection(item: DownloadItem) {
         _uiState.update { it.copy(selection = it.selection.toggled(item.id)) }
+        maybeMarkSelectionHintSeen()
+    }
+
+    /**
+     * First entry into selection mode dismisses the long-press hint forever
+     * (persisted) — the affordance is discovered, the banner row reclaimed.
+     */
+    private fun maybeMarkSelectionHintSeen() {
+        if (_selectionHintSeen.value || !_uiState.value.selectionMode) return
+        _selectionHintSeen.value = true
+        launch { downloadsStore.setSelectionHintSeen(true) }
     }
 
     fun clearSelection() {
@@ -405,12 +536,15 @@ class DownloadsViewModel(
     /**
      * Selects every download matching the ACTIVE filter — a collapsed group's
      * episodes count too (they're part of the Series view), while items hidden
-     * by the Movies/Series filter don't.
+     * by the Movies/Series or status filter don't.
      */
     fun selectAll() {
         val activeFilter = _filter.value
+        val activeStatusFilter = _statusFilter.value
         _uiState.update { state ->
-            val candidates = state.downloads.filter(activeFilter::accepts).map { it.id }
+            val candidates = state.downloads
+                .filter { activeFilter.accepts(it) && activeStatusFilter.accepts(it) }
+                .map { it.id }
             state.copy(selection = state.selection.selectAll(candidates))
         }
     }
@@ -424,6 +558,7 @@ class DownloadsViewModel(
         _uiState.update { state ->
             state.copy(selection = SelectionState(toggledGroupSelection(state.selectedIds, groupIds)))
         }
+        maybeMarkSelectionHintSeen()
     }
 
     /**
@@ -467,107 +602,4 @@ class DownloadsViewModel(
             targets.map { item -> async { action(item) } }.awaitAll()
         }
     }
-
-    // ── Freshness check / resync ────────────────────────────────────────
-
-    /**
-     * Checks every downloaded item for available updates (TTL-gated per item).
-     * Safe to call repeatedly — items within their TTL are skipped. Sets
-     * [checking] while the batch runs so the appbar icon can spin.
-     */
-    fun checkAllForUpdates() {
-        if (_checking.value) return
-        launch {
-            _checking.value = true
-            try {
-                val ids = offlineRepository.getDownloadedItemIds()
-                resync.checkForUpdatesBatch(ids)
-            } finally {
-                _checking.value = false
-            }
-        }
-    }
-
-    /**
-     * Resyncs a single item's metadata/images. Progress flows through
-     * [resyncProgress]; the item's update flag clears once its baseline refreshes.
-     */
-    fun resyncOne(itemId: String) {
-        resync.resyncBatch(listOf(itemId))
-    }
-
-    /**
-     * Resyncs every item currently flagged for an update. Sequential to keep
-     * bandwidth predictable and avoid competing with active downloads. Resolves
-     * the flagged ids from the repository so it works even if the sheet hasn't
-     * collected [updateRows] yet.
-     */
-    fun resyncAll() {
-        launch {
-            val flagged = offlineRepository.getItemsWithUpdates().first()
-            if (flagged.isNotEmpty()) resync.resyncBatch(flagged.map { it.id })
-        }
-    }
-
-    /** Resyncs an explicit set of item ids (used by the sheet's per-item action). */
-    fun resyncAll(itemIds: List<String>) {
-        if (itemIds.isNotEmpty()) resync.resyncBatch(itemIds)
-    }
-
-    /** Clears batch progress once the resync sheet is dismissed. */
-    fun clearResyncProgress() {
-        resync.clearBatchProgress()
-    }
-
-    /**
-     * Force-resyncs an explicit set of completed items, refreshing only the
-     * data categories in [options]. Unlike [resyncAll], this is user-directed
-     * (any completed item, not just flagged ones) and partial (skipped
-     * categories retain their baseline). Progress flows through [resyncProgress].
-     */
-    fun forceResync(itemIds: List<String>, options: ResyncOptions) {
-        if (itemIds.isEmpty() || options.isEmpty) return
-        resync.resyncBatch(itemIds, options)
-    }
-
-    /**
-     * Download statuses eligible for a force resync. COMPLETED items carry the
-     * full artifact set; FAILED and PAUSED items still have their offline
-     * metadata row (seeded during intake) plus whatever sidecars landed before
-     * the stall, so refreshing them from the server is valid. Actively
-     * transferring states (PENDING/QUEUED/DOWNLOADING) are excluded — the
-     * download worker itself lands fresh sidecars there, and a concurrent
-     * resync would interleave with its writes. CANCELLED never lingers: cancel
-     * deletes the row and its files.
-     */
-    private val forceResyncEligibleStatuses = setOf(
-        DownloadStatus.COMPLETED,
-        DownloadStatus.FAILED,
-        DownloadStatus.PAUSED,
-    )
-
-    /**
-     * Completed/stalled downloads available for a force resync, deduplicated by
-     * media item id. Resolved from an uncapped one-shot DB read (not the UI
-     * list's 500-row reactive window) so every downloaded media item is
-     * offered, and so the picker is correct even when opened before the list
-     * flow has emitted. Drives the item picker in the force-resync sheet.
-     * Carries the episode context (series name + SxxExx) so episodes are
-     * identifiable in the picker, mirroring the context line on the downloads
-     * list.
-     */
-    suspend fun forceResyncCandidates(): List<ForceResyncCandidate> =
-        queue.getAllDownloadsSnapshot()
-            .filter { it.status in forceResyncEligibleStatuses }
-            .distinctBy { it.mediaItemId }
-            .map {
-                ForceResyncCandidate(
-                    id = it.mediaItemId,
-                    name = it.name,
-                    mediaType = it.mediaType,
-                    seriesName = it.seriesName,
-                    seasonNumber = it.seasonNumber,
-                    episodeNumber = it.episodeNumber,
-                )
-            }
 }

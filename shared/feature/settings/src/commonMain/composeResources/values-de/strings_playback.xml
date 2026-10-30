@@ -137,7 +137,7 @@
     <string name="settings_pause_on_focus_loss_on">Wiedergabe pausieren, wenn das System Fokusverlust meldet</string>
     <string name="settings_pause_on_focus_loss_off">Wiedergabe bei Fokusverlust fortsetzen</string>
     <string name="settings_resume_headset_plug">Fortsetzen bei erneut angeschlossenen Kopfhörern</string>
-    <string name="settings_resume_headset_plug_subtitle">Wiedergabe fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
+    <string name="settings_resume_headset_plug_subtitle">Wiedergabe fortsetzen, wenn Kopfhörer nach der automatischen Unplug-Pause wieder verbunden werden (kabelgebunden oder Bluetooth)</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Bildwiederholraten-Anpassung</string>
@@ -200,7 +200,9 @@
     <string name="settings_reset_exoplayer">Alle ExoPlayer-Einstellungen wiederherstellen</string>
     <string name="settings_media_segments">Mediensegmente</string>
     <string name="settings_media_segments_summary">%1$d Auto-Skip, %2$d Button zeigen</string>
-    <string name="settings_skip_segments_on_seek">Segmente beim Spulen überspringen</string>
+        <string name="settings_skip_prompt_duration">Skip-Button-Dauer</string>
+    <string name="settings_skip_prompt_duration_subtitle">Wie lange der Intro-/Segment-Skip-Button sichtbar bleibt</string>
+<string name="settings_skip_segments_on_seek">Segmente beim Spulen überspringen</string>
     <string name="settings_skip_segments_on_seek_on">Vorwärtssprünge überspringen Auto-Skip-Segmente</string>
     <string name="settings_segment_skip_delay">Auto-Skip-Verzögerung</string>
     <string name="settings_segment_skip_delay_off">Aus</string>

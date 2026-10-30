@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
  *
  * The two reads are uncached forwards over [PlaylistApiClient] (the
  * PlaybackRepositoryImpl family-seam precedent — the family single composes
- * the same impl the JellyfinApiClient union delegates to, so the wire
+ * the same impl the retired JellyfinApiClient union delegated to, so the wire
  * behavior is byte-identical). The six edits self-invalidate the playlist's
  * ONE cached projection — its detail entry — through
  * [MediaRepositoryInternals.detailCaches], the Koin single shared with

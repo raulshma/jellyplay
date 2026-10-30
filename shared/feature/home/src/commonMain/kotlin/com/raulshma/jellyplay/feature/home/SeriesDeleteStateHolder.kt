@@ -18,9 +18,10 @@ import kotlinx.coroutines.launch
  * Owns the offline home's advanced "delete downloaded episodes" sheet for a
  * series card: the sheet's [HomeSeriesDeleteState] (seasons, downloaded
  * episodes, sizes, loading flag) plus the four actions that drive it. The VM
- * folds [state] into [HomeUiState.seriesDelete] with one collector (same fold
- * pattern as the refresher/Seerr collectors) and forwards the action methods,
- * so the sheet's UI call sites are unchanged.
+ * re-exposes [state] (`seriesDeleteSheet`) for the sheet's leaf collector in
+ * HomeTailSheets — not a [HomeUiState] fold; dismissal is this holder's null
+ * write — and forwards the action methods, so the sheet's UI call sites are
+ * unchanged.
  *
  * Why a holder: the sheet state and its actions are one concern with a
  * non-obvious invariant (the snapshot-before-dismiss capture below) that had

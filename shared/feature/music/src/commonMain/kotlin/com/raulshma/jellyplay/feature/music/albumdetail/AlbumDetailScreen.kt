@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -102,11 +103,11 @@ fun AlbumDetailScreen(
 
     DeferredRefreshEffect(viewModel.deferredRefresher)
 
-    // Stable URL-builder refs (MediaDetailScreen's rememberedGetImageUrl idiom) so
-    // AlbumDetailContent can skip recomposition while trackDownloads re-emits a
-    // fresh Map on every download-progress tick.
-    val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
-    val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
+    // Stable resolver ref (MediaDetailScreen's rememberedGetImageUrl idiom, now
+    // the tag-aware ArtworkUrls instance) so AlbumDetailContent can skip
+    // recomposition while trackDownloads re-emits a fresh Map on every
+    // download-progress tick.
+    val artworkUrls = viewModel.artworkUrls
 
     // One collected mix snapshot drives both the isStartingMix progress gate
     // and the first-track navigation one-shot (InstantMixStateHolder fold).
@@ -151,8 +152,7 @@ fun AlbumDetailScreen(
                     detail = viewModel.detail!!,
                     tracks = viewModel.tracks,
                     trackDownloads = trackDownloads,
-                    getImageUrl = rememberedGetImageUrl,
-                    getBackdropUrl = rememberedGetBackdropUrl,
+                    artworkUrls = artworkUrls,
                     onTrackClick = onTrackClick,
                     onPlayAlbum = { tracks, startIndex ->
                         viewModel.playAlbum(tracks, startIndex)
@@ -181,8 +181,7 @@ private fun AlbumDetailContent(
     detail: MediaDetail,
     tracks: List<MediaItem>,
     trackDownloads: Map<String, DownloadItem>,
-    getImageUrl: (String) -> String,
-    getBackdropUrl: (String) -> String,
+    artworkUrls: ArtworkUrls,
     onTrackClick: (String) -> Unit,
     onPlayAlbum: (List<MediaItem>, Int) -> Unit,
     onAddToQueue: (MediaItem) -> Unit,
@@ -210,7 +209,7 @@ private fun AlbumDetailContent(
             .drawBehind { drawRect(backgroundColorState.value) }
     ) {
         MediaImage(
-            url = getBackdropUrl(item.id),
+            url = artworkUrls.backdrop(item),
             contentDescription = null,
             blurHash = item.blurHashes.backdrop,
             modifier = Modifier
@@ -385,9 +384,9 @@ private fun AlbumDetailContent(
             }
 
             itemsIndexed(tracks, key = { _, track -> track.id }, contentType = { _, _ -> "mediaItem" }) { index, track ->
-                // Memoize per-track so getImageUrl + click lambdas aren't rebuilt
-                // on every recomposition of the visible row.
-                val imageUrl = remember(track.id) { getImageUrl(track.id) }
+                // Memoize per-track so the poster URL + click lambdas aren't
+                // rebuilt on every recomposition of the visible row.
+                val imageUrl = remember(track, artworkUrls) { artworkUrls.poster(track) }
                 val onClick = remember(track.id) { { onTrackClick(track.id) } }
                 val onAddToQueue = remember(track.id) { { onAddToQueue(track) } }
                 val onDownloadClick = remember(track.id) { { onDownloadTrack(track) } }

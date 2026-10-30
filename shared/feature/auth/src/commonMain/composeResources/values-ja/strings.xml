@@ -72,6 +72,7 @@
     <string name="auth_loading">読み込み中…</string>
     <string name="auth_no_servers_added_title">追加されたサーバーはありません</string>
     <string name="auth_no_servers_added_desc">Jellyfin サーバーを追加して開始してください</string>
+    <string name="auth_restore_backup">バックアップから復元</string>
     <string name="auth_remove_server">サーバーを削除</string>
     <string name="auth_remove_server_title">サーバーを削除しますか？</string>
     <string name="auth_remove_server_message">これにより「%1$s」とそのサーバーに保存されたすべてのユーザーが削除されます。元に戻せません。</string>

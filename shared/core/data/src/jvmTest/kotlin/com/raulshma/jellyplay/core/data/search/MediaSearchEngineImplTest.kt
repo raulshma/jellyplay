@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.search
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -53,7 +54,7 @@ import kotlin.test.assertTrue
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class MediaSearchEngineImplTest {
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val seerrRepository: SeerrRepository = mockk()
     private val searchHistoryRepository: SearchHistoryRepository = mockk(relaxed = true)
     private val serverIdentityStore: ServerIdentityStore = mockk()
@@ -76,7 +77,7 @@ class MediaSearchEngineImplTest {
             SeerrPreferences(serverUrl = "https://seerr.example.com", searchEnabled = true),
         )
         engine = MediaSearchEngineImpl(
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
             seerrRepository = seerrRepository,
             searchHistoryRepository = searchHistoryRepository,
             serverIdentityStore = serverIdentityStore,
@@ -102,7 +103,7 @@ class MediaSearchEngineImplTest {
         assertFalse(state.isSearching)
         assertTrue(state.jellyfin.isEmpty())
         assertTrue(state.seerr.isEmpty())
-        verify { mediaRepository wasNot Called }
+        verify { libraryFeed wasNot Called }
         verify { seerrRepository wasNot Called }
         verify { offlineRepository wasNot Called }
         verify { searchHistoryRepository wasNot Called }
@@ -112,7 +113,7 @@ class MediaSearchEngineImplTest {
 
     @Test
     fun `preview fans out to jellyfin and seerr and lands both slots`() = runTest {
-        coEvery { mediaRepository.search("batman", limit = 8) } returns Result.success(
+        coEvery { libraryFeed.search(query = "batman", filters = LibraryFilters(), limit = 8, startIndex = 0) } returns Result.success(
             SearchResult(items = listOf(jellyItem("j1"), jellyItem("j2")), totalRecordCount = 2, startIndex = 0)
         )
         coEvery { seerrRepository.search("batman") } returns Result.success(
@@ -131,7 +132,7 @@ class MediaSearchEngineImplTest {
 
     @Test
     fun `preview emits a searching state before the completed round`() = runTest {
-        coEvery { mediaRepository.search("batman", limit = 8) } returns Result.success(
+        coEvery { libraryFeed.search(query = "batman", filters = LibraryFilters(), limit = 8, startIndex = 0) } returns Result.success(
             SearchResult(items = listOf(jellyItem("j1")), totalRecordCount = 1, startIndex = 0)
         )
         coEvery { seerrRepository.search("batman") } returns Result.success(emptyList())
@@ -150,7 +151,7 @@ class MediaSearchEngineImplTest {
 
     @Test
     fun `a round without jellyfin matches does not record history`() = runTest {
-        coEvery { mediaRepository.search("void", limit = 8) } returns Result.success(
+        coEvery { libraryFeed.search(query = "void", filters = LibraryFilters(), limit = 8, startIndex = 0) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0)
         )
         coEvery { seerrRepository.search("void") } returns Result.success(listOf(seerrItem(1)))
@@ -165,7 +166,7 @@ class MediaSearchEngineImplTest {
 
     @Test
     fun `a throwing jellyfin source degrades to an empty jellyfin slot`() = runTest {
-        coEvery { mediaRepository.search(any(), any(), any(), any()) } throws RuntimeException("server down")
+        coEvery { libraryFeed.search(any(), any(), any(), any()) } throws RuntimeException("server down")
         coEvery { seerrRepository.search("batman") } returns Result.success(listOf(seerrItem(1)))
 
         val state = engine.preview(flowOf("batman")).first { !it.isSearching }
@@ -178,7 +179,7 @@ class MediaSearchEngineImplTest {
 
     @Test
     fun `a failing seerr source degrades to an empty seerr slot`() = runTest {
-        coEvery { mediaRepository.search("batman", limit = 8) } returns Result.success(
+        coEvery { libraryFeed.search(query = "batman", filters = LibraryFilters(), limit = 8, startIndex = 0) } returns Result.success(
             SearchResult(items = listOf(jellyItem("j1")), totalRecordCount = 1, startIndex = 0)
         )
         coEvery { seerrRepository.search("batman") } returns Result.failure(IllegalStateException("seerr down"))
@@ -195,7 +196,7 @@ class MediaSearchEngineImplTest {
     @Test
     fun `seerr is skipped on a Local network connection`() = runTest {
         networkStatus.value = NetworkStatus.Local
-        coEvery { mediaRepository.search("batman", limit = 8) } returns Result.success(
+        coEvery { libraryFeed.search(query = "batman", filters = LibraryFilters(), limit = 8, startIndex = 0) } returns Result.success(
             SearchResult(items = listOf(jellyItem("j1")), totalRecordCount = 1, startIndex = 0)
         )
 
@@ -239,7 +240,7 @@ class MediaSearchEngineImplTest {
         // The offline item renders in the jellyfin slot via toMediaItem().
         assertEquals(listOf("o1"), state.jellyfin.map { it.id })
         assertTrue(state.seerr.isEmpty())
-        verify { mediaRepository wasNot Called }
+        verify { libraryFeed wasNot Called }
         verify { seerrRepository wasNot Called }
         coVerify(exactly = 1) { searchHistoryRepository.saveQuery("batman", "user-1") }
     }

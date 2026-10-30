@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +24,8 @@ import com.composables.icons.tabler.outline.Inbox
 import com.composables.icons.tabler.outline.PlugConnected
 import com.composables.icons.tabler.outline.Stars
 import com.raulshma.jellyplay.core.data.repository.JellyPushState
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.JellyPlayContractMismatch
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
@@ -33,8 +38,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_msg
 import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_ur_entry_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_ur_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_feature_locked
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_contract_mismatch_body
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_contract_mismatch_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_plugin_section
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_plugin_section_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_plugin_version_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_push_state_no_distributor
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_push_state_registering
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_push_state_registered
@@ -85,6 +93,12 @@ import org.jetbrains.compose.resources.stringResource
  * a user can act on anything here, so it is the only moment worth probing.
  * UNKNOWN → one refresh; UNAVAILABLE/AVAILABLE never re-probe (the identity
  * reset in the store re-arms the next visit).
+ *
+ * The one UNAVAILABLE face that does NOT vanish: a refused contract (the probe
+ * decoded a payload whose contractVersion this client refuses) renders the
+ * [JellyPlayContractMismatchBanner] instead — the gates stay closed, but the
+ * user learns the plugin is present with the wrong contract and which side to
+ * update. The group's summary names the served plugin version once known.
  */
 @Composable
 internal fun SettingsJellyPlayPluginSection(
@@ -107,6 +121,15 @@ internal fun SettingsJellyPlayPluginSection(
         if (pluginStatus == JellyPlayPluginStatus.UNKNOWN) {
             viewModel.refreshJellyPlayPluginStatus()
         }
+    }
+
+    val contractMismatch by viewModel.jellyPlayContractMismatch.collectAsStateWithLifecycle()
+    val pluginVersion by viewModel.jellyPlayPluginVersion.collectAsStateWithLifecycle()
+
+    val mismatch = contractMismatch
+    if (pluginStatus == JellyPlayPluginStatus.UNAVAILABLE && mismatch != null) {
+        JellyPlayContractMismatchBanner(mismatch)
+        return
     }
 
     if (pluginStatus != JellyPlayPluginStatus.AVAILABLE) {
@@ -142,7 +165,14 @@ internal fun SettingsJellyPlayPluginSection(
     SettingsGroup(
         icon = Tabler.Outline.PlugConnected,
         title = stringResource(Res.string.settings_jellyplay_plugin_section),
-        summary = { stringResource(Res.string.settings_jellyplay_plugin_section_summary) },
+        summary = {
+            val version = pluginVersion
+            if (version != null) {
+                stringResource(Res.string.settings_jellyplay_plugin_version_summary, version)
+            } else {
+                stringResource(Res.string.settings_jellyplay_plugin_section_summary)
+            }
+        },
         badge = if (messagesVisible && unreadCount > 0) {
             {
                 Box(
@@ -227,6 +257,43 @@ internal fun SettingsJellyPlayPluginSection(
                 )
             }
         }
+    }
+}
+
+/**
+ * The refused-contract face: the whole section hides (every gate is closed),
+ * so this banner is the drift's ONLY surface — what the server runs vs what
+ * this client understands, in error-container colors. The range's rendering
+ * (single version as `1`, a real range as `1–2`) is the model's
+ * [JellyPlayContractMismatch.supportedRangeLabel].
+ */
+@Composable
+private fun JellyPlayContractMismatchBanner(mismatch: JellyPlayContractMismatch) {
+    val supported = mismatch.supportedRangeLabel
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth24)
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(Res.string.settings_jellyplay_contract_mismatch_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+        )
+        Text(
+            text = stringResource(
+                Res.string.settings_jellyplay_contract_mismatch_body,
+                mismatch.servedContractVersion.toString(),
+                supported,
+                mismatch.pluginVersion,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+        )
     }
 }
 

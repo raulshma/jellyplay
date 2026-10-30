@@ -12,20 +12,18 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
-import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.network.library.HomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
-import com.raulshma.jellyplay.core.network.library.HomeWriteGeneration
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.testfixtures.FakeHomeSectionSources
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -45,11 +43,11 @@ import kotlin.test.assertTrue
  * `HomeSectionsFetcher` on a fake [HomeSectionSources]. Before this suite no
  * test ran repo + fetcher together: the repo's constructor is `internal` to
  * core:data and the fetcher was `internal` to core:network, so every
- * cross-layer invariant — the write-generation bump funnel, the fetcher's
- * `observedGeneration` mirror, the roll's invalidate→fetch→seed ordering, the
- * single-row-refresh outcome contract (`success(section)` swap /
- * `success(null)` drop / `failure` keep-stale) — was pinned PIECEWISE across
- * three suites (`MediaRepositoryHomeSectionsCacheTest`,
+ * cross-layer invariant — the repo's post-operation bump funnel, the
+ * fetcher's roll choreography (invalidate → fetch → seed behind its own
+ * write guard), the single-row-refresh outcome contract (`success(section)`
+ * swap / `success(null)` drop / `failure` keep-stale) — was pinned PIECEWISE
+ * across three suites (`MediaRepositoryHomeSectionsCacheTest`,
  * `HomeSectionsFetcherTest`, and feature/home's `DiscoverRollContractTest`,
  * which hand-builds a protocol-faithful repo double to span the layers it
  * cannot construct). This suite closes that gap. Full module/layer coverage
@@ -58,11 +56,13 @@ import kotlin.test.assertTrue
  *
  * STACK:
  *  - [HomeSectionsFetcher] — the real commonMain orchestrator (sub-call
- *    fan-out, TTL memos, the generation mirror), constructed exactly as
- *    `LibraryApiClientImpl` constructs it (see the fetcher's construction-
- *    scope KDoc), minus the transport: its sources are the module-local
- *    [FakeHomeSectionSources] (a mirror of core:network's fetcher-test fake,
- *    which is internal to that module and cannot be reused).
+ *    fan-out, TTL memos, the roll operation and its generation guard),
+ *    constructed exactly as `LibraryApiClientImpl` constructs it (see the
+ *    fetcher's construction-scope KDoc), minus the transport: its sources
+ *    are the shared [FakeHomeSectionSources] double
+ *    (:shared:core:test-fixtures — the one copy core:network's fetcher suite
+ *    and this suite drive; this suite's former module-local mirror carried
+ *    the "internal to that module and cannot be reused" apology).
  *  - [RealStackClientShell] — `LibraryApiClientImpl`'s home seam, test-local:
  *    the wide client surface is a relaxed double (this suite drives only the
  *    home path; anything else reaching the shell is a suite bug) and the two
@@ -70,8 +70,8 @@ import kotlin.test.assertTrue
  *    cancellation-rethrowing runCatching is kept — the fetch's
  *    throw-when-nothing-rendered must still become the Result.failure).
  *  - [FetcherBackedCachePort] — the [HomeSectionsCachePort] adapter with the
- *    same four one-line forwards `LibraryApiClientImpl` performs internally,
- *    recording the generation tokens the repo funnel hands down.
+ *    same forwards `LibraryApiClientImpl` performs internally, recording the
+ *    roll ops the repo routes through the port.
  *  - `MediaRepositoryImpl` — the real repo over the above, with a relaxed
  *    [HomeSectionsSnapshotStore] double (its persist call count IS the last
  *    pin) and relaxed doubles for every surface this suite does not
@@ -93,102 +93,27 @@ class HomeFeedRealStackContractTest {
     private var built: MediaRepositoryImpl? = null
 
     /**
-     * Mirrors core:network's HomeSectionsFetcherTest fake (internal to that
-     * module): every member records its leaf call and pops a scripted
-     * Result, with success-empty as the default so unscripted members render
-     * nothing.
-     */
-    private class FakeHomeSectionSources : HomeSectionSources {
-
-        /** Leaf calls in issue order, e.g. "discover:dr_x:20" — the call-count assertions key on this. */
-        val calls = mutableListOf<String>()
-
-        val continueWatchingResults = ArrayDeque<Result<List<MediaItem>>>()
-        val continueReadingResults = ArrayDeque<Result<List<MediaItem>>>()
-        val nextUpResults = ArrayDeque<Result<List<MediaItem>>>()
-        val upcomingResults = ArrayDeque<Result<List<MediaItem>>>()
-        val foldersResults = ArrayDeque<Result<List<LibraryFolder>>>()
-        val latestResults = ArrayDeque<Result<List<MediaItem>>>()
-        val similarResults = ArrayDeque<Result<List<MediaItem>>>()
-        val suggestionsResults = ArrayDeque<Result<SearchResult>>()
-        val collectionResults = ArrayDeque<Result<SearchResult>>()
-        val favoritesResults = ArrayDeque<Result<SearchResult>>()
-        val genreResults = ArrayDeque<Result<SearchResult>>()
-        val studioResults = ArrayDeque<Result<SearchResult>>()
-        val discoverRowResults = ArrayDeque<Result<List<MediaItem>>>()
-
-        private fun <T> resolve(queue: ArrayDeque<Result<T>>, key: String, empty: () -> T): Result<T> {
-            calls += key
-            return queue.removeFirstOrNull() ?: Result.success(empty())
-        }
-
-        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>> =
-            resolve(continueWatchingResults, "cw:$limit:$classicRows:$excludeActiveSessions") { emptyList() }
-
-        override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> =
-            resolve(continueReadingResults, "cr:$limit") { emptyList() }
-
-        override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> =
-            resolve(nextUpResults, "nu:$limit:$enableRewatching:$maxDays") { emptyList() }
-
-        override suspend fun getUpcoming(userId: String?, parentId: String?, limit: Int): Result<List<MediaItem>> =
-            resolve(upcomingResults, "upcoming:$userId:$parentId:$limit") { emptyList() }
-
-        override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
-            resolve(foldersResults, "folders") { emptyList() }
-
-        override suspend fun getLatestMedia(parentId: String, limit: Int, classicEpisodePool: Int?): Result<List<MediaItem>> =
-            resolve(latestResults, "latest:$parentId:$limit:$classicEpisodePool") { emptyList() }
-
-        override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
-            resolve(similarResults, "similar:$itemId:$limit") { emptyList() }
-
-        override suspend fun getSearchSuggestions(limit: Int): Result<SearchResult> =
-            resolve(suggestionsResults, "suggestions:$limit") { SearchResult(emptyList(), 0, 0) }
-
-        override suspend fun getCollectionItems(collectionId: String, startIndex: Int, limit: Int): Result<SearchResult> =
-            resolve(collectionResults, "collection:$collectionId:$startIndex:$limit") { SearchResult(emptyList(), 0, 0) }
-
-        override suspend fun getFavorites(mediaTypes: List<MediaType>?, limit: Int, startIndex: Int): Result<SearchResult> =
-            resolve(favoritesResults, "favorites:$limit:$startIndex") { SearchResult(emptyList(), 0, 0) }
-
-        override suspend fun getItemsByGenre(genreId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult> =
-            resolve(genreResults, "genre:$genreId:$startIndex:$limit") { SearchResult(emptyList(), 0, 0) }
-
-        override suspend fun getItemsByStudio(studioId: String, mediaTypes: List<MediaType>?, startIndex: Int, limit: Int): Result<SearchResult> =
-            resolve(studioResults, "studio:$studioId:$startIndex:$limit") { SearchResult(emptyList(), 0, 0) }
-
-        override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> =
-            resolve(discoverRowResults, "discover:${row.id}:${row.limit}") { emptyList() }
-    }
-
-    /**
      * The test-local twin of `LibraryApiClientImpl`'s internal port adapter:
-     * the same four one-line forwards onto the fetcher, MINUS the retry
-     * wrapper on `refreshHomeSection` (the fetcher already returns Result;
-     * production unwraps into its retry machinery, which this stack has no
-     * need for). Records the generation tokens the repo funnel delivers so
-     * the bump-at-invalidate-AND-commit rule is assertable end-to-end.
+     * the same forwards onto the fetcher, MINUS the retry wrapper on
+     * `refreshHomeSection` (the fetcher already returns Result; production
+     * unwraps into its retry machinery, which this stack has no need for).
+     * Records the roll ops the repo routes through the port, so a
+     * single-row pull's "never the roll op" shape stays assertable.
      */
     private class FetcherBackedCachePort(
         private val fetcher: HomeSectionsFetcher,
     ) : HomeSectionsCachePort {
 
-        val invalidateGenerations = mutableListOf<HomeWriteGeneration>()
-        val seedGenerations = mutableListOf<HomeWriteGeneration>()
+        /** The rows whose roll ops the repo ran through the port. */
+        val rollCalls = mutableListOf<DiscoverRowConfig>()
 
         override fun invalidateSubcallCaches() {
             fetcher.invalidateCaches()
         }
 
-        override fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration) {
-            invalidateGenerations += generation
-            fetcher.invalidateDiscoverRow(rowId, generation)
-        }
-
-        override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration) {
-            seedGenerations += generation
-            fetcher.seedDiscoverRow(row, items, generation)
+        override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
+            rollCalls += row
+            return fetcher.rerollDiscoverRow(row)
         }
 
         override suspend fun refreshHomeSection(
@@ -234,7 +159,7 @@ class HomeFeedRealStackContractTest {
     // The AuthApiClient seam behind the REAL HomeSession — the proven
     // construction shape of MediaRepositoryHomeSectionsCacheTest.buildRepository.
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val authClient: JellyfinApiClient = mockk(relaxed = true)
+    private val authClient: AuthApiClient = mockk(relaxed = true)
 
     /** The SWR snapshot-store double — the persist call count is the last test's pin. */
     private val snapshotStore: HomeSectionsSnapshotStore = mockk(relaxed = true)
@@ -277,19 +202,29 @@ class HomeFeedRealStackContractTest {
             homeSession,
             CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
         )
+        // ONE shared detail cluster across the impl + its ledger (the facade
+        // split's single-instance shape — the same MediaRepositoryInternals
+        // single the Koin graph aliases).
+        val internals = MediaRepositoryInternals(client, homeSession, sessionCacheRegistry)
         val repository = MediaRepositoryImpl(
             libraryApiClient = client,
             collectionApiClient = mockk<CollectionApiClient>(relaxed = true),
+            imageUrlApiClient = mockk<ImageUrlApiClient>(relaxed = true),
             homeSectionsCachePort = port,
             homeSnapshotStore = snapshotStore,
             playedStateSync = mockk(relaxed = true),
-            episodeCatalogue = mockk<EpisodeCatalogue>(relaxed = true),
             userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
-            timeSource = fakeTimeSource,
-            homeSession = homeSession,
             userDataAnnouncer = announcerFor(homeSession) { built },
-            sessionCacheRegistry = sessionCacheRegistry,
-            internals = MediaRepositoryInternals(client, homeSession, sessionCacheRegistry),
+            internals = internals,
+            ledger = MediaFreshnessLedger(
+                homeSession = homeSession,
+                sessionCacheRegistry = sessionCacheRegistry,
+                homeSnapshotStore = snapshotStore,
+                episodeCatalogue = mockk<EpisodeCatalogue>(relaxed = true),
+                internals = internals,
+                homeSectionsCachePort = port,
+                timeSource = fakeTimeSource,
+            ),
         ).also { built = it }
         return Stack(repository, client, port)
     }
@@ -354,12 +289,12 @@ class HomeFeedRealStackContractTest {
         // Leaf calls: seed fetch + refresh only. Assembled fetches: two, both
         // non-forced — the second happened because the success bump cleared
         // the in-memory payload (event-driven freshness; the frozen TTL would
-        // have served the pre-pull row otherwise). No port verb rode the
-        // single-row bump (the fetcher's own memo was refreshed by the pull
-        // itself), so the port recorded nothing.
+        // have served the pre-pull row otherwise). The pull rode the refresh
+        // op only — never the roll op (the fetcher's memo was refreshed by
+        // the pull itself).
         assertEquals(listOf("discover:dr_x:20", "discover:dr_x:20"), sources.calls)
         assertEquals(listOf(false, false), client.fetchCalls)
-        assertTrue(port.invalidateGenerations.isEmpty() && port.seedGenerations.isEmpty())
+        assertTrue(port.rollCalls.isEmpty(), "the single-row pull must ride the refresh op, never the roll op")
     }
 
     @Test
@@ -430,17 +365,16 @@ class HomeFeedRealStackContractTest {
     }
 
     @Test
-    fun `invalidateDiscoverRowCache bumps the generation through the real fetcher memo`() = runBlocking {
+    fun `rerollDiscoverRow rolls the real fetcher memo and the next fetch serves the roll`() = runBlocking {
         // The repo→port→fetcher leg of the roll protocol (race windows 2+3 of
-        // HomeFeed.rerollDiscoverRow's KDoc), now on the REAL stack:
-        // invalidateDiscoverRowCache — the private funnel, driven by the repo
-        // verb `rerollDiscoverRow` — bumps and hands the post-bump token to
-        // the port verb, the REAL fetcher mirrors it before dropping the row
-        // memo, and the commit half seeds the memo behind the commit token —
-        // so the next ordinary fetch (the assembled payload was dropped, it
-        // must refetch) serves the rolled row without re-querying the source.
-        // The recorded tokens pin bump-at-invalidate-AND-commit end-to-end:
-        // exactly one bump per verb, strictly +1 apart, delivered as data.
+        // HomeFeed.rerollDiscoverRow's KDoc), now on the REAL stack: the
+        // invalidate → fetch → seed choreography runs INSIDE the real
+        // fetcher's operation — it drops the row memo, fetches the row raw
+        // and re-seeds it behind its own write guard — while the repo answers
+        // with its post-operation bump (the assembled payload was dropped, so
+        // the next ordinary read must refetch), and that refetch serves the
+        // rolled row without re-querying the source. The leaf calls pin the
+        // whole shape: one raw fetch for the roll, none for the next read.
         val (repository, client, port) = buildStack()
         signIn("server-1", "user-1")
         val row = discoverRow("dr_x")
@@ -455,8 +389,7 @@ class HomeFeedRealStackContractTest {
         val rolled = repository.rerollDiscoverRow(row)
 
         assertEquals(listOf("rolled"), rolled.getOrNull()?.map { it.id })
-        assertEquals(listOf(HomeWriteGeneration.of(1L)), port.invalidateGenerations, "invalidate carries the post-bump token")
-        assertEquals(listOf(HomeWriteGeneration.of(2L)), port.seedGenerations, "seed carries the commit token, +1 after invalidate")
+        assertEquals(listOf(row), port.rollCalls, "the roll routes through the port's complete operation")
 
         val after = repository.getHomeSections(query, force = false).getOrThrow()
         assertEquals(listOf("rolled"), after.sections.single().items.map { it.id })

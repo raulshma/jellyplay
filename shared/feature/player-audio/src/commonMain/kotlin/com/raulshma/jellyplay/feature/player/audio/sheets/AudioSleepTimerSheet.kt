@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.MoonStars
+import com.raulshma.jellyplay.core.data.playback.SleepTimerSheetPolicy
+import com.raulshma.jellyplay.core.data.playback.SLEEP_TIMER_PRESET_MS
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
@@ -32,6 +34,7 @@ import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
+import com.raulshma.jellyplay.core.ui.components.rememberIs24HourFormat
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_cancel
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_cancel_timer
@@ -42,15 +45,6 @@ import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_sle
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_sleep_timer_keep
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_sleep_timer_stops_at
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_sleep_timer_title
-import com.raulshma.jellyplay.feature.player.audio.rememberIs24HourFormat
-
-private val SLEEP_TIMER_PRESETS = listOf(
-    15 * 60 * 1000L,
-    30 * 60 * 1000L,
-    45 * 60 * 1000L,
-    60 * 60 * 1000L,
-    90 * 60 * 1000L,
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,7 +139,7 @@ internal fun AudioSleepTimerSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        SLEEP_TIMER_PRESETS.forEach { durationMs ->
+                        SLEEP_TIMER_PRESET_MS.forEach { durationMs ->
                             // Highlight the configured duration (lastUsedDurationMs is set synchronously
                             // when the timer starts). Previously this compared against remainingMs, which
                             // decrements every second, so the highlight vanished the moment the timer began.

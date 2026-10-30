@@ -54,20 +54,12 @@ import org.koin.dsl.module
  *    resolve from the androidMain/jvmMain platform modules
  *    (androidSettingsPlatformModule / desktopSettingsPlatformModule).
  *
- * Android APP-SIDE-REQUIRED defs (the wrapped types live in Android-only
- * core:data/core:notification code and app-side scheduler classes — this
- * module's androidMain cannot see them): the composition root must register
- * these four before the corresponding screens open (resolution is lazy, so
- * boot stays safe):
- *  - [com.raulshma.jellyplay.feature.settings.AutoDownloadSync] (wraps the
- *    AutoDownloadScheduler WorkManager sync),
- *  - [com.raulshma.jellyplay.feature.settings.NotificationSync] (wraps
- *    NotificationScheduler.scheduleOrUpdate),
- *  - [com.raulshma.jellyplay.feature.settings.WatchNextRefresher] (wraps the
- *    Android TV Watch Next scheduler),
- *  - [com.raulshma.jellyplay.feature.settings.AudioCacheClearer] (wraps
- *    AudioStreamCache).
- * The desktop actuals of all four live in desktopSettingsPlatformModule.
+ * The ViewModel seam adapters (AutoDownloadSync, AutoDownloadCleanup,
+ * NotificationSync, WatchNextRefresher, AudioCacheClearer) are platform-module
+ * defs too: their Android halves wrap core:data's Android-only types, all
+ * visible from this module's androidMain (the feature depends on core:data),
+ * so androidSettingsPlatformModule binds them beside the Context-shaped picks;
+ * the desktop actuals of all five live in desktopSettingsPlatformModule.
  */
 val settingsModule: Module = module {
     includes(platformSettingsModule())
@@ -139,7 +131,9 @@ val settingsModule: Module = module {
 
     // Hand-written, not viewModelOf: the nullable audio-device seam resolves
     // with getOrNull (the ctor KDoc owns the rationale), which viewModelOf's
-    // per-param hard get() cannot express.
+    // per-param hard get() cannot express. The connection-speed probe rides
+    // the same getOrNull shape (always bound in production; nullable keeps
+    // the VM's unit-test construction seam-free).
     viewModel {
         PlaybackSettingsViewModel(
             projections = get(),
@@ -147,6 +141,7 @@ val settingsModule: Module = module {
             editor = get(),
             watchNextRefresher = get(),
             audioDeviceEnumerator = getOrNull(),
+            connectionSpeedTester = getOrNull(),
         )
     }
 

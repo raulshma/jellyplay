@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -347,7 +349,7 @@ class SettingsCatalogScreenContractTest {
         // …the auto-download retention cluster rides the auto-download toggle
         // the same way, and the "Clean up now" action additionally rides the
         // keep-days picker being non-zero (the screen feeds the > 0 state).
-        val autoDownloadOn = RowAdmissionFlags(parentsOn = setOf(StorageRows.AutoDownloadNewEpisodes.id))
+        val autoDownloadOn = RowAdmissionFlags(parentsOn = setOf(StorageRows.AutoDownloadMode.id))
         listOf(
             StorageRows.AutoDownloadLookahead.id,
             StorageRows.AutoDownloadMaxPerPass.id,
@@ -358,7 +360,7 @@ class SettingsCatalogScreenContractTest {
             assertFalse(SettingsScreenGroups.storageDownloads.rowAdmitted(it, RowAdmissionFlags()), "$it drops when auto-download is off")
         }
         val keepDaysOn = RowAdmissionFlags(
-            parentsOn = setOf(StorageRows.AutoDownloadNewEpisodes.id, StorageRows.AutoDownloadKeepDays.id),
+            parentsOn = setOf(StorageRows.AutoDownloadMode.id, StorageRows.AutoDownloadKeepDays.id),
         )
         assertTrue(SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadCleanUpNow.id, keepDaysOn))
         assertFalse(
@@ -428,6 +430,7 @@ class SettingsCatalogScreenContractTest {
                 videoAutoplayNext = true,
                 audioPassthrough = true,
                 spatialAudioEnabled = true,
+                pauseScreensaverMode = PauseScreensaverMode.CLOCK,
             ),
         )
         val declaredParents = listOf(
@@ -548,11 +551,11 @@ class SettingsCatalogScreenContractTest {
     // ── 3. The fixed drifts, pinned behaviorally ────────────────────────
 
     /**
-     * The playback screen sections in LazyColumn order — the same
-     * [SettingsScreenSection] declaration the screen consumes, so the adjust
-     * pins below run the very [deriveAdjustForAdvanced] the screen passes to
-     * `PreferenceScreenScaffold` (no per-screen hand-written lambda left to
-     * drift from the shipped shapes).
+     * The playback screen sections in LazyColumn order — the same fold the
+     * shell derives from the screen's [PreferenceScreenGroup] slot
+     * declaration, so the adjust pins below run the very
+     * [deriveAdjustForAdvanced] the shell computes (the hand-written
+     * per-screen lambda and the hand-maintained section list are gone).
      */
     private val playbackSections = listOf(
         SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
@@ -644,17 +647,20 @@ class SettingsCatalogScreenContractTest {
         // The declaration side keeps the ids inside LiveTvSearchItems and must
         // keep following the media_segment_<enum-name> convention so the
         // derived scroll set and the hand-built rows stay in lock-step. The
-        // group's skip-on-seek toggle is the one non-enum member — a
-        // hand-built row like the per-type rows.
+        // group's skip-on-seek toggle, skip-prompt-duration row and the
+        // Next Up preroll row are the three non-enum members — hand-built
+        // rows like the per-type rows.
         val enumSegmentIds = MediaSegmentType.entries.map { "media_segment_${it.name.lowercase()}" }
         assertEquals(
-            enumSegmentIds + PlaybackRows.SkipSegmentsOnSeek.id,
+            enumSegmentIds + PlaybackRows.SkipSegmentsOnSeek.id + PlaybackRows.SkipPromptDuration.id +
+                PlaybackRows.NextUpPreroll.id,
             SettingsScreenGroups.playbackMediaSegments.itemIds,
-            "media-segment group declarations drifted from MediaSegmentType.entries + the skip-on-seek toggle",
+            "media-segment group declarations drifted from MediaSegmentType.entries + the hand-built transport rows",
         )
         assertTrue(
             SettingsScreenGroups.playbackDvr.itemIds.none {
-                it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) || it == PlaybackRows.SkipSegmentsOnSeek.id
+                it.startsWith(SettingsScreenGroups.MEDIA_SEGMENT_ID_PREFIX) || it == PlaybackRows.SkipSegmentsOnSeek.id ||
+                    it == PlaybackRows.SkipPromptDuration.id || it == PlaybackRows.NextUpPreroll.id
             },
             "DVR group must not absorb media-segment ids",
         )
@@ -862,34 +868,34 @@ class SettingsCatalogScreenContractTest {
         assertEquals(11, SettingsScreenGroups.storageNetwork.items.size, "the storage.network declaration changed — update this pin")
 
         // Downloads: the three download_schedule_* window rows only when
-        // scheduling is on (their declared WhenOn gate); the four auto-download
-        // retention rows only when auto-download is on; clean-up-now only when
-        // the keep-days window is set; every other record renders
-        // unconditionally (its non-advanced base).
+        // scheduling is on (their declared WhenOn gate); the five auto-download
+        // rows (check-now included) only when the policy mode is not NEVER;
+        // clean-up-now only when the keep-days window is set; every other
+        // record renders unconditionally (its non-advanced base).
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 8,
+            SettingsScreenGroups.storageDownloads.items.size - 9,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 5,
+            SettingsScreenGroups.storageDownloads.items.size - 6,
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
                 RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true)),
             ),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 8, // minus the three schedule windows, the four auto-download retention rows, and the clean-up action — every parent-gated row
+            SettingsScreenGroups.storageDownloads.items.size - 9, // minus the three schedule windows, the five auto-download rows, and the clean-up action — every parent-gated row
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to false))),
         )
         assertEquals(
-            SettingsScreenGroups.storageDownloads.items.size - 5, // minus the four auto-download retention rows and the clean-up action
+            SettingsScreenGroups.storageDownloads.items.size - 6, // minus the five auto-download rows and the clean-up action
             rowTotalFor(SettingsScreenGroups.storageDownloads, RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true))),
         )
-        // The auto-download retention cluster: the four policy rows ride the
-        // auto-download toggle, and clean-up-now additionally rides the
+        // The auto-download retention cluster: the five policy rows ride the
+        // mode picker, and clean-up-now additionally rides the
         // keep-days picker being non-zero — with the schedule and
         // auto-download windows on, only the clean-up action stays gated
         // off; turning the keep-days window on admits every declared row.
@@ -897,7 +903,7 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.storageDownloads.items.size - 1, // minus the clean-up action (the keep-days window is still off)
             rowTotalFor(
                 SettingsScreenGroups.storageDownloads,
-                RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true, StorageRows.AutoDownloadNewEpisodes.id to true)),
+                RowAdmissionFlags(parentsOn = rowParentsOn(StorageRows.DownloadSchedule.id to true, StorageRows.AutoDownloadMode.id to true)),
             ),
         )
         assertEquals(
@@ -907,7 +913,7 @@ class SettingsCatalogScreenContractTest {
                 RowAdmissionFlags(
                     parentsOn = rowParentsOn(
                         StorageRows.DownloadSchedule.id to true,
-                        StorageRows.AutoDownloadNewEpisodes.id to true,
+                        StorageRows.AutoDownloadMode.id to true,
                         StorageRows.AutoDownloadKeepDays.id to true,
                     ),
                 ),
@@ -968,9 +974,9 @@ class SettingsCatalogScreenContractTest {
         )
         // Every non-advanced declaration renders with caps on (isTv off: the
         // two TV rows ride isTv alone — shipped semantics, also without
-        // advanced mode), EXCEPT the two still-watching rows, which ride the
-        // autoplay toggle (their declared WhenOn gate — the flags here carry
-        // no parentsOn).
+        // advanced mode), EXCEPT the two still-watching rows and the
+        // pause-screensaver delay row, which ride their parent toggles (their
+        // declared WhenOn gates — the flags here carry no parentsOn).
         assertEquals(
             SettingsScreenGroups.playbackPlayer.items.count { !it.isAdvanced } - 2,
             rowTotalFor(
@@ -984,7 +990,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 5, // minus the two TV rows, the two WhenOn(autoplay) still-watching rows, and the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
+            SettingsScreenGroups.playbackPlayer.items.size - 6, // minus the two TV rows, the two WhenOn(autoplay) still-watching rows, the WhenOn(pause_screensaver) delay row, and the Platform(Pip) auto-PiP row (off on this desktop JVM's seam)
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -999,11 +1005,12 @@ class SettingsCatalogScreenContractTest {
         // semantics, also without advanced mode); every other advanced
         // declaration (the resume-on-headset-plug row among them) admits
         // under advanced, and the Always-admitted input-bindings editor row
-        // needs no advanced. Only the two WhenOn(autoplay) still-watching
-        // rows (no parents on) and the Platform(Pip) auto-PiP row (off on
-        // this desktop JVM's seam — TV does not back it) drop.
+        // needs no advanced. The two WhenOn(autoplay) still-watching rows
+        // (no parents on), the WhenOn(pause_screensaver) delay row (no
+        // parents on), and the Platform(Pip) auto-PiP row (off on this
+        // desktop JVM's seam — TV does not back it) drop.
         assertEquals(
-            SettingsScreenGroups.playbackPlayer.items.size - 2 - 1,
+            SettingsScreenGroups.playbackPlayer.items.size - 2 - 1 - 1,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1238,26 +1245,34 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home display row total is the nine declared rows plus the conditional unhide row`() {
-        // The count follows the emitted rows: the nine always-declared rows
-        // plus the explicit unhide +1 when hidden CW items exist, rather than
-        // items.size (10, including the unhide row) + 1.
-        val displayRowsWithoutUnhide = SettingsScreenGroups.homeDisplay.items.count { it.id != HomeRows.UnhideCw.id }
-        assertEquals(displayRowsWithoutUnhide, homeDisplayScreenRowTotal(hiddenCwItems = 0))
+    fun `home display row total is the declared rows minus the gated pair plus the conditional unhide row`() {
+        // The count follows the emitted rows: the declared rows minus the
+        // unhide row (the content-gated +1 once hidden CW items exist) and
+        // minus the hero-slideshow interval row while its WhenOn
+        // (home_hero_style = slideshow) parent is off.
+        val displayRowsWithoutGatedPair = SettingsScreenGroups.homeDisplay.items.count {
+            it.id != HomeRows.UnhideCw.id && it.id != HomeRows.HomeHeroSlideshowInterval.id
+        }
+        assertEquals(displayRowsWithoutGatedPair, homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false))
         assertEquals(
-            displayRowsWithoutUnhide + 1, // +1: the unhide row, once hidden CW items exist
-            homeDisplayScreenRowTotal(hiddenCwItems = 1),
+            displayRowsWithoutGatedPair + 1, // +1: the unhide row, once hidden CW items exist
+            homeDisplayScreenRowTotal(hiddenCwItems = 1, heroSlideshowOn = false),
         )
         assertEquals(
-            SettingsScreenGroups.homeDisplay.items.size - 1,
-            homeDisplayScreenRowTotal(hiddenCwItems = 0),
+            displayRowsWithoutGatedPair + 1, // +1: the slideshow interval row, its parent on
+            homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = true),
+        )
+        assertEquals(
+            SettingsScreenGroups.homeDisplay.items.size - 2,
+            homeDisplayScreenRowTotal(hiddenCwItems = 0, heroSlideshowOn = false),
             "the display declaration changed — update this pin",
         )
         // The unhide row is declared last, so the derived emission order
         // keeps it at the end.
         assertEquals(HomeRows.UnhideCw.id, SettingsScreenGroups.homeDisplay.itemIds.last())
-        // …and it admits for emission (rowAdmitted's no-gate default) — the
-        // screen's content-state `if` carries its gate.
+        // …and they admit for emission (rowAdmitted's no-gate default /
+        // the WhenOn parent fed by the screen) — the screen's content-state
+        // `if`s carry their gates.
         assertTrue(SettingsScreenGroups.homeDisplay.rowAdmitted(HomeRows.UnhideCw.id, RowAdmissionFlags()))
     }
 
@@ -1458,11 +1473,10 @@ class SettingsCatalogScreenContractTest {
     }
 
     /**
-     * The appearance screen sections in LazyColumn order — the same
-     * [SettingsScreenSection] declaration the screen consumes, so the
-     * trailing-shape adjust pin below runs the very [deriveAdjustForAdvanced]
-     * the screen passes to `PreferenceScreenScaffold` (the hand-written
-     * per-screen lambda is gone).
+     * The appearance screen sections in LazyColumn order — the same fold the
+     * shell derives from the screen's [PreferenceScreenGroup] slot
+     * declaration, so the trailing-shape adjust pin below runs the very
+     * [deriveAdjustForAdvanced] the shell computes.
      */
     private val appearanceSections = listOf(
         SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
@@ -1544,7 +1558,108 @@ class SettingsCatalogScreenContractTest {
         assertEquals(naiveSecurityTotal(showAdvanced = true, supportsAppLock = false, supportsBiometric = true), securityTotal(canShowBiometric = true, showAdvanced = true, supportsAppLock = false))
     }
 
-    // ── 7. The search-result click action ───────────────────────────────
+    // ── 7. The screen-shell declaration path ────────────────────────────
+
+    @Test
+    fun `screen-shell slot declarations derive the same hidden counts as their group declarations`() {
+        // The five migrated screens' hoisted slot declarations — the ONE
+        // ordered declarations the screens map their hand-written bodies
+        // onto ([AppearanceSettingsScreenSlots] et al., beside each screen).
+        // Consumed directly here, so a screen reorder or re-flag updates
+        // both sides of every pin below at once instead of stranding a stale
+        // replica. The default content-count hook IS the declared-admission
+        // delta, so every plain slot list derives exactly what
+        // [hiddenRowsFor] over the group list derives — the ratchet's
+        // absolute numbers (FusedRowsRatchetTest) hold through the shell
+        // unchanged. The track-selection slot contributes zero (every row
+        // declares Always), so the language declaration's completeness does
+        // not move its hint. The deliberately-absent content-only slots (the
+        // security screen's quick-connect and remote-control groups)
+        // contribute zero by construction.
+        val appearanceSlots = AppearanceSettingsScreenSlots
+        val languageSlots = LanguageSettingsScreenSlots
+        val storageSlots = StorageSettingsScreenSlots
+        val securitySlots = SecuritySettingsScreenSlots
+        // The playback declaration is parameterized by the preferred player
+        // (the engine slot's content-count hook is the one runtime-keyed
+        // shape the flags vocabulary cannot express); the shipped JVM shape
+        // is the LIBVLC branch — this JVM's desktop seam backs the mpv
+        // device rows and the vlc branch is capability-free.
+        val playbackSlots = PlaybackSettingsScreenSlots(PlayerType.LIBVLC)
+        val appearanceGroups = listOf(
+            SettingsScreenGroups.appearanceTheme,
+            SettingsScreenGroups.appearanceNavigation,
+            SettingsScreenGroups.appearanceLibrary,
+            SettingsScreenGroups.appearancePerformance,
+            SettingsScreenGroups.appearanceEyeCare,
+            SettingsScreenGroups.appearanceNewsletter,
+        )
+        assertEquals(
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+            hiddenRowsFor(appearanceSlots, RowAdmissionFlags(showAdvanced = false, isTv = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(appearanceGroups, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+            hiddenRowsFor(appearanceSlots, RowAdmissionFlags(showAdvanced = false, isTv = true)),
+        )
+        assertEquals(
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.languageGeneral, SettingsScreenGroups.languageSubtitles),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLocaleOverride = false),
+            ),
+            hiddenRowsFor(languageSlots, RowAdmissionFlags(showAdvanced = false, supportsAppLocaleOverride = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(
+                listOf(
+                    SettingsScreenGroups.storageCache,
+                    SettingsScreenGroups.storageNetwork,
+                    SettingsScreenGroups.storageDownloads,
+                ),
+                RowAdmissionFlags(showAdvanced = false),
+            ),
+            hiddenRowsFor(storageSlots, RowAdmissionFlags(showAdvanced = false)),
+        )
+        assertEquals(
+            hiddenRowsFor(
+                listOf(SettingsScreenGroups.security),
+                RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false),
+            ),
+            hiddenRowsFor(securitySlots, RowAdmissionFlags(showAdvanced = false, supportsAppLock = true, supportsBiometric = false)),
+        )
+
+        // Playback: the engine slot's prefix hook is the declared-admission
+        // delta over the branch the screen emits — the shell count is the
+        // plain groups' delta plus that one branch term (this JVM's desktop
+        // seam backs the mpv device rows; the vlc branch is capability-free).
+        val desktop = RowAdmissionFlags(showAdvanced = false)
+        val plainPlaybackGroups = listOf(
+            SettingsScreenGroups.playbackPlayer,
+            SettingsScreenGroups.playbackAdvancedVideo,
+            SettingsScreenGroups.playbackMediaSegments,
+            SettingsScreenGroups.playbackSyncPlay,
+            SettingsScreenGroups.playbackCasting,
+            SettingsScreenGroups.playbackDvr,
+        )
+        assertEquals(
+            hiddenRowsFor(plainPlaybackGroups, desktop) +
+                (
+                    rowTotalFor(SettingsScreenGroups.playbackEngine, desktop.copy(showAdvanced = true)) { it.id.startsWith("vlc_") } -
+                        rowTotalFor(SettingsScreenGroups.playbackEngine, desktop) { it.id.startsWith("vlc_") }
+                    ),
+            hiddenRowsFor(playbackSlots, desktop),
+        )
+        // …and it is honest where the frozen literal was not: the count moves
+        // with the engine branch (vlc's declared row count differs from mpv's
+        // desktop-gated one) instead of sitting at a hand-picked constant.
+        val mpvSlots = PlaybackSettingsScreenSlots(PlayerType.MPV)
+        assertTrue(
+            hiddenRowsFor(playbackSlots, desktop) != hiddenRowsFor(mpvSlots, desktop),
+            "the derived playback hint must track the engine branch (the frozen 28 could not)",
+        )
+    }
+
+    // ── 8. The search-result click action ───────────────────────────────
 
     @Test
     fun `search-result clicks decide the pure action per branch`() {

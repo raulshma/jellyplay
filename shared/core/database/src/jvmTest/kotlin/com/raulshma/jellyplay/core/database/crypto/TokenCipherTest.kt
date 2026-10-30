@@ -113,15 +113,38 @@ class TokenCipherTest {
     }
 
     @Test
-    fun `decryption fails with different key`() {
+    fun `decryption with a different key returns null instead of throwing`() {
         val plaintext = "secret"
         val encrypted = cipher.encrypt(plaintext)!!
 
         val differentKey = JvmTokenCipher.forTesting(
             javax.crypto.spec.SecretKeySpec(ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }, "AES")
         )
-        org.junit.Assert.assertThrows(javax.crypto.AEADBadTagException::class.java) {
-            differentKey.decrypt(encrypted)
-        }
+        // Key rotated out from under the row (uninstall + data restore, backup
+        // restore on a new device): degrade to "no valid token" — the contract
+        // every caller already maps to isConnected=false / signed-out — never
+        // throw out of a Room flow.
+        assertNull(differentKey.decrypt(encrypted))
+    }
+
+    @Test
+    fun `decrypt returns null for malformed ciphertext`() {
+        // v1$ prefix marks it encrypted, but the payload is not base64.
+        assertNull(cipher.decrypt("v1\$!!!not-base64!!!\$also-not"))
+    }
+
+    @Test
+    fun `decrypt returns null for truncated ciphertext`() {
+        // Encrypted-looking but missing the iv/ct separator — a row damaged
+        // after the fact must degrade, not throw out of a flow mapping.
+        assertNull(cipher.decrypt("v1\$only-one-part"))
+    }
+
+    @Test
+    fun `decrypt still round-trips after a null-degrading failure`() {
+        // A poisoned row must not corrupt the cipher's state for other rows.
+        val good = cipher.encrypt("still-works")!!
+        assertNull(cipher.decrypt("v1\$!!!not-base64!!!\$also-not"))
+        assertEquals("still-works", cipher.decrypt(good))
     }
 }

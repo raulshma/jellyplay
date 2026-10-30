@@ -75,9 +75,11 @@ class EqualizerHelper(
      * must stay **enabled while EITHER is on**; when both are off, the engine
      * is free to disable it so the system effect is not held open needlessly.
      *
-     * Folding this rule in here means the three apply sites
-     * (`AudioEffectsProcessor`, `AudioEffectChain`, `MpvPlayerEngine`) cannot
-     * drift — they pass the two user-facing flags and this method owns the
+     * Folding this rule in here means the apply sites (`AudioEffectsProcessor`
+     * directly; the video engines through the `AudioSessionEffectTrio` —
+     * `AudioEffectChain` composes it for Exo, `MpvPlayerEngine` constructs it
+     * for mpv) cannot drift — they pass the two user-facing flags and this
+     * method owns the
      * `||`. Previously the rule lived in a companion `shouldEnableFor` that
      * each site had to remember to call, and callers then re-derived the
      * same `||` to decide follow-up work. The resolved flag is returned so

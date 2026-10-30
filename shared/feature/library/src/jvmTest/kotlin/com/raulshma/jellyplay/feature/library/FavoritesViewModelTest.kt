@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.feature.library
 
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -45,7 +46,8 @@ class FavoritesViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
+    private lateinit var prefetcherReads: com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
     private lateinit var userDataMutator: UserDataMutator
     private lateinit var quickDownloadActions: QuickDownloadActions
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -60,22 +62,26 @@ class FavoritesViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        // The photo-folder prefetcher still reads the union (its folder-url
+        // read has no LibraryFeed member); the test asserts that seam.
+        prefetcherReads = mockk(relaxed = true)
         userDataMutator = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         // BEFORE construction: the deferred refresher reads the flow in its
         // initializer — a stub after would hand it the relaxed default (a
         // dead mock flow that never emits).
-        every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = FavoritesViewModel(
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
+            userDataChanges = userDataEvents,
             userDataMutator = userDataMutator,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             quickDownloadActions = quickDownloadActions,
             // Real prefetcher over the mocked repository: the photo-folder
             // prefetch tests assert the repository seam, not the prefetcher.
-            photoFolderPrefetcher = PhotoFolderPrefetcher(mediaRepository),
+            photoFolderPrefetcher = PhotoFolderPrefetcher(prefetcherReads),
         )
     }
 
@@ -94,7 +100,9 @@ class FavoritesViewModelTest {
         coVerify {
             userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        // No libraryFeed.markPlayed verify: LibraryFeed has no such
+        // member — the narrowing is the type-level guarantee this pin used
+        // to assert at runtime.
     }
 
     @Test
@@ -126,7 +134,7 @@ class FavoritesViewModelTest {
             prepend = LoadState.NotLoading(endOfPaginationReached = false),
             append = LoadState.NotLoading(endOfPaginationReached = false),
         )
-        every { mediaRepository.getFavoritesPaged(any()) } answers {
+        every { libraryFeed.getFavoritesPaged(any()) } answers {
             flowOf(PagingData.from(emptyList<MediaItem>(), idleStates))
         }
     }
@@ -141,7 +149,7 @@ class FavoritesViewModelTest {
 
         assertTrue(firstPage.isCompleted)
         coVerify(exactly = 1) {
-            mediaRepository.getFavoritesPaged(mediaTypes = listOf(MediaType.MOVIE))
+            libraryFeed.getFavoritesPaged(mediaTypes = listOf(MediaType.MOVIE))
         }
     }
 
@@ -155,7 +163,7 @@ class FavoritesViewModelTest {
         advanceUntilIdle()
 
         assertTrue(firstPage.isCompleted)
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(mediaTypes = null) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(mediaTypes = null) }
     }
 
     // ── Deferred refresh (user-data changes while off-screen) ───────────────
@@ -166,18 +174,18 @@ class FavoritesViewModelTest {
         // Keep the paging pipeline alive for the whole test (cachedIn shares it).
         val collector = launch { viewModel.pagedItems.collect {} }
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
 
         // A write confirmed while the grid is NOT on screen only marks stale.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
 
         // Re-entry fires the single deferred regeneration.
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 2) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -192,7 +200,7 @@ class FavoritesViewModelTest {
         advanceUntilIdle()
 
         // Silent contract: no mid-scroll pager swap for on-screen events.
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -209,13 +217,13 @@ class FavoritesViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("m1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 2) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -230,7 +238,7 @@ class FavoritesViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getFavoritesPaged(any()) }
+        coVerify(exactly = 1) { libraryFeed.getFavoritesPaged(any()) }
         collector.cancel()
     }
 
@@ -248,21 +256,21 @@ class FavoritesViewModelTest {
     fun `prefetchPhotoFolderChildUrls fetches only photo folders and merges results`() = runTest {
         val folder = MediaItem(id = "pf-1", name = "Folder", mediaType = MediaType.PHOTO_FOLDER)
         val movie = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
-        coEvery { mediaRepository.getPhotoFolderChildImageUrls("pf-1") } returns listOf("u1", "u2")
+        coEvery { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) } returns listOf("u1", "u2")
 
         viewModel.prefetchPhotoFolderChildUrls(listOf(folder, movie))
         advanceUntilIdle()
 
         // Only the photo folder is fetched — regular items never hit the seam.
-        coVerify(exactly = 1) { mediaRepository.getPhotoFolderChildImageUrls("pf-1") }
-        coVerify(exactly = 0) { mediaRepository.getPhotoFolderChildImageUrls("m1") }
+        coVerify(exactly = 1) { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) }
+        coVerify(exactly = 0) { prefetcherReads.getPhotoFolderChildImageUrls("m1", any()) }
         assertEquals(listOf("u1", "u2"), viewModel.photoFolderChildUrlsFor("pf-1").first())
     }
 
     @Test
     fun `prefetchPhotoFolderChildUrls skips folders already in the map`() = runTest {
         val folder = MediaItem(id = "pf-1", name = "Folder", mediaType = MediaType.PHOTO_FOLDER)
-        coEvery { mediaRepository.getPhotoFolderChildImageUrls("pf-1") } returns listOf("u1")
+        coEvery { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) } returns listOf("u1")
 
         viewModel.prefetchPhotoFolderChildUrls(listOf(folder))
         advanceUntilIdle()
@@ -271,7 +279,7 @@ class FavoritesViewModelTest {
 
         // Recomposition re-fires the prefetch; the already-fetched folder is
         // not re-fetched and the merged state keeps the original urls.
-        coVerify(exactly = 1) { mediaRepository.getPhotoFolderChildImageUrls("pf-1") }
+        coVerify(exactly = 1) { prefetcherReads.getPhotoFolderChildImageUrls("pf-1", any()) }
         assertEquals(listOf("u1"), viewModel.photoFolderChildUrlsFor("pf-1").first())
     }
 
@@ -282,7 +290,7 @@ class FavoritesViewModelTest {
         viewModel.prefetchPhotoFolderChildUrls(listOf(movie))
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.getPhotoFolderChildImageUrls(any()) }
+        coVerify(exactly = 0) { prefetcherReads.getPhotoFolderChildImageUrls(any(), any()) }
         assertEquals(emptyList(), viewModel.photoFolderChildUrlsFor("m1").first())
     }
 

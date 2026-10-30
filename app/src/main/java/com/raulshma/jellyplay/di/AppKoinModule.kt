@@ -67,33 +67,28 @@ import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
 /**
- * App-side Koin graph (Hilt removal): every former @Inject/@Singleton
- * ctor class and @Binds interface pair that used to live in :app's Hilt
- * component (plus the deleted WidgetModule's three @Binds) constructs here.
- * 1:1 with the old constructors — Context params are the application context,
- * the application [CoroutineScope] is the shared DatastoreQualifiers single
- * (the javax @ApplicationScope qualifier died with Hilt).
+ * App-side Koin graph: the :app classes that need DI construct here. Context
+ * params are the application context, and the application [CoroutineScope] is
+ * the shared DatastoreQualifiers single.
  *
- * Data-layer deps (AuthRepository, RealtimeConnection, the schedulers, …)
- * resolve from the core graphs: the legacy remainder lands in
- * androidCoreDataModule/androidNotificationModule and the shared
- * stores from datastoreCommonModule/androidDatastoreModule — one framework
- * per type, this module owns only :app classes.
+ * Data-layer deps (AuthRepository, RealtimeConnection, the schedulers, ...)
+ * resolve from the core graphs: androidCoreDataModule/androidNotificationModule
+ * and the shared stores from datastoreCommonModule/androidDatastoreModule - one
+ * framework per type, this module owns only :app classes.
  */
 fun androidAppModule(context: Context): Module = module {
     single { DeepLinkHandler() }
 
-    // App-scoped PIN/biometric lock flag: the single source of
-    // truth for "unlocked" that MainActivity's compose gate renders AND
-    // PlayerActivity's locked-redirect check reads — hoisted off
-    // MainActivity's former compose-local state so the media-notification
-    // class-name PendingIntent can no longer reach playback without a
-    // challenge (see AppLockState KDoc).
+    // App-scoped PIN/biometric lock flag: the single source of truth for
+    // "unlocked" that MainActivity's compose gate renders AND PlayerActivity's
+    // locked-redirect check reads, so the media-notification class-name
+    // PendingIntent cannot reach playback without a challenge (see AppLockState
+    // KDoc).
     single { AppLockState() }
 
     // Floating overlay bridge: both deps resolve from the core graphs
-    // (ActivePlayerController from androidCoreDataModule's legacy remainder,
-    // VideoMiniPlayerState from the shared playback state module).
+    // (ActivePlayerController from androidCoreDataModule, VideoMiniPlayerState
+    // from the shared playback state module).
     single {
         FloatingPlayerState(
             activePlayerController = get(),
@@ -113,7 +108,7 @@ fun androidAppModule(context: Context): Module = module {
             remoteControlReceiver = get(),
             widgetWorkScheduler = get(),
             cacheMaintenanceInitializer = get(),
-            mediaRepository = get(),
+            libraryFeed = get(),
         )
     }
     single {
@@ -141,7 +136,7 @@ fun androidAppModule(context: Context): Module = module {
     single {
         ExternalPlayerReports(
             playbackRepository = get(),
-            mediaRepository = get(),
+            userDataWrites = get(),
             playbackSourceResolver = get(),
             playbackStore = get(),
         )
@@ -233,13 +228,12 @@ fun androidAppModule(context: Context): Module = module {
 }
 
 /**
- * App-shell ViewModels. All three are `viewModelOf` one-liners — every ctor
+ * App-shell ViewModels. All three are `viewModelOf` one-liners - every ctor
  * param is a plain Koin-bound type (no getOrNull seams, no function-typed
  * defaults), so nothing needs a hand-written def (same two documented reasons
  * SettingsKoinModule keeps its hand-written half). The Activity sites resolve
  * them through the AndroidX ViewModelStore (see [KoinViewModelFactory] below),
- * so per-owner instance semantics — not Koin's own scoping — decide sharing,
- * exactly like the former Hilt-ViewModel integration's viewModels() pair.
+ * so per-owner instance semantics - not Koin's own scoping - decide sharing.
  * Registration totality (exactly one def per app-module ViewModel) is pinned
  * by AppKoinModuleViewModelTotalityGuardTest (app/src/test).
  */
@@ -250,20 +244,14 @@ val androidAppViewModelsModule: Module = module {
 }
 
 /**
- * Shared-feature seam adapters over the core data singletons (formerly the
- * HiltMusicMessageBus/HiltDetailThemeMusic/
- * HiltAudioPlayerEngine/HiltAudioPlayerCast classes in the deleted
- * HiltInteropModule). Same adapter bodies, direct Koin resolution: the
- * CastManager/UserMessageBus/ThemeMusicPlayer targets
- * are Koin-owned by the core graphs now, so no EntryPoint bridge
- * remains. Desktop halves are the no-op defs in each shared module's jvmMain.
- * (DetailAudioPlayback is gone entirely — its only caller, the detail
- * local-track play command, was production-unreachable and died with the
- * DetailUiEvent fold.)
+ * Shared-feature seam adapters over the core data singletons. The
+ * CastManager/UserMessageBus/ThemeMusicPlayer targets are Koin-owned by the
+ * core graphs, so the adapters resolve them directly with no EntryPoint
+ * bridge. Desktop halves are the no-op defs in each shared module's jvmMain.
  *
- * AudioPlayerEngine is NOT bridged here anymore: the contract moved into
- * core/data (beside AudioQueueManager/AudioEffectsManager) and the media3
- * manager implements it directly — androidCoreDataModule holds the alias.
+ * AudioPlayerEngine is NOT bridged here: the contract lives in core/data
+ * (beside AudioQueueManager/AudioEffectsManager) and the media3 manager
+ * implements it directly - androidCoreDataModule holds the alias.
  */
 fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<MusicMessageBus> { AppMusicMessageBus(bus = get()) }
@@ -280,15 +268,6 @@ fun androidAppInteropAdaptersModule(application: Application): Module = module {
     // at render time — the same one-shot cadence either way.
     single<DownloadOutcomeMessenger> {
         AppDownloadOutcomeMessenger(userMessageBus = get(), application = application)
-    }
-    // The companion-plugin's live broadcast events (ADR 0010) surface as
-    // one-shot user messages over the same core bus (the text is the
-    // controller's title/body fold — server-supplied, UiText.Raw path).
-    single<com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger> {
-        val bus: UserMessageBus = get()
-        com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger { text ->
-            bus.info(text)
-        }
     }
 }
 
@@ -402,8 +381,7 @@ private fun installedVersionName(context: Context): String {
  * MainViewModel instance (MainActivity's `by viewModels` delegate and the
  * MainNavDisplay admin gate in JellyPlayApp): both go through
  * ViewModelProvider with the default canonical-name key, so they resolve the
- * same store entry — the exact contract the former androidx Hilt
- * ViewModel composable provided.
+ * same store entry, which is the androidx ViewModel contract.
  * (koinViewModel()'s Koin-scoped store keying cannot be reached from the
  * pre-composition splash-gate path, so the ViewModelProvider contract is the
  * deterministic single mechanism for this VM.)

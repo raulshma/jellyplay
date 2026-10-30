@@ -3,10 +3,12 @@ package com.raulshma.jellyplay.core.datastore.downloads
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +56,37 @@ class DownloadsStoreTest {
         assertEquals(slice.downloadStorageLocation, "INTERNAL")
         assertEquals(DownloadScheduleWindow(), slice.downloadScheduleWindow)
         assertEquals(false, slice.downloadScheduleEnabled)
+    }
+
+    @Test
+    fun `auto-download mode defaults to NEVER and round-trips`() = runTest {
+        assertEquals(AutoDownloadMode.NEVER, store.downloads.first().autoDownloadMode)
+        store.setAutoDownloadMode(AutoDownloadMode.ASK)
+        assertEquals(AutoDownloadMode.ASK, store.downloads.first().autoDownloadMode)
+    }
+
+    @Test
+    fun `auto-download mode falls back to the legacy boolean - true means INSTANT`() = runTest {
+        // A pre-gh-181 install has only the boolean (true). The canonical key
+        // is absent, so read() derives INSTANT from it.
+        dataStore.edit { it[booleanPreferencesKey("auto_download_new_episodes")] = true }
+        assertEquals(AutoDownloadMode.INSTANT, store.downloads.first().autoDownloadMode)
+    }
+
+    @Test
+    fun `auto-download mode falls back to NEVER on the legacy off state`() = runTest {
+        dataStore.edit { it[booleanPreferencesKey("auto_download_new_episodes")] = false }
+        assertEquals(AutoDownloadMode.NEVER, store.downloads.first().autoDownloadMode)
+    }
+
+    @Test
+    fun `setting the mode mirrors the legacy boolean for downgrade reads`() = runTest {
+        store.setAutoDownloadMode(AutoDownloadMode.INSTANT)
+        val prefs = dataStore.data.first()
+        assertEquals(true, prefs[booleanPreferencesKey("auto_download_new_episodes")])
+        // The canonical key wins on the next read even if the boolean lags.
+        store.setAutoDownloadMode(AutoDownloadMode.NEVER)
+        assertEquals(AutoDownloadMode.NEVER, store.downloads.first().autoDownloadMode)
     }
 
     @Test

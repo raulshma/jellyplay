@@ -1,11 +1,18 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.components.matchesPickerQuery
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,17 +30,30 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +69,8 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_save
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_picker_no_results
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_picker_search
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +87,20 @@ internal fun SettingsChipPickerSheet(
     // there are too many options or any label is too long to fit on one line.
     val useVertical = options.size > MAX_HORIZONTAL_CHIPS ||
         options.any { it.length > MAX_HORIZONTAL_CHIP_LABEL_CHARS }
+
+    // A long flat option list searches better than it chips: delegate to the
+    // list picker (which owns the search mode) instead of rendering chips.
+    if (options.size >= 10) {
+        SettingsListPickerSheet(
+            title = title,
+            items = options.indices.toList(),
+            label = { options[it] },
+            isSelected = { it == selectedIndex },
+            onDismiss = onDismiss,
+            onSelect = onSelect,
+        )
+        return
+    }
 
     TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
@@ -215,19 +251,54 @@ internal fun <T> SettingsListPickerSheet(
     onDismiss: () -> Unit,
     onSelect: (T) -> Unit,
 ) {
-    TvSafeSheet(onDismissRequest = onDismiss) {
+    var searching by rememberSaveable(title) { mutableStateOf(false) }
+    var query by rememberSaveable(title) { mutableStateOf("") }
+    val searchLabel = stringResource(Res.string.settings_picker_search)
+    val visibleItems = items.filter {
+        matchesPickerQuery(query, label(it), subtitle(it), it.toString())
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusManager = LocalFocusManager.current
+    TvSafeSheet(onDismissRequest = onDismiss, sheetState = sheetState, showDragHandle = !searching) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .padding(bottom = if (searching) 8.dp else 32.dp),
         ) {
-            SheetHeader(title = title)
-            LazyColumn {
-                itemsIndexed(items, key = { _, item -> label(item) }, contentType = { _, _ -> "option" }) { index, item ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (searching) {
+                    IconButton(onClick = {
+                        focusManager.clearFocus()
+                        searching = false
+                        query = ""
+                    }) {
+                        Icon(Tabler.Outline.ArrowLeft, contentDescription = title)
+                    }
+                    PickerSearchField(
+                        query = query,
+                        onQueryChange = { query = it },
+                        placeholder = searchLabel,
+                        requestFocus = true,
+                        modifier = Modifier.weight(1f).padding(end = 16.dp, top = 8.dp, bottom = 8.dp),
+                    )
+                } else {
+                    Box(Modifier.weight(1f)) { SheetHeader(title = title) }
+                }
+                if (!searching && items.size >= 10) {
+                    IconButton(onClick = { searching = !searching; query = "" }) {
+                        Icon(Tabler.Outline.Search, contentDescription = searchLabel)
+                    }
+                }
+            }
+            if (visibleItems.isEmpty()) {
+                Text(stringResource(Res.string.settings_picker_no_results), modifier = Modifier.padding(24.dp))
+            }
+            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                itemsIndexed(visibleItems, contentType = { _, _ -> "option" }) { index, item ->
                     val selected = isSelected(item)
                     val shape = when {
-                        items.size == 1 -> ShapeCache.smooth16
-                        index == 0 || index == items.lastIndex -> expressiveListShape(index, items.size)
+                        visibleItems.size == 1 -> ShapeCache.smooth16
+                        index == 0 || index == visibleItems.lastIndex -> expressiveListShape(index, visibleItems.size)
                         else -> ShapeCache.smooth8
                     }
 
@@ -288,6 +359,52 @@ internal fun <T> SettingsListPickerSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Shared compact search input; focusing it also keeps it above a changing IME. */
+@Composable
+internal fun PickerSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    requestFocus: Boolean = false,
+    onFocusChange: (Boolean) -> Unit = {},
+) {
+    val focusRequester = remember { FocusRequester() }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    var focused by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = { Text(placeholder) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+        modifier = modifier
+            .testTag("settings-picker-search")
+            .focusRequester(focusRequester)
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged {
+                focused = it.isFocused
+                onFocusChange(it.isFocused)
+            },
+    )
+    LaunchedEffect(requestFocus) {
+        if (requestFocus) {
+            withFrameNanos { }
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
+    }
+    LaunchedEffect(focused, imeBottom) {
+        if (focused) {
+            withFrameNanos { }
+            bringIntoViewRequester.bringIntoView()
         }
     }
 }

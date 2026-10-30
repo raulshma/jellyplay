@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">Bildwiederholrate an Videobilder anpassen (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Streaming-Qualität</string>
     <string name="ss_streaming_quality_subtitle">Standard-Videoqualität für Streaming festlegen: 1080p, 4K, SD, Auto</string>
+    <string name="ss_playback_mode_title">Wiedergabemodus</string>
+    <string name="ss_playback_mode_subtitle">Auto, Direct Play erzwingen oder Transcode erzwingen — die Zustellmethode für Streams</string>
     <string name="ss_audio_delay_title">Audio-Sync-Verzögerung</string>
     <string name="ss_audio_delay_subtitle">Audio-Sync-Latenz-Offset anpassen (ms)</string>
     <string name="ss_live_stream_option_title">Live-TV-Stream</string>
@@ -198,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Verbleibende statt vergangene Zeit anzeigen</string>
     <string name="ss_pause_on_focus_loss_title">Bei Fokusverlust pausieren</string>
     <string name="ss_pause_on_focus_loss_subtitle">Wiedergabe pausieren, wenn das System Audio-Fokusverlust meldet</string>
-    <string name="ss_resume_headset_plug_subtitle">Fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
+    <string name="ss_resume_headset_plug_subtitle">Fortsetzen, wenn Kopfhörer nach der automatischen Unplug-Pause wieder verbunden werden (kabelgebunden oder Bluetooth)</string>
     <string name="ss_mpv_video_output_title">MPV-Videoausgabe</string>
     <string name="ss_mpv_video_output_subtitle">MPV-Videoausgabetreiber</string>
     <string name="ss_mpv_scaler_title">MPV-Scaler</string>
@@ -343,6 +345,8 @@
     <string name="ss_subtitle_font_size_subtitle">Größe der Untertitel-Texte während der Videowiedergabe</string>
     <string name="ss_subtitle_forced_only_title">Nur erzwungene Untertitel</string>
     <string name="ss_subtitle_forced_only_subtitle">Untertitel nur anzeigen, wenn erzwungene Tracks vorhanden sind</string>
+    <string name="ss_show_only_preferred_subtitles_title">Nur bevorzugte Untertitel</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Untertitel-Tracks nur in deinen bevorzugten Sprachen anzeigen</string>
     <string name="ss_pgs_direct_play_title">PGS Direct Play</string>
     <string name="ss_pgs_direct_play_subtitle">PGS-Untertitel nativ rendern statt einzubrennen</string>
     <string name="ss_hdr_subtitle_style_title">HDR-Untertitel-Stil</string>
@@ -537,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Befehl, der ausgeführt wird, wenn die Wiedergabe endet</string>
     <string name="ss_hooks_idle_cmd_subtitle">Befehl, der ausgeführt wird, wenn die App in den Leerlauf wechselt</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Befehl, der ausgeführt wird, wenn die App den Leerlauf verlässt</string>
+
+    <string name="ss_auto_download_mode_title">Neue Episoden automatisch herunterladen</string>
+    <string name="ss_auto_download_mode_subtitle">Sofort, vor dem Download nachfragen oder nie neue Episoden heruntergeladener Serien herunterladen</string>
+    <string name="ss_auto_download_check_now_subtitle">Auto-Download-Durchlauf sofort ausführen</string>
 </resources>

@@ -4,9 +4,8 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.data.session.settingsSyncGateOpen
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
-import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshot
@@ -404,14 +403,8 @@ class JellyPlaySyncViewModel(
         }
     }
 
-    /**
-     * The ONE gate seam for the meta-keyed sync surface: probe AVAILABLE AND
-     * the `settings-sync` key in the registry. No toggle half — meta keys are
-     * deliberately absent from [com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate.TOGGLEABLE_FEATURES].
-     */
-    private fun syncGateOpen(): Boolean =
-        statusStore.status.value == JellyPlayPluginStatus.AVAILABLE &&
-            statusStore.hasFeature(JellyPlayPluginFeatures.SettingsSync)
+    /** The sync surface's gate: [settingsSyncGateOpen] — the meta-keyed, probe-only rule. */
+    private fun syncGateOpen(): Boolean = statusStore.settingsSyncGateOpen()
 
     private companion object {
         /** The one namespace the shipped adapter syncs (the data layer's wiring). */

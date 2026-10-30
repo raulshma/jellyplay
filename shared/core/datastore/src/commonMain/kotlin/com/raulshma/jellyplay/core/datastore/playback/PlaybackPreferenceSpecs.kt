@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExternalPlayerApp
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
@@ -18,7 +19,10 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.RefreshRateMode
+import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
+import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import kotlinx.serialization.encodeToString
 
 /** The stereo-downmix loudness compensation bounds ([PlaybackSlice.downmixBoostDb] clamps to these). */
@@ -185,17 +189,101 @@ object PlaybackPreferenceSpecs {
             default = StreamingQuality.AUTO,
             resetCategory = PreferenceResetCategory.PLAYBACK,
         ),
+        /*
+         * The HDR delivery posture for direct play: which HDR family may reach
+         * the display and which wins when more than one decodes. AUTO keeps the
+         * engine's default negotiation. Sits beside the streaming-quality rows
+         * — a delivery-quality knob like its neighbors.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "hdr_format_preference",
+            default = HdrFormatPreference.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "hdr_format",
+                titleKey = "ss_hdr_format_title",
+                subtitleKey = "ss_hdr_format_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("hdr", "hdr10", "dolby", "vision", "sdr", "tone mapping", "format", "dv"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * Force transcoding for sources taller than this height (0 = off) —
+         * the resolution cap beside the streaming-quality rows: a "don't even
+         * try to direct-play 4K on this device" lever.
+         */
+        PreferenceSpec.plainInt(
+            keyName = "force_transcode_above_height",
+            default = 0,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 0,
+            search = PreferenceSearchSpec(
+                id = "force_transcode_above_height",
+                titleKey = "ss_force_transcode_above_height_title",
+                subtitleKey = "ss_force_transcode_above_height_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("transcode", "resolution", "height", "4k", "1080p", "limit", "cap", "above"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The preferred video codec when the server transcodes; AUTO defers to
+         * the server/device profile.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "preferred_transcode_video_codec",
+            default = TranscodeVideoCodecPreference.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "preferred_transcode_video_codec",
+                titleKey = "ss_preferred_transcode_video_codec_title",
+                subtitleKey = "ss_preferred_transcode_video_codec_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("transcode", "video", "codec", "h264", "hevc", "h.265", "av1", "encoder"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The preferred audio codec when the server transcodes; AUTO defers to
+         * the server/device profile.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "preferred_transcode_audio_codec",
+            default = TranscodeAudioCodecPreference.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "preferred_transcode_audio_codec",
+                titleKey = "ss_preferred_transcode_audio_codec_title",
+                subtitleKey = "ss_preferred_transcode_audio_codec_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("transcode", "audio", "codec", "aac", "ac3", "eac3", "opus"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
     )
 
     /** Playback method, with the legacy `force_direct_play` pair. */
     private val playbackMethod: List<PreferenceSpec<*>> = listOf(
         /*
          * Reads [PlaybackSlice.playbackMode]. Migrates the legacy boolean
-         * `force_direct_play` key when the new enum key is absent: a legacy value
-         * of `true` (the historical default) maps to
-         * [PlaybackMode.FORCE_DIRECT_PLAY] to preserve the prior behaviour of
-         * always requesting a static stream; `false` maps to [PlaybackMode.AUTO]
-         * so the server negotiates the best method.
+         * `force_direct_play` key when the new enum key is absent: an explicit
+         * legacy `true` maps to [PlaybackMode.FORCE_DIRECT_PLAY] (preserving
+         * that install's chosen posture), anything else maps to
+         * [PlaybackMode.AUTO] so the server negotiates the best method. The
+         * absent-legacy default is deliberately FALSE: the historical `true`
+         * default here migrated every fresh install into FORCE_DIRECT_PLAY,
+         * which sends the `directPlayAll` profile and silently defeats the
+         * quality cap + bitrate ladder (Issue #1) — the enum owns the posture
+         * now, and its default is AUTO.
+         *
+         * The search spec surfaces the row in the settings catalog (title,
+         * category, search) — without it the delivery method was reachable
+         * only through the in-player Playback Options sheet.
          */
         PreferenceSpec.derived(
             keyName = "playback_mode",
@@ -207,12 +295,21 @@ object PlaybackPreferenceSpecs {
                         prefs,
                         FORCE_DIRECT_PLAY.typedKey(),
                         FORCE_DIRECT_PLAY.keyName,
-                        default = true,
+                        default = false,
                     )
                     if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
                 }
             },
             encode = { it.name },
+            search = PreferenceSearchSpec(
+                id = "playback_mode",
+                titleKey = "ss_playback_mode_title",
+                subtitleKey = "ss_playback_mode_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("delivery", "direct play", "transcode", "force", "streaming method", "auto", "playback mode"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
         ),
         /*
          * The legacy `force_direct_play` boolean surface. Not a [PlaybackSlice]
@@ -544,6 +641,102 @@ object PlaybackPreferenceSpecs {
                 platformRule = PreferencePlatformRule.ANDROID_ONLY,
             ),
         ),
+        /*
+         * What happens to an interrupted session on cold start: OFF discards,
+         * ASK offers the restore, AUTO resumes silently. Default ASK.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "session_restore_mode",
+            default = SessionRestoreMode.ASK,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "session_restore",
+                titleKey = "ss_session_restore_title",
+                subtitleKey = "ss_session_restore_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("session", "restore", "resume", "crash", "reopen", "continue", "interrupted"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+            ),
+        ),
+        /*
+         * The cold-start restore prompt's dismissal marker (NOT a setting —
+         * deliberately search-less): the fingerprint of the exact offer the
+         * user dismissed, so the next cold start suppresses the same offer
+         * instead of re-asking. Self-invalidating — the fingerprint rides the
+         * server row's stamp, so any new playback on the item changes it and
+         * fresh sessions prompt again. No [PlaybackSlice] property: the marker
+         * is per-device ephemeral state, so it stays out of the serialized
+         * backup envelope, restore(), the sync wire and the admin catalog
+         * (see [perDeviceRowNames]). Direct read/write lives on
+         * [PlaybackStore] (not the slice) — the cold-start evaluation must not
+         * race the slice's seeded flow.
+         */
+        PreferenceSpec.derived(
+            keyName = "session_restore_dismissed",
+            default = "",
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            read = { _, raw -> raw ?: "" },
+            encode = { it },
+        ),
+        /*
+         * Offer to delete the watched movie file after playback finishes
+         * (downloads hygiene). Default off.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "offer_delete_after_playback_movies",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "offer_delete_movies",
+                titleKey = "ss_offer_delete_movies_title",
+                subtitleKey = "ss_offer_delete_movies_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("delete", "offer", "movie", "after playback", "finished", "cleanup", "prompt"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * Offer to delete the watched episode file after playback finishes.
+         * Default off.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "offer_delete_after_playback_episodes",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "offer_delete_episodes",
+                titleKey = "ss_offer_delete_episodes_title",
+                subtitleKey = "ss_offer_delete_episodes_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("delete", "offer", "episode", "after playback", "finished", "cleanup", "prompt"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The user-authored device-profile JSON merged over the server's
+         * transcode decision (the power-user escape hatch, the
+         * `video_default_aspect_ratio` raw-string precedent): a derived row
+         * with the identity encode, so the derived write/restore machinery
+         * stays total. An empty string (the default) merges nothing.
+         */
+        PreferenceSpec.derived(
+            keyName = "custom_device_profile_json",
+            default = "",
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            read = { _, raw -> raw ?: "" },
+            encode = { it },
+            search = PreferenceSearchSpec(
+                id = "custom_device_profile",
+                titleKey = "ss_custom_device_profile_title",
+                subtitleKey = "ss_custom_device_profile_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("device profile", "custom", "json", "transcode", "codec", "advanced"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
     )
 
     /** Subtitle + user-data-sync toggles (other reset categories). */
@@ -592,6 +785,22 @@ object PlaybackPreferenceSpecs {
             frameRatePair +
             lifecycleToggles +
             subtitleSyncToggles
+
+    /**
+     * The store's per-device rows — spec rows that are real rows (reset
+     * coverage + the derivation-integrity reflection) but describe user state
+     * that is meaningless on any other device: the cold-start prompt's
+     * dismissal latch. [PreferenceSyncPolicy] consumes this face so the rows
+     * stay out of the sync wire AND out of the admin settings catalog,
+     * mirroring the home store's global-marker derivation. Kept as a
+     * name-derived set (the accessor names the row and fails fast on an
+     * undeclared name) so a rename cannot orphan the exclusion — `by lazy`
+     * because the accessor's `rowsByName` memo is declared after `all` and a
+     * class-init-order access would NPE the delegate.
+     */
+    val perDeviceRowNames: Set<String> by lazy {
+        setOf(SESSION_RESTORE_DISMISSED.keyName)
+    }
 
     /**
      * Category reset participation, derived as the rows whose declared
@@ -707,6 +916,26 @@ object PlaybackPreferenceSpecs {
     val STREAMING_QUALITY: PreferenceSpec<StreamingQuality> get() = row("streaming_quality")
 
     val CELLULAR_STREAMING_QUALITY: PreferenceSpec<StreamingQuality> get() = row("cellular_streaming_quality")
+
+    val HDR_FORMAT_PREFERENCE: PreferenceSpec<HdrFormatPreference> get() = row("hdr_format_preference")
+
+    val FORCE_TRANSCODE_ABOVE_HEIGHT: PreferenceSpec<Int> get() = row("force_transcode_above_height")
+
+    val PREFERRED_TRANSCODE_VIDEO_CODEC: PreferenceSpec<TranscodeVideoCodecPreference> get() =
+        row("preferred_transcode_video_codec")
+
+    val PREFERRED_TRANSCODE_AUDIO_CODEC: PreferenceSpec<TranscodeAudioCodecPreference> get() =
+        row("preferred_transcode_audio_codec")
+
+    val SESSION_RESTORE_MODE: PreferenceSpec<SessionRestoreMode> get() = row("session_restore_mode")
+
+    val SESSION_RESTORE_DISMISSED: PreferenceSpec<String> get() = row("session_restore_dismissed")
+
+    val OFFER_DELETE_AFTER_PLAYBACK_MOVIES: PreferenceSpec<Boolean> get() = row("offer_delete_after_playback_movies")
+
+    val OFFER_DELETE_AFTER_PLAYBACK_EPISODES: PreferenceSpec<Boolean> get() = row("offer_delete_after_playback_episodes")
+
+    val CUSTOM_DEVICE_PROFILE_JSON: PreferenceSpec<String> get() = row("custom_device_profile_json")
 
     val PLAYBACK_MODE: PreferenceSpec<PlaybackMode> get() = row("playback_mode")
 

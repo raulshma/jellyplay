@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 /**
  * The "Your watching" screen's window chips — each maps 1:1 onto the
@@ -62,6 +61,22 @@ class JellyPlayYourWatchingViewModel(
     private val _uiState = MutableStateFlow(JellyPlayYourWatchingState())
     val uiState: StateFlow<JellyPlayYourWatchingState> = _uiState.asStateFlow()
 
+    /**
+     * The tab dance's one holder: the gate, the stale-response guard and the
+     * quiet-absence fold live there; this VM keeps only the window query and
+     * the state shape.
+     */
+    private val tabLoader = PluginTabLoader(
+        scope = scope,
+        gateOpen = { featureGate.isAvailableNowOrProbe(statusStore, JellyPlayPluginFeatures.Analytics) },
+        selected = { _uiState.value.window },
+        fetch = { window -> pluginApiClient.getMyAnalytics(window.days) },
+        isCurrent = { window -> _uiState.value.window == window },
+        land = { analytics -> _uiState.update { it.copy(analytics = analytics, isLoading = false) } },
+        quiet = null,
+        onGateClosed = { _uiState.update { it.copy(isLoading = false) } },
+    )
+
     /** Selects a window chip and (re)loads its aggregates. Same-window reselect refetches. */
     fun selectWindow(window: JellyPlayYourWatchingWindow) {
         _uiState.value = JellyPlayYourWatchingState(window = window, isLoading = true)
@@ -75,26 +90,6 @@ class JellyPlayYourWatchingViewModel(
      * simply never fetches.
      */
     fun refresh() {
-        scope.launch {
-            if (!analyticsGateOpen()) {
-                _uiState.update { it.copy(isLoading = false) }
-                return@launch
-            }
-            val window = _uiState.value.window
-            pluginApiClient.getMyAnalytics(window.days)
-                .onSuccess { analytics ->
-                    // Stale-response guard: only the selected window's fetch may land.
-                    if (_uiState.value.window != window) return@onSuccess
-                    _uiState.update { it.copy(analytics = analytics, isLoading = false) }
-                }
-                .onFailure {
-                    if (_uiState.value.window != window) return@onFailure
-                    _uiState.update { it.copy(analytics = null, isLoading = false) }
-                }
-        }
+        tabLoader.refresh()
     }
-
-    /** The ONE gate seam, or the probe-only fallback when the seam is unwired. */
-    private suspend fun analyticsGateOpen(): Boolean =
-        featureGate.isAvailableNowOrProbe(statusStore, JellyPlayPluginFeatures.Analytics)
 }

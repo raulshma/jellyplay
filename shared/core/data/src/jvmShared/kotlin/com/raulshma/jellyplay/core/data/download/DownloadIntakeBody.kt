@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
+import com.raulshma.jellyplay.core.data.download.DownloadIntake.SeriesPolicyChoice
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -30,7 +33,9 @@ import com.raulshma.jellyplay.core.model.maxBitrate
 open class DownloadIntakeBody(
     private val delegate: DownloadDelegate,
     private val downloadRepository: DownloadRepository,
-    private val mediaRepository: MediaRepository,
+    private val policyStore: SeriesDownloadPolicyStore,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val downloadsStore: DownloadsStore,
     /** Resolved no-source error copy — the twins' single real platform delta. */
     private val noSourceError: () -> String,
@@ -50,11 +55,24 @@ open class DownloadIntakeBody(
             )
     }
 
+    override suspend fun seriesPolicy(seriesId: String): AutoDownloadMode? =
+        policyStore.seriesPolicy(seriesId)
+
     override suspend fun startSeries(
         seriesId: String,
         episodeIds: Map<String, List<String>>?,
-    ): Result<List<String>> =
-        downloadRepository.downloadSeries(seriesId, episodeIds)
+        policyChoice: SeriesPolicyChoice,
+    ): Result<List<String>> {
+        // The override is written before the batch: a failed series lookup
+        // must not swallow the user's policy choice (the downloads they
+        // picked may already exist — the override is about future episodes).
+        when (policyChoice) {
+            is SeriesPolicyChoice.Set -> policyStore.setSeriesPolicy(seriesId, policyChoice.mode)
+            SeriesPolicyChoice.Inherit -> policyStore.setSeriesPolicy(seriesId, null)
+            SeriesPolicyChoice.LeaveUnchanged -> Unit
+        }
+        return downloadRepository.downloadSeries(seriesId, episodeIds)
+    }
 
     override suspend fun startFromItem(item: MediaItem): DownloadRequestResult {
         val inline = item.mediaType.isVideoType || item.mediaType.isMusicTrack
@@ -64,7 +82,7 @@ open class DownloadIntakeBody(
                 else -> DownloadRequestResult.NeedsDetailScreen(item.id)
             }
         }
-        val detail = mediaRepository.getMediaDetail(item.id)
+        val detail = detailFeed.getMediaDetail(item.id, force = false)
             .getOrElse { return DownloadRequestResult.Failed(it.message) }
         val result = start(detail, downloadsStore.downloads.value.downloadQuality.maxBitrate)
         return if (result.error == null) {

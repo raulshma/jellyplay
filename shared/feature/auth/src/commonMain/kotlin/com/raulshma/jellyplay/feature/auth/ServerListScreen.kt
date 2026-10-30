@@ -61,6 +61,7 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove_server
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove_server_message
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_remove_server_title
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_restore_backup
 import com.raulshma.jellyplay.feature.auth.generated.resources.server_health_checking
 import com.raulshma.jellyplay.feature.auth.generated.resources.server_health_healthy
 import com.raulshma.jellyplay.feature.auth.generated.resources.server_health_unreachable
@@ -90,6 +91,9 @@ import com.composables.icons.tabler.outline.*
 fun ServerListScreen(
     onAddServer: () -> Unit,
     onServerSelected: (ServerInfo) -> Unit,
+    /** Opens the restore-from-backup wizard; null hides the affordances (the
+     *  signed-in shell keeps backup/restore inside settings instead). */
+    onRestoreBackup: (() -> Unit)? = null,
     viewModel: AuthViewModel = koinViewModel(),
 ) {
     val servers by viewModel.servers.collectAsStateWithLifecycle()
@@ -109,6 +113,16 @@ fun ServerListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.auth_app_name)) },
+                actions = {
+                    if (onRestoreBackup != null) {
+                        IconButton(onClick = onRestoreBackup) {
+                            Icon(
+                                Tabler.Outline.DatabaseImport,
+                                contentDescription = stringResource(Res.string.auth_restore_backup),
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
@@ -131,6 +145,8 @@ fun ServerListScreen(
                     description = stringResource(Res.string.auth_no_servers_added_desc),
                     actionLabel = stringResource(Res.string.auth_add_server),
                     onAction = onAddServer,
+                    secondaryActionLabel = onRestoreBackup?.let { stringResource(Res.string.auth_restore_backup) },
+                    onSecondaryAction = onRestoreBackup,
                 )
             } else {
                 val firstItemFocusRequester = remember { FocusRequester() }

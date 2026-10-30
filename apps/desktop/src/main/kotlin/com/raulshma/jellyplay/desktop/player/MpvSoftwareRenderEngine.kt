@@ -59,6 +59,8 @@ class MpvSoftwareRenderEngine(
     extraOptions: Map<String, String> = emptyMap(),
     /** Forwarded to the shared engine ctor (the extracted shader dir). */
     shaderDir: String? = null,
+    /** Forwarded to the shared engine ctor (the factory-synced input.conf path, or null). */
+    inputConfPath: String? = null,
 ) : MpvDesktopEngine(
     extraOptions = buildMap {
         put("vo", "libmpv")
@@ -68,6 +70,7 @@ class MpvSoftwareRenderEngine(
     // instead of embedding a child window.
     windowHandle = null,
     shaderDir = shaderDir,
+    inputConfPath = inputConfPath,
 ),
     SoftwareFrameVideoSurface {
 

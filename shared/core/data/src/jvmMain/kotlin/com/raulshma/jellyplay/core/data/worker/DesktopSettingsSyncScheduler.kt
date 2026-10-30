@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -13,7 +15,11 @@ import kotlinx.coroutines.launch
  *
  *  - one flush at [start] (the app-start catch-up Android's trigger covers),
  *  - on every going-online edge via the shared [ReconnectTrigger],
- *  - on [enqueueNow] (the dirty-write signal's desktop half),
+ *  - on [enqueueNow] (the dirty-write signal's desktop half) — debounced to
+ *    one trailing-edge flush per [DIRTY_WRITE_DEBOUNCE_MILLIS]: a burst of
+ *    dirty writes (search-history saves, reader annotation ops) collapses to
+ *    one cycle after the burst settles instead of one serialized cycle per
+ *    write, the same settle window the live-resync SSE frames' debounce uses,
  *  - on [onWindowFocus] — the desktop's app-background equivalent (ADR 0011):
  *    the window regaining focus is the "the user is back" edge, so changes
  *    made here flush shortly after; a cheap time-debounce keeps rapid
@@ -52,6 +58,15 @@ class DesktopSettingsSyncScheduler(
     private var lastFocusFlushNanos: Long = Long.MIN_VALUE
 
     /**
+     * The dirty-write flush still waiting out its debounce window — each new
+     * write cancels and reschedules it; nulled by the job itself just before
+     * the flush runs, so a write landing mid-flush schedules a fresh window
+     * instead of cancelling the cycle already running.
+     */
+    @Volatile
+    private var pendingFlushJob: Job? = null
+
+    /**
      * Launches the startup flush and arms the reconnect edge. Idempotent,
      * mirroring [DesktopPlaybackSyncScheduler.start]; the composition root
      * resolves + start()s it after startKoin.
@@ -63,7 +78,12 @@ class DesktopSettingsSyncScheduler(
     }
 
     override fun enqueueNow() {
-        scope.launch { flush("dirty-write") }
+        pendingFlushJob?.cancel()
+        pendingFlushJob = scope.launch {
+            delay(DIRTY_WRITE_DEBOUNCE_MILLIS)
+            pendingFlushJob = null
+            flush("dirty-write")
+        }
     }
 
     override fun enqueuePeriodicIfEnabled() {
@@ -103,5 +123,8 @@ class DesktopSettingsSyncScheduler(
 
         /** Rapid alt-tab bursts collapse to one flush per window. */
         const val FOCUS_DEBOUNCE_MILLIS = 30_000L
+
+        /** A burst of dirty writes collapses to one flush after the burst settles. */
+        const val DIRTY_WRITE_DEBOUNCE_MILLIS = 500L
     }
 }

@@ -12,13 +12,18 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.DownloadPolicyDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.PlayedFlagRow
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.database.entity.SeriesDownloadPolicyEntity
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
+import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.maxBitrate
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -43,35 +48,29 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// V3 downloads conveyor: moved verbatim from the legacy :core:data shim (same
-// package/name) minus its Android-only surfaces. Ctor-level transforms only —
-// method bodies are byte-identical except where a seam call replaces a direct
-// platform call (documented inline):
-//  - `@ApplicationContext context` dropped; its three uses became constructor
-//    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator] and Coil
-//    preloading → [OfflineImagePreloader] (now on [OfflineDownloadWriterCore]
-//    with the offline-metadata cluster). The third — the notification group summary →
-//    [DownloadProgressNotifier] — has since left entirely: the summary surface
-//    (DownloadSummarySurface) observes the in-flight count flow and posts on
-//    transitions, so this repository's state changes reach the shade through
-//    its own DAO writes and the seam dep is gone.
-//  - concrete `DownloadStorageLayout` → the [DownloadStorageLayoutContract]
-//    interface (Android impl keeps its Context/StatFs logic verbatim) — the
-//    contract is now a dependency of the writer core only.
-//  - `mediaRepository: MediaRepository` → a deferred [MediaRepositoryAccess]
+// V3 downloads conveyor. This repository takes constructor seams instead of
+// Android handles, and no method body calls a platform API directly
+// (documented inline):
+//  - WorkManager enqueue/cancel -> [DownloadEnqueueCoordinator]; Coil
+//    preloading -> [OfflineImagePreloader] (on [OfflineDownloadWriterCore]
+//    with the offline-metadata cluster). The notification group summary is
+//    not a dependency at all: the summary surface (DownloadSummarySurface)
+//    observes the in-flight count flow and posts on transitions, so this
+//    repository's state changes reach the shade through its own DAO writes.
+//  - `DownloadStorageLayout` -> the [DownloadStorageLayoutContract]
+//    interface (Android impl keeps its Context/StatFs logic); the contract is
+//    a dependency of the writer core only.
+//  - `mediaRepository: MediaRepository` -> a deferred [MediaRepositoryAccess]
 //    provider: every use sits on the series paths (downloadSeries + episode
 //    series-seeding in the writer core); startDownload never touches it, so
 //    desktop single-item downloads work with a throwing provider.
-//  - `dagger.Lazy<DownloadDelegate>` → kotlin `Lazy<DownloadDelegate>` and
-//    now a plain [DownloadDelegate]: the artifact-write half moved to
-//    [OfflineDownloadWriterCore] — a standalone single over the same DAOs and
-//    seams with NO back-reference to this repository — so the former
-//    construction cycle `DownloadRepositoryImpl → DownloadDelegate →
-//    OfflineDownloadWriter → DownloadRepositoryImpl` is gone and the `Lazy`
-//    deferral with it. This class keeps the [DownloadRepository] surface
-//    (which extends [OfflineDownloadWriter]) and forwards those members
-//    one-to-one to the same writer-core single the delegate writes through.
-//  - `android.util.Log` → the module's Log facade.
+//  - [DownloadDelegate] is a plain dependency (no `dagger.Lazy`): the
+//    artifact-write half lives in [OfflineDownloadWriterCore], a standalone
+//    single over the same DAOs and seams with NO back-reference to this
+//    repository. This class keeps the [DownloadRepository] surface (which
+//    extends [OfflineDownloadWriter]) and forwards those members one-to-one
+//    to the same writer-core single the delegate writes through.
+//  - `android.util.Log` -> the module's Log facade.
 // Koin (dataJvmModule) owns construction; the legacy DataModule bridges the
 // remaining Hilt injectors via koin().get().
 
@@ -101,7 +100,7 @@ class DownloadRepositoryImpl(
      */
     private val timeSource: TimeSource,
     /**
-     * The extracted artifact-write cluster ([OfflineDownloadWriterCore]): row
+     * The artifact-write cluster ([OfflineDownloadWriterCore]): row
      * creation, offline metadata + baseline seeding, parent hierarchy seeding,
      * worker enqueue, and the sidecar/artifact surface — over its own DAO and
      * seam dependencies, with no reference back to this repository. The
@@ -112,26 +111,22 @@ class DownloadRepositoryImpl(
     private val writer: OfflineDownloadWriterCore,
     /**
      * The per-item download recipe (prepare + execute + artifact bundle).
-     * Resolved eagerly: no construction cycle remains, so the former
-     * `Lazy` deferral is gone.
      */
     private val downloadDelegate: DownloadDelegate,
 ) : DownloadRepository,
     // The promoted feature-facing read seams (DownloadQueue,
     // TrackDownloadStatusWindow, ActiveDownloadCount, SeriesEpisodeDownloads)
-    // — the DownloadIntake precedent: their surfaces cross commonMain
+    // - the DownloadIntake precedent: their surfaces cross commonMain
     // verbatim, so the engine implements them DIRECTLY instead of behind
-    // per-read verbatim-forward adapters (the deleted JvmDownloadQueue /
-    // JvmTrackDownloadStatusWindow / JvmActiveDownloadCount /
-    // JvmSeriesEpisodeDownloads). Their members carry this class's own
-    // repository vocabulary, so the repository overrides in this file ARE
-    // the seam implementations — the former differently-named one-line
-    // forwarders are gone; only [isSupported], which no repository member
-    // spells, is declared down with the seam section.
+    // per-read adapters. Their members carry this class's own repository
+    // vocabulary, so the repository overrides in this file ARE the seam
+    // implementations; only [isSupported], which no repository member spells,
+    // is declared down with the seam section.
     DownloadQueue,
     TrackDownloadStatusWindow,
     ActiveDownloadCount,
-    SeriesEpisodeDownloads {
+    SeriesEpisodeDownloads,
+    SeriesDownloadPolicyStore {
 
     // Caps the number of episodes processed concurrently when queueing a series
     // download. Avoids launching 20+ parallel OkHttp calls + Coil decodes at once.
@@ -148,6 +143,11 @@ class DownloadRepositoryImpl(
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
     )
+
+    // The gh-181 policy + suggestion tables, resolved from the already-injected
+    // database handle so the constructor surface (and every test/Koin call
+    // site) stays put.
+    private val downloadPolicyDao: DownloadPolicyDao = database.downloadPolicyDao()
 
     // Room re-runs download queries on every 2 s progress tick, and a full
     // structural `distinctUntilChanged` over up to 500 x ~25-field items is
@@ -422,7 +422,7 @@ class DownloadRepositoryImpl(
             // Detail fetch and episode catalogue are independent round-trips —
             // start both before awaiting either so series download setup pays
             // max(detail, catalogue) instead of detail + catalogue.
-            val detailDeferred = async { mediaRepository().getMediaDetail(seriesId).getOrThrow() }
+            val detailDeferred = async { mediaRepository().getMediaDetail(seriesId, force = false).getOrThrow() }
             val snapshotDeferred = async { episodeCatalogue.loadSeriesEpisodes(seriesId) }
 
             val detail = detailDeferred.await()
@@ -476,7 +476,7 @@ class DownloadRepositoryImpl(
                 // surviving list still carries.
                 val episodeResults = downloadPermits.mapConcurrentCatching(episodes) { episode ->
                     try {
-                        val episodeDetail = mediaRepository().getMediaDetail(episode.id).getOrNull()
+                        val episodeDetail = mediaRepository().getMediaDetail(episode.id, force = false).getOrNull()
                         // Single per-episode recipe shared with DownloadIntake.start
                         // via DownloadDelegate.startOne — no inline prepare/execute to
                         // drift out of sync. Series downloads bundle every external
@@ -539,11 +539,10 @@ class DownloadRepositoryImpl(
 
     // ── Sidecar/artifact + write surface (forwards one-to-one) ─────────────
     // The inherited OfflineDownloadWriter members and the local reads forward
-    // to [writer] — the extracted OfflineDownloadWriterCore single the
-    // DownloadDelegate also writes through (bodies moved verbatim there;
-    // the behavioral contracts are pinned by
+    // to [writer], the OfflineDownloadWriterCore single the DownloadDelegate
+    // also writes through. The behavioral contracts are pinned by
     // DownloadRepositoryImplSubtitlesTest (androidHostTest),
-    // OfflineDownloadWriterCoreTest and DownloadSidecarCoreTest (jvmTest)).
+    // OfflineDownloadWriterCoreTest and DownloadSidecarCoreTest (jvmTest).
 
     override suspend fun downloadTrickplayData(
         itemId: String,
@@ -647,26 +646,98 @@ class DownloadRepositoryImpl(
                 },
             )
         } ?: return AutoDownloadSweepResult.EMPTY
+        // The sweep can delete a series' last remaining download — drop the
+        // now-dead policy override and any stale Ask-mode prompts with it.
+        deletable.mapNotNull { it.seriesId }.distinct().forEach { seriesId ->
+            runCatchingRethrowingCancellation { maybeClearSeriesAutoDownloadState(seriesId) }
+        }
         return AutoDownloadSweepResult(deletable.size, bytesReclaimed).also {
             Log.i(TAG, "Retention sweep deleted ${it.deletedCount} downloads (${it.bytesReclaimed} bytes)")
         }
     }
 
-    // The entity ⟷ domain mappers this class used to carry as private members
-    // (MediaItem/MediaDetail → OfflineMediaEntity, MediaItem → PlaybackStateEntity,
-    // DownloadEntity → DownloadItem, DownloadProgressRow → DownloadProgress) live
-    // in OfflineMediaMappers.kt — the single owner of the offline/download column
-    // semantics, shared with OfflineRepositoryImpl's read side.
+    override suspend fun seriesPolicy(seriesId: String): AutoDownloadMode? =
+        downloadPolicyDao.getPolicyBySeriesId(seriesId)?.mode?.toEnumOrNull()
+
+    override suspend fun hasSeriesPolicies(): Boolean = downloadPolicyDao.countPolicies() > 0
+
+    override suspend fun seriesPolicies(seriesIds: List<String>): Map<String, AutoDownloadMode> =
+        if (seriesIds.isEmpty()) {
+            emptyMap()
+        } else {
+            val policies = mutableMapOf<String, AutoDownloadMode>()
+            downloadPolicyDao.getPoliciesBySeriesIds(seriesIds).forEach { row ->
+                val mode: AutoDownloadMode? = row.mode.toEnumOrNull()
+                if (mode != null) policies[row.seriesId] = mode
+            }
+            policies
+        }
+
+    override suspend fun setSeriesPolicy(seriesId: String, mode: AutoDownloadMode?) {
+        if (mode == null) {
+            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
+        } else {
+            downloadPolicyDao.upsertPolicy(SeriesDownloadPolicyEntity(seriesId = seriesId, mode = mode.name))
+        }
+        // NEVER and inherit both invalidate the series' pending prompts —
+        // they were recorded under an override that no longer wants them.
+        if (mode == null || mode == AutoDownloadMode.NEVER) {
+            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
+        }
+    }
+
+    override fun observeAutoDownloadSuggestions(): Flow<List<AutoDownloadSuggestion>> =
+        downloadPolicyDao.observePendingSuggestions().map { rows -> rows.map { it.toSuggestion() } }
+
+    override suspend fun recordAutoDownloadSuggestions(suggestions: List<AutoDownloadSuggestion>): Int {
+        if (suggestions.isEmpty()) return 0
+        val knownIds = downloadPolicyDao.getKnownSuggestionIds(suggestions.map { it.episodeId }).toSet()
+        val fresh = suggestions.filter { it.episodeId !in knownIds }
+        if (fresh.isNotEmpty()) {
+            downloadPolicyDao.upsertSuggestions(fresh.map { it.toEntity() })
+        }
+        return fresh.size
+    }
+
+    override suspend fun autoDownloadSuggestionsByIds(episodeIds: List<String>): List<AutoDownloadSuggestion> =
+        if (episodeIds.isEmpty()) {
+            emptyList()
+        } else {
+            downloadPolicyDao.getPendingSuggestionsByIds(episodeIds).map { it.toSuggestion() }
+        }
+
+    override suspend fun dismissAutoDownloadSuggestions(episodeIds: List<String>) {
+        if (episodeIds.isNotEmpty()) {
+            downloadPolicyDao.dismissSuggestions(episodeIds, timeSource.nowEpochMillis())
+        }
+    }
 
     /**
-     * Declared delta vs the former inline body, adopted from the majority
-     * choreography: the orphan prune now runs as the core's post-transaction
-     * step (the old body pruned inside the same transaction — the difference
-     * is observable only as transiently un-pruned orphan rows between the two
-     * transactions), and the cast-image prune the old body skipped now runs —
-     * its reference scan only deletes files no surviving offline row
-     * references, so the former skip leaked cast images rather than
-     * protecting them.
+     * When a series' last download row is gone, its policy override and any
+     * pending Ask-mode prompts are dead state — an override on a series with
+     * nothing downloaded never joins the check's coverage universe, and a
+     * prompt for a removed series has nothing to anchor to. Internal for the
+     * host test (the deletion choreography it rides is mock-hostile).
+     */
+    internal suspend fun maybeClearSeriesAutoDownloadState(seriesId: String) {
+        if (downloadDao.getDownloadsForSeries(seriesId).isEmpty()) {
+            downloadPolicyDao.deletePolicyBySeriesId(seriesId)
+            downloadPolicyDao.deleteSuggestionsBySeriesId(seriesId)
+        }
+    }
+
+    // The entity/domain mappers (MediaItem/MediaDetail to OfflineMediaEntity,
+    // MediaItem to PlaybackStateEntity, DownloadEntity to DownloadItem,
+    // DownloadProgressRow to DownloadProgress) live in OfflineMediaMappers.kt -
+    // the single owner of the offline/download column semantics, shared with
+    // OfflineRepositoryImpl's read side.
+
+    /**
+     * The orphan prune runs as the core's post-transaction step (transiently
+     * un-pruned orphan rows are observable between the two transactions), and
+     * the cast-image prune runs too - its reference scan only deletes files no
+     * surviving offline row references, so it never removes a referenced cast
+     * image.
      */
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
         deletionCore.delete(
@@ -677,6 +748,7 @@ class DownloadRepositoryImpl(
                 syncBaselineDao.deleteById(entity.mediaItemId)
             },
         )
+        entity.seriesId?.let { maybeClearSeriesAutoDownloadState(it) }
     }
 
     /**

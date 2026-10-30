@@ -1,8 +1,9 @@
 package com.raulshma.jellyplay.feature.music.browse
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -26,18 +27,20 @@ import kotlinx.coroutines.flow.StateFlow
  * fire-and-forget loads had neither).
  */
 class MusicBrowseViewModel(
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
     private val playlistRepository: PlaylistRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the browse pages render through. */
+    val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     // One collection per tab; each starts on NAME (the previous hard-coded default).
-    private val artistCollection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.ARTISTS)
-    private val albumCollection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.ALBUMS)
-    private val trackCollection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.TRACKS)
+    private val artistCollection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.ARTISTS)
+    private val albumCollection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.ALBUMS)
+    private val trackCollection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.TRACKS)
 
     private val genreCollection = SimpleListCollection<Genre>(scope = scope) { force ->
-        mediaRepository.getGenres(force = force)
+        libraryFeed.getGenres(parentId = null, force = force)
     }
 
     private val playlistCollection = SimpleListCollection<Playlist>(scope) { _ ->

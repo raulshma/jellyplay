@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
@@ -45,8 +46,9 @@ private const val QUEUE_ADVANCE_LOG_TAG = "UpNextQueue"
  * Display fields only ([VideoQueueItem]'s shape): playback always goes through
  * the item id. `seasonNumber`/`episodeNumber` ride along so the episode card
  * keeps its "S1 · E2" subtitle line; `imageUrl` carries the queue row's own
- * artwork (an episode card's artwork is resolved from [itemId] by the screen,
- * which owns the image-url seam).
+ * artwork (an episode card's artwork is resolved from [episode] by the screen,
+ * which owns the tagged-artwork seam — the full item rides so its image tag
+ * can; surfaces that only have [itemId] stay untagged).
  */
 @Immutable
 data class UpNextCard(
@@ -57,6 +59,8 @@ data class UpNextCard(
     val source: Source,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
+    /** The episode-sibling item in full (EPISODE source only) — the screen resolves its tagged poster. */
+    val episode: MediaItem? = null,
 ) {
     /** Where the card's item came from — mirrors the advance's precedence ladder. */
     enum class Source {
@@ -76,7 +80,10 @@ data class UpNextCard(
  * queue-row activation, the card + has-queued-next projections, the
  * "mark watched & skip" / "mark unwatched & quit" overflow orchestration, the
  * autoplay-cancel wiring behind the Up Next overlay, the overlay's
- * next-episode loading flag, and the smart-download cleanup.
+ * next-episode loading flag, the smart-download cleanup, and the binge
+ * controls (the autoplay episode limit — the unattended streak, its two auto
+ * arms and manual reset arms, the reactive limit verdict — plus the #17
+ * after-finish keep gate that holds the card up instead of closing).
  *
  * The [SubtitleStyleController] shape: every fact the moved logic read from
  * the VM arrives as a narrow constructor lambda — NO raw uiState handle
@@ -169,6 +176,19 @@ internal class UpNextController(
     private val cancelAutoplayDecision: () -> Unit,
     /** Writes the Up Next overlay's `autoplayCancelled` mirror. */
     private val setAutoplayCancelledMirror: (Boolean) -> Unit,
+    // ── Binge controls (the autoplay episode limit + the after-finish card) ──
+    /**
+     * The configured consecutive-auto-advance cap, `0` = unlimited — as a
+     * FLOW so the reactive [isAutoplayLimitReached] verdict tracks a mid-play
+     * settings change without a controller handle poking it (the session maps
+     * the aggregate's `autoplayEpisodeLimit` leaf).
+     */
+    private val autoplayEpisodeLimit: Flow<Int> = flowOf(0),
+    /**
+     * The `showNextEpisodeDetailsAfterFinish` pref (the end-of-media
+     * keep-gate's pref arm; #17).
+     */
+    private val isShowDetailsAfterFinishEnabled: () -> Boolean = { false },
     // ── Smart-download cleanup ─────────────────────────────────────────────
     /** The `smartDownloadsEnabled` preference gate. */
     private val isSmartDownloadsEnabled: () -> Boolean,
@@ -272,6 +292,7 @@ internal class UpNextController(
                 source = UpNextCard.Source.EPISODE,
                 seasonNumber = sibling.seasonNumber,
                 episodeNumber = sibling.episodeNumber,
+                episode = sibling,
             )
             else -> null
         }
@@ -336,12 +357,16 @@ internal class UpNextController(
     /** Loads one season's episode list (episode sheet season click). */
     fun loadSeason(seasonId: String) = navigator.loadSeason(seasonId)
 
-    /** Starts playback of a picked episode at its saved position. */
+    /** Starts playback of a picked episode at its saved position (manual — resets the binge streak). */
     fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
+        resetAutoAdvanceStreak()
         initializeItem(episodeId, startPositionTicks)
     }
 
-    fun playPreviousEpisode() = navigator.previous()
+    fun playPreviousEpisode() {
+        resetAutoAdvanceStreak()
+        navigator.previous()
+    }
 
     /**
      * QUEUE-FIRST advance: when the manual up-next queue holds an item (and no
@@ -446,6 +471,9 @@ internal class UpNextController(
      */
     fun playQueueItem(index: Int) {
         val item = queueItems.value.getOrNull(index) ?: return
+        // A manual queue-row pick is a deliberate item selection: the binge
+        // streak restarts (the autoplay cap's reset arm).
+        resetAutoAdvanceStreak()
         if (!manualQueuePlayInFlight.compareAndSet(false, true)) {
             Log.d(QUEUE_ADVANCE_LOG_TAG, "manual queue play ignored (in flight): ${item.itemId}")
             return
@@ -502,6 +530,8 @@ internal class UpNextController(
      * threshold callback's launch).
      */
     fun markWatchedAndSkip() {
+        // A deliberate user advance — the binge streak restarts.
+        resetAutoAdvanceStreak()
         val decision = decideWatchedActions(
             hasNext = hasNextEpisode(),
             incognito = isIncognito(),
@@ -554,6 +584,94 @@ internal class UpNextController(
     fun cancelAutoplay() {
         cancelAutoplayDecision()
         setAutoplayCancelledMirror(true)
+    }
+
+    // ── Binge controls: the autoplay episode limit + the after-finish card ──
+
+    /**
+     * The unattended binge streak: consecutive AUTO-advances this player
+     * session. Grows ONLY on [advanceUnattended] (both auto arms — the
+     * engine end and the Up Next countdown); every manual item selection
+     * resets it —
+     * the manual verbs here ([playEpisode] / [playPreviousEpisode] /
+     * [playQueueItem] / [markWatchedAndSkip] / [playNextManually]) plus the
+     * player-open arm ([resetAutoAdvanceStreak], the VM's Initialize funnel).
+     * Deliberately a counter of its own, NOT [AutoPlayController]'s
+     * still-watching streak: that one also resets on generic user
+     * interaction, while the cap's reset is exactly "manual item selection /
+     * player open" — a pause mid-episode must not lift the cap.
+     */
+    private val autoAdvanceStreak = MutableStateFlow(0)
+
+    /**
+     * The autoplay-cap verdict: true when the configured cap is armed
+     * (limit > 0) and the streak reached it. While true, the two auto arms
+     * are blocked ([canAutoAdvance] — the VM's end-of-playback gate) and the
+     * Up Next overlay renders MANUAL ("Watch now / Dismiss", no countdown).
+     */
+    val isAutoplayLimitReached: StateFlow<Boolean> = combine(
+        autoAdvanceStreak,
+        autoplayEpisodeLimit,
+    ) { streak, limit -> limit > 0 && streak >= limit }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** The end-of-playback gate's limit arm: a reached cap blocks the advance. */
+    fun canAutoAdvance(): Boolean = !isAutoplayLimitReached.value
+
+    /** Player open / manual item selection: the unattended streak restarts. */
+    fun resetAutoAdvanceStreak() {
+        autoAdvanceStreak.value = 0
+    }
+
+    /**
+     * The unattended auto-advance: the binge streak grows, then the advance.
+     * Two triggers share it — the engine-end arm (the VM's
+     * `handlePlaybackEnded`) and the Up Next countdown's expiry (the
+     * overlay's [NextEpisodeOverlay] countdown reaching zero) — in both the
+     * user pressed nothing. Blocked upstream by [canAutoAdvance] when the
+     * cap is reached, so this only runs while the cap allows it.
+     */
+    fun advanceUnattended() {
+        recordAutoAdvanceForLimit()
+        playNextEpisode()
+    }
+
+    /**
+     * The MANUAL play-next arm — the card's "Watch now" button, the PiP
+     * transport's next action, the still-watching Continue: a deliberate
+     * user pick resets the unattended streak, then advances.
+     */
+    fun playNextManually() {
+        resetAutoAdvanceStreak()
+        playNextEpisode()
+    }
+
+    private fun recordAutoAdvanceForLimit() {
+        autoAdvanceStreak.value += 1
+    }
+
+    /**
+     * The end-of-media keep gate (#17): when playback concluded and no
+     * auto-advance will happen, should the Up Next card stay up — persistently,
+     * as a "next episode" details card — instead of the player closing?
+     *
+     * Decision table: the pref must be on; the user must NOT have cancelled
+     * the countdown (a dismissed card stays dismissed — the close path is the
+     * current behavior); a next item must exist (the card projection is the
+     * display truth — queue head or episode sibling, null under SyncPlay);
+     * and no auto-advance may be pending (autoplay off, or on with the limit
+     * reached — an enabled autoplay under the cap would have advanced before
+     * this gate ran, so the last arm is defensive).
+     */
+    fun shouldKeepUpNextCardAfterFinish(
+        autoplayEnabled: Boolean,
+        autoplayCancelled: Boolean,
+    ): Boolean {
+        if (!isShowDetailsAfterFinishEnabled()) return false
+        if (autoplayCancelled) return false
+        if (upNextCard.value == null) return false
+        if (autoplayEnabled && !isAutoplayLimitReached.value) return false
+        return true
     }
 
     // ── Smart-download cleanup ─────────────────────────────────────────────

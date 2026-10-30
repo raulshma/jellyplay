@@ -2,8 +2,10 @@ package com.raulshma.jellyplay.feature.music.artistdetail
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -50,7 +52,8 @@ class ArtistDetailViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val detailFeed: DetailFeed = mockk()
+    private val userDataChanges: UserDataChanges = mockk()
     private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
@@ -69,11 +72,13 @@ class ArtistDetailViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         viewModel = ArtistDetailViewModel(
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
+            userDataChanges = userDataChanges,
             libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
         )
     }
@@ -85,7 +90,7 @@ class ArtistDetailViewModelTest {
 
     /** Loads an artist detail + albums so the screen state is populated. */
     private fun loadArtist(artistName: String = "Artist") {
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = artistName, mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
@@ -106,7 +111,7 @@ class ArtistDetailViewModelTest {
 
     @Test
     fun loadArtist_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } returns
             Result.failure(RuntimeException("no artist"))
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
@@ -127,7 +132,7 @@ class ArtistDetailViewModelTest {
         // The albums half now fails the whole fetch (all-or-nothing): the old
         // ladder left it silently empty — an artist that looked to have no
         // albums, with no error and no retry path.
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
@@ -240,7 +245,7 @@ class ArtistDetailViewModelTest {
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", force = false) }
         coVerify(exactly = 1) { libraryApiClient.getArtistAlbums("ar1", 50) }
         assertFalse(viewModel.isLoading)
     }
@@ -261,7 +266,7 @@ class ArtistDetailViewModelTest {
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", force = false) }
         coVerify(exactly = 1) { libraryApiClient.getArtistAlbums("ar1", 50) }
         assertFalse(viewModel.isLoading)
         // The mix error survives the skipped re-entry.
@@ -270,7 +275,7 @@ class ArtistDetailViewModelTest {
 
     @Test
     fun loadArtist_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } throws IllegalStateException("engine blew up")
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } throws IllegalStateException("engine blew up")
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.loadArtist("ar1")
@@ -283,7 +288,7 @@ class ArtistDetailViewModelTest {
 
         // The throw must count as a failed loud load: re-entry reloads
         // (no no-op guard) and succeeds.
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
         viewModel.loadArtist("ar1")
@@ -300,7 +305,7 @@ class ArtistDetailViewModelTest {
         // all-or-nothing publish leaves nothing on screen behind the error),
         // so the re-entry guard must not skip — this is the flag's positive
         // case beyond the null-content guard.
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
@@ -314,7 +319,7 @@ class ArtistDetailViewModelTest {
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { mediaRepository.getMediaDetail("ar1") }
+        coVerify(exactly = 2) { detailFeed.getMediaDetail("ar1", force = false) }
         coVerify(exactly = 2) { libraryApiClient.getArtistAlbums("ar1", 50) }
         assertNull(viewModel.error)
         assertEquals(albums, viewModel.albums)
@@ -324,7 +329,7 @@ class ArtistDetailViewModelTest {
     fun deferredRefresh_successHealsAFailedLoudLoadForReEntry() = runTest(mainDispatcher) {
         // Loud failure: nothing on screen behind the error, and the failed
         // loud load armed the re-entry guard.
-        coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
@@ -335,7 +340,7 @@ class ArtistDetailViewModelTest {
 
         // The deferred silent regeneration succeeds and heals the screen.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
-        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
@@ -353,8 +358,8 @@ class ArtistDetailViewModelTest {
         // no-ops instead of flash-reloading over the healed content.
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1", true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", force = false) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", true) }
         assertFalse(viewModel.isLoading)
     }
 
@@ -367,7 +372,7 @@ class ArtistDetailViewModelTest {
         // A write confirmed while the artist screen is NOT on screen only
         // marks the artist stale.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
-        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
@@ -379,7 +384,7 @@ class ArtistDetailViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1", true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", true) }
         assertFalse(viewModel.isLoading)
         assertNull(viewModel.error)
         assertEquals("Artist 2", viewModel.artistName)
@@ -391,7 +396,7 @@ class ArtistDetailViewModelTest {
         advanceUntilIdle()
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
-        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.failure(RuntimeException("offline blip"))
+        coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.failure(RuntimeException("offline blip"))
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
@@ -400,7 +405,7 @@ class ArtistDetailViewModelTest {
 
         // The silent refetch failed — serve-stale-while-revalidate keeps the
         // last name/albums on screen instead of flashing an error.
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1", true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", true) }
         assertFalse(viewModel.isLoading)
         assertNull(viewModel.error)
         assertEquals("Artist", viewModel.artistName)
@@ -409,7 +414,7 @@ class ArtistDetailViewModelTest {
         // The failed silent half re-arms the deferred refresh: the next
         // re-entry retries the regeneration instead of trusting the consumed
         // flag (which would pin the pre-change data forever).
-        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
         viewModel.deferredRefresher.onScreenActiveChanged(false)
@@ -426,7 +431,7 @@ class ArtistDetailViewModelTest {
         // The name re-fetches fine, the albums row fails: publishing only the
         // fresh half would show a new name beside the pre-change albums.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
-        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
@@ -449,7 +454,7 @@ class ArtistDetailViewModelTest {
     fun refreshArtist_bypassesTheDetailCache() = runTest(mainDispatcher) {
         loadArtist()
         advanceUntilIdle()
-        coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
         coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
@@ -457,7 +462,7 @@ class ArtistDetailViewModelTest {
         viewModel.refreshArtist("ar1")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1", true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("ar1", true) }
         assertEquals(albums, viewModel.albums)
         assertFalse(viewModel.isLoading)
     }

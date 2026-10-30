@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
@@ -85,7 +85,7 @@ class PlayerSessionManagerTest {
         }
     }
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineRepository: OfflineRepository
@@ -99,7 +99,7 @@ class PlayerSessionManagerTest {
 
     @Before
     fun setUp() {
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
@@ -135,7 +135,7 @@ class PlayerSessionManagerTest {
         sessionManager = PlayerSessionManager(
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
             nowPlayingReporter = NowPlayingReporter(),
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playbackRepository = playbackRepository,
             imageUrlProvider = mockk(relaxed = true),
             playbackIdentity = mockk(relaxed = true),
@@ -168,7 +168,7 @@ class PlayerSessionManagerTest {
         val state = sessionManager.sessionState.value
         assertFalse(state.isReady)
         // The whole point: no network stage runs while offline.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
         // failLoad contract: the state write and the feedback emission carry
         // the SAME message — comparing them needs no resource literal here.
         assertEquals(1, messageBus.errors.size)
@@ -191,7 +191,7 @@ class PlayerSessionManagerTest {
         val state = sessionManager.sessionState.value
         assertEquals("Offline", state.playMethodString)
         assertTrue(state.isReady)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     // ── Offline-source preference (prefer downloaded vs streaming) ────
@@ -220,7 +220,7 @@ class PlayerSessionManagerTest {
         stubAggregatePreference(OfflinePlaybackPreference.PREFER_STREAMING)
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns
             downloadItem(itemId, tempFile.absolutePath)
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns Result.success(
             MediaDetail(item = MediaItem(id = itemId, name = "Test Movie", mediaType = MediaType.MOVIE)),
         )
 
@@ -228,7 +228,7 @@ class PlayerSessionManagerTest {
 
         // The usable download was passed over: the server copy is fetched
         // and the session never takes the "Offline" play method.
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail(itemId) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail(itemId, force = false) }
         assertFalse(sessionManager.sessionState.value.playMethodString == "Offline")
     }
 
@@ -251,14 +251,14 @@ class PlayerSessionManagerTest {
         val state = sessionManager.sessionState.value
         assertEquals("Offline", state.playMethodString)
         assertTrue(state.isReady)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), force = false) }
     }
 
     @Test
     fun loadOnline_detailFetchFailure_surfacesFeedbackAndIsNotReady() = runTest(testDispatcher) {
         val itemId = "item-movie"
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns
             Result.failure(java.io.IOException("dead air"))
 
         sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
@@ -284,7 +284,7 @@ class PlayerSessionManagerTest {
         sourceId: String = "ms-1",
     ) {
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = itemId, name = "Test Movie", mediaType = MediaType.MOVIE),
                 mediaSources = listOf(MediaSource(id = sourceId, name = "Test Source")),
@@ -376,7 +376,7 @@ class PlayerSessionManagerTest {
         return PlayerSessionManager(
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
             nowPlayingReporter = NowPlayingReporter(),
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playbackRepository = playbackRepository,
             imageUrlProvider = mockk(relaxed = true),
             playbackIdentity = identity,
@@ -398,7 +398,7 @@ class PlayerSessionManagerTest {
     private suspend fun loadOneOnlineSession(manager: PlayerSessionManager) {
         val itemId = "item-movie"
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
-        coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail(itemId, force = false) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = itemId, name = "Test Movie", mediaType = MediaType.MOVIE),
                 mediaSources = listOf(MediaSource(id = "ms-1", name = "Test Source")),

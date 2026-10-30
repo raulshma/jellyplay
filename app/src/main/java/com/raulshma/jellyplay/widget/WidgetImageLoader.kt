@@ -213,9 +213,14 @@ object WidgetImageLoader {
         imageUrlProvider: ImageUrlProvider,
     ): ContinueWatchingPosterEntry {
         val imageId = WidgetPosterIdentity.continueWatchingPosterImageId(item)
+        val imageTag = WidgetPosterIdentity.posterImageTag(item)
         return ContinueWatchingPosterEntry(
             imageId,
-            imageUrlProvider.getImageUrl(imageId, maxWidth = WidgetPosterIdentity.CONTINUE_WATCHING_POSTER_MAX_WIDTH),
+            imageUrlProvider.getImageUrl(
+                imageId,
+                maxWidth = WidgetPosterIdentity.CONTINUE_WATCHING_POSTER_MAX_WIDTH,
+                tag = imageTag,
+            ),
         )
     }
 

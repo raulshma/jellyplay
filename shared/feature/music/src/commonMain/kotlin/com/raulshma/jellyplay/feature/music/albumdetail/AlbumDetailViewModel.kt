@@ -6,8 +6,10 @@ import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -37,14 +39,18 @@ private data class AlbumContent(
 )
 
 class AlbumDetailViewModel(
+    /** The album's detail read (the detail-read family seam). */
+    private val detailFeed: DetailFeed,
+    /** The server user-data change feed (the deferred reload arming). */
+    private val userDataChanges: UserDataChanges,
     /**
-     * The detail read + user-data feed only — the album's track list rides
-     * [musicCatalogue], the repository's narrow music family seam (the
-     * getAlbumTracks force lever included).
+     * The album's track list read — the repository's narrow music family
+     * seam (the getAlbumTracks force lever included).
      */
-    private val mediaRepository: MediaRepository,
     private val musicCatalogue: MusicCatalogue,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the album hero + track rows render through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
     private val downloads: TrackDownloadStatusWindow,
     private val downloadIntake: DownloadIntake,
@@ -60,7 +66,7 @@ class AlbumDetailViewModel(
      * [DeferredFetchCoordinator].
      */
     private val fetchCoordinator = DeferredFetchCoordinator<String, AlbumContent>(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
         fetch = ::fetchAlbumData,
     )
@@ -146,7 +152,7 @@ class AlbumDetailViewModel(
      */
     private suspend fun fetchAlbumData(albumId: String, force: Boolean): AlbumContent {
         return coroutineScope {
-            val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
+            val detailDeferred = async { detailFeed.getMediaDetail(albumId, force = force) }
             val tracksDeferred = async { musicCatalogue.getAlbumTracks(albumId, force = force) }
             val detailResult = detailDeferred.await()
             val tracksResult = tracksDeferred.await()

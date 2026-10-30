@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
@@ -153,7 +153,7 @@ object DiscoverRowTemplates {
 class DiscoverRowsViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
     private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     /** The library client's uncached reads (the editor preview's fresh row
      *  fetch + the People picker — off the union; the tag facets ride the
@@ -182,7 +182,7 @@ class DiscoverRowsViewModel(
     // behavior delta of this fold; see FilterDimensionsHolder).
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
-        getGenres = { force -> mediaRepository.getGenres(force = force) },
+        getGenres = { force -> libraryFeed.getGenres(parentId = null, force = force) },
         getTags = { mediaCatalogueEnrichments.getTags(null) },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
@@ -205,8 +205,8 @@ class DiscoverRowsViewModel(
 
     private fun loadEditorCatalogs() {
         launch {
-            mediaRepository.getLibraryFolders().onSuccess { _libraryFolders.value = it }
-            mediaRepository.getStudios().onSuccess { _studios.value = it }
+            libraryFeed.getLibraryFolders(force = false).onSuccess { _libraryFolders.value = it }
+            libraryFeed.getStudios(parentId = null).onSuccess { _studios.value = it }
         }
         // Genres/tags ride the shared holder (independent coroutines + retry)
         // instead of sequential reads inside the launch above — same end

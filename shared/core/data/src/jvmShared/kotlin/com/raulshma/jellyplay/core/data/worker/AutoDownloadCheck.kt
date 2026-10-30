@@ -6,17 +6,23 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
+import com.raulshma.jellyplay.core.model.AutoDownloadSuggestion
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
  * The auto-download check choreography: one pass that finds new episodes of
  * series the user has already downloaded from and hands them to
- * [DownloadIntake.startSeries] per season, gated on the
- * `autoDownloadNewEpisodes` preference and respecting the WiFi-only /
+ * [DownloadIntake.startSeries] per season, gated per series on its effective
+ * mode (the per-series policy override or the global `autoDownloadMode`
+ * preference — NEVER series are skipped) and respecting the WiFi-only /
  * storage-limit constraints enforced inside [DownloadRepository].
  *
  * The pass is bounded by the retention policy (the `auto_download_*` prefs on
@@ -36,6 +42,13 @@ import kotlinx.coroutines.flow.firstOrNull
  *    the pass stops and the remaining series are picked up next pass.
  *  - **Per-server allow-list** — a non-empty `autoDownloadServers` set no-ops
  *    the whole pass unless [ServerIdentityStore.activeServerId] is in it.
+ *  - **Per-series policy** (gh-181) — each series resolves its effective mode
+ *    as its `series_download_policies` override (chosen in the series download
+ *    sheet) or the global `autoDownloadMode` preference. NEVER skips the
+ *    series; ASK computes the same candidates the INSTANT half would enqueue
+ *    but records them as pending suggestions
+ *    ([DownloadRepository.recordAutoDownloadSuggestions]) for the user to
+ *    confirm on the Downloads screen — never enqueues.
  *
  * Previously this lived twice: verbatim in the legacy Android
  * `core.data.worker.AutoDownloadWorker.doWork`, and ported verbatim in
@@ -61,6 +74,7 @@ import kotlinx.coroutines.flow.firstOrNull
 class AutoDownloadCheck(
     private val downloadsStore: DownloadsStore,
     private val downloadRepository: DownloadRepository,
+    private val policyStore: SeriesDownloadPolicyStore,
     private val downloadIntake: DownloadIntake,
     private val episodeCatalogue: EpisodeCatalogue,
     /** Active-server identity for the per-user allow-list gate. */
@@ -72,6 +86,8 @@ class AutoDownloadCheck(
      * mid-pass instead of queueing downloads for a dead shell.
      */
     private val isStopped: () -> Boolean = { false },
+    /** Clock for the Ask-mode suggestions' `suggestedAt` stamp (fake-clock testable). */
+    private val timeSource: TimeSource = SystemTimeSource(),
 ) {
 
     /**
@@ -80,8 +96,10 @@ class AutoDownloadCheck(
      * counts its own in-process passes from 0).
      */
     suspend fun checkOnce(attempt: Int): Outcome {
-        val prefs = downloadsStore.downloads.firstOrNull()
-        if (prefs == null || !prefs.autoDownloadNewEpisodes) return Outcome.Complete
+        // No global gate: a global NEVER with per-series overrides must still
+        // reach those series (the schedulers keep the pass alive via
+        // hasSeriesPolicies); series resolution below skips NEVER ones.
+        val prefs = downloadsStore.downloads.firstOrNull() ?: return Outcome.Complete()
 
         // Per-server allow-list: empty = all servers; a non-empty set that does
         // not contain the active server no-ops the whole pass (the download
@@ -91,7 +109,7 @@ class AutoDownloadCheck(
             val activeServerId = serverIdentityStore.activeServerId.firstOrNull()
             if (activeServerId == null || activeServerId !in prefs.autoDownloadServers) {
                 Log.i(TAG, "AutoDownload skipped: active server is not allow-listed")
-                return Outcome.Complete
+                return Outcome.Complete()
             }
         }
 
@@ -107,7 +125,7 @@ class AutoDownloadCheck(
         // The coverage union's series half (the folded getDownloadedSeriesIds
         // read — same DAO query, snapped off the shared coverage flow).
         val seriesIds = downloadRepository.downloadCoverage().first().seriesIds
-        if (seriesIds.isEmpty()) return Outcome.Complete
+        if (seriesIds.isEmpty()) return Outcome.Complete()
 
         // Fetch every series' downloaded episode ids in a single 2-column query
         // (grouped by seriesId) instead of issuing one full-row query per series
@@ -115,9 +133,15 @@ class AutoDownloadCheck(
         // rows × 23 columns per iteration; this reads 2 columns, once.
         val downloadedEpisodeIdsBySeries = downloadRepository.getDownloadedEpisodeIdsBySeries()
 
+        val globalMode = prefs.autoDownloadMode
+        // Per-series overrides (gh-181) resolved in one query; a missing row
+        // means the series follows the global mode.
+        val policies = policyStore.seriesPolicies(seriesIds.toList())
+
         val lookahead = prefs.autoDownloadLookahead
         val maxPerPass = prefs.autoDownloadMaxPerPass
         var enqueuedInPass = 0
+        val askSuggestions = mutableListOf<AutoDownloadSuggestion>()
 
         var hadTransientFailure = false
         for (seriesId in seriesIds) {
@@ -125,6 +149,8 @@ class AutoDownloadCheck(
             // Budget spent: the remaining series (and their seasons) are picked
             // up by the next pass instead of blowing past the cap mid-pass.
             if (maxPerPass > 0 && enqueuedInPass >= maxPerPass) break
+            val mode = policies[seriesId] ?: globalMode
+            if (mode == AutoDownloadMode.NEVER) continue
             val alreadyDownloaded = downloadedEpisodeIdsBySeries[seriesId].orEmpty()
             // One consolidated load per series: seasons + every season's episodes
             // in a single snapshot, replacing the prior getSeasons + per-season
@@ -137,7 +163,10 @@ class AutoDownloadCheck(
             }
             for (season in snapshot.seasons) {
                 if (isStopped()) break
-                if (maxPerPass > 0 && enqueuedInPass >= maxPerPass) break
+                // The enqueue budget bounds the INSTANT half only — Ask-mode
+                // prompts write table rows, not transfers, so they never
+                // consume download budget.
+                if (mode == AutoDownloadMode.INSTANT && maxPerPass > 0 && enqueuedInPass >= maxPerPass) break
                 val seasonEpisodes = snapshot.seasonEpisodes(season.id)
                 val newEpisodeIds = if (lookahead > 0) {
                     lookaheadWindow(seasonEpisodes, alreadyDownloaded, lookahead)
@@ -145,22 +174,58 @@ class AutoDownloadCheck(
                     // Legacy behavior: every not-yet-downloaded episode.
                     seasonEpisodes.filter { it.id !in alreadyDownloaded }.map { it.id }
                 }
-                if (newEpisodeIds.isNotEmpty()) {
-                    val budgeted = if (maxPerPass > 0) {
-                        newEpisodeIds.take(maxPerPass - enqueuedInPass)
-                    } else {
-                        newEpisodeIds
+                if (newEpisodeIds.isEmpty()) continue
+                when (mode) {
+                    AutoDownloadMode.INSTANT -> {
+                        val budgeted = if (maxPerPass > 0) {
+                            newEpisodeIds.take(maxPerPass - enqueuedInPass)
+                        } else {
+                            newEpisodeIds
+                        }
+                        downloadIntake.startSeries(
+                            seriesId = seriesId,
+                            episodeIds = mapOf(season.id to budgeted),
+                        )
+                        enqueuedInPass += budgeted.size
                     }
-                    downloadIntake.startSeries(
-                        seriesId = seriesId,
-                        episodeIds = mapOf(season.id to budgeted),
-                    )
-                    enqueuedInPass += budgeted.size
+
+                    AutoDownloadMode.ASK -> {
+                        // Same candidates the INSTANT half would have enqueued,
+                        // recorded as pending prompts instead. The Downloads
+                        // screen's suggestion card is where the user answers;
+                        // the Android adapter additionally raises a summary
+                        // notification when [Outcome.Complete.newSuggestions]
+                        // reports fresh rows.
+                        val episodeById = seasonEpisodes.associateBy { it.id }
+                        newEpisodeIds.forEach { episodeId ->
+                            episodeById[episodeId]?.let { episode ->
+                                askSuggestions += AutoDownloadSuggestion(
+                                    episodeId = episode.id,
+                                    seriesId = seriesId,
+                                    seriesName = episode.seriesName.orEmpty(),
+                                    seasonId = season.id,
+                                    seasonName = episode.seasonName ?: season.name,
+                                    seasonNumber = episode.seasonNumber ?: 0,
+                                    episodeNumber = episode.indexNumber ?: 0,
+                                    name = episode.name,
+                                    suggestedAt = timeSource.nowEpochMillis(),
+                                )
+                            }
+                        }
+                    }
+
+                    AutoDownloadMode.NEVER -> Unit
                 }
             }
         }
 
-        if (!hadTransientFailure) return Outcome.Complete
+        val newSuggestions = if (askSuggestions.isEmpty()) {
+            0
+        } else {
+            policyStore.recordAutoDownloadSuggestions(askSuggestions)
+        }
+
+        if (!hadTransientFailure) return Outcome.Complete(newSuggestions)
         return if (attempt < MAX_RETRIES) {
             Outcome.RetriesPending
         } else {
@@ -198,10 +263,13 @@ class AutoDownloadCheck(
 
         /**
          * The gate was off, there was nothing downloaded to check, or every
-         * catalogue load landed. (Android mapping: `Result.success()`;
-         * desktop: the ladder returns until the next periodic pass.)
+         * catalogue load landed. [newSuggestions] is how many Ask-mode
+         * prompts were newly recorded this pass (0 on every INSTANT-only
+         * pass) — the Android adapter's notification trigger. Equality is
+         * structural, so `assertEquals(Outcome.Complete, result)` keeps
+         * holding for passes that recorded nothing.
          */
-        data object Complete : Outcome
+        data class Complete(val newSuggestions: Int = 0) : Outcome
 
         /**
          * At least one series' catalogue load failed while still under

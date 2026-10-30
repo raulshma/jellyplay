@@ -97,6 +97,19 @@ internal class LivePlaybackSession(
     private val lastChannelStore: LastChannelStore,
     private val transcodeReasonsRenderer: TranscodeReasonsRenderer,
     playbackRepository: PlaybackRepository,
+    /**
+     * The system media-session factory (gh-178 headset control). Android-only
+     * — null on desktop (documented-latent, like the audio / PiP seams); the
+     * controller is created on first engine and follows the engine through
+     * zaps, releases with the session.
+     */
+    private val mediaSessionFactory: LiveMediaSessionFactory? = null,
+    /**
+     * Channel artwork resolver for the session metadata (blank = no artwork).
+     * The channel's [LiveTvChannel.imageTag] rides as the third argument —
+     * the `?tag=` etag cache-buster on the notification artwork.
+     */
+    private val channelImageUrl: (channelId: String, maxWidth: Int, tag: String?) -> String = { _, _, _ -> "" },
 ) {
 
     // ── Upward event pipe ─────────────────────────────────────────────────────
@@ -165,6 +178,15 @@ internal class LivePlaybackSession(
 
     private var engine: LivePlayerEngine? = null
     private var initialized = false
+
+    /**
+     * The system media session controller (gh-178) — created on the first
+     * [ensureEngine] (it reads [engine] lazily, so it follows engine creation
+     * and zaps), released in [release]. Null when no factory was injected
+     * (desktop).
+     */
+    private val mediaSessionController: LiveMediaSessionController? =
+        mediaSessionFactory?.create({ engine }, channelImageUrl)
 
     /** The committed channel list + cursor the zap machine steps over. */
     private var channels: List<LiveTvChannel> = emptyList()
@@ -375,6 +397,14 @@ internal class LivePlaybackSession(
                     container = resolved.container,
                 )
             )
+        // The system MediaSession follows every successful tune (gh-178) —
+        // init, zap, retry, transcode-fallback reload all funnel through
+        // here — so headset / lock-screen control always targets the tuned
+        // channel. Same-channel re-tunes rebuild the session id (the
+        // controller's release-superseded order handles the uniqueness rule).
+        // The channel's imageTag rides along so the session artwork URL
+        // carries the etag cache-buster.
+        mediaSessionController?.createForChannel(channel.id, channel.name, channel.imageTag)
         // PiP auto-entry arms on every successful tune (init, zap, retry,
         // stream-option reload all funnel through here) — mirrors the VOD
         // session's per-load arm. The Activity additionally gates entry on
@@ -686,6 +716,9 @@ internal class LivePlaybackSession(
         enginePlaybackMapJob?.cancel()
         enginePlaybackMapJob = null
         engineEventSource.value = null
+        // Drop the MediaSession with the engine it backs (gh-178): leaving it
+        // registered would leave headset buttons targeting a released player.
+        mediaSessionController?.release()
         engine?.release()
         engine = null
         initialized = false

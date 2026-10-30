@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
@@ -308,7 +309,10 @@ internal class DownloadLifecycleActions(
         }
     }
 
-    fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
+    fun downloadSeries(
+        episodeIds: Map<String, List<String>>? = null,
+        policyChoice: DownloadIntake.SeriesPolicyChoice = DownloadIntake.SeriesPolicyChoice.LeaveUnchanged,
+    ) {
         val detail = session.value?.detail ?: run {
             scope.launch { messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = 0, error = strings.get(Res.string.detail_error_details_not_loaded))) }
             return
@@ -321,7 +325,7 @@ internal class DownloadLifecycleActions(
 
         scope.launch {
             _state.update { it.copy(isDownloadingSeries = true) }
-            downloadIntake.startSeries(item.id, episodeIds)
+            downloadIntake.startSeries(item.id, episodeIds, policyChoice)
                 .onSuccess { downloadIds ->
                     messages.tryEmit(DetailMessage.SeriesDownload(queuedCount = downloadIds.size, error = null))
                 }
@@ -335,6 +339,15 @@ internal class DownloadLifecycleActions(
                 }
             _state.update { it.copy(isDownloadingSeries = false) }
         }
+    }
+
+    /**
+     * The session series' stored policy override (null = Default) — the
+     * download sheet's pre-load read so its chips open on the stored choice.
+     */
+    suspend fun seriesPolicy(): AutoDownloadMode? {
+        val seriesId = session.value?.seriesId ?: return null
+        return downloadIntake.seriesPolicy(seriesId)
     }
 
     fun prepareDownloadSheetEpisodes() {

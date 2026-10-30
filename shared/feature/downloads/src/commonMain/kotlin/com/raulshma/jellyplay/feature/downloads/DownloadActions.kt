@@ -63,6 +63,14 @@ object DownloadActions {
     )
 
     /**
+     * The status set [action] admits — `null` when it admits every status
+     * (DELETE). Exposed read-only so derived vocabularies (the status
+     * filter's Active set) fold off this table instead of hand-copying it.
+     */
+    fun admittedStatuses(action: DownloadBulkAction): Set<DownloadStatus>? =
+        admittingStatuses.getValue(action)
+
+    /**
      * The actions the admission table admits for [item], in declaration order
      * — the single source the row renderer consults for which actions EXIST
      * for a status. Per-status placement (which slot a button renders in,
@@ -95,6 +103,24 @@ object DownloadActions {
         selectedIds: Set<String>,
         scope: DownloadActionScope,
     ): Boolean = targets(action, downloads, selectedIds, scope).isNotEmpty()
+
+    /**
+     * The actions [supports] admits for [scope], folded once over the whole
+     * vocabulary. A control cluster derives ONE set per scope (in a remember
+     * keyed on its inputs) and reads membership — `PAUSE in bulkActions` —
+     * instead of spelling a [supports] remember per button: same verdicts,
+     * one fold, and adding an enum entry can't forget to re-dress a screen.
+     * Agreement with [supports] per action is pinned by
+     * DownloadActionFacesTest (the never-offer-a-no-op rule keeps one fold).
+     */
+    fun availableBulkActions(
+        downloads: List<DownloadItem>,
+        selectedIds: Set<String>,
+        scope: DownloadActionScope,
+    ): Set<DownloadBulkAction> =
+        DownloadBulkAction.entries.filter { action ->
+            supports(action, downloads, selectedIds, scope)
+        }.toSet()
 
     /**
      * The items [action] would act on: intersect [scope]'s candidate set with

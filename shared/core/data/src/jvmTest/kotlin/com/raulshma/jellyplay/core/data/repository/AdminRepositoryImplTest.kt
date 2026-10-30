@@ -44,8 +44,8 @@ import kotlin.test.assertTrue
  *
  * The ctor injects the family singles directly (admin + user clients in
  * these tests; the live-tv/library clients carry the two remaining
- * pass-throughs and are omitted here) — the JellyfinApiClient union it used
- * to inject was a pure delegation over these same singles.
+ * pass-throughs and are omitted here) — the retired JellyfinApiClient union
+ * it used to inject was a pure delegation over these same singles.
  */
 class AdminRepositoryImplTest {
 

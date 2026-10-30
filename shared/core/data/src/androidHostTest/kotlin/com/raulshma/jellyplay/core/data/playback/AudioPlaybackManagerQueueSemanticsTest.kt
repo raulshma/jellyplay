@@ -139,8 +139,8 @@ private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
  * `getOrCreatePlayer()` ASSIGNS the factory result to the private
  * `exoPlayer` field (the same tail `createPlayer()` has always had), so the
  * first play-path prefix arms `EngineDispatch.isLive` and every
- * `exoPlayer ?: return` adapter guard synchronously — the former
- * reflection write into the field is retired. The stub never fires player
+ * `exoPlayer ?: return` adapter guard synchronously, with no reflection write
+ * into the field. The stub never fires player
  * events, so chassis-driven cursor writes are asserted directly, the way
  * the core suite asserts its recording dispatch; the ONE async write the
  * adapter performs (the shuffle/undo playlist rebuild) is awaited via a
@@ -169,7 +169,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
         // [AudioLibraryBrowser] both read (since the constructor diet the
         // browser is a ctor param — the harness constructs it over the same
         // mocks, exactly the production Koin shape).
-        private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository =
+        private val detailFeed: com.raulshma.jellyplay.core.data.repository.DetailFeed =
             mockk(relaxed = true) {
                 // Real Result values (value classes cannot be proxied): the
                 // resolve ladder fails and buildPlayableMediaItem falls to
@@ -178,7 +178,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
                 val detailResult: Result<com.raulshma.jellyplay.core.model.MediaDetail> =
                     detail?.let { Result.success(it) }
                         ?: Result.failure(RuntimeException("test"))
-                coEvery { getMediaDetail(any()) } returns detailResult
+                coEvery { getMediaDetail(any(), force = false) } returns detailResult
             }
         private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository =
             mockk(relaxed = true)
@@ -199,9 +199,23 @@ class AudioPlaybackManagerQueueSemanticsTest {
                 }
             }
 
+        // The browser reads the browse + detail family seams (browse + detail
+        // reads in one resolve); the manager reads the shared detailFeed mock
+        // above. Same default: a failing detail read falls to the
+        // local-source arm.
+        private val browserLibraryFeed: com.raulshma.jellyplay.core.data.repository.LibraryFeed =
+            mockk(relaxed = true)
+
+        private val browserDetailFeed: com.raulshma.jellyplay.core.data.repository.DetailFeed =
+            mockk(relaxed = true) {
+                coEvery { getMediaDetail(any(), any()) } returns
+                    Result.failure(RuntimeException("test"))
+            }
+
         private val libraryBrowser = AudioLibraryBrowser(
             scope = scope,
-            mediaRepository = mediaRepository,
+            libraryFeed = browserLibraryFeed,
+            detailFeed = browserDetailFeed,
             musicCatalogue = mockk(relaxed = true),
             libraryApiClient = mockk(relaxed = true),
             playlistRepository = mockk(relaxed = true),
@@ -217,7 +231,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
         val manager: AudioPlaybackManager = AudioPlaybackManager(
             context = ApplicationProvider.getApplicationContext(),
             libraryBrowser = libraryBrowser,
-            mediaRepository = mediaRepository,
+            detailFeed = detailFeed,
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             playbackSourceResolver = playbackSourceResolver,

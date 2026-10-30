@@ -159,8 +159,10 @@ fun PhotoAlbumScreen(
             errorFallbackMessage = stringResource(Res.string.photos_failed_to_load_photos),
             appendErrorFallbackMessage = stringResource(Res.string.photos_failed_to_load_more),
         ) { photo, itemModifier ->
-            val imageUrl = remember(photo.id) {
-                viewModel.getImageUrl(photo.id, maxWidth = 400)
+            // Tag-aware thumb: same 400px width as before, the photo's own
+            // Primary tag as the cache-buster.
+            val imageUrl = remember(photo, viewModel.artworkUrls) {
+                viewModel.artworkUrls.poster(photo, maxWidth = 400)
             }
             val memoizedClick = remember(photo.id, parentId) {
                 { onPhotoClick(photo.id, parentId) }

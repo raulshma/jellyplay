@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.core.datastore.createPreferenceSliceGraph
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileSlice
 import com.raulshma.jellyplay.core.model.PinLockoutState
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
@@ -63,16 +62,16 @@ class PreferenceSnapshotReaderTest {
 
     @Test
     fun `cleared stores read back the factory baseline`() = runTest {
-        // Two desktop read-clamps diverge from the value-level FACTORY
+        // One desktop read-clamp diverges from the value-level FACTORY
         // baseline on a cleared graph: `normalizePreferredPlayer` degrades the
-        // absent EXO_PLAYER choice to the platform default (MPV on desktop),
-        // and the legacy `force_direct_play` boolean reads its historical
-        // `true` default as FORCE_DIRECT_PLAY. Exactly what the former per-VM
+        // absent EXO_PLAYER choice to the platform default (MPV on desktop).
+        // (The legacy `force_direct_play` boolean used to migrate its absent
+        // `true` default into FORCE_DIRECT_PLAY here; it now defaults the
+        // cleared graph to AUTO — Issue #1.) Exactly what the former per-VM
         // assemblies read — the reader must not normalize any differently.
         val cleared = PreferenceSliceSnapshot.FACTORY.copy(
             playback = PreferenceSliceSnapshot.FACTORY.playback.copy(
                 preferredPlayer = platformEngineSupport.default,
-                playbackMode = PlaybackMode.FORCE_DIRECT_PLAY,
             ),
         )
         assertEquals(cleared, reader.snapshotOnce())

@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -10,6 +11,7 @@ import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSideSearchState
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrServiceDetailsResult
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.model.Genre
@@ -82,7 +84,8 @@ class SearchViewModelTest {
     // has no access to that module (SyncStatusStateHolderTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryFeed: LibraryFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var libraryApiClient: LibraryApiClient
 
     /** Silent grid mutations delegate here; relaxed mock is enough. */
@@ -101,7 +104,8 @@ class SearchViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        libraryFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         libraryApiClient = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -113,18 +117,20 @@ class SearchViewModelTest {
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
-        coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(emptyList())
         catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
 
         viewModel = SearchViewModel(
-            mediaRepository,
+            libraryFeed,
+            userDataChanges,
             catalogueEnrichments,
             libraryApiClient,
             userDataMutator,
             imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository,
             seerrRequestDelegate,
             mediaSearchEngine,
@@ -210,7 +216,8 @@ class SearchViewModelTest {
         )
         // Recreate so the init-time suggestion load picks up the stub.
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
 
@@ -250,10 +257,11 @@ class SearchViewModelTest {
     @Test
     fun `loadGenres publishes genres on success`() = runTest(mainDispatcher) {
         val genres = listOf(Genre(id = "1", name = "Action"), Genre(id = "2", name = "Comedy"))
-        coEvery { mediaRepository.getGenres(any()) } returns Result.success(genres)
+        coEvery { libraryFeed.getGenres(any(), any()) } returns Result.success(genres)
 
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
@@ -265,20 +273,21 @@ class SearchViewModelTest {
     @Test
     fun `loadGenres retries once after a transient failure`() = runTest(mainDispatcher) {
         val genres = listOf(Genre(id = "1", name = "Action"))
-        coEvery { mediaRepository.getGenres(any()) } returnsMany listOf(
+        coEvery { libraryFeed.getGenres(any(), any()) } returnsMany listOf(
             Result.failure(RuntimeException("blip")),
             Result.success(genres),
         )
 
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.genres.collect { } }
         advanceUntilIdle()
 
         assertEquals(genres, viewModel.genres.value)
-        coVerify(atLeast = 2) { mediaRepository.getGenres(any()) }
+        coVerify(atLeast = 2) { libraryFeed.getGenres(any(), any()) }
     }
 
     @Test
@@ -287,7 +296,8 @@ class SearchViewModelTest {
         catalogueEnrichments.tagsResult = Result.success(tags)
 
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.tags.collect { } }
@@ -304,7 +314,8 @@ class SearchViewModelTest {
             SeerrPreferences(serverUrl = "https://seerr.example")
         )
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrConnected.collect { } }
@@ -319,7 +330,8 @@ class SearchViewModelTest {
             SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
         )
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.isSeerrSearchEnabled.collect { } }
@@ -340,7 +352,8 @@ class SearchViewModelTest {
             MediaSideSearchState(query = "matrix", seerr = seerrItems, seerrError = false, offline = offline)
         )
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         advanceUntilIdle()
@@ -356,7 +369,8 @@ class SearchViewModelTest {
             MediaSideSearchState(query = "matrix", seerr = emptyList(), seerrError = true, offline = emptyList())
         )
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         advanceUntilIdle()
@@ -382,7 +396,8 @@ class SearchViewModelTest {
             }
         }
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         viewModel.onEvent(SearchUiEvent.Search("matrix"))
@@ -414,7 +429,8 @@ class SearchViewModelTest {
             }
         }
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         viewModel.onEvent(SearchUiEvent.RetrySeerrSearch)
@@ -432,29 +448,30 @@ class SearchViewModelTest {
 
     @Test
     fun `userData change while inactive defers the paged refresh to the next entry`() = runTest(mainDispatcher) {
-        every { mediaRepository.userDataChanges } returns userDataEvents
-        coEvery { mediaRepository.searchPaged(any(), any()) } returns
+        every { userDataChanges.userDataChanges } returns userDataEvents
+        coEvery { libraryFeed.searchPaged(any(), any()) } returns
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
         try {
             viewModel.onEvent(SearchUiEvent.Search("breaking"))
             advanceUntilIdle()
-            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+            coVerify(exactly = 1) { libraryFeed.searchPaged(any(), any()) }
 
             // A write confirmed while the screen is NOT on screen only marks stale.
             viewModel.deferredRefresher.onScreenActiveChanged(false)
             userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
             advanceUntilIdle()
-            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+            coVerify(exactly = 1) { libraryFeed.searchPaged(any(), any()) }
 
             // Re-entry fires the single deferred regeneration.
             viewModel.deferredRefresher.onScreenActiveChanged(true)
             advanceUntilIdle()
-            coVerify(exactly = 2) { mediaRepository.searchPaged(any(), any()) }
+            coVerify(exactly = 2) { libraryFeed.searchPaged(any(), any()) }
         } finally {
             pagedJob.cancel()
         }
@@ -462,11 +479,12 @@ class SearchViewModelTest {
 
     @Test
     fun `userData change while active does not regenerate the pager`() = runTest(mainDispatcher) {
-        every { mediaRepository.userDataChanges } returns userDataEvents
-        coEvery { mediaRepository.searchPaged(any(), any()) } returns
+        every { userDataChanges.userDataChanges } returns userDataEvents
+        coEvery { libraryFeed.searchPaged(any(), any()) } returns
             flowOf(androidx.paging.PagingData.empty<com.raulshma.jellyplay.core.model.MediaItem>())
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         val pagedJob = launch { viewModel.pagedResults.collect { } }
@@ -478,7 +496,7 @@ class SearchViewModelTest {
             viewModel.deferredRefresher.onScreenActiveChanged(true)
             userDataEvents.emit(UserDataChange("user-1", listOf("m1")))
             advanceUntilIdle()
-            coVerify(exactly = 1) { mediaRepository.searchPaged(any(), any()) }
+            coVerify(exactly = 1) { libraryFeed.searchPaged(any(), any()) }
         } finally {
             pagedJob.cancel()
         }
@@ -510,7 +528,8 @@ class SearchViewModelTest {
         every { mediaSearchEngine.recentHistory() } returns flowOf(history)
 
         viewModel = SearchViewModel(
-            mediaRepository, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            libraryFeed, userDataChanges, catalogueEnrichments, libraryApiClient, userDataMutator, imageUrlProvider,
+            DefaultArtworkUrls(imageUrlProvider),
             seerrRepository, seerrRequestDelegate, mediaSearchEngine, searchFiltersStore, quickDownloadActions,
         )
         backgroundScope.launch { viewModel.searchHistory.collect { } }

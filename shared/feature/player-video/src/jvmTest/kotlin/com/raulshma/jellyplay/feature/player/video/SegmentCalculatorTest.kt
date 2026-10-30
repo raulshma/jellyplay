@@ -18,6 +18,7 @@ class SegmentCalculatorTest {
         chapters: List<ChapterInfo> = emptyList(),
         segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
         durationMs: Long = 0L,
+        nextUpPrerollMs: Long = SegmentCalculator.UP_NEXT_PRE_ROLL_MS,
         autoplayCancelled: Boolean = false,
         isInSyncPlaySession: Boolean = false,
         hasNextEpisode: Boolean = false,
@@ -26,6 +27,7 @@ class SegmentCalculatorTest {
         chapters = chapters,
         segmentBehaviors = segmentBehaviors,
         durationMs = durationMs,
+        nextUpPrerollMs = nextUpPrerollMs,
         autoplayCancelled = autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = hasNextEpisode,
@@ -141,6 +143,31 @@ class SegmentCalculatorTest {
             positionMs = 80_000, // > 100_000 - 30_000
         )
         assertTrue(result)
+    }
+
+    @Test
+    fun shouldShowUpNext_usesConfiguredPreroll_notTheConstant() {
+        // #16: the window rides the input's preroll — 10 s opens at 90 s of a
+        // 100 s item, so 85 s stays outside where the 30 s default would
+        // already have fired (80 s).
+        val short = input(durationMs = 100_000, nextUpPrerollMs = 10_000, hasNextEpisode = true)
+        assertFalse(SegmentCalculator.shouldShowUpNext(short, positionMs = 85_000))
+        assertTrue(SegmentCalculator.shouldShowUpNext(short, positionMs = 91_000))
+    }
+
+    @Test
+    fun shouldShowUpNext_defaultPrerollIsTheHistorical30s() {
+        val default = input(durationMs = 100_000, hasNextEpisode = true)
+        assertFalse(SegmentCalculator.shouldShowUpNext(default, positionMs = 65_000))
+        assertTrue(SegmentCalculator.shouldShowUpNext(default, positionMs = 71_000))
+    }
+
+    @Test
+    fun shouldShowUpNext_longPrerollFiresEarly() {
+        // 120 s (the pref's max) on a 3-minute item: the card arms at 60 s.
+        val long = input(durationMs = 180_000, nextUpPrerollMs = 120_000, hasNextEpisode = true)
+        assertFalse(SegmentCalculator.shouldShowUpNext(long, positionMs = 55_000))
+        assertTrue(SegmentCalculator.shouldShowUpNext(long, positionMs = 61_000))
     }
 
     @Test

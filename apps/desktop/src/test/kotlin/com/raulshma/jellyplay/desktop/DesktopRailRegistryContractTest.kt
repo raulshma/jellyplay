@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.desktop
 
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
+import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -41,5 +44,60 @@ class DesktopRailRegistryContractTest {
         DESKTOP_RAIL_ITEMS.forEach { item ->
             assertEquals(item, NAV_DESTINATION_BY_ROUTE[item.route])
         }
+    }
+
+    @Test
+    fun railMembershipEqualsTheRegistryPlacementDescriptor() {
+        // DESKTOP_RAIL_ROUTES is the rail's own ORDER policy; PRIMARY
+        // ELIGIBILITY is the registry's placement descriptor — DESKTOP_RAIL_ITEMS
+        // filters the list through NavPrimarySurface.DesktopRail. Pin the two
+        // membership sets equal in BOTH directions so the filter cannot
+        // silently drop a listed route the registry places, and the list
+        // cannot silently omit a route the registry places (a registered
+        // destination joining or leaving the rail must edit both, caught here).
+        val flagged = NAV_DESTINATIONS
+            .filter { NavPrimarySurface.DesktopRail in it.primarySurfaces }
+            .map { it.route }
+        assertEquals(
+            flagged.toSet(),
+            DESKTOP_RAIL_ROUTES.toSet(),
+            "the rail's listed routes and the registry's DesktopRail placement must agree",
+        )
+        assertEquals(flagged.toSet(), DESKTOP_RAIL_ITEMS.map { it.route }.toSet())
+        // Sanity: the flag is total over the registry today — a future row
+        // that drops the default DesktopRail placement must be a deliberate
+        // desktop decision, not a forgotten annotation.
+        assertTrue(flagged.isNotEmpty())
+    }
+
+    @Test
+    fun railOrderIsTheRecordedDesktopSequence() {
+        // DESKTOP_RAIL_ROUTES now DERIVES from the registry rows' railOrder
+        // positions, so the exact sequence — the recorded desktop ORDER policy
+        // (registry order differs: Search/Library swap, Shortcuts parked after
+        // Arr Queue) — is pinned verbatim here. A railOrder edit that
+        // re-orders the rail fails loudly; re-recording a new order is a
+        // deliberate desktop decision, never derivation drift.
+        assertEquals(
+            listOf(
+                Route.Home,
+                Route.Search,
+                Route.Library,
+                Route.LiveTv,
+                Route.MusicBrowse,
+                Route.Downloads,
+                Route.Newsletter,
+                Route.WatchProgressHeatmap,
+                Route.SyncPlay,
+                Route.Requests,
+                Route.UpcomingCalendar,
+                Route.ArrQueue,
+                Route.Shortcuts,
+                Route.Settings,
+                Route.AdminDashboard,
+            ),
+            DESKTOP_RAIL_ROUTES,
+            "the desktop rail order changed — a deliberate desktop product decision must re-record this sequence",
+        )
     }
 }

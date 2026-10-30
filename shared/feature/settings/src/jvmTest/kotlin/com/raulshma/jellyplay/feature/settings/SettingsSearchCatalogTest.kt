@@ -47,14 +47,56 @@ class SettingsSearchCatalogTest {
     }
 
     /**
-     * The catalog-wide size pin: it exists to catch silent catalog-wide item
-     * additions/removals — a bump here is a deliberate, reviewed change, and
-     * the per-item history lives in the VCS, not in this file.
+     * The per-group size pins: every screen group's declared item count is
+     * pinned individually, so a silent addition/removal fails at its own
+     * group — a bump here is a deliberate, reviewed change at that one
+     * group, and the per-item history lives in the VCS, not in this file.
      */
     @Test
     fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
-        assertEquals(365, items.size)
+        // The per-group size pins, in [SettingsScreenGroups.all]'s curated
+        // flat catalog order.
+        assertEquals(4, SettingsScreenGroups.account.items.size)
+        assertEquals(3, SettingsScreenGroups.integrations.items.size)
+        assertEquals(5, SettingsScreenGroups.activityInsights.items.size)
+        assertEquals(2, SettingsScreenGroups.systemCore.items.size)
+        assertEquals(8, SettingsScreenGroups.systemScreensaver.items.size)
+        assertEquals(2, SettingsScreenGroups.systemIdleAmbient.items.size)
+        assertEquals(1, SettingsScreenGroups.systemDiscordPresence.items.size)
+        assertEquals(6, SettingsScreenGroups.systemHooks.items.size)
+        assertEquals(2, SettingsScreenGroups.jellyplaySync.items.size)
+        assertEquals(14, SettingsScreenGroups.jellyplayFeatures.items.size)
+        assertEquals(20, SettingsScreenGroups.homeDisplay.items.size)
+        assertEquals(4, SettingsScreenGroups.homeNextUp.items.size)
+        assertEquals(5, SettingsScreenGroups.homeLayout.items.size)
+        assertEquals(8, SettingsScreenGroups.homeCards.items.size)
+        assertEquals(20, SettingsScreenGroups.appearanceTheme.items.size)
+        assertEquals(2, SettingsScreenGroups.appearanceNavigation.items.size)
+        assertEquals(24, SettingsScreenGroups.appearanceLibrary.items.size)
+        assertEquals(2, SettingsScreenGroups.appearancePerformance.items.size)
+        assertEquals(2, SettingsScreenGroups.appearanceEyeCare.items.size)
+        assertEquals(3, SettingsScreenGroups.appearanceNewsletter.items.size)
+        assertEquals(53, SettingsScreenGroups.playbackPlayer.items.size)
+        assertEquals(26, SettingsScreenGroups.playbackAdvancedVideo.items.size)
+        assertEquals(42, SettingsScreenGroups.playbackEngine.items.size)
+        assertEquals(3, SettingsScreenGroups.playbackSyncPlay.items.size)
+        assertEquals(3, SettingsScreenGroups.playbackCasting.items.size)
+        assertEquals(3, SettingsScreenGroups.playbackDvr.items.size)
+        assertEquals(9, SettingsScreenGroups.playbackMediaSegments.items.size)
+        assertEquals(29, SettingsScreenGroups.audio.items.size)
+        assertEquals(6, SettingsScreenGroups.audioCache.items.size)
+        assertEquals(3, SettingsScreenGroups.languageGeneral.items.size)
+        assertEquals(4, SettingsScreenGroups.languageTrackSelection.items.size)
+        assertEquals(13, SettingsScreenGroups.languageSubtitles.items.size)
+        assertEquals(14, SettingsScreenGroups.notifications.items.size)
+        assertEquals(7, SettingsScreenGroups.storageCache.items.size)
+        assertEquals(11, SettingsScreenGroups.storageNetwork.items.size)
+        assertEquals(16, SettingsScreenGroups.storageDownloads.items.size)
+        assertEquals(7, SettingsScreenGroups.security.items.size)
+        assertEquals(4, SettingsScreenGroups.backup.items.size)
+        assertEquals(1, SettingsScreenGroups.about.items.size)
+        assertEquals(5, SettingsScreenGroups.experimental.items.size)
         // Curated flat order starts with the account/session pair, and the
         // aggregation is a pure concatenation of the decorated per-screen
         // groups (no dedup, no reordering).

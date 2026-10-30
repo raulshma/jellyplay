@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.database.crypto
 
+import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
@@ -37,14 +38,27 @@ open class JvmTokenCipher(
         if (ciphertext == null) return null
         if (ciphertext.isEmpty()) return ciphertext
         if (!isEncrypted(ciphertext)) return ciphertext
-        val parts = ciphertext.removePrefix(VERSION_PREFIX).split(SEPARATOR)
-        require(parts.size == 2) { "Malformed ciphertext" }
-        val iv = Base64.getDecoder().decode(parts[0])
-        val ct = Base64.getDecoder().decode(parts[1])
-        val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
+        return try {
+            val parts = ciphertext.removePrefix(VERSION_PREFIX).split(SEPARATOR)
+            require(parts.size == 2) { "Malformed ciphertext" }
+            val iv = Base64.getDecoder().decode(parts[0])
+            val ct = Base64.getDecoder().decode(parts[1])
+            val cipher = Cipher.getInstance(TRANSFORMATION).apply {
+                init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
+            }
+            String(cipher.doFinal(ct), Charsets.UTF_8)
+        } catch (_: GeneralSecurityException) {
+            // The row's ciphertext cannot be read with the current key —
+            // e.g. the Keystore key was wiped by an uninstall while the
+            // database row survived a data restore, or the desktop key file
+            // was rotated. Callers already treat null as "no valid token"
+            // (isConnected=false / signed-out), so degrade instead of
+            // throwing out of every Room flow that maps a server row.
+            null
+        } catch (_: IllegalArgumentException) {
+            // Malformed ciphertext or undecodable base64 — same degradation.
+            null
         }
-        return String(cipher.doFinal(ct), Charsets.UTF_8)
     }
 
     override fun isEncrypted(value: String?): Boolean {

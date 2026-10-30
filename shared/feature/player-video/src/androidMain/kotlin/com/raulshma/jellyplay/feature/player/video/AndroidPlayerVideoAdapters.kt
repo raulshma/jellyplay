@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.core.ui.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.msg_smart_download_deleted
 import com.raulshma.jellyplay.core.ui.message.uiTextOf
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res as PlayerVideoRes
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_direct_play_unavailable
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_transcode_switched
@@ -67,10 +66,13 @@ internal class AndroidJellyfinRemotePlayCastStrategy(
  * the androidMain [AndroidMediaSessionController] with the app [Context] and
  * the Hilt-owned legacy [PlaybackSessionManager] the ViewModel used to take
  * as a constructor dependency — the legacy type now lives entirely on the
- * Android side of the seam. [getEngine]'s engine is narrowed to media3
- * `Player?` here via [asMedia3Player]; [getCastPlayer] hands the controller
- * the legacy media3-typed cast player for the background-cast detach path
- * (wired from the legacy `core:data` CastManager in the Koin module).
+ * Android side of the seam. The engine reference is passed through raw; the
+ * controller resolves the media3 transport itself (the live ExoPlayer when
+ * the engine hosts one, a [com.raulshma.jellyplay.feature.player.video.engine.MediaEngineSessionPlayer]
+ * adapter otherwise — the gh-178 headset fix). [getCastPlayer] hands the
+ * controller the legacy media3-typed cast player for the background-cast
+ * detach path (wired from the legacy `core:data` CastManager in the Koin
+ * module).
  */
 internal class AndroidMediaSessionFactory(
     private val context: Context,
@@ -84,7 +86,7 @@ internal class AndroidMediaSessionFactory(
     ): MediaSessionController = AndroidMediaSessionController(
         context = context,
         sessionManager = sessionManager,
-        getPlayer = { getEngine()?.asMedia3Player() },
+        getEngine = getEngine,
         getCastPlayer = getCastPlayer,
         getImageUrl = getImageUrl,
     )

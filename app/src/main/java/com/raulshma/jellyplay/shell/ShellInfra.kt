@@ -63,6 +63,16 @@ class ShellInfra(
     val updateCoordinatorLazy: Lazy<UpdateCoordinator>,
     val syncPlayOpenCoordinatorLazy: Lazy<SyncPlayOpenCoordinator>,
     val whatsNewCoordinatorLazy: Lazy<WhatsNewCoordinator>,
+    // Cold-start session restoration: the player-video controller single —
+    // resolved in the AUTHENTICATED branch only (MainContent's prompt host),
+    // so the resume fetch never runs for auth/onboarding sessions.
+    val sessionRestorationControllerLazy: Lazy<com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController>,
+    // Whether the LAUNCH intent classified to an explicit destination (the
+    // IncomingIntentRequest fold run in onCreate, before this bundle is built):
+    // the cold-start restoration's skip signal — an explicit destination is
+    // never hijacked by a "resume last watched?" prompt. Eager like
+    // [keyDispatcher]: a launch fact, not a Koin service.
+    val launchedWithExplicitDestination: Boolean,
     val userMessageBusLazy: Lazy<UserMessageBus>,
     val externalPlayerReportsLazy: Lazy<com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports>,
     val keyDispatcher: (Int) -> Boolean,

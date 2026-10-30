@@ -332,6 +332,10 @@ fun LivePlayerScreen(
                 viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex))
                 chrome.hide()
             },
+            onPlayPause = {
+                viewModel.onEvent(LiveTvPlayerUiEvent.TogglePlayPause)
+                chrome.show()
+            },
             onSelect = {
                 if (activeSheet != null) {
                     activeSheet = null
@@ -647,6 +651,7 @@ internal fun liveDpadKeyConfig(
     dispatcher: PlayerInputDispatcher,
     onChannelUp: () -> Unit,
     onChannelDown: () -> Unit,
+    onPlayPause: () -> Unit,
     onSelect: () -> Boolean,
     onBack: () -> Boolean,
     onMenu: () -> Boolean,
@@ -667,6 +672,19 @@ internal fun liveDpadKeyConfig(
                 isSheetOpen() || !dispatcher.isControlEnabled(DpadControl.DOWN) -> false
                 key.isKeyUp -> {
                     onChannelDown()
+                    true
+                }
+                else -> false
+            }
+        }
+        // The remote / headset play-pause key: the same TogglePlayPause the
+        // overlay button drives. First KeyDown only, sheet-gated like the zap
+        // arms — an open sheet owns the keys.
+        onKeyEvent(DpadAction.PlayPause) { key ->
+            when {
+                isSheetOpen() -> false
+                key.isKeyDown && key.repeatCount == 0 -> {
+                    onPlayPause()
                     true
                 }
                 else -> false

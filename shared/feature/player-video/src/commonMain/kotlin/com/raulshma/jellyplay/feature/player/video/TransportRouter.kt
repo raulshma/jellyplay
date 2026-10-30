@@ -95,7 +95,7 @@ internal class TransportRouter(
     private val segmentBehaviors: () -> Map<MediaSegmentType, SegmentBehavior>,
     /** The `skip_segments_on_seek` gate (the cached aggregate). */
     private val seekClampEnabled: () -> Boolean,
-    /** The clamp's "Skipped …" notice (VM-owned; see [PlaybackSession]'s ctor). */
+    /** The clamp's "Skipped …" notice (the session's segment-skip seam; the auto-skip arm raises the same notice). */
     private val onSegmentSkippedNotice: (MediaSegmentType) -> Unit,
     /** The seek latches + process-death position snapshot + coalesced offline-mirror write. */
     private val persistSeek: (positionMs: Long) -> Unit,

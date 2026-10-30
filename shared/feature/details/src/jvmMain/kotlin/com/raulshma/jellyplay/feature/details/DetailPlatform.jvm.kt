@@ -69,7 +69,9 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
         DetailViewModel(
             storageProbe = get(),
             strings = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
+            collectionOperations = get(),
+            userDataChanges = get(),
             mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             collectionApiClient = get(),
@@ -77,6 +79,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             mediaDetailProvider = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             offlineRepository = get(),
             stores = get(),
             remoteDiscovery = get(),
@@ -84,20 +87,27 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             themeMusicPlayer = get(),
             actionFactories = get(),
             mediaDownloadActions = get(),
-            bookTocCacheRepository = get(),
-            readerAnnotationsRepository = getOrNull(),
-            bookTocProber = getOrNull(),
+            bookArms = DetailBookArms(
+                tocCacheRepository = get(),
+                readerAnnotationsRepository = getOrNull(),
+                tocProber = getOrNull(),
+            ),
             // ADR 0010 companion-plugin seams — registered core:data /
             // core:network singles (DataSessionPlaybackKoinModule /
-            // NetworkKoinModules); the VM null-guards everything anyway.
-            pluginStatusStore = get(),
-            pluginRatingsApi = get(),
-            pluginRecommendationsApi = get(),
-            pluginMarkersApi = get(),
-            jellyPlayFeatureGate = get(),
+            // NetworkKoinModules); the bundle null-folds everything anyway.
+            pluginArms = DetailPluginArms(
+                statusStore = get(),
+                featureGate = get(),
+                ratingsApi = get(),
+                recommendationsApi = get(),
+                markersApi = get(),
+            ),
             // The direct-TMDB details fallback behind the externalRatings
             // enrichment (core:network single, NetworkKoinModules).
             tmdbApiClient = get(),
+            // The awards-badge toggle read (the AppearanceStore single, the
+            // datastore common graph) — the externalRatings OMDb leg's pref half.
+            appearanceStore = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure
@@ -105,18 +115,23 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     // in androidDetailsModule now, the DetailViewModel precedent.
     viewModel {
         CollectionDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            collectionOperations = get(),
+            userDataChanges = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             mediaDownloadActions = get(),
         )
     }
     viewModel {
         PersonDetailViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
+            userDataChanges = get(),
             libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             mediaDownloadActions = get(),
             projections = get(),
         )

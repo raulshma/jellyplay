@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">Sincronizar a taxa de atualização do ecrã com os fotogramas do vídeo (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Qualidade de Transmissão</string>
     <string name="ss_streaming_quality_subtitle">Definir qualidade predefinida do vídeo para transmissão: 1080p, 4K, SD, Automática</string>
+    <string name="ss_playback_mode_title">Modo de reprodução</string>
+    <string name="ss_playback_mode_subtitle">Automático, forçar reprodução direta ou forçar transcodificação — o método de entrega dos streams</string>
     <string name="ss_audio_delay_title">Atraso de Sincronização de Áudio</string>
     <string name="ss_audio_delay_subtitle">Ajustar o desvio de latência de sincronização de áudio (ms)</string>
     <string name="ss_live_stream_option_title">Transmissão de TV em Direto</string>
@@ -198,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Apresentar o tempo restante em vez do tempo decorrido</string>
     <string name="ss_pause_on_focus_loss_title">Pausar ao Perder Foco</string>
     <string name="ss_pause_on_focus_loss_subtitle">Pausar a reprodução quando o sistema reporta perda de foco de áudio</string>
-    <string name="ss_resume_headset_plug_subtitle">Retoma a reprodução quando os auscultadores forem religados após a pausa automática</string>
+    <string name="ss_resume_headset_plug_subtitle">Retoma a reprodução quando os auscultadores se religarem após a pausa automática (com fio ou Bluetooth)</string>
     <string name="ss_mpv_video_output_title">Saída de Vídeo MPV</string>
     <string name="ss_mpv_video_output_subtitle">Controlador de saída de vídeo do MPV</string>
     <string name="ss_mpv_scaler_title">Escalonador MPV</string>
@@ -343,6 +345,8 @@
     <string name="ss_subtitle_font_size_subtitle">Tamanho do texto das legendas durante a reprodução de vídeo</string>
     <string name="ss_subtitle_forced_only_title">Apenas Legendas Forçadas</string>
     <string name="ss_subtitle_forced_only_subtitle">Mostrar legendas apenas quando existem faixas forçadas</string>
+    <string name="ss_show_only_preferred_subtitles_title">Apenas legendas preferidas</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Mostrar apenas faixas de legenda nos seus idiomas preferidos</string>
     <string name="ss_pgs_direct_play_title">Reprodução Direta de PGS</string>
     <string name="ss_pgs_direct_play_subtitle">Renderizar legendas PGS nativamente em vez de as gravar no vídeo</string>
     <string name="ss_hdr_subtitle_style_title">Estilo de Legendas HDR</string>
@@ -537,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando a executar quando a mídia termina de reproduzir</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando a executar quando o app fica inativo</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando a executar quando o app sai da inatividade</string>
+
+    <string name="ss_auto_download_mode_title">Descarregar novos episódios automaticamente</string>
+    <string name="ss_auto_download_mode_subtitle">Descarregar imediatamente, perguntar antes de descarregar ou nunca descarregar novos episódios de séries descarregadas</string>
+    <string name="ss_auto_download_check_now_subtitle">Executar uma passagem de descarregamento automático agora</string>
 </resources>

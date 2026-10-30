@@ -14,11 +14,27 @@ import com.raulshma.jellyplay.feature.player.video.AndroidVideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.CastManager
 import com.raulshma.jellyplay.feature.player.video.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.feature.player.video.NextStreamByteWarmer
+import com.raulshma.jellyplay.feature.player.video.PlayerItemContentSources
+import com.raulshma.jellyplay.feature.player.video.PlayerOfflineSources
+import com.raulshma.jellyplay.feature.player.video.PlayerSessionSources
+import com.raulshma.jellyplay.feature.player.video.PlayerSessionStackSources
 import com.raulshma.jellyplay.feature.player.video.PlayerStores
+import com.raulshma.jellyplay.feature.player.video.PlayerSubtitleSources
 import com.raulshma.jellyplay.feature.player.video.PlayerVideoMessageBus
+import com.raulshma.jellyplay.feature.player.video.PostPlaybackDeleteSources
 import com.raulshma.jellyplay.feature.player.video.VideoMediaSessionFactory
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerPlatform
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerViewModel
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
+import com.raulshma.jellyplay.feature.player.video.session.dismissalFingerprint
+import com.raulshma.jellyplay.feature.player.video.session.latestResumeVideoSnapshot
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.raulshma.jellyplay.feature.player.video.engine.AndroidPlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
@@ -67,7 +83,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // singles now register their commonMain seam interface (the ViewModel's
     // ctor slots are interface-typed) plus the concrete Android class for the
     // androidMain call sites (engines, overlay) — one instance, two keys.
-    single { AndroidFontProvider(context) }
+    single { AndroidFontProvider(context, subtitleStore = get()) }
     single<FontProvider> { get<AndroidFontProvider>() }
     single {
         VideoStreamCache(
@@ -135,25 +151,37 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // "Play (with pre-rolls)": the one-shot Cinema Mode override the
     // detail screen arms before the play dispatch (core:player-contract).
     single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
+    // Cold-start session restoration (the shell's "resume last watched?" gate):
+    // ONE evaluation per process, resolved by the app shell through ShellInfra's
+    // lazy provider — first use is the authenticated branch's prompt host
+    // (SessionRestorePromptHost), so the fetch never runs for auth/onboarding
+    // sessions. Server-authoritative by design: the snapshot is the resume query
+    // behind the home Continue Watching row, mapped once (latestResumeVideoSnapshot)
+    // and cached nowhere; a fetch failure degrades to no-offer inside the
+    // controller. classicRows stays the default — the factory's playable-video
+    // filter already drops Series/Season rollups.
+    single {
+        SessionRestorationController(
+            restoreMode = { get<PlaybackStore>().playback.value.sessionRestoreMode },
+            fetchLatestSnapshot = {
+                latestResumeVideoSnapshot(
+                    get<LibraryApiClient>()
+                        .getContinueWatching(limit = RESUME_SNAPSHOT_FETCH_LIMIT)
+                        .getOrThrow(),
+                )
+            },
+            readDismissal = { get<PlaybackStore>().sessionRestoreDismissalNow().takeIf { it.isNotEmpty() } },
+            persistDismissal = { snapshot ->
+                get<PlaybackStore>().setSessionRestoreDismissal(dismissalFingerprint(snapshot))
+            },
+        )
+    }
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
-            mediaRepository = get(),
-            libraryApiClient = get(),
-            lyricsRepository = get(),
-            playbackRepository = get(),
-            playbackIdentity = get(),
-            subtitleProviderRepository = get(),
-            videoQueue = get(),
-            cinemaModeOverride = get(),
-            streamingSubtitleStore = get(),
-            imageUrlProvider = get(),
-            downloadRepository = get(),
-            offlineRepository = get(),
-            offlinePlaybackFacade = get(),
-            playbackSourceResolver = get(),
-            episodeCatalogue = get(),
-            itemPlaybackPreferenceRepository = get(),
+            // The construction bundles (the PlayerStores pattern): each built
+            // once here — a new session collaborator widens its bundle and
+            // this definition, not the ViewModel's constructor.
             stores = PlayerStores(
                 aggregateStore = get(),
                 engine = get(),
@@ -169,26 +197,78 @@ fun androidPlayerVideoModule(context: Context): Module = module {
                 networkOffline = get(),
                 volumeProfile = get(),
             ),
-            mediaSessionFactory = get(),
+            subtitleSources = PlayerSubtitleSources(
+                subtitleProviderRepository = get(),
+                streamingSubtitleStore = get(),
+                subtitlePreviewRepository = get(),
+                fontProvider = get(),
+            ),
+            offlineSources = PlayerOfflineSources(
+                downloadRepository = get(),
+                offlineRepository = get(),
+                offlineModeManager = get(),
+            ),
+            sessionStack = PlayerSessionStackSources(
+                playbackIdentity = get(),
+                playerLifecycleManager = get(),
+                playerEngineFactory = get(),
+                mediaSessionFactory = get(),
+            ),
+            itemContent = PlayerItemContentSources(
+                libraryApiClient = get(),
+                episodeCatalogue = get(),
+                lyricsRepository = get(),
+            ),
+            sessionSources = PlayerSessionSources(
+                detailFeed = get(),
+                playbackRepository = get(),
+                offlinePlaybackFacade = get(),
+                playbackSourceResolver = get(),
+                itemPlaybackPreferenceRepository = get(),
+                jellyfinRemotePlayCastStrategy = get(),
+                adaptiveBitrateManager = get(),
+                networkMonitor = get(),
+                userDataMutator = get(),
+                nowPlayingReporter = get(),
+                sleepCountdown = get(),
+                videoMiniPlayerState = get(),
+            ),
+            imageUrlProvider = get(),
+            artworkUrls = get(),
             castManager = get(),
-            jellyfinRemotePlayCastStrategy = get(),
             syncPlayManager = get(),
-            adaptiveBitrateManager = get(),
-            networkMonitor = get(),
             activePlayerController = get(),
-            playerLifecycleManager = get(),
             pipController = get(),
-            videoMiniPlayerState = get(),
-            sleepCountdown = get(),
-            offlineModeManager = get(),
-            userMessageBus = get(),
-            playerEngineFactory = get(),
             fontProvider = get(),
+            userMessageBus = get(),
             savedStateHandle = params.get(),
-            subtitlePreviewRepository = get(),
-            userDataMutator = get(),
-            nowPlayingReporter = get(),
+            videoQueue = get(),
+            cinemaModeOverride = get(),
             nextStreamByteWarmer = get(),
+            // Swipe-from-recents mid-playback finishes the activity behind
+            // the player: the VM's onCleared teardown must NOT persist the
+            // restore prompt's handled-offer marker then (an interrupted
+            // session prompts on the next launch). The flag rides the shell
+            // (see PlayerHostExitState).
+            isAppExiting = {
+                com.raulshma.jellyplay.feature.player.video.PlayerHostExitState.isHostFinishing
+            },
+            // #14 offer-delete-after-playback: the existing server delete
+            // path (MediaInfoApiClient.deleteItem — the recordings/cleanup
+            // arm), the signed-in user's delete permission, and the
+            // repository's cache invalidation for the deleted item.
+            postPlaybackDeleteSources = PostPlaybackDeleteSources(
+                canDeleteContent = get<AuthRepository>().currentUser
+                    .map { it?.canDeleteContent == true }
+                    .distinctUntilChanged(),
+                deleteItem = { itemId -> get<MediaInfoApiClient>().deleteItem(itemId) },
+                invalidateAfterDelete = { itemId, seriesIdHint ->
+                    get<MediaRepositoryCacheInvalidation>().invalidateForUserDataChange(itemId, seriesIdHint)
+                },
+            ),
         )
     }
 }
+
+/** The one-shot cold-start fetch's row budget (the recency pick runs client-side). */
+private const val RESUME_SNAPSHOT_FETCH_LIMIT = 5

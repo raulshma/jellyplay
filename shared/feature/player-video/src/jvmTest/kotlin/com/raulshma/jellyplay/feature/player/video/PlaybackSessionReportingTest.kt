@@ -16,7 +16,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.slot
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -138,9 +138,9 @@ class PlaybackSessionReportingTest {
     fun getReportPositionMs_freshSeek_winsOverEnginePosition() {
         engine.advanceTo(50_000L)
         // A seek followed by an immediate teardown must report the seek
-        // position, not the engine's not-yet-caught-up position.
-        session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = nowMs // the latch was stamped "just now"
+        // position, not the engine's not-yet-caught-up position: the funnel
+        // arms the latch through the ledger's seek verb.
+        session.seekPersisted(42_000L)
 
         assertEquals(42_000L, session.getReportPositionMs())
     }
@@ -148,8 +148,8 @@ class PlaybackSessionReportingTest {
     @Test
     fun getReportPositionMs_staleSeek_fallsBackToEnginePosition() {
         engine.advanceTo(50_000L)
-        session.lastSeekPositionMs = 42_000L
-        session.lastSeekTimestamp = nowMs - 60_000L // far past the 3 s window
+        session.seekPersisted(42_000L)
+        graph.nowMs += 60_000L // far past the 3 s window
 
         assertEquals(50_000L, session.getReportPositionMs())
     }
@@ -169,7 +169,6 @@ class PlaybackSessionReportingTest {
         assertEquals(10_000L, persist.positionMs)
         assertEquals("server-1", persist.playSessionId)
         assertEquals(nowMs, persist.nowMs, "the snapshot carries the injected clock's reading")
-        assertEquals(10_000L, session.lastPersistedPositionMs)
 
         // The offline mirror runs on the session scope (Unconfined → synchronous).
         coVerify(exactly = 1) {
@@ -185,7 +184,6 @@ class PlaybackSessionReportingTest {
 
         // Only the first write landed; the throttled one left no trace.
         assertEquals(1, positionStore.persists.size)
-        assertEquals(10_000L, session.lastPersistedPositionMs)
         coVerify(exactly = 1) { offlinePlaybackFacade.recordProgress(any(), any(), any(), any()) }
     }
 
@@ -210,6 +208,22 @@ class PlaybackSessionReportingTest {
         coVerify(exactly = 0) { offlinePlaybackFacade.recordProgress(any(), any(), any(), any()) }
     }
 
+    @Test
+    fun reportPlaybackStopped_engineReportingZero_fallsBackToTheLastPersistedPosition() = runTest {
+        // Some engines report 0 right after STATE_ENDED: the stop falls back
+        // to the last persisted position (the > 0 guard skips the
+        // never-persisted sentinel) instead of being dropped — the one
+        // consumer of the persistence window's last-written position.
+        session.persistPlaybackPosition(positionMs = 10_000L, force = true)
+        engine.advanceTo(0L)
+
+        session.reportCurrentPlaybackStopped()
+
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 100_000_000L)
+        }
+    }
+
     // ── reportCurrentPlaybackStopped: dedup latch + incognito gate ─────────
 
     @Test
@@ -222,7 +236,6 @@ class PlaybackSessionReportingTest {
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
         }
-        assertEquals("server-1", session.stopReportedForSession)
     }
 
     @Test
@@ -247,7 +260,15 @@ class PlaybackSessionReportingTest {
         session.reportCurrentPlaybackStopped()
 
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any()) }
-        assertNull(session.stopReportedForSession)
+
+        // The latch stayed untouched through the gated calls: the moment the
+        // gate opens, the SAME session's stop reports for the first time (a
+        // latched dedup would have swallowed it).
+        session.cachedAggregate = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate()
+        session.reportCurrentPlaybackStopped()
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
+        }
     }
 
     @Test
@@ -258,8 +279,13 @@ class PlaybackSessionReportingTest {
 
         // A zero-tick stop is worthless to the server — never reported, and
         // the latch stays open so a real position can still be reported later.
-        coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any()) }
-        assertNull(session.stopReportedForSession)
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
+
+        engine.advanceTo(60_000L)
+        session.reportCurrentPlaybackStopped()
+        coVerify(exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
+        }
     }
 
     // ── Failed flag + stalled-finish stop dedup ────────────────────
@@ -300,7 +326,12 @@ class PlaybackSessionReportingTest {
         // duration (stalled-finish): a second stop at the stalled position
         // would only downgrade it.
         coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
-        assertEquals("server-1", session.stopReportedForSession)
+
+        // The skip LATCHED the dedup: even with the reporter's flag cleared,
+        // the same session's stop stays deduped.
+        every { progressReporter.hasReportedStopFor("server-1") } returns false
+        session.reportCurrentPlaybackStopped()
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
     }
 
     @Test
@@ -325,7 +356,13 @@ class PlaybackSessionReportingTest {
         coVerify(timeout = 5_000L, exactly = 0) {
             playbackRepository.reportPlaybackStopped(any(), any(), any(), any())
         }
-        assertEquals("server-1", session.stopReportedForSession)
+
+        // The deduped teardown STILL latched the session: a post-release
+        // stop for the same id stays deduped even with the reporter's flag
+        // cleared.
+        every { progressReporter.hasReportedStopFor("server-1") } returns false
+        session.reportCurrentPlaybackStopped()
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStopped(any(), any(), any(), any()) }
     }
 
     // ── reloadForMode: SessionEvent.InformUser notices ──────────────────────
@@ -380,9 +417,8 @@ class PlaybackSessionReportingTest {
     fun reloadForMode_usesTheExplicitModeAndQuality_notTheMirrorGetters() = runTest {
         // The VM's playback-pref setters (setPlaybackMode / setStreamingQuality
         // / setAdaptiveBitrateEnabled, via the applyPlaybackPrefChange command)
-        // pass their post-change values EXPLICITLY — the reload used to read
-        // mode/quality back from the ui-prefs mirror, which only worked because
-        // each setter had written the mirror first. Pin the contract at the
+        // pass their post-change values EXPLICITLY, so a reload never depends
+        // on the ui-prefs mirror being written first. Pin the contract at the
         // session seam (no full-VM harness exists in this module): the
         // mirror-backed getter seams deliberately disagree, and the re-POST
         // must still resolve against the caller's explicit arguments.
@@ -434,7 +470,6 @@ class PlaybackSessionReportingTest {
         coVerify(timeout = 5_000L, exactly = 1) {
             offlinePlaybackFacade.recordProgress("item-1", 450_000_000L, any(), false)
         }
-        assertEquals("server-1", session.stopReportedForSession)
     }
 
     @Test
@@ -448,6 +483,83 @@ class PlaybackSessionReportingTest {
         // release-time Stop must be deduped away.
         coVerify(timeout = 5_000L, exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
+        }
+    }
+
+    // ── release: the restore prompt's teardown marker ──────────────────────
+
+    @Test
+    fun release_deliveredStop_persistsTheRestoreTeardownMarker() = runTest {
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        // The stop went out at 60 s → the marker rides the same value in ms,
+        // the fingerprint the next cold start's row (the same ticks ÷ 10 000)
+        // matches (see SessionRestoreDismissal).
+        coVerify(timeout = 5_000L, exactly = 1) {
+            graph.playbackStore.setSessionRestoreDismissal("item-1||60000")
+        }
+    }
+
+    @Test
+    fun release_errorLatched_doesNotPersistTheTeardownMarker() = runTest {
+        // A failed session could not actually be watched — the offer stands.
+        every { progressReporter.isErrorLatched() } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
+    @Test
+    fun release_incognito_doesNotPersistTheTeardownMarker() = runTest {
+        buildSession(incognito = true)
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
+    @Test
+    fun release_hostExitFlag_stopStillReports_butMarkerIsSkipped() = runTest {
+        // The host (activity) went away behind the player — an interrupted
+        // session, not a deliberate close: the cold-start prompt must fire
+        // on the next launch, so the handled-offer marker is skipped while
+        // the stop report itself still goes out. The distinction is the
+        // constructor-wired host-teardown probe the graph flips (the ledger
+        // reads it at the final stop report), not a per-release flag write.
+        graph.hostTeardown = true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(timeout = 5_000L, exactly = 1) {
+            playbackRepository.reportPlaybackStopped("item-1", "server-1", 600_000_000L)
+        }
+        coVerify(exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
+        }
+    }
+
+    @Test
+    fun release_dedupedStop_doesNotPersistTheTeardownMarker() = runTest {
+        // The stalled-finish path already stop-reported this session at the
+        // FULL duration — the item is watched and the row is gone; the
+        // teardown arm writes nothing on the dedup.
+        every { progressReporter.hasReportedStopFor("server-1") } returns true
+        engine.advanceTo(60_000L)
+
+        session.release(vmTeardownAfterInternals = {})
+
+        coVerify(exactly = 0) {
+            graph.playbackStore.setSessionRestoreDismissal(any())
         }
     }
 
@@ -481,7 +593,11 @@ class PlaybackSessionReportingTest {
 
         val slot = io.mockk.slot<PlaybackStartInfo>()
         coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(capture(slot)) }
-        assertEquals(session.playSessionId, slot.captured.sessionId)
+        // The locally-allocated UUID fallback won: the id resolves through the
+        // ledger's resolver (no server-issued id in the state) and is a
+        // well-formed UUID, not any server-issued value.
+        assertEquals(session.positionLedger.currentPlaySessionId, slot.captured.sessionId)
+        assertNotNull(runCatching { java.util.UUID.fromString(slot.captured.sessionId) }.getOrNull())
     }
 
     @kotlin.test.Test
@@ -532,8 +648,7 @@ class PlaybackSessionReportingTest {
         override fun wasInSyncPlay(): Boolean = false
     }
 
-    // [FakePositionStore] is the recording double (player-video jvmTest, the
-    // the test-placement rule move out of test-fixtures) — this file's former
-    // private variant (records persists, serves nulls) is its DEFAULT shape
+    // [FakePositionStore] is the recording double (player-video jvmTest, per
+    // the test-placement rule): records persists and serves nulls by default
     // (the saved*Value fields stay null).
 }

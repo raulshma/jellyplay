@@ -73,6 +73,8 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -172,19 +174,33 @@ data class HomeCallbacks(
      * constructor call site compiling.
      */
     val onOpenRoute: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
+    /**
+     * Execute a header shortcut's shell action ([com.raulshma.jellyplay.core.ui.navigation.ShortcutAction])
+     * — Surprise Me / Play On / offline toggle. Screen targets never reach
+     * this (they navigate through [onOpenRoute]); actions dispatch to the
+     * shell-owned handlers (MainViewModel / Play On controller) via the
+     * section builder's shell hook. Default no-op keeps existing constructor
+     * call sites compiling.
+     */
+    val onShortcutAction: (com.raulshma.jellyplay.core.ui.navigation.ShortcutAction) -> Unit = {},
 )
 
 /**
- * The wiring-shaped values every rendered surface shares, bundled — the
- * four adjacent same-typed string-returning lambdas of the former flat
- * parameter list ([mediaImageUrlBuilder] / [mediaBackdropUrlBuilder] /
- * [onlineBackdropResolver] / [heroBackdropUrlBuilder]) made transposition a
- * compile-passing bug, and the same ten values were re-threaded through
- * [HomeSurfaceContent] into [HomeContentCallbacks] verbatim. Built ONCE in
- * [MainHomeContent] (every member is already a remembered stable), passed as
- * one parameter beside the per-surface values (surface, state, contentPad);
- * `@Immutable` + value equality keep every consumer skippable — the
- * [HomeDockState]/[HomeDockCallbacks] bundling precedent.
+ * The wiring-shaped values every rendered surface shares, bundled. The
+ * former flat parameter list's adjacent string-returning lambdas
+ * (`mediaImageUrlBuilder`/`mediaBackdropUrlBuilder` and friends) made
+ * transposition a compile-passing bug, so the item-backed artwork slots are
+ * now ONE typed resolver ([artwork]) — its slots are named methods
+ * (`poster`/`backdrop`/`seriesPoster`), a call site can no longer transpose
+ * them past the compiler — and only the genuinely screen-resolved lambdas
+ * stay lambdas: the hero's online-vs-offline fold
+ * ([heroBackdropUrlBuilder]), the raw id-level backdrop read
+ * ([onlineBackdropResolver], the series-backdrop leg no [ArtworkUrls] slot
+ * can carry), and the fallback chain ([fallbackImageUrlBuilder]). Built ONCE
+ * in [MainHomeContent] (every member is already a remembered stable), passed
+ * as one parameter beside the per-surface values (surface, state,
+ * contentPad); `@Immutable` + value equality keep every consumer skippable —
+ * the [HomeDockState]/[HomeDockCallbacks] bundling precedent.
  */
 @Immutable
 internal data class HomeRenderInputs(
@@ -192,17 +208,22 @@ internal data class HomeRenderInputs(
     val mediaOnItemClick: (MediaItem) -> Unit,
     /** Media-card play funnel (overlay button, quick-action menu, ASK dialog). */
     val mediaOnPlayClick: (MediaItem) -> Unit,
-    /** Poster URL for a [MediaItem] (server-backed rows). */
-    val mediaImageUrlBuilder: (MediaItem) -> String,
-    /** Backdrop URL for a [MediaItem] (server-backed wide rows). */
-    val mediaBackdropUrlBuilder: (MediaItem) -> String,
+    /**
+     * The item/tag-aware artwork resolver behind every server-backed image
+     * slot (the VM's [HomeViewModel.artwork] read). Rows derive their
+     * remembered `(MediaItem) -> String` lambdas from it — remembered ONCE
+     * per arm, never per item, so the rows' lambda params keep stable
+     * identities and the rows stay skippable.
+     */
+    val artwork: ArtworkUrls,
     /** Backdrop URL for an item ID (online; the series-backdrop resolver's source). */
     val onlineBackdropResolver: (String) -> String,
     /**
      * The single hero backdrop builder — the parent resolves online-vs-offline
-     * once, so children never re-branch.
+     * once, so children never re-branch. Item-based (the featured item is the
+     * resolver's input), so the online URL carries the item's image tag.
      */
-    val heroBackdropUrlBuilder: (String) -> String,
+    val heroBackdropUrlBuilder: (MediaItem) -> String,
     /** Ordered fallback poster URLs for a [MediaItem] (see [fallbackImageUrls]). */
     val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
     /** Seerr details prefetch (id + media type + completion callback). */
@@ -354,13 +375,29 @@ private fun MainHomeContent(
     val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero) {
         selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero)
     }
+    // The hero presentation fold — the ONE place the style pref meets the
+    // form factor and the candidate pool ([homeHeroStyleDecision]). The
+    // controller consumes the SLIDESHOW advance interval; the hero slot in
+    // the content list consumes the render flags.
+    val heroStyleDecision = remember(
+        state.homeHeroStyle,
+        state.homeHeroSlideshowIntervalSec,
+        isTv,
+        featuredCandidates.size,
+    ) {
+        homeHeroStyleDecision(state.homeHeroStyle, isTv, state.homeHeroSlideshowIntervalSec, featuredCandidates.size)
+    }
     // The featured item's curated billboard copy, keyed by item id — the hero
     // reads the headline/subhead overrides for whichever candidate is
     // featured (curated or local; a miss renders the item's own metadata).
     val curatedHeroOverlay = remember(state.curatedHero) { state.curatedHero.associateBy { it.item.id } }
     val heroFocusRequester = remember { FocusRequester() }
-    val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
-    val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
+    // The item/tag-aware artwork resolver behind every server-backed image
+    // slot — remembered once off the VM (the detail screen's ArtworkCallbacks
+    // wiring: `urls = viewModel.artwork`). The row arms derive their
+    // remembered poster/backdrop lambdas from the bundle's
+    // [HomeRenderInputs.artwork]; per-slot VM pass-throughs are gone.
+    val artwork = remember(viewModel) { viewModel.artwork }
     // Hero artwork while offline resolves to the downloaded item's local
     // backdrop (falling back to its poster) instead of a server URL, which is
     // unreachable offline. Episodes are included so an all-episodes offline
@@ -376,14 +413,22 @@ private fun MainHomeContent(
             offlineContent.episodes.map { Triple(it.id, it.backdropPath, it.posterPath) }
     }
     val offlineBackdropResolver = remember(offlineResolverKey) {
-        return@remember { id: String ->
-            currentOfflineContent.itemsById[id]?.let { it.backdropPath ?: it.posterPath } ?: ""
+        return@remember { item: com.raulshma.jellyplay.core.model.MediaItem ->
+            currentOfflineContent.itemsById[item.id]?.let { it.backdropPath ?: it.posterPath } ?: ""
         }
     }
+    // The raw id-level backdrop read — the series-backdrop leg of the
+    // episode/season cards (a bare series id; the model carries no series
+    // backdrop tag, so [ArtworkUrls] cannot resolve it). The ONE retained
+    // raw getter's screen-side stabilization.
     val onlineBackdropResolver = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
     // The single hero backdrop builder the content list consumes — the parent
-    // resolves online-vs-offline once, so the child never re-branches.
-    val heroBackdropUrlBuilder = if (renderingOffline) offlineBackdropResolver else onlineBackdropResolver
+    // resolves online-vs-offline once, so the child never re-branches. Online
+    // it is the item-level resolver (the URL carries the item's image tag);
+    // offline it reads the local file paths.
+    val onlineHeroBackdropBuilder = remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
+    val heroBackdropUrlBuilder: (MediaItem) -> String =
+        if (renderingOffline) offlineBackdropResolver else onlineHeroBackdropBuilder
 
     // Scroll state must exist before the hero controller (auto-rotate reads
     // listState.isScrollInProgress). Both own Compose side-effects, so order
@@ -398,6 +443,7 @@ private fun MainHomeContent(
         featuredCandidates = featuredCandidates,
         listState = listState,
         getBackdropUrl = heroBackdropUrlBuilder,
+        timedAdvanceMs = heroStyleDecision.autoAdvanceMs,
     )
 
     // Global nav overflow "Surprise Me": the hero controller lives here
@@ -550,7 +596,7 @@ private fun MainHomeContent(
         viewModel.onEvent(HomeUiEvent.PrefetchPhotoFolderChildUrls(photoFolderItems))
     }
 
-    val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)
+    val fallbackImageUrlBuilder = rememberFallbackUrls(artwork)
 
     // The shared render wiring, bundled once (see [HomeRenderInputs]) — every
     // member above is already a remembered stable, so the bundle's identity is
@@ -558,8 +604,7 @@ private fun MainHomeContent(
     val renderInputs = remember(
         mediaOnItemClick,
         mediaOnPlayClick,
-        mediaImageUrlBuilder,
-        mediaBackdropUrlBuilder,
+        artwork,
         onlineBackdropResolver,
         heroBackdropUrlBuilder,
         fallbackImageUrlBuilder,
@@ -571,8 +616,7 @@ private fun MainHomeContent(
         HomeRenderInputs(
             mediaOnItemClick = mediaOnItemClick,
             mediaOnPlayClick = mediaOnPlayClick,
-            mediaImageUrlBuilder = mediaImageUrlBuilder,
-            mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+            artwork = artwork,
             onlineBackdropResolver = onlineBackdropResolver,
             heroBackdropUrlBuilder = heroBackdropUrlBuilder,
             fallbackImageUrlBuilder = fallbackImageUrlBuilder,
@@ -710,7 +754,7 @@ private fun MainHomeContent(
             val focusBackdropUrlFor = if (renderingOffline) {
                 remember { { _: MediaItem -> "" } }
             } else {
-                mediaBackdropUrlBuilder
+                remember(artwork) { { item: MediaItem -> artwork.backdrop(item) } }
             }
             val focusBackdrop = rememberFocusBackdropState(
                 focusedItem = { tvFocusedItem },
@@ -764,6 +808,8 @@ private fun MainHomeContent(
                     headerHeight = headerHeight,
                     heroController = heroController,
                     implicitOfflineBanner = implicitOfflineBanner,
+                    heroStyleDecision = heroStyleDecision,
+                    heroCandidates = featuredCandidates,
                     discoverRows = discoverRows,
                     allDiscoverItems = allDiscoverItems,
                     renderInputs = renderInputs,
@@ -845,6 +891,10 @@ private fun HomeSurfaceContent(
     isLightTheme: Boolean,
     headerHeight: Dp,
     heroController: HeroController,
+    /** The hero presentation fold (the screen's [homeHeroStyleDecision] output) the hero slot branches on. */
+    heroStyleDecision: HomeHeroStyleDecision,
+    /** The full rotation candidate pool — the TV_SLIDER hero's pager pages. */
+    heroCandidates: List<MediaItem>,
     implicitOfflineBanner: String?,
     discoverRows: List<List<SeerrSearchItem>>,
     allDiscoverItems: List<SeerrSearchItem>,
@@ -949,6 +999,8 @@ private fun HomeSurfaceContent(
                     feed = s.feed,
                     featuredItem = heroController.featuredItem,
                     curatedHeroOverlay = curatedHeroOverlay,
+                    heroStyleDecision = heroStyleDecision,
+                    heroCandidates = heroCandidates,
                     backgroundColor = backgroundColor,
                     contentPad = contentPad,
                     headerHeight = headerHeight,
@@ -981,7 +1033,9 @@ private fun HomeSurfaceContent(
                             heroController.onFocusChange(focused)
                         }
                     },
-                    getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                    // seriesPosterUrl rode here until the artwork fold moved
+                    // series art onto HomeRenderInputs.artwork — the row arm
+                    // derives its resolver lambda from the bundle now.
                     photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                     onSeerrItemClick = callbacks.onSeerrItemClick,
                     onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
@@ -1024,6 +1078,7 @@ private fun HomeSurfaceContent(
                     },
                 ),
                 renderInputs = renderInputs,
+                heroController = heroController,
                 listState = listState,
                 density = density,
                 // The chips' own flow (see HomeViewModel.presenceChips) —
@@ -1060,7 +1115,7 @@ private fun HomeDockArea(
     // Lift the search-results-overlay lambdas (recreated per keystroke
     // below) into remembered locals so HomeSearchResultsOverlay's
     // results LazyColumn stops being re-scored each keystroke.
-    val searchGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
+    val searchPosterUrlBuilder = remember(viewModel) { { item: MediaItem -> viewModel.artwork.poster(item) } }
     val searchOnJellyfinClick = remember(viewModel, callbacks, closeSearch) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
             closeSearch()
@@ -1111,6 +1166,28 @@ private fun HomeDockArea(
     val dockOnShowSyncDetails = remember(viewModel) {
         { onShowSyncDetails() }
     }
+    // Header shortcuts: collect the resolved list + fold clicks (screen →
+    // route, action → the shell handler) and long-press → the editor.
+    val headerShortcuts by viewModel.headerShortcuts.collectAsStateWithLifecycle()
+    val dockOnShortcutClick = remember(callbacks) {
+        { shortcut: com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut ->
+            when (val target = shortcut.target) {
+                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Screen ->
+                    callbacks.onOpenRoute(target.route)
+                is com.raulshma.jellyplay.core.ui.navigation.ShortcutCatalogTarget.Action ->
+                    callbacks.onShortcutAction(target.action)
+            }
+        }
+    }
+    val dockOnShortcutLongClick = remember(callbacks) {
+        { _: com.raulshma.jellyplay.core.ui.navigation.ResolvedShortcut ->
+            callbacks.onOpenRoute(
+                com.raulshma.jellyplay.core.ui.navigation.Route.ShortcutsCustomize(
+                    com.raulshma.jellyplay.core.model.ShortcutSurface.HEADER,
+                ),
+            )
+        }
+    }
 
     HomeTopDockScrim(
         settingsSearch = viewModel::settingsSearchResults,
@@ -1132,6 +1209,7 @@ private fun HomeDockArea(
             homeHeroEnabled = state.homeHeroEnabled,
             hasFeaturedItem = heroHasFeaturedItem,
             hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
+            headerShortcuts = headerShortcuts,
         ),
         dockCallbacks = HomeDockCallbacks(
             onUserSwitch = onUserSwitch,
@@ -1141,6 +1219,8 @@ private fun HomeDockArea(
             onClearSearch = dockOnClearSearch,
             onToggleOffline = dockOnToggleOffline,
             onShowSyncDetails = dockOnShowSyncDetails,
+            onShortcutClick = dockOnShortcutClick,
+            onShortcutLongClick = dockOnShortcutLongClick,
         ),
         onHeroFocusDown = remember(heroFocusRequester) {
             { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
@@ -1157,7 +1237,7 @@ private fun HomeDockArea(
                     jellyfinResults = search.jellyfinResults,
                     seerrResults = search.seerrResults,
                     isSearching = search.isSearching,
-                    getImageUrl = searchGetImageUrl,
+                    posterUrl = searchPosterUrlBuilder,
                     onJellyfinClick = searchOnJellyfinClick,
                     onSeerrClick = searchOnSeerrClick,
                     searchHistory = searchHistory,
@@ -1187,8 +1267,13 @@ private fun HomeTailSheets(
 ) {
     // Advanced series delete-episodes sheet — the same one the media-detail
     // screen uses. Shown when a series card's quick-action Delete is tapped;
-    // the ViewModel loads the series' seasons/downloaded episodes.
-    state.seriesDelete?.let { sd ->
+    // the ViewModel loads the series' seasons/downloaded episodes. The state
+    // is leaf-collected off its holder flow (the `pendingSyncEntries`
+    // pattern — see the sync sheet below), not folded into HomeUiState: a
+    // sheet emission (open, load, per-season expand) must not copy the bag
+    // and re-run the orchestrator while a modal sheet covers the screen.
+    val seriesDelete by viewModel.seriesDeleteSheet.collectAsStateWithLifecycle()
+    seriesDelete?.let { sd ->
         HomeSeriesDeleteSheet(
             state = sd,
             onDelete = remember(viewModel) { { episodeIds: Set<String> -> viewModel.onEvent(HomeUiEvent.DeleteOfflineEpisodes(episodeIds)) } },
@@ -1200,11 +1285,13 @@ private fun HomeTailSheets(
     // Series download sheet — the same one the media-detail screen uses. Shown
     // when a series card's quick-action Download is tapped; the ViewModel
     // assembles the series' seasons/episodes from the episode catalogue.
-    state.seriesDownload?.let { sd ->
+    // Leaf-collected off its holder flow like the delete sheet above.
+    val seriesDownload by viewModel.seriesDownloadSheet.collectAsStateWithLifecycle()
+    seriesDownload?.let { sd ->
         HomeSeriesDownloadSheet(
             state = sd,
             onLoadEpisodes = remember(viewModel) { { seasonId: String -> viewModel.onEvent(HomeUiEvent.LoadSeriesDownloadEpisodes(seasonId)) } },
-            onDownload = remember(viewModel) { { selection: Map<String, List<String>> -> viewModel.onEvent(HomeUiEvent.DownloadSeries(selection)) } },
+            onDownload = remember(viewModel) { { selection: Map<String, List<String>>, policy: AutoDownloadMode? -> viewModel.onEvent(HomeUiEvent.DownloadSeries(selection, policy)) } },
             onDismiss = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissSeriesDownload) } },
         )
     }
@@ -1314,10 +1401,14 @@ private data class SectionConfigTarget(
 private fun HomeSeriesDownloadSheet(
     state: HomeSeriesDownloadState,
     onLoadEpisodes: (seasonId: String) -> Unit,
-    onDownload: (selectedEpisodes: Map<String, List<String>>) -> Unit,
+    onDownload: (selectedEpisodes: Map<String, List<String>>, policy: AutoDownloadMode?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // The sheet-scoped policy chip state, SEEDED from the series' stored
+    // override (null = Default): leaving the sheet's composition resets it,
+    // same "close means reset" rule as the detail screen's session flag.
+    var selectedPolicy by remember(state.seriesId) { mutableStateOf(state.storedPolicy) }
     TvSafeSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         SeriesDownloadSheet(
             seasons = state.seasons,
@@ -1326,6 +1417,8 @@ private fun HomeSeriesDownloadSheet(
             downloadedEpisodeIds = state.downloadedEpisodeIds,
             onLoadEpisodes = onLoadEpisodes,
             isDownloading = false,
+            selectedPolicy = selectedPolicy,
+            onPolicySelect = { selectedPolicy = it },
             onDownload = onDownload,
             onDismiss = onDismiss,
         )
@@ -1507,16 +1600,16 @@ private fun HomeTopDockScrim(
 /**
  * The card-image fallback-URL builder the rows consume — a thin remember over
  * the pure [fallbackImageUrls] (the policy lives there; see HomeMediaRows.kt).
- * Keyed on the VM so the builder identity is stable and the rows don't see a
- * new lambda per recomposition.
+ * Keyed on the resolver so the builder identity is stable and the rows don't
+ * see a new lambda per recomposition.
  */
 @Composable
 private fun rememberFallbackUrls(
-    viewModel: HomeViewModel,
+    artwork: ArtworkUrls,
 ): (com.raulshma.jellyplay.core.model.MediaItem) -> List<String> {
-    return remember(viewModel) {
+    return remember(artwork) {
         { item: com.raulshma.jellyplay.core.model.MediaItem ->
-            fallbackImageUrls(item, viewModel::getImageUrl)
+            fallbackImageUrls(item, artwork)
         }
     }
 }

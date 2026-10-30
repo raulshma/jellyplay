@@ -193,7 +193,8 @@
     <string name="player_video_rendering">Rendu</string>
     <string name="player_video_deinterlace">Désentrelacement · %1$s</string>
     <string name="player_video_passthrough">Passthrough</string>
-    <string name="player_video_stats_for_nerds">Stats pour initiés</string>
+        <string name="player_video_stats_close">Fermer</string>
+<string name="player_video_stats_for_nerds">Stats pour initiés</string>
     <string name="player_video_stats_for_nerds_on">Stats pour initiés \u00B7 Activé</string>
     <string name="player_video_video_filters">Filtres vidéo</string>
     <string name="player_video_video_filters_on">Filtres vidéo \u00B7 Activé</string>
@@ -331,7 +332,16 @@
     <string name="player_video_watched">Vu</string>
     <string name="player_video_time_left">%1$s restantes</string>
     <string name="player_video_now_playing">En cours de lecture</string>
-    <string name="player_video_quality_title">Qualite</string>
+        <string name="player_video_playback_options">Options de lecture</string>
+    <string name="player_video_playback_options_desc">Changez le moteur, le mode de diffusion du serveur et la qualité. Les changements s'appliquent à la session en cours.</string>
+    <string name="player_video_playback_options_engine_section">Moteur</string>
+    <string name="player_video_playback_options_delivery_section">Diffusion</string>
+    <string name="player_video_playback_options_quality_section">Qualité</string>
+    <string name="player_video_quality_unavailable">La qualité est indisponible pour cette lecture (lecture directe forcée, hors ligne, cast ou SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">Laisser le serveur choisir (lecture directe quand possible)</string>
+    <string name="player_video_playback_mode_force_direct_desc">Diffuser le fichier tel quel, sans transcodage</string>
+    <string name="player_video_playback_mode_force_transcode_desc">Toujours transcoder via le serveur</string>
+<string name="player_video_quality_title">Qualite</string>
     <string name="player_video_quality_description">Les modifications s appliquent immediatement pour les flux adaptatifs. Pour la lecture directe, cela definit le debit binaire maximal de lecture.</string>
     <string name="player_video_adaptive_bitrate_cap">Plafond de debit adaptatif</string>
     <string name="player_video_adaptive_bitrate_on">Limite la qualite sur les reseaux limites</string>
@@ -392,4 +402,32 @@
     <string name="player_video_transcode_switched">Passage au flux transcodé — mise en mémoire tampon</string>
     <string name="player_video_direct_play_unavailable">Lecture directe indisponible pour cet élément — repli sur le transcodage</string>
     <string name="player_video_vlc_client_cert_unsupported">Le certificat client n'est pas pris en charge par le moteur VLC — passez à ExoPlayer ou mpv pour les serveurs mTLS</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="pause_details_starring">Distribution</string>
+    <string name="player_video_curve_auto">Auto (défaut mpv)</string>
+    <string name="player_video_curve_bt2390">BT.2390</string>
+    <string name="player_video_curve_bt2446a">BT.2446A</string>
+    <string name="player_video_curve_clip">Écrêtage</string>
+    <string name="player_video_curve_hable">Hable</string>
+    <string name="player_video_curve_linear">Linéaire</string>
+    <string name="player_video_curve_spline">Spline</string>
+    <string name="player_video_deband_heavy">Élevé</string>
+    <string name="player_video_deband_light">Léger</string>
+    <string name="player_video_deband_medium">Moyen</string>
+    <string name="player_video_deband_off">Désactivé</string>
+    <string name="player_video_delete_offer_delete">Supprimer</string>
+    <string name="player_video_delete_offer_failed">Impossible de supprimer « %1$s » — il est toujours sur le serveur</string>
+    <string name="player_video_delete_offer_keep">Conserver</string>
+    <string name="player_video_delete_offer_title">Supprimer « %1$s » du serveur ?</string>
+    <string name="player_video_hdr_format_auto">Auto</string>
+    <string name="player_video_hdr_format_dv_only">Dolby Vision uniquement</string>
+    <string name="player_video_hdr_format_hdr10_only">HDR10 uniquement</string>
+    <string name="player_video_hdr_format_prefer_dv">Préférer Dolby Vision</string>
+    <string name="player_video_hdr_format_preference_caption">Le format HDR qui atteint votre écran quand l’élément en propose plusieurs. Appliqué à la prochaine lecture.</string>
+    <string name="player_video_hdr_format_preference_section">Format HDR préféré</string>
+    <string name="player_video_hdr_format_sdr_only">SDR uniquement</string>
+    <string name="player_video_render_deband">Réduction du banding</string>
+    <string name="player_video_render_motion_interpolation">Interpolation de mouvement</string>
+    <string name="player_video_render_tone_curve">Courbe de mappage des tons (HDR → SDR)</string>
 </resources>

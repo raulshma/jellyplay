@@ -5,7 +5,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.Flow
  * CANCELLED fetch rethrows: cancellation is never converted to a load error.
  *
  * [fetch] is the only per-flavor part (library browse / favorites / search);
- * the blank-query guard for search lives in [MediaRepository.searchPagingSource].
+ * the blank-query guard for search lives in [LibraryFeed.searchPagingSource].
  * Order-preserving: pages carry the items exactly as the repository returned
  * them.
  */
@@ -79,8 +79,8 @@ internal class JellyfinPagingSource(
 }
 
 /**
- * The single [Pager] shape for every paged media flow in
- * [MediaRepository] — one [PagingConfig] instead of the three hand-copied
+ * The single [Pager] shape for every paged media flow on [LibraryFeed] —
+ * one [PagingConfig] instead of the three hand-copied
  * `Pager(PagingConfig(...))` blocks it replaces. The factory is re-invoked by
  * paging on every invalidation, so each closure must capture its call site's
  * parameters (they do).
@@ -107,7 +107,7 @@ private const val PREFETCH_DISTANCE = 20
  * round-trip — a whitespace-only search bar must not fire network calls on
  * every keystroke-backed pager refresh.
  */
-internal fun MediaRepository.searchPagingSource(
+internal fun LibraryFeed.searchPagingSource(
     query: String,
     filters: LibraryFilters = LibraryFilters(),
 ): JellyfinPagingSource = JellyfinPagingSource { startIndex, limit ->

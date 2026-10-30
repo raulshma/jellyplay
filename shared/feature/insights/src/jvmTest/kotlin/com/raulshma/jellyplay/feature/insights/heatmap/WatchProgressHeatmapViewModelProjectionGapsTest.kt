@@ -2,8 +2,9 @@ package com.raulshma.jellyplay.feature.insights.heatmap
 
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
@@ -51,7 +52,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var watchHistoryRepository: WatchHistoryRepository
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
 
     private lateinit var playbackReportingStatus: MutableStateFlow<PlaybackReportingStatus>
@@ -66,7 +67,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         watchHistoryRepository = mockk()
-        mediaRepository = mockk()
+        detailFeed = mockk()
         imageUrlProvider = mockk()
         playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.AVAILABLE)
         every { watchHistoryRepository.playbackReportingStatus } returns playbackReportingStatus
@@ -87,7 +88,7 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "http://img"
         // Day-selection resolution: a failed detail lookup simply skips the
         // cache (the label under test lives in SelectedDayInfo itself).
-        coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), any()) } returns
             Result.failure(RuntimeException("no detail"))
     }
 
@@ -98,8 +99,8 @@ class WatchProgressHeatmapViewModelProjectionGapsTest {
 
     private fun newViewModel(): WatchProgressHeatmapViewModel = WatchProgressHeatmapViewModel(
         watchHistoryRepository = watchHistoryRepository,
-        mediaRepository = mediaRepository,
-        imageUrlProvider = imageUrlProvider,
+        detailFeed = detailFeed,
+        artworkUrls = DefaultArtworkUrls(imageUrlProvider),
     )
 
     private fun session(itemId: String, name: String) = PlaybackReportingDetail(

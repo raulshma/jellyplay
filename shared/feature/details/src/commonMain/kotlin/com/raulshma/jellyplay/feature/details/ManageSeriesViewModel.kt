@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -23,9 +23,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
  * Loads the series' tvdb id from Jellyfin, resolves the owning Sonarr server,
  * then fetches every episode grouped by season. All mutations (monitor toggle,
  * delete file, search, refresh/scan) resolve the owning server internally via
- * the [SonarrSeriesOperations] seam (the Manage-Series-exclusive split of the
- * former ArrRepository family — this screen is its one consumer, so it injects
- * only that narrow surface); the screen only ever deals with tvdb ids.
+ * the [SonarrSeriesOperations] seam (the Manage-Series-exclusive surface - this
+ * screen is its one consumer, so it injects only that narrow surface); the
+ * screen only ever deals with tvdb ids.
  *
  * State is a single [MutableStateFlow]<[ManageSeriesUiState]> for atomic
  * snapshots (mirrors the DetailUiState single-state model). One-shot feedback
@@ -41,7 +41,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_manage_
  */
 class ManageSeriesViewModel internal constructor(
     private val strings: DetailStrings,
-    private val mediaRepository: MediaRepository,
+    private val detailFeed: DetailFeed,
     private val sonarr: SonarrSeriesOperations,
 ) : JellyPlayViewModel() {
 
@@ -81,7 +81,7 @@ class ManageSeriesViewModel internal constructor(
         _uiState.update { ManageSeriesUiState(isLoading = true) }
         loadJob = launch {
             // 1. Resolve the series tvdb id from Jellyfin.
-            val detailResult = mediaRepository.getMediaDetail(seriesId)
+            val detailResult = detailFeed.getMediaDetail(seriesId, force = false)
             val detail = detailResult.getOrNull()
             if (detailResult.isFailure || detail == null) {
                 _uiState.update {
@@ -225,9 +225,8 @@ class ManageSeriesViewModel internal constructor(
                         it.copy(actionTarget = null, userMessage = UserErrorMessages.resolve(e, "Couldn't delete the file."))
                     }
                 }
-            // Settle arm: the flag drops on BOTH outcomes and [PendingConfirmation.clear]
-            // runs on BOTH outcomes — pre-fold this was a clear-before-action write, so
-            // failure left the pending episode cleared too.
+            // Settle arm: the flag and the pending confirmation both clear on
+            // BOTH outcomes, so a failure leaves nothing stale behind.
             _uiState.update { it.copy(isDeleting = false, pendingDelete = it.pendingDelete.clear()) }
         }
     }

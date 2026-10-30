@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
 import com.raulshma.jellyplay.core.ui.components.PagedCollectionList
 import com.raulshma.jellyplay.feature.music.components.TrackRow
+import com.raulshma.jellyplay.feature.music.collection.musicArtUrl
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_more
 import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_tracks
@@ -66,10 +67,10 @@ fun GenreDetailScreen(
             appendErrorFallbackMessage = stringResource(Res.string.music_failed_load_more),
             tvInitialFocusTag = "genre_detail_init",
         ) { track ->
-            // Memoize per-item so getImageUrl + the click
+            // Memoize per-item so the poster URL + the click
             // lambdas aren't rebuilt on every recomposition
             // of this visible row (matches Tracks/Search).
-            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
+            val imageUrl = remember(track, viewModel.artworkUrls) { viewModel.artworkUrls.musicArtUrl(track) }
             val onClick = remember(track.id) {
                 {
                     val loadedTracks = tracks.itemSnapshotList.items

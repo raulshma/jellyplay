@@ -1,28 +1,20 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
-import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
+import com.raulshma.jellyplay.core.network.api.CollectionApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.PlaylistApiClient
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
-import com.raulshma.jellyplay.core.data.session.HomeSession
-import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.model.SystemTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -38,92 +30,46 @@ import kotlin.test.assertTrue
  */
 class MediaRepositoryImplTest {
 
-    /** Late-binding handle the announcer's arming lambda reads (set at build time). */
-    private var built: MediaRepositoryImpl? = null
-
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
+    // One relaxed mock per family seam the repo ctor takes (the construction
+    // ritual + the permanently-null session flow live in [mediaRepoStackFor]):
+    // the library seam below is the read surface the suite stubs most.
+    private val apiClient: LibraryApiClient = mockk(relaxed = true)
+    private val collectionApi: CollectionApiClient = mockk(relaxed = true)
+    private val playlistApi: PlaylistApiClient = mockk(relaxed = true)
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
-    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
-    private val userDataRealtimeChannel: UserDataRealtimeChannel = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
     // Facade split: the playlist members moved to PlaylistRepositoryImpl;
-    // built over the SAME MediaRepositoryInternals single-construction (and
-    // the same mocked apiClient — the union mock doubles as the
-    // LibraryApiClient family view), so the self-invalidation tests below
-    // still pin the cross-surface behavior: an edit through the playlist
-    // impl drops a detail cached through the media impl. Construction-only
-    // re-point; every assertion is unchanged.
+    // the harness builds it over the SAME MediaRepositoryInternals single
+    // the media repo takes, so the self-invalidation tests below still pin
+    // the cross-surface behavior: an edit through the playlist impl drops a
+    // detail cached through the media impl. Construction-only re-point; every
+    // assertion is unchanged.
     private lateinit var playlistRepository: PlaylistRepositoryImpl
 
-    // The real catalogue single the repo's invalidation funnel drops into.
-    // The union's series-read pass-throughs retired (zero repo-typed
-    // callers), so the mutation-funnel pins below observe the drop through
-    // THIS reference — the same production surface the funnel invalidates.
+    // The real catalogue single the repo's invalidation funnel drops into —
+    // the mutation-funnel pins below observe the drop through THIS reference
+    // (the same production surface the funnel invalidates).
     private lateinit var episodeCatalogue: EpisodeCatalogueImpl
 
     @BeforeTest
     fun setup() {
-        // Real (permanently-null) session flow behind the shared HomeSession
-        // identity detector — this suite never switches identity, so
-        // CacheIdentity.UNKNOWN is the expected key surface.
-        every { apiClient.session } returns MutableStateFlow(null)
         // User-data mutations fan out through PlayedStateSync now (the repo
         // only owns cache invalidation around the write) — pin the mock's
         // write results so the invalidation wrappers see a successful write.
         coEvery { playedStateSync.flip(any(), any()) } returns Result.success(Unit)
         coEvery { playedStateSync.flip(any(), any(), any()) } returns Result.success(Unit)
         coEvery { playedStateSync.toggleFavorite(any()) } returns Result.success(true)
-        // The repo's invalidation funnel drops a real EpisodeCatalogueImpl's
-        // series snapshot, which in turn calls back into the mocked
-        // apiClient — the series/episodes stubs keep working end-to-end
-        // through the catalogue transplant.
-        val homeSession = HomeSession(
-            apiClient,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        )
-        val sessionCacheRegistry = SessionCacheRegistry(
-            homeSession,
-            CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        )
-        episodeCatalogue = EpisodeCatalogueImpl(
-            apiClient,
-            offlineRepository,
-            homeSession,
-            sessionCacheRegistry,
-        )
-        val internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry)
-        val timeSource = SystemTimeSource()
-        // The repo ctor-injects the persisted
-        // half of the home pipeline (the same store the Koin graph wires);
-        // this suite never touches home persistence, so the relaxed DAO
-        // mock under the store is inert.
-        val homeSnapshotStore = HomeSectionsSnapshotStore(
-            homeSectionCacheDao,
-            homeSession,
-            timeSource,
-        )
-        repository = MediaRepositoryImpl(
-            // One union mock covers both family seams (the JellyfinApiClient
-            // mock implements each of them).
+        val stack = mediaRepoStackFor(
             libraryApiClient = apiClient,
-            collectionApiClient = apiClient,
-            // The home cache-maintenance port (inert here — this suite pins
-            // the detail-cache / staleness choreography).
-            homeSectionsCachePort = mockk(relaxed = true),
-            homeSnapshotStore = homeSnapshotStore,
+            collectionApiClient = collectionApi,
+            playlistApiClient = playlistApi,
             playedStateSync = playedStateSync,
-            episodeCatalogue = episodeCatalogue,
-            userDataRealtimeChannel = userDataRealtimeChannel,
-            timeSource = timeSource,
-            homeSession = homeSession,
-            userDataAnnouncer = announcerFor(homeSession) { built },
-            sessionCacheRegistry = sessionCacheRegistry,
-            internals = internals,
-        ).also { built = it }
-        playlistRepository = PlaylistRepositoryImpl(apiClient, internals)
+        )
+        repository = stack.repository
+        playlistRepository = stack.playlistRepository
+        episodeCatalogue = stack.episodeCatalogue
     }
 
     @Test
@@ -132,10 +78,10 @@ class MediaRepositoryImplTest {
             mockk(relaxed = true)
         )
 
-        val first = repository.getMediaDetail("item-1")
+        val first = repository.getMediaDetail("item-1", force = false)
         assertTrue(first.isSuccess)
 
-        val second = repository.getMediaDetail("item-1")
+        val second = repository.getMediaDetail("item-1", force = false)
         assertTrue(second.isSuccess)
 
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
@@ -165,12 +111,12 @@ class MediaRepositoryImplTest {
         }
 
         val (a, b) = coroutineScope {
-            val a = async { repository.getMediaDetail("item-1") }
+            val a = async { repository.getMediaDetail("item-1", force = false) }
             // Deterministically wait until the first fetch is suspended inside
             // the mock before launching the second caller, so the single-flight
             // (in-flight Deferred) path is the one exercised, not a cache hit.
             fetchStarted.await()
-            val b = async { repository.getMediaDetail("item-1") }
+            val b = async { repository.getMediaDetail("item-1", force = false) }
             // Yield so the second caller advances to the point it has registered
             // on the shared in-flight Deferred before the fetch completes.
             delay(1)
@@ -189,7 +135,7 @@ class MediaRepositoryImplTest {
             mockk(relaxed = true)
         )
 
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
         repository.getMediaDetail("item-1", force = true)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
@@ -214,7 +160,7 @@ class MediaRepositoryImplTest {
             Result.success(mockk<MediaDetail>(relaxed = true))
         }
 
-        val first = async { repository.getMediaDetail("item-1") }
+        val first = async { repository.getMediaDetail("item-1", force = false) }
         fetchStarted.await()
         // A user-data mutation lands while the fetch is in flight: its
         // internal eviction bumps detailCacheEpoch, so the completing fetch
@@ -227,7 +173,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("item-1") } returns Result.success(
             mockk(relaxed = true)
         )
-        repository.getMediaDetail("item-1")
+        repository.getMediaDetail("item-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("item-1") }
     }
@@ -302,7 +248,7 @@ class MediaRepositoryImplTest {
         )
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
-        repository.getMediaDetail("series-1")
+        repository.getMediaDetail("series-1", force = false)
         episodeCatalogue.loadSeriesEpisodes("series-1")
         repository.markUnplayed("series-1")
         episodeCatalogue.loadSeriesEpisodes("series-1")
@@ -322,7 +268,7 @@ class MediaRepositoryImplTest {
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
 
-        repository.getMediaDetail("episode-1")
+        repository.getMediaDetail("episode-1", force = false)
         episodeCatalogue.loadSeriesEpisodes("series-1")
         repository.markUnplayed("episode-1")
         episodeCatalogue.loadSeriesEpisodes("series-1")
@@ -353,7 +299,7 @@ class MediaRepositoryImplTest {
         )
 
         // Populate: detail (episode) + the series' catalogue snapshot.
-        repository.getMediaDetail("episode-1")
+        repository.getMediaDetail("episode-1", force = false)
         episodeCatalogue.loadSeriesEpisodes("series-1")
 
         // Mutate episode user-data → must drop the parent series' caches.
@@ -375,7 +321,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
-        repository.getMediaDetail("series-1")
+        repository.getMediaDetail("series-1", force = false)
         episodeCatalogue.loadSeriesEpisodes("series-1")
         repository.markPlayed("series-1")
         episodeCatalogue.loadSeriesEpisodes("series-1")
@@ -393,7 +339,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
-        repository.getMediaDetail("movie-1")
+        repository.getMediaDetail("movie-1", force = false)
         episodeCatalogue.loadSeriesEpisodes("series-1")
         repository.markPlayed("movie-1")
         episodeCatalogue.loadSeriesEpisodes("series-1")
@@ -417,7 +363,7 @@ class MediaRepositoryImplTest {
             Result.success(listOf(mediaItem("track-1")))
         }
 
-        val first = async { repository.getAlbumTracks("album-1") }
+        val first = async { repository.getAlbumTracks("album-1", force = false) }
         fetchStarted.await()
         // A user-data mutation lands while the fetch is in flight → its
         // internal eviction bumps detailCacheEpoch.
@@ -427,7 +373,7 @@ class MediaRepositoryImplTest {
 
         // Next read must re-fetch (the racing fetch was not cached).
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("track-1")))
-        repository.getAlbumTracks("album-1")
+        repository.getAlbumTracks("album-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
     }
@@ -436,8 +382,8 @@ class MediaRepositoryImplTest {
     fun `getAlbumTracks caches result when no invalidation races`() = runTest {
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("track-1")))
 
-        repository.getAlbumTracks("album-1")
-        repository.getAlbumTracks("album-1")
+        repository.getAlbumTracks("album-1", force = false)
+        repository.getAlbumTracks("album-1", force = false)
 
         coVerify(exactly = 1) { apiClient.getAlbumTracks("album-1") }
     }
@@ -449,56 +395,56 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getCollectionItems caches per page and serves from cache`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 40, startIndex = 0)
         )
-        coEvery { apiClient.getCollectionItems("col-1", 20, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 20, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c2")), totalRecordCount = 40, startIndex = 20)
         )
 
-        repository.getCollectionItems("col-1", 0, 20)
-        repository.getCollectionItems("col-1", 0, 20) // cache hit (same page)
-        repository.getCollectionItems("col-1", 20, 20) // cache miss (different page)
+        repository.getCollectionItems("col-1", 0, 20, force = false)
+        repository.getCollectionItems("col-1", 0, 20, force = false) // cache hit (same page)
+        repository.getCollectionItems("col-1", 20, 20, force = false) // cache miss (different page)
 
-        coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 0, 20) }
-        coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 20, 20) }
+        coVerify(exactly = 1) { collectionApi.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 1) { collectionApi.getCollectionItems("col-1", 20, 20) }
     }
 
     @Test
     fun `getCollectionItems with force re-fetches instead of serving the cached page`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 40, startIndex = 0)
         )
 
-        repository.getCollectionItems("col-1", 0, 20)
-        repository.getCollectionItems("col-1", 0, 20) // cache hit
+        repository.getCollectionItems("col-1", 0, 20, force = false)
+        repository.getCollectionItems("col-1", 0, 20, force = false) // cache hit
         repository.getCollectionItems("col-1", 0, 20, force = true)
 
         // The deferred silent refresh's freshness lever: a member item's flip
         // never evicts the collection's page key, so only the explicit force
         // can bypass it.
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 20) }
     }
 
     @Test
     fun `getCollectionItems with force evicts every cached page of the collection`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 40, startIndex = 0)
         )
-        coEvery { apiClient.getCollectionItems("col-1", 20, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 20, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c2")), totalRecordCount = 40, startIndex = 20)
         )
 
-        repository.getCollectionItems("col-1", 0, 20)
-        repository.getCollectionItems("col-1", 20, 20)
+        repository.getCollectionItems("col-1", 0, 20, force = false)
+        repository.getCollectionItems("col-1", 20, 20, force = false)
         // Forcing one page drops the collection's whole page family — same
         // prefix evict as invalidateCollectionItemsCache — so a paginated
         // caller's force-heal never leaves stale sibling pages behind.
         repository.getCollectionItems("col-1", 0, 20, force = true)
-        repository.getCollectionItems("col-1", 20, 20)
+        repository.getCollectionItems("col-1", 20, 20, force = false)
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 20, 20) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 20, 20) }
     }
 
     @Test
@@ -508,28 +454,28 @@ class MediaRepositoryImplTest {
         // "collection_12" is a prefix of "collection_123_0_20" too, so
         // force-healing collection 12 would silently drop collection 123's
         // cached pages.
-        coEvery { apiClient.getCollectionItems("12", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("12", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c12")), totalRecordCount = 1, startIndex = 0)
         )
-        coEvery { apiClient.getCollectionItems("123", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("123", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c123")), totalRecordCount = 1, startIndex = 0)
         )
 
-        repository.getCollectionItems("12", 0, 20)
-        repository.getCollectionItems("123", 0, 20)
+        repository.getCollectionItems("12", 0, 20, force = false)
+        repository.getCollectionItems("123", 0, 20, force = false)
         repository.getCollectionItems("12", 0, 20, force = true)
-        repository.getCollectionItems("123", 0, 20) // must still be a cache hit
+        repository.getCollectionItems("123", 0, 20, force = false) // must still be a cache hit
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("12", 0, 20) }
-        coVerify(exactly = 1) { apiClient.getCollectionItems("123", 0, 20) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("12", 0, 20) }
+        coVerify(exactly = 1) { collectionApi.getCollectionItems("123", 0, 20) }
     }
 
     @Test
     fun `getAlbumTracks with force re-fetches instead of serving the cached list`() = runTest {
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("t1")))
 
-        repository.getAlbumTracks("album-1")
-        repository.getAlbumTracks("album-1") // cache hit
+        repository.getAlbumTracks("album-1", force = false)
+        repository.getAlbumTracks("album-1", force = false) // cache hit
         repository.getAlbumTracks("album-1", force = true)
 
         // The deferred silent refresh's freshness lever (mirrors the
@@ -553,13 +499,13 @@ class MediaRepositoryImplTest {
     fun `a track flip arms the album-tracks marker - the next non-forced read refetches once`() = runTest {
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("t1")))
 
-        repository.getAlbumTracks("album-1") // populate the album's tracks entry
+        repository.getAlbumTracks("album-1", force = false) // populate the album's tracks entry
         // Flip a MEMBER (not the album): the eviction drops `tracks_track-1`
         // and `detail_track-1`, never `tracks_album-1` — only the armed
         // marker can make the album's next read bypass it.
         repository.markUnplayed("track-1")
-        repository.getAlbumTracks("album-1") // consumes the marker as a force
-        repository.getAlbumTracks("album-1") // marker gone: cached
+        repository.getAlbumTracks("album-1", force = false) // consumes the marker as a force
+        repository.getAlbumTracks("album-1", force = false) // marker gone: cached
 
         coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
     }
@@ -572,10 +518,10 @@ class MediaRepositoryImplTest {
             else Result.success(listOf(mediaItem("t1")))
         }
 
-        repository.getAlbumTracks("album-1") // populate
+        repository.getAlbumTracks("album-1", force = false) // populate
         repository.markUnplayed("track-1") // arm the marker
-        val failed = repository.getAlbumTracks("album-1") // consumes, fetch fails
-        repository.getAlbumTracks("album-1") // re-armed: refetches
+        val failed = repository.getAlbumTracks("album-1", force = false) // consumes, fetch fails
+        repository.getAlbumTracks("album-1", force = false) // re-armed: refetches
 
         assertTrue(failed.isFailure)
         coVerify(exactly = 3) { apiClient.getAlbumTracks("album-1") }
@@ -583,35 +529,35 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `a member flip arms the collection-items marker - the next non-forced page read refetches`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
 
-        repository.getCollectionItems("col-1", 0, 20) // populate the page entry
+        repository.getCollectionItems("col-1", 0, 20, force = false) // populate the page entry
         // Flip a MEMBER (not the collection): the eviction drops
         // `detail_member-1`, never the collection's page key.
         repository.markUnplayed("member-1")
-        repository.getCollectionItems("col-1", 0, 20) // consumes the marker
-        repository.getCollectionItems("col-1", 0, 20) // marker gone: cached
+        repository.getCollectionItems("col-1", 0, 20, force = false) // consumes the marker
+        repository.getCollectionItems("col-1", 0, 20, force = false) // marker gone: cached
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 20) }
     }
 
     @Test
     fun `a failed collection-items read re-arms the marker for the next read`() = runTest {
         var fetchCalls = 0
-        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } coAnswers {
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 20) } coAnswers {
             if (++fetchCalls == 2) Result.failure(RuntimeException("offline blip"))
             else Result.success(SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0))
         }
 
-        repository.getCollectionItems("col-1", 0, 20) // populate
+        repository.getCollectionItems("col-1", 0, 20, force = false) // populate
         repository.markUnplayed("member-1") // arm the marker
-        val failed = repository.getCollectionItems("col-1", 0, 20) // consumes, fetch fails
-        repository.getCollectionItems("col-1", 0, 20) // re-armed: refetches
+        val failed = repository.getCollectionItems("col-1", 0, 20, force = false) // consumes, fetch fails
+        repository.getCollectionItems("col-1", 0, 20, force = false) // re-armed: refetches
 
         assertTrue(failed.isFailure)
-        coVerify(exactly = 3) { apiClient.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 3) { collectionApi.getCollectionItems("col-1", 0, 20) }
     }
 
     @Test
@@ -629,15 +575,15 @@ class MediaRepositoryImplTest {
         val albumDetail = MediaDetail(
             item = MediaItem(id = "album-1", name = "Album", mediaType = MediaType.ALBUM),
         )
-        coEvery { apiClient.getCollectionItems("col-1", 0, 20) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 20) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
 
-        repository.getCollectionItems("col-1", 0, 20) // populate the page entry
+        repository.getCollectionItems("col-1", 0, 20, force = false) // populate the page entry
         repository.invalidateFor(albumDetail) // evicts; must NOT arm
-        repository.getCollectionItems("col-1", 0, 20) // marker not armed: cached
+        repository.getCollectionItems("col-1", 0, 20, force = false) // marker not armed: cached
 
-        coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 0, 20) }
+        coVerify(exactly = 1) { collectionApi.getCollectionItems("col-1", 0, 20) }
     }
 
     // ------------------------------------------------------------------
@@ -648,22 +594,22 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `createCollection delegates name and seed ids to apiClient`() = runTest {
-        coEvery { apiClient.createCollection("My Set", listOf("m1")) } returns Result.success("col-new")
+        coEvery { collectionApi.createCollection("My Set", listOf("m1")) } returns Result.success("col-new")
 
         val result = repository.createCollection("My Set", listOf("m1"))
 
         assertEquals("col-new", result.getOrNull())
-        coVerify(exactly = 1) { apiClient.createCollection("My Set", listOf("m1")) }
+        coVerify(exactly = 1) { collectionApi.createCollection("My Set", listOf("m1")) }
     }
 
     @Test
     fun `addItemsToCollection delegates collectionId and item ids to apiClient`() = runTest {
-        coEvery { apiClient.addItemsToCollection("c1", listOf("m1", "m2")) } returns Result.success(Unit)
+        coEvery { collectionApi.addItemsToCollection("c1", listOf("m1", "m2")) } returns Result.success(Unit)
 
         val result = repository.addItemsToCollection("c1", listOf("m1", "m2"))
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { apiClient.addItemsToCollection("c1", listOf("m1", "m2")) }
+        coVerify(exactly = 1) { collectionApi.addItemsToCollection("c1", listOf("m1", "m2")) }
     }
 
     // ------------------------------------------------------------------
@@ -715,9 +661,9 @@ class MediaRepositoryImplTest {
             MediaDetail(item = mediaItem("movie-1"))
         )
 
-        repository.getMediaDetail("movie-1")
+        repository.getMediaDetail("movie-1", force = false)
         repository.toggleFavorite("movie-1")
-        repository.getMediaDetail("movie-1")
+        repository.getMediaDetail("movie-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("movie-1") }
     }
@@ -728,9 +674,9 @@ class MediaRepositoryImplTest {
             MediaDetail(item = mediaItem("movie-1"))
         )
 
-        repository.getMediaDetail("movie-1")
+        repository.getMediaDetail("movie-1", force = false)
         repository.markUnplayed("movie-1")
-        repository.getMediaDetail("movie-1")
+        repository.getMediaDetail("movie-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("movie-1") }
     }
@@ -750,7 +696,7 @@ class MediaRepositoryImplTest {
 
         // Populate both caches.
         repository.getLatestMedia("folder-1", 20)
-        repository.getGenres(null)
+        repository.getGenres(parentId = null, force = false)
         coVerify(exactly = 1) { apiClient.getLatestMedia("folder-1", 20) }
         coVerify(exactly = 1) { apiClient.getGenres(null) }
 
@@ -760,7 +706,7 @@ class MediaRepositoryImplTest {
 
         // Group member: whole-cache drop → refetch. Non-member: still cached.
         repository.getLatestMedia("folder-1", 20)
-        repository.getGenres(null)
+        repository.getGenres(parentId = null, force = false)
 
         coVerify(exactly = 2) { apiClient.getLatestMedia("folder-1", 20) }
         coVerify(exactly = 1) { apiClient.getGenres(null) }
@@ -798,26 +744,26 @@ class MediaRepositoryImplTest {
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("track-1")))
-        coEvery { apiClient.getCollectionItems("col-1", 0, 100) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 100) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
 
         // Populate every series-scoped cache.
         episodeCatalogue.loadSeriesEpisodes("series-1")
-        repository.getAlbumTracks("album-1")
-        repository.getCollectionItems("col-1", 0, 100)
+        repository.getAlbumTracks("album-1", force = false)
+        repository.getCollectionItems("col-1", 0, 100, force = false)
 
         // Full invalidation (user/server switch) must drop all of them.
         repository.invalidateCaches()
 
         episodeCatalogue.loadSeriesEpisodes("series-1")
-        repository.getAlbumTracks("album-1")
-        repository.getCollectionItems("col-1", 0, 100)
+        repository.getAlbumTracks("album-1", force = false)
+        repository.getCollectionItems("col-1", 0, 100, force = false)
 
         coVerify(exactly = 2) { apiClient.getSeasons("series-1") }
         coVerify(exactly = 2) { apiClient.getAllEpisodes("series-1") }
         coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 100) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 100) }
     }
 
     // ------------------------------------------------------------------
@@ -854,9 +800,9 @@ class MediaRepositoryImplTest {
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
 
-        repository.getMediaDetail("series-1")
+        repository.getMediaDetail("series-1", force = false)
         repository.markSeasonUnplayed("season-1", seriesId = "series-1")
-        repository.getMediaDetail("series-1")
+        repository.getMediaDetail("series-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("series-1") }
     }
@@ -865,51 +811,51 @@ class MediaRepositoryImplTest {
     fun `addItemsToCollection then getCollectionItems re-fetches`() = runTest {
         // The mutation self-
         // invalidates, so DetailViewModel's manual compensation is gone.
-        coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 50) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
-        coEvery { apiClient.addItemsToCollection("col-1", listOf("m1")) } returns Result.success(Unit)
+        coEvery { collectionApi.addItemsToCollection("col-1", listOf("m1")) } returns Result.success(Unit)
 
-        repository.getCollectionItems("col-1")
+        repository.getCollectionItems("col-1", startIndex = 0, limit = 50, force = false)
         repository.addItemsToCollection("col-1", listOf("m1"))
-        repository.getCollectionItems("col-1")
+        repository.getCollectionItems("col-1", startIndex = 0, limit = 50, force = false)
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 50) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 50) }
     }
 
     @Test
     fun `addItemsToCollection drops collection items but not an unrelated item's detail`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 50) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
         coEvery { apiClient.getMediaDetail("movie-1") } returns Result.success(
             MediaDetail(item = mediaItem("movie-1"))
         )
-        coEvery { apiClient.addItemsToCollection("col-1", listOf("m1")) } returns Result.success(Unit)
+        coEvery { collectionApi.addItemsToCollection("col-1", listOf("m1")) } returns Result.success(Unit)
 
-        repository.getCollectionItems("col-1")
-        repository.getMediaDetail("movie-1")
+        repository.getCollectionItems("col-1", startIndex = 0, limit = 50, force = false)
+        repository.getMediaDetail("movie-1", force = false)
         repository.addItemsToCollection("col-1", listOf("m1"))
-        repository.getCollectionItems("col-1")
-        repository.getMediaDetail("movie-1")
+        repository.getCollectionItems("col-1", startIndex = 0, limit = 50, force = false)
+        repository.getMediaDetail("movie-1", force = false)
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 50) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 50) }
         // The unrelated item's detail was untouched.
         coVerify(exactly = 1) { apiClient.getMediaDetail("movie-1") }
     }
 
     @Test
     fun `createCollection invalidates the new collection's items cache`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-new", 0, 50) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-new", 0, 50) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
-        coEvery { apiClient.createCollection("My Set", listOf("m1")) } returns Result.success("col-new")
+        coEvery { collectionApi.createCollection("My Set", listOf("m1")) } returns Result.success("col-new")
 
-        repository.getCollectionItems("col-new")
+        repository.getCollectionItems("col-new", startIndex = 0, limit = 50, force = false)
         repository.createCollection("My Set", listOf("m1"))
-        repository.getCollectionItems("col-new")
+        repository.getCollectionItems("col-new", startIndex = 0, limit = 50, force = false)
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-new", 0, 50) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-new", 0, 50) }
     }
 
     // ------------------------------------------------------------------
@@ -923,11 +869,11 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("pl-1") } returns Result.success(
             MediaDetail(item = mediaItem("pl-1"))
         )
-        coEvery { apiClient.removeItemsFromPlaylist("pl-1", listOf("e1")) } returns Result.success(Unit)
+        coEvery { playlistApi.removeItemsFromPlaylist("pl-1", listOf("e1")) } returns Result.success(Unit)
 
-        repository.getMediaDetail("pl-1")
+        repository.getMediaDetail("pl-1", force = false)
         playlistRepository.removeItemsFromPlaylist("pl-1", listOf("e1"))
-        repository.getMediaDetail("pl-1")
+        repository.getMediaDetail("pl-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
     }
@@ -937,11 +883,11 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("pl-1") } returns Result.success(
             MediaDetail(item = mediaItem("pl-1"))
         )
-        coEvery { apiClient.addItemsToPlaylist("pl-1", listOf("m1")) } returns Result.success(Unit)
+        coEvery { playlistApi.addItemsToPlaylist("pl-1", listOf("m1")) } returns Result.success(Unit)
 
-        repository.getMediaDetail("pl-1")
+        repository.getMediaDetail("pl-1", force = false)
         playlistRepository.addItemsToPlaylist("pl-1", listOf("m1"))
-        repository.getMediaDetail("pl-1")
+        repository.getMediaDetail("pl-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
     }
@@ -951,11 +897,11 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getMediaDetail("pl-1") } returns Result.success(
             MediaDetail(item = mediaItem("pl-1"))
         )
-        coEvery { apiClient.movePlaylistItem("pl-1", "e1", 2) } returns Result.success(Unit)
+        coEvery { playlistApi.movePlaylistItem("pl-1", "e1", 2) } returns Result.success(Unit)
 
-        repository.getMediaDetail("pl-1")
+        repository.getMediaDetail("pl-1", force = false)
         playlistRepository.movePlaylistItem("pl-1", "e1", 2)
-        repository.getMediaDetail("pl-1")
+        repository.getMediaDetail("pl-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("pl-1") }
     }
@@ -974,12 +920,12 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
-        val detail = repository.getMediaDetail("series-1").getOrThrow()
+        val detail = repository.getMediaDetail("series-1", force = false).getOrThrow()
         episodeCatalogue.loadSeriesEpisodes("series-1")
 
         repository.invalidateFor(detail)
 
-        repository.getMediaDetail("series-1")
+        repository.getMediaDetail("series-1", force = false)
         episodeCatalogue.loadSeriesEpisodes("series-1")
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("series-1") }
@@ -1007,13 +953,13 @@ class MediaRepositoryImplTest {
         )
         coEvery { apiClient.getAlbumTracks("album-1") } returns Result.success(listOf(mediaItem("track-1")))
 
-        val detail = repository.getMediaDetail("album-1").getOrThrow()
-        repository.getAlbumTracks("album-1")
+        val detail = repository.getMediaDetail("album-1", force = false).getOrThrow()
+        repository.getAlbumTracks("album-1", force = false)
 
         repository.invalidateFor(detail)
 
-        repository.getMediaDetail("album-1")
-        repository.getAlbumTracks("album-1")
+        repository.getMediaDetail("album-1", force = false)
+        repository.getAlbumTracks("album-1", force = false)
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("album-1") }
         coVerify(exactly = 2) { apiClient.getAlbumTracks("album-1") }
@@ -1021,17 +967,17 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `invalidateFor on a collection drops its items cache`() = runTest {
-        coEvery { apiClient.getCollectionItems("col-1", 0, 50) } returns Result.success(
+        coEvery { collectionApi.getCollectionItems("col-1", 0, 50) } returns Result.success(
             SearchResult(items = listOf(mediaItem("c1")), totalRecordCount = 1, startIndex = 0)
         )
 
-        repository.getCollectionItems("col-1")
+        repository.getCollectionItems("col-1", startIndex = 0, limit = 50, force = false)
         repository.invalidateFor(
             MediaDetail(item = MediaItem(id = "col-1", name = "Box Set", mediaType = MediaType.COLLECTION))
         )
-        repository.getCollectionItems("col-1")
+        repository.getCollectionItems("col-1", startIndex = 0, limit = 50, force = false)
 
-        coVerify(exactly = 2) { apiClient.getCollectionItems("col-1", 0, 50) }
+        coVerify(exactly = 2) { collectionApi.getCollectionItems("col-1", 0, 50) }
     }
 
     @Test

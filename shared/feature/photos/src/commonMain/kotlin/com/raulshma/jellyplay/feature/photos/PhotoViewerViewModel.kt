@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.feature.photos
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -13,10 +14,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 class PhotoViewerViewModel(
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     /** The SearchResult-shaped reads (the sibling-photos query — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set (filmstrip thumbs via [ArtworkUrls.poster]). */
+    val artworkUrls: ArtworkUrls,
     private val photoExport: PhotoExport,
 ) : JellyPlayViewModel() {
 
@@ -69,7 +73,7 @@ class PhotoViewerViewModel(
         launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
 
-            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detailResult = detailFeed.getMediaDetail(itemId, force = false)
             val detail = detailResult.getOrNull()
             val item = detail?.item
             if (item == null) {
@@ -118,7 +122,7 @@ class PhotoViewerViewModel(
 
     private fun loadDetailForCurrentPhoto(itemId: String) {
         launch {
-            val detailResult = mediaRepository.getMediaDetail(itemId)
+            val detailResult = detailFeed.getMediaDetail(itemId, force = false)
             detailResult.getOrNull()?.let { detail ->
                 _state.value = _state.value.copy(photoDetail = detail)
             }
@@ -134,6 +138,18 @@ class PhotoViewerViewModel(
 
     fun getThumbnailUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = 200)
+
+    /**
+     * The item-based full-image URL: same target id ([MediaItem.id]) and the
+     * same null-[maxWidth]-means-original contract as the raw overload, with
+     * the photo's own Primary tag as the `?tag=` cache-buster.
+     */
+    fun getImageUrl(item: MediaItem, maxWidth: Int? = null): String =
+        imageUrlProvider.getImageUrl(item.id, maxWidth = maxWidth, tag = item.imageTags.primary)
+
+    /** The item-based filmstrip thumb: same 200px width, the photo's own tag. */
+    fun getThumbnailUrl(item: MediaItem): String =
+        artworkUrls.poster(item, maxWidth = 200)
 
     fun toggleSlideshow() {
         if (_isSlideshowActive.value) {
@@ -206,7 +222,7 @@ class PhotoViewerViewModel(
                 // PhotoExport actual (androidMain); failures throw and land in
                 // the shared catch below with the same messages as before.
                 photoExport.saveToGallery(
-                    imageUrl = getImageUrl(photo.id, maxWidth = null),
+                    imageUrl = getImageUrl(photo, maxWidth = null),
                     displayName = photo.name,
                 )
                 _saveResult.value = SaveResult.Success
@@ -224,7 +240,7 @@ class PhotoViewerViewModel(
 
     fun getFullImageUrl(): String? {
         val photo = _state.value.photo ?: return null
-        return getImageUrl(photo.id, maxWidth = null)
+        return getImageUrl(photo, maxWidth = null)
     }
 
     fun sharePhoto(onError: (String) -> Unit) {
@@ -234,7 +250,7 @@ class PhotoViewerViewModel(
                 // Platform share (FileProvider + ACTION_SEND on Android) — see
                 // savePhotoToGallery for the fetch/download failure contract.
                 photoExport.sharePhoto(
-                    imageUrl = getImageUrl(photo.id, maxWidth = null),
+                    imageUrl = getImageUrl(photo, maxWidth = null),
                     displayName = photo.name,
                 )
             } catch (e: Exception) {

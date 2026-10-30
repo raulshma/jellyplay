@@ -66,6 +66,10 @@ val playerLiveModule: Module = module {
             // focus module); the vacuous default covers a graph without one.
             playbackFocus = getOrNull()
                 ?: com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
+            // The system media-session factory (gh-178 headset control):
+            // Android-only — androidPlayerLiveModule binds it; desktop (where
+            // the live screen never composes) resolves null.
+            mediaSessionFactory = getOrNull(),
         )
     }
     single {

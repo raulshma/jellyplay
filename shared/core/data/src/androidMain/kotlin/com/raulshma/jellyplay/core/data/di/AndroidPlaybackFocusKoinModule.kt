@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
 import android.content.Context
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.AudioFocusCommands
 import com.raulshma.jellyplay.core.data.playback.focus.AndroidFocusArbiter
 import com.raulshma.jellyplay.core.data.playback.focus.AudioPlaybackManagerSurface
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
@@ -27,7 +27,9 @@ internal fun androidPlaybackFocusModule(context: Context): Module = module {
         DefaultPlaybackFocus(
             arbiter = get(),
             surfaces = listOf(
-                AudioPlaybackManagerSurface(manager = lazy { get<AudioPlaybackManager>() }),
+                // The Audio shell seam: the surface reads only the manager's
+                // AudioFocusCommands face — the Koin alias onto the same single.
+                AudioPlaybackManagerSurface(commands = lazy { get<AudioFocusCommands>() }),
                 get<VideoPlaybackSurface>(),
             ),
         )

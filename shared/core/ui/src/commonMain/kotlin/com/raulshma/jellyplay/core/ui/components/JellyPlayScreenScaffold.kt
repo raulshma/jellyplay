@@ -195,7 +195,7 @@ fun JellyPlayScreenScaffold(
                 if (topBarStyle == TopBarStyle.Collapsing) {
                     MediumTopAppBar(
                         title = {
-                            ScreenTitle(text = title)
+                            ScreenTitle(text = title, isCollapsing = true)
                         },
                         navigationIcon = {
                             if (onBack != null) {
@@ -209,7 +209,7 @@ fun JellyPlayScreenScaffold(
                 } else {
                     TopAppBar(
                         title = {
-                            ScreenTitle(text = title)
+                            ScreenTitle(text = title, isCollapsing = false)
                         },
                         navigationIcon = {
                             if (onBack != null) {
@@ -229,10 +229,10 @@ fun JellyPlayScreenScaffold(
 }
 
 @Composable
-private fun ScreenTitle(text: String) {
+private fun ScreenTitle(text: String, isCollapsing: Boolean = false) {
     Text(
         text = text,
-        style = MaterialTheme.typography.headlineLarge.copy(
+        style = (if (isCollapsing) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge).copy(
             fontWeight = FontWeight.Bold,
         ),
         color = MaterialTheme.colorScheme.onSurface,
@@ -326,6 +326,11 @@ fun ScreenEmptyState(
     /** When true, disables the action button and swaps its label for a small
      *  spinner. Use while the action is in flight so the tap isn't silent. */
     actionLoading: Boolean = false,
+    /** Quieter second action under the primary button (rendered only when both
+     *  the label and the handler are non-null) — e.g. restore-from-backup
+     *  beside add-server on the empty server list. */
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -384,6 +389,17 @@ fun ScreenEmptyState(
                     } else {
                         Text(actionLabel)
                     }
+                }
+            }
+            if (secondaryActionLabel != null && onSecondaryAction != null) {
+                val secondaryFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                androidx.compose.material3.TextButton(
+                    onClick = onSecondaryAction,
+                    modifier = Modifier
+                        .then(secondaryFocusState.focusModifier)
+                        .tvFocusIndicator(secondaryFocusState, ShapeCache.smooth12),
+                ) {
+                    Text(secondaryActionLabel)
                 }
             }
         }

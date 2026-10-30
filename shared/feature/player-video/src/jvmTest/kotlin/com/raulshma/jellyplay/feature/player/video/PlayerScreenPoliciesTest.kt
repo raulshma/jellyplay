@@ -141,6 +141,7 @@ class SkipSegmentButtonVisibilityTest {
                 isInPipMode = false,
                 isCinemaIntroVisible = false,
                 shouldShowUpNext = false,
+                areControlsVisible = true,
             ),
         )
     }
@@ -154,6 +155,7 @@ class SkipSegmentButtonVisibilityTest {
                 isInPipMode = false,
                 isCinemaIntroVisible = false,
                 shouldShowUpNext = false,
+                areControlsVisible = true,
             ),
         )
     }
@@ -168,6 +170,7 @@ class SkipSegmentButtonVisibilityTest {
                     isInPipMode = false,
                     isCinemaIntroVisible = false,
                     shouldShowUpNext = false,
+                    areControlsVisible = true,
                 ),
                 "behavior $behavior",
             )
@@ -184,6 +187,7 @@ class SkipSegmentButtonVisibilityTest {
                     isInPipMode = true,
                     isCinemaIntroVisible = false,
                     shouldShowUpNext = false,
+                    areControlsVisible = true,
                 ),
                 "pip suppresses $type",
             )
@@ -194,8 +198,26 @@ class SkipSegmentButtonVisibilityTest {
                     isInPipMode = false,
                     isCinemaIntroVisible = true,
                     shouldShowUpNext = false,
+                    areControlsVisible = true,
                 ),
                 "cinema intro suppresses $type",
+            )
+        }
+    }
+
+    @Test
+    fun hiddenControls_suppressTheButton() {
+        for (type in listOf(MediaSegmentType.INTRO, MediaSegmentType.OUTRO)) {
+            assertFalse(
+                isSkipSegmentButtonVisible(
+                    activeSegment = segment(type),
+                    segmentBehavior = SegmentBehavior.SHOW_BUTTON,
+                    isInPipMode = false,
+                    isCinemaIntroVisible = false,
+                    shouldShowUpNext = false,
+                    areControlsVisible = false,
+                ),
+                "hidden controls suppress $type",
             )
         }
     }
@@ -209,6 +231,7 @@ class SkipSegmentButtonVisibilityTest {
                 isInPipMode = false,
                 isCinemaIntroVisible = false,
                 shouldShowUpNext = true,
+                areControlsVisible = true,
             ),
         )
         assertTrue(
@@ -218,6 +241,7 @@ class SkipSegmentButtonVisibilityTest {
                 isInPipMode = false,
                 isCinemaIntroVisible = false,
                 shouldShowUpNext = true,
+                areControlsVisible = true,
             ),
         )
     }

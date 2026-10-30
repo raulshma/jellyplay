@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">디스플레이 주사율을 비디오 프레임에 동기화합니다(TV/HDMI)</string>
     <string name="ss_streaming_quality_title">스트리밍 화질</string>
     <string name="ss_streaming_quality_subtitle">스트리밍 기본 비디오 화질을 설정합니다: 1080p, 4K, SD, 자동</string>
+    <string name="ss_playback_mode_title">재생 모드</string>
+    <string name="ss_playback_mode_subtitle">자동, 직접 재생 강제 또는 트랜스코딩 강제 — 스트림 전송 방식</string>
     <string name="ss_audio_delay_title">오디오 싱크 지연</string>
     <string name="ss_audio_delay_subtitle">오디오 싱크 지연 오프셋을 조정합니다(ms)</string>
     <string name="ss_live_stream_option_title">실시간 TV 스트림</string>
@@ -198,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">경과 시간 대신 남은 시간을 표시합니다</string>
     <string name="ss_pause_on_focus_loss_title">포커스 상실 시 일시 정지</string>
     <string name="ss_pause_on_focus_loss_subtitle">시스템이 오디오 포커스 상실을 알리면 재생을 일시 정지합니다</string>
-    <string name="ss_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰을 다시 연결하면 재생을 재개합니다</string>
+    <string name="ss_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰이 다시 연결되면 재생을 재개합니다(유선 또는 블루투스)</string>
     <string name="ss_mpv_video_output_title">MPV 비디오 출력</string>
     <string name="ss_mpv_video_output_subtitle">MPV 비디오 출력 드라이버입니다</string>
     <string name="ss_mpv_scaler_title">MPV 스케일러</string>
@@ -343,6 +345,8 @@
     <string name="ss_subtitle_font_size_subtitle">비디오 재생 중 자막 텍스트의 크기입니다</string>
     <string name="ss_subtitle_forced_only_title">강제 자막만</string>
     <string name="ss_subtitle_forced_only_subtitle">강제 트랙이 있을 때만 자막을 표시합니다</string>
+    <string name="ss_show_only_preferred_subtitles_title">선호 자막만 표시</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">선호하는 언어의 자막 트랙만 표시합니다</string>
     <string name="ss_pgs_direct_play_title">PGS 다이렉트 재생</string>
     <string name="ss_pgs_direct_play_subtitle">PGS 자막을 굽는 대신 네이티브로 렌더링합니다</string>
     <string name="ss_hdr_subtitle_style_title">HDR 자막 스타일</string>
@@ -537,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">미디어 재생이 끝날 때 실행할 명령</string>
     <string name="ss_hooks_idle_cmd_subtitle">앱이 유휴 상태가 될 때 실행할 명령</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">앱이 유휴 상태를 벗어날 때 실행할 명령</string>
+
+    <string name="ss_auto_download_mode_title">새 에피소드 자동 다운로드</string>
+    <string name="ss_auto_download_mode_subtitle">다운로드한 시리즈의 새 에피소드를 즉시 다운로드, 다운로드 전에 묻기 또는 다운로드 안 함</string>
+    <string name="ss_auto_download_check_now_subtitle">자동 다운로드 지금 실행</string>
 </resources>

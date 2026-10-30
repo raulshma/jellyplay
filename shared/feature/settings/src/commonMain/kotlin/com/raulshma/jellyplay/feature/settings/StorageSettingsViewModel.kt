@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.StoragePreferences
 import kotlinx.coroutines.flow.StateFlow
@@ -157,11 +158,20 @@ class StorageSettingsViewModel(
     }
 
     /** Store write + auto-download scheduler poke against the updated config. */
-    fun setAutoDownloadNewEpisodes(enabled: Boolean) {
+    fun setAutoDownloadMode(mode: AutoDownloadMode) {
         editor.edit {
-            downloads.setAutoDownloadNewEpisodes(enabled)
+            downloads.setAutoDownloadMode(mode)
             autoDownloadSync.sync()
         }
+    }
+
+    /**
+     * The "Check for new episodes now" action: one immediate auto-download
+     * discovery pass (the [AutoDownloadSync.checkNow] seam — Android's KEEP
+     * one-shot, the desktop in-process off-cycle pass).
+     */
+    fun checkForNewEpisodesNow() {
+        autoDownloadSync.checkNow()
     }
 
     /**

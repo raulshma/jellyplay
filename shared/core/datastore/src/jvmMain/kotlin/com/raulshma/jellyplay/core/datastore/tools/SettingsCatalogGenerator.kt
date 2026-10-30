@@ -1,16 +1,27 @@
 package com.raulshma.jellyplay.core.datastore.tools
 
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audio.AudioPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCachePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEnginePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.library.LibraryPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.notification.NotificationPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflinePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.reader.ReaderPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
-import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfilePreferenceSpecs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -37,12 +48,13 @@ import javax.xml.parsers.DocumentBuilderFactory
  *
  * Coverage policy (the catalog is an ALLOWLIST, not an enumeration of
  * `user_prefs`):
- *  - spec rows of the seven spec-backed domains, minus the prefixes the sync
- *    adapter excludes at its registration (`dream`/`screensaver` — the
- *    catalog must describe exactly what syncs);
- *  - the [SUPPLEMENTAL] rows below — valuable hand-written store keys that
- *    predate the spec machinery; each carries a "migrate to specs" note;
- *  - everything else in `user_prefs` (the ~20 stores with hand-written `Keys`
+ *  - spec rows of the nineteen spec-backed domains — the plugin's knob
+ *    surface. For most domains that is exactly the synced set; a domain
+ *    whose rows ride no sync wire (reader) still advertises here, so the
+ *    catalog is a superset of the synced set, never a subset. The sync
+ *    adapter's excluded prefixes (`dream`/`screensaver`) stay out at
+ *    registration;
+ *  - everything else in `user_prefs` (the stores with hand-written `Keys`
  *    objects) stays OUT until those stores migrate to specs, and secrets or
  *    device identity can never enter regardless (the [DENYLIST] is a hard
  *    error, not a silent skip, so a future spec migration of the security or
@@ -90,38 +102,6 @@ object SettingsCatalogGenerator {
         val id: String get() = "$ns/$key"
     }
 
-    /** Catalog group of the hand-written [SUPPLEMENTAL] rows. */
-    const val SUPPLEMENTAL_GROUP = "General"
-
-    /**
-     * Hand-written store keys worth advertising before their stores migrate
-     * to the spec machinery. Key names reference the store's `Keys` object so
-     * a rename cannot silently orphan the row (migration to specs removes the
-     * hand-written row entirely).
-     */
-    private data class Supplemental(
-        val key: String,
-        val valueType: String,
-        val defaultValue: JsonPrimitive?,
-        val description: String,
-    )
-
-    // VolumeProfileStore (shared/core/datastore .../volume/VolumeProfileStore.kt).
-    private val SUPPLEMENTAL = listOf(
-        Supplemental(
-            key = VolumeProfileStore.Keys.REMEMBER_VOLUME_PER_CONTENT_TYPE.name,
-            valueType = "boolean",
-            defaultValue = JsonPrimitive(true),
-            description = "Remember playback volume per content type (movie, episode, …).",
-        ),
-        Supplemental(
-            key = VolumeProfileStore.Keys.VOLUME_PROFILES.name,
-            valueType = "string",
-            defaultValue = null,
-            description = "Remembered volume levels as a JSON map of content-type bucket to level (0..1).",
-        ),
-    )
-
     /** The spec-backed domains, in catalog (namespace, then domain) order. */
     private val SPEC_DOMAINS: List<Pair<String, List<PreferenceSpec<*>>>> = listOf(
         "Appearance" to AppearancePreferenceSpecs.all,
@@ -136,14 +116,39 @@ object SettingsCatalogGenerator {
         // ONE entry per wire key, first domain wins — so the shared pair stays
         // catalogued where it always was.
         "Subtitles & language" to SubtitlePreferenceSpecs.all,
+        "Audio effects" to AudioEffectsPreferenceSpecs.all,
+        "Player engines" to PlayerEnginePreferenceSpecs.all,
+        "Notifications & newsletter" to NotificationPreferenceSpecs.all,
+        "Reader" to ReaderPreferenceSpecs.all,
+        // The library/downloads rows carry no search metadata, so their labels
+        // degrade to the mechanical humanize fallback until the feature-side
+        // search faces migrate onto the rows.
+        "Library" to LibraryPreferenceSpecs.all,
+        "Downloads" to DownloadsPreferenceSpecs.all,
+        // The audio-player family + the network/offline-mode domain (the
+        // network/offline subset of the legacy DOWNLOADS_NETWORK reset
+        // category, alongside Downloads above). Their rows carry no search
+        // metadata yet, so their labels degrade to the mechanical humanize
+        // fallback until the feature-side search faces migrate onto the rows.
+        "Audio" to AudioPreferenceSpecs.all,
+        "Audio cache" to AudioCachePreferenceSpecs.all,
+        "Network & offline" to NetworkOfflinePreferenceSpecs.all,
+        // The SyncPlay/casting rows carry search faces (the playback screen's
+        // hand fused rows' ss_* keys); the volume-memory toggle does too (the
+        // desktop-only hand row's face — the remembered-levels blob beside it
+        // carries none, so its label degrades to the humanize fallback); the
+        // two navigation toggles reuse the appearance screen's faces (the
+        // customization blobs carry none).
+        "SyncPlay & casting" to SyncPlayCastPreferenceSpecs.all,
+        "Volume memory" to VolumeProfilePreferenceSpecs.all,
+        "Navigation" to NavigationPreferenceSpecs.all,
     )
 
     /**
-     * All catalog entries, in artifact order (spec domains, then supplemental
-     * rows). [strings] is the settings-search resource table (name → text)
-     * the labels and descriptions resolve from. Throws on denylisted or
-     * duplicate keys — a broken policy must fail the generation, not ship a
-     * wrong catalog.
+     * All catalog entries, in artifact order (spec domains). [strings] is the
+     * settings-search resource table (name → text) the labels and
+     * descriptions resolve from. Throws on denylisted or duplicate keys — a
+     * broken policy must fail the generation, not ship a wrong catalog.
      */
     fun entries(strings: Map<String, String>): List<Entry> {
         val result = mutableListOf<Entry>()
@@ -175,23 +180,6 @@ object SettingsCatalogGenerator {
                     spec.toEntry(domain, strings)?.let(::add)
                 }
             }
-        }
-        SUPPLEMENTAL.forEach {
-            add(
-                Entry(
-                    ns = NAMESPACE,
-                    key = it.key,
-                    label = humanize(it.key),
-                    description = it.description,
-                    valueType = it.valueType,
-                    defaultValue = it.defaultValue,
-                    options = null,
-                    optionLabels = null,
-                    group = SUPPLEMENTAL_GROUP,
-                    min = null,
-                    max = null,
-                ),
-            )
         }
         return result
     }

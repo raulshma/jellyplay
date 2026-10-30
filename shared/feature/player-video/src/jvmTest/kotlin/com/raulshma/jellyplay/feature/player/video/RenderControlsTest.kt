@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvInterpolationTscale
@@ -43,11 +44,13 @@ class RenderControlsTest {
     // Mirror fakes (the VM-side state the lambdas read/write).
     private var globalConfig = MpvEngineConfig()
     private var globalExoConfig = ExoPlayerEngineConfig()
+    private var hdrFormatPreference = HdrFormatPreference.AUTO
     private var storedRows: Map<PlaybackPrefScope, ItemPlaybackPreference> = emptyMap()
 
     // Recording sinks.
     private val savedGlobalConfigs = mutableListOf<MpvEngineConfig>()
     private val savedGlobalExoConfigs = mutableListOf<ExoPlayerEngineConfig>()
+    private val savedHdrFormatPreferences = mutableListOf<HdrFormatPreference>()
     private val savedProfiles = mutableListOf<MpvRenderOverrides>()
     private var clearedProfiles = 0
     private var configDirties = 0
@@ -62,6 +65,8 @@ class RenderControlsTest {
             saveGlobalMpvConfig = { savedGlobalConfigs.add(it) },
             getGlobalExoConfig = { globalExoConfig },
             saveGlobalExoConfig = { savedGlobalExoConfigs.add(it) },
+            getHdrFormatPreference = { hdrFormatPreference },
+            saveHdrFormatPreference = { savedHdrFormatPreferences.add(it) },
             loadStoredRow = { prefScope, _ -> storedRows[prefScope] },
             saveRenderProfile = { savedProfiles.add(it) },
             clearStoredRenderProfile = { clearedProfiles++ },
@@ -224,6 +229,24 @@ class RenderControlsTest {
         assertTrue(savedProfiles.isEmpty())
         // Still a dirty-config report — a no-op for the exo engine at runtime,
         // but zero surprises for whatever rebuild follows.
+        assertEquals(1, configDirties)
+    }
+
+    @Test
+    fun hdrFormatPreferencePick_persistsThePlaybackSlice_withoutASessionLens() = testScope.runTest {
+        controller.setHdrFormatPreference(HdrFormatPreference.SDR_ONLY)
+
+        // One playback-slice write, the pick verbatim (no session mirror —
+        // the sheet holds its own optimistic lens and the aggregate emission
+        // carries the rebuild trigger).
+        assertEquals(listOf(HdrFormatPreference.SDR_ONLY), savedHdrFormatPreferences)
+        // No global engine-slice writes and no per-item overrides: the
+        // posture is a playback-slice preference, not an engine config.
+        assertTrue(savedGlobalConfigs.isEmpty())
+        assertTrue(savedGlobalExoConfigs.isEmpty())
+        assertTrue(savedProfiles.isEmpty())
+        // The belt-and-braces dirty report (the fresh-slice rebuild through
+        // PlayerPrefsFanout is the real trigger).
         assertEquals(1, configDirties)
     }
 

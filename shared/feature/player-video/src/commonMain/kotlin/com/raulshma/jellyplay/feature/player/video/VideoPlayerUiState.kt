@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
-import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
@@ -41,10 +40,10 @@ data class CinemaIntroUiState(
  * one place.
  *
  * Note: `isInIntro` / `isInCredits` / `shouldShowUpNext` are deliberately NOT
- * captured here — they are computed properties on [VideoPlayerUiState] that
- * depend on the live position/duration, so they are re-derived inside
- * `computeOverlay` from the position-aware state. Only the *inputs* that do
- * not change every tick are projected.
+ * captured here — they depend on the live position/duration (which ride the
+ * ViewModel's dedicated flows, never a state snapshot), so they are re-derived
+ * inside `computeOverlay` by feeding those flows through [SegmentCalculator].
+ * Only the *inputs* that do not change every tick are projected.
  *
  * [hasQueuedNext] arrives as the uiState mirror of the Up Next controller's
  * flow (the mirror survives item switches via [keepAcrossItems]); the queue
@@ -80,13 +79,22 @@ internal data class SegmentProjection(
      * position tick. The continuation verdicts fold into ONE `hasNextEpisode`
      * boolean: an episode sibling OR the Up Next controller's queue mirror
      * (queue-first semantics, incl. movies, which have no sibling).
+     *
+     * [nextUpPrerollMs] is the configured up-next pre-roll window
+     * (`nextUpButtonPrerollSec * 1000` at the VM funnels — #16); the default
+     * keeps the historical constant for the state-delegate and reporter-tick
+     * callers that don't carry the pref.
      */
-    fun toSegmentInput(durationMs: Long) = SegmentCalculatorInput(
+    fun toSegmentInput(
+        durationMs: Long,
+        nextUpPrerollMs: Long = SegmentCalculator.UP_NEXT_PRE_ROLL_MS,
+    ) = SegmentCalculatorInput(
         segments = segments,
         chapters = chapters,
         segmentBehaviors = segmentBehaviors,
         segmentSkipDelaysMs = segmentSkipDelaysMs,
         durationMs = durationMs,
+        nextUpPrerollMs = nextUpPrerollMs,
         autoplayCancelled = autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = nextEpisode != null || hasQueuedNext,
@@ -166,13 +174,14 @@ data class SkippedSegmentNotice(
  * mirror read by `SegmentProjection`) and [cinemaIntroState] (pre-roll intro
  * context; its load/advance sequencing moves into the session).
  *
- * *High-frequency playback progress residuals:* [currentPosition], [duration],
- * [bufferedPosition] and [videoStats] stay on the root. The live, up-to-4 Hz
- * source of truth is the ViewModel's dedicated StateFlows
- * (`currentPositionMs` / `durationMs` / `bufferedPositionMs` / `videoStats`);
- * these root fields exist as seeds/snapshots for the on-state segment math
- * ([computeActiveSegment] and friends read [currentPosition] / [duration]) and
- * must not churn slice copies at tick rate.
+ * *High-frequency playback progress — deliberately absent:* the live
+ * position / duration / stats live ONLY on the ViewModel's dedicated
+ * StateFlows (`currentPositionMs` / `durationMs` / `videoStats`; buffer
+ * health rides the engine's stats and buffered-ranges flows). Nothing on
+ * this state snapshots them — every time-dependent verdict is explicit:
+ * the caller feeds the duration into [SegmentProjection.toSegmentInput]
+ * and the position into the [SegmentCalculator] call — so a 4 Hz tick can
+ * never churn a copy of this bag.
  *
  * *Everything else still flat* is leaf state with no slice to join:
  * [chapters] (feeds both the media display and [toSegmentInput], so it cannot
@@ -207,8 +216,6 @@ data class VideoPlayerUiState(
      * Lifted once the load completes; [isBuffering] covers mid-playback stalls.
      */
     val isInitializing: Boolean = true,
-    val currentPosition: Long = 0L,
-    val duration: Long = 0L,
     val playbackSpeed: Float = 1.0f,
     val chapters: List<ChapterInfo> = emptyList(),
     val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
@@ -263,8 +270,6 @@ data class VideoPlayerUiState(
      * flag is the structured signal the legacy String channel dropped.
      */
     val playerErrorRetryable: Boolean = false,
-    val bufferedPosition: Long = 0L,
-    val videoStats: EngineVideoStats = EngineVideoStats(),
     val showPlaybackErrorDialog: Boolean = false,
     val isScreenLocked: Boolean = false,
     val cinemaIntroState: CinemaIntroUiState? = null,
@@ -318,7 +323,7 @@ data class VideoPlayerUiState(
     /**
      * Ephemeral "Skipped Intro / …" confirmation, raised when an auto-skip
      * fires or a skip-on-seek clamp lands. `null` = nothing showing;
-     * the ViewModel owns the ~2.5 s auto-clear.
+     * the session's SegmentSkipDispatcher owns the ~2.5 s auto-clear.
      */
     val skippedSegmentNotice: SkippedSegmentNotice? = null,
 ) {
@@ -326,68 +331,35 @@ data class VideoPlayerUiState(
     // ── Segment math ────────────────────────────────────────────────────────
     // Thin delegates onto SegmentCalculator. The input (toSegmentInput) is
     // assembled from the segmentState / autoplay / episodes / media slices
-    // plus the flat chapters / isInSyncPlaySession / duration and the position
-    // handed in by the caller (or the currentPosition snapshot).
+    // plus the flat chapters / isInSyncPlaySession. This state carries NO
+    // position/duration snapshot — the live values ride the ViewModel's
+    // dedicated high-frequency flows — so every time-dependent verdict is
+    // explicit: the caller feeds the duration into [toSegmentInput] and the
+    // position into the calculator call, and no tick ever copies this bag.
 
+    /** Duration-independent behavior-map lookup; the 0 duration is a non-value here. */
     fun behaviorForType(type: MediaSegmentType): SegmentBehavior =
-        SegmentCalculator.behaviorForType(toSegmentInput(), type)
+        SegmentCalculator.behaviorForType(toSegmentInput(durationMs = 0L), type)
 
     /**
-     * Pure (side-effect-free) derivation of the active segment at
-     * [currentPosition]. Previously this method mutated `@Transient var`
-     * cache fields declared on this `@Immutable` data class — that broke
-     * Compose's stability contract (the caches were invisible to
-     * `equals`/`hashCode`, so a cache-only change could suppress state
-     * propagation, and mutation happened mid-composition via the
-     * [activeSegment] getter). The cache optimisation was micro at best
-     * (typical segment/chapter lists are tiny) and the callers already read
-     * [activeSegment] once per recomposition into a local `val`, so the
-     * recomputation cost is negligible. Kept as a `fun` (not a `val`) so it
-     * is only evaluated when actually needed.
+     * Position-explicit active-segment lookup. Lets high-frequency callers
+     * (the position-tick auto-skip check, the segment-skip dispatch) compute
+     * the active segment for a raw engine position WITHOUT copying this state
+     * bag (which is the highest-frequency avoidable allocation on the
+     * playback path). [durationMs] only feeds the chapter fallback's
+     * last-chapter end (an open-ended final chapter closes at the runtime) —
+     * callers without a duration read keep the 0 default, which merely leaves
+     * that one edge closed.
      */
-    fun computeActiveSegment(): MediaSegment? =
-        SegmentCalculator.computeActiveSegment(toSegmentInput(), currentPosition)
+    fun computeActiveSegment(positionMs: Long, durationMs: Long = 0L): MediaSegment? =
+        SegmentCalculator.computeActiveSegment(toSegmentInput(durationMs), positionMs)
 
-    /**
-     * Position-explicit overload. Lets high-frequency callers (e.g. the
-     * position-tick auto-skip check) compute the active segment for a raw
-     * engine position WITHOUT copying this state bag (which is the
-     * highest-frequency avoidable allocation on the playback path).
-     */
-    fun computeActiveSegment(positionMs: Long): MediaSegment? =
-        SegmentCalculator.computeActiveSegment(toSegmentInput(), positionMs)
-
-    internal fun toSegmentInput() = SegmentProjection(this).toSegmentInput(duration)
-
-    val activeSegment: MediaSegment?
-        get() = computeActiveSegment()
-
-    val isInIntro: Boolean
-        get() = isInSegmentType(MediaSegmentType.INTRO)
-
-    val isInCredits: Boolean
-        get() = isInSegmentType(MediaSegmentType.OUTRO)
-
-    fun isInSegmentType(type: MediaSegmentType): Boolean =
-        SegmentCalculator.isInSegmentType(toSegmentInput(), currentPosition, type)
-
-    val introSegmentEndTicks: Long?
-        get() = segmentEndTicksForType(MediaSegmentType.INTRO)
-
-    val creditSegmentEndTicks: Long?
-        get() = segmentEndTicksForType(MediaSegmentType.OUTRO)
-
-    fun segmentEndTicksForType(type: MediaSegmentType): Long? =
-        SegmentCalculator.segmentEndTicksForType(toSegmentInput(), currentPosition, type)
-
+    /** Duration-independent end-ticks resolution (an id match on the segment list). */
     fun segmentEndTicks(segment: MediaSegment): Long? =
-        SegmentCalculator.segmentEndTicks(toSegmentInput(), segment)
+        SegmentCalculator.segmentEndTicks(toSegmentInput(durationMs = 0L), segment)
 
-    val shouldShowUpNext: Boolean
-        get() = SegmentCalculator.shouldShowUpNext(toSegmentInput(), currentPosition)
-
-    val isOutroNearEnd: Boolean
-        get() = SegmentCalculator.isOutroNearEnd(toSegmentInput(), currentPosition)
+    internal fun toSegmentInput(durationMs: Long = 0L) =
+        SegmentProjection(this).toSegmentInput(durationMs)
 
     // Derived media display values: delegated to the stored slice (the single
     // derivation home — see MediaContentState.hdrType / videoFrameRate).

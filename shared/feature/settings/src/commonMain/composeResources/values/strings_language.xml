@@ -47,6 +47,11 @@
     <string name="settings_track_rule_audio_language">Audio language</string>
     <string name="settings_track_rule_subtitle_language">Subtitle language</string>
     <string name="settings_track_rule_subtitle_mode">Subtitle mode</string>
+    <string name="settings_track_rule_content_kind">Content kind</string>
+    <string name="settings_track_rule_content_kind_helper">Full dialogue vs signs/songs vs commentary, from the track title</string>
+    <string name="settings_track_rule_commentary">Commentary tracks</string>
+    <string name="settings_track_rule_commentary_ranked_down">Ranked last (default)</string>
+    <string name="settings_track_rule_commentary_allowed">Treated as equals</string>
     <string name="settings_track_rule_edit">Edit rule</string>
     <string name="settings_track_rule_delete">Delete rule</string>
     <string name="settings_display_language">Display Language</string>
@@ -60,6 +65,9 @@
     <string name="settings_forced_subtitles">Forced Subtitles Only</string>
     <string name="settings_forced_subtitles_on">Show subtitles only when forced tracks are present</string>
     <string name="settings_forced_subtitles_off">Show subtitles per preferred language</string>
+    <string name="settings_show_only_preferred_subtitles">Preferred Subtitles Only</string>
+    <string name="settings_show_only_preferred_subtitles_on">Hide subtitle tracks outside your preferred languages</string>
+    <string name="settings_show_only_preferred_subtitles_off">Show all subtitle tracks</string>
     <string name="settings_high_contrast_subtitles">High-Contrast Subtitles</string>
     <string name="settings_high_contrast_on">Maximally legible subtitle style for accessibility</string>
     <string name="settings_high_contrast_off">Use subtitle style as configured</string>

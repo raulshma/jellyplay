@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataApiClient
 import com.raulshma.jellyplay.core.network.api.UserDataWrite
 import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import kotlinx.coroutines.flow.first
@@ -32,7 +33,17 @@ import java.time.format.DateTimeFormatter
 //    download-stack params stay Lazy (defensive, per their ctor kdocs).
 //  - `android.util.Log` → the module's Log facade.
 class PlayedStateSyncImpl(
+    /**
+     * The catalogue-read seam for reconcile's fresh server view
+     * ([getMediaDetail] — the one read this class takes off the wide client).
+     */
     private val apiClient: LibraryApiClient,
+    /**
+     * The user-data write funnel ([UserDataApiClient] — the family seam the
+     * former [LibraryApiClient.writeUserData] forward relayed to): the flip /
+     * toggleFavorite writes ride it directly, never the wide client.
+     */
+    private val userDataApiClient: UserDataApiClient,
     private val offlineRepository: OfflineRepository,
     private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
@@ -87,7 +98,7 @@ class PlayedStateSyncImpl(
             if (played) maybeAutoDeleteAfterWatch(itemId)
             return Result.success(Unit)
         }
-        val result = apiClient.writeUserData(
+        val result = userDataApiClient.writeUserData(
             if (played) UserDataWrite.MarkPlayed(itemId) else UserDataWrite.MarkUnplayed(itemId),
         )
         if (result.isSuccess) {
@@ -131,7 +142,7 @@ class PlayedStateSyncImpl(
         }
         // Online: the server reads + flips atomically (currentIsFavorite = null
         // lets it resolve). The outcome is the authoritative new state.
-        val result = apiClient.writeUserData(UserDataWrite.ToggleFavorite(itemId))
+        val result = userDataApiClient.writeUserData(UserDataWrite.ToggleFavorite(itemId))
         if (result.isSuccess) {
             // ToggleFavorite always answers FavoriteNow on success (the impl's
             // contract); the fallback arm only survives a contract break and

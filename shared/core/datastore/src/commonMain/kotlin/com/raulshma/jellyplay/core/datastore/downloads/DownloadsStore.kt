@@ -3,18 +3,20 @@ package com.raulshma.jellyplay.core.datastore.downloads
 import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.isEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -31,6 +33,46 @@ import kotlinx.serialization.json.Json
  * keys, its setters (including the `MAX_CONCURRENT_DOWNLOADS` coerce invariant),
  * its read projection, and its reset-key list end-to-end. Mirrors the
  * `PlaybackStore` / `AppearanceStore` shape.
+ *
+ * **Spec derivation:** every key this store owns is declared exactly once as a
+ * row in [DownloadsPreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding, the derived rows
+ * of [restore] delegate to the rows' derived writes, and [resetKeysFor]
+ * filters the rows by reset category. Every key this store owns resets under
+ * the single legacy `DOWNLOADS_NETWORK` category (the network/offline keys now
+ * belong to `NetworkOfflineStore`).
+ *
+ * **Hand-written residuals (the documented opt-outs — cross-key invariants,
+ * per-user namespacing and band policies a row encoding cannot own):**
+ *  - [setAutoDownloadMode] / [restore] write the canonical
+ *    [DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MODE] enum AND mirror it onto the
+ *    legacy [DownloadsPreferenceSpecs.AUTO_DOWNLOAD_NEW_EPISODES] boolean in
+ *    one edit (`mode.isEnabled`) so an app downgrade still reads a sane value;
+ *    the mode row's read carries the legacy fallback the mirror serves (the
+ *    row's encode stays null — the pair's write is a cross-key invariant).
+ *  - the per-user server allow-list
+ *    ([DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS]) is the declaration-only
+ *    [PreferenceSpec.custom] row: the `u_<userId>::`-namespaced read/write
+ *    ([readAutoDownloadServers] / [setAutoDownloadServers] / the namespaced
+ *    [restore] line, skipped pre-login) resolves the namespace off the very
+ *    snapshot being read or edited — the `HomeDiscoveryStore` precedent.
+ *  - the four band rows keep their read-side bands in the [read] projection
+ *    (`max_concurrent_downloads` to 1..6, `auto_download_lookahead` to
+ *    0..[MAX_LOOKAHEAD], `auto_download_max_per_pass` to 0..[MAX_PER_PASS_LIMIT],
+ *    `auto_download_keep_days` floored at 0 — the videoplayer precedent: a
+ *    plain-int row carries no read transform) and the clamps in their setters.
+ *  - the declaration-only rows ([PreferenceSpec.boolean] /
+ *    [PreferenceSpec.string] — `download_storage_location`,
+ *    `auto_delete_after_watch`, the downloads-list trio,
+ *    `downloads_selection_hint_seen`, `download_schedule_enabled/_wifi_only`,
+ *    and the legacy `auto_download_new_episodes` surface) keep the store's
+ *    hand-written setter/restore lines: a declaration-only row has no derived
+ *    write (their hand reads were the plain typed `prefs[key] ?: default` —
+ *    the keys were born in the typed-key era, so no legacy fallback applies).
+ *  - the coalesced [setDownloadScheduleWindow] three-key write stays
+ *    hand-written (one window, three keys, one transaction).
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file; key strings match
  * the legacy `UserPreferencesStore.Keys` names — no migration file.
@@ -52,90 +94,81 @@ class DownloadsStore constructor(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [DownloadsPreferenceSpecs] row — the member rebuilds the row's typed key
+     * from the row's single-declared wire name (`Preferences.Key` equality is
+     * name-based, so these interoperate with any hand-built key of the same
+     * name). Kept as a plain object rather than folded into the rows because
+     * it is the reflection anchor for the JVM reset-coverage guard and the
+     * key-identity reference for the hand-written cross-key invariant setters
+     * below.
+     */
     internal object Keys {
-        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
-        val DOWNLOAD_CONNECTIONS = intPreferencesKey("download_connections")
-        val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
-        val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
-        val SMART_DOWNLOADS_ENABLED = booleanPreferencesKey("smart_downloads_enabled")
-        val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey("auto_download_new_episodes")
-        val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey("max_download_storage_gb")
-        val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
-        /**
-         * Auto-delete-after-watch: when ON, a downloaded item is removed from
-         * disk once it reaches 100% played. This is an unrequested,
-         * destructive, opt-in behaviour; see
-         * `PlayedStateSync.maybeAutoDeleteAfterWatch`. Default OFF.
-         */
-        val AUTO_DELETE_AFTER_WATCH = booleanPreferencesKey("auto_delete_after_watch")
-        val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey("cellular_download_size_warning_mb")
-        val DOWNLOAD_SCHEDULE_ENABLED = booleanPreferencesKey("download_schedule_enabled")
-        val DOWNLOAD_SCHEDULE_START = intPreferencesKey("download_schedule_start")
-        val DOWNLOAD_SCHEDULE_END = intPreferencesKey("download_schedule_end")
-        val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("download_schedule_wifi_only")
-        /**
-         * Auto-download lookahead: how many not-yet-downloaded episodes after the
-         * highest downloaded (or watched) episode of each season one check pass
-         * enqueues. `0` restores the legacy all-missing-episodes behavior.
-         */
-        val AUTO_DOWNLOAD_LOOKAHEAD = intPreferencesKey("auto_download_lookahead")
-        /**
-         * Global per-pass enqueue budget across every series (`0` = unlimited) —
-         * remaining series are picked up by the next pass.
-         */
-        val AUTO_DOWNLOAD_MAX_PER_PASS = intPreferencesKey("auto_download_max_per_pass")
-        /**
-         * Keep-days retention: completed downloads older than this many days are
-         * swept (unwatched ones are protected). `0` = off.
-         */
-        val AUTO_DOWNLOAD_KEEP_DAYS = intPreferencesKey("auto_download_keep_days")
-        /**
-         * Per-user server allow-list for auto-download — canonical name of the
-         * `u_<userId>::`-namespaced JSON string-set key. Empty = all servers.
-         * Never read/written as a flat key: see the class KDoc.
-         */
-        val AUTO_DOWNLOAD_SERVERS = stringPreferencesKey("auto_download_servers")
-        /**
-         * Downloads-screen list state (gh-175 follow-up): the persisted
-         * All/Movies/Series filter and Recent/Name/Size sort, stored as the
-         * enum name strings. The enums live in the downloads feature (this
-         * module cannot see them), so unknown values degrade at the feature's
-         * decode side (`DownloadListFilter.fromName` / `DownloadListSort.fromName`),
-         * and an empty string means "never set" — the feature's defaults.
-         */
-        val DOWNLOADS_LIST_FILTER = stringPreferencesKey("downloads_list_filter")
-        val DOWNLOADS_LIST_SORT = stringPreferencesKey("downloads_list_sort")
+        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey(DownloadsPreferenceSpecs.WIFI_ONLY_DOWNLOADS.keyName)
+        val DOWNLOAD_CONNECTIONS = intPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_CONNECTIONS.keyName)
+        val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey(DownloadsPreferenceSpecs.MAX_CONCURRENT_DOWNLOADS.keyName)
+        val DOWNLOAD_QUALITY = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_QUALITY.keyName)
+        val SMART_DOWNLOADS_ENABLED = booleanPreferencesKey(DownloadsPreferenceSpecs.SMART_DOWNLOADS_ENABLED.keyName)
+        val AUTO_DOWNLOAD_MODE = stringPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MODE.keyName)
+        val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_NEW_EPISODES.keyName)
+        val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey(DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.keyName)
+        val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_STORAGE_LOCATION.keyName)
+        val AUTO_DELETE_AFTER_WATCH = booleanPreferencesKey(DownloadsPreferenceSpecs.AUTO_DELETE_AFTER_WATCH.keyName)
+        val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey(DownloadsPreferenceSpecs.CELLULAR_DOWNLOAD_SIZE_WARNING_MB.keyName)
+        val DOWNLOAD_SCHEDULE_ENABLED = booleanPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_ENABLED.keyName)
+        val DOWNLOAD_SCHEDULE_START = intPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_START.keyName)
+        val DOWNLOAD_SCHEDULE_END = intPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_END.keyName)
+        val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey(DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_WIFI_ONLY.keyName)
+        val AUTO_DOWNLOAD_LOOKAHEAD = intPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_LOOKAHEAD.keyName)
+        val AUTO_DOWNLOAD_MAX_PER_PASS = intPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.keyName)
+        val AUTO_DOWNLOAD_KEEP_DAYS = intPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.keyName)
+        val AUTO_DOWNLOAD_SERVERS = stringPreferencesKey(DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS.keyName)
+        val DOWNLOADS_LIST_FILTER = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.keyName)
+        val DOWNLOADS_LIST_SORT = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT.keyName)
+        val DOWNLOADS_LIST_STATUS_FILTER = stringPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_LIST_STATUS_FILTER.keyName)
+        val DOWNLOADS_SELECTION_HINT_SEEN = booleanPreferencesKey(DownloadsPreferenceSpecs.DOWNLOADS_SELECTION_HINT_SEEN.keyName)
     }
 
     val downloads: StateFlow<DownloadsSlice> =
         dataStore.sliceStateFlow(scope, seed = DownloadsSlice(), read = ::read)
 
+    /**
+     * Pure read of the downloads fields from a raw [Preferences] snapshot,
+     * each field delegated to its [DownloadsPreferenceSpecs] row encoding —
+     * except the four band rows, whose read-side bands post-clamp the row read
+     * (the videoplayer precedent), and the namespaced allow-list, whose
+     * per-user read stays the store's hand codec. Exposed so the facade can
+     * fold these into the whole-`UserPreferences` projection without
+     * duplicating the read logic.
+     */
     internal fun read(prefs: Preferences): DownloadsSlice = DownloadsSlice(
-        wifiOnlyDownloads = PreferenceCodec.readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
-        downloadConnections = PreferenceCodec.readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
-        maxConcurrentDownloads = PreferenceCodec.readInt(prefs, Keys.MAX_CONCURRENT_DOWNLOADS, "max_concurrent_downloads", 3)
-            .coerceIn(1, 6),
-        downloadQuality = readDownloadQuality(prefs),
-        smartDownloadsEnabled = PreferenceCodec.readBool(prefs, Keys.SMART_DOWNLOADS_ENABLED, "smart_downloads_enabled", false),
-        autoDownloadNewEpisodes = PreferenceCodec.readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
-        autoDownloadLookahead = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_LOOKAHEAD, "auto_download_lookahead", DEFAULT_LOOKAHEAD)
+        wifiOnlyDownloads = DownloadsPreferenceSpecs.WIFI_ONLY_DOWNLOADS.readFrom(prefs),
+        downloadConnections = DownloadsPreferenceSpecs.DOWNLOAD_CONNECTIONS.readFrom(prefs),
+        maxConcurrentDownloads = DownloadsPreferenceSpecs.MAX_CONCURRENT_DOWNLOADS.readFrom(prefs).coerceIn(1, 6),
+        downloadQuality = DownloadsPreferenceSpecs.DOWNLOAD_QUALITY.readFrom(prefs),
+        smartDownloadsEnabled = DownloadsPreferenceSpecs.SMART_DOWNLOADS_ENABLED.readFrom(prefs),
+        autoDownloadMode = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MODE.readFrom(prefs),
+        autoDownloadLookahead = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_LOOKAHEAD.readFrom(prefs)
             .coerceIn(0, MAX_LOOKAHEAD),
-        autoDownloadMaxPerPass = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_MAX_PER_PASS, "auto_download_max_per_pass", 0)
+        autoDownloadMaxPerPass = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.readFrom(prefs)
             .coerceIn(0, MAX_PER_PASS_LIMIT),
-        autoDownloadKeepDays = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_KEEP_DAYS, "auto_download_keep_days", 0)
+        autoDownloadKeepDays = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.readFrom(prefs)
             .coerceAtLeast(0),
         autoDownloadServers = readAutoDownloadServers(prefs),
-        maxDownloadStorageGb = PreferenceCodec.readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
-        downloadsListFilter = prefs[Keys.DOWNLOADS_LIST_FILTER] ?: "",
-        downloadsListSort = prefs[Keys.DOWNLOADS_LIST_SORT] ?: "",
-        downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
-        autoDeleteAfterWatch = prefs[Keys.AUTO_DELETE_AFTER_WATCH] ?: false,
-        cellularDownloadSizeWarningMb = PreferenceCodec.readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
-        downloadScheduleEnabled = prefs[Keys.DOWNLOAD_SCHEDULE_ENABLED] ?: false,
+        maxDownloadStorageGb = DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.readFrom(prefs),
+        downloadsListFilter = DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.readStored(prefs),
+        downloadsListSort = DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT.readStored(prefs),
+        downloadsListStatusFilter = DownloadsPreferenceSpecs.DOWNLOADS_LIST_STATUS_FILTER.readStored(prefs),
+        selectionHintSeen = DownloadsPreferenceSpecs.DOWNLOADS_SELECTION_HINT_SEEN.readStored(prefs),
+        downloadStorageLocation = DownloadsPreferenceSpecs.DOWNLOAD_STORAGE_LOCATION.readStored(prefs),
+        autoDeleteAfterWatch = DownloadsPreferenceSpecs.AUTO_DELETE_AFTER_WATCH.readStored(prefs),
+        cellularDownloadSizeWarningMb = DownloadsPreferenceSpecs.CELLULAR_DOWNLOAD_SIZE_WARNING_MB.readFrom(prefs),
+        downloadScheduleEnabled = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_ENABLED.readStored(prefs),
         downloadScheduleWindow = DownloadScheduleWindow(
-            startHour = prefs[Keys.DOWNLOAD_SCHEDULE_START] ?: 0,
-            endHour = prefs[Keys.DOWNLOAD_SCHEDULE_END] ?: 6,
-            wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
+            startHour = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_START.readFrom(prefs),
+            endHour = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_END.readFrom(prefs),
+            wifiOnly = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_WIFI_ONLY.readStored(prefs),
         ),
     )
 
@@ -145,6 +178,9 @@ class DownloadsStore constructor(
      * namespace is resolved from the snapshot itself, and pre-login (no active
      * user) serves the default (empty = all servers). A corrupted JSON blob
      * degrades to the default rather than throwing into the slice collector.
+     * The [DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS] row is the
+     * declaration-only custom declaration (the namespaced slot never holds
+     * data under the canonical name), so this hand read is the row's codec.
      */
     private fun readAutoDownloadServers(prefs: Preferences): Set<String> {
         val userId = identityStore.activeUserIdIn(prefs) ?: return emptySet()
@@ -152,50 +188,69 @@ class DownloadsStore constructor(
         return runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
     }
 
-    private fun readDownloadQuality(prefs: Preferences): DownloadQuality =
-        prefs[Keys.DOWNLOAD_QUALITY].toEnumOrNull() ?: DownloadQuality.ORIGINAL
-
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — derived rows delegate to their row's derived write (the
+    // encoding — enum-by-name, plain slot — is the row's, not re-declared
+    // here); the declaration-only rows, the mode's legacy mirror and the
+    // coalesced schedule window keep their hand-written lines.
     // ------------------------------------------------------------------
 
     suspend fun setWifiOnlyDownloads(enabled: Boolean) {
-        dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
+        dataStore.edit { DownloadsPreferenceSpecs.WIFI_ONLY_DOWNLOADS.writeTo(it, enabled) }
     }
 
     suspend fun setDownloadConnections(count: Int) {
-        dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
+        dataStore.edit { DownloadsPreferenceSpecs.DOWNLOAD_CONNECTIONS.writeTo(it, count) }
     }
 
+    /** The 1..6 max-concurrent invariant: the setter is the write-side clamp owner. */
     suspend fun setMaxConcurrentDownloads(count: Int) {
-        dataStore.edit { it[Keys.MAX_CONCURRENT_DOWNLOADS] = count.coerceIn(1, 6) }
+        dataStore.edit {
+            DownloadsPreferenceSpecs.MAX_CONCURRENT_DOWNLOADS.writeTo(it, count.coerceIn(1, 6))
+        }
     }
 
     suspend fun setDownloadQuality(quality: DownloadQuality) {
-        dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality.name }
+        dataStore.edit { DownloadsPreferenceSpecs.DOWNLOAD_QUALITY.writeTo(it, quality) }
     }
 
     suspend fun setSmartDownloadsEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.SMART_DOWNLOADS_ENABLED] = enabled }
+        dataStore.edit { DownloadsPreferenceSpecs.SMART_DOWNLOADS_ENABLED.writeTo(it, enabled) }
     }
 
-    suspend fun setAutoDownloadNewEpisodes(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
+    /**
+     * Writes the mode to the canonical key and mirrors it onto the legacy
+     * boolean (`mode != NEVER`) so an app downgrade keeps auto-download on
+     * for INSTANT/ASK users rather than silently flipping it off — the
+     * cross-key invariant the [DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MODE]
+     * row's null encode opts out of.
+     */
+    suspend fun setAutoDownloadMode(mode: AutoDownloadMode) {
+        dataStore.edit {
+            it[Keys.AUTO_DOWNLOAD_MODE] = mode.name
+            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = mode.isEnabled
+        }
     }
 
-    /** Lookahead window in episodes (0 = legacy all-missing behavior). */
+    /** Lookahead window in episodes (0 = legacy all-missing behavior); banded to 0..[MAX_LOOKAHEAD]. */
     suspend fun setAutoDownloadLookahead(episodes: Int) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_LOOKAHEAD] = episodes.coerceIn(0, MAX_LOOKAHEAD) }
+        dataStore.edit {
+            DownloadsPreferenceSpecs.AUTO_DOWNLOAD_LOOKAHEAD.writeTo(it, episodes.coerceIn(0, MAX_LOOKAHEAD))
+        }
     }
 
-    /** Per-pass enqueue budget across series (0 = unlimited). */
+    /** Per-pass enqueue budget across series (0 = unlimited); banded to 0..[MAX_PER_PASS_LIMIT]. */
     suspend fun setAutoDownloadMaxPerPass(count: Int) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_MAX_PER_PASS] = count.coerceIn(0, MAX_PER_PASS_LIMIT) }
+        dataStore.edit {
+            DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.writeTo(it, count.coerceIn(0, MAX_PER_PASS_LIMIT))
+        }
     }
 
-    /** Keep-days retention window (0 = off). */
+    /** Keep-days retention window (0 = off); floored at 0. */
     suspend fun setAutoDownloadKeepDays(days: Int) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_KEEP_DAYS] = days.coerceAtLeast(0) }
+        dataStore.edit {
+            DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.writeTo(it, days.coerceAtLeast(0))
+        }
     }
 
     /**
@@ -213,17 +268,27 @@ class DownloadsStore constructor(
     }
 
     suspend fun setMaxDownloadStorageGb(gb: Int) {
-        dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
+        dataStore.edit { DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.writeTo(it, gb) }
     }
 
-    /** Persists the downloads-list filter (an enum name string; see [Keys.DOWNLOADS_LIST_FILTER]). */
+    /** Persists the downloads-list filter (an enum name string; see [DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER]). */
     suspend fun setDownloadsListFilter(value: String) {
         dataStore.edit { it[Keys.DOWNLOADS_LIST_FILTER] = value }
     }
 
-    /** Persists the downloads-list sort (an enum name string; see [Keys.DOWNLOADS_LIST_SORT]). */
+    /** Persists the downloads-list sort (an enum name string; see [DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT]). */
     suspend fun setDownloadsListSort(value: String) {
         dataStore.edit { it[Keys.DOWNLOADS_LIST_SORT] = value }
+    }
+
+    /** Persists the downloads-list status filter (an enum name string; see [DownloadsPreferenceSpecs.DOWNLOADS_LIST_STATUS_FILTER]). */
+    suspend fun setDownloadsListStatusFilter(value: String) {
+        dataStore.edit { it[Keys.DOWNLOADS_LIST_STATUS_FILTER] = value }
+    }
+
+    /** Marks the long-press selection hint as seen (terminal; see [DownloadsPreferenceSpecs.DOWNLOADS_SELECTION_HINT_SEEN]). */
+    suspend fun setSelectionHintSeen(seen: Boolean) {
+        dataStore.edit { it[Keys.DOWNLOADS_SELECTION_HINT_SEEN] = seen }
     }
 
     suspend fun setDownloadStorageLocation(location: String) {
@@ -235,13 +300,14 @@ class DownloadsStore constructor(
     }
 
     suspend fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
-        dataStore.edit { it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = sizeMb }
+        dataStore.edit { DownloadsPreferenceSpecs.CELLULAR_DOWNLOAD_SIZE_WARNING_MB.writeTo(it, sizeMb) }
     }
 
     suspend fun setDownloadScheduleEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = enabled }
     }
 
+    /** One window, three keys, one transaction — the coalesced hand write. */
     suspend fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
         dataStore.edit {
             it[Keys.DOWNLOAD_SCHEDULE_START] = window.startHour
@@ -264,40 +330,14 @@ class DownloadsStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. The download keys all sit in the legacy `DOWNLOADS_NETWORK`
-     * reset category (which the network/offline keys also share).
+     * [category] — the [DownloadsPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. The download keys all
+     * sit in the legacy `DOWNLOADS_NETWORK` reset category (which the
+     * network/offline keys also share), so all other categories return an
+     * empty list.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
-            Keys.WIFI_ONLY_DOWNLOADS,
-            Keys.DOWNLOAD_CONNECTIONS,
-            Keys.MAX_CONCURRENT_DOWNLOADS,
-            Keys.DOWNLOAD_QUALITY,
-            Keys.SMART_DOWNLOADS_ENABLED,
-            Keys.AUTO_DOWNLOAD_NEW_EPISODES,
-            Keys.AUTO_DOWNLOAD_LOOKAHEAD,
-            Keys.AUTO_DOWNLOAD_MAX_PER_PASS,
-            Keys.AUTO_DOWNLOAD_KEEP_DAYS,
-            Keys.MAX_DOWNLOAD_STORAGE_GB,
-            Keys.DOWNLOAD_STORAGE_LOCATION,
-            Keys.DOWNLOADS_LIST_FILTER,
-            Keys.DOWNLOADS_LIST_SORT,
-            Keys.AUTO_DELETE_AFTER_WATCH,
-            Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
-            Keys.DOWNLOAD_SCHEDULE_ENABLED,
-            Keys.DOWNLOAD_SCHEDULE_START,
-            Keys.DOWNLOAD_SCHEDULE_END,
-            Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
-            // Canonical form of the per-user namespaced allow-list key: the
-            // flat slot never holds data (every read/write resolves the
-            // u_<userId>:: namespace), but the coverage guard enumerates the
-            // declared key objects, and the HomeDiscoveryStore precedent keeps
-            // its canonical keys in the static list the same way. The namespaced
-            // instances are stripped by [removeDynamicResetKeys].
-            Keys.AUTO_DOWNLOAD_SERVERS,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        DownloadsPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Factory-reset participation for the **dynamic** allow-list key: the static
@@ -308,7 +348,7 @@ class DownloadsStore constructor(
      * ([UserNamespacedKeys.isNamespaced]) keeps it precise: an unrelated key
      * that merely starts with `u_` is never touched.
      */
-    internal fun removeDynamicResetKeys(category: PreferenceResetCategory, prefs: androidx.datastore.preferences.core.MutablePreferences) {
+    internal fun removeDynamicResetKeys(category: PreferenceResetCategory, prefs: MutablePreferences) {
         if (category != PreferenceResetCategory.DOWNLOADS_NETWORK) return
         prefs.asMap().keys
             .filter { UserNamespacedKeys.isNamespaced(it.name, setOf(Keys.AUTO_DOWNLOAD_SERVERS.name)) }
@@ -317,36 +357,44 @@ class DownloadsStore constructor(
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences], plus the gap
-     * keys [restorePreferences] omits (`cellular_download_size_warning_mb`,
-     * `download_schedule_enabled`, and the schedule-window keys destructured from
-     * [DownloadsSlice.downloadScheduleWindow]).
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with) — except the mode's legacy mirror, the namespaced allow-list and
+     * the declaration-only rows, whose hand-written lines mirror the setters
+     * (see the class KDoc's opt-outs), plus the gap keys the legacy
+     * facade-level `restorePreferences` omits (`cellular_download_size_warning_mb`,
+     * `download_schedule_enabled`, and the schedule-window keys destructured
+     * from [DownloadsSlice.downloadScheduleWindow]).
      */
     suspend fun restore(slice: DownloadsSlice) {
-        dataStore.edit { it ->
-            it[Keys.WIFI_ONLY_DOWNLOADS] = slice.wifiOnlyDownloads
-            it[Keys.DOWNLOAD_CONNECTIONS] = slice.downloadConnections
-            it[Keys.MAX_CONCURRENT_DOWNLOADS] = slice.maxConcurrentDownloads
-            it[Keys.DOWNLOAD_QUALITY] = slice.downloadQuality.name
-            it[Keys.SMART_DOWNLOADS_ENABLED] = slice.smartDownloadsEnabled
-            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadNewEpisodes
-            it[Keys.AUTO_DOWNLOAD_LOOKAHEAD] = slice.autoDownloadLookahead
-            it[Keys.AUTO_DOWNLOAD_MAX_PER_PASS] = slice.autoDownloadMaxPerPass
-            it[Keys.AUTO_DOWNLOAD_KEEP_DAYS] = slice.autoDownloadKeepDays
-            it[Keys.MAX_DOWNLOAD_STORAGE_GB] = slice.maxDownloadStorageGb
-            it[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
-            it[Keys.DOWNLOADS_LIST_FILTER] = slice.downloadsListFilter
-            it[Keys.DOWNLOADS_LIST_SORT] = slice.downloadsListSort
-            it[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
-            it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = slice.cellularDownloadSizeWarningMb
-            it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
-            it[Keys.DOWNLOAD_SCHEDULE_START] = slice.downloadScheduleWindow.startHour
-            it[Keys.DOWNLOAD_SCHEDULE_END] = slice.downloadScheduleWindow.endHour
-            it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = slice.downloadScheduleWindow.wifiOnly
+        dataStore.edit { prefs ->
+            DownloadsPreferenceSpecs.WIFI_ONLY_DOWNLOADS.writeTo(prefs, slice.wifiOnlyDownloads)
+            DownloadsPreferenceSpecs.DOWNLOAD_CONNECTIONS.writeTo(prefs, slice.downloadConnections)
+            DownloadsPreferenceSpecs.MAX_CONCURRENT_DOWNLOADS.writeTo(prefs, slice.maxConcurrentDownloads)
+            DownloadsPreferenceSpecs.DOWNLOAD_QUALITY.writeTo(prefs, slice.downloadQuality)
+            DownloadsPreferenceSpecs.SMART_DOWNLOADS_ENABLED.writeTo(prefs, slice.smartDownloadsEnabled)
+            // The mode's cross-key mirror: the canonical enum plus the legacy
+            // boolean beside it (see the class KDoc's opt-outs).
+            prefs[Keys.AUTO_DOWNLOAD_MODE] = slice.autoDownloadMode.name
+            prefs[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadMode.isEnabled
+            DownloadsPreferenceSpecs.AUTO_DOWNLOAD_LOOKAHEAD.writeTo(prefs, slice.autoDownloadLookahead)
+            DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.writeTo(prefs, slice.autoDownloadMaxPerPass)
+            DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.writeTo(prefs, slice.autoDownloadKeepDays)
+            DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.writeTo(prefs, slice.maxDownloadStorageGb)
+            prefs[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
+            prefs[Keys.DOWNLOADS_LIST_FILTER] = slice.downloadsListFilter
+            prefs[Keys.DOWNLOADS_LIST_SORT] = slice.downloadsListSort
+            prefs[Keys.DOWNLOADS_LIST_STATUS_FILTER] = slice.downloadsListStatusFilter
+            prefs[Keys.DOWNLOADS_SELECTION_HINT_SEEN] = slice.selectionHintSeen
+            prefs[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
+            DownloadsPreferenceSpecs.CELLULAR_DOWNLOAD_SIZE_WARNING_MB.writeTo(prefs, slice.cellularDownloadSizeWarningMb)
+            prefs[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
+            prefs[Keys.DOWNLOAD_SCHEDULE_START] = slice.downloadScheduleWindow.startHour
+            prefs[Keys.DOWNLOAD_SCHEDULE_END] = slice.downloadScheduleWindow.endHour
+            prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = slice.downloadScheduleWindow.wifiOnly
             // The allow-list is namespaced: write into the active user's
             // namespace (skipped pre-login — no namespace to write into).
-            val userId = identityStore.activeUserIdIn(it) ?: return@edit
-            it[UserNamespacedKeys.stringKey(userId, Keys.AUTO_DOWNLOAD_SERVERS)] = json.encodeToString(slice.autoDownloadServers)
+            val userId = identityStore.activeUserIdIn(prefs) ?: return@edit
+            prefs[UserNamespacedKeys.stringKey(userId, Keys.AUTO_DOWNLOAD_SERVERS)] = json.encodeToString(slice.autoDownloadServers)
         }
     }
 
@@ -363,34 +411,54 @@ class DownloadsStore constructor(
 }
 
 /**
- * The downloads preference slice. Plain data class. Defaults mirror the
- * projection defaults in [DownloadsStore.read].
+ * The downloads preference slice. Plain data class. Every default IS its
+ * [DownloadsPreferenceSpecs] row's declared default — read off the row via a
+ * plain accessor, so a preference's default is stated exactly once, in its
+ * spec, and cannot drift between the spec (what an absent key reads) and the
+ * slice (what a fresh in-memory instance serves). The four banded rows keep
+ * their pre-band declared defaults here, exactly as the slice always has. The
+ * legacy-only row (`auto_download_new_episodes`) has no slice property by
+ * design. The spec-default equality is pinned field-for-field by
+ * `DownloadsSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class DownloadsSlice(
-    val wifiOnlyDownloads: Boolean = true,
-    val downloadConnections: Int = 4,
-    val maxConcurrentDownloads: Int = 3,
-    val downloadQuality: DownloadQuality = DownloadQuality.ORIGINAL,
-    val smartDownloadsEnabled: Boolean = false,
-    val autoDownloadNewEpisodes: Boolean = false,
+    val wifiOnlyDownloads: Boolean = DownloadsPreferenceSpecs.WIFI_ONLY_DOWNLOADS.default,
+    val downloadConnections: Int = DownloadsPreferenceSpecs.DOWNLOAD_CONNECTIONS.default,
+    val maxConcurrentDownloads: Int = DownloadsPreferenceSpecs.MAX_CONCURRENT_DOWNLOADS.default,
+    val downloadQuality: DownloadQuality = DownloadsPreferenceSpecs.DOWNLOAD_QUALITY.default,
+    val smartDownloadsEnabled: Boolean = DownloadsPreferenceSpecs.SMART_DOWNLOADS_ENABLED.default,
+    /**
+     * The tri-state new-episode policy (gh-181). A pre-gh-181 settings backup
+     * carries only the legacy boolean, so restoring one lands on the NEVER
+     * default — the toggle must be re-set after such a restore.
+     */
+    val autoDownloadMode: AutoDownloadMode = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MODE.default,
     /** Episodes past the highest downloaded/watched per season (0 = all missing). */
-    val autoDownloadLookahead: Int = DownloadsStore.DEFAULT_LOOKAHEAD,
+    val autoDownloadLookahead: Int = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_LOOKAHEAD.default,
     /** Global per-pass enqueue budget across series (0 = unlimited). */
-    val autoDownloadMaxPerPass: Int = 0,
+    val autoDownloadMaxPerPass: Int = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_MAX_PER_PASS.default,
     /** Keep-days retention window for completed downloads (0 = off). */
-    val autoDownloadKeepDays: Int = 0,
+    val autoDownloadKeepDays: Int = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_KEEP_DAYS.default,
     /** Active user's auto-download server allow-list (empty = all servers). */
-    val autoDownloadServers: Set<String> = emptySet(),
-    val maxDownloadStorageGb: Int = 0,
+    val autoDownloadServers: Set<String> = DownloadsPreferenceSpecs.AUTO_DOWNLOAD_SERVERS.default,
+    val maxDownloadStorageGb: Int = DownloadsPreferenceSpecs.MAX_DOWNLOAD_STORAGE_GB.default,
     /** Downloads-list filter as an enum name string ("" = feature default). */
-    val downloadsListFilter: String = "",
+    val downloadsListFilter: String = DownloadsPreferenceSpecs.DOWNLOADS_LIST_FILTER.default,
     /** Downloads-list sort as an enum name string ("" = feature default). */
-    val downloadsListSort: String = "",
-    val downloadStorageLocation: String = "INTERNAL",
-    val autoDeleteAfterWatch: Boolean = false,
-    val cellularDownloadSizeWarningMb: Int = 0,
-    val downloadScheduleEnabled: Boolean = false,
-    val downloadScheduleWindow: DownloadScheduleWindow = DownloadScheduleWindow(),
+    val downloadsListSort: String = DownloadsPreferenceSpecs.DOWNLOADS_LIST_SORT.default,
+    /** Downloads-list status filter as an enum name string ("" = feature default). */
+    val downloadsListStatusFilter: String = DownloadsPreferenceSpecs.DOWNLOADS_LIST_STATUS_FILTER.default,
+    /** The long-press selection hint was dismissed once; never show it again. */
+    val selectionHintSeen: Boolean = DownloadsPreferenceSpecs.DOWNLOADS_SELECTION_HINT_SEEN.default,
+    val downloadStorageLocation: String = DownloadsPreferenceSpecs.DOWNLOAD_STORAGE_LOCATION.default,
+    val autoDeleteAfterWatch: Boolean = DownloadsPreferenceSpecs.AUTO_DELETE_AFTER_WATCH.default,
+    val cellularDownloadSizeWarningMb: Int = DownloadsPreferenceSpecs.CELLULAR_DOWNLOAD_SIZE_WARNING_MB.default,
+    val downloadScheduleEnabled: Boolean = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_ENABLED.default,
+    val downloadScheduleWindow: DownloadScheduleWindow = DownloadScheduleWindow(
+        startHour = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_START.default,
+        endHour = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_END.default,
+        wifiOnly = DownloadsPreferenceSpecs.DOWNLOAD_SCHEDULE_WIFI_ONLY.default,
+    ),
 )

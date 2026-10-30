@@ -108,6 +108,10 @@ class MpvPlayerEngine(
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
+    // Transport commands can arrive before the Compose video surface creates
+    // the native handle. Replay pause and speed after playFile instead of losing them.
+    private var pauseRequested = false
+    private var requestedPlaybackSpeed = 1f
 
     // ── time-pos dispatch dedupe (see the postInitOptions observe KDoc) ─────
     // The observer events and the reset sites below all run on the main
@@ -139,6 +143,16 @@ class MpvPlayerEngine(
     private val equalizerHelper = EqualizerHelper()
     private val dialogueBoost = DialogueBoostHelper(equalizerHelper)
     private val nightMode = NightModeHelper()
+
+    // The engine-agnostic session-effect trio over the generated session id
+    // (attach/apply/release + the equalizer/dialogue-boost co-enabling
+    // call) — the same choreography AudioEffectChain composes on the Exo
+    // path; mpv's normalization and rumble-cut DSP stays in the af chain.
+    private val sessionTrio = AudioSessionEffectTrio(
+        equalizerHelper = equalizerHelper,
+        dialogueBoost = dialogueBoost,
+        nightMode = nightMode,
+    )
 
     // The Android [MpvBinding] over this view's mpv handle — the platform
     // seam of the shared [MpvCore] choreography (writes absorb this JNI
@@ -519,19 +533,26 @@ class MpvPlayerEngine(
             mpv.setOptionString(MpvProperties.CONFIG_DIR, configDir.absolutePath)
 
             val fontsDir = fontProvider.provideFontsDir()
-            mpv.setOptionString(MpvProperties.SUB_FONTS_DIR, fontsDir.absolutePath)
-            // Force the libass font provider off. On some devices libass's
-            // fontconfig provider fails to initialize ("can't find selected font
-            // provider" — observed on Adreno 509 / Nokia 6.1 Plus under app
-            // isolation, with OR without a FONTCONFIG_FILE env override), and
-            // EVERY subtitle then rasterizes to an empty bitmap. With "none",
-            // libass resolves fonts solely from sub-fonts-dir (the bundled
-            // subfont.ttf + any user-installed .ttf) plus the ASS `sub-font`
-            // default set below. System fontconfig aliasing is lost, but that is
-            // strictly better than no subtitles at all, and ASS tracks usually
-            // embed their own fonts (mkv attachments), which libass loads via
-            // the demuxer regardless of provider.
-            mpv.setOptionString(MpvProperties.SUB_FONT_PROVIDER, "none")
+            // App default, but yields to a user-owned sub-fonts-dir (mpv.conf
+            // or the in-app advanced config): power users may point libass at
+            // their own font folder — see the provider note below.
+            mpv.safeSetOptionUnlessUserOwned(MpvProperties.SUB_FONTS_DIR, fontsDir.absolutePath)
+            // Force the libass font provider off — the app DEFAULT, and like
+            // sub-fonts-dir above it yields to a user-owned key. On some
+            // devices libass's fontconfig provider fails to initialize ("can't
+            // find selected font provider" — observed on Adreno 509 / Nokia
+            // 6.1 Plus under app isolation, with OR without a FONTCONFIG_FILE
+            // env override), and EVERY subtitle then rasterizes to an empty
+            // bitmap. With "none", libass resolves fonts solely from
+            // sub-fonts-dir (the bundled subfont.ttf + any user-installed
+            // .ttf) plus the ASS `sub-font` default set below. System
+            // fontconfig aliasing is lost, but that is strictly better than no
+            // subtitles at all, and ASS tracks usually embed their own fonts
+            // (mkv attachments), which libass loads via the demuxer regardless
+            // of provider. A user who overrides the provider owns the
+            // consequence: system fonts (e.g. Roboto) resolve only if the
+            // provider can actually see them.
+            mpv.safeSetOptionUnlessUserOwned(MpvProperties.SUB_FONT_PROVIDER, "none")
             // Default the requested family to the bundled fallback's own family
             // so libass matches it exactly under the none provider. Overridden
             // per-style by the shared MpvSubtitleStyleApplier when the user picks a
@@ -786,24 +807,15 @@ class MpvPlayerEngine(
     private fun applyAndroidAudioEffects() {
         val sid = audioSessionId
         if (sid == 0) return
-        val effects = currentConfig.audioEffects
-
-        // Dialogue Boost and the equalizer share one system Equalizer instance.
-        equalizerHelper.attach(sid)
-        equalizerHelper.setEnabled(
-            equalizerEnabled = effects.equalizerEnabled,
-            dialogueBoostEnabled = effects.dialogueBoostEnabled,
-        )
-        dialogueBoost.attach(sid)
-        dialogueBoost.setStrength(effects.dialogueBoostStrength)
-        dialogueBoost.setEnabled(effects.dialogueBoostEnabled)
-
-        nightMode.attach(sid)
-        nightMode.setStrength(effects.nightModeStrength)
-        nightMode.setEnabled(effects.nightModeEnabled)
+        // The shared [AudioSessionEffectTrio] owns the attach ladder and the
+        // equalizer/dialogue-boost co-enabling call — the former hand-copy
+        // of Exo's AudioEffectChain choreography is gone.
+        sessionTrio.attach(sid)
+        sessionTrio.apply(currentConfig.audioEffects)
     }
 
     override fun load(request: PlaybackRequest) {
+        pauseRequested = false
         // Engine may have been release()d and is being reused — beginLoad
         // clears the teardown guard + per-item state (pending batch, fold
         // latches, side-load registry, server duration rung, cue flows) so
@@ -831,6 +843,8 @@ class MpvPlayerEngine(
                 applyAndroidAudioEffects()
                 configureMpvForRequest(view, request)
                 view.playFile(request.uri)
+                core.setPlaybackSpeed(requestedPlaybackSpeed)
+                if (pauseRequested) core.pause()
                 pendingRequest = null
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
@@ -862,9 +876,7 @@ class MpvPlayerEngine(
         // guaranteed to finish before this release() runs — the main looper
         // is single-threaded.
         core.cancelTrackRefresh()
-        dialogueBoost.detach()
-        equalizerHelper.detach()
-        nightMode.detach()
+        sessionTrio.release()
         // Stop the display-event refreshes: the probe's listener is held
         // strongly by DisplayManager, so it must not outlive the engine.
         displayHdrProbe.release()
@@ -919,11 +931,13 @@ class MpvPlayerEngine(
     }
 
     override fun play() {
+        pauseRequested = false
         core.play()
         timePosDedupe.reset()
     }
 
     override fun pause() {
+        pauseRequested = true
         core.pause()
         timePosDedupe.reset()
     }
@@ -939,6 +953,7 @@ class MpvPlayerEngine(
     }
 
     override fun setPlaybackSpeed(speed: Float) {
+        requestedPlaybackSpeed = speed
         core.setPlaybackSpeed(speed)
     }
 
@@ -1206,6 +1221,17 @@ class MpvPlayerEngine(
             configDir.mkdirs()
         }
 
+        // The user's input.conf (issue #26): synced into the config dir
+        // BEFORE initialize() — mpv reads `input.conf` from `config-dir` once,
+        // during mpv_initialize (this engine runs `config=yes`). A blank pref
+        // clears a stale file; a failed write logs and skips (playback
+        // continues without the custom bindings). Mid-session edits land on
+        // the next engine rebuild — no live keybinding reload is attempted.
+        val mpvCfgForInput = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
+        if (MpvInputConfFile.sync(configDir, mpvCfgForInput.userInputConf) is MpvInputConfFile.SyncResult.Failed) {
+            Log.w(TAG, "mpv input.conf: write failed — custom key bindings skipped for this session")
+        }
+
         // NOTE: do NOT set FONTCONFIG_FILE / FONTCONFIG_PATH. Pointing fontconfig
         // at a minimal app-written fonts.conf breaks libass's font-provider init
         // on some devices (e.g. Adreno 509 / Nokia 6.1 Plus: "can't find selected
@@ -1261,6 +1287,8 @@ class MpvPlayerEngine(
             try {
                 configureMpvForRequest(view, request)
                 view.playFile(request.uri)
+                core.setPlaybackSpeed(requestedPlaybackSpeed)
+                if (pauseRequested) core.pause()
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
             }
@@ -1292,6 +1320,28 @@ class MpvPlayerEngine(
         core.setNativeSubtitlesVisible(visible)
     }
 
+    /**
+     * The custom on-screen buttons' command seam (issue #27): splits the raw
+     * mpv command line on whitespace and runs it through the binding. The
+     * Android JNI transport throws on a rejected command — contained here and
+     * reported as `false`, per the contract's "absorb failures into the
+     * Boolean" rule (a custom command must never break playback).
+     */
+    override fun executeUserCommand(command: String): Boolean {
+        val mpv = mpvView?.mpv ?: return false
+        val args = command.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (args.isEmpty()) return false
+        return try {
+            // The JNI transport throws on a rejected command and returns an
+            // untyped Any? on success — the absence of a throw IS the success
+            // signal (the same containment the config writes use).
+            mpv.command(*args.toTypedArray())
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     override val currentPositionMs: Long
         get() = core.cachedPositionMs
 
@@ -1309,8 +1359,8 @@ class MpvPlayerEngine(
 
     override val playbackSpeed: Float
         get() = try {
-            mpvView?.mpv?.getPropertyDouble(MpvProperties.SPEED)?.toFloat() ?: 1f
-        } catch (_: Exception) { 1f }
+            mpvView?.mpv?.getPropertyDouble(MpvProperties.SPEED)?.toFloat() ?: requestedPlaybackSpeed
+        } catch (_: Exception) { requestedPlaybackSpeed }
 
     override val audioSessionId: Int
         get() = generatedAudioSessionId

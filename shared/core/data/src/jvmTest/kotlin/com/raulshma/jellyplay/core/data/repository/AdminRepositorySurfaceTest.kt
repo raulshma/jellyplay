@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
  * precedent): the interface is the feature-visible seam for every
  * server-administration screen (users, devices, tasks, dashboard, logs),
  * and the whole point of the seam is that features consume screen
- * operations here instead of the wide JellyfinApiClient transport interface —
+ * operations here instead of the transport client seams themselves —
  * so every member added to it is coupling paid across the admin feature
  * family. This test parses the interface's source, counts its members
  * (fun/val declarations, overloads counted separately — matching the impl's

@@ -36,6 +36,19 @@ class MpvStatsProjectionTest {
     }
 
     @Test
+    fun audioCodec_prefersSelectedTrackThenLegacyIdThenDescription() {
+        for ((values, expected) in listOf(
+            mapOf("current-tracks/audio/codec" to "ac3", "audio-codec-name" to "eac3", "audio-codec" to "ATSC A/52B (AC-3, E-AC-3)") to "ac3",
+            mapOf("current-tracks/audio/codec" to "", "audio-codec-name" to "eac3", "audio-codec" to "ATSC A/52B (AC-3, E-AC-3)") to "eac3",
+            mapOf("audio-codec" to "AAC (Advanced Audio Coding)") to "AAC (Advanced Audio Coding)",
+        )) {
+            val reads = FakeReads(values)
+            val stats = MpvStatsProjection.project(reads, MpvStatsProjection.readGuardScalars(reads), 0L, 0L)
+            assertEquals(expected, stats.audioCodec)
+        }
+    }
+
+    @Test
     fun guardScalars_bitrateZeroNormalizesToNull_countersDefaultToZero() {
         val reads = FakeReads(
             mapOf(
@@ -62,14 +75,15 @@ class MpvStatsProjectionTest {
                 "video-params/h" to 2160.0,
                 "container-fps" to 23.976,
                 "video-bitrate" to 24_000_000.0,
-                "audio-codec" to "eac3 (E-AC-3)",
+                "audio-codec" to "ATSC A/52B (AC-3, E-AC-3)",
+                "current-tracks/audio/codec" to "eac3",
                 "audio-params/samplerate" to 48_000.0,
                 "audio-params/channel-count" to 6.0,
                 "audio-bitrate" to 640_000.0,
                 "demuxer-cache-state/total-bytes" to 52_428_800.0,
                 "decoder-frame-drop-count" to 3L,
                 "displayed-frame-count" to 12_345L,
-                "total-avsync" to -0.42,
+                "avsync" to -0.00042,
                 "display-fps" to 60.0,
                 "vo-delayed" to 8.5,
                 "frame-drop-count" to 7L,
@@ -86,12 +100,12 @@ class MpvStatsProjectionTest {
         assertEquals("3840x2160", stats.videoResolution)
         assertEquals(23.976f, stats.videoFrameRate)
         assertEquals(24_000_000, stats.videoBitrate)
-        // The richer audio-codec string — NOT audio-codec-name.
-        assertEquals("eac3 (E-AC-3)", stats.audioCodec)
+        // The selected bitstream wins over the ambiguous decoder description.
+        assertEquals("eac3", stats.audioCodec)
         assertEquals(48_000, stats.audioSampleRate)
         assertEquals(6, stats.audioChannels)
         assertEquals(640_000, stats.audioBitrate)
-        assertEquals((24_000_000 + 640_000).toLong(), stats.estimatedBandwidthBps)
+        assertEquals(0L, stats.estimatedBandwidthBps)
         assertEquals(3L, stats.droppedFrames)
         assertEquals(12_345L, stats.totalVideoFrames)
         assertEquals(90_000L, stats.bufferedPositionMs)
@@ -99,7 +113,7 @@ class MpvStatsProjectionTest {
         assertEquals(52_428_800L, stats.bufferSizeBytes)
         assertEquals(-0.42f, stats.avsyncMs)
         assertEquals(60.0f, stats.displayFps)
-        assertEquals(8.5f, stats.voDelayedMs)
+        assertNull(stats.voDelayedMs)
         assertEquals(7L, stats.voFrameDropCount)
     }
 
@@ -107,6 +121,7 @@ class MpvStatsProjectionTest {
     fun project_driftedNames_readTheCanonicalProperties() {
         val reads = FakeReads(
             mapOf(
+                "current-tracks/audio/codec" to "eac3",
                 "video-bitrate" to 1_000_000.0,
                 "audio-bitrate" to 100_000.0,
                 // A resolvable resolution so both halves of the video-params
@@ -122,10 +137,10 @@ class MpvStatsProjectionTest {
             bufferedPositionMs = 0L,
         )
         // The former desktop reads must NOT be asked.
-        assertTrue("audio-codec-name" !in reads.asked, "audioCodec must read audio-codec, not audio-codec-name")
+        assertTrue("audio-codec-name" !in reads.asked, "selected-track codec must take priority over the legacy property")
         assertTrue("width" !in reads.asked, "videoResolution must read video-params/w|h, not the width/height aliases")
         // The canonical ones must be.
-        assertTrue("audio-codec" in reads.asked)
+        assertTrue("current-tracks/audio/codec" in reads.asked)
         assertTrue("video-params/w" in reads.asked)
         assertTrue("video-params/h" in reads.asked)
         assertTrue("demuxer-cache-state/total-bytes" in reads.asked)
@@ -139,7 +154,7 @@ class MpvStatsProjectionTest {
                 "video-bitrate" to 0.0,             // unset → null (guard scalars)
                 "audio-params/samplerate" to 0.0,
                 "audio-params/channel-count" to 0.0,
-                "total-avsync" to 0.0,              // exactly zero = "no deviation yet"
+                "avsync" to 0.0,              // exactly zero = "no deviation yet"
                 "display-fps" to 0.0,
                 "vo-delayed" to 0.0,
                 "video-params/w" to 1920.0,
@@ -156,7 +171,7 @@ class MpvStatsProjectionTest {
         assertNull(stats.videoBitrate)
         assertNull(stats.audioSampleRate)
         assertNull(stats.audioChannels)
-        assertNull(stats.avsyncMs)
+        assertEquals(0f, stats.avsyncMs)
         assertNull(stats.displayFps)
         assertNull(stats.voDelayedMs)
         assertNull(stats.videoResolution)

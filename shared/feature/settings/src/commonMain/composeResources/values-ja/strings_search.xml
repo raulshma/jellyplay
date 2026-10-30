@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">ディスプレイのリフレッシュレートを動画フレームに同期します (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">ストリーミング品質</string>
     <string name="ss_streaming_quality_subtitle">ストリーミングのデフォルト動画品質を設定します: 1080p、4K、SD、自動</string>
+    <string name="ss_playback_mode_title">再生モード</string>
+    <string name="ss_playback_mode_subtitle">自動、直接再生を強制、またはトランスコードを強制 — ストリームの配信方式</string>
     <string name="ss_audio_delay_title">オーディオ同期遅延</string>
     <string name="ss_audio_delay_subtitle">オーディオ同期の遅延オフセットを調整します (ms)</string>
     <string name="ss_live_stream_option_title">ライブテレビストリーム</string>
@@ -198,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">経過時間の代わりに残り時間を表示します</string>
     <string name="ss_pause_on_focus_loss_title">フォーカス喪失時に一時停止</string>
     <string name="ss_pause_on_focus_loss_subtitle">システムがオーディオフォーカスの喪失を通知したときに再生を一時停止します</string>
-    <string name="ss_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンを再接続すると再生を再開します</string>
+    <string name="ss_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンが再接続されると再生を再開します（有線・Bluetooth）</string>
     <string name="ss_mpv_video_output_title">MPV 動画出力</string>
     <string name="ss_mpv_video_output_subtitle">MPV の動画出力ドライバー</string>
     <string name="ss_mpv_scaler_title">MPV スケーラー</string>
@@ -343,6 +345,8 @@
     <string name="ss_subtitle_font_size_subtitle">動画再生中の字幕テキストのサイズ</string>
     <string name="ss_subtitle_forced_only_title">強制字幕のみ</string>
     <string name="ss_subtitle_forced_only_subtitle">強制トラックが存在する場合のみ字幕を表示します</string>
+    <string name="ss_show_only_preferred_subtitles_title">優先言語の字幕のみ</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">優先言語の字幕トラックのみを表示します</string>
     <string name="ss_pgs_direct_play_title">PGS ダイレクト再生</string>
     <string name="ss_pgs_direct_play_subtitle">焼き込みではなく PGS 字幕をネイティブにレンダリングします</string>
     <string name="ss_hdr_subtitle_style_title">HDR 字幕スタイル</string>
@@ -537,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">メディアの再生終了時に実行するコマンド</string>
     <string name="ss_hooks_idle_cmd_subtitle">アプリがアイドル状態になったときに実行するコマンド</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">アプリがアイドル状態を終了したときに実行するコマンド</string>
+
+    <string name="ss_auto_download_mode_title">新エピソードを自動ダウンロード</string>
+    <string name="ss_auto_download_mode_subtitle">ダウンロード済みシリーズの新エピソードを今すぐダウンロード、確認してからダウンロード、またはダウンロードしない</string>
+    <string name="ss_auto_download_check_now_subtitle">自動ダウンロードを今すぐ実行する</string>
 </resources>

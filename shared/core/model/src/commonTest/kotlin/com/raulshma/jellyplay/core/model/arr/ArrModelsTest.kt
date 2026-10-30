@@ -206,4 +206,24 @@ seerr.posterPath,
 "/abc.jpg",
 )
     }
+
+    @Test
+    fun `same-slot episodes of one series get distinct synthetic ids and rowKeys`() {
+        // Regression guard for the v0.11.5 Upcoming-calendar crash: a Sonarr
+        // double premiere maps to two rows identical in every series-level
+        // field; episodeId is the only discriminator, so it must participate
+        // in both the Home row id (syntheticId) and the calendar list key
+        // (rowKey).
+        val first = ArrCalendarItem(
+            tvdbId = 42, episodeId = 1001, title = "Show",
+            mediaType = ArrMediaType.SERIES, airDateUtc = "2026-01-20T05:00:00Z",
+        )
+        val second = first.copy(episodeId = 1002)
+        assertTrue(
+            first.toSeerrSearchItem().id != second.toSeerrSearchItem().id,
+            "same-slot episodes must not share a Home row id",
+        )
+        assertTrue(first.rowKey() != second.rowKey(), "same-slot episodes must not share a rowKey")
+        assertEquals(first.rowKey(), first.copy().rowKey(), "rowKey must be stable for identical rows")
+    }
 }

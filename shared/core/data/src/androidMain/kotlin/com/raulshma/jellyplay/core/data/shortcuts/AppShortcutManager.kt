@@ -9,7 +9,7 @@ import coil3.imageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.toBitmap
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingSurface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,7 +22,13 @@ import kotlinx.coroutines.launch
 
 class AppShortcutManager(
     private val context: Context,
-    private val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
+    /**
+     * The audio family's now-playing metadata face (the Audio shell seam's
+     * role-split): the shortcut observation reads exactly the four
+     * [NowPlayingSurface] flows. Lazy defers the manager construction (the
+     * media3 graph is only touched on the first shortcut observation).
+     */
+    private val nowPlaying: Lazy<NowPlayingSurface>,
     /**
      * The Koin application scope (DatastoreQualifiers.applicationScope) the
      * IO scope hangs off as a SupervisorJob child — the manager never cancels
@@ -37,11 +43,11 @@ class AppShortcutManager(
 
     fun observePlaybackForDynamicShortcuts() {
         scope.launch {
-            val audioPlaybackManager = audioPlaybackManagerLazy.value
+            val nowPlaying = nowPlaying.value
             combine(
-                audioPlaybackManager.currentPlayingItemId.filterNotNull(),
-                audioPlaybackManager.title,
-                audioPlaybackManager.artist,
+                nowPlaying.currentPlayingItemId.filterNotNull(),
+                nowPlaying.title,
+                nowPlaying.artist,
             ) { itemId, title, artist -> TrackInfo(itemId, title, artist) }
                 .distinctUntilChanged { old, new -> old.itemId == new.itemId }
                 .collect { track -> pushContinueListeningShortcut(track) }
@@ -87,7 +93,7 @@ class AppShortcutManager(
     }
 
     private suspend fun createShortcutIcon(): IconCompat {
-        val artworkUrl = audioPlaybackManagerLazy.value.albumArtUrl.value
+        val artworkUrl = nowPlaying.value.albumArtUrl.value
         if (artworkUrl.isNullOrBlank()) return createDefaultIcon()
 
         // ShortcutManagerCompat renders the icon at the system shortcut size

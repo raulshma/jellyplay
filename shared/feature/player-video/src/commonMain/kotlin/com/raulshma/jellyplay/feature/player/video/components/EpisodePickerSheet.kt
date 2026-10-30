@@ -86,7 +86,7 @@ internal fun EpisodePickerSheet(
     onSeasonSelect: (String) -> Unit,
     onEpisodeSelect: (MediaItem) -> Unit,
     onDismiss: () -> Unit,
-    getImageUrl: (String) -> String,
+    posterUrl: (MediaItem) -> String,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val isTv = LocalTvMode.current
@@ -205,9 +205,11 @@ internal fun EpisodePickerSheet(
                     ) { index, episode ->
                         val isCurrent = episode.id == currentEpisodeId
                         val isFirstOrCurrent = index == focusTargetIndex
-                        // Memoize the thumbnail URL per episode id so it isn't
-                        // rebuilt for every visible row on each recomposition.
-                        val imageUrl = remember(episode.id) { getImageUrl(episode.id) }
+                        // Memoize the thumbnail URL per episode so it isn't
+                        // rebuilt for every visible row on each recomposition;
+                        // the item is the key so a tag change (new copy) mints
+                        // the tagged URL again.
+                        val imageUrl = remember(episode, posterUrl) { posterUrl(episode) }
 
                         EpisodeRow(
                             episode = episode,

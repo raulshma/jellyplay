@@ -14,9 +14,9 @@ import org.jellyfin.sdk.api.client.extensions.*
  * moved verbatim off [LibraryApiClientImpl]. Like its playlist sibling
  * ([PlaylistApiClientImpl]) it closes over nothing but the SAME
  * [JellyfinApiEngine] single the wide client uses — no caches, no fetcher, no
- * favorite-flag store — so Koin constructs it over the engine and the union's
- * [com.raulshma.jellyplay.core.network.JellyfinApiClientImpl] delegates this
- * seam here; the split is pure relocation.
+ * favorite-flag store — so Koin constructs it over the engine alone and the
+ * wide client forwards its one collection obligation here; the split is pure
+ * relocation.
  *
  * One deliberate backward hop: [LibraryApiClientImpl] keeps satisfying
  * [com.raulshma.jellyplay.core.network.library.HomeSectionSources] (the home
@@ -33,6 +33,10 @@ class CollectionApiClientImpl(
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> = engine.withApi { api ->
+        // The query stays hand-assembled (a fixed single-path shape, no spec);
+        // only the page tail adopts the shared fold ([toSearchResult] — the
+        // exact SearchResult assembly this used to hand-copy, with the
+        // call's own startIndex echoed back).
         val response = api.itemsApi.getItems(
             parentId = collectionId.toUUID(),
             startIndex = startIndex,
@@ -40,11 +44,7 @@ class CollectionApiClientImpl(
             recursive = true,
             fields = LIST_ITEM_FIELDS,
         ).content
-        SearchResult(
-            items = response.items.toFilteredMediaItems(engine.currentMaxParentalRating),
-            totalRecordCount = response.totalRecordCount,
-            startIndex = startIndex,
-        )
+        response.toSearchResult(engine.currentMaxParentalRating, startIndex)
     }
 
     override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =

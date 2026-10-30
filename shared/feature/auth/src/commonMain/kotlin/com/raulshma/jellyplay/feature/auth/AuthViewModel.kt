@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.feature.auth
 
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.boundedPoll
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -15,7 +18,6 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_not
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_polling
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_timeout
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -169,45 +171,56 @@ class AuthViewModel(
             )
 
             quickConnectPollingJob = launch {
-                var attempts = 0
-                val maxAttempts = 40
-                while (attempts < maxAttempts) {
-                    delay(3_000)
-                    attempts++
-
+                // The approval wait is a boundedPoll (a bounded
+                // wait-for-one-answer): a 3 s head start before the first
+                // probe — the user needs to read the code — then one probe
+                // per 3 s round, 40 rounds ≈ 2 minutes before the timeout
+                // error. Authenticated/Failed stop the poll (non-null); a
+                // pending round answers null; exhaustion maps to the timeout
+                // error below. Cancellation (cancel/clear/onCleared) unwinds
+                // through the poll's gaps.
+                val answer = boundedPoll(
+                    PollSpec(
+                        initialDelayMs = 3_000,
+                        intervalMs = 3_000,
+                        maxAttempts = 40,
+                    ),
+                ) { _ ->
                     val pollResult = authRepository.pollQuickConnect(qcInfo.secret)
-                    if (pollResult.isFailure) {
-                        _quickConnectState.set(
-                            QuickConnectUiState.Error(
-                                UiMessage.of(pollResult, Res.string.auth_qc_error_polling)
-                            )
-                        )
-                        return@launch
+                    when {
+                        pollResult.isFailure -> QuickConnectPollAnswer.Failed(pollResult)
+                        pollResult.getOrNull()?.authenticated == true ->
+                            QuickConnectPollAnswer.Authenticated
+                        else -> null
                     }
-
-                    val state = pollResult.getOrNull()!!
-                    if (state.authenticated) {
+                }
+                when (answer) {
+                    null -> _quickConnectState.set(
+                        QuickConnectUiState.Error(
+                            UiMessage.Resource(Res.string.auth_qc_error_timeout)
+                        )
+                    )
+                    is QuickConnectPollAnswer.Failed -> _quickConnectState.set(
+                        QuickConnectUiState.Error(
+                            UiMessage.of(answer.result, Res.string.auth_qc_error_polling)
+                        )
+                    )
+                    QuickConnectPollAnswer.Authenticated -> {
                         _quickConnectState.set(QuickConnectUiState.Authenticating)
                         val loginResult = authRepository.loginWithQuickConnect(
                             serverAddress, qcInfo.secret
                         )
-                        if (loginResult.isSuccess) {
-                            _quickConnectState.set(QuickConnectUiState.Success)
-                        } else {
-                            _quickConnectState.set(
+                        _quickConnectState.set(
+                            if (loginResult.isSuccess) {
+                                QuickConnectUiState.Success
+                            } else {
                                 QuickConnectUiState.Error(
                                     UiMessage.of(loginResult, Res.string.auth_qc_error_auth)
                                 )
-                            )
-                        }
-                        return@launch
+                            }
+                        )
                     }
                 }
-                _quickConnectState.set(
-                    QuickConnectUiState.Error(
-                        UiMessage.Resource(Res.string.auth_qc_error_timeout)
-                    )
-                )
             }
         }
     }
@@ -229,4 +242,24 @@ class AuthViewModel(
         quickConnectPollingJob?.cancel()
         healthCheckJob?.cancel()
     }
+}
+
+/**
+ * One round's answer for the QuickConnect approval poll in
+ * [AuthViewModel.startQuickConnect] — the stop-or-wait vocabulary
+ * [boundedPoll] asks for, where a pending round is a `null` answer and owns
+ * no variant:
+ *
+ *  - **[QuickConnectPollAnswer.Authenticated]** — the user approved on their
+ *    device; the poll stops and the login proceeds.
+ *  - **[QuickConnectPollAnswer.Failed]** — the poll call itself errored; the
+ *    poll stops too (a failing endpoint is not re-attempted today) and
+ *    carries the failed [Result] so the error state keeps the
+ *    exception-vs-resource fold ([UiMessage.of]) — distinguishable from the
+ *    exhaustion timeout, which carries the bare resource.
+ */
+private sealed interface QuickConnectPollAnswer {
+    data object Authenticated : QuickConnectPollAnswer
+
+    data class Failed(val result: Result<QuickConnectState>) : QuickConnectPollAnswer
 }

@@ -33,7 +33,7 @@ internal val desktopRemoteControlModule: Module = module {
         DesktopAudioRemoteControlDispatcher(
             audioQueueManager = get(),
             audioPlayerEngine = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             remoteNavigationBridge = get(),
         )
     }
@@ -53,7 +53,7 @@ internal val desktopRemoteControlModule: Module = module {
         RemoteControlReceiver(
             webSocketClient = get(),
             authRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             videoDispatcher = get(),
             audioDispatcher = get(),
             uiDispatcher = get(),

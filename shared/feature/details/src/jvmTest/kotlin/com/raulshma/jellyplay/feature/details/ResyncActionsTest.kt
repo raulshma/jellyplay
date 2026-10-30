@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -28,7 +28,7 @@ import kotlin.test.Test
 class ResyncActionsTest {
 
     private val offlineSyncManager: OfflineSyncManager = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val downloadIntake: DownloadIntake = mockk(relaxed = true)
 
@@ -39,7 +39,7 @@ class ResyncActionsTest {
         scope = scope,
         session = MutableStateFlow(itemId?.let { DetailSession(itemId = it) }),
         offlineSyncManager = offlineSyncManager,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         offlineRepository = offlineRepository,
         downloadIntake = downloadIntake,
     )
@@ -215,7 +215,7 @@ class ResyncActionsTest {
     @Test
     fun `redownloadMedia success maps to Done`() = runTest {
         val detail = MediaDetail(item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE))
-        coEvery { mediaRepository.getMediaDetail("item1", any()) } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("item1", any()) } returns Result.success(detail)
         coEvery { downloadIntake.start(detail) } returns DownloadResult(
             downloadItem = mockk(relaxed = true),
             error = null,
@@ -225,7 +225,7 @@ class ResyncActionsTest {
         actions.redownloadMedia()
         advanceUntilIdle()
 
-        coVerify { mediaRepository.getMediaDetail("item1", force = true) }
+        coVerify { detailFeed.getMediaDetail("item1", force = true) }
         coVerify { offlineRepository.deleteOfflineItem("item1") }
         val state = actions.state.value
         assertTrue(state is ResyncUiState.Done, "expected Done, was $state")
@@ -235,7 +235,7 @@ class ResyncActionsTest {
     @Test
     fun `redownloadMedia intake error maps to Error`() = runTest {
         val detail = MediaDetail(item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE))
-        coEvery { mediaRepository.getMediaDetail("item1", any()) } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("item1", any()) } returns Result.success(detail)
         coEvery { downloadIntake.start(detail) } returns DownloadResult(
             downloadItem = null,
             error = "disk full",
@@ -252,7 +252,7 @@ class ResyncActionsTest {
 
     @Test
     fun `redownloadMedia detail fetch failure maps to Error`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("item1", any()) } returns Result.failure(RuntimeException("network"))
+        coEvery { detailFeed.getMediaDetail("item1", any()) } returns Result.failure(RuntimeException("network"))
         val actions = actions(this)
 
         actions.redownloadMedia()
@@ -266,7 +266,7 @@ class ResyncActionsTest {
     @Test
     fun `redownloadMedia is a no-op while Working`() = runTest {
         val gate = CompletableDeferred<MediaDetail>()
-        coEvery { mediaRepository.getMediaDetail("item1", any()) } coAnswers { Result.success(gate.await()) }
+        coEvery { detailFeed.getMediaDetail("item1", any()) } coAnswers { Result.success(gate.await()) }
         val actions = actions(this)
 
         actions.redownloadMedia()
@@ -276,7 +276,7 @@ class ResyncActionsTest {
         actions.redownloadMedia()
         advanceUntilIdle()
         // Second call must not force-fetch again.
-        coVerify(exactly = 1) { mediaRepository.getMediaDetail("item1", force = true) }
+        coVerify(exactly = 1) { detailFeed.getMediaDetail("item1", force = true) }
 
         gate.complete(MediaDetail(item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE)))
         advanceUntilIdle()
@@ -290,7 +290,7 @@ class ResyncActionsTest {
         advanceUntilIdle()
 
         assertTrue(actions.state.value is ResyncUiState.Idle)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         coVerify(exactly = 0) { offlineRepository.deleteOfflineItem(any()) }
     }
 
@@ -299,7 +299,7 @@ class ResyncActionsTest {
         // The re-download path guards against thrown exceptions (unlike resync);
         // a failing intake must surface the message, not leave state at Working.
         val detail = MediaDetail(item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE))
-        coEvery { mediaRepository.getMediaDetail("item1", any()) } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("item1", any()) } returns Result.success(detail)
         coEvery { downloadIntake.start(detail) } throws RuntimeException("disk crash")
         val actions = actions(this)
 

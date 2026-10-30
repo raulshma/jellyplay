@@ -140,6 +140,10 @@ enum class PlayerOrientationLock {
 @Composable
 expect fun rememberPlayerWindowOps(): PlayerWindowOps
 
+/** Top touch band reserved for system gestures, including hidden bars; zero on desktop. */
+@Composable
+internal expect fun playerSystemGestureTopInsetPx(): Float
+
 /**
  * STREAM_MUSIC volume nudge for the hardware-keyboard volume shortcuts.
  * Android keeps the system-volume UI/ringer behaviour of the original
@@ -163,13 +167,6 @@ internal expect fun rememberHasHardwareKeyboard(): Boolean
  */
 @Composable
 internal expect fun rememberIsPortraitOrientation(): Boolean
-
-/**
- * Locale 24-hour clock preference for the controls' clock. Desktop derives it
- * from the default JDK time format pattern.
- */
-@Composable
-internal expect fun rememberIs24HourFormat(): Boolean
 
 /**
  * Whether the non-TV hardware-keyboard layer grabs focus onto its player Box

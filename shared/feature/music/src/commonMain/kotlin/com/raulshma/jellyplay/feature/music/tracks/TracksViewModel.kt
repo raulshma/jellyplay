@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.music.tracks
 
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -19,13 +20,15 @@ import kotlinx.coroutines.flow.StateFlow
  * queue) that are genuinely per-collection and stay at the adapter.
  */
 class TracksViewModel(
-    mediaRepository: MediaRepository,
+    libraryFeed: LibraryFeed,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item-based artwork accessor set the tracks list renders through. */
+    val artworkUrls: ArtworkUrls,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
 
     /** Sorted paged tracks — sort state, pager and declared sort set live in the collection. */
-    private val collection = SortedPagedCollection(mediaRepository, scope, MusicCollectionKind.TRACKS)
+    private val collection = SortedPagedCollection(libraryFeed, scope, MusicCollectionKind.TRACKS)
 
     val selectedSort: StateFlow<MusicSortOption> = collection.selectedSort
 

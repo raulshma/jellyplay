@@ -71,6 +71,7 @@ internal class EngineAttachController(
     private val subtitlePreview: SubtitlePreviewController,
     private val syncPlay: SyncPlayBridge,
     private val onEngineCapabilities: (capabilities: EngineCapabilities, keepScreenOnDuringVideo: Boolean) -> Unit,
+    private val onStreamMetadataReset: () -> Unit = {},
 ) {
 
     /** The three per-engine fan-out collectors; cancelled by the next attach. */
@@ -133,6 +134,9 @@ internal class EngineAttachController(
             // initial (empty) availableTracks emission cannot act on
             // a stale held selection.
             trackSelectionHelper.onEngineRecreated()
+            // Never retain the previous stream's metadata during a reload —
+            // the fresh engine's first stats tick repopulates it.
+            onStreamMetadataReset()
             collectionJob = scope.launch {
                 // The play/buffering mirrors, buffering watchdog,
                 // direct-play fallback latch, error surfacing, subtitle

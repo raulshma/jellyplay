@@ -3,7 +3,8 @@
 package com.raulshma.jellyplay.feature.photos
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -38,7 +39,7 @@ class PhotoViewerViewModelTest {
     // scheduler, so the VM's viewModelScope coroutines run on this scheduler).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoExport: PhotoExport
@@ -50,7 +51,7 @@ class PhotoViewerViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
 
         libraryApiClient = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
@@ -60,7 +61,7 @@ class PhotoViewerViewModelTest {
         // The relaxed mock's default Result would ClassCast inside the VM's
         // .getOrNull() — stub every detail read with a real Result (relaxed
         // slideshow navigations included).
-        coEvery { mediaRepository.getMediaDetail(any()) } returns
+        coEvery { detailFeed.getMediaDetail(any(), force = false) } returns
             Result.success(MediaDetail(item = photo1))
     }
 
@@ -70,9 +71,10 @@ class PhotoViewerViewModelTest {
     }
 
     private fun createViewModel(): PhotoViewerViewModel = PhotoViewerViewModel(
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         libraryApiClient = libraryApiClient,
         imageUrlProvider = imageUrlProvider,
+        artworkUrls = ArtworkUrls.EMPTY,
         photoExport = photoExport,
     )
 
@@ -83,9 +85,9 @@ class PhotoViewerViewModelTest {
         } returns Result.success(
             SearchResult(items = listOf(photo1, photo2, photo3), totalRecordCount = 3, startIndex = 0)
         )
-        coEvery { mediaRepository.getMediaDetail(photo1.id) } returns Result.success(MediaDetail(item = photo1))
-        coEvery { mediaRepository.getMediaDetail(photo2.id) } returns Result.success(MediaDetail(item = photo2))
-        coEvery { mediaRepository.getMediaDetail(photo3.id) } returns Result.success(MediaDetail(item = photo3))
+        coEvery { detailFeed.getMediaDetail(photo1.id, force = false) } returns Result.success(MediaDetail(item = photo1))
+        coEvery { detailFeed.getMediaDetail(photo2.id, force = false) } returns Result.success(MediaDetail(item = photo2))
+        coEvery { detailFeed.getMediaDetail(photo3.id, force = false) } returns Result.success(MediaDetail(item = photo3))
     }
 
     /** Loads the viewer onto [photo2] inside a three-photo album (index 1). */
@@ -141,7 +143,7 @@ class PhotoViewerViewModelTest {
 
     @Test
     fun `load failure surfaces the error message and keeps photo null`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("broken") } returns
+        coEvery { detailFeed.getMediaDetail("broken", force = false) } returns
             Result.failure(RuntimeException("server exploded"))
 
         val vm = createViewModel()
@@ -155,7 +157,7 @@ class PhotoViewerViewModelTest {
 
     @Test
     fun `load failure with a null exception message falls back to a default`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("broken") } returns Result.failure(RuntimeException())
+        coEvery { detailFeed.getMediaDetail("broken", force = false) } returns Result.failure(RuntimeException())
 
         val vm = createViewModel()
         vm.load(itemId = "broken", parentId = null)
@@ -176,7 +178,7 @@ class PhotoViewerViewModelTest {
 
         assertEquals(2, vm.state.value.currentIndex)
         assertEquals(photo3, vm.state.value.photo)
-        coVerify { mediaRepository.getMediaDetail("p3") }
+        coVerify { detailFeed.getMediaDetail("p3", force = false) }
     }
 
     @Test
@@ -191,7 +193,7 @@ class PhotoViewerViewModelTest {
         // Still on photo2 (index 1), no detail re-fetch for an out-of-range id.
         assertEquals(1, vm.state.value.currentIndex)
         assertEquals(photo2, vm.state.value.photo)
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail("p1") }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail("p1", force = false) }
     }
 
     @Test

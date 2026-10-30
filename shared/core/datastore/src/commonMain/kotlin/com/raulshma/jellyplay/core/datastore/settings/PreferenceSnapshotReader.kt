@@ -41,6 +41,7 @@ class PreferenceSnapshotReader(
         homeDiscovery = stores.homeDiscovery.homeDiscovery.first(),
         library = stores.library.library.first(),
         navigation = stores.navigation.navigation.first(),
+        shortcuts = stores.shortcuts.shortcuts.first(),
         downloads = stores.downloads.downloads.first(),
         networkOffline = stores.networkOffline.networkOffline.first(),
         notification = stores.notification.notification.first(),

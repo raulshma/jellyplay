@@ -27,20 +27,43 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Wand
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvRenderQuality
 import com.raulshma.jellyplay.core.model.MpvShaderPack
 import com.raulshma.jellyplay.core.model.MpvToneMapping
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_auto
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_bt2390
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_bt2446a
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_clip
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_hable
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_linear
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_curve_spline
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deband_heavy
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deband_light
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deband_medium
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deband_off
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_render_deband
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_render_motion_interpolation
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_render_tone_curve
+import org.jetbrains.compose.resources.stringResource
 
 /**
- * The "Rendering" sheet: shader pack, HDR→SDR tone mapping, render
- * quality, and the "save for this series" persistence toggle (off = this
- * session only; on = pinned to the series row, or the item row for
- * standalone movies). "Inherit (follow global)" clears the stored override.
+ * The "Rendering" sheet: shader pack, HDR→SDR tone mapping, render quality,
+ * the persisted render prefs (tone-mapping curve, deband strength, motion
+ * interpolation — the global VideoPlayerStore slice, applied to the running
+ * engine through the aggregate fanout's rebuild trigger), and the "save for
+ * this series" persistence toggle (off = this session only; on = pinned to
+ * the series row, or the item row for standalone movies). "Inherit (follow
+ * global)" clears the stored override.
  *
  * English literals match the sibling sheets (PlaybackModeSheet et al.) —
- * sheet bodies are the established hard-coded-string surface.
+ * sheet bodies are the established hard-coded-string surface; the persisted
+ * render-pref rows ride string resources (their labels' single home, shared
+ * shape with the AVSync/AspectRatio sheets).
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -48,12 +71,18 @@ fun RenderSheet(
     shaderPack: MpvShaderPack,
     toneMapping: MpvToneMapping,
     renderQuality: MpvRenderQuality,
+    toneMappingCurve: MpvToneMappingCurve,
+    debandMode: MpvDebandMode,
+    motionInterpolation: Boolean,
     hasStoredOverride: Boolean,
     canSaveForSeries: Boolean,
     saveForSeries: Boolean,
     onShaderPackSelect: (MpvShaderPack) -> Unit,
     onToneMappingSelect: (MpvToneMapping) -> Unit,
     onRenderQualitySelect: (MpvRenderQuality) -> Unit,
+    onToneMappingCurveSelect: (MpvToneMappingCurve) -> Unit,
+    onDebandModeSelect: (MpvDebandMode) -> Unit,
+    onMotionInterpolationChange: (Boolean) -> Unit,
     onSaveForSeriesChange: (Boolean) -> Unit,
     onInherit: () -> Unit,
     onDismiss: () -> Unit,
@@ -128,6 +157,57 @@ fun RenderSheet(
                 }
             }
 
+            // ── The persisted render prefs (the VideoPlayerStore slice) ────
+
+            Spacer(Modifier.height(16.dp))
+            RenderSectionTitle(stringResource(Res.string.player_video_render_tone_curve))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MpvToneMappingCurve.entries.forEach { curve ->
+                    RenderChip(
+                        label = toneMappingCurveLabel(curve),
+                        selected = curve == toneMappingCurve,
+                        onClick = { onToneMappingCurveSelect(curve) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            RenderSectionTitle(stringResource(Res.string.player_video_render_deband))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MpvDebandMode.entries.forEach { mode ->
+                    RenderChip(
+                        label = debandModeLabel(mode),
+                        selected = mode == debandMode,
+                        onClick = { onDebandModeSelect(mode) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(Res.string.player_video_render_motion_interpolation),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Switch(
+                    checked = motionInterpolation,
+                    onCheckedChange = onMotionInterpolationChange,
+                )
+            }
+
             if (canSaveForSeries) {
                 Spacer(Modifier.height(16.dp))
                 Row(
@@ -169,6 +249,27 @@ private fun RenderSectionTitle(text: String) {
         modifier = Modifier.padding(horizontal = 24.dp),
     )
     Spacer(Modifier.height(8.dp))
+}
+
+/** The persisted HDR→SDR tone-mapping curve family's labels. */
+@Composable
+private fun toneMappingCurveLabel(curve: MpvToneMappingCurve): String = when (curve) {
+    MpvToneMappingCurve.AUTO -> stringResource(Res.string.player_video_curve_auto)
+    MpvToneMappingCurve.BT_2390 -> stringResource(Res.string.player_video_curve_bt2390)
+    MpvToneMappingCurve.BT_2446A -> stringResource(Res.string.player_video_curve_bt2446a)
+    MpvToneMappingCurve.SPLINE -> stringResource(Res.string.player_video_curve_spline)
+    MpvToneMappingCurve.HABLE -> stringResource(Res.string.player_video_curve_hable)
+    MpvToneMappingCurve.CLIP -> stringResource(Res.string.player_video_curve_clip)
+    MpvToneMappingCurve.LINEAR -> stringResource(Res.string.player_video_curve_linear)
+}
+
+/** The deband strength level's labels. */
+@Composable
+private fun debandModeLabel(mode: MpvDebandMode): String = when (mode) {
+    MpvDebandMode.OFF -> stringResource(Res.string.player_video_deband_off)
+    MpvDebandMode.LIGHT -> stringResource(Res.string.player_video_deband_light)
+    MpvDebandMode.MEDIUM -> stringResource(Res.string.player_video_deband_medium)
+    MpvDebandMode.HEAVY -> stringResource(Res.string.player_video_deband_heavy)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

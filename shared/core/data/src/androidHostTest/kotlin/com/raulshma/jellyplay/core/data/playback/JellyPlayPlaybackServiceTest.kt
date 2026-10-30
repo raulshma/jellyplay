@@ -7,7 +7,8 @@ import androidx.media3.session.MediaSession.ControllerInfo
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -49,7 +50,7 @@ import org.koin.dsl.module
  * Runs against the exact production construction path: a real
  * [PlaybackSessionManager] + [AudioLibraryBrowser.buildMediaSession] around a
  * mockk player (testFixture [stubMediaSessionPlayer]), with the
- * [AudioPlaybackManager] and [CastManager] mocked in a test-local Koin
+ * [AudioServiceSurface] and [CastManager] mocked in a test-local Koin
  * container.
  */
 @OptIn(UnstableApi::class)
@@ -58,7 +59,7 @@ import org.koin.dsl.module
 class JellyPlayPlaybackServiceTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val audioPlaybackManager: AudioPlaybackManager = mockk(relaxed = true)
+    private val audioServiceSurface: AudioServiceSurface = mockk(relaxed = true)
     private lateinit var manager: PlaybackSessionManager
     private lateinit var browser: AudioLibraryBrowser
 
@@ -68,12 +69,13 @@ class JellyPlayPlaybackServiceTest {
         startKoin {
             modules(module {
                 single<PlaybackSessionManager> { manager }
-                single<AudioPlaybackManager> { audioPlaybackManager }
+                single<AudioServiceSurface> { audioServiceSurface }
             })
         }
         browser = AudioLibraryBrowser(
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-            mediaRepository = mockk<MediaRepository>(relaxed = true),
+            libraryFeed = mockk<LibraryFeed>(relaxed = true),
+            detailFeed = mockk<DetailFeed>(relaxed = true),
             musicCatalogue = mockk<MusicCatalogue>(relaxed = true),
             libraryApiClient = mockk<LibraryApiClient>(relaxed = true),
             playlistRepository = mockk<PlaylistRepository>(relaxed = true),
@@ -136,7 +138,27 @@ class JellyPlayPlaybackServiceTest {
 
         service.onGetSession(mockk<ControllerInfo>(relaxed = true))
 
-        verify(exactly = 1) { audioPlaybackManager.ensureAudioSession() }
+        verify(exactly = 1) { audioServiceSurface.ensureAudioSession() }
+    }
+
+    /**
+     * The dead-buttons regression pin: a controller connecting while a
+     * session is already active (the VIDEO player's own startup hits this —
+     * its session activates the slot, which starts the service, whose first
+     * connection re-enters onGetSession) must NOT force the audio session
+     * into existence. The unconditional ensure built an idle audio session
+     * mid-video-load, whose setActiveSession then evicted the not-yet-playing
+     * video session (the manager guard protects only a playing holder) — and
+     * media buttons routed to the empty audio session for the whole video.
+     */
+    @Test
+    fun `onGetSession with an active session never ensures the audio session`() {
+        val active = activeSession(isPlaying = true)
+
+        val handed = active.service.onGetSession(mockk<ControllerInfo>(relaxed = true))
+
+        assertSame(active.session, handed)
+        verify(exactly = 0) { audioServiceSurface.ensureAudioSession() }
     }
 
     @Test
@@ -155,7 +177,7 @@ class JellyPlayPlaybackServiceTest {
         service.onTaskRemoved(null)
 
         assertTrue(shadowOf(service).isStoppedBySelf())
-        verify(exactly = 0) { audioPlaybackManager.stopAndRelease() }
+        verify(exactly = 0) { audioServiceSurface.stopAndRelease() }
     }
 
     @Test
@@ -164,7 +186,7 @@ class JellyPlayPlaybackServiceTest {
 
         active.service.onTaskRemoved(null)
 
-        verify(exactly = 1) { audioPlaybackManager.stopAndRelease() }
+        verify(exactly = 1) { audioServiceSurface.stopAndRelease() }
         assertTrue(shadowOf(active.service).isStoppedBySelf())
     }
 
@@ -174,7 +196,7 @@ class JellyPlayPlaybackServiceTest {
 
         active.service.onTaskRemoved(null)
 
-        verify(exactly = 0) { audioPlaybackManager.stopAndRelease() }
+        verify(exactly = 0) { audioServiceSurface.stopAndRelease() }
         assertFalse(shadowOf(active.service).isStoppedBySelf())
     }
 }

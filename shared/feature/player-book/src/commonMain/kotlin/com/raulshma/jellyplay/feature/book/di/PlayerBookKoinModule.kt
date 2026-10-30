@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.book.di
 
 import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -33,7 +32,7 @@ import org.koin.dsl.module
 val playerBookModule: Module = module {
     viewModel {
         BookReaderViewModel(
-            mediaRepository = get(),
+            detailFeed = get(),
             playbackRepository = get(),
             playbackIdentity = get(),
             preferences = ReaderPreferences(store = get(), scope = get(DatastoreQualifiers.applicationScope)),

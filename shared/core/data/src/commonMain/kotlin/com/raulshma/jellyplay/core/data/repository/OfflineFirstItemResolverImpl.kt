@@ -11,11 +11,12 @@ import com.raulshma.jellyplay.core.model.toMediaItem
 // legacy DataModule bridges the remaining Hilt injectors via koin().get()).
 //
 // promotion from jvmShared: every ctor dep is a commonMain interface
-// (OfflineRepository / MediaRepository / OfflineModeManager / ImageUrlProvider),
+// (OfflineRepository / DetailFeed / OfflineModeManager / ImageUrlProvider),
 // so the impl crosses verbatim. Its Koin single stays in dataJvmModule.
 class OfflineFirstItemResolverImpl(
     private val offlineRepository: OfflineRepository,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val offlineModeManager: OfflineModeManager,
     private val imageUrlProvider: ImageUrlProvider,
 ) : OfflineFirstItemResolver {
@@ -29,7 +30,7 @@ class OfflineFirstItemResolverImpl(
         // Online-only fallback for items watched but never downloaded. Skipped
         // while offline to avoid a guaranteed-failing network call.
         if (offlineModeManager.offlineMode.value == OfflineMode.ONLINE) {
-            mediaRepository.getMediaDetail(id)
+            detailFeed.getMediaDetail(id, force = false)
                 .getOrNull()
                 ?.item
                 ?.let { item ->

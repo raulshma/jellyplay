@@ -10,16 +10,21 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StillWatchingMode
+import com.raulshma.jellyplay.core.model.TrickplayMode
 import com.raulshma.jellyplay.core.model.ensureControlsSummonable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.serializer
@@ -34,7 +39,7 @@ import kotlinx.serialization.serializer
  *
  * **The row groups below are the ONE registration of this domain's rows.**
  * Each row is constructed exactly once, inside its per-domain group list
- * (`transportTiming` … `mediaSegments`) — nothing re-lists them: [all]
+ * (`transportTiming` … `mpvRender`) — nothing re-lists them: [all]
  * derives by concatenation of the groups, `resetKeysFor` derives by filtering
  * [all] on the declared [PreferenceSpec.resetCategory], and [searchEntries]
  * derives from the rows' declared [PreferenceSpec.search] (plus the six
@@ -151,6 +156,20 @@ object VideoPlayerPreferenceSpecs {
                 subtitleKey = "ss_controls_timeout_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("controls", "timeout", "hide", "overlay"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainLong(
+            keyName = "skip_prompt_duration_ms",
+            default = 10_000L,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "skip_prompt_duration",
+                titleKey = "settings_skip_prompt_duration",
+                subtitleKey = "settings_skip_prompt_duration_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("skip", "intro", "outro", "button", "duration", "seconds"),
                 routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
                 isAdvanced = true,
             ),
@@ -455,6 +474,41 @@ object VideoPlayerPreferenceSpecs {
                 routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
             ),
         ),
+        /*
+         * Cap on how many episodes autoplay back-to-back before the sequence
+         * stops (0 = unlimited). Sits beside the autoplay toggle it qualifies.
+         */
+        PreferenceSpec.plainInt(
+            keyName = "autoplay_episode_limit",
+            default = 0,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 0,
+            search = PreferenceSearchSpec(
+                id = "autoplay_episode_limit",
+                titleKey = "ss_autoplay_episode_limit_title",
+                subtitleKey = "ss_autoplay_episode_limit_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("autoplay", "limit", "episodes", "count", "binge", "maximum", "cap"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            ),
+        ),
+        /*
+         * Show the next-episode details card after an episode finishes
+         * (metadata + artwork preview before the autoplay fires). Default on.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "show_next_episode_details_after_finish",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "next_episode_details",
+                titleKey = "ss_next_episode_details_title",
+                subtitleKey = "ss_next_episode_details_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("next episode", "details", "preview", "finish", "autoplay", "card", "up next"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            ),
+        ),
     )
 
     /** "Still watching?" + autoplay + cinema + HUD (clock, brightness, mute, segments HUD). */
@@ -628,6 +682,25 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        /*
+         * The trickplay preview's presentation: bubble over the seek bar, a
+         * docked filmstrip, or a fullscreen takeover while scrubbing. Sits
+         * beside the trickplay toggles it qualifies.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "trickplay_mode",
+            default = TrickplayMode.BUBBLE,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "trickplay_mode",
+                titleKey = "ss_trickplay_mode_title",
+                subtitleKey = "ss_trickplay_mode_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("trickplay", "preview", "bubble", "filmstrip", "fullscreen", "scrub", "thumbnails"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
         PreferenceSpec.plainBoolean(
             keyName = "video_episode_browser_enabled",
             default = true,
@@ -723,6 +796,25 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        /*
+         * Ambient blur: the paused frame blurs and expands behind the pause
+         * surface (the render-adjacent video effect beside the TV zoom below).
+         * Default off.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "ambient_blur_enabled",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "ambient_blur",
+                titleKey = "ss_ambient_blur_title",
+                subtitleKey = "ss_ambient_blur_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("ambient", "blur", "backdrop", "pause", "glow", "background"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
         PreferenceSpec.plainFloat(
             keyName = "tv_zoom_mode_percent",
             default = 0f,
@@ -738,6 +830,25 @@ object VideoPlayerPreferenceSpecs {
                 platformRule = PreferencePlatformRule.ANDROID_ONLY,
             ),
         ),
+        /*
+         * How bitmap subtitle (PGS/VobSub) planes scale onto the frame when
+         * their native resolution disagrees with the render target — the
+         * render-key twin of the TV zoom above.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "bitmap_subtitle_scale_mode",
+            default = BitmapSubtitleScaleMode.FIT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "bitmap_subtitle_scale",
+                titleKey = "ss_bitmap_subtitle_scale_title",
+                subtitleKey = "ss_bitmap_subtitle_scale_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("bitmap", "subtitle", "pgs", "vobsub", "scale", "stretch", "cover", "fit"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
         PreferenceSpec.plainBoolean(
             keyName = "incognito_mode_enabled",
             default = false,
@@ -748,6 +859,55 @@ object VideoPlayerPreferenceSpecs {
                 subtitleKey = "ss_incognito_mode_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("incognito", "private", "history", "stealth"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The pause-screensaver cluster: what replaces the video after a long
+         * pause, how long until it arms, and whether the pause surface shows
+         * item details. The three rows travel together.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "pause_screensaver_mode",
+            default = PauseScreensaverMode.OFF,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "pause_screensaver",
+                titleKey = "ss_pause_screensaver_title",
+                subtitleKey = "ss_pause_screensaver_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("pause", "screensaver", "clock", "logo", "burn-in", "dim", "black"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainInt(
+            keyName = "pause_screensaver_after_minutes",
+            default = 5,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 1,
+            max = 60,
+            search = PreferenceSearchSpec(
+                id = "pause_screensaver_delay",
+                titleKey = "ss_pause_screensaver_delay_title",
+                subtitleKey = "ss_pause_screensaver_delay_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("pause", "screensaver", "delay", "minutes", "timer", "idle", "timeout"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "pause_details_enabled",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "pause_details",
+                titleKey = "ss_pause_details_title",
+                subtitleKey = "ss_pause_details_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("pause", "details", "metadata", "info", "overlay", "episode"),
                 routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
                 isAdvanced = true,
             ),
@@ -875,6 +1035,122 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        /*
+         * How early (seconds) the "Next up" button appears before the current
+         * item ends — the segment-adjacent end-of-item cadence knob. Default
+         * 30s, bounded to 5–120s.
+         */
+        PreferenceSpec.plainInt(
+            keyName = "next_up_button_preroll_sec",
+            default = 30,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 5,
+            max = 120,
+            search = PreferenceSearchSpec(
+                id = "next_up_preroll",
+                titleKey = "ss_next_up_preroll_title",
+                subtitleKey = "ss_next_up_preroll_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("next up", "button", "preroll", "seconds", "early", "before end", "credits"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+    )
+
+    /**
+     * mpv-engine power-user knobs (advanced-gated): the tone-mapping curve
+     * family, the deband strength, motion interpolation, and the two raw
+     * escape hatches (input.conf text, custom on-screen buttons). The rows
+     * carry no mpv typing here — the engine layer maps the stored values onto
+     * mpv options via the core:model enums ([MpvToneMappingCurve.mpvValue] /
+     * [MpvDebandMode.mpvValue]).
+     */
+    private val mpvRender: List<PreferenceSpec<*>> = listOf(
+        PreferenceSpec.enumRow(
+            keyName = "mpv_tone_mapping_curve",
+            default = MpvToneMappingCurve.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "mpv_tone_mapping_curve",
+                titleKey = "ss_mpv_tone_mapping_curve_title",
+                subtitleKey = "ss_mpv_tone_mapping_curve_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("mpv", "tone mapping", "hdr", "sdr", "curve", "bt.2390", "hable"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.enumRow(
+            keyName = "mpv_deband_mode",
+            default = MpvDebandMode.OFF,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "mpv_deband",
+                titleKey = "ss_mpv_deband_title",
+                subtitleKey = "ss_mpv_deband_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("mpv", "deband", "banding", "gradient", "strength", "dither"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "mpv_motion_interpolation",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "mpv_motion_interpolation",
+                titleKey = "ss_mpv_motion_interpolation_title",
+                subtitleKey = "ss_mpv_motion_interpolation_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("mpv", "motion", "interpolation", "smooth", "fps", "judder", "soap"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * Raw `input.conf`-style key bindings text (the video_default_aspect_ratio
+         * raw-string precedent: a derived row with the identity encode, so the
+         * derived write/restore machinery stays total). An empty string (the
+         * default) applies nothing.
+         */
+        PreferenceSpec.derived(
+            keyName = "mpv_input_conf",
+            default = "",
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            read = { _, raw -> raw ?: "" },
+            encode = { it },
+            search = PreferenceSearchSpec(
+                id = "mpv_input_conf",
+                titleKey = "ss_mpv_input_conf_title",
+                subtitleKey = "ss_mpv_input_conf_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("mpv", "input", "key bindings", "keyboard", "remote", "config"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * Custom on-screen button definitions (JSON-ish raw text the player
+         * renders as extra transport buttons). Empty = none.
+         */
+        PreferenceSpec.derived(
+            keyName = "mpv_custom_buttons",
+            default = "",
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            read = { _, raw -> raw ?: "" },
+            encode = { it },
+            search = PreferenceSearchSpec(
+                id = "mpv_custom_buttons",
+                titleKey = "ss_mpv_custom_buttons_title",
+                subtitleKey = "ss_mpv_custom_buttons_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("mpv", "custom", "buttons", "osd", "toolbar", "actions"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
     )
 
     /**
@@ -956,7 +1232,8 @@ object VideoPlayerPreferenceSpecs {
             speedMemory +
             stillWatchingHud +
             trickplayBrowser +
-            mediaSegments
+            mediaSegments +
+            mpvRender
 
     /**
      * Category reset participation, derived as the rows whose declared
@@ -1078,6 +1355,11 @@ object VideoPlayerPreferenceSpecs {
 
     val VIDEO_CONTROLS_TIMEOUT_MS: PreferenceSpec<Long> get() = row("video_controls_timeout_ms")
 
+    val SKIP_PROMPT_DURATION_MS: PreferenceSpec<Long> get() = row("skip_prompt_duration_ms")
+
+    /** The clamp every [SKIP_PROMPT_DURATION_MS] read/write shares. */
+    val SKIP_PROMPT_DURATION_MS_BOUNDS: ClosedRange<Long> = 3_000L..30_000L
+
     val VIDEO_HIDE_OSD_ON_PAUSE: PreferenceSpec<Boolean> get() = row("video_hide_osd_on_pause")
 
     val VIDEO_RESUME_ON_HEADSET_PLUG: PreferenceSpec<Boolean> get() = row("video_resume_on_headset_plug")
@@ -1138,9 +1420,44 @@ object VideoPlayerPreferenceSpecs {
 
     val SHOW_TIME_REMAINING: PreferenceSpec<Boolean> get() = row("show_time_remaining")
 
+    val AMBIENT_BLUR_ENABLED: PreferenceSpec<Boolean> get() = row("ambient_blur_enabled")
+
+    val BITMAP_SUBTITLE_SCALE_MODE: PreferenceSpec<BitmapSubtitleScaleMode> get() = row("bitmap_subtitle_scale_mode")
+
+    val PAUSE_SCREENSAVER_MODE: PreferenceSpec<PauseScreensaverMode> get() = row("pause_screensaver_mode")
+
+    val PAUSE_SCREENSAVER_AFTER_MINUTES: PreferenceSpec<Int> get() = row("pause_screensaver_after_minutes")
+
+    /** The clamp every [PAUSE_SCREENSAVER_AFTER_MINUTES] read/write shares. */
+    val PAUSE_SCREENSAVER_AFTER_MINUTES_BOUNDS: ClosedRange<Int> = 1..60
+
+    val PAUSE_DETAILS_ENABLED: PreferenceSpec<Boolean> get() = row("pause_details_enabled")
+
+    val NEXT_UP_BUTTON_PREROLL_SEC: PreferenceSpec<Int> get() = row("next_up_button_preroll_sec")
+
+    /** The clamp every [NEXT_UP_BUTTON_PREROLL_SEC] read/write shares. */
+    val NEXT_UP_BUTTON_PREROLL_SEC_BOUNDS: ClosedRange<Int> = 5..120
+
+    val MPV_TONE_MAPPING_CURVE: PreferenceSpec<MpvToneMappingCurve> get() = row("mpv_tone_mapping_curve")
+
+    val MPV_DEBAND_MODE: PreferenceSpec<MpvDebandMode> get() = row("mpv_deband_mode")
+
+    val MPV_MOTION_INTERPOLATION: PreferenceSpec<Boolean> get() = row("mpv_motion_interpolation")
+
+    val MPV_INPUT_CONF: PreferenceSpec<String> get() = row("mpv_input_conf")
+
+    val MPV_CUSTOM_BUTTONS: PreferenceSpec<String> get() = row("mpv_custom_buttons")
+
+    val AUTOPLAY_EPISODE_LIMIT: PreferenceSpec<Int> get() = row("autoplay_episode_limit")
+
+    val SHOW_NEXT_EPISODE_DETAILS_AFTER_FINISH: PreferenceSpec<Boolean> get() =
+        row("show_next_episode_details_after_finish")
+
     val TRICKPLAY_ENABLED: PreferenceSpec<Boolean> get() = row("trickplay_enabled")
 
     val TRICKPLAY_ON_SEEK_GESTURE: PreferenceSpec<Boolean> get() = row("trickplay_on_seek_gesture")
+
+    val TRICKPLAY_MODE: PreferenceSpec<TrickplayMode> get() = row("trickplay_mode")
 
     val VIDEO_EPISODE_BROWSER_ENABLED: PreferenceSpec<Boolean> get() = row("video_episode_browser_enabled")
 

@@ -1,6 +1,15 @@
 package com.raulshma.jellyplay.core.ui.navigation
 
 /**
+ * The offline hide-set — the [NAV_DESTINATIONS] rows whose destination has no
+ * offline fallback ([NavDestination.hiddenOffline]), as persisted navKeys.
+ * The fact's ONE owner is the registry row; this derivation is the only
+ * consumer shape the nav-bar fold needs.
+ */
+private val offlineHiddenNavKeys: Set<String> =
+    NAV_DESTINATIONS.filter { it.hiddenOffline }.map { it.route.navKey }.toSet()
+
+/**
  * The top-level-route composition policy every browse shell renders through —
  * the former Android-shell-only `visibleTopLevelRoutes` fold, now shared:
  *
@@ -8,11 +17,11 @@ package com.raulshma.jellyplay.core.ui.navigation
  *     (Android: the homeMode-selected [VIDEO_TOP_LEVEL_ROUTES] /
  *     [MUSIC_TOP_LEVEL_ROUTES] bar set; desktop: the full
  *     `DESKTOP_RAIL_ROUTES` rail). Membership+order tables stay per-shell;
- *  2. while offline, the server-bound destination with no offline fallback is
- *     hidden ([Route.LiveTv] — live streams always degrade to a dead-end
- *     ErrorScreen; Library is NOT hidden here, its grid auto-switches to the
- *     offline store, and Home/Search/Shortcuts/MusicBrowse all keep offline
- *     paths);
+ *  2. while offline, the destinations with no offline fallback are hidden
+ *     (the registry rows' [NavDestination.hiddenOffline] flag — [Route.LiveTv]
+ *     today: live streams always degrade to a dead-end ErrorScreen; Library
+ *     is NOT hidden here, its grid auto-switches to the offline store, and
+ *     Home/Search/Shortcuts/MusicBrowse all keep offline paths);
  *  3. the user's nav customization filters (hidden items, which may include
  *     the offline hide-set) and reorders (stored nav-item order) the
  *     remainder.
@@ -29,7 +38,7 @@ fun visibleTopLevelRoutes(
     navItemOrder: List<String>,
     isOffline: Boolean,
 ): LinkedHashMap<Route, String> {
-    val offlineHidden = if (isOffline) setOf(Route.LiveTv.navKey) else emptySet()
+    val offlineHidden = if (isOffline) offlineHiddenNavKeys else emptySet()
     return applyNavCustomization(baseRoutes, hiddenNavItems + offlineHidden, navItemOrder)
 }
 
@@ -41,6 +50,6 @@ fun <T> visibleTopLevelRoutes(
     navItemOrder: List<String>,
     isOffline: Boolean,
 ): List<T> {
-    val offlineHidden = if (isOffline) setOf(Route.LiveTv.navKey) else emptySet()
+    val offlineHidden = if (isOffline) offlineHiddenNavKeys else emptySet()
     return applyNavCustomization(baseRoutes, keyOf, hiddenNavItems + offlineHidden, navItemOrder)
 }

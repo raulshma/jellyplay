@@ -72,6 +72,7 @@
     <string name="auth_loading">Chargement…</string>
     <string name="auth_no_servers_added_title">Aucun serveur ajouté</string>
     <string name="auth_no_servers_added_desc">Ajoutez votre serveur Jellyfin pour commencer</string>
+    <string name="auth_restore_backup">Restaurer la sauvegarde</string>
     <string name="auth_remove_server">Supprimer le serveur</string>
     <string name="auth_remove_server_title">Supprimer le serveur ?</string>
     <string name="auth_remove_server_message">Cela supprime "%1$s" et tous les utilisateurs enregistrés. Cette action est irréversible.</string>

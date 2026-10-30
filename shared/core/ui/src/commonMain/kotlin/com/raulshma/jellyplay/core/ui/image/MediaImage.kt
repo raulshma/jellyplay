@@ -86,6 +86,21 @@ fun mediaImageDecodeSize(
 }
 
 /**
+ * The decode bounds for row cards (PosterCard / WideMediaCard / SeerrMediaCard)
+ * — the ONE home for the policy each card shell used to repeat (or skip).
+ * [width] is the decode-bounds width in px, ~2× the on-screen dp width (the
+ * density PosterCard's 360 constant was tuned for: typical grid card widths
+ * ≤180 dp); the height derives from the card's [aspectRatio], clamped so
+ * extreme ratios can't request huge decodes. Feeds [MediaImage]'s `size`
+ * parameter — the perf-mode clamp ([mediaImageDecodeSize]) still applies on
+ * top of it. Card shells without an aspect-correct size fall to
+ * [DefaultDecodeSize]'s 384² square, which under-decodes the width on ≥2×
+ * density phones.
+ */
+fun rowCardDecodeSize(width: Int, aspectRatio: Float): CoilSize =
+    CoilSize(width, (width / aspectRatio).toInt().coerceIn(240, 810))
+
+/**
  * The `coil#size` extra key Coil's MemoryCacheService appends to a request's
  * auto-derived memory-cache key (transformation-free requests carry the
  * resolved size string under this extra; [MediaImage] requests never set

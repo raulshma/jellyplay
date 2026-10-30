@@ -15,14 +15,16 @@ import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
 import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
 import com.raulshma.jellyplay.core.data.repository.SeerrRequestLifecycle
 import com.raulshma.jellyplay.core.data.repository.SeerrServiceDirectory
@@ -41,16 +43,20 @@ import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
+import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
@@ -169,27 +175,46 @@ class DataKoinModulesTest {
                 koin.get<ArrReleaseOperations>() === koin.get<ArrRepository>(),
                 "ArrReleaseOperations must alias the ArrRepositoryImpl single (one impl, three seams)",
             )
-            // The family seams of the two widest repository interfaces follow
-            // the same alias contract: MediaRepository's music-catalogue and
-            // user-data-write families, its home-feed and user-data-change
-            // families, and SeerrRepository's service-directory /
-            // request-lifecycle / auth families — each resolves to the SAME
-            // impl single as its union, never a second repository instance.
+            // The family seams of the two widest repository impls follow the
+            // same alias contract: the media repository's music-catalogue /
+            // user-data-write / home-feed / user-data-change / browse /
+            // detail / collection families (every member of the former
+            // MediaRepository union — the union itself is gone), and
+            // SeerrRepository's service-directory / request-lifecycle / auth
+            // families — each resolves to the SAME impl single, never a
+            // second repository instance.
+            val mediaImpl = koin.get<MediaRepositoryImpl>()
             assertTrue(
-                koin.get<MusicCatalogue>() === koin.get<MediaRepository>(),
+                koin.get<MusicCatalogue>() === mediaImpl,
                 "MusicCatalogue must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<UserDataWriteOperations>() === koin.get<MediaRepository>(),
+                koin.get<UserDataWriteOperations>() === mediaImpl,
                 "UserDataWriteOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<HomeFeed>() === koin.get<MediaRepository>(),
+                koin.get<HomeFeed>() === mediaImpl,
                 "HomeFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
-                koin.get<UserDataChanges>() === koin.get<MediaRepository>(),
+                koin.get<LibraryFeed>() === mediaImpl,
+                "LibraryFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<UserDataChanges>() === mediaImpl,
                 "UserDataChanges must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<DetailFeed>() === mediaImpl,
+                "DetailFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<CollectionOperations>() === mediaImpl,
+                "CollectionOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<PhotoFolderReads>() === mediaImpl,
+                "PhotoFolderReads must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
                 koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
@@ -234,6 +259,7 @@ class DataKoinModulesTest {
             assertResolves<NetworkMonitor>(koin)
             assertResolves<OfflineModeManager>(koin)
             assertResolves<ImageUrlProvider>(koin)
+            assertResolves<ArtworkUrls>(koin)
             assertResolves<LocalStreamProbe>(koin)
 
             // V3 downloads conveyor: the download engine resolves on desktop —
@@ -266,6 +292,7 @@ class DataKoinModulesTest {
             assertResolves<MediaRepositoryAccess>(koin)
             assertResolves<DesktopDownloadManager>(koin)
             assertResolves<DesktopAutoDownloadScheduler>(koin)
+            assertResolves<AutoDownloadScheduler>(koin)
 
             // ── Home conveyor desktop actuals ────────────────────
             // The four WorkManager/widget-backed HomeViewModel ctor deps are
@@ -277,15 +304,13 @@ class DataKoinModulesTest {
             assertResolves<ContinueWatchingBroadcaster>(koin)
             assertResolves<LibrarySyncHook>(koin)
 
-            // ──  MediaRepository cluster flip ─────────────────────────
-            // The last Hilt-owned data cluster, now Koin-owned on BOTH
-            // platforms. MediaDetailProvider and its concrete impl resolve
-            // since the playback flips moved PlaybackSourceResolverImpl
-            // into dataJvmModule (Uri-free) — no longer latent on desktop.
-            val mediaRepository = koin.get<MediaRepository>()
+            // MediaRepository cluster: Koin-owned on both platforms.
+            // MediaDetailProvider and its concrete impl resolve through
+            // PlaybackSourceResolverImpl, which lives in dataJvmModule
+            // (Uri-free).
             assertTrue(
-                koin.get<MediaRepositoryCacheInvalidation>() === mediaRepository,
-                "MediaRepositoryCacheInvalidation must alias the MediaRepository single (one cache set, not two)",
+                koin.get<MediaRepositoryCacheInvalidation>() === mediaImpl,
+                "MediaRepositoryCacheInvalidation must alias the MediaRepositoryImpl single (one cache set, not two)",
             )
             assertTrue(
                 koin.get<LyricsRepository>() is LyricsRepositoryImpl,
@@ -351,7 +376,7 @@ class DataKoinModulesTest {
 
             // ── Companion-plugin sync adapters ──────────────────
             // The nine ProfileSyncAdapter registrations multi-bind their
-            // commonMain interface (dataSessionPlaybackModule), and the sync
+            // commonMain interface (dataProfileSyncModule), and the sync
             // engine consumes them sorted by the engine's REGISTRATION_ORDER
             // (Koin's `getAll` on secondary binds returns them in
             // index-allocation order, not declaration order — the engine

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.ItemQualityBadge
+import com.raulshma.jellyplay.core.model.MediaImageTags
 import com.raulshma.jellyplay.core.model.MediaSourceType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MissingEpisodeReason
@@ -156,6 +157,48 @@ class JellyfinDtoMappersTest {
         ).toMediaItem()
 
         assertTrue(mapped.people.isEmpty())
+    }
+
+    // ── image-tag threading (the stale-artwork cache busters) ────────────
+
+    @Test
+    fun `toMediaItem carries the own and inherited image tags`() {
+        val mapped = BaseItemDto(
+            id = UUID.fromString("88888888-8888-4888-8888-888888888888"),
+            name = "Tagged Episode",
+            type = BaseItemKind.EPISODE,
+            imageTags = mapOf(
+                ImageType.PRIMARY to "primary-tag",
+                ImageType.LOGO to "logo-tag",
+            ),
+            backdropImageTags = listOf("backdrop-tag", "unused"),
+            parentPrimaryImageTag = "parent-tag",
+            parentThumbImageTag = "parent-thumb-tag",
+            seriesPrimaryImageTag = "series-tag",
+            seriesThumbImageTag = "series-thumb-tag",
+            albumPrimaryImageTag = "album-tag",
+        ).toMediaItem()
+
+        val tags = mapped.imageTags
+        assertEquals("primary-tag", tags.primary)
+        assertEquals("backdrop-tag", tags.backdrop)
+        assertEquals("logo-tag", tags.logo)
+        assertEquals("parent-tag", tags.parentPrimary)
+        assertEquals("parent-thumb-tag", tags.parentThumb)
+        assertEquals("series-tag", tags.seriesPrimary)
+        assertEquals("series-thumb-tag", tags.seriesThumb)
+        assertEquals("album-tag", tags.album)
+    }
+
+    @Test
+    fun `toMediaItem defaults the image tags when the item carries none`() {
+        val mapped = BaseItemDto(
+            id = UUID.fromString("99999999-9999-4999-8999-999999999999"),
+            name = "Tagless Movie",
+            type = BaseItemKind.MOVIE,
+        ).toMediaItem()
+
+        assertEquals(MediaImageTags(), mapped.imageTags)
     }
 
     // ── detail image-tag mapping ("prefer logos" title) ──────────────────

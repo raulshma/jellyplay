@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -75,6 +77,14 @@ internal class AndroidPlayerCastController(
     private val getSessionState: () -> PlayerSessionState,
 ) : PlayerCastController {
 
+    /**
+     * The tagged-artwork resolver over [imageUrlProvider]: the hand-off's
+     * artwork URI carries the item's own primary image tag when the session's
+     * detail matches the playing item, so re-uploaded art mints a new cache
+     * key on the receiver too.
+     */
+    private val artworkUrls: ArtworkUrls = DefaultArtworkUrls(imageUrlProvider)
+
     // ----- Cast state pass-through (screen reads these directly) -----
 
     override     val isCastAvailable: Boolean get() = castManager.isCastAvailable
@@ -139,8 +149,16 @@ internal class AndroidPlayerCastController(
         val url = playbackRepository.getStreamUrl(currentItemId, sourceId, startTimeTicks)
         if (url.isBlank()) return
 
+        // Tagged when the session's detail is the playing item (same target
+        // id — only the tag is added); the raw-id URL stands otherwise.
         val artworkUri = try {
-            Uri.parse(imageUrlProvider.getImageUrl(currentItemId, maxWidth = 300))
+            Uri.parse(
+                artworkUrls.posterFor(
+                    sessionState.mediaDetail?.item,
+                    itemId = currentItemId,
+                    maxWidth = 300,
+                ),
+            )
         } catch (_: Exception) { null }
 
         val subtitleConfigs = buildCastSubtitleConfigurations(

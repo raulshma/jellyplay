@@ -97,7 +97,10 @@ fun main(args: Array<String>) {
     // Non-link argv (a dragged-on .m3u/.strm path, junk) is silently
     // ignored — see DesktopLinkOpen's scope boundary.
     val linkOpens = DesktopLinkOpenQueue()
-    DesktopLinkOpenPolicy.firstLink(args.toList())?.let(linkOpens::submitLink)
+    // The submitLaunchLink arm records the launch fact the cold-start session
+    // restoration reads (an argv link is an explicit launch destination — the
+    // "resume last watched?" prompt must not hijack it).
+    DesktopLinkOpenPolicy.firstLink(args.toList())?.let(linkOpens::submitLaunchLink)
     // Drop-file cleanup + the forward watcher: a payload left by a launch
     // that died mid-handshake is stale by definition, and every payload the
     // watcher drains re-validates through the same parse policy before it

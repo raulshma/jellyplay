@@ -193,7 +193,8 @@
     <string name="player_video_rendering">渲染</string>
     <string name="player_video_deinterlace">去隔行扫描 · %1$s</string>
     <string name="player_video_passthrough">直通</string>
-    <string name="player_video_stats_for_nerds">详细统计</string>
+        <string name="player_video_stats_close">关闭</string>
+<string name="player_video_stats_for_nerds">详细统计</string>
     <string name="player_video_stats_for_nerds_on">详细统计 \u00B7 开启</string>
     <string name="player_video_video_filters">视频滤镜</string>
     <string name="player_video_video_filters_on">视频滤镜 \u00B7 开启</string>
@@ -330,7 +331,16 @@
     <string name="player_video_watched">已观看</string>
     <string name="player_video_time_left">剩余 %1$s</string>
     <string name="player_video_now_playing">正在播放</string>
-    <string name="player_video_quality_title">质量</string>
+        <string name="player_video_playback_options">播放选项</string>
+    <string name="player_video_playback_options_desc">切换引擎、服务器流媒体传输方式与画质。更改将应用到当前会话。</string>
+    <string name="player_video_playback_options_engine_section">引擎</string>
+    <string name="player_video_playback_options_delivery_section">传输方式</string>
+    <string name="player_video_playback_options_quality_section">画质</string>
+    <string name="player_video_quality_unavailable">此播放不支持画质选择（强制直接播放、离线、投屏或 SyncPlay）。</string>
+    <string name="player_video_playback_mode_auto_desc">由服务器决定（可能时直接播放）</string>
+    <string name="player_video_playback_mode_force_direct_desc">按原始文件播放，不转码</string>
+    <string name="player_video_playback_mode_force_transcode_desc">始终通过服务器转码</string>
+<string name="player_video_quality_title">质量</string>
     <string name="player_video_quality_description">更改会立即应用于自适应流。对于直接播放，这会设置最大播放比特率。</string>
     <string name="player_video_adaptive_bitrate_cap">自适应比特率上限</string>
     <string name="player_video_adaptive_bitrate_on">在按流量计费的网络中限制质量</string>
@@ -390,4 +400,32 @@
     <string name="player_video_transcode_switched">已切换到转码流 — 正在重新缓冲</string>
     <string name="player_video_direct_play_unavailable">此项目不支持直接播放 — 将回退到转码</string>
     <string name="player_video_vlc_client_cert_unsupported">VLC 引擎不支持客户端证书 — mTLS 服务器请改用 ExoPlayer 或 mpv</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="pause_details_starring">主演</string>
+    <string name="player_video_curve_auto">自动（mpv 默认）</string>
+    <string name="player_video_curve_bt2390">BT.2390</string>
+    <string name="player_video_curve_bt2446a">BT.2446A</string>
+    <string name="player_video_curve_clip">裁剪</string>
+    <string name="player_video_curve_hable">Hable</string>
+    <string name="player_video_curve_linear">线性</string>
+    <string name="player_video_curve_spline">样条</string>
+    <string name="player_video_deband_heavy">强</string>
+    <string name="player_video_deband_light">弱</string>
+    <string name="player_video_deband_medium">中</string>
+    <string name="player_video_deband_off">关闭</string>
+    <string name="player_video_delete_offer_delete">删除</string>
+    <string name="player_video_delete_offer_failed">无法删除“%1$s”——它仍在服务器上</string>
+    <string name="player_video_delete_offer_keep">保留</string>
+    <string name="player_video_delete_offer_title">从服务器删除“%1$s”？</string>
+    <string name="player_video_hdr_format_auto">自动</string>
+    <string name="player_video_hdr_format_dv_only">仅 Dolby Vision</string>
+    <string name="player_video_hdr_format_hdr10_only">仅 HDR10</string>
+    <string name="player_video_hdr_format_prefer_dv">优先 Dolby Vision</string>
+    <string name="player_video_hdr_format_preference_caption">当内容提供多种 HDR 格式时，选择输出到显示器的格式。下次播放时生效。</string>
+    <string name="player_video_hdr_format_preference_section">首选 HDR 格式</string>
+    <string name="player_video_hdr_format_sdr_only">仅 SDR</string>
+    <string name="player_video_render_deband">去色带</string>
+    <string name="player_video_render_motion_interpolation">运动插值</string>
+    <string name="player_video_render_tone_curve">色调映射曲线（HDR → SDR）</string>
 </resources>

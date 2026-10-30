@@ -180,6 +180,8 @@
     <string name="ss_frame_rate_matching_subtitle">Synchroniser le taux de rafraîchissement avec les images vidéo (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Qualité de streaming</string>
     <string name="ss_streaming_quality_subtitle">Définir la qualité vidéo par défaut du streaming : 1080p, 4K, SD, Auto</string>
+    <string name="ss_playback_mode_title">Mode de lecture</string>
+    <string name="ss_playback_mode_subtitle">Auto, lecture directe forcée ou transcodage forcé — la méthode de diffusion des flux</string>
     <string name="ss_audio_delay_title">Décalage de synchronisation audio</string>
     <string name="ss_audio_delay_subtitle">Ajuster le décalage de synchronisation audio (ms)</string>
     <string name="ss_live_stream_option_title">Flux TV en direct</string>
@@ -198,7 +200,7 @@
     <string name="ss_show_time_remaining_subtitle">Afficher le temps restant au lieu du temps écoulé</string>
     <string name="ss_pause_on_focus_loss_title">Pause en cas de perte de focus</string>
     <string name="ss_pause_on_focus_loss_subtitle">Mettre en pause la lecture quand le système signale une perte de focus audio</string>
-    <string name="ss_resume_headset_plug_subtitle">Reprend la lecture quand le casque est rebranché après la pause automatique</string>
+    <string name="ss_resume_headset_plug_subtitle">Reprend la lecture quand le casque se reconnecte après la pause automatique (filaire ou Bluetooth)</string>
     <string name="ss_mpv_video_output_title">Sortie vidéo MPV</string>
     <string name="ss_mpv_video_output_subtitle">Pilote de sortie vidéo MPV</string>
     <string name="ss_mpv_scaler_title">Scaling MPV</string>
@@ -343,6 +345,8 @@
     <string name="ss_subtitle_font_size_subtitle">Taille du texte des sous-titres pendant la lecture vidéo</string>
     <string name="ss_subtitle_forced_only_title">Sous-titres forcés uniquement</string>
     <string name="ss_subtitle_forced_only_subtitle">Afficher les sous-titres uniquement quand des pistes forcées sont présentes</string>
+    <string name="ss_show_only_preferred_subtitles_title">Sous-titres préférés uniquement</string>
+    <string name="ss_show_only_preferred_subtitles_subtitle">Afficher uniquement les pistes de sous-titres dans vos langues préférées</string>
     <string name="ss_pgs_direct_play_title">Lecture directe PGS</string>
     <string name="ss_pgs_direct_play_subtitle">Rendre les sous-titres PGS nativement au lieu de les incruster</string>
     <string name="ss_hdr_subtitle_style_title">Style des sous-titres HDR</string>
@@ -537,4 +541,8 @@
     <string name="ss_hooks_ended_cmd_subtitle">Commande à exécuter à la fin de la lecture</string>
     <string name="ss_hooks_idle_cmd_subtitle">Commande à exécuter quand l'app devient inactive</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Commande à exécuter quand l'app quitte l'inactivité</string>
+
+    <string name="ss_auto_download_mode_title">Télécharger automatiquement les nouveaux épisodes</string>
+    <string name="ss_auto_download_mode_subtitle">Télécharger immédiatement, demander avant de télécharger ou ne jamais télécharger les nouveaux épisodes des séries téléchargées</string>
+    <string name="ss_auto_download_check_now_subtitle">Lancer une passe de téléchargement automatique maintenant</string>
 </resources>

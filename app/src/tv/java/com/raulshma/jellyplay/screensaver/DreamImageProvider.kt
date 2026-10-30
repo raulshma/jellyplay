@@ -8,7 +8,6 @@ import coil3.request.allowHardware
 import coil3.size.Size
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
@@ -20,7 +19,6 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 class DreamImageProvider(
-    private val mediaRepository: MediaRepository,
     /** The SearchResult-shaped reads (the random-items query — off the union). */
     private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
@@ -72,11 +70,14 @@ class DreamImageProvider(
                     else -> return@mapNotNull null
                 }
                 // Photos surface their Primary image (the photo-album grid's
-                // URL surface); video/music entries use the backdrop.
+                // URL surface); video/music entries use the backdrop. The
+                // item's own tag rides each URL — the etag cache-buster that
+                // makes re-uploaded artwork visible to the screensaver's Coil
+                // caches.
                 val imageUrl = if (category == DreamImageCategory.PHOTOS) {
-                    imageUrlProvider.getImageUrl(item.id)
+                    imageUrlProvider.getImageUrl(item.id, tag = item.imageTags.primary)
                 } else {
-                    imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
+                    imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920, tag = item.imageTags.backdrop)
                 }
                 if (imageUrl.isBlank()) return@mapNotNull null
                 DreamImage(

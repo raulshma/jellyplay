@@ -26,14 +26,14 @@ class LibrarySyncHookImplTest {
     fun `onLibraryScanComplete drains downloads and refreshes both widgets`() = runTest {
         createHook().onLibraryScanComplete()
 
-        coVerify(exactly = 1) { autoDownloadScheduler.enqueueNow() }
+        coVerify(exactly = 1) { autoDownloadScheduler.checkNow() }
         coVerify(exactly = 1) { widgetWorkScheduler.refreshLibraryNow() }
         coVerify(exactly = 1) { widgetWorkScheduler.refreshSeerrNow() }
     }
 
     @Test
     fun `an auto-download failure does not break the widget refresh`() = runTest {
-        coEvery { autoDownloadScheduler.enqueueNow() } throws IllegalStateException("WorkManager gone")
+        coEvery { autoDownloadScheduler.checkNow() } throws IllegalStateException("WorkManager gone")
 
         createHook().onLibraryScanComplete()
 
@@ -56,12 +56,12 @@ class LibrarySyncHookImplTest {
             createHook().onLibraryScanComplete()
 
             coVerify(exactly = 0) { widgetWorkScheduler.refreshSeerrNow() }
-            coVerify(exactly = 1) { autoDownloadScheduler.enqueueNow() }
+            coVerify(exactly = 1) { autoDownloadScheduler.checkNow() }
         }
 
     @Test
     fun `hook itself never throws when everything fails`() = runTest {
-        coEvery { autoDownloadScheduler.enqueueNow() } throws IllegalStateException("boom")
+        coEvery { autoDownloadScheduler.checkNow() } throws IllegalStateException("boom")
         coEvery { widgetWorkScheduler.refreshLibraryNow() } throws IllegalStateException("boom")
         coEvery { widgetWorkScheduler.refreshSeerrNow() } throws IllegalStateException("boom")
 

@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_albums
 import com.raulshma.jellyplay.feature.music.generated.resources.music_creating_mix
 import com.raulshma.jellyplay.feature.music.generated.resources.music_instant_mix
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -130,7 +131,7 @@ fun ArtistDetailScreen(
                     artistName = viewModel.artistName,
                     artistId = artistId,
                     albums = viewModel.albums,
-                    getImageUrl = { viewModel.getImageUrl(it) },
+                    artworkUrls = viewModel.artworkUrls,
                     getBackdropUrl = { viewModel.getBackdropUrl(it) },
                     onAlbumClick = onAlbumClick,
                     onInstantMix = { viewModel.startInstantMix(artistId) },
@@ -149,7 +150,10 @@ private fun ArtistDetailContent(
     artistName: String,
     artistId: String,
     albums: List<MediaItem>,
-    getImageUrl: (String) -> String,
+    /** The tag-aware artwork resolver — album cards carry the album's own tag. */
+    artworkUrls: ArtworkUrls,
+    // Raw-id backdrop builder: the hero resolves the nav-arg artistId, and no
+    // artist MediaItem (hence no tag) is in hand at this call site.
     getBackdropUrl: (String) -> String,
     onAlbumClick: (String) -> Unit,
     onInstantMix: () -> Unit,
@@ -245,7 +249,7 @@ private fun ArtistDetailContent(
                 ) { _, album, itemModifier ->
                     AlbumCard(
                         album = album,
-                        imageUrl = getImageUrl(album.id),
+                        imageUrl = artworkUrls.poster(album),
                         onClick = { onAlbumClick(album.id) },
                         cardWidth = albumCardWidth,
                         modifier = itemModifier,
@@ -299,7 +303,7 @@ private fun ArtistDetailContent(
                         ) { _, album, itemModifier ->
                             AlbumCard(
                                 album = album,
-                                imageUrl = getImageUrl(album.id),
+                                imageUrl = artworkUrls.poster(album),
                                 onClick = { onAlbumClick(album.id) },
                                 cardWidth = albumCardWidth,
                                 modifier = itemModifier,

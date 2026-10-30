@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
@@ -76,7 +76,7 @@ class SubtitleManagerProviderDownloadTest {
     }
 
     private lateinit var playbackRepository: PlaybackRepository
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var detailFeed: DetailFeed
     private lateinit var subtitleProviderRepository: SubtitleProviderRepository
     private lateinit var streamingSubtitleStore: StreamingSubtitleStore
     private lateinit var userMessageBus: RecordingMessageBus
@@ -110,7 +110,7 @@ class SubtitleManagerProviderDownloadTest {
     @Before
     fun setUp() {
         playbackRepository = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        detailFeed = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
         // No-op store: the durable persistence contract (save/load round-trip,
         // manifest survival) is covered by StreamingSubtitleStoreImplTest in
@@ -129,7 +129,7 @@ class SubtitleManagerProviderDownloadTest {
     ): SubtitleManager = SubtitleManager(
         contentGateway = contentGateway,
         playbackRepository = playbackRepository,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         subtitleProviderRepository = subtitleProviderRepository,
         streamingSubtitleStore = streamingSubtitleStore,
         userMessageBus = userMessageBus,
@@ -153,7 +153,7 @@ class SubtitleManagerProviderDownloadTest {
             mediaSources = emptyList(),
             chapters = emptyList(),
         )
-        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(detail)
+        coEvery { detailFeed.getMediaDetail("item-1", any()) } returns Result.success(detail)
 
         val m = manager()
         m.downloadProviderSubtitle(result)
@@ -185,7 +185,7 @@ class SubtitleManagerProviderDownloadTest {
 
         // 4. Force-re-fetched so the stream surfaces; the refreshed detail is
         //    handed back to the VM to rebuild mediaStreams.
-        io.mockk.coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1", force = true) }
+        io.mockk.coVerify(atLeast = 1) { detailFeed.getMediaDetail("item-1", force = true) }
         assertEquals(listOf(detail), refreshedDetails)
 
         // 5. Per-id status reflects success. Status is keyed on the composite
@@ -218,7 +218,7 @@ class SubtitleManagerProviderDownloadTest {
         assertEquals(1, streamingSubtitleStore.loadAll("item-1").size)
         // No refresh should run: no server stream surfaced.
         assertTrue(refreshedDetails.isEmpty())
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any(), any()) }
+        coVerify(exactly = 0) { detailFeed.getMediaDetail(any(), any()) }
         // Non-fatal: device-only status + info note (not a hard error).
         val status = m.state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY, status?.state)
@@ -282,7 +282,7 @@ class SubtitleManagerProviderDownloadTest {
             ),
             chapters = emptyList(),
         )
-        mediaRepository.stubDetailReads(
+        detailFeed.stubDetailReads(
             "item-1",
             detailWithStreams(listOf(MediaStream(index = 0, type = StreamType.SUBTITLE, language = "eng"))),
             detailWithStreams(
@@ -321,7 +321,7 @@ class SubtitleManagerProviderDownloadTest {
         coEvery { playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
         // The post-upload refresh reads the detail; relaxed mocks mistype the
         // Result payload (see the delegation test), so stub it explicitly.
-        coEvery { mediaRepository.getMediaDetail("item-1", any()) } returns Result.success(
+        coEvery { detailFeed.getMediaDetail("item-1", any()) } returns Result.success(
             MediaDetail(
                 item = MediaItem(id = "item-1", name = "Movie", mediaType = MediaType.MOVIE),
                 mediaSources = emptyList(),

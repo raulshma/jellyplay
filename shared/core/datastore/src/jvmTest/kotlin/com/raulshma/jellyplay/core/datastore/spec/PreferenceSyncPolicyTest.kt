@@ -61,15 +61,17 @@ class PreferenceSyncPolicyTest {
     }
 
     @Test
-    fun bookkeepingKeys_areExactlyTheHomeGlobalMarkers() {
+    fun bookkeepingKeys_areExactlyTheHomeGlobalMarkersPlusThePerDeviceRows() {
         // Byte pin for the install-global bookkeeping face: the specs'
-        // global-marker rows (the ones legacyRows excludes), derived into the
-        // policy so a new marker joins automatically — this pin catches a
-        // derivation regression in EITHER direction (a global row forgotten
-        // outside legacyRows would sync raw; a synced marker claims, or
-        // skips, another device's one-time fold).
+        // global-marker rows (the ones legacyRows excludes) plus the playback
+        // store's per-device rows (PlaybackPreferenceSpecs.perDeviceRowNames),
+        // derived into the policy so a new row joins automatically — this pin
+        // catches a derivation regression in EITHER direction (a row forgotten
+        // outside its store's face would sync raw; a synced marker claims, or
+        // skips, another device's one-time fold, and a synced UX latch would
+        // silence another device's prompt).
         assertEquals(
-            setOf("home_ns_migrated", "home_v3_upgrade_baseline_done"),
+            setOf("home_ns_migrated", "home_v3_upgrade_baseline_done", "session_restore_dismissed"),
             PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS,
         )
         // Disjoint from the denylist by construction: the bookkeeping keys

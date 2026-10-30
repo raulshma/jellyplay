@@ -16,8 +16,8 @@ import org.junit.Test
  * Pins [PluginAdminRepositoryImpl]'s stateless forwards over the
  * [PluginApiClient] family seam (moved verbatim from AdminRepositoryImpl at
  * the admin facade split — the LiveTvRepositoryImpl pattern; the family
- * single composes the same impl the JellyfinApiClient union delegates to,
- * so wire behavior is unchanged). The two compositions live in the jvmTest
+ * single composes the same impl the retired JellyfinApiClient union
+ * delegated to, so wire behavior is unchanged). The two compositions live in the jvmTest
  * twin — the ctor's session seams there are plain lambdas, stubbed per
  * test.
  */

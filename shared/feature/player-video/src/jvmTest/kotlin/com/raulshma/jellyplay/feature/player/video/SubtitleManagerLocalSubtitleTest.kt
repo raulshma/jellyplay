@@ -25,7 +25,7 @@ class SubtitleManagerLocalSubtitleTest {
             override fun readBytes(uri: String): ByteArray = ByteArray(0)
         },
         playbackRepository = mockk(relaxed = true),
-        mediaRepository = mockk(relaxed = true),
+        detailFeed = mockk(relaxed = true),
         subtitleProviderRepository = mockk(relaxed = true),
         streamingSubtitleStore = mockk(relaxed = true),
         userMessageBus = object : PlayerVideoMessageBus {

@@ -8,9 +8,13 @@ import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsProcessor
 import com.raulshma.jellyplay.core.data.playback.AudioLibraryBrowser
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.AudioFocusCommands
 import com.raulshma.jellyplay.core.data.playback.AudioPrefetchEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.AudioRemoteControlSurface
+import com.raulshma.jellyplay.core.data.playback.AudioServiceSurface
+import com.raulshma.jellyplay.core.data.playback.NowPlayingSurface
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
@@ -50,7 +54,8 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             // scope (Dispatchers.Default): the browser resolves media3
             // session callbacks on it.
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-            mediaRepository = get(),
+            libraryFeed = get(),
+            detailFeed = get(),
             libraryApiClient = get(),
             musicCatalogue = get(),
             playlistRepository = get(),
@@ -70,7 +75,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
         AudioPlaybackManager(
             context = context,
             playbackFocus = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             libraryBrowser = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
@@ -110,6 +115,15 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     // three above, so shell code resolves the interface and constructs
     // against a fake on the JVM.
     single<ShellAudioSurface> { get<AudioPlaybackManager>() }
+    // The narrow androidMain consumer faces (the Audio shell seam's
+    // role-split, beside ShellAudioSurface): the remote-control dispatcher,
+    // the media3 service host, the focus executor and the shortcuts manager
+    // each resolve the one role they read — same single, ONLY this module
+    // names the concrete class.
+    single<AudioRemoteControlSurface> { get<AudioPlaybackManager>() }
+    single<AudioServiceSurface> { get<AudioPlaybackManager>() }
+    single<AudioFocusCommands> { get<AudioPlaybackManager>() }
+    single<NowPlayingSurface> { get<AudioPlaybackManager>() }
     // The Now-playing verdict (GLOSSARY): one fold over the video registry
     // (commonMain, dataJvmModule) and this module's manager as the audio
     // face. Consumed by the remote-cast family's reporter + receiver, the

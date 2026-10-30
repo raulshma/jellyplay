@@ -90,13 +90,13 @@ class CalendarGroupingTest {
         assertEquals("Has date", days.single().items.single().title)
     }
 
-    // ── releaseDate ────────────────────────────────────────────────────────
+    // ── airDateDay (the shared parse, asserted through the member) ─────────
 
     @Test
-    fun releaseDateParsesIsoDatePrefixOfFullTimestamp() {
-        assertEquals(LocalDate(2026, 7, 14), item("m", airDateUtc = "2026-07-14T23:59:59.999Z").releaseDate())
-        assertNull(item("m", airDateUtc = null).releaseDate())
-        assertNull(item("m", airDateUtc = "garbage!!").releaseDate())
+    fun airDateDayParsesIsoDatePrefixOfFullTimestamp() {
+        assertEquals(LocalDate(2026, 7, 14), item("m", airDateUtc = "2026-07-14T23:59:59.999Z").airDateDay())
+        assertNull(item("m", airDateUtc = null).airDateDay())
+        assertNull(item("m", airDateUtc = "garbage!!").airDateDay())
     }
 
     // ── toRelativeLabel ────────────────────────────────────────────────────

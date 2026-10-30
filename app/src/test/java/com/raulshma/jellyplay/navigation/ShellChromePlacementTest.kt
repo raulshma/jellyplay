@@ -87,6 +87,6 @@ class ShellChromePlacementTest {
         assertEquals(0.dp, insets.start)
         assertEquals(0.dp, insets.top)
         assertEquals(16.dp, insets.end)
-        assertEquals(4.dp, insets.bottom)
+        assertEquals(12.dp, insets.bottom)
     }
 }

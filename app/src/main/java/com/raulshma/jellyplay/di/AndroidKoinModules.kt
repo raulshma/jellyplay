@@ -48,16 +48,11 @@ fun androidKoinModules(app: Application): List<Module> = listOf(
     dataJvmModule,
     androidDataModule(app),
     // Legacy core:data remainder (Hilt-extinct — media3
-    // audio stack, cast, schedulers, remote control, workers) +
+    // audio stack, cast, schedulers, remote control, workers,
+    // the V3 downloads conveyor's Android seam actuals) +
     // core:notification.
     androidCoreDataModule(app),
     androidNotificationModule(app),
-    // V3 downloads conveyor: Android actuals of the portable
-    // download engine's seams (WorkManager enqueue/coordinator,
-    // Context/StatFs storage layout, notification summary, Coil
-    // preload). Koin owns these legacy-side impls so the
-    // DownloadRepository single in dataJvmModule resolves.
-    androidDownloadSeamsModule(app),
     // Dev v0.10.7 quick-action download-outcome bridge lives in
     // androidAppInteropAdaptersModule below (DownloadOutcomeMessenger
     // -> core:ui UserMessageBus).
@@ -95,12 +90,12 @@ fun androidKoinModules(app: Application): List<Module> = listOf(
     coreUiMessageModule,
     // V3 settings conveyor (Android platform pick): the Android
     // actuals of the shared settings ViewModels' seams (SAF backup
-    // IO, LocaleManager, storage walkers, About/Licenses sources).
-    // The four seams (auto-download sync, notification reschedule,
-    // TV watch-next, audio cache clear) wrap the legacy schedulers,
-    // resolved straight from the core Koin graph.
+    // IO, LocaleManager, storage walkers, About/Licenses sources) and
+    // the ViewModel seam adapters (auto-download sync + cleanup,
+    // notification reschedule, TV watch-next, audio cache clear)
+    // wrapping the core:data schedulers, resolved straight from the
+    // core Koin graph.
     androidSettingsPlatformModule(app),
-    androidSettingsSeamsModule(),
     // MediaStore/FileProvider photo-export actual for the photos
     // feature's PhotoExport seam (androidDataModule pattern).
     androidPhotoExportModule(app),

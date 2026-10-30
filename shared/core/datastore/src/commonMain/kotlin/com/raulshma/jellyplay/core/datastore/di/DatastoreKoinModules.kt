@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.datastore.di
 
 import com.raulshma.jellyplay.core.datastore.ArrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.ArrSecureCredentialsStore
+import com.raulshma.jellyplay.core.datastore.PreferencesEditFailureReporter
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -31,6 +32,7 @@ import com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
@@ -156,6 +158,15 @@ val datastoreCommonModule = module {
         NavigationStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
             get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    single {
+        ShortcutsStore(
+            get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+            // Per-user namespace resolution (u_<userId>::shortcuts_*).
+            get<ServerIdentityStore>(),
         )
     }
 
@@ -299,9 +310,10 @@ val datastoreCommonModule = module {
     // Composites
     // ------------------------------------------------------------------
 
-    // The domain-store enumeration for the settings read lanes lives ONCE
-    // here: both PreferenceProjections (eager StateFlow projections) and
-    // PreferenceSnapshotReader (one-shot diff snapshot) consume the bundle.
+    // The domain-store enumeration lives ONCE here: PreferenceProjections
+    // (eager StateFlow projections), PreferenceSnapshotReader (one-shot diff
+    // snapshot), UserPreferencesStore (the facade) and PreferencesEditScope
+    // (the audited write seam) all consume the bundle.
     single {
         PreferenceStores(
             playback = get<PlaybackStore>(),
@@ -315,6 +327,7 @@ val datastoreCommonModule = module {
             homeDiscovery = get<HomeDiscoveryStore>(),
             library = get<LibraryStore>(),
             navigation = get<NavigationStore>(),
+            shortcuts = get<ShortcutsStore>(),
             downloads = get<DownloadsStore>(),
             networkOffline = get<NetworkOfflineStore>(),
             notification = get<NotificationStore>(),
@@ -345,26 +358,11 @@ val datastoreCommonModule = module {
         UserPreferencesStore(
             get(DatastoreQualifiers.applicationScope),
             get(DatastoreQualifiers.userPreferencesDataStore),
-            get<PlaybackStore>(),
-            get<AppearanceStore>(),
-            get<VideoPlayerStore>(),
-            get<DownloadsStore>(),
-            get<PlayerEngineStore>(),
-            get<HomeDiscoveryStore>(),
-            get<AudioStore>(),
-            get<AudioEffectsStore>(),
-            get<AudioCacheStore>(),
-            get<LibraryStore>(),
-            get<NavigationStore>(),
-            get<NetworkOfflineStore>(),
-            get<NotificationStore>(),
-            get<ScreensaverStore>(),
-            get<SecurityStore>(),
-            get<SubtitleLanguageStore>(),
-            get<SyncPlayCastStore>(),
-            get<ExperimentalStore>(),
-            get<VolumeProfileStore>(),
-            get<AppRuntimeStateStore>(),
+            // The domain-store aggregate the settings read lanes already
+            // consume — the enumeration lives ONCE in the PreferenceStores
+            // single above, not re-listed here per facade/edit-scope ctor.
+            stores = get<PreferenceStores>(),
+            appRuntimeStateStore = get<AppRuntimeStateStore>(),
             // External backup slices (Room-backed config, integration /
             // widget settings): their concrete sources live in core:data's
             // dataSettingsBackupSlicesModule, so they are gathered by type —
@@ -376,26 +374,8 @@ val datastoreCommonModule = module {
 
     single {
         PreferencesEditScope(
-            get<PlaybackStore>(),
-            get<AppearanceStore>(),
-            get<VideoPlayerStore>(),
-            get<DownloadsStore>(),
-            get<PlayerEngineStore>(),
-            get<HomeDiscoveryStore>(),
-            get<AudioStore>(),
-            get<AudioEffectsStore>(),
-            get<AudioCacheStore>(),
-            get<LibraryStore>(),
-            get<NavigationStore>(),
-            get<NetworkOfflineStore>(),
-            get<NotificationStore>(),
-            get<ScreensaverStore>(),
-            get<SecurityStore>(),
-            get<SubtitleLanguageStore>(),
-            get<SyncPlayCastStore>(),
-            get<ExperimentalStore>(),
-            get<VolumeProfileStore>(),
-            get<AppRuntimeStateStore>(),
+            stores = get<PreferenceStores>(),
+            appRuntimeState = get<AppRuntimeStateStore>(),
         )
     }
 
@@ -404,6 +384,9 @@ val datastoreCommonModule = module {
             get(DatastoreQualifiers.applicationScope),
             get<PreferencesEditScope>(),
             get<UserPreferencesStore>(),
+            // Optional: bound by core:data on both JVM shells (log-backed);
+            // absent → failures swallow without report.
+            getOrNull<PreferencesEditFailureReporter>(),
         )
     }
 

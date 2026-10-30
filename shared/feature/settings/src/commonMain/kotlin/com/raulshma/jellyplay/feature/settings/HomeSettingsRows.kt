@@ -114,6 +114,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_watch
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_watched_checkmark_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_slideshow_interval
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_slideshow_interval_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_slideshow_interval_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_slideshow_interval_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_hero_style_title
 
 /**
  * The home domain's fused row declarations — the feature-side single home of
@@ -152,6 +160,35 @@ internal object HomeRows {
         titleRes = Res.string.settings_show_hero_section,
         searchTitleRes = Res.string.ss_hero_section_title,
         searchSubtitleRes = Res.string.ss_hero_section_subtitle,
+    )
+
+    /**
+     * The hero's render style — rides beside [HeroSection] (the master
+     * toggle whose state it qualifies).
+     */
+    val HomeHeroStyle = SettingsRow(
+        id = "home_hero_style",
+        icon = Tabler.Outline.LayersLinked,
+        titleRes = Res.string.settings_home_hero_style,
+        subtitleRes = Res.string.settings_home_hero_style_subtitle,
+        searchTitleRes = Res.string.ss_home_hero_style_title,
+        searchSubtitleRes = Res.string.ss_home_hero_style_subtitle,
+    )
+
+    /**
+     * The slideshow style's per-slide dwell time — gated
+     * [RowAdmission.WhenOn]([HomeHeroStyle.id]): the interval only
+     * configures the SLIDESHOW style (the screen feeds
+     * "style is slideshow" as the parent's on-state).
+     */
+    val HomeHeroSlideshowInterval = SettingsRow(
+        id = "home_hero_slideshow_interval",
+        icon = Tabler.Outline.Clock,
+        titleRes = Res.string.settings_home_hero_slideshow_interval,
+        subtitleRes = Res.string.settings_home_hero_slideshow_interval_subtitle,
+        searchTitleRes = Res.string.ss_home_hero_slideshow_interval_title,
+        searchSubtitleRes = Res.string.ss_home_hero_slideshow_interval_subtitle,
+        gate = RowAdmission.WhenOn(HomeRows.HomeHeroStyle.id),
     )
 
     val HomeBackdrop = SettingsRow(
@@ -496,6 +533,8 @@ private val homeCategory = CoreUiRes.string.ss_cat_home
 internal val HomeDisplayRows: List<SettingsRow> = listOf(
     HomeRows.HomeMode,
     HomeRows.HeroSection,
+    HomeRows.HomeHeroStyle,
+    HomeRows.HomeHeroSlideshowInterval,
     HomeRows.HeroVideo,
     HomeRows.HeroVideoTv,
     HomeRows.HomeBackdrop,

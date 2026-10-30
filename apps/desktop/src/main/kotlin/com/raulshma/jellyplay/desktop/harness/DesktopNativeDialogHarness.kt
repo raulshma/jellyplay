@@ -313,7 +313,7 @@ object DesktopNativeDialogHarness {
                 check(!file.versionMismatch) {
                     "version mismatch on our own fresh export (schema ${file.schemaVersion})"
                 }
-                wizard.toggleAllCategories()
+                wizard.toggle(com.raulshma.jellyplay.feature.settings.WizardSelectionTarget.AllCategories)
                 wizard.restoreSelected()
                 check(runner.awaitUntil(15_000) { wizard.uiState.completed }) {
                     "restore never completed (applying=${wizard.uiState.applying} error=${wizard.uiState.applyError})"

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.FAMILY_MOOD
 import com.raulshma.jellyplay.core.data.FAMILY_MOODPREF
 import com.raulshma.jellyplay.core.data.FAMILY_SMART
 import com.raulshma.jellyplay.core.data.SliceJson
+import com.raulshma.jellyplay.core.data.backupKey
 import com.raulshma.jellyplay.core.data.entityFrom
 import com.raulshma.jellyplay.core.data.parseSlashKey
 import com.raulshma.jellyplay.core.data.toPayload
@@ -78,7 +79,9 @@ class JellyPlayPlaylistsSyncAdapter(
 
     // encodeDefaults: the payload always carries every column, so a receiving
     // device sees explicit values (not merely absent fields) — the codec
-    // stance lives in [SliceJson], shared with the backup slice source.
+    // stance lives in [SliceJson], shared with the backup slice source. The
+    // key grammar ("{family}/{id}") is the backupKey() extensions beside
+    // [parseSlashKey] — the same one home the slice source builds through.
     private fun SmartPlaylistEntity.valueOf(): JsonElement = SliceJson.encodeToJsonElement(toPayload())
 
     private fun MoodPlaylistEntity.valueOf(): JsonElement = SliceJson.encodeToJsonElement(toPayload())
@@ -86,9 +89,9 @@ class JellyPlayPlaylistsSyncAdapter(
     private fun MoodPlaylistPreferenceEntity.valueOf(): JsonElement = SliceJson.encodeToJsonElement(toPayload())
 
     override suspend fun snapshot(): Map<String, JsonElement> = buildMap {
-        smartPlaylistDao.getAll().forEach { put("smart/${it.id}", it.valueOf()) }
-        moodPlaylistDao.getAll().forEach { put("mood/${it.id}", it.valueOf()) }
-        moodPlaylistDao.getAllPreferences().forEach { put("moodpref/${it.playlistId}", it.valueOf()) }
+        smartPlaylistDao.getAll().forEach { put(it.backupKey(), it.valueOf()) }
+        moodPlaylistDao.getAll().forEach { put(it.backupKey(), it.valueOf()) }
+        moodPlaylistDao.getAllPreferences().forEach { put(it.backupKey(), it.valueOf()) }
     }
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {

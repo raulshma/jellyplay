@@ -379,6 +379,7 @@
 
     <!-- Plugin / catalog metadata labels (batch) -->
     <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_contract_mismatch">JellyPlay 插件（v%3$s）使用的契约版本为 v%1$s，此应用支持 v%2$s——请更新服务器上的插件或应用。</string>
     <string name="admin_plugin_by_author">作者：%1$s</string>
 
     <!-- Statistics time-unit suffixes (compact chart labels) -->

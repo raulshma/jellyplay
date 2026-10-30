@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.session
 
+import com.raulshma.jellyplay.core.model.JellyPlayContractMismatch
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
@@ -25,7 +26,11 @@ import kotlinx.coroutines.flow.asStateFlow
  * Contract-version rule: a payload whose contractVersion falls outside the
  * versions this client understands is treated as UNAVAILABLE — the client
  * refuses contracts it does not understand (the plugin's docs/CONTRACT.md
- * versioning rule, client side).
+ * versioning rule, client side). The refusal is published separately on
+ * [contractMismatch] so the UI can distinguish "plugin present, wrong
+ * contract — update one side" from the plain UNAVAILABLE of an absent
+ * plugin or a network error (mismatch null); [servedPluginVersion] carries
+ * the plugin's version whenever any payload decoded.
  */
 class JellyPlayPluginStatusStore(
     private val apiClient: JellyPlayCapabilitiesRoutes,
@@ -47,11 +52,27 @@ class JellyPlayPluginStatusStore(
     /** The live feature set (empty while unavailable or before the first probe). */
     val features: StateFlow<Set<String>> = _features.asStateFlow()
 
+    private val _contractMismatch = MutableStateFlow<JellyPlayContractMismatch?>(null)
+
+    /**
+     * Non-null when the last [refresh] decoded a capabilities payload whose
+     * contractVersion this client refuses; null when unavailable for the
+     * ordinary reasons (plugin absent, network error) or not yet probed.
+     */
+    val contractMismatch: StateFlow<JellyPlayContractMismatch?> = _contractMismatch.asStateFlow()
+
+    private val _servedPluginVersion = MutableStateFlow<String?>(null)
+
+    /** The plugin's own version string from the last decoded payload (null before that). */
+    val servedPluginVersion: StateFlow<String?> = _servedPluginVersion.asStateFlow()
+
     init {
         sessionCacheRegistry.registerAction(OWNER) {
             _status.value = JellyPlayPluginStatus.UNKNOWN
             _capabilities.value = null
             _features.value = emptySet()
+            _contractMismatch.value = null
+            _servedPluginVersion.value = null
         }
     }
 
@@ -75,14 +96,32 @@ class JellyPlayPluginStatusStore(
 
     suspend fun refresh() {
         val caps = apiClient.getCapabilities().getOrNull()
-        if (caps != null && caps.contractVersion in KNOWN_CONTRACT_VERSIONS) {
-            _capabilities.value = caps
-            _features.value = caps.features.toSet()
-            _status.value = JellyPlayPluginStatus.AVAILABLE
-        } else {
-            _capabilities.value = null
-            _features.value = emptySet()
-            _status.value = JellyPlayPluginStatus.UNAVAILABLE
+        when {
+            caps != null && caps.contractVersion in KNOWN_CONTRACT_VERSIONS -> {
+                _capabilities.value = caps
+                _features.value = caps.features.toSet()
+                _status.value = JellyPlayPluginStatus.AVAILABLE
+                _contractMismatch.value = null
+                _servedPluginVersion.value = caps.pluginVersion
+            }
+            caps != null -> {
+                _capabilities.value = null
+                _features.value = emptySet()
+                _status.value = JellyPlayPluginStatus.UNAVAILABLE
+                _contractMismatch.value = JellyPlayContractMismatch(
+                    servedContractVersion = caps.contractVersion,
+                    supportedRange = KNOWN_CONTRACT_VERSIONS,
+                    pluginVersion = caps.pluginVersion,
+                )
+                _servedPluginVersion.value = caps.pluginVersion
+            }
+            else -> {
+                _capabilities.value = null
+                _features.value = emptySet()
+                _status.value = JellyPlayPluginStatus.UNAVAILABLE
+                _contractMismatch.value = null
+                _servedPluginVersion.value = null
+            }
         }
     }
 

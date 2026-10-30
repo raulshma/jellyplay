@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.PlayerInputKey
 import com.raulshma.jellyplay.core.model.PlayerInputMap
@@ -20,7 +21,6 @@ import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdic
 import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.chrome.keyboardSeekStepMs
 import com.raulshma.jellyplay.feature.player.video.components.A11Y_STEP_DELTA
-import com.raulshma.jellyplay.feature.player.video.components.SPEED_OPTIONS
 import com.raulshma.jellyplay.feature.player.video.delayAdjustMs
 import com.raulshma.jellyplay.feature.player.video.mediaKeySeek
 import com.raulshma.jellyplay.feature.player.video.playerKeyCode
@@ -78,6 +78,11 @@ internal class PlayerActionExecutor(
     private val getSupportsAudioDelay: () -> Boolean,
     private val getAudioDelayMs: () -> Long,
     private val getSeekStepMs: () -> Long,
+    // Episode-navigation availability (the "where they exist, unmapped
+    // otherwise" rule): next folds the sibling + queue mirror (queue-first,
+    // incl. movies), previous reads the adjacent-episode snapshot.
+    private val getHasNextEpisode: () -> Boolean,
+    private val getHasPreviousEpisode: () -> Boolean,
     // ── The D-pad seek chip's engine reads + commit funnel (pass-through) ──
     getCurrentPositionMs: () -> Long,
     getDurationMs: () -> Long,
@@ -300,11 +305,13 @@ internal class PlayerActionExecutor(
                 true
             }
             PlayerAction.CYCLE_SPEED -> {
-                // The SpeedPickerSheet ladder: next rung above the current
-                // speed, wrapping to 1x past the top (an off-ladder speed
-                // snaps to the first rung).
+                // The shared speed ladder (PlaybackSpeedLadder.fullRungs — the
+                // SpeedPickerSheet's chip rungs, read from core:model not the
+                // UI components package): next rung above the current speed,
+                // wrapping to 1x past the top (an off-ladder speed snaps to
+                // the first rung).
                 val current = getPlaybackSpeed()
-                val next = SPEED_OPTIONS.firstOrNull { it > current + 0.01f } ?: 1.0f
+                val next = PlaybackSpeedLadder.fullRungs.firstOrNull { it > current + 0.01f } ?: 1.0f
                 onUiEvent(VideoPlayerUiEvent.SetPlaybackSpeed(next))
                 chrome.show()
                 true
@@ -321,12 +328,23 @@ internal class PlayerActionExecutor(
                 true
             }
             PlayerAction.NEXT_EPISODE -> {
-                onUiEvent(VideoPlayerUiEvent.PlayNextEpisode)
-                true
+                // No next episode (movie with an empty queue, end of season
+                // run): the key is UNMAPPED — returning false lets the event
+                // fall through instead of being swallowed by a no-op.
+                if (getHasNextEpisode()) {
+                    onUiEvent(VideoPlayerUiEvent.PlayNextEpisode)
+                    true
+                } else {
+                    false
+                }
             }
             PlayerAction.PREVIOUS_EPISODE -> {
-                onUiEvent(VideoPlayerUiEvent.PlayPreviousEpisode)
-                true
+                if (getHasPreviousEpisode()) {
+                    onUiEvent(VideoPlayerUiEvent.PlayPreviousEpisode)
+                    true
+                } else {
+                    false
+                }
             }
             // The continuous-class behaviors keep their own sites: the
             // swipe-class drags (SWIPE_*) belong to the drag detector, ZOOM

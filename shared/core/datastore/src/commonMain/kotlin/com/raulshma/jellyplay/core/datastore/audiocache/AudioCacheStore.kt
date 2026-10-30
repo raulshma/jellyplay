@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
@@ -24,9 +23,21 @@ import kotlinx.serialization.Serializable
  * keys, setters, read projection, and reset-key list end-to-end. Mirrors the
  * `PlaybackStore` / `AppearanceStore` shape.
  *
- * These keys were never string-typed in the legacy store, so the reads below
- * use plain `prefs[key] ?: default` rather than the `PreferenceCodec` legacy
- * helpers — no dual-read fallback is needed.
+ * **Spec derivation:** every spec-declarable key this store owns is declared
+ * exactly once as a row in [AudioCachePreferenceSpecs] (wire name, default,
+ * reset category, read/write encoding) and the machinery below is derived
+ * from those rows — each [Keys] member rebuilds its row's typed key from the
+ * row's wire name, each [read] projection row delegates to its row encoding,
+ * the single-key setters and the derived rows of [restore] delegate to the
+ * rows' derived writes, and [resetKeysFor] filters the rows by reset
+ * category. Every key this store owns resets under the single `AUDIO_CACHE`
+ * category.
+ *
+ * **Hand-written residuals (the documented opt-outs — see the spec KDoc):**
+ * the [AudioCachePreferenceSpecs.AUDIO_CACHING_ENABLED] row is the
+ * declaration-only [com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec.boolean]
+ * (the hand read was the plain `prefs[key] ?: true`): its setter/restore
+ * lines stay hand-written (a declaration-only row has no derived write).
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
@@ -37,53 +48,80 @@ class AudioCacheStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [AudioCachePreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key
+     * of the same name). Kept as a plain object rather than folded into the
+     * rows because it is the reflection anchor for the JVM reset-coverage
+     * guard.
+     */
     internal object Keys {
-        val AUDIO_CACHING_ENABLED = booleanPreferencesKey("audio_caching_enabled")
-        val AUDIO_CACHE_SIZE_MB = intPreferencesKey("audio_cache_size_mb")
-        val AUDIO_PREFETCH_LOOKAHEAD = intPreferencesKey("audio_prefetch_lookahead")
-        val AUDIO_PREFETCH_BACKFILL = intPreferencesKey("audio_prefetch_backfill")
-        val AUDIO_CACHE_NETWORK_POLICY = stringPreferencesKey("audio_cache_network_policy")
-        val AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB = intPreferencesKey("audio_cache_cellular_monthly_cap_mb")
+        val AUDIO_CACHING_ENABLED = booleanPreferencesKey(AudioCachePreferenceSpecs.AUDIO_CACHING_ENABLED.keyName)
+        val AUDIO_CACHE_SIZE_MB = intPreferencesKey(AudioCachePreferenceSpecs.AUDIO_CACHE_SIZE_MB.keyName)
+        val AUDIO_PREFETCH_LOOKAHEAD = intPreferencesKey(AudioCachePreferenceSpecs.AUDIO_PREFETCH_LOOKAHEAD.keyName)
+        val AUDIO_PREFETCH_BACKFILL = intPreferencesKey(AudioCachePreferenceSpecs.AUDIO_PREFETCH_BACKFILL.keyName)
+        val AUDIO_CACHE_NETWORK_POLICY =
+            stringPreferencesKey(AudioCachePreferenceSpecs.AUDIO_CACHE_NETWORK_POLICY.keyName)
+        val AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB =
+            intPreferencesKey(AudioCachePreferenceSpecs.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB.keyName)
     }
 
     val audioCache: StateFlow<AudioCacheSlice> =
         dataStore.sliceStateFlow(scope, seed = AudioCacheSlice(), read = ::read)
 
+    /**
+     * Pure read of the audio-cache policy fields from a raw [Preferences]
+     * snapshot, each field delegated to its [AudioCachePreferenceSpecs] row
+     * encoding (the declaration-only caching-enabled row via its plain
+     * [com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec.readStored]
+     * — the exact hand read). Exposed so the facade can fold these into the
+     * whole-`UserPreferences` projection without duplicating the read logic.
+     */
     internal fun read(prefs: Preferences): AudioCacheSlice = AudioCacheSlice(
-        audioCachingEnabled = prefs[Keys.AUDIO_CACHING_ENABLED] ?: true,
-        audioCacheSizeMb = prefs[Keys.AUDIO_CACHE_SIZE_MB] ?: 1024,
-        audioPrefetchLookahead = prefs[Keys.AUDIO_PREFETCH_LOOKAHEAD] ?: 3,
-        audioPrefetchBackfill = prefs[Keys.AUDIO_PREFETCH_BACKFILL] ?: 5,
-        audioCacheNetworkPolicy = prefs[Keys.AUDIO_CACHE_NETWORK_POLICY].toEnumOrNull() ?: AudioCacheNetworkPolicy.DEFAULT,
-        audioCacheCellularMonthlyCapMb = prefs[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] ?: 500,
+        audioCachingEnabled = AudioCachePreferenceSpecs.AUDIO_CACHING_ENABLED.readStored(prefs),
+        audioCacheSizeMb = AudioCachePreferenceSpecs.AUDIO_CACHE_SIZE_MB.readFrom(prefs),
+        audioPrefetchLookahead = AudioCachePreferenceSpecs.AUDIO_PREFETCH_LOOKAHEAD.readFrom(prefs),
+        audioPrefetchBackfill = AudioCachePreferenceSpecs.AUDIO_PREFETCH_BACKFILL.readFrom(prefs),
+        audioCacheNetworkPolicy = AudioCachePreferenceSpecs.AUDIO_CACHE_NETWORK_POLICY.readFrom(prefs),
+        audioCacheCellularMonthlyCapMb =
+            AudioCachePreferenceSpecs.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB.readFrom(prefs),
     )
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding — enum-by-name, plain slot — is the row's, not
+    // re-declared here); the declaration-only caching-enabled row keeps its
+    // hand-written line.
     // ------------------------------------------------------------------
 
+    /**
+     * The declaration-only caching-enabled row (no derived write — see the
+     * class KDoc's opt-outs): the hand-written plain slot write.
+     */
     suspend fun setAudioCachingEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.AUDIO_CACHING_ENABLED] = enabled }
     }
 
     suspend fun setAudioCacheSizeMb(sizeMb: Int) {
-        dataStore.edit { it[Keys.AUDIO_CACHE_SIZE_MB] = sizeMb }
+        dataStore.edit { AudioCachePreferenceSpecs.AUDIO_CACHE_SIZE_MB.writeTo(it, sizeMb) }
     }
 
     suspend fun setAudioPrefetchLookahead(lookahead: Int) {
-        dataStore.edit { it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = lookahead }
+        dataStore.edit { AudioCachePreferenceSpecs.AUDIO_PREFETCH_LOOKAHEAD.writeTo(it, lookahead) }
     }
 
     suspend fun setAudioPrefetchBackfill(backfill: Int) {
-        dataStore.edit { it[Keys.AUDIO_PREFETCH_BACKFILL] = backfill }
+        dataStore.edit { AudioCachePreferenceSpecs.AUDIO_PREFETCH_BACKFILL.writeTo(it, backfill) }
     }
 
     suspend fun setAudioCacheNetworkPolicy(policy: AudioCacheNetworkPolicy) {
-        dataStore.edit { it[Keys.AUDIO_CACHE_NETWORK_POLICY] = policy.name }
+        dataStore.edit { AudioCachePreferenceSpecs.AUDIO_CACHE_NETWORK_POLICY.writeTo(it, policy) }
     }
 
     suspend fun setAudioCacheCellularMonthlyCapMb(capMb: Int) {
-        dataStore.edit { it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = capMb }
+        dataStore.edit { AudioCachePreferenceSpecs.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB.writeTo(it, capMb) }
     }
 
     /**
@@ -98,46 +136,51 @@ class AudioCacheStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. Every audio-cache key sits in `AUDIO_CACHE`, so all other
-     * categories return an empty list. The facade aggregates these lists
-     * instead of a central `when` switch.
+     * [category] — the [AudioCachePreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. Every audio-cache key
+     * sits in `AUDIO_CACHE`, so all other categories return an empty list.
+     * The facade aggregates these lists instead of a central `when` switch.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.AUDIO_CACHE -> listOf(
-            Keys.AUDIO_CACHING_ENABLED, Keys.AUDIO_CACHE_SIZE_MB,
-            Keys.AUDIO_PREFETCH_LOOKAHEAD, Keys.AUDIO_PREFETCH_BACKFILL,
-            Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        AudioCachePreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences].
+     * DataStore — the derived rows via their row's derived write (the same
+     * encoding the row reads with), the declaration-only caching-enabled row
+     * via its hand-written line.
      */
     suspend fun restore(slice: AudioCacheSlice) {
-        dataStore.edit { it ->
-            it[Keys.AUDIO_CACHING_ENABLED] = slice.audioCachingEnabled
-            it[Keys.AUDIO_CACHE_SIZE_MB] = slice.audioCacheSizeMb
-            it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = slice.audioPrefetchLookahead
-            it[Keys.AUDIO_PREFETCH_BACKFILL] = slice.audioPrefetchBackfill
-            it[Keys.AUDIO_CACHE_NETWORK_POLICY] = slice.audioCacheNetworkPolicy.name
-            it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = slice.audioCacheCellularMonthlyCapMb
+        dataStore.edit { prefs ->
+            prefs[Keys.AUDIO_CACHING_ENABLED] = slice.audioCachingEnabled
+            AudioCachePreferenceSpecs.AUDIO_CACHE_SIZE_MB.writeTo(prefs, slice.audioCacheSizeMb)
+            AudioCachePreferenceSpecs.AUDIO_PREFETCH_LOOKAHEAD.writeTo(prefs, slice.audioPrefetchLookahead)
+            AudioCachePreferenceSpecs.AUDIO_PREFETCH_BACKFILL.writeTo(prefs, slice.audioPrefetchBackfill)
+            AudioCachePreferenceSpecs.AUDIO_CACHE_NETWORK_POLICY.writeTo(prefs, slice.audioCacheNetworkPolicy)
+            AudioCachePreferenceSpecs.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB
+                .writeTo(prefs, slice.audioCacheCellularMonthlyCapMb)
         }
     }
 }
 
 /**
  * The audio-cache policy preference slice. Plain data class.
- * Defaults mirror the projection defaults in [AudioCacheStore.read].
+ * Every default IS its [AudioCachePreferenceSpecs] row's declared default —
+ * read off the row via a plain accessor, so a preference's default is stated
+ * exactly once, in its spec, and cannot drift between the spec (what an
+ * absent key reads) and the slice (what a fresh in-memory instance serves).
+ * The spec-default equality is pinned field-for-field by
+ * `AudioCacheSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class AudioCacheSlice(
-    val audioCachingEnabled: Boolean = true,
-    val audioCacheSizeMb: Int = 1024,
-    val audioPrefetchLookahead: Int = 3,
-    val audioPrefetchBackfill: Int = 5,
-    val audioCacheNetworkPolicy: AudioCacheNetworkPolicy = AudioCacheNetworkPolicy.DEFAULT,
-    val audioCacheCellularMonthlyCapMb: Int = 500,
+    val audioCachingEnabled: Boolean = AudioCachePreferenceSpecs.AUDIO_CACHING_ENABLED.default,
+    val audioCacheSizeMb: Int = AudioCachePreferenceSpecs.AUDIO_CACHE_SIZE_MB.default,
+    val audioPrefetchLookahead: Int = AudioCachePreferenceSpecs.AUDIO_PREFETCH_LOOKAHEAD.default,
+    val audioPrefetchBackfill: Int = AudioCachePreferenceSpecs.AUDIO_PREFETCH_BACKFILL.default,
+    val audioCacheNetworkPolicy: AudioCacheNetworkPolicy =
+        AudioCachePreferenceSpecs.AUDIO_CACHE_NETWORK_POLICY.default,
+    val audioCacheCellularMonthlyCapMb: Int =
+        AudioCachePreferenceSpecs.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB.default,
 )

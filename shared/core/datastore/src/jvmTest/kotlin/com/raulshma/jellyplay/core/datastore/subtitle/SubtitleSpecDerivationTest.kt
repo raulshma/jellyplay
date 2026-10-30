@@ -47,6 +47,7 @@ class SubtitleSpecDerivationTest {
     private val expectedStoredType: Map<String, KClass<*>> = mapOf(
         "preferred_subtitle_lang" to String::class,
         "subtitles_forced_only" to Boolean::class,
+        "show_only_preferred_subtitles" to Boolean::class,
         "preferred_audio_lang" to String::class,
         "subtitle_delay_by_item" to String::class,
         "subtitle_style" to String::class,
@@ -139,13 +140,14 @@ class SubtitleSpecDerivationTest {
     fun `resetKeysFor returns exactly the SUBTITLES_LANGUAGE-category keys`() {
         val store = SubtitleLanguageStore(TestDataStoreProvider.get(), scope)
         val subtitleKeys = store.resetKeysFor(PreferenceResetCategory.SUBTITLES_LANGUAGE).map { it.name }
-        // The exact 11 keys the hand-written pre-spec reset list carried (the
+        // The exact 12 keys the hand-written pre-spec reset list carried (the
         // app-wide pair below is the rest).
         assertEquals(
             listOf(
                 "preferred_subtitle_lang",
                 "preferred_audio_lang",
                 "subtitles_forced_only",
+                "show_only_preferred_subtitles",
                 "subtitle_preview_in_settings",
                 "subtitle_style",
                 "high_contrast_subtitles",
@@ -208,6 +210,7 @@ class SubtitleSpecDerivationTest {
         val slice = SubtitleSlice()
         assertEquals(SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.default, slice.preferredSubtitleLanguage)
         assertEquals(SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.default, slice.subtitlesForcedOnly)
+        assertEquals(SubtitlePreferenceSpecs.SHOW_ONLY_PREFERRED_SUBTITLES.default, slice.showOnlyPreferredSubtitles)
         assertEquals(SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.default, slice.preferredAudioLanguage)
         assertEquals(SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.default, slice.subtitleDelayByItem)
         assertEquals(SubtitlePreferenceSpecs.TRACK_SELECTION_RULES.default, slice.languageRules)
@@ -219,13 +222,13 @@ class SubtitleSpecDerivationTest {
         assertEquals(SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE_ENABLED.default, slice.hdrSubtitleStyleEnabled)
         assertEquals(SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.default, slice.hdrSubtitleStyle)
         assertEquals(SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.default, slice.userStylePresets)
-        // Totality: the 13 pinned properties are ALL the slice's fields (13
+        // Totality: the 14 pinned properties are ALL the slice's fields (14
         // rows, one slice property each). A field added without a spec-default
         // pin above (and without bumping this count) fails here. Statics (the
         // @Serializable Companion, Compose's $stable) don't count.
         val instanceFields = SubtitleSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(13, instanceFields)
+        assertEquals(14, instanceFields)
     }
 
     @Test

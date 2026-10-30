@@ -12,7 +12,10 @@ import androidx.media3.common.Player
  * Engines without a media3 player (mpv, libVLC, NoOp, every desktop engine)
  * do not implement this interface and resolve to `null` — mirroring the
  * `ZoomSafeSubtitleStrategy` precedent of declaring a capability on the seam
- * instead of type-testing concrete adapters.
+ * instead of type-testing concrete adapters. The null is meaningful, not a
+ * dead end: gh-178's session controller fronts capability-null engines with
+ * the [MediaEngineSessionPlayer] adapter, so the seam decides WHICH transport
+ * a system MediaSession gets (native vs adapter), never WHETHER it gets one.
  */
 interface Media3PlayerHost {
 

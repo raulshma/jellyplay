@@ -7,8 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.feature.player.video.components.HdrOptionsSheet
+import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.RenderSheet
 import com.raulshma.jellyplay.feature.player.video.session.SheetsSessionSlice
 
@@ -38,11 +40,12 @@ import com.raulshma.jellyplay.feature.player.video.session.SheetsSessionSlice
  * cross-sheet link reference the module's [sheet] identity instead of
  * restating the raw constant.
  *
- * Exactly two sheets are implemented so far ([HdrSheetModule],
- * [RenderSheetModule], chosen because they cross-link). The remaining
- * branches stayed hand-written in [PlayerSheetRouter]'s `when` and migrate
- * as touched — the Detail section module precedent
- * ([SubtitleHubSheetModule], its own file).
+ * Four sheets are implemented so far ([HdrSheetModule], [RenderSheetModule]
+ * — wave 1, chosen because they cross-link — [SubtitleHubSheetModule], its
+ * own file, and [PlaybackModeSheetModule], the session-slice repair's
+ * as-touched vehicle). The remaining branches stay hand-written in
+ * [PlayerSheetRouter]'s `when` and migrate as touched — the Detail section
+ * module precedent.
  */
 internal interface PlayerSheetModule {
 
@@ -154,7 +157,7 @@ internal object PlayerSheetRegistry {
         PlayerSheet.Queue -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.SyncPlay -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.Quality -> PlayerSheetRegistration.pending(sheet)
-        PlayerSheet.PlaybackMode -> PlayerSheetRegistration.pending(sheet)
+        PlayerSheet.PlaybackMode -> PlayerSheetRegistration.migrated(PlaybackModeSheetModule)
         PlayerSheet.SleepTimer -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.VideoFilter -> PlayerSheetRegistration.pending(sheet)
         PlayerSheet.Hdr -> PlayerSheetRegistration.migrated(HdrSheetModule)
@@ -212,6 +215,13 @@ internal object HdrSheetModule : PlayerSheetModule {
         val seededMpvPass = sheets.render.pending.hdrPassthrough ?: globalMpv.hdrPassthrough
         var mpvPassthrough by remember(seededMpvPass) { mutableStateOf(seededMpvPass) }
         var exoMode by remember(globalExo.hdrToneMapping) { mutableStateOf(globalExo.hdrToneMapping) }
+        // The HDR-format pick's optimistic mirror (the persisted-pref twin of
+        // the two engine-slice mirrors above — re-seeded when the DataStore
+        // round-trip lands). Only the engines that HONOR the posture offer
+        // the row: the output policy consumes it on mpv hosts + Exo; VLC and
+        // the external hand-off cannot, so they hide it like the other
+        // config blocks.
+        var hdrFormat by remember(sheets.hdrFormatPreference) { mutableStateOf(sheets.hdrFormatPreference) }
         val isMpv = scope.uiState.preferredPlayerType == PlayerType.MPV
         val isExo = scope.uiState.preferredPlayerType == PlayerType.EXO_PLAYER
         HdrOptionsSheet(
@@ -230,6 +240,11 @@ internal object HdrSheetModule : PlayerSheetModule {
             onExoHdrToneMappingSelect = { mode ->
                 exoMode = mode
                 scope.viewModel.onEvent(VideoPlayerUiEvent.SetExoHdrToneMapping(mode))
+            },
+            hdrFormatPreference = hdrFormat.takeIf { isMpv || isExo },
+            onHdrFormatPreferenceSelect = { preference ->
+                hdrFormat = preference
+                scope.sheets.setHdrFormatPreference(preference)
             },
             // The cross-sheet link declares through the sibling module's
             // registered key — the route target is the Render module's
@@ -267,24 +282,82 @@ internal object RenderSheetModule : PlayerSheetModule {
         val global = sheets.globalMpvConfig
         val effective = sessionRender.effectiveMpvConfig(global)
         val active = sessionRender.override
+        // The persisted render prefs read the uiPrefs slice (the
+        // VideoPlayerStore projection) and write through the session's pref
+        // commands — the aggregate fanout's render-pref diff then rebuilds
+        // the engine config so the pick reaches the running engine.
+        val uiPrefs = scope.uiState.uiPrefs
         RenderSheet(
             shaderPack = active?.shaderPack ?: global.shaderPack,
             toneMapping = active?.toneMapping ?: global.toneMapping,
             // The effective quality (the session lens may hold a pick the
             // DataStore round-trip hasn't mirrored into the aggregate yet).
             renderQuality = effective.renderQuality,
+            toneMappingCurve = uiPrefs.mpvToneMappingCurve,
+            debandMode = uiPrefs.mpvDebandMode,
+            motionInterpolation = uiPrefs.mpvMotionInterpolation,
             hasStoredOverride = active != null,
             canSaveForSeries = scope.uiState.media.seriesId != null || scope.inputs.itemId != null,
             saveForSeries = scope.inputs.saveRenderForSeries,
             onShaderPackSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderShaderPack(it, scope.inputs.saveRenderForSeries)) },
             onToneMappingSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderToneMapping(it, scope.inputs.saveRenderForSeries)) },
             onRenderQualitySelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetRenderQuality(it)) },
+            onToneMappingCurveSelect = { scope.sheets.setMpvToneMappingCurve(it) },
+            onDebandModeSelect = { scope.sheets.setMpvDebandMode(it) },
+            onMotionInterpolationChange = { scope.sheets.setMpvMotionInterpolation(it) },
             onSaveForSeriesChange = { scope.inputs.onSaveRenderForSeriesChange(it) },
             onInherit = {
                 scope.viewModel.onEvent(VideoPlayerUiEvent.ClearRenderOverride)
                 scope.inputs.onSheetChange(PlayerSheet.None)
             },
             onDismiss = scope.inputs.dismissSheet,
+        )
+    }
+}
+
+/**
+ * The combined playback-options module (wave 3, the as-touched cadence
+ * vehicle for the session-slice repair): delivery + engine + quality in one
+ * panel that stays open across picks. The branch's two session reads were
+ * the audited defect — cast connectivity and the platform's
+ * availablePlayerTypes read off the session handle, and the eligibility
+ * policy (cast-connected, SyncPlay-active, engine identity) restated in the
+ * ViewModel's SwitchPlayerEngine arm. Both now read the sheets slice's ONE
+ * verdicts ([SheetsSessionSlice.switchableEngines] /
+ * [SheetsSessionSlice.localControlBlocked]): the module renders the
+ * verdicts, the VM arm consumes the same flow, nothing re-folds.
+ */
+internal object PlaybackModeSheetModule : PlayerSheetModule {
+
+    override val sheet: PlayerSheet = PlayerSheet.PlaybackMode
+
+    /** The verdict flows are collected HERE (sheet-local) — only this panel consumes them while open. */
+    @Composable
+    override fun Content(scope: PlayerSheetScope) {
+        val sheets = scope.sheets
+        val engine by sheets.engineFlow.collectAsStateWithLifecycle()
+        val switchableEngines by sheets.switchableEngines.collectAsStateWithLifecycle()
+        val localControlBlocked by sheets.localControlBlocked.collectAsStateWithLifecycle()
+        val uiState = scope.uiState
+        PlaybackModeSheet(
+            currentMode = uiState.uiPrefs.playbackMode,
+            currentPlayMethod = uiState.media.playMethod,
+            onSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackMode(it)) },
+            onDismiss = scope.inputs.dismissSheet,
+            currentQuality = uiState.uiPrefs.streamingQuality,
+            adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
+            onQualitySelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
+            onToggleAdaptiveBitrate = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
+            // Forced direct play has no transcode quality to pick either —
+            // the section disables until the delivery mode changes. The
+            // VM-state terms (forced mode, downloaded badge) fold here; the
+            // cast/SyncPlay terms ride the slice's verdict.
+            qualityAvailable = uiState.uiPrefs.playbackMode != PlaybackMode.FORCE_DIRECT_PLAY &&
+                !uiState.media.showDownloadedBadge &&
+                !localControlBlocked,
+            currentEngineName = engine?.displayName,
+            availablePlayers = switchableEngines,
+            onPlayerSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SwitchPlayerEngine(it)) },
         )
     }
 }

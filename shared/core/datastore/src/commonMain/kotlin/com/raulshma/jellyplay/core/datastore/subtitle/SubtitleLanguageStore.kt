@@ -77,6 +77,7 @@ class SubtitleLanguageStore constructor(
     internal object Keys {
         val PREFERRED_SUBTITLE_LANG = stringPreferencesKey(SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.keyName)
         val SUBTITLES_FORCED_ONLY = booleanPreferencesKey(SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.keyName)
+        val SHOW_ONLY_PREFERRED_SUBTITLES = booleanPreferencesKey(SubtitlePreferenceSpecs.SHOW_ONLY_PREFERRED_SUBTITLES.keyName)
         val PREFERRED_AUDIO_LANG = stringPreferencesKey(SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.keyName)
         val SUBTITLE_DELAY_BY_ITEM = stringPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.keyName)
         val SUBTITLE_STYLE = stringPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_STYLE.keyName)
@@ -89,6 +90,17 @@ class SubtitleLanguageStore constructor(
         val TRACK_SELECTION_RULES = stringPreferencesKey(SubtitlePreferenceSpecs.TRACK_SELECTION_RULES.keyName)
         val SUBTITLE_STYLE_PRESETS = stringPreferencesKey(SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.keyName)
     }
+
+    /**
+     * One-shot gate for [migrateLegacyFontPaths] — the
+     * [PreferenceCodec.TYPED_MIGRATION_DONE] pattern, scoped to this store's
+     * font-path rename. Declared OUTSIDE [Keys] on purpose: Keys is pinned
+     * one-to-one to the [SubtitlePreferenceSpecs] rows (the derivation test),
+     * and this gate is one-time migration machinery, not a user-tunable
+     * preference — a factory reset clearing it is harmless (the styles reset
+     * to defaults with it, and no path can carry the legacy prefix again).
+     */
+    private val fontPathMigrationGate = booleanPreferencesKey("subtitle_font_path_migration_done")
 
     /**
      * The subtitle &amp; language preference slice, derived directly from the raw
@@ -107,6 +119,7 @@ class SubtitleLanguageStore constructor(
     internal fun read(prefs: Preferences): SubtitleSlice = SubtitleSlice(
         preferredSubtitleLanguage = SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.readStored(prefs),
         subtitlesForcedOnly = SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.readFrom(prefs),
+        showOnlyPreferredSubtitles = SubtitlePreferenceSpecs.SHOW_ONLY_PREFERRED_SUBTITLES.readFrom(prefs),
         preferredAudioLanguage = SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.readStored(prefs),
         subtitleDelayByItem = SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.readFrom(prefs),
         languageRules = SubtitlePreferenceSpecs.TRACK_SELECTION_RULES.readFrom(prefs),
@@ -143,6 +156,10 @@ class SubtitleLanguageStore constructor(
 
     suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
         dataStore.edit { SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.writeTo(it, enabled) }
+    }
+
+    suspend fun setShowOnlyPreferredSubtitles(enabled: Boolean) {
+        dataStore.edit { SubtitlePreferenceSpecs.SHOW_ONLY_PREFERRED_SUBTITLES.writeTo(it, enabled) }
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
@@ -209,6 +226,53 @@ class SubtitleLanguageStore constructor(
     }
 
     /**
+     * One-shot rename of the persisted selected-font paths when the fonts home
+     * moves (Android's subtitle-fonts dir relocated out of cacheDir — the
+     * store half of that move): every [SubtitleStyle.fontFamilyPath] still
+     * under [legacyPathPrefix] — the selected style, the HDR style and each
+     * user preset — is rewritten to [newPathPrefix] in ONE DataStore
+     * transaction, then [Keys.FONT_PATH_MIGRATION_DONE] latches so later
+     * calls are no-ops (the [PreferenceCodec.runTypedKeyMigration] gate
+     * pattern). Store-domain on purpose: the paths live in this store's
+     * blobs, so the rewrite belongs here, not in the platform font provider.
+     * The prefix pair comes from the caller (Context dirs); this store never
+     * touches the filesystem.
+     */
+    suspend fun migrateLegacyFontPaths(legacyPathPrefix: String, newPathPrefix: String) {
+        if (legacyPathPrefix == newPathPrefix) return
+        dataStore.edit { prefs ->
+            if (prefs[fontPathMigrationGate] == true) return@edit
+            fun rewrite(path: String?): String? =
+                path?.takeIf { it.startsWith(legacyPathPrefix) }
+                    ?.let { newPathPrefix + it.removePrefix(legacyPathPrefix) }
+
+            val style = SubtitlePreferenceSpecs.SUBTITLE_STYLE.readFrom(prefs)
+            rewrite(style.fontFamilyPath)?.let {
+                SubtitlePreferenceSpecs.SUBTITLE_STYLE.writeTo(prefs, style.copy(fontFamilyPath = it))
+            }
+            val hdrStyle = SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.readFrom(prefs)
+            rewrite(hdrStyle.fontFamilyPath)?.let {
+                SubtitlePreferenceSpecs.HDR_SUBTITLE_STYLE.writeTo(prefs, hdrStyle.copy(fontFamilyPath = it))
+            }
+            val presets = SubtitlePreferenceSpecs.SUBTITLE_STYLE_PRESETS.readFrom(prefs)
+            if (presets.isNotEmpty()) {
+                val migrated = presets.map { preset ->
+                    rewrite(preset.style.fontFamilyPath)
+                        ?.let { rewritten -> preset.copy(style = preset.style.copy(fontFamilyPath = rewritten)) }
+                        ?: preset
+                }
+                if (migrated != presets) {
+                    prefs[Keys.SUBTITLE_STYLE_PRESETS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                        kotlinx.serialization.serializer<List<SubtitleStylePreset>>(),
+                        migrated,
+                    )
+                }
+            }
+            prefs[fontPathMigrationGate] = true
+        }
+    }
+
+    /**
      * Persists the track-language rule set. The identity rule set
      * (MANUAL preset, nothing configured) removes the key so storage carries
      * no no-op blob — matching the identity-by-absence read default.
@@ -256,6 +320,7 @@ class SubtitleLanguageStore constructor(
         dataStore.edit { prefs ->
             slice.preferredSubtitleLanguage?.let { prefs[Keys.PREFERRED_SUBTITLE_LANG] = it }
             SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.writeTo(prefs, slice.subtitlesForcedOnly)
+            SubtitlePreferenceSpecs.SHOW_ONLY_PREFERRED_SUBTITLES.writeTo(prefs, slice.showOnlyPreferredSubtitles)
             slice.preferredAudioLanguage?.let { prefs[Keys.PREFERRED_AUDIO_LANG] = it }
             prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = PreferenceCodec.encodeDefaultsJson.encodeToString(
                 kotlinx.serialization.serializer<Map<String, Long>>(),
@@ -296,6 +361,7 @@ class SubtitleLanguageStore constructor(
 data class SubtitleSlice(
     val preferredSubtitleLanguage: String? = SubtitlePreferenceSpecs.PREFERRED_SUBTITLE_LANG.default,
     val subtitlesForcedOnly: Boolean = SubtitlePreferenceSpecs.SUBTITLES_FORCED_ONLY.default,
+    val showOnlyPreferredSubtitles: Boolean = SubtitlePreferenceSpecs.SHOW_ONLY_PREFERRED_SUBTITLES.default,
     val preferredAudioLanguage: String? = SubtitlePreferenceSpecs.PREFERRED_AUDIO_LANG.default,
     val subtitleDelayByItem: Map<String, Long> = SubtitlePreferenceSpecs.SUBTITLE_DELAY_BY_ITEM.default,
     /** The track-language rule set; the default instance is the inert identity. */

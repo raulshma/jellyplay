@@ -6,7 +6,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -30,7 +30,8 @@ class LibraryRecommendationsWidgetWorker(
     appContext: Context,
     params: WorkerParameters,
     private val widgetDataStore: WidgetDataStore,
-    private val mediaRepository: MediaRepository,
+    /** The similar-items row source (the SIMILAR source's detail-cluster read — off the union). */
+    private val detailFeed: DetailFeed,
     /** The home-feed seam (the LATEST source's sections read — off the union). */
     private val homeFeed: HomeFeed,
     /** The SearchResult-shaped reads (latest/favorites/random queries — off the union). */
@@ -83,7 +84,7 @@ class LibraryRecommendationsWidgetWorker(
 
     private suspend fun fetchSimilarToRecent(): List<MediaItem>? {
         val seed = widgetDataStore.continueWatching.first().firstOrNull() ?: return null
-        val result = mediaRepository.getSimilarItems(seed.id, MAX_ITEMS).getOrNull() ?: return null
+        val result = detailFeed.getSimilarItems(seed.id, MAX_ITEMS).getOrNull() ?: return null
         if (result.isEmpty()) return null
         return result
     }
@@ -131,10 +132,12 @@ class LibraryRecommendationsWidgetWorker(
 
     private fun MediaItem.toWidgetItem(): LibraryWidgetItem {
         val imageId = WidgetPosterIdentity.libraryRecommendationsPosterImageId(this)
+        val imageTag = WidgetPosterIdentity.posterImageTag(this)
         val poster = runCatching {
             imageUrlProvider.getImageUrl(
                 imageId,
                 maxWidth = WidgetPosterIdentity.LIBRARY_RECOMMENDATIONS_POSTER_MAX_WIDTH,
+                tag = imageTag,
             )
         }
             .getOrNull()

@@ -106,8 +106,9 @@ import org.jetbrains.compose.resources.stringResource
  * The detail body's per-family section renderers, decomposed out of the former
  * ~1,060-line inline [DetailContentBody] column.
  *
- * The trunk ([DetailContentBody]) walks the ordered list [DetailSectionAdmission]
- * produces and dispatches each [DetailSectionKind] to one renderer here. Every
+ * The trunk ([DetailContentBody]) walks the ordered list the section-module
+ * registry produces and routes each [DetailSectionKind] to its module's
+ * renderer. Every
  * renderer owns exactly one [StaggeredDetailSection] slot, receives its
  * `delayIndex` from the admission descriptor (never re-states it), and keeps
  * the former inline body verbatim — same content gates, same remember keys,
@@ -364,8 +365,11 @@ internal fun DetailHeaderSection(
 
             FadingItem {
                 val logoTag = detail.logoImageTag
-                val logoUrl = remember(item.id, logoTag) {
-                    if (logoTag != null) callbacks.artwork.getLogoUrl(item.id) else ""
+                // Keyed on the item (not its id) so a tag change re-keys; the
+                // resolver forwards the item's own Logo tag (the same value the
+                // logoTag gate reads).
+                val logoUrl = remember(item, logoTag) {
+                    if (logoTag != null) callbacks.artwork.urls.logo(item) else ""
                 }
                 if (preferLogoTitleEnabled(state.preferences.preferLogos, logoTag, logoUrl)) {
                     DetailLogoTitle(
@@ -539,6 +543,7 @@ internal fun DetailHeaderSection(
                             rtUrl = state.core.externalRatings.rtUrl,
                             imdbUrl = state.core.externalRatings.imdbUrl,
                             tmdbUrl = state.core.externalRatings.tmdbUrl,
+                            awards = state.core.externalRatings.awards,
                         )
                     }
                     // Book meta: file format + reading progress (the
@@ -1019,7 +1024,8 @@ internal fun DetailAlbumTracksSection(
                 state.core.albumTracks.forEachIndexed { index, track ->
                     val trackClick = remember(track.id) { { callbacks.navigation.onItemClick(track.id) } }
                     val trackPlayClick = remember(track.id, index) { { callbacks.playback.onPlayAlbumTrack(index); callbacks.navigation.onItemClick(track.id) } }
-                    val trackImageUrl = remember(track.id) { callbacks.artwork.getImageUrl(track.id) }
+                    // Keyed on the item (not its id) so a tag change re-keys.
+                    val trackImageUrl = remember(track) { callbacks.artwork.urls.poster(track) }
                     FadingItem {
                         AlbumTrackItem(
                             track = track,
@@ -1130,7 +1136,8 @@ internal fun DetailUpcomingEpisodesSection(
                 ) {
                     upcoming.forEach { episode ->
                         val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
-                        val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                        // Keyed on the item (not its id) so a tag change re-keys.
+                        val episodeImageUrl = remember(episode) { callbacks.artwork.urls.poster(episode) }
                         FadingItem {
                             UpcomingEpisodeCard(
                                 episode = episode,
@@ -1153,7 +1160,8 @@ internal fun DetailUpcomingEpisodesSection(
                     },
                 ) { _, episode, focusModifier ->
                     val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
-                    val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                    // Keyed on the item (not its id) so a tag change re-keys.
+                    val episodeImageUrl = remember(episode) { callbacks.artwork.urls.poster(episode) }
                     UpcomingEpisodeCard(
                         episode = episode,
                         imageUrl = episodeImageUrl,
@@ -1212,32 +1220,44 @@ internal fun DetailSeasonsSection(
                 // bundle plus the episode interactions, which the screen
                 // bundles express one level up (play dispatch, item
                 // navigation, quick-action intake, per-episode delete).
-                val sectionCallbacks = SeasonsSectionCallbacks(
-                    onSeasonSelected = callbacks.seasons.onSeasonSelected,
-                    onSeasonPinned = callbacks.seasons.onSeasonPinned,
-                    onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
-                    onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
-                    onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
-                    onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
-                    onEpisodePlayClick = { episode ->
-                        val sourceId = null
-                        val startPos = episode.playbackPositionTicks ?: 0L
-                        callbacks.playback.onPlayClick(episode.id, sourceId, startPos)
-                    },
-                    onEpisodeDetailClick = { episode ->
-                        callbacks.navigation.onItemClick(episode.id)
-                    },
-                    onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
-                    onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
-                    onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
-                )
+                // Remembered on exactly the screen-level bundles its lambdas
+                // capture (each of them remembered on stable keys upstream),
+                // so sibling-section recompositions reuse the bundle instead
+                // of rebuilding its ten lambdas.
+                val sectionCallbacks = remember(
+                    callbacks.seasons,
+                    callbacks.playback,
+                    callbacks.navigation,
+                    callbacks.screen,
+                    callbacks.download,
+                ) {
+                    SeasonsSectionCallbacks(
+                        onSeasonSelected = callbacks.seasons.onSeasonSelected,
+                        onSeasonPinned = callbacks.seasons.onSeasonPinned,
+                        onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
+                        onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
+                        onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
+                        onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
+                        onEpisodePlayClick = { episode ->
+                            val sourceId = null
+                            val startPos = episode.playbackPositionTicks ?: 0L
+                            callbacks.playback.onPlayClick(episode.id, sourceId, startPos)
+                        },
+                        onEpisodeDetailClick = { episode ->
+                            callbacks.navigation.onItemClick(episode.id)
+                        },
+                        onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
+                        onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
+                        onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
+                    )
+                }
                 SeasonsSection(
                     presentation = presentation,
                     seriesItem = item,
                     smartPlayTarget = state.core.smartPlayTarget,
                     fetchedSeasonIds = state.core.fetchedSeasonIds,
                     persistedSeasonId = state.persistedSeasonId,
-                    getImageUrl = callbacks.artwork.getImageUrl,
+                    urls = callbacks.artwork.urls,
                     callbacks = sectionCallbacks,
                     animeMarkers = state.core.animeMarkers,
                     seasonRatings = state.core.seasonRatings,
@@ -1284,7 +1304,8 @@ internal fun DetailCollectionItemsSection(
             ) { _, collectionItem, focusModifier ->
                 val collectionClick = remember(collectionItem.id) { { callbacks.navigation.onItemClick(collectionItem.id) } }
                 val collectionProgress = collectionItem.progressFraction()
-                val collectionImageUrl = remember(collectionItem.id) { callbacks.artwork.getImageUrl(collectionItem.id) }
+                // Keyed on the item (not its id) so a tag change re-keys.
+                val collectionImageUrl = remember(collectionItem) { callbacks.artwork.urls.poster(collectionItem) }
                 PosterCard(
                     item = collectionItem,
                     imageUrl = collectionImageUrl,
@@ -1361,7 +1382,8 @@ internal fun DetailCastSection(
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                     // Cast rendering branches on capabilities.personNavigation:
                     //  - REMOTE (personNavigation true): existing PersonItem,
-                    //    click -> onPersonClick, image via getImageUrl.
+                    //    click -> onPersonClick, portrait via the resolver
+                    //    (the person's own primary tag included).
                     //  - LOCAL (personNavigation false): OfflinePersonItem with
                     //    the on-disk cast portrait (assets.castImages[id])
                     //    preferred over the server URL fallback, NO click.
@@ -1374,7 +1396,8 @@ internal fun DetailCastSection(
                     ) { _, person, focusModifier ->
                         if (personNavEnabled) {
                             val personClick = remember(person.id) { { callbacks.navigation.onPersonClick(person.id) } }
-                            val personImageUrl = remember(person.id) { callbacks.artwork.getImageUrl(person.id) }
+                            // Keyed on the person (not the id) so a tag change re-keys.
+                            val personImageUrl = remember(person) { callbacks.artwork.urls.personPortrait(person) }
                             PersonItem(
                                 person = person,
                                 imageUrl = personImageUrl,
@@ -1384,8 +1407,8 @@ internal fun DetailCastSection(
                         } else {
                             // Local portrait preferred, then server URL fallback.
                             val localPortrait = state.core.assets.castImages[person.id]
-                            val personImageUrl = remember(person.id, localPortrait) {
-                                localPortrait ?: callbacks.artwork.getImageUrl(person.id)
+                            val personImageUrl = remember(person, localPortrait) {
+                                localPortrait ?: callbacks.artwork.urls.personPortrait(person)
                             }
                             OfflinePersonItem(
                                 person = person.toOfflinePersonInfo(),
@@ -1427,7 +1450,7 @@ internal fun DetailMoreInCollectionSection(
                     },
                     onItemClick = callbacks.navigation.onItemClick,
                     onItemFocus = callbacks.screen.onFocusedMediaItem,
-                    getImageUrl = callbacks.artwork.getImageUrl,
+                    urls = callbacks.artwork.urls,
                 )
             }
         }
@@ -1493,7 +1516,8 @@ internal fun DetailMoreLikeThisSection(
                     },
                 ) { _, related, focusModifier ->
                     val relatedClick = remember(related.id) { { callbacks.navigation.onItemClick(related.id) } }
-                    val relatedImageUrl = remember(related.id) { callbacks.artwork.getImageUrl(related.id) }
+                    // Keyed on the item (not its id) so a tag change re-keys.
+                    val relatedImageUrl = remember(related) { callbacks.artwork.urls.poster(related) }
                     PosterCard(
                         item = related,
                         imageUrl = relatedImageUrl,
@@ -1577,7 +1601,8 @@ internal fun DetailJellyPlaySimilarSection(
                 },
             ) { _, similarItem, focusModifier ->
                 val similarClick = remember(similarItem.id) { { callbacks.navigation.onItemClick(similarItem.id) } }
-                val similarImageUrl = remember(similarItem.id) { callbacks.artwork.getImageUrl(similarItem.id) }
+                // Keyed on the item (not its id) so a tag change re-keys.
+                val similarImageUrl = remember(similarItem) { callbacks.artwork.urls.poster(similarItem) }
                 PosterCard(
                     item = similarItem,
                     imageUrl = similarImageUrl,
@@ -1659,7 +1684,8 @@ internal fun DetailSpecialFeaturesSection(
                 },
             ) { _, extra, focusModifier ->
                 val extraClick = remember(extra.id) { { callbacks.playback.onPlayExtra(extra) } }
-                val extraImageUrl = remember(extra.id) { callbacks.artwork.getImageUrl(extra.id) }
+                // Keyed on the item (not its id) so a tag change re-keys.
+                val extraImageUrl = remember(extra) { callbacks.artwork.urls.poster(extra) }
                 PosterCard(
                     item = extra,
                     imageUrl = extraImageUrl,

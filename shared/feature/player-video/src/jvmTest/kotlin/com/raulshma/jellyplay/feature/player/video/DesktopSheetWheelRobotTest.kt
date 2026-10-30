@@ -94,6 +94,18 @@ class DesktopSheetWheelRobotTest {
             "robot wheel needs an interactive display",
             !java.awt.GraphicsEnvironment.isHeadless(),
         )
+        try {
+            val testRobot = Robot()
+            testRobot.mouseMove(200, 200)
+            Thread.sleep(50)
+            val loc = java.awt.MouseInfo.getPointerInfo()?.location
+            org.junit.Assume.assumeTrue(
+                "robot wheel needs an interactive mouse session (cursor target (200,200), actual $loc)",
+                loc != null && Math.abs(loc.x - 200) <= 5 && Math.abs(loc.y - 200) <= 5,
+            )
+        } catch (_: Throwable) {
+            org.junit.Assume.assumeTrue("robot mouse move unavailable", false)
+        }
     }
 
     @Test

@@ -379,6 +379,7 @@
 
     <!-- Plugin / catalog metadata labels (batch) -->
     <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_contract_mismatch">O plugin JellyPlay (v%3$s) usa o contrato v%1$s; este app suporta v%2$s — atualize o plugin no seu servidor ou o app.</string>
     <string name="admin_plugin_by_author">por %1$s</string>
 
     <!-- Statistics time-unit suffixes (compact chart labels) -->

@@ -6,7 +6,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -42,7 +43,8 @@ class PlaybackOutboxDrainerTest {
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val userDataSyncTrigger: PlaybackOutboxDrainer.UserDataSyncTrigger = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val userDataWrites: UserDataWriteOperations = mockk(relaxed = true)
+    private val userDataAnnouncer: UserDataAnnouncer = mockk(relaxed = true)
     private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
 
     @BeforeTest
@@ -53,9 +55,6 @@ class PlaybackOutboxDrainerTest {
         coEvery { outboxReplay.replayOutboxEntry(any()) } returns true
         coEvery { outbox.drain() } returns emptyList()
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
-        // Derived watched flips route through the repository (cache
-        // invalidation included); relaxed mocks cannot synthesize Result.
-        coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
         // Relaxed mocks cannot pick a sealed-interface answer; default to the
         // benign outcome (tests override where the branch matters).
         coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ReconcileOutcome.NoChange
@@ -70,7 +69,8 @@ class PlaybackOutboxDrainerTest {
             offlineModeManager = offlineModeManager,
             playedStateSync = playedStateSync,
             offlineRepository = offlineRepository,
-            mediaRepository = mediaRepository,
+            userDataWrites = userDataWrites,
+            userDataAnnouncer = userDataAnnouncer,
             cacheInvalidator = cacheInvalidator,
             userDataSyncTrigger = userDataSyncTrigger,
         )
@@ -143,7 +143,7 @@ class PlaybackOutboxDrainerTest {
         // empty), yet the adopted row's item must still be named so
         // id-matching consumers (an open detail screen) heal — the previous
         // announce passed the empty set and was a no-op.
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("d1")) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf("d1")) }
     }
 
     @Test
@@ -408,7 +408,7 @@ class PlaybackOutboxDrainerTest {
 
         drain()
 
-        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        coVerify(exactly = 1) { userDataWrites.recordDrainedPlays(listOf("item-1")) }
     }
 
     @Test
@@ -418,7 +418,7 @@ class PlaybackOutboxDrainerTest {
 
         drain()
 
-        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        coVerify(exactly = 1) { userDataWrites.recordDrainedPlays(listOf("item-1")) }
     }
 
     @Test
@@ -428,7 +428,7 @@ class PlaybackOutboxDrainerTest {
 
         drain()
 
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        coVerify(exactly = 0) { userDataWrites.recordDrainedPlays(any()) }
     }
 
     @Test
@@ -446,9 +446,9 @@ class PlaybackOutboxDrainerTest {
         val result = drain()
 
         assertTrue(result.retriesPending)
-        coVerify(exactly = 1) { mediaRepository.markPlayed("item-1") }
+        coVerify(exactly = 1) { userDataWrites.recordDrainedPlays(listOf("item-1")) }
         // The telemetry push (not the flip) is what names the item here.
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf("item-1")) }
     }
 
     @Test
@@ -462,7 +462,7 @@ class PlaybackOutboxDrainerTest {
         // caches must drop synchronously and the synthetic user-data push must
         // reach home/detail listeners without waiting for the WS echo.
         coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
-        verify(exactly = 1) { mediaRepository.notifyUserDataChanged(listOf("item-1")) }
+        verify(exactly = 1) { userDataAnnouncer.notifyUserDataChanged(listOf("item-1")) }
         verify(exactly = 1) { userDataSyncTrigger.enqueueNow() }
     }
 
@@ -476,7 +476,7 @@ class PlaybackOutboxDrainerTest {
         val result = drain(attempt = 10)
 
         coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
-        verify(exactly = 0) { mediaRepository.notifyUserDataChanged(any()) }
+        verify(exactly = 0) { userDataAnnouncer.notifyUserDataChanged(any()) }
     }
 
     @Test
@@ -488,7 +488,7 @@ class PlaybackOutboxDrainerTest {
 
         // The UNPLAYED intent is the authority; deriving a watched flip here
         // would immediately undo the user's unwatch.
-        coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
+        coVerify(exactly = 0) { userDataWrites.recordDrainedPlays(any()) }
     }
 
     @Test

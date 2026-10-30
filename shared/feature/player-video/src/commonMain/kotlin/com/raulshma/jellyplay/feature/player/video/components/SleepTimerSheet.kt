@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.Color
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.data.playback.SLEEP_TIMER_PRESET_MS
+import com.raulshma.jellyplay.core.data.playback.SleepTimerSheetPolicy
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
@@ -43,10 +45,10 @@ import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
+import com.raulshma.jellyplay.core.ui.components.rememberIs24HourFormat
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
 import kotlinx.coroutines.delay
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -66,14 +68,6 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer_stops_at
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_start
-
-private val PRESET_DURATIONS = listOf(
-    15 * 60 * 1000L,
-    30 * 60 * 1000L,
-    45 * 60 * 1000L,
-    60 * 60 * 1000L,
-    90 * 60 * 1000L,
-)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -180,7 +174,7 @@ internal fun SleepTimerSheet(
                     }
                 }
 
-                items(PRESET_DURATIONS, key = { it }) { durationMs ->
+                items(SLEEP_TIMER_PRESET_MS, key = { it }) { durationMs ->
                     val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
                     val isLastUsed = !isActive && durationMs == lastUsedDurationMs
                     val isTarget = isSelected || isLastUsed
@@ -223,7 +217,7 @@ internal fun SleepTimerSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        PRESET_DURATIONS.forEach { durationMs ->
+                        SLEEP_TIMER_PRESET_MS.forEach { durationMs ->
                             val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
                             val isLastUsed = !isActive && durationMs == lastUsedDurationMs
                             SleepTimerChip(

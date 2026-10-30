@@ -4,63 +4,38 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
-import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
-import com.raulshma.jellyplay.core.data.book.BookTocProber
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
-import com.raulshma.jellyplay.core.model.HomeFreshness
-import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
-import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
-import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
-import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionRequest
-import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionStateHolder
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
-import com.raulshma.jellyplay.core.model.DetailCapabilities
-import com.raulshma.jellyplay.core.model.DetailContext
-import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
-import com.raulshma.jellyplay.core.model.BookFormat
-import com.raulshma.jellyplay.core.model.BookTocEntry
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.Playlist
-import com.raulshma.jellyplay.core.model.SearchResult
-import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.InstantMixError
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seriesIdForDetail
 import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
-import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -68,21 +43,22 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_access_denied
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_load_failed
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_error_unavailable_offline
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_instant_mix_empty
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_radio_empty
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_radio_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_instant_mix_failed
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_next_up_episode
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_episode
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_replay_episode
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_resume_episode
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_mark_played
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_mark_unplayed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_couldnt_update_favorite
@@ -94,14 +70,13 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_ser
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_series_notifications_on
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_shown_in_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_shown_in_next_up
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_next_up_episode
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_play_episode
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_replay_episode
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_resume_episode
 
 /**
- * ViewModel for the media-detail screen — the thin async caller that owns the
- * [DetailUiState] content writes over the provider's resolved snapshots.
+ * ViewModel for the media-detail screen — the thin flows + `onEvent` facade
+ * over [DetailLoadOrchestrator] (the `HomeRefresher` split): the loader is
+ * the SOLE WRITER of the [DetailUiState] content state over the provider's
+ * resolved snapshots, and this class folds its [DetailLoadOrchestrator.state]
+ * into the published snapshot and routes user intents.
  *
  * Every user intent arrives as a [DetailUiEvent] through the single [onEvent]
  * funnel (the home feature's `HomeViewModel` precedent;
@@ -122,7 +97,16 @@ class DetailViewModel internal constructor(
     // every localized string goes through the [strings] seam.
     private val storageProbe: DetailStorageProbe,
     private val strings: DetailStrings,
-    private val mediaRepository: MediaRepository,
+    /**
+     * The detail-read and collection-verbs family seams, handed to the
+     * loader ([DetailLoadOrchestrator]) and to the resync helper and the
+     * Add-to-Collection adapter respectively: those consumers each make
+     * exactly their one family's calls, so they take the seam.
+     */
+    private val detailFeed: DetailFeed,
+    private val collectionOperations: CollectionOperations,
+    /** The server user-data change feed (the loader's debounced reload trigger). */
+    private val userDataChanges: UserDataChanges,
     private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     /** The item-attached extras + provider-id reads (the detail screen's
      *  special-features row, the Seerr item resolution). */
@@ -141,14 +125,17 @@ class DetailViewModel internal constructor(
      * remote/local source decision, the projected [MediaDetail], seasons/
      * episodes (via the shared EpisodeCatalogue), album tracks, local
      * subtitles, local artwork, the download/sync attachment, and capabilities.
-     * [loadItemInternal] collects its [DetailLoadState] stream and reduces each
-     * emission into [_uiState]; remote-only subordinate work (Seerr, Sonarr,
-     * theme music, similar/collection items) fires off the resolved snapshot.
+     * The loader ([DetailLoadOrchestrator]) collects its [DetailLoadState]
+     * stream and reduces each emission into the content state; remote-only
+     * subordinate work (Seerr, Sonarr, theme music, similar/collection items)
+     * fires off the resolved snapshot.
      * Also feeds the action helpers' season expansion / canonical-id lookups.
      */
     private val mediaDetailProvider: MediaDetailProvider,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
+    /** The item/tag-aware artwork resolver exposed as [artwork] (the raw seam is [imageUrlProvider]). */
+    private val artworkUrls: ArtworkUrls,
     private val offlineRepository: OfflineRepository,
     /** Preference/state stores read by the content core (pure DI aggregation). */
     private val stores: DetailStores,
@@ -156,20 +143,23 @@ class DetailViewModel internal constructor(
     private val remoteDiscovery: RemoteDiscoveryClients,
     private val audioQueueFacade: AudioQueueFacade,
     private val themeMusicPlayer: DetailThemeMusic,
-    /** Hilt factories for the extracted action helpers (see [DetailActionFactories]). */
+    /** Factories for the action helpers (see [DetailActionFactories]). */
     private val actionFactories: DetailActionFactories,
     /** Quick-action download/remove routing shared with the other host screens (#147). */
     private val mediaDownloadActions: MediaDownloadActions,
     /**
-     * Book-only seams (BOOK media type). The TOC cache is the reader's
-     * write-through table (`book_toc_cache`); the marks repo supplies the
-     * bookmark/highlight counts; the prober parses a never-opened book's
-     * LOCAL file (player-book binding) when no cache row exists yet. All
-     * defaulted so existing test constructions compile.
+     * Book-only seams (BOOK media type), one bundle ([DetailBookArms]). The
+     * TOC cache is the reader's write-through table (`book_toc_cache`); the
+     * marks repo supplies the bookmark/highlight counts; the prober parses a
+     * never-opened book's LOCAL file (player-book binding) when no cache row
+     * exists yet. The bundle normalizes the platforms' optional registrations
+     * (a platform without a prober binding passes null) onto the no-op
+     * adapters once, so every read below is a plain call — the silent absence
+     * (no cached TOC, no probe, counts never written) is decided inside the
+     * bundle, not at each call site. Defaulted so existing test constructions
+     * compile.
      */
-    private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
-    private val readerAnnotationsRepository: ReaderAnnotationsRepository? = null,
-    private val bookTocProber: BookTocProber? = null,
+    private val bookArms: DetailBookArms = DetailBookArms(),
     /**
      * Dispatcher for the smart-play resolution launches ([computeSeriesSmartPlayTarget]
      * / [computeEpisodeSmartPlayTarget]): production resolves off Main, but the
@@ -182,60 +172,71 @@ class DetailViewModel internal constructor(
     /**
      * The jellyfin-plugin-jellyplay companion-plugin seams (ADR 0010), behind
      * the three plugin-gated detail sections (ratings row, server-scored
-     * "More like this", anime filler/recap badges). The data seams are the
-     * NARROW plugin roles the enrichments read — the ratings role (mdblist
-     * chips + per-season TMDB scores), the recommendations role (similar
-     * items) and the markers role (filler/recap badges) — not the whole
-     * client family. Nullable-with-default keeps the direct-construction test
-     * harnesses compiling — the Settings screen's `jellyPlayStatusStore`
-     * precedent; the Koin factory passes the real singles and every
-     * enrichment degrades to silent absence when either is null (the plugin
-     * contract's never-an-error-surface rule).
+     * "More like this", anime filler/recap badges), one bundle
+     * ([DetailPluginArms]). The data seams are the NARROW plugin roles the
+     * enrichments read — the ratings role (mdblist chips + per-season TMDB
+     * scores), the recommendations role (similar items) and the markers role
+     * (filler/recap badges) — plus the ONE gate seam ([JellyPlayFeatureGate],
+     * one member per ADR 0010 §6), not the whole client family. Every read
+     * goes through the bundle's operations, whose null-arm yields the plugin
+     * contract's silent absence (never an error surface) — decided once
+     * inside the bundle, not at every call site. The unwired default keeps
+     * the direct-construction test harnesses compiling — the Settings
+     * screen's `jellyPlayStatusStore` precedent; the Koin factory passes the
+     * real singles.
      *
      * Gating goes through the status store ONLY ([JellyPlayPluginFeatures]
      * keys, one [JellyPlayPluginStatusStore.refresh] probe per item
      * navigation); data calls ride the roles — never per-endpoint 404
      * handling.
      */
-    private val pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
-    private val pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
-    private val pluginRecommendationsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRecommendationsRoutes? = null,
-    private val pluginMarkersApi: com.raulshma.jellyplay.core.network.api.JellyPlayMarkersRoutes? = null,
-    /**
-     * The per-feature gate (probe AND the user's toggle — the ONE seam).
-     * Nullable-with-default like the two seams above; without it the
-     * probe-only fallback keeps the pre-toggle behavior (tests).
-     */
-    private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
+    private val pluginArms: DetailPluginArms = DetailPluginArms(),
     /**
      * The TMDB-fallback seam: the direct-TMDB details read behind the
      * `externalRatings` enrichment when Seerr is disconnected (or its ratings
-     * fetch failed/returned nothing). Nullable-with-default like the plugin
-     * seams — the Koin defs pass the core:network single and the enrichment
-     * degrades to silent absence (TMDB-only source unavailable) when null,
-     * keeping the direct-construction test harnesses compiling.
+     * fetch failed/returned nothing). Nullable-with-default like the bundles
+     * above — deliberately NOT absorbed into [pluginArms]: this is the stock
+     * TMDB fallback, not a companion-plugin seam (nothing about it gates on
+     * the plugin's capabilities registry), and its single read site reads
+     * silent absence inline without sprawling. The Koin defs pass the
+     * core:network single and the enrichment degrades to silent absence
+     * (TMDB-only source unavailable) when null, keeping the
+     * direct-construction test harnesses compiling.
      */
     private val tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
+    /**
+     * The appearance store, read DIRECTLY for the awards-badge toggle
+     * (`AppearanceSlice.detailsAwardsBadgesEnabled`): the projection bundle
+     * ([DetailPreferences]) cannot carry it (the datastore projection lives
+     * outside this feature's edit surface), so the store rides the same
+     * nullable-with-default pattern — deliberately NOT absorbed into
+     * [pluginArms] or [bookArms]: it is a user-appearance preference, not a
+     * plugin or book seam, and its single read site's silent absence (null
+     * suppresses the badge) is exactly what an OFF toggle produces.
+     * Production passes the core:datastore single; null (unwired tests)
+     * suppresses the badge.
+     */
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
     val preferences: StateFlow<DetailPreferences> = stores.projections.detailPreferences
 
-    // Single source of truth for detail-screen CONTENT state. All mutations
-    // funnel through [_uiState.update]; the [uiState] aggregator additionally
-    // folds in [SeerrRequestStateHolder] state via combine() so observers see a
-    // single atomic snapshot. Per-sheet action state (downloads, playlists,
-    // collections, resync) deliberately does NOT live here — it is published by
-    // the owning helper (see [downloads], [playlists], [collections],
+    // Single source of truth for detail-screen CONTENT state is the
+    // [DetailLoadOrchestrator]'s state flow (constructed below, after the
+    // download helper it resets); the [uiState] aggregator additionally
+    // folds in [SeerrRequestStateHolder] state via combine() so observers see
+    // a single atomic snapshot. Per-sheet action state (downloads, playlists,
+    // collections, resync) deliberately does NOT live here — it is published
+    // by the owning helper (see [downloads], [playlists], [collections],
     // [resync]) and collected directly at the composition site that needs it.
-    private val _uiState = MutableStateFlow(DetailUiState())
 
     /**
-     * The loaded item's session snapshot — what every action helper needs to
-     * know about the current screen. Reset to a bare id-only session in
-     * [loadItemInternal] and adopted (content sections filled) in
-     * [reduceLoaded] on each new resolution; helpers read `.value` at command
-     * time, exactly when the former provider lambdas read the VM.
+     * The loaded item's session snapshot - what every action helper needs to
+     * know about the current screen. Reset to a bare id-only session at load
+     * start and adopted (content sections filled) on each new resolution by
+     * the loader ([DetailLoadOrchestrator]); helpers read `.value` at command
+     * time.
      */
     private val _session = MutableStateFlow<DetailSession?>(null)
 
@@ -251,6 +252,50 @@ class DetailViewModel internal constructor(
     )
     val messages: SharedFlow<DetailMessage> = _messages.asSharedFlow()
 
+    // The download helper is constructed FIRST: the loader resets its state
+    // on every navigation and loads the downloaded-episode ids on every new
+    // resolution (the HomeRefresher-first ordering rule).
+    private val downloadLifecycleActions = actionFactories.downloads.create(
+        scope = scope,
+        session = _session,
+        messages = _messages,
+        strings = strings,
+        mediaDetailProvider = mediaDetailProvider,
+    )
+
+    /**
+     * The load pipeline ([DetailLoadOrchestrator]) — sole writer of the
+     * content state. The VM hands it its collaborators (constructor-lambda
+     * wiring, the Home refresher's shape); [publishedState] defers to
+     * [uiState], whose lazy combine reads `loader.state` — no construction
+     * cycle, the lambda only runs after both exist.
+     */
+    private val loader = DetailLoadOrchestrator(
+        scope = scope,
+        strings = strings,
+        detailFeed = detailFeed,
+        collectionOperations = collectionOperations,
+        userDataChanges = userDataChanges,
+        mediaDetailProvider = mediaDetailProvider,
+        libraryApiClient = libraryApiClient,
+        mediaCatalogueEnrichments = mediaCatalogueEnrichments,
+        playbackRepository = playbackRepository,
+        offlineRepository = offlineRepository,
+        remoteDiscovery = remoteDiscovery,
+        pluginArms = pluginArms,
+        tmdbApiClient = tmdbApiClient,
+        appearanceStore = appearanceStore,
+        themeMusicPlayer = themeMusicPlayer,
+        bookArms = bookArms,
+        smartPlayDispatcher = smartPlayDispatcher,
+        preferences = stores.projections.detailPreferences,
+        session = _session,
+        downloadActions = downloadLifecycleActions,
+        engineStore = stores.engineStore,
+        artworkUrls = artworkUrls,
+        publishedState = { uiState.value },
+    )
+
     /**
      * Whether the "Manage Series" action should be shown. True iff:
      * - The DIRECT_ARR_INTEGRATION experimental flag is enabled, AND
@@ -265,11 +310,11 @@ class DetailViewModel internal constructor(
      * ManageSeriesScreen.
      */
     val canManageSeries: StateFlow<Boolean> = combine(
-        // ONE _uiState projection + dedupe: only a change to one of the
+        // ONE content-state projection + dedupe: only a change to one of the
         // identity-relevant fields re-runs the gate below. Favorite/played
         // toggles change isFavorite/isPlayed but not id/mediaType, so their
         // emissions collapse into a single distinct one here.
-        _uiState.map {
+        loader.state.map {
             SeriesManageInputs(
                 identity = it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) },
                 tvdbId = it.detail?.providerIds?.get("tvdb"),
@@ -311,15 +356,16 @@ class DetailViewModel internal constructor(
      * tick in any sheet state no longer re-copies the content bag.
      */
     val uiState: StateFlow<DetailUiState> by lazy {
-        // Group 1 — core load state (detail/seasons/episodes/smart-play/...).
-        val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+        // Group 1 — core load state (detail/seasons/episodes/smart-play/...),
+        // the loader's content state (it is the sole writer).
+        val core = loader.state.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
         // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
         // The holder's snapshot flow already combines + dedupes its six
         // sub-flows; snapshotIn gives the group its dedicated StateFlow so its
         // ticks don't re-run the outer combine.
         val seerrRequest = seerrRequestState.snapshotIn(scope)
-        // Group 3 — Seerr connection flags that only gate recommendation visibility
-        // (the two retired repository lenses, derived off the one preferences flow).
+        // Group 3 - Seerr connection flags that only gate recommendation visibility
+        // (both lenses derived off the one preferences flow).
         val seerrFlags = remoteDiscovery.seerrRepository.preferences
             .map { prefs ->
                 SeerrConnectionFlags(
@@ -343,10 +389,10 @@ class DetailViewModel internal constructor(
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
     }
 
-    /** The single command funnel — routes each intent to its private handler. */
+    /** The single command funnel — routes each intent to its private handler (the load intents land on the loader). */
     fun onEvent(event: DetailUiEvent) {
         when (event) {
-            is DetailUiEvent.LoadItem -> loadItem(event.itemId)
+            is DetailUiEvent.LoadItem -> loader.load(event.itemId, refresh = false)
             is DetailUiEvent.ForceRefresh -> forceRefresh()
             is DetailUiEvent.SetThemeMusicMuted -> setThemeMusicMuted(event.muted)
             is DetailUiEvent.LoadEpisodesForSeason -> loadEpisodesForSeason(event.seriesId, event.seasonId)
@@ -377,13 +423,13 @@ class DetailViewModel internal constructor(
         }
     }
 
-    // ── Extracted action helpers ────────────────────────────────────────
+    // Action helpers -------------------------------------------------------
     // Each follows the SeerrRequestStateHolder template: a plain, VM-scoped
     // class (constructed here, dies with viewModelScope) that owns its own
-    // coroutines and state. They are the screen's seams — commands go through
+    // coroutines and state. They are the screen's seams - commands go through
     // the properties below, state is collected from the helper's own
-    // StateFlow — so the flat [DetailUiState] bag stays a pure content core
-    // and a tick in one sheet no longer re-copies it.
+    // StateFlow - so the flat [DetailUiState] bag stays a pure content core
+    // and a tick in one sheet never re-copies it.
     private val offlineDeleteActions = OfflineDeleteActions(
         scope = scope,
         offlineRepository = offlineRepository,
@@ -391,12 +437,12 @@ class DetailViewModel internal constructor(
         // deferred-read timing as every other helper seam.
         episodesProvider = { _session.value?.episodes ?: emptyMap() },
         seasonsProvider = { _session.value?.seasons ?: emptyList() },
-        onContentMutated = ::refreshAfterOfflineMutation,
+        onContentMutated = loader::refreshAfterOfflineMutation,
     )
     private val resyncActions = actionFactories.resync.create(
         scope = scope,
         session = _session,
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         offlineRepository = offlineRepository,
     )
     private val markSeasonReactor = MarkSeasonReactor(
@@ -417,14 +463,7 @@ class DetailViewModel internal constructor(
         scope = scope,
         session = _session,
         messages = _messages,
-        adapter = CollectionAddTarget(strings, collectionApiClient, mediaRepository),
-        mediaDetailProvider = mediaDetailProvider,
-    )
-    private val downloadLifecycleActions = actionFactories.downloads.create(
-        scope = scope,
-        session = _session,
-        messages = _messages,
-        strings = strings,
+        adapter = CollectionAddTarget(strings, collectionApiClient, collectionOperations),
         mediaDetailProvider = mediaDetailProvider,
     )
     private val watchPartyActions = actionFactories.watchParty.create(
@@ -438,6 +477,7 @@ class DetailViewModel internal constructor(
         session = _session,
         messages = _messages,
         strings = strings,
+        onRefreshAccepted = { forceRefresh() },
     )
 
     init {
@@ -447,7 +487,7 @@ class DetailViewModel internal constructor(
         // re-derives on every user switch.
         scope.launch {
             metadataAdminActions.isAdmin.collect { isAdmin ->
-                _uiState.update { it.copy(canManageMetadata = isAdmin) }
+                loader.update { it.copy(canManageMetadata = isAdmin) }
             }
         }
         // Mirror the CURRENT series' new-episode notification opt-in
@@ -466,7 +506,7 @@ class DetailViewModel internal constructor(
                     val seriesId = session.detail?.item?.seriesId
                         ?: session.detail?.item?.id
                         ?: session.itemId
-                    _uiState.update {
+                    loader.update {
                         it.copy(seriesNotificationsEnabled = configs[seriesId]?.enabled == true)
                     }
                 }
@@ -511,73 +551,30 @@ class DetailViewModel internal constructor(
     // Direct (non-observable) readers for the two stream-selection indices.
     // These are read synchronously at click time inside the play callback
     // (which captures a `remember`-ed lambda), so they must read the current
-    // snapshot from [_uiState] rather than a composition-captured value. All
-    // other state is consumed reactively via [uiState].
-    val selectedSubtitleIndex: Int? get() = _uiState.value.selectedSubtitleIndex
-    val selectedAudioIndex: Int? get() = _uiState.value.selectedAudioIndex
-    val selectedLocalSubtitleIndex: Int? get() = _uiState.value.selectedLocalSubtitleIndex
+    // snapshot from the loader's state rather than a composition-captured
+    // value. All other state is consumed reactively via [uiState].
+    val selectedSubtitleIndex: Int? get() = loader.state.value.selectedSubtitleIndex
+    val selectedAudioIndex: Int? get() = loader.state.value.selectedAudioIndex
+    val selectedLocalSubtitleIndex: Int? get() = loader.state.value.selectedLocalSubtitleIndex
 
-    // Internal caches (not observable UI state). Mutations happen on the Main
-    // dispatcher (viewModelScope). Seasons/episodes/sortedEpisodes all live in
-    // [MediaDetailSnapshot] now — the provider owns the read graph and the
-    // optimistic rewrite, so the VM keeps no local catalogue snapshot. The
-    // download sheet's per-season cache moved into [downloadLifecycleActions].
-    private var loadJob: Job? = null
-
-    /** The BOOK item whose extras (TOC cache + marks counts) are being observed. */
-    private var bookExtrasJob: Job? = null
-    /**
-     * The staleness guard owning what used to be `currentItemId` +
-     * `seerrDataGeneration`: navigation publishes the item identity and bumps
-     * one epoch ([DetailLoadGuard.enter]); every suspension-point write below
-     * re-checks [DetailLoadGuard.isCurrent] instead of hand-copying
-     * `if (currentItemId != itemId) return`. See its KDoc for why one epoch
-     * covers both lifecycles.
-     */
-    private val loadGuard = DetailLoadGuard()
-    /**
-     * The plugin similar-items hydration width (the arrqueue searchSemaphore /
-     * heatmap resolveSemaphore idiom, [DEFAULT_FANOUT_PARALLELISM]) — the one
-     * bounded-parallel surface for the per-candidate getMediaDetail fan-out.
-     */
-    private val hydrationSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
-    /**
-     * The series whose provider catalogue the current screen consumes — the
-     * [loadItemInternal] invalidation target and the [loadEpisodesForSeason]
-     * identity. Kept as a plain field (not folded into [loadGuard]) because it
-     * is an identity READ, not a staleness epoch.
-     */
-    private var currentSeriesId: String? = null
-    /** Idempotency latch: one Seerr-data load per navigation (see [loadSeerrDataIfNeeded]). */
-    private var seerrDataLoaded = false
-    /**
-     * The [MediaDetailSnapshot.contentGeneration] of the last snapshot whose
-     * *content* sections (detail, seasons, episodes, album tracks, subtitles,
-     * origin) were fully reduced into [_uiState]. The provider guarantees stable
-     * content references + the same generation across attachment-only ticks, so
-     * a value equal to the incoming snapshot's generation means "attachment tick"
-     * — we update only [DetailUiState.detailContext]/[DetailUiState.capabilities]/
-     * [DetailUiState.assets]/[DetailUiState.localSubtitles] and leave the
-     * consumer's optimistic content (watched/favorite flips, episodes) untouched.
-     * Reset to -1 in [loadItemInternal] so the first Loaded emission of every
-     * screen entry is treated as a fresh resolution.
-     */
-    private var lastAppliedGeneration = -1L
+    // The load graph's internal caches (load job, staleness guard, generation
+    // latch, Seerr latch, hydration semaphore) live in [DetailLoadOrchestrator]
+    // — the load pipeline's one owner.
 
     private fun selectSubtitle(index: Int?) {
-        _uiState.update { it.copy(selectedSubtitleIndex = index) }
-        persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
+        loader.update { it.copy(selectedSubtitleIndex = index) }
+        persistStreamSelection(subtitleIndex = index, audioIndex = loader.state.value.selectedAudioIndex)
     }
 
     private fun selectAudio(index: Int?) {
-        _uiState.update { it.copy(selectedAudioIndex = index) }
-        persistStreamSelection(subtitleIndex = _uiState.value.selectedSubtitleIndex, audioIndex = index)
+        loader.update { it.copy(selectedAudioIndex = index) }
+        persistStreamSelection(subtitleIndex = loader.state.value.selectedSubtitleIndex, audioIndex = index)
     }
 
     /**
      * Persists a manifest-backed local-subtitle selection for the current item.
      *
-     * Sets [DetailUiState.selectedLocalSubtitleIndex] in [_uiState] AND persists
+     * Sets [DetailUiState.selectedLocalSubtitleIndex] in the content state AND persists
      * via `stores.engineStore.setMediaStreamSelection` (subtitleStreamIndex =
      * [index], audioStreamIndex = the existing remote audio index). A spike
      * confirmed `mediaStreamSelections[itemId]` is honored offline, and the
@@ -589,8 +586,8 @@ class DetailViewModel internal constructor(
      * downloaded file (the two are independent selection spaces).
      */
     private fun selectLocalSubtitle(index: Int?) {
-        _uiState.update { it.copy(selectedLocalSubtitleIndex = index) }
-        persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
+        loader.update { it.copy(selectedLocalSubtitleIndex = index) }
+        persistStreamSelection(subtitleIndex = index, audioIndex = loader.state.value.selectedAudioIndex)
     }
 
     /**
@@ -600,7 +597,7 @@ class DetailViewModel internal constructor(
      * apart in how they resolve the current item id or launch the write.
      */
     private fun persistStreamSelection(subtitleIndex: Int?, audioIndex: Int?) {
-        val itemId = _uiState.value.detail?.item?.id ?: return
+        val itemId = loader.state.value.detail?.item?.id ?: return
         launch {
             stores.engineStore.setMediaStreamSelection(
                 itemId = itemId,
@@ -629,36 +626,6 @@ class DetailViewModel internal constructor(
         launch { stores.libraryStore.setCompactEpisodeList(enabled) }
     }
 
-    init {
-        // Live refresh on server `UserDataChanged` pushes (e.g. another
-        // client flipping played/favorite on the item on screen). The server
-        // emits one change per item, so ids are accumulated across the
-        // debounce window and membership is checked at the drain — plain
-        // debounce would keep only the last change of a burst and miss the
-        // earlier items. Refresh reuses the pull-to-refresh path, which owns
-        // the per-type cache invalidation and keeps the current content
-        // visible under the Refreshing state.
-        launch {
-            val burstIds = mutableSetOf<String>()
-            mediaRepository.userDataChanges
-                .onEach { change -> burstIds += change.itemIds }
-                .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
-                .collect {
-                    val changedIds = burstIds.toList()
-                    burstIds.clear()
-                    val itemId = loadGuard.itemId ?: return@collect
-                    if (_uiState.value.detail?.item?.id != itemId) return@collect
-                    if (itemId in changedIds) {
-                        loadItemInternal(itemId, refresh = true)
-                    }
-                }
-        }
-    }
-
-    private fun loadItem(itemId: String) {
-        loadItemInternal(itemId, refresh = false)
-    }
-
     /**
      * Pull-to-refresh: delegates to [MediaDetailProvider.refresh], which owns
      * the per-type cache invalidation (detail, seasons/episodes, album, collection)
@@ -668,776 +635,24 @@ class DetailViewModel internal constructor(
      * [DetailUiState.loadState]) instead.
      */
     private fun forceRefresh() {
-        val itemId = _uiState.value.detail?.item?.id ?: return
-        loadItemInternal(itemId, refresh = true)
-    }
-
-    private fun loadItemInternal(itemId: String, refresh: Boolean) {
-        // Record the item we're loading synchronously — and bump the load
-        // epoch in the same atomic step — so that a stale
-        // loadSeerrDataIfNeeded() call (from a freshly-composed screen still
-        // observing the previous item's detail via the shared ViewModel) can be
-        // rejected before it loads the wrong item's trailers/videos, and any
-        // in-flight Seerr fetch from the previous item cannot write its stale
-        // results onto this item's screen.
-        loadGuard.enter(itemId)
-        // Same for the helpers' session: a bare id-only session is visible to
-        // command-time reads immediately (the content sections fill in
-        // reduceLoaded once the provider resolves).
-        _session.value = DetailSession(itemId = itemId)
-        loadJob?.cancel()
-        loadJob = launch {
-            // Single atomic reset — collapses what used to be ~14 separate
-            // composeState/stateFlow mutations into one emission so observers
-            // see one recomposition, not fourteen. The surviving leaves and
-            // the per-flavour load state are declared once in
-            // [DetailUiState.clearedForReload]: on refresh the detail stays
-            // visible under the Refreshing indicator; every content slice
-            // (sortedEpisodes included) is cleared so fresh data replaces it
-            // wholesale.
-            _uiState.update { it.clearedForReload(keepDetail = refresh) }
-            // Drop the provider's catalogue cache for any series we were viewing
-            // so the new item's load starts fresh (the VM is reused across
-            // navigations). The provider owns the catalogue internally now.
-            currentSeriesId?.let { mediaDetailProvider.invalidate(it) }
-            currentSeriesId = null
-            seerrDataLoaded = false
-            // Reset the content-generation guard so the first Loaded emission of this
-            // screen entry is treated as a fresh resolution (fires remote side effects,
-            // adopts content sections). The provider never emits a generation of -1.
-            lastAppliedGeneration = -1L
-            // Reset the download-lifecycle helper's state + sheet caches, since the
-            // same VM instance is reused across navigations.
-            downloadLifecycleActions.resetForNavigation()
-            if (refresh) {
-                // The provider owns per-type cache invalidation + the remote refetch.
-                // Suspend until the new generation lands so the collector that follows
-                // observes the refreshed snapshot rather than a stale replay; the detail
-                // stays visible (kept above) under the Refreshing indicator meanwhile.
-                mediaDetailProvider.refresh(itemId)
-            }
-            mediaDetailProvider.observe(itemId).collect { state ->
-                // Stale-write guard: a collector from a previous itemId is cancelled
-                // by loadJob?.cancel() on the next loadItem, but defend in depth.
-                if (!loadGuard.isCurrent(itemId)) return@collect
-                applyLoadState(itemId, state)
-            }
-        }
+        val itemId = loader.state.value.detail?.item?.id ?: return
+        loader.load(itemId, refresh = true)
     }
 
     /**
-     * Reduces a single [DetailLoadState] from the provider into [_uiState].
-     *
-     * - [DetailLoadState.Loading]: surfaces a full-screen loading state only
-     *   when no content is shown yet; never clears an already-rendered detail.
-     * - [DetailLoadState.Error]: classifies the provider's error into the
-     *   unavailable-offline / access-denied / generic buckets.
-     * - [DetailLoadState.Loaded]: either a full content reduction (new
-     *   [MediaDetailSnapshot.contentGeneration]) or an attachment-only tick
-     *   (same generation), per the clobber-protection contract in [reduceLoaded].
-     */
-    private suspend fun applyLoadState(itemId: String, state: DetailLoadState) {
-        when (state) {
-            DetailLoadState.Loading -> {
-                // Only flip into the full-screen loading state when there is no
-                // content to show. A transient Loading after content is rendered
-                // (e.g. a provider re-resolution) must NOT blank the screen; the
-                // prior detail stays visible until the next Loaded replaces it.
-                _uiState.update {
-                    it.copy(
-                        loadState = if (it.detail == null) DetailUiLoadState.Loading else DetailUiLoadState.Loaded,
-                    )
-                }
-            }
-            is DetailLoadState.Error -> {
-                val e = state.error
-                val message: String
-                val accessDenied: Boolean
-                when {
-                    e.isUnavailableOffline -> {
-                        message = strings.get(Res.string.detail_error_unavailable_offline)
-                        accessDenied = false
-                    }
-                    e.isAccessDenied -> {
-                        message = strings.get(Res.string.detail_error_access_denied)
-                        accessDenied = true
-                    }
-                    else -> {
-                        message = e.message.ifBlank { strings.get(Res.string.detail_error_load_failed) }
-                        accessDenied = false
-                    }
-                }
-                _uiState.update {
-                    it.copy(
-                        loadState = DetailUiLoadState.Error(
-                            message = message,
-                            accessDenied = accessDenied,
-                            unavailableOffline = e.isUnavailableOffline,
-                        ),
-                    )
-                }
-            }
-            is DetailLoadState.Loaded -> reduceLoaded(itemId, state.snapshot)
-        }
-    }
-
-    /**
-     * Reduces a resolved [MediaDetailSnapshot] into [_uiState] (and adopts it
-     * into the helpers' [_session]).
-     *
-     * Two paths, keyed on [MediaDetailSnapshot.contentGeneration] vs
-     * [lastAppliedGeneration]:
-     *
-     * 1. **New resolution** (generation changed): adopts the content sections
-     *    (detail, seasons, episodes, album tracks, local subtitles, origin,
-     *    assets, capabilities, detailContext) atomically, clears the smart-play
-     *    target, then recomputes it — for both origins, since a LOCAL series
-     *    carries the same loaded episode data and should expose the same
-     *    Play/Resume/Next up target. For a REMOTE origin, additionally fires the
-     *    remote-only subordinate work (similar/collection items, theme music,
-     *    Sonarr resolution, Seerr discovery) exactly once per resolution. For a
-     *    LOCAL origin no remote coroutines start.
-     * 2. **Attachment tick** (same generation): updates ONLY detailContext,
-     *    capabilities, assets and localSubtitles — the provider guarantees
-     *    stable content references across attachment ticks, so the consumer's
-     *    optimistic mutations (watched/favorite flips, episode rewrites) survive
-     *    download-progress / sync-state re-emissions without being clobbered.
-     */
-    private fun reduceLoaded(itemId: String, snapshot: MediaDetailSnapshot) {
-        val detail = snapshot.detail
-        val isRemote = snapshot.context.origin == DetailOrigin.REMOTE
-        val isNewResolution = snapshot.contentGeneration != lastAppliedGeneration
-        if (!isNewResolution) {
-            // Attachment-only tick: preserve the consumer's optimistic content.
-            _uiState.update {
-                it.copy(
-                    detailContext = snapshot.context,
-                    capabilities = snapshot.capabilities,
-                    assets = snapshot.assets,
-                    localSubtitles = snapshot.localSubtitles,
-                )
-            }
-            return
-        }
-
-        // New resolution: adopt content sections wholesale.
-        currentSeriesId = detail.item.seriesIdForDetail
-
-        // Publish the resolved session to the action helpers (command-time
-        // reads now see the full content snapshot).
-        _session.value = DetailSession(
-            itemId = itemId,
-            seriesId = currentSeriesId,
-            detail = detail,
-            seasons = snapshot.seasons,
-            episodes = snapshot.episodesBySeason,
-            sortedEpisodes = snapshot.sortedEpisodes,
-        )
-
-        // Downloaded-episode ids load at SCREEN-OPEN, not sheet-open:
-        // the seasons section's rows read the set for the delete affordance
-        // and the on-disk states, so in-flight + completed downloads must
-        // render without the user ever opening the download sheet. The
-        // sheet-open call stays as an idempotent freshness re-read.
-        downloadLifecycleActions.loadDownloadedEpisodeIds()
-
-        // Stream selection: remote applies the persisted engine-store selection;
-        // local clears it (local playback uses the separate local-subtitle index).
-        val (subtitleIndex, audioIndex) = if (isRemote) {
-            val stored = stores.engineStore.playerEngine.value.mediaStreamSelections[itemId]
-            stored?.subtitleStreamIndex to stored?.audioStreamIndex
-        } else {
-            null to null
-        }
-
-        _uiState.update {
-            it.copy(
-                detail = detail,
-                origin = snapshot.context.origin,
-                detailContext = snapshot.context,
-                capabilities = snapshot.capabilities,
-                assets = snapshot.assets,
-                localSubtitles = snapshot.localSubtitles,
-                seasons = snapshot.seasons,
-                episodes = snapshot.episodesBySeason,
-                fetchedSeasonIds = snapshot.fetchedSeasonIds,
-                sortedEpisodes = snapshot.sortedEpisodes,
-                albumTracks = snapshot.albumTracks,
-                selectedSubtitleIndex = subtitleIndex,
-                selectedAudioIndex = audioIndex,
-                // Smart-play is recomputed below; cleared first so a stale target
-                // from the previous item never survives a resolution change.
-                smartPlayTarget = null,
-                loadState = DetailUiLoadState.Loaded,
-            )
-        }
-        lastAppliedGeneration = snapshot.contentGeneration
-
-        // Smart-play targets the next episode to watch from the already-loaded
-        // sorted episodes, so it runs for both origins: a LOCAL series with
-        // downloaded episodes shows the same Play/Resume/Next up target (and Up
-        // Next section) as its remote counterpart. Not an enrichment — this is
-        // the core resolution the screen's primary button reads.
-        maybeComputeSmartPlayTarget()
-        // Declared enrichment fan-out: the subordinate loads below the core
-        // resolution, as an ordered declaration list (see [enrichments] for
-        // the gate table and what deliberately stayed inline).
-        runEnrichments(itemId, snapshot)
-        // Book extras (TOC cache + marks counts) ride their own observe job —
-        // cache-first, with the local-file probe as the never-opened fallback.
-        // DELIBERATELY NOT a [DetailEnrichment] declaration: its entry must
-        // run for EVERY media type (the leading bookExtrasJob cancel is a
-        // lifecycle cancel — a book → non-book move must kill the previous
-        // book's marks collector), which no snapshot-keyed gate can express
-        // without either leaking the collector or duplicating the guard.
-        loadBookExtras(itemId, detail.path, snapshot.context.download?.downloadPath)
-    }
-
-    /**
-     * The declared enrichment fan-out — the subordinate loads a fresh
-     * resolution triggers, reduced from the former hand-launched blocks
-     * (triggerRemoteSideEffects / triggerLocalSideEffects /
-     * resolveSonarrForSeries / loadCollectionItems) to DATA: each entry is a
-     * [DetailEnrichment] whose gate reads the resolved snapshot only
-     * (mediaType × origin × capability) and whose body is the former launch
-     * content verbatim (guards included). Evaluated in declaration order —
-     * the exact order the remote block fired them — by [runEnrichments], so
-     * "snapshot of type X with capabilities Y fires E1..En and not the
-     * others" is directly testable (DetailViewModelEnrichmentsTest).
-     *
-     * Ordering note: the former sequence ran the collection-items launch
-     * AFTER [loadBookExtras]; both are fire-and-forget, guard-checked
-     * coroutines, so any declaration order that keeps the former remote
-     * block's relative sequence (and [loadBookExtras] after the evaluator)
-     * preserves the observable behavior. Later additions (the ADR 0010
-     * plugin family, franchise `franchise`, upcoming `upcoming`) append after the
-     * original entries for the same reason.
-     *
-     * Still inline by design (see reduceLoaded): [loadBookExtras] (lifecycle
-     * cancel for every media type) and [maybeComputeSmartPlayTarget] (core
-     * resolution, not a side effect).
-     *
-     * The detail section modules' enrichment arms
-     * ([DetailSectionRegistry.enrichments]) are spliced in at the exact
-     * position the wave-1 migrated hand-written entry occupied (the
-     * pluginRatings fetch, now PluginRatingsSectionModule's arm) — the
-     * externalRatings entry below reads the feature probe that arm latches,
-     * so the splice point is load-bearing. The wave-2 arms (specialFeatures,
-     * collectionItems, franchise, upcoming) joined the registry with their
-     * sections and ride the same spliced list: all entries are independent,
-     * fire-and-forget, guard-checked coroutines (single-writer-per-field),
-     * so the arms' positions within the spliced list preserve the observable
-     * behavior the fan-out order contract documents above.
-     */
-    // ── The section modules' enrichment-host seam ([DetailSectionEnrichmentHost]):
-    //    a private adapter over the members the former hand-written enrichment
-    //    bodies read directly — the guard, the state-write funnel, the plugin
-    //    roles. Kept off the ViewModel's member surface: implementing the host
-    //    on the class itself would widen the ownership ratchet's counted
-    //    interface for what is wiring, not new VM behavior. Declared ahead of
-    //    [enrichments], whose initializer splices it in. ──
-
-    private val sectionEnrichmentHost = object : DetailSectionEnrichmentHost {
-        override suspend fun pluginFeature(feature: String, itemId: String): Boolean =
-            this@DetailViewModel.pluginFeature(feature, itemId)
-
-        override fun isCurrent(itemId: String): Boolean = loadGuard.isCurrent(itemId)
-
-        override fun updateState(reduce: (DetailUiState) -> DetailUiState) {
-            _uiState.update(reduce)
-        }
-
-        override suspend fun mdbListRatings(
-            imdbId: String,
-        ): Result<List<JellyPlayPluginRating>?>? =
-            pluginRatingsApi?.getMdbListRatings(imdbId)
-
-        // Wave-2 roles: the reads the collection-family/strip arms' former
-        // hand-written bodies made directly on these collaborators.
-        override suspend fun specialFeatures(itemId: String): Result<List<MediaItem>> =
-            libraryApiClient.getSpecialFeatures(itemId)
-
-        override suspend fun collectionItems(
-            collectionId: String,
-            startIndex: Int,
-            limit: Int,
-        ): Result<SearchResult> =
-            mediaRepository.getCollectionItems(collectionId, startIndex = startIndex, limit = limit)
-
-        override suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
-            mediaCatalogueEnrichments.getBoxSetsContaining(itemId)
-
-        override suspend fun upcomingEpisodes(parentId: String, limit: Int): Result<List<MediaItem>> =
-            libraryApiClient.getUpcoming(parentId = parentId, limit = limit)
-
-        override fun detailPreferences(): DetailPreferences = preferences.value
-
-        override suspend fun <T, R> mapConcurrent(items: List<T>, transform: suspend (T) -> R): List<R> =
-            hydrationSemaphore.mapConcurrentCatching(items, transform)
-    }
-
-    private val enrichments: List<DetailEnrichment> =
-        listOf(
-        DetailEnrichment(
-            name = "themeMusic",
-            // Gate matrix: the global pref must be ON and the series not
-            // per-series muted (the mute chip's memory) on top of the shared
-            // remote gate — a muted series's enrichment doesn't start
-            // playback at all.
-            gate = {
-                it.remoteDiscoveryAllowed &&
-                    preferences.value.playThemeMusic &&
-                    !preferences.value.isThemeMusicMutedFor(
-                        it.detail.item.seriesId ?: it.itemId,
-                    )
-            },
-        ) { inputs ->
-            val themeSourceId = inputs.detail.item.seriesId ?: inputs.itemId
-            themeMusicPlayer.playThemeFor(themeSourceId)
-        },
-        DetailEnrichment(
-            name = "arrServerResolve",
-            // SERIES/EPISODE only (the canManageSeries menu lives on series
-            // detail), and only when a Sonarr-resolvable tvdb id exists.
-            gate = {
-                it.remoteDiscoveryAllowed &&
-                    (it.mediaType == MediaType.SERIES || it.mediaType == MediaType.EPISODE) &&
-                    it.detail.providerIds["tvdb"]?.toIntOrNull() != null
-            },
-        ) { inputs ->
-            val summary = remoteDiscovery.arrRepository.resolveServers()
-                .getOrDefault(ArrServiceSummary())
-            // Guard: don't write sonarr resolution onto a different item's state.
-            if (loadGuard.isCurrent(inputs.itemId)) {
-                _uiState.update { it.copy(sonarrServersResolved = summary.sonarrServers.isNotEmpty()) }
-            }
-        },
-        DetailEnrichment(
-            name = "similarItems",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Fetch similar/related items concurrently and non-blocking so the core
-            // detail renders immediately. The result lands in relatedItems.
-            mediaRepository.getSimilarItems(inputs.itemId, limit = 12)
-                .onSuccess { items ->
-                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                    _uiState.update {
-                        it.copy(relatedItems = items.filter { related -> related.id != inputs.itemId })
-                    }
-                }
-        },
-        DetailEnrichment(
-            name = "mediaSegments",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Pre-warm the player's media-segment TTL cache and surface the two
-            // intro/credits skip affordances as a detail-side chip. The cache fill
-            // is an implicit side effect of the call; only the booleans flow into
-            // uiState so the chip can render before the player attaches.
-            playbackRepository.getMediaSegments(inputs.itemId).onSuccess { segments ->
-                if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
-                val availability = segments.toAvailability()
-                _uiState.update {
-                    it.copy(
-                        hasIntroSegment = availability.hasIntro,
-                        hasCreditSegment = availability.hasCredits,
-                    )
-                }
-            }
-        },
-        DetailEnrichment(
-            name = "seerrDiscovery",
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // Trigger the Seerr recommendations/videos fetch from the VM. The 350ms
-            // delay is preserved for frame priority (don't contend with first-frame
-            // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
-            kotlinx.coroutines.delay(350)
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            loadSeerrDataIfNeeded(inputs.detail)
-        },
-        DetailEnrichment(
-            name = "localRelatedItems",
-            // LOCAL-origin counterpart: remote discovery is server-only, so a
-            // downloaded item would otherwise render as an island. Requires at
-            // least one genre/studio to mine the on-device offline library for
-            // (the former triggerLocalSideEffects early return).
-            gate = {
-                !it.isRemote &&
-                    (it.detail.item.genres.isNotEmpty() || it.detail.item.studios.isNotEmpty())
-            },
-        ) { inputs ->
-            val related = offlineRepository.getLocalRelated(
-                currentId = inputs.itemId,
-                genres = inputs.detail.item.genres,
-                studios = inputs.detail.item.studios,
-                limit = 12,
-            )
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(localRelatedItems = related.filter { r -> r.id != inputs.itemId })
-            }
-        },
-    ) +
-        // The section modules' enrichment arms (the detail section registry):
-        // the wave-1 pluginRatings fetch, verbatim from its former hand-written
-        // entry, spliced exactly where that entry sat so the fan-out order
-        // (and externalRatings' read of the latched probe below) is unchanged;
-        // the wave-2 arms (specialFeatures, collectionItems, franchise,
-        // upcoming) joined their sections' modules and ride the same spliced
-        // list.
-        DetailSectionRegistry.enrichments(host = sectionEnrichmentHost) +
-        listOf(
-        DetailEnrichment(
-            name = "externalRatings",
-            // The no-plugin ratings strip (RT/IMDb/TMDB chips when the
-            // plugin is absent). Source order mirrors the spec: Seerr's
-            // detail-by-provider-id ratings first (the loadSeerrData path —
-            // same repository, same tmdbId resolution), the direct-TMDB
-            // vote aggregate as the fallback when Seerr is disconnected or
-            // its ratings fetch failed/returned nothing. MOVIE/SERIES only:
-            // the provider-id sources and the ratings payload exist for
-            // nothing else.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            // The user-pref half of the gate rides the body: the gate lambda
-            // stays a pure snapshot read (the DetailEnrichmentInputs
-            // contract), so `showExternalRatings` is checked here instead —
-            // a preference read, not snapshot state.
-            if (!preferences.value.showExternalRatings) return@DetailEnrichment
-            // The plugin dedupe probe, the pluginSimilarSuppressesStock
-            // mirror: one synchronous Ratings-feature read (the store refresh
-            // is latched — the pluginRatings enrichment above probed this
-            // item already), remembered on the state, and suppressing the external-ratings
-            // chips at RENDER time only when the plugin row actually has
-            // content. `!hasPluginRatings` cannot gate the START — the plugin
-            // row's content lands asynchronously from the same fan-out.
-            val pluginRatingsLive = pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)
-            val mediaType = inputs.mediaType
-            if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@DetailEnrichment
-            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
-
-            // Seerr ratings first — the same connection-flag read
-            // loadSeerrData uses (the flags live only on the published
-            // aggregator, never on _uiState). The fetch is cache-backed
-            // (SeerrRepositoryImpl's detail cache), so a failed/empty Seerr
-            // payload costs one call before the TMDB fallback.
-            val seerrRatings = if (uiState.value.isSeerrConnected) {
-                remoteDiscovery.seerrRepository
-                    .getRatings(tmdbId, if (mediaType == MediaType.MOVIE) "movie" else "tv")
-                    .getOrNull()
-                    ?.takeUnless { seerr ->
-                        seerr.rt?.criticsScore == null && seerr.rt?.audienceScore == null &&
-                            seerr.imdb?.criticsScore == null && seerr.imdb?.rating == null &&
-                            seerr.tmdb?.rating == null
-                    }
-                    ?.let { DetailExternalRatings.fromSeerr(it) }
-            } else {
-                null
-            }
-            val resolved = seerrRatings
-                // TMDB-only fallback: the public vote aggregate + the
-                // constructed provider link. Null seam (unwired tests) or a
-                // failed fetch leave the strip empty — silent absence.
-                ?: tmdbApiClient?.getDetails(tmdbId, mediaType)?.getOrNull()?.let { details ->
-                    DetailExternalRatings.tmdbOnly(
-                        voteAverage = details.voteAverage?.toFloat(),
-                        tmdbPathSegment = if (mediaType == MediaType.MOVIE) "movie" else "tv",
-                        tmdbId = tmdbId,
-                    )
-                }
-            if (resolved == null || resolved.isEmpty) return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(
-                    externalRatings = resolved,
-                    externalRatingsSuppressedByPlugin = pluginRatingsLive,
-                )
-            }
-        },
-        DetailEnrichment(
-            name = "pluginSimilarItems",
-            // The server-scored "More like this" row, rendered BESIDE the stock
-            // one. The stock row stands down only when the capabilities
-            // handshake says the plugin registered into the host's similar
-            // pipeline (Jellyfin 12+ — there the stock endpoint returns the
-            // same scored list and both rows would duplicate); on pre-12 hosts
-            // / older plugins the lists differ and both render. The plugin
-            // returns scored item ids only, so each id is hydrated through
-            // the same per-item fetch the detail screen already uses
-            // (getMediaDetail), preserving score order; per-id failures drop
-            // out and an empty hydration leaves the stock row in place.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
-            val scored = pluginRecommendationsApi?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
-                ?.getOrNull()
-                .orEmpty()
-                .filter { it != inputs.itemId }
-                .distinct()
-            if (scored.isEmpty()) return@DetailEnrichment
-            // The shared bounded-parallel hydration (DEFAULT_FANOUT_PARALLELISM,
-            // the arrqueue/heatmap idiom): per-id failures and null details drop
-            // out (mapConcurrentCatching's drop policy) instead of an unbounded
-            // async/awaitAll fan-out over the server.
-            val hydrated = hydrationSemaphore.mapConcurrentCatching(scored) { candidate ->
-                mediaRepository.getMediaDetail(candidate).getOrNull()?.item
-            }
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(
-                    pluginSimilarItems = hydrated
-                        .filterNotNull()
-                        .filter { item -> item.id != inputs.itemId }
-                        .distinctBy { item -> item.id },
-                    // The probe ran synchronously inside pluginFeature above, so
-                    // the capabilities payload is fresh for this read.
-                    pluginSimilarSuppressesStock =
-                        pluginStatusStore?.capabilities?.value?.serverSimilarPipeline == true,
-                )
-            }
-        },
-        DetailEnrichment(
-            name = "pluginAnimeMarkers",
-            // Series-scoped filler/recap badges for the seasons section's
-            // episode rows. SERIES resolves to itself, EPISODE/SEASON to the
-            // parent series (seriesIdForDetail) — the same series context the
-            // seasons tree renders.
-            gate = {
-                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
-            },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
-            val seriesId = inputs.detail.item.seriesIdForDetail ?: return@DetailEnrichment
-            val providerSeriesId = resolveProviderSeriesId(inputs.detail) ?: return@DetailEnrichment
-            val markers = pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)
-                ?.getOrNull() ?: return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(animeMarkers = animeBadges(markers)) }
-        },
-        DetailEnrichment(
-            name = "pluginSeasonRatings",
-            // The TMDB per-episode scores for the seasons section's episode
-            // rows + the season header's average (ADR 0010, the `ratings`
-            // feature family's season leg). Same series context as the anime
-            // badges; one fetch per LOADED season (a lazily-expanded season
-            // re-emits a new generation, so the enrichment re-runs and picks
-            // it up — seasons already scored on a previous generation merge
-            // in place of a re-fetch, so the re-run requests only the new
-            // arrivals). The shared bounded-parallel per-season fetch (the
-            // pluginSimilarItems idiom): per-season null/empty results and
-            // failures drop out; a wholly empty fold leaves the field empty
-            // — silent absence, never an error.
-            gate = {
-                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
-            },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
-            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
-            // Seasons still unscored on this field's last emission (the
-            // merge source) — numberless seasons never fetch (the serial
-            // loop's `?: continue`).
-            val alreadyScored = _uiState.value.seasonRatings.keys
-            val seasonsToFetch = inputs.snapshot.seasons.mapNotNull { season ->
-                val seasonNumber = season.indexNumber ?: return@mapNotNull null
-                if (season.id in alreadyScored) return@mapNotNull null
-                season to seasonNumber
-            }
-            if (seasonsToFetch.isEmpty()) return@DetailEnrichment
-            val fetchedRatingsBySeasonId = hydrationSemaphore
-                .mapConcurrentCatching(seasonsToFetch) { (season, seasonNumber) ->
-                    pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
-                        ?.getOrNull()
-                        ?.takeIf { it.isNotEmpty() }
-                        ?.let { ratings -> season.id to ratings }
-                }
-                .filterNotNull()
-                .toMap()
-            if (fetchedRatingsBySeasonId.isEmpty()) return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(seasonRatings = it.seasonRatings + fetchedRatingsBySeasonId) }
-        },
-        DetailEnrichment(
-            name = "trailers",
-            // The merged trailer list's local leg — the server-hosted
-            // trailers (the parental-filtered getLocalTrailers wrapper) merged
-            // with the TMDB/Seerr videos into `state.trailers`, ordered by the
-            // `preferLocalTrailers` pref. The remote leg re-merges on its own
-            // landing (foldCompanionLanding's Videos case — the seerrDiscovery
-            // enrichment fetches it independently and later), so whichever
-            // source resolves first already leaves a correct list. A failed
-            // local fetch degrades to the remote-only list (today's content);
-            // remote-only is exactly the no-local-trailer shape.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            val local = libraryApiClient.getLocalTrailers(inputs.itemId).getOrNull().orEmpty()
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                it.copy(
-                    trailers = mergeTrailerEntries(
-                        localTrailers = local,
-                        remoteVideos = it.relatedVideos,
-                        preferLocalTrailers = preferences.value.preferLocalTrailers,
-                    ),
-                )
-            }
-        },
-        DetailEnrichment(
-            name = "themeVideo",
-            // The server ThemeVideo clip behind the detail hero's ambient
-            // video (preferred over the YouTube embed when it resolves). Same
-            // remote gate as the trailers leg — the user-pref half
-            // (`trailerAutoplay`) rides the body: without the autoplay pref
-            // no mount ever reads the URL, so the fetch is skipped entirely.
-            // A failed/empty lookup degrades to the embed (today's content);
-            // the URL is shaped fresh against the active session.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            if (!preferences.value.trailerAutoplay) return@DetailEnrichment
-            val clip = libraryApiClient.getThemeVideos(inputs.itemId).getOrNull()?.firstOrNull()
-            if (clip == null) return@DetailEnrichment
-            val streamUrl = playbackRepository.getStreamUrl(itemId = clip.id, mediaSourceId = clip.id)
-            if (streamUrl.isBlank()) return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(themeVideoStreamUrl = streamUrl) }
-        },
-        )
-
-    /** The stock similar row's limit (the plugin row mirrors it). */
-    private companion object {
-        const val SIMILAR_ITEMS_LIMIT = 12
-    }
-
-    /**
-     * The ADR 0010 feature gate for the plugin sections: one capabilities
-     * probe per item navigation (latched on the item id — the store's own
-     * contract re-probes on identity transitions), then the ONE gate seam —
-     * [JellyPlayFeatureGate.isAvailableNow] (probe AND the user's per-feature
-     * toggle; the fresh one-shot arm honors the refresh that just landed).
-     * Without the gate seam (direct-construction tests) the probe-only
-     * snapshot read keeps the pre-toggle behavior. False when the plugin
-     * seams are unwired or the probe failed — silent absence.
-     */
-    private var pluginProbedItemId: String? = null
-
-    private suspend fun pluginFeature(feature: String, itemId: String): Boolean {
-        val store = pluginStatusStore ?: return false
-        if (pluginProbedItemId != itemId) {
-            pluginProbedItemId = itemId
-            store.refresh()
-        }
-        return jellyPlayFeatureGate.isAvailableNowOrProbe(store, feature)
-    }
-
-    /**
-     * The evaluator beside [reduceLoaded]: walks the declaration list in
-     * order, launching each gated entry on the VM scope. viewModelScope's
-     * Main.immediate keeps the launch bodies in declaration order up to each
-     * body's first suspension point — the former synchronous-then-launched
-     * ordering of the remote block. [DetailLoadGuard] stays the single
-     * admission seam: every body re-checks it at its suspension-point writes.
-     */
-    private fun runEnrichments(itemId: String, snapshot: MediaDetailSnapshot) {
-        val inputs = DetailEnrichmentInputs(itemId = itemId, snapshot = snapshot)
-        for (enrichment in enrichments) {
-            if (!enrichment.gate(inputs)) continue
-            launch { enrichment.run(inputs) }
-        }
-    }
-
-    /**
-     * Book-only extras: publishes [DetailUiState.BookDetailState] for the
-     * current BOOK item and keeps the marks counts live while the screen is
-     * up.
-     *
-     * TOC resolution order mirrors the reading experience itself: the
-     * reader's write-through cache first (instant, offline, exactly what the
-     * last open saw); when there is no row yet, a one-shot probe of the
-     * book's LOCAL file (a completed download) parses the same structures
-     * the reader would (PDF outline, EPUB NCX/nav, comic page count) and
-     * write-throughs the result, so the probe cost is paid once per install.
-     * A remote never-downloaded book has no local file — the sections stay
-     * hidden rather than fetching the whole file for a speculative parse.
-     */
-    private fun loadBookExtras(itemId: String, itemPath: String?, downloadPath: String?) {
-        // Cancel before the book check: the marks collector below must not
-        // outlive a book → non-book navigation.
-        bookExtrasJob?.cancel()
-        val format = BookFormat.fromPath(itemPath) ?: return
-        bookExtrasJob = launch {
-            fun publish(toc: List<BookTocEntry>, pageCount: Int) {
-                if (!loadGuard.isCurrent(itemId)) return
-                _uiState.update {
-                    it.copy(
-                        book = (it.book ?: DetailUiState.BookDetailState(format = format)).copy(
-                            toc = toc,
-                            pageCount = pageCount,
-                        ),
-                    )
-                }
-            }
-
-            val cached = runCatching { bookTocCacheRepository.getToc(itemId) }.getOrNull()
-            publish(cached?.entries ?: emptyList(), cached?.pageCount ?: 0)
-
-            if (cached == null) {
-                val probe = runCatching { bookTocProber?.probe(downloadPath, format) }.getOrNull()
-                if (probe != null && loadGuard.isCurrent(itemId)) {
-                    // Write-through: the next detail visit reads the cache.
-                    runCatching {
-                        bookTocCacheRepository.putToc(itemId, probe.format, probe.pageCount, probe.entries)
-                    }
-                    publish(probe.entries, probe.pageCount)
-                }
-            }
-
-            // Marks counts observe live (the reader edits them on another
-            // screen; returning here re-renders the counts). Cancelled with
-            // the job on the next load.
-            val marks = readerAnnotationsRepository ?: return@launch
-            combine(
-                marks.observeBookmarks(itemId),
-                marks.observeAnnotations(itemId),
-            ) { bookmarks, annotations -> bookmarks.size to annotations.size }
-                .collect { (bookmarkCount, highlightCount) ->
-                    if (!loadGuard.isCurrent(itemId)) return@collect
-                    _uiState.update {
-                        it.copy(
-                            book = (it.book ?: DetailUiState.BookDetailState(format = format)).copy(
-                                bookmarkCount = bookmarkCount,
-                                highlightCount = highlightCount,
-                            ),
-                        )
-                    }
-                }
-        }
-    }
-
-    /**
-     * On-demand per-season expand. The provider supplies seasons/episodes up
-     * front (including [DetailUiState.fetchedSeasonIds]); a season NOT in that
-     * set (e.g. the mismatched-season-key edge) is fetched here through the
-     * provider, which merges it into its snapshot and re-emits a new-generation
-     * [MediaDetailSnapshot] via [observe]. [reduceLoaded] adopts the merged
-     * episodes and recomputes smart-play — no local uiState merge needed.
+     * On-demand per-season expand — the provider supplies seasons/episodes up
+     * front; a season NOT in [DetailUiState.fetchedSeasonIds] is fetched and
+     * merged by the loader (which owns the provider graph and the identity
+     * checks).
      */
     private fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
-        if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
-        val itemId = loadGuard.itemId ?: return
-        launch {
-            if (currentSeriesId != seriesId) return@launch
-            // expandSeason fetches the season via the catalogue (serving from
-            // its cached snapshot when present, else fetching the one season),
-            // merges it into the provider's content, and re-emits. The reducer
-            // picks up the new snapshot on the next observe() emission.
-            mediaDetailProvider.expandSeason(itemId, seasonId)
-        }
+        loader.loadEpisodesForSeason(seriesId, seasonId)
     }
 
     private fun playAlbum(startIndex: Int = 0) {
-        val tracks = _uiState.value.albumTracks
+        val tracks = loader.state.value.albumTracks
         if (tracks.isEmpty()) return
-        val albumName = _uiState.value.detail?.item?.name
+        val albumName = loader.state.value.detail?.item?.name
         // Queue construction (N image URLs + N queue items) runs on
         // Dispatchers.Default and the playQueue mutation hops to Main inside
         // the facade — the AudioQueueManager thread contract, in one place.
@@ -1460,7 +675,7 @@ class DetailViewModel internal constructor(
             audioQueueFacade.startInstantMix(
                 seedItemId,
                 albumFallback = fallbackName,
-                guard = { loadGuard.isCurrent(seedItemId) },
+                guard = { loader.isCurrent(seedItemId) },
             ).toInstantMixOutcome()
         },
     )
@@ -1493,7 +708,7 @@ class DetailViewModel internal constructor(
      * wrong screen.
      */
     private fun startInstantMix() {
-        val detail = _uiState.value.detail ?: return
+        val detail = loader.state.value.detail ?: return
         val item = detail.item
         if (!item.mediaType.isAudioType) return
         instantMixHolder.start(item.id, item.album ?: item.name)
@@ -1507,14 +722,14 @@ class DetailViewModel internal constructor(
      * the player's queue sheet (the radio chip's stop action).
      */
     private fun startRadio() {
-        val detail = _uiState.value.detail ?: return
+        val detail = loader.state.value.detail ?: return
         val item = detail.item
         if (!item.mediaType.isAudioType) return
         launch {
             when (val outcome = audioQueueFacade.startRadio(
                 item.id,
                 albumFallback = item.album ?: item.name,
-                guard = { loadGuard.isCurrent(item.id) },
+                guard = { loader.isCurrent(item.id) },
             )) {
                 AudioQueueOutcome.Empty ->
                     _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_radio_empty)))
@@ -1525,89 +740,15 @@ class DetailViewModel internal constructor(
         }
     }
 
-    private fun maybeComputeSmartPlayTarget() {
-        val item = _uiState.value.detail?.item ?: return
-        when (item.mediaType) {
-            MediaType.SERIES -> computeSeriesSmartPlayTarget()
-            MediaType.EPISODE -> computeEpisodeSmartPlayTarget(item)
-            // A SEASON entry (#168) plays within that season only: the same
-            // resolver over the entry season's slice of the series snapshot.
-            MediaType.SEASON -> computeSeasonSmartPlayTarget(item)
-            else -> _uiState.update { it.copy(smartPlayTarget = null) }
-        }
-    }
-
-    private fun computeSeasonSmartPlayTarget(season: MediaItem) {
-        launch(smartPlayDispatcher) {
-            val sorted = _uiState.value.sortedEpisodes.takeIf { it.isNotEmpty() }
-            val result = sorted?.let { SmartPlayResolver.resolveSeason(season.id, it) }
-            _uiState.update {
-                it.copy(smartPlayTarget = result?.toUiTarget())
-            }
-        }
-    }
-
-    private fun computeSeriesSmartPlayTarget() {
-        launch(smartPlayDispatcher) {
-            val state = _uiState.value
-            val sorted = state.sortedEpisodes.takeIf { it.isNotEmpty() }
-            if (sorted == null) {
-                _uiState.update { it.copy(smartPlayTarget = null) }
-                return@launch
-            }
-            val result = SmartPlayResolver.resolveSeries(sorted)
-            if (result == null) {
-                _uiState.update { it.copy(smartPlayTarget = null) }
-                return@launch
-            }
-            _uiState.update {
-                it.copy(smartPlayTarget = result.toUiTarget())
-            }
-        }
-    }
-
-    private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
-        launch(smartPlayDispatcher) {
-            val sorted = _uiState.value.sortedEpisodes.takeIf { it.isNotEmpty() } ?: return@launch
-            // The episode must still be present in the current sorted view.
-            if (sorted.none { it.id == currentEpisode.id }) {
-                _uiState.update { it.copy(smartPlayTarget = null) }
-                return@launch
-            }
-            _uiState.update {
-                it.copy(smartPlayTarget = SmartPlayResolver.resolveEpisode(currentEpisode).toUiTarget())
-            }
-        }
-    }
-
-    /** Maps a pure [SmartPlayResult] to the localized UI target. */
-    private suspend fun SmartPlayResult.toUiTarget(): DetailUiState.SmartPlayTarget {
-        val s = episode.seasonNumber ?: 1
-        val e = episode.episodeNumber ?: episode.indexNumber ?: 1
-        val label = when (label) {
-            LabelKind.RESUME_EPISODE -> strings.get(Res.string.detail_resume_episode, s, e)
-            LabelKind.NEXT_UP_EPISODE -> strings.get(Res.string.detail_next_up_episode, s, e)
-            LabelKind.PLAY_EPISODE -> strings.get(Res.string.detail_play_episode, s, e)
-            LabelKind.REPLAY_EPISODE -> strings.get(Res.string.detail_replay_episode, s, e)
-        }
-        return DetailUiState.SmartPlayTarget(
-            episode = episode,
-            label = label,
-            startPositionTicks = startPositionTicks,
-            primaryImageUrl = imageUrlProvider.getImageUrl(episode.id),
-            labelKind = this.label,
-        )
-    }
-
     /**
      * The Detail screen's container adapter: applies a resolved mutation to
      * every visible projection of an item. Detail actions can target the
      * current item, a related/collection card, or an episode card; keeping
-     * these projections together prevents one card from replaying the old
-     * state until the next full detail load. Folds the former
-     * `updatePlayedStateInUi` / `updateFavoriteStateInUi` pair — the patch
-     * (resume-zeroing on played flips, favorite-only flips) is derived from
-     * the [com.raulshma.jellyplay.core.data.repository.AppliedMutation] the
+     * these projections together prevents one card from replaying stale
+     * state until the next full detail load. One patch covers both played and
+     * favorite flips (resume-zeroing on played flips, favorite-only flips),
+     * derived from the
+     * [com.raulshma.jellyplay.core.data.repository.AppliedMutation] the
      * mutator resolved.
      *
      * Membership is checked before rebuilding: a projection that cannot
@@ -1618,7 +759,7 @@ class DetailViewModel internal constructor(
      */
     private val detailItemContainer = UserDataContainer { itemId, patch ->
         var shouldRecomputeSmartPlay = false
-        _uiState.update { state ->
+        loader.update { state ->
             val currentDetail = state.detail
             val isCurrentDetail = currentDetail?.item?.id == itemId
             val inSortedEpisodes = state.sortedEpisodes.any { it.id == itemId }
@@ -1648,12 +789,12 @@ class DetailViewModel internal constructor(
                 },
             )
         }
-        if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()
+        if (shouldRecomputeSmartPlay) loader.recomputeSmartPlayTarget()
     }
 
     private fun toggleFavorite() {
         launch {
-            val itemId = _uiState.value.detail?.item?.id ?: return@launch
+            val itemId = loader.state.value.detail?.item?.id ?: return@launch
             userDataMutator.setFavorite(
                 itemId = itemId,
                 mode = UserDataMutator.FlipMode.Optimistic,
@@ -1679,7 +820,7 @@ class DetailViewModel internal constructor(
      */
     private fun setPlayed(played: Boolean) {
         launch {
-            val itemId = _uiState.value.detail?.item?.id ?: return@launch
+            val itemId = loader.state.value.detail?.item?.id ?: return@launch
             userDataMutator.setPlayed(
                 itemId = itemId,
                 played = played,
@@ -1706,7 +847,7 @@ class DetailViewModel internal constructor(
      * itself), or null when the item is not series-scoped.
      */
     private fun seriesIdForItem(itemId: String): String? {
-        val state = _uiState.value
+        val state = loader.state.value
         val episodeSeriesId = state.episodes.values
             .asSequence()
             .flatten()
@@ -1787,17 +928,16 @@ class DetailViewModel internal constructor(
 
     /**
      * The discovery-pref write funnel: every item-keyed preference write on
-     * this screen is the same row — resolve the key off the current item (an
-     * episode keys to its parent series, a series to itself — the
+     * this screen is the same row - resolve the key off the current item (an
+     * episode keys to its parent series, a series to itself - the
      * hideFromNextUp keying), run the store write, then optionally surface
-     * the snackbar once the write has landed. Five handlers used to restate
-     * that skeleton by hand; only the three terms differed. The event
-     * funnel's entries stay; their bodies collapsed onto this one.
+     * the snackbar once the write has landed. The event funnel's entries stay;
+     * their bodies all delegate here.
      *
      * [setLastViewedSeason] and [setShowDetailUpNext] stay hand-written: the
-     * first is event-keyed (its series+season pair arrives with the event —
+     * first is event-keyed (its series+season pair arrives with the event -
      * no item resolution, no message, a silent background write), the second
-     * has no key at all; neither has a skeleton to collapse.
+     * has no key at all; neither follows the item-keyed skeleton.
      */
     private fun writeDiscoveryPref(
         /** The write's identity off the current item — [seriesKey] or the item id. */
@@ -1807,7 +947,7 @@ class DetailViewModel internal constructor(
         /** The snackbar, emitted after the write lands; null = silent. */
         message: (suspend () -> DetailMessage)? = null,
     ) {
-        val item = _uiState.value.detail?.item ?: return
+        val item = loader.state.value.detail?.item ?: return
         val resolvedKey = key(item)
         launch {
             write(resolvedKey)
@@ -1918,7 +1058,7 @@ class DetailViewModel internal constructor(
      */
     private fun hideFranchiseRow(collectionId: String) {
         val itemId = _session.value?.itemId ?: return
-        _uiState.update { state ->
+        loader.update { state ->
             state.copy(
                 hiddenFranchiseCollections = state.hiddenFranchiseCollections + (
                     itemId to (
@@ -1939,9 +1079,15 @@ class DetailViewModel internal constructor(
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
 
-    /** Clear-logo URL for the "prefer logos" detail title. */
-    fun getLogoUrl(itemId: String): String =
-        imageUrlProvider.getLogoUrl(itemId)
+    /**
+     * The item/tag-aware artwork resolver (the [ArtworkUrls] seam): one
+     * MediaItem/PersonInfo in, the URL for the slot it renders with the right
+     * image tag already selected. The same read-side query shape as the raw
+     * getters above — it replaces the per-id `getLogoUrl` delegate, whose only
+     * consumer (the "prefer logos" title) now reads `urls.logo(item)` off the
+     * content tree's [ArtworkCallbacks].
+     */
+    internal val artwork: ArtworkUrls get() = artworkUrls
 
     /**
      * Available bytes on the volume backing the download destination
@@ -1954,148 +1100,6 @@ class DetailViewModel internal constructor(
      */
     suspend fun getAvailableStorageBytes(isAudio: Boolean): Long =
         storageProbe.availableBytes(isAudio)
-
-    /**
-     * The TMDB-companion choreography shared with [SeerrDetailViewModel]
-     * (formerly hand-copied here): the holder owns the movie/tv videos fork,
-     * the connected × recommendations-enabled × staleness gate, the bounded
-     * fan-out, per-leg error tolerance, and the take-limits. Built on the
-     * [SeerrRequestStateHolder] template — constructor-lambda fetch seams
-     * straight onto [RemoteDiscoveryClients.seerrRepository], a single
-     * snapshot surface, landings folded into this screen's bag below.
-     */
-    private val tmdbCompanion = TmdbCompanionStateHolder(
-        scope = scope,
-        fetches = TmdbCompanionFetches.of(remoteDiscovery.seerrRepository),
-    )
-
-    private fun loadSeerrData(detail: MediaDetail, generation: Long) {
-        launch {
-            if (!loadGuard.isCurrent(generation)) return@launch
-            _uiState.update {
-                it.copy(
-                    seerrRecommendations = emptyList(),
-                    seerrSimilar = emptyList(),
-                    relatedVideos = emptyList(),
-                    // Parity: the merged trailer list drops its (now
-                    // stale) remote entries and keeps the local ones — the
-                    // videos leg re-merges on landing, exactly like the raw
-                    // relatedVideos reset below.
-                    trailers = mergeTrailerEntries(
-                        localTrailers = it.trailers.localTrailerItems(),
-                        remoteVideos = emptyList(),
-                        preferLocalTrailers = preferences.value.preferLocalTrailers,
-                    ),
-                    tmdbReviews = emptyList(),
-                )
-            }
-
-            if (remoteDiscovery.offlineModeManager.networkStatus.value == NetworkStatus.Local) return@launch
-
-            val mediaType = detail.item.mediaType
-            if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch
-
-            val tmdbId = resolveTmdbId(detail) // top-level fn in TmdbIdResolver.kt
-            if (tmdbId == null) return@launch
-
-            // Read the already-resolved Seerr connection booleans from the
-            // published [uiState] aggregator — NOT [_uiState]. The flags are
-            // folded into [uiState] by the outer combine (Group 3 → seerrFlags),
-            // but are never written to [_uiState] (the Group 1 primary flow), so
-            // reading [_uiState].value here would always yield the default false
-            // and skip every Seerr fetch. [uiState] is a hot StateFlow, so .value
-            // is a snapshot read with no subscription/probe overhead.
-            val connected = uiState.value.isSeerrConnected
-
-            if (!loadGuard.isCurrent(generation)) return@launch
-
-            // Fire-and-forget: each leg lands into [_uiState] as it resolves,
-            // staleness-checked atomically with its write via the request's
-            // [TmdbCompanionRequest.isCurrent] (this screen's captured epoch —
-            // the same seam startInstantMix passes its guard through).
-            tmdbCompanion.load(
-                TmdbCompanionRequest(
-                    tmdbId = tmdbId,
-                    mediaType = mediaType,
-                    connected = connected,
-                    recommendationsEnabled = uiState.value.isSeerrRecommendationsEnabled,
-                    loadVideos = true,
-                    loadReviews = true,
-                    loadRecommendations = true,
-                    isCurrent = { loadGuard.isCurrent(generation) },
-                    onLanding = ::foldCompanionLanding,
-                ),
-            )
-        }
-    }
-
-    /** Maps one holder landing onto its [DetailUiState] field. */
-    private fun foldCompanionLanding(landing: TmdbCompanionLanding) {
-        _uiState.update {
-            when (landing) {
-                is TmdbCompanionLanding.Videos ->
-                    it.copy(
-                        relatedVideos = landing.videos,
-                        // The merged trailer list re-merges with the
-                        // fresh remote leg, keeping whichever local entries
-                        // the `trailers` enrichment already wrote.
-                        trailers = mergeTrailerEntries(
-                            localTrailers = it.trailers.localTrailerItems(),
-                            remoteVideos = landing.videos,
-                            preferLocalTrailers = preferences.value.preferLocalTrailers,
-                        ),
-                    )
-                is TmdbCompanionLanding.Reviews -> it.copy(tmdbReviews = landing.reviews)
-                is TmdbCompanionLanding.Recommendations -> it.copy(seerrRecommendations = landing.items)
-                is TmdbCompanionLanding.Similar -> it.copy(seerrSimilar = landing.items)
-                // This screen never requests the ratings leg (the ratings row
-                // renders from the loaded detail's own fields here).
-                is TmdbCompanionLanding.Ratings -> it
-            }
-        }
-    }
-
-    private fun loadSeerrDataIfNeeded(detail: MediaDetail) {
-        // Reject details that don't belong to the item currently being viewed.
-        // Because the DetailViewModel is shared across detail navigations, a
-        // freshly-composed screen briefly observes the *previous* item's detail
-        // and may invoke this with a stale MediaDetail — which would load (and
-        // cache) the wrong item's trailers/videos and block the real item's load.
-        if (!loadGuard.isCurrent(detail.item.id)) return
-        if (seerrDataLoaded) return
-        seerrDataLoaded = true
-        val generation = loadGuard.bump()
-        loadSeerrData(detail, generation)
-    }
-
-    // ── Offline / download-lifecycle management ──────────────────────────
-    // Ports the operations previously owned by OfflineDetailViewModel and
-    // OfflineSeriesViewModel so the unified detail screen can manage a local
-    // download in place. These read the reactive
-    // [DetailUiState.detailContext] attachment for capability gating and act on
-    // the current item or the passed ids. Per-item write actions route through
-    // the offline-aware PlayedStateSync / playback outbox (mirroring today).
-
-    /**
-     * Called by [OfflineDeleteActions] after each delete transaction lands. The
-     * provider only re-resolves content on a refresh tick, and the reducer
-     * short-circuits same-generation attachment ticks — so without this the
-     * screen would keep showing the pre-delete episodes (or, after a re-resolve,
-     * a stuck loading spinner / "Finding Episode" on an emptied season) until
-     * the next navigation. Drop the now-stale series catalogue and re-resolve
-     * the current view. The refresh is gated to local views: a remote view's
-     * server episode list is unchanged by a download delete (the attachment
-     * flow already refreshes download badges), so refreshing it would only
-     * wastefully refetch from the server.
-     */
-    private fun refreshAfterOfflineMutation() {
-        val seriesId = currentSeriesId ?: return
-        mediaDetailProvider.invalidate(seriesId)
-        val itemId = loadGuard.itemId ?: return
-        if (_uiState.value.origin?.isLocal == true) {
-            launch { mediaDetailProvider.refresh(itemId) }
-        }
-    }
 
     override fun onCleared() {
         super.onCleared()

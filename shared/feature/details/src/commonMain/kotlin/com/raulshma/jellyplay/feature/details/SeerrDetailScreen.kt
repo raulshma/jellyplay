@@ -61,8 +61,6 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +83,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestButtonState
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.seerrRequestButtonState
+import com.raulshma.jellyplay.core.model.seerr.toSeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -162,7 +161,12 @@ fun SeerrDetailScreen(
         viewModel.loadDetails(tmdbId, mediaType)
     }
 
-    val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
+    // ONE fold of the movie/tv union for this screen, computed here — the
+    // outermost composition holding movieDetail/tvDetail — and passed down to
+    // the content/body/buttons instead of re-derived per site; the precedence
+    // rules live once in SeerrDetailView.of instead of a ladder per read site.
+    val view = SeerrDetailView.of(movieDetail, tvDetail)
+    val backdropUrl = view.backdropUrl
     val outerIsLightTheme = rememberIsLightTheme()
     var activeTrailerKey by remember { mutableStateOf<String?>(null) }
 
@@ -196,36 +200,20 @@ fun SeerrDetailScreen(
                 }
                 else -> {
                     SeerrDetailContent(
-                        movieDetail = movieDetail,
-                        tvDetail = tvDetail,
+                        view = view,
+                        hasContent = movieDetail != null || tvDetail != null,
                         ratings = ratings,
                         recommendations = seerrRecommendations,
                         similar = seerrSimilar,
                         onRequestClick = {
                             // The dialog item is built from whichever detail is
                             // loaded (movies and shows carry different fields);
-                            // the holder owns the rest of the open cascade.
-                            val item = movieDetail?.let {
-                                SeerrSearchItem(
-                                    id = it.id,
-                                    mediaType = "movie",
-                                    title = it.title,
-                                    overview = it.overview,
-                                    posterPath = it.posterPath,
-                                    releaseDate = it.releaseDate,
-                                    mediaInfo = it.mediaInfo
-                                )
-                            } ?: tvDetail?.let {
-                                SeerrSearchItem(
-                                    id = it.id,
-                                    mediaType = "tv",
-                                    name = it.name,
-                                    overview = it.overview,
-                                    posterPath = it.posterPath,
-                                    firstAirDate = it.firstAirDate,
-                                    mediaInfo = it.mediaInfo
-                                )
-                            }
+                            // the holder owns the rest of the open cascade. The
+                            // mapping itself lives beside the Seerr types in
+                            // core/model (the ArrCalendarItem.toSeerrSearchItem
+                            // precedent) so it can be pinned by model tests.
+                            val item = movieDetail?.toSeerrSearchItem()
+                                ?: tvDetail?.toSeerrSearchItem()
                             item?.let { viewModel.openRequestDialog(it) }
                         },
                         onNavigate = onNavigate,
@@ -266,33 +254,10 @@ fun SeerrDetailScreen(
             }
 
             activeTrailerKey?.let { key ->
-                Dialog(
-                    onDismissRequest = { activeTrailerKey = null },
-                    properties = DialogProperties(
-                        usePlatformDefaultWidth = false,
-                        dismissOnBackPress = true,
-                        dismissOnClickOutside = true
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        InlineTrailerPlayerHost(
-                            videoKey = key,
-                            modifier = Modifier.fillMaxSize(),
-                            muted = false,
-                            showControls = true,
-                            autoplay = true,
-                            onEmbedFailed = {
-                                activeTrailerKey = null
-                                uriHandler.openUri("https://www.youtube.com/watch?v=$key")
-                            }
-                        )
-                    }
-                }
+                InlineTrailerDialog(
+                    videoKey = key,
+                    onDismiss = { activeTrailerKey = null },
+                )
             }
         }
         } // CompositionLocalProvider
@@ -302,8 +267,10 @@ fun SeerrDetailScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SeerrDetailContent(
-    movieDetail: SeerrMovieDetails?,
-    tvDetail: SeerrTvDetails?,
+    /** The screen's one movie/tv fold ([SeerrDetailView.of]) — passed down, never re-derived here. */
+    view: SeerrDetailView,
+    /** Whether either detail leg is loaded — gates the scroll controller and the TV focus wait. */
+    hasContent: Boolean,
     ratings: SeerrRatings?,
     recommendations: List<SeerrSearchItem>,
     similar: List<SeerrSearchItem>,
@@ -340,11 +307,15 @@ private fun SeerrDetailContent(
         themeVariant.detailCardBorder(primary, secondary, outline)
     }
 
-    val backdropUrl = movieDetail?.backdropUrl ?: tvDetail?.backdropUrl
-    val title = movieDetail?.title ?: tvDetail?.name ?: ""
-    val posterUrl = movieDetail?.posterUrl ?: tvDetail?.posterUrl
+    // The screen's one fold of the movie/tv union (computed at the screen
+    // root, passed down) — the header art, ids, external links and rating
+    // badge below all read it, and the body / action buttons receive the
+    // SAME instance; the content precedence lives once in SeerrDetailView.of.
+    val backdropUrl = view.backdropUrl
+    val title = view.title
+    val posterUrl = view.posterUrl
 
-    val relatedVideos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
+    val relatedVideos = view.relatedVideos
     val trailerVideo = remember(relatedVideos) {
         relatedVideos.firstOrNull {
             it.site?.lowercase() == "youtube" &&
@@ -354,7 +325,6 @@ private fun SeerrDetailContent(
     var autoplayEmbedFailed by remember { mutableStateOf(false) }
 
     val contentFocusRequester = remember { FocusRequester() }
-    val hasContent = movieDetail != null || tvDetail != null
 
     // Reuse the shared detail scroll-state controller instead of re-implementing
     // the backdrop-height/scroll-offset/fraction/color/nav-bar-sync chain here.
@@ -512,8 +482,7 @@ private fun SeerrDetailContent(
                     // the landscape Row, full-width in the portrait Column).
                     val detailBody: @Composable (Modifier) -> Unit = { bodyModifier ->
                         SeerrDetailBody(
-                            movieDetail = movieDetail,
-                            tvDetail = tvDetail,
+                            view = view,
                             ratings = ratings,
                             recommendations = recommendations,
                             similar = similar,
@@ -561,8 +530,7 @@ private fun SeerrDetailContent(
                                 Spacer(Modifier.height(24.dp))
 
                                 MediaInfoCondensed(
-                                    movieDetail = movieDetail,
-                                    tvDetail = tvDetail,
+                                    view = view,
                                     ratings = ratings,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -570,8 +538,7 @@ private fun SeerrDetailContent(
                                 Spacer(Modifier.height(24.dp))
 
                                 SeerrActionButtons(
-                                    movieDetail = movieDetail,
-                                    tvDetail = tvDetail,
+                                    view = view,
                                     onRequestClick = onRequestClick,
                                     jellyfinItemId = jellyfinItemId,
                                     onOpenInLibrary = { id ->
@@ -586,10 +553,10 @@ private fun SeerrDetailContent(
                                 // The former private ExternalLinksRow, generalized into the
                                 // shared DetailExternalLinksRow — same three brand chips,
                                 // same id sources and url construction, plain links now.
-                                val seerrMediaType = if (movieDetail != null) "movie" else "tv"
-                                val seerrTmdbId = movieDetail?.id ?: tvDetail?.id ?: 0
-                                val seerrImdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId
-                                val seerrTvdbId = tvDetail?.externalIds?.tvdbId
+                                val seerrMediaType = if (view.isMovie) "movie" else "tv"
+                                val seerrTmdbId = view.tmdbId
+                                val seerrImdbId = view.imdbId
+                                val seerrTvdbId = view.tvdbId
                                 val tmdbLabel = stringResource(Res.string.detail_link_tmdb)
                                 val imdbLabel = stringResource(Res.string.detail_link_imdb)
                                 val tvdbLabel = stringResource(Res.string.detail_link_tvdb)
@@ -643,7 +610,7 @@ private fun SeerrDetailContent(
                                             modifier = Modifier.weight(1f, fill = false)
                                         )
                                     
-                                        val contentRating = tvDetail?.contentRatings?.find { it.iso31661 == "US" }?.rating
+                                        val contentRating = view.usContentRating
                                         if (contentRating != null) {
                                             Spacer(Modifier.width(8.dp))
                                             Surface(
@@ -660,7 +627,7 @@ private fun SeerrDetailContent(
                                             }
                                         }
                                     }
-                                    val tagline = movieDetail?.tagline ?: tvDetail?.tagline
+                                    val tagline = view.tagline
                                     tagline?.takeIf { it.isNotBlank() }?.let {
                                         Text(
                                             text = it,
@@ -674,8 +641,7 @@ private fun SeerrDetailContent(
                             Spacer(Modifier.height(16.dp))
 
                             MediaInfoCondensed(
-                                movieDetail = movieDetail,
-                                tvDetail = tvDetail,
+                                view = view,
                                 ratings = ratings,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -683,8 +649,7 @@ private fun SeerrDetailContent(
                             Spacer(Modifier.height(24.dp))
 
                             SeerrActionButtons(
-                                movieDetail = movieDetail,
-                                tvDetail = tvDetail,
+                                view = view,
                                 onRequestClick = onRequestClick,
                                 jellyfinItemId = jellyfinItemId,
                                 onOpenInLibrary = { id ->
@@ -774,15 +739,18 @@ private fun SeerrDetailTopBar(
 
 @Composable
 private fun SeerrActionButtons(
-    movieDetail: SeerrMovieDetails?,
-    tvDetail: SeerrTvDetails?,
+    /** The screen's one movie/tv fold ([SeerrDetailView.of]); only [SeerrDetailView.mediaInfo] is read here. */
+    view: SeerrDetailView,
     onRequestClick: () -> Unit,
     jellyfinItemId: String?,
     onOpenInLibrary: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester? = null,
 ) {
-    val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
+    // The screen fold, passed down: only the mediaInfo the button state
+    // reads — the movie/tv precedence is SeerrDetailView.of's, not this
+    // shell's.
+    val mediaInfo = view.mediaInfo
     // The gating fold (pending/processing/existing request entry) AND the
     // button precedence (available > requested > requestable) live in
     // core/model's SeerrStatusDecisions — the same table the requests list
@@ -887,8 +855,8 @@ private fun SeerrActionButtons(
 
 @Composable
 private fun SeerrDetailBody(
-    movieDetail: SeerrMovieDetails?,
-    tvDetail: SeerrTvDetails?,
+    /** The screen's one movie/tv fold ([SeerrDetailView.of]) — passed down, never re-derived here. */
+    view: SeerrDetailView,
     ratings: SeerrRatings?,
     recommendations: List<SeerrSearchItem>,
     similar: List<SeerrSearchItem>,
@@ -908,6 +876,12 @@ private fun SeerrDetailBody(
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val maxWidth = adaptiveInfo.detailBodyMaxWidth(isTv)
 
+    // The screen's one fold, passed down; the two layout branches below read
+    // the SAME cast/videos computation instead of each carrying a verbatim
+    // twin of the ladder (the former shape).
+    val cast = view.cast
+    val videos = view.relatedVideos
+
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter
@@ -920,7 +894,7 @@ private fun SeerrDetailBody(
         ) {
             // Overview Section
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                val overview = movieDetail?.overview ?: tvDetail?.overview ?: ""
+                val overview = view.overview
                 if (overview.isNotBlank()) {
                     Text(
                         text = stringResource(Res.string.detail_seerr_overview),
@@ -935,8 +909,8 @@ private fun SeerrDetailBody(
                         lineHeight = 24.sp
                     )
                 }
-                
-                val keywords = movieDetail?.keywords ?: tvDetail?.keywords ?: emptyList()
+
+                val keywords = view.keywords
                 if (keywords.isNotEmpty()) {
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -971,27 +945,23 @@ private fun SeerrDetailBody(
                         verticalArrangement = Arrangement.spacedBy(32.dp)
                     ) {
                         // Cast
-                        val cast = tvDetail?.aggregateCredits?.cast?.toAggregateCastMembers()
-                            ?: movieDetail?.credits?.cast?.toCastMembers()
-                            ?: emptyList()
                         if (cast.isNotEmpty()) {
                             CastSection(cast)
                         }
 
-                        // Seasons (TV only)
-                        if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
+                        // Seasons (TV only — view.seasons is empty on the movie leg)
+                        if (view.seasons.isNotEmpty()) {
                             SeasonsSection(
-                                seasons = tvDetail.seasons,
+                                seasons = view.seasons,
                                 selectedSeasonNumber = selectedSeasonNumber,
                                 episodesBySeason = episodesBySeason,
                                 isLoadingEpisodes = isLoadingEpisodes,
                                 onSeasonClick = onSeasonClick,
-                                showPosterUrl = tvDetail.posterUrl,
+                                showPosterUrl = view.seasonsPosterUrl,
                             )
                         }
 
                         // Videos
-                        val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
                         if (videos.isNotEmpty()) {
                             VideosSection(videos, onVideoClick)
                         }
@@ -1001,35 +971,31 @@ private fun SeerrDetailBody(
                         modifier = Modifier.width(300.dp),
                         verticalArrangement = Arrangement.spacedBy(32.dp)
                     ) {
-                        MediaInformationSection(movieDetail, tvDetail, streamingRegion, discoverRegion, seerrServerUrl)
+                        MediaInformationSection(view, streamingRegion, discoverRegion, seerrServerUrl)
                     }
                 }
             } else {
                 // Stacked layout for compact screens
-                val cast = tvDetail?.aggregateCredits?.cast?.toAggregateCastMembers()
-                    ?: movieDetail?.credits?.cast?.toCastMembers()
-                    ?: emptyList()
                 if (cast.isNotEmpty()) {
                     CastSection(cast)
                 }
 
-                if (tvDetail != null && tvDetail.seasons.isNotEmpty()) {
+                if (view.seasons.isNotEmpty()) {
                     SeasonsSection(
-                        seasons = tvDetail.seasons,
+                        seasons = view.seasons,
                         selectedSeasonNumber = selectedSeasonNumber,
                         episodesBySeason = episodesBySeason,
                         isLoadingEpisodes = isLoadingEpisodes,
                         onSeasonClick = onSeasonClick,
-                        showPosterUrl = tvDetail.posterUrl,
+                        showPosterUrl = view.seasonsPosterUrl,
                     )
                 }
 
-                val videos = movieDetail?.relatedVideos ?: tvDetail?.relatedVideos ?: emptyList()
                 if (videos.isNotEmpty()) {
                     VideosSection(videos, onVideoClick)
                 }
 
-                MediaInformationSection(movieDetail, tvDetail, streamingRegion, discoverRegion, seerrServerUrl)
+                MediaInformationSection(view, streamingRegion, discoverRegion, seerrServerUrl)
             }
 
             // Recommendations

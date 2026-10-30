@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -30,12 +30,11 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_no_
 
 /**
  * Drives the collection adapter over [AddToTargetActions] through its
- * interface — the merged module's collection surface (formerly the
- * CollectionActions mirror).
+ * interface - the module's collection surface.
  */
 class CollectionTargetsTest {
 
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val collectionOperations: CollectionOperations = mockk(relaxed = true)
     private val collectionApiClient: CollectionApiClient = mockk(relaxed = true)
     private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
 
@@ -77,7 +76,7 @@ class CollectionTargetsTest {
             scope = scope,
             session = session,
             messages = messages.flow,
-            adapter = CollectionAddTarget(strings, collectionApiClient, mediaRepository),
+            adapter = CollectionAddTarget(strings, collectionApiClient, collectionOperations),
             mediaDetailProvider = mediaDetailProvider,
         )
     }
@@ -178,7 +177,7 @@ class CollectionTargetsTest {
     // region addTo
     @Test
     fun `addTo success emits the added-to-collection message`() = runTest {
-        coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.success(Unit)
+        coEvery { collectionOperations.addItemsToCollection(any(), any()) } returns Result.success(Unit)
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val a = actions(this)
 
@@ -192,7 +191,7 @@ class CollectionTargetsTest {
         )
         assertFalse(a.state.value.isAdding)
         assertFalse(a.state.value.showPicker)
-        coVerify { mediaRepository.addItemsToCollection("c1", listOf("m1")) }
+        coVerify { collectionOperations.addItemsToCollection("c1", listOf("m1")) }
     }
 
     @Test
@@ -214,13 +213,13 @@ class CollectionTargetsTest {
             )
         )
         // Nothing should be added against an empty resolution.
-        coVerify(exactly = 0) { mediaRepository.addItemsToCollection(any(), any()) }
+        coVerify(exactly = 0) { collectionOperations.addItemsToCollection(any(), any()) }
         assertFalse(a.state.value.isAdding)
     }
 
     @Test
     fun `addTo for a series resolves ids from sorted episodes over a cold load`() = runTest {
-        coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.success(Unit)
+        coEvery { collectionOperations.addItemsToCollection(any(), any()) } returns Result.success(Unit)
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val ep1 = MediaItem(id = "ep1", name = "E1", mediaType = MediaType.EPISODE)
         val ep2 = MediaItem(id = "ep2", name = "E2", mediaType = MediaType.EPISODE)
@@ -239,13 +238,13 @@ class CollectionTargetsTest {
         advanceUntilIdle()
 
         // Sorted episodes win; the cold-load fallback must not fire.
-        coVerify { mediaRepository.addItemsToCollection("c1", listOf("ep1", "ep2")) }
+        coVerify { collectionOperations.addItemsToCollection("c1", listOf("ep1", "ep2")) }
         assertEquals(0, coldLoads)
     }
 
     @Test
     fun `addTo for a series falls back to canonicalEpisodeIds when the snapshot is empty`() = runTest {
-        coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.success(Unit)
+        coEvery { collectionOperations.addItemsToCollection(any(), any()) } returns Result.success(Unit)
         val collection = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
         val a = actions(
             this,
@@ -257,12 +256,12 @@ class CollectionTargetsTest {
         a.addTo(collection)
         advanceUntilIdle()
 
-        coVerify { mediaRepository.addItemsToCollection("c1", listOf("cold-1", "cold-2")) }
+        coVerify { collectionOperations.addItemsToCollection("c1", listOf("cold-1", "cold-2")) }
     }
 
     @Test
     fun `addTo repository failure emits couldnt-add message`() = runTest {
-        coEvery { mediaRepository.addItemsToCollection(any(), any()) } returns Result.failure(RuntimeException("server"))
+        coEvery { collectionOperations.addItemsToCollection(any(), any()) } returns Result.failure(RuntimeException("server"))
         val a = actions(this)
 
         a.addTo(CollectionSummary(id = "c1", name = "Marvel", itemCount = 4))
@@ -281,7 +280,7 @@ class CollectionTargetsTest {
     // region createAndAdd
     @Test
     fun `createAndAdd success creates the collection and closes the dialog`() = runTest {
-        coEvery { mediaRepository.createCollection(any(), any()) } returns Result.success("col-new")
+        coEvery { collectionOperations.createCollection(any(), any()) } returns Result.success("col-new")
         val a = actions(this)
         a.openCreateDialog()
         assertTrue(a.state.value.showCreateDialog)
@@ -290,7 +289,7 @@ class CollectionTargetsTest {
         advanceUntilIdle()
 
         // Name is trimmed; the create endpoint is seeded with the current item; dialog closes on success.
-        coVerify { mediaRepository.createCollection("My Set", listOf("m1")) }
+        coVerify { collectionOperations.createCollection("My Set", listOf("m1")) }
         assertTrue(
             messages.recorded.contains(
                 DetailMessage.Text(strings.get(Res.string.detail_msg_collection_created, "My Set"))
@@ -308,7 +307,7 @@ class CollectionTargetsTest {
         a.createAndAdd("   ")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.createCollection(any(), any()) }
+        coVerify(exactly = 0) { collectionOperations.createCollection(any(), any()) }
         // Dialog stays open; the guard fired before any state mutation.
         assertTrue(a.state.value.showCreateDialog)
     }
@@ -320,12 +319,12 @@ class CollectionTargetsTest {
         a.createAndAdd("Name")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.createCollection(any(), any()) }
+        coVerify(exactly = 0) { collectionOperations.createCollection(any(), any()) }
     }
 
     @Test
     fun `createAndAdd repository failure emits couldnt-add message`() = runTest {
-        coEvery { mediaRepository.createCollection(any(), any()) } returns Result.failure(RuntimeException("server"))
+        coEvery { collectionOperations.createCollection(any(), any()) } returns Result.failure(RuntimeException("server"))
         val a = actions(this)
         a.openCreateDialog()
 
@@ -362,7 +361,7 @@ class CollectionTargetsTest {
                 DetailMessage.Text(strings.get(Res.string.detail_msg_no_episodes_queued))
             )
         )
-        coVerify(exactly = 0) { mediaRepository.createCollection(any(), any()) }
+        coVerify(exactly = 0) { collectionOperations.createCollection(any(), any()) }
         assertFalse(a.state.value.showCreateDialog)
         assertFalse(a.state.value.isAdding)
     }

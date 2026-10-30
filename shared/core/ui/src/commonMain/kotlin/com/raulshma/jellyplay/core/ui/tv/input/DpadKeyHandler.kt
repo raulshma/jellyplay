@@ -17,6 +17,8 @@ enum class DpadAction {
     PlayPause,
     FastForward,
     Rewind,
+    Next,
+    Previous,
     Menu,
 }
 

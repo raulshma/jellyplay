@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaDetail
 import io.mockk.coEvery
 
@@ -11,7 +11,7 @@ import io.mockk.coEvery
  * [SubtitleManagerTest] (Jellyfin/offline path) and
  * [SubtitleManagerProviderDownloadTest] (external-provider path).
  */
-internal fun MediaRepository.stubDetailReads(itemId: String, first: MediaDetail, rest: MediaDetail) {
+internal fun DetailFeed.stubDetailReads(itemId: String, first: MediaDetail, rest: MediaDetail) {
     var reads = 0
     coEvery { getMediaDetail(itemId, any()) } coAnswers {
         reads++

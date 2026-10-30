@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.MediaItem
 
 /**
- * The home hot-path's cache-maintenance verbs, split off
+ * The home hot-path's cache-maintenance and row-mutation verbs, split off
  * [com.raulshma.jellyplay.core.network.api.LibraryApiClient] (which used to
  * declare them): a network API interface should not carry cache-management
  * vocabulary, and core:data's write paths should not have to know the network
@@ -16,15 +16,15 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * fetcher, so a future sub-call cache is a network-module-only change.
  *
  * Consumed ONLY by the data layer's write/roll paths (the user-data composite
- * eviction, the wholesale invalidation, and the dice roll's
- * invalidate→fetch→seed halves on `MediaRepositoryImpl`) — reads go through
- * the ordinary client methods. Cache-write generation ownership lives entirely
- * in the data layer: the two mutating discover-row verbs carry
- * [HomeWriteGeneration] — the repo funnel's post-bump token (the fetcher keeps
- * a mirror, no counter of its own) — so this port is both the transport the
- * protocol steps land on and the one channel the network layer's write guard
- * observes the token through. The roll protocol's single owner remains the
- * KDoc on `HomeFeed.rerollDiscoverRow`; this port adds no ordering of its own.
+ * eviction, the wholesale invalidation, and the dice roll + single-row
+ * refresh on `MediaRepositoryImpl`) — reads go through the ordinary client
+ * methods. The two row-mutation verbs are COMPLETE operations owned by the
+ * fetcher (the roll's invalidate → fetch → seed choreography runs inside it,
+ * behind its own write guard); they hand back only the outcome, and the data
+ * layer bumps its own assembled-payload cache generation when an operation
+ * reports that a row changed. No cache-write token crosses this seam — the
+ * roll protocol's ordering rules live on `HomeFeed.rerollDiscoverRow` and in
+ * the fetcher operations' KDoc.
  */
 public interface HomeSectionsCachePort {
 
@@ -40,27 +40,18 @@ public interface HomeSectionsCachePort {
     fun invalidateSubcallCaches()
 
     /**
-     * Drops ONE discover row's memoised items (the dice affordance): the next
-     * home fetch re-rolls a RANDOM row instead of replaying the cached set for
-     * the sub-call TTL. Best-effort and synchronous — a no-op when the row has
-     * not been memoised. [generation] is the data layer's post-bump
-     * [HomeWriteGeneration] (the roll funnel's bump comes FIRST, repo-side):
-     * the fetcher mirrors it before the drop so its write guard observes the
-     * same value its single owner produced.
+     * The dice re-roll as ONE operation (the invalidate → fetch → seed
+     * choreography, owned by the fetcher — see
+     * [HomeSectionsFetcher.rerollDiscoverRow]): drops the row's memoised
+     * items, fetches the row fresh from the server, and — on a non-empty
+     * result — commits the rolled set into the per-row memo so the next home
+     * fetch serves the roll. Returns the fresh items; a failure or an empty
+     * result returns as-is with the pre-fetch drop standing (the next home
+     * fetch re-queries the row rather than replaying or pinning pre-roll
+     * items). Either way the row's cached state changed — the caller bumps
+     * its own assembled-payload cache when this returns.
      */
-    fun invalidateDiscoverRow(rowId: String, generation: HomeWriteGeneration)
-
-    /**
-     * Memoises one discover row's freshly fetched items in the home fetcher's
-     * per-row sub-call cache (the dice roll's commit step): the next home
-     * fetch serves the rolled items instead of re-querying the server, so a
-     * roll survives the periodic refresh. No-op on an empty list; the key
-     * derivation matches the fetch path's. [generation] is the data layer's
-     * post-bump [HomeWriteGeneration] (the commit bump comes FIRST,
-     * repo-side) — the commit-time half of the bump-at-invalidate-AND-commit
-     * rule.
-     */
-    fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: HomeWriteGeneration)
+    suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>>
 
     /**
      * The single-row home refetch (the home screen's edge-pull refresh):

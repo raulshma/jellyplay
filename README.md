@@ -877,6 +877,12 @@ Other open-source projects in the Jellyfin ecosystem:
 We welcome contributions of all sizes — bug reports, feature requests, code,
 translations, and documentation.
 
+## Sponsor
+
+If JellyPlay is useful to you, consider sponsoring development:
+
+<iframe src="https://github.com/sponsors/raulshma/button" title="Sponsor raulshma" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe>
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** — see

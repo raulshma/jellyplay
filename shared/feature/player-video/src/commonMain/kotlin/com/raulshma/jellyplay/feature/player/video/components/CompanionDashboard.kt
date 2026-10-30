@@ -132,7 +132,10 @@ fun CompanionDashboard(
     onSelectAudioTrack: (TrackOption) -> Unit,
     onSelectSubtitleTrack: (TrackOption) -> Unit,
     onPlayEpisode: (String) -> Unit,
-    getImageUrl: (String) -> String,
+    /** Tag-carrying portrait resolver for the cast-and-crew row (the VM's [ArtworkUrls] slot). */
+    personPortraitUrl: (PersonInfo) -> String,
+    /** Tag-carrying episode poster resolver for the episodes tab. */
+    episodePosterUrl: (JellyfinMediaItem) -> String,
     onToggleOrientation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -301,7 +304,7 @@ fun CompanionDashboard(
                             .heightIn(min = 250.dp, max = 500.dp)
                     ) {
                         when (selectedTab) {
-                            0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
+                            0 -> OverviewTabContent(overview = overview, people = people, personPortraitUrl = personPortraitUrl)
                             1 -> SubtitlesTabContent(
                                 lyricsLines = lyricsLines,
                                 castPositionFlow = castPositionFlow,
@@ -310,7 +313,7 @@ fun CompanionDashboard(
                                 onSelectAudioTrack = onSelectAudioTrack,
                                 onSelectSubtitleTrack = onSelectSubtitleTrack
                             )
-                            2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, getImageUrl = getImageUrl)
+                            2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, episodePosterUrl = episodePosterUrl)
                         }
                     }
                 }
@@ -407,7 +410,7 @@ fun CompanionDashboard(
                         .border(1.dp, Color.White.copy(alpha = 0.08f), ShapeCache.smooth24)
                 ) {
                     when (selectedTab) {
-                        0 -> OverviewTabContent(overview = overview, people = people, getImageUrl = getImageUrl)
+                        0 -> OverviewTabContent(overview = overview, people = people, personPortraitUrl = personPortraitUrl)
                         1 -> SubtitlesTabContent(
                             lyricsLines = lyricsLines,
                             castPositionFlow = castPositionFlow,
@@ -416,7 +419,7 @@ fun CompanionDashboard(
                             onSelectAudioTrack = onSelectAudioTrack,
                             onSelectSubtitleTrack = onSelectSubtitleTrack
                         )
-                        2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, getImageUrl = getImageUrl)
+                        2 -> EpisodesTabContent(episodes = episodes, onPlayEpisode = onPlayEpisode, episodePosterUrl = episodePosterUrl)
                     }
                 }
 
@@ -441,7 +444,7 @@ fun CompanionDashboard(
 fun OverviewTabContent(
     overview: String,
     people: List<PersonInfo>,
-    getImageUrl: (String) -> String,
+    personPortraitUrl: (PersonInfo) -> String,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -486,7 +489,7 @@ fun OverviewTabContent(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.width(72.dp)
                             ) {
-                                val avatarUrl = remember(person.id) { getImageUrl(person.id) }
+                                val avatarUrl = remember(person, personPortraitUrl) { personPortraitUrl(person) }
                                 MediaImage(
                                     url = avatarUrl,
                                     contentDescription = person.name,
@@ -700,7 +703,7 @@ fun TrackSelectorGroup(
 fun EpisodesTabContent(
     episodes: List<JellyfinMediaItem>,
     onPlayEpisode: (String) -> Unit,
-    getImageUrl: (String) -> String,
+    episodePosterUrl: (JellyfinMediaItem) -> String,
 ) {
     if (episodes.isEmpty()) {
         Box(
@@ -729,7 +732,7 @@ fun EpisodesTabContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val thumbUrl = remember(episode.id) { getImageUrl(episode.id) }
+                    val thumbUrl = remember(episode, episodePosterUrl) { episodePosterUrl(episode) }
                     MediaImage(
                         url = thumbUrl,
                         contentDescription = episode.name,

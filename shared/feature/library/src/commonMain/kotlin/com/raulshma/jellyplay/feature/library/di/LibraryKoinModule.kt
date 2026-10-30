@@ -14,8 +14,8 @@ import org.koin.dsl.module
  *  - MediaRepository / UserDataMutator / PhotoFolderPrefetcher are Hilt-owned
  *    and reach Koin through the app
  *    composition root's Hilt interop module;
- *  - ImageUrlProvider (shared data) and LibraryStore (shared datastore)
- *    resolve from the shared-module graph;
+ *  - ImageUrlProvider / ArtworkUrls (shared data) and LibraryStore (shared
+ *    datastore) resolve from the shared-module graph;
  *  - PhotoExport resolves from feature/photos' photosModule, which carries the
  *    per-platform export modules (androidPhotoExportModule /
  *    desktopPhotoExportModule) along with the photo suite (PhotoAlbum/PhotoViewer
@@ -34,7 +34,8 @@ import org.koin.dsl.module
 val libraryModule: Module = module {
     viewModel {
         LibraryViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
+            userDataChanges = get(),
             mediaCatalogueEnrichments = get(),
             offlineRepository = get(),
             quickDownloadActions = get(),
@@ -42,15 +43,18 @@ val libraryModule: Module = module {
             userMessageBus = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             photoFolderPrefetcher = get(),
             libraryStore = get(),
         )
     }
     viewModel {
         FavoritesViewModel(
-            mediaRepository = get(),
+            libraryFeed = get(),
+            userDataChanges = get<com.raulshma.jellyplay.core.data.repository.UserDataChanges>().userDataChanges,
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             quickDownloadActions = get(),
             photoFolderPrefetcher = get(),
         )
@@ -58,9 +62,11 @@ val libraryModule: Module = module {
     viewModel { params ->
         StudioDetailViewModel(
             savedStateHandle = params.get<SavedStateHandle>(),
-            mediaRepository = get(),
+            libraryFeed = get(),
+            userDataChanges = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
+            artworkUrls = get(),
             quickDownloadActions = get(),
         )
     }

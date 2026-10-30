@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.widget
 /**
  * Fired after a successful foreground library scan / home refresh so downstream
  * one-shot triggers can piggy-back on the same signal:
- *   - the auto-download foreground drain ([com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler.enqueueNow])
+ *   - the auto-download foreground drain ([com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler.checkNow])
  *   - the widget recommendations refresh ([com.raulshma.jellyplay.widget.WidgetWorkScheduler])
  *
  * Mirrors the `ContinueWatchingBroadcaster` DI-clean pattern: the interface

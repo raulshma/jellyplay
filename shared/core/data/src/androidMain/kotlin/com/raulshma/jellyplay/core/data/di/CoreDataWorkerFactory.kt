@@ -40,9 +40,11 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 context, workerParameters,
                 episodeCatalogue = koin().get(),
                 downloadRepository = koin().get(),
+                policyStore = koin().get(),
                 downloadIntake = koin().get(),
                 downloadsStore = koin().get(),
                 serverIdentityStore = koin().get(),
+                suggestionNotifier = koin().get(),
             )
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,
@@ -83,7 +85,8 @@ class CoreDataWorkerFactory : WorkerFactory() {
                         offlineModeManager = koin().get(),
                         playedStateSync = koin().get(),
                         offlineRepository = koin().get(),
-                        mediaRepository = koin().get(),
+                        userDataWrites = koin().get(),
+                        userDataAnnouncer = koin().get(),
                         cacheInvalidator = koin().get(),
                         userDataSyncTrigger = PlaybackOutboxDrainer.UserDataSyncTrigger {
                             koin().get<UserDataSyncScheduler>().enqueueNow()

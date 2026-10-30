@@ -25,9 +25,8 @@ import kotlinx.coroutines.sync.withLock
  * Production adapter over [UserDataWriteOperations] (the write — including
  * PlayedStateSync fan-out and repository self-invalidation) and
  * [MediaDetailProvider] (the active-session rewrite). The repository dep is
- * the user-data-write family seam, not the [MediaRepository] union, since
- * this module is the clean sole consumer of that family (the family-seam
- * flip).
+ * the user-data-write family seam, since this module is the clean sole
+ * consumer of that family (the family-seam flip).
  */
 class UserDataMutatorImpl(
     private val userDataWrites: UserDataWriteOperations,

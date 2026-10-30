@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
+import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_auth
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_check_availability
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_not_enabled
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_qc_error_timeout
@@ -170,6 +171,32 @@ class AuthViewModelTest {
 
         advanceUntilIdle()
         assertTrue(viewModel.quickConnectState.value is QuickConnectUiState.Error)
+    }
+
+    @Test
+    fun quickConnect_loginFails_returnsAuthError() = runTest(testDispatcher) {
+        coEvery { authRepository.isQuickConnectEnabled() } returns Result.success(true)
+        coEvery { authRepository.initiateQuickConnect() } returns Result.success(
+            QuickConnectInfo(secret = "secret", code = "CODE")
+        )
+        coEvery { authRepository.pollQuickConnect("secret") } returns Result.success(
+            QuickConnectState(authenticated = true, secret = "secret")
+        )
+        coEvery { authRepository.loginWithQuickConnect("http://server", "secret") } returns
+            Result.failure(RuntimeException())
+
+        viewModel.startQuickConnect("http://server")
+
+        advanceUntilIdle()
+        val state = viewModel.quickConnectState.value
+        assertTrue("expected Error, was $state", state is QuickConnectUiState.Error)
+        // A message-less login failure pins this arm's own resource: the
+        // fallback is auth_qc_error_auth — not the polling or timeout strings
+        // the neighboring arms use.
+        assertEquals(
+            UiMessage.Resource(Res.string.auth_qc_error_auth),
+            (state as QuickConnectUiState.Error).message,
+        )
     }
 
     @Test

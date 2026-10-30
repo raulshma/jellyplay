@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.datastore
 
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
@@ -18,6 +19,7 @@ import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
@@ -63,6 +65,10 @@ fun UserPreferencesStore.declaredKeys(): List<Preferences.Key<*>> = buildList {
     addAll(reflectKeys(AudioCacheStore.Keys))
     addAll(reflectKeys(LibraryStore.Keys))
     addAll(reflectKeys(NavigationStore.Keys))
+    // The shortcuts store declares no Keys object — every key it reads or
+    // writes is derived from a ShortcutsPreferenceSpecs row (rawShortcutsUserKey),
+    // so the rows ARE the declaration owner and are enumerated directly.
+    addAll(ShortcutsPreferenceSpecs.all.map { stringPreferencesKey(it.keyName) })
     addAll(reflectKeys(NetworkOfflineStore.Keys))
     addAll(reflectKeys(NotificationStore.Keys))
     addAll(reflectKeys(ScreensaverStore.Keys))

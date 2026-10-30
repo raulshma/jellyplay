@@ -17,7 +17,8 @@ import java.util.concurrent.TimeUnit
 // implements the shared DownloadEnqueueCoordinator seam (same package, moved
 // to :shared:core:data jvmShared with the portable DownloadRepositoryImpl).
 // The @Inject/@Singleton annotations were stripped — Koin owns construction
-// (the app composition root's androidDownloadSeamsModule), and the cold-start
+// (androidDownloadsSeamsModule, this module's downloads-seams family module),
+// and the cold-start
 // recovery single (core:data's DownloadRecoveryPort, which the app module's
 // DownloadRecoveryInitializer invokes) reaches this actual through the seam.
 // The WorkManager bodies are verbatim; the cancelWork

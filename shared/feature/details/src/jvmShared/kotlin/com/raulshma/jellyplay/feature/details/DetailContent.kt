@@ -69,6 +69,15 @@ internal fun DetailContent(
     state: DetailContentState,
     callbacks: DetailContentCallbacks,
     availableStorageProvider: suspend (isAudio: Boolean) -> Long,
+    /**
+     * The process-wide playback seams ([MediaDetailPlaybackSeams]) the
+     * content tree's play-adjacent reads consume — the queue seeding behind
+     * the ⋮ menu's play-next/play-last entries and the SyncPlay veto over
+     * "Play (with pre-rolls)" — threaded from the screen's one bundle
+     * instead of mid-body `koinInject` pulls (the recorded Detail play
+     * sequencer decision).
+     */
+    seams: MediaDetailPlaybackSeams,
 ) {
     val item = state.core.detail?.item
     val listState = rememberLazyListState()
@@ -124,28 +133,24 @@ internal fun DetailContent(
 
     // Manual up-next queue (the player drains it queue-first). The controller
     // is process-wide, so "play next" here feeds the player's queue sheet even
-    // before the player opens. koinInject — the book feature's desktop-host
-    // precedent for a process-wide core:data single a screen consumes directly.
-    val videoQueue = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.VideoQueueController>()
-    val imageUrlProvider = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>()
+    // before the player opens — it arrives on the screen's [seams] bundle.
     fun enqueueInQueue(item: com.raulshma.jellyplay.core.model.MediaItem?, next: Boolean) {
         if (item == null) return
         val queueItem = com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
             itemId = item.id,
             title = item.name,
             subtitle = item.seriesName ?: item.year?.toString(),
-            imageUrl = imageUrlProvider.getImageUrl(item.id, maxWidth = 300),
+            imageUrl = callbacks.artwork.urls.poster(item, maxWidth = 300),
             runTimeTicks = item.runTimeTicks,
         )
-        if (next) videoQueue.enqueueNext(queueItem) else videoQueue.enqueueLast(queueItem)
+        if (next) seams.videoQueue.enqueueNext(queueItem) else seams.videoQueue.enqueueLast(queueItem)
     }
 
     // "Play (with pre-rolls)": the SyncPlay veto is host-level (the
-    // process-wide SyncPlayManager, the videoQueue koinInject precedent) — a
-    // group session owns the playback order, so the per-invocation intro
-    // override is meaningless there. The media-type + offline gates live
-    // with the menu entry ([MediaOptionsMenu.offersPlayWithPrerolls]).
-    val syncPlayManager = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager>()
+    // process-wide SyncPlayManager on the [seams] bundle) — a group session
+    // owns the playback order, so the per-invocation intro override is
+    // meaningless there. The media-type + offline gates live with the menu
+    // entry ([MediaOptionsMenu.offersPlayWithPrerolls]).
 
     val mediaOptions = rememberMediaOptions(
         onPlayNextInQueue = {
@@ -154,7 +159,7 @@ internal fun DetailContent(
         onPlayLastInQueue = {
             enqueueInQueue(item, next = false)
         },
-        canPlayWithPrerolls = !isSeries && !syncPlayManager.isInSyncPlaySession,
+        canPlayWithPrerolls = !isSeries && !seams.syncPlayManager.isInSyncPlaySession,
         onPlayWithPrerolls = callbacks.playback.onPlayWithPrerolls,
         item = item,
         detail = state.core.detail,
@@ -301,10 +306,28 @@ internal fun DetailContent(
             !isTv && !isExpanded -> BookCoverHero.SHARP
             else -> BookCoverHero.BLURRED
         }
+        // Item-backed ids resolve through the bundle's tag-aware resolver
+        // (books render their Primary cover, everything else the Backdrop);
+        // the parent-series leg (episodes/seasons render the SERIES backdrop —
+        // MediaImageTags carries no series backdrop tag) stays the raw untagged
+        // getter on [ArtworkCallbacks] (an id this scope holds no MediaItem
+        // for), same target id as before. Remembered on the item (not its id)
+        // so a tag change re-keys, per the bundle-resolver pattern.
+        val getBackdropUrl = remember(item, isBook, callbacks.artwork) {
+            { backdropId: String ->
+                when {
+                    item != null && backdropId == item.id && isBook ->
+                        callbacks.artwork.urls.poster(item)
+                    item != null && backdropId == item.id ->
+                        callbacks.artwork.urls.backdrop(item)
+                    else -> callbacks.artwork.getBackdropUrl(backdropId)
+                }
+            }
+        }
         DetailBackdrop(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
-            getBackdropUrl = if (isBook) callbacks.artwork.getImageUrl else callbacks.artwork.getBackdropUrl,
+            getBackdropUrl = getBackdropUrl,
             trailers = state.core.trailers,
             preferences = state.preferences,
             scrollState = scrollState,

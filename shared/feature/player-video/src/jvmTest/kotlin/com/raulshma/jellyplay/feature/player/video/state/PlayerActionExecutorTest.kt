@@ -74,6 +74,8 @@ class PlayerActionExecutorTest {
         var seekStepMs: Long = 10_000L,
         var positionMs: Long = 60_000L,
         var durationMs: Long = 120_000L,
+        var hasNextEpisode: Boolean = true,
+        var hasPreviousEpisode: Boolean = true,
     )
 
     /** Recording chrome fixture: the visibility writes land in [Probe] exactly like the old setShowControls port did. The auto-hide timer rides the test scope (virtual time, auto-cancelled). */
@@ -128,6 +130,8 @@ class PlayerActionExecutorTest {
         getSupportsAudioDelay = { inputs.supportsAudioDelay },
         getAudioDelayMs = { inputs.audioDelayMs },
         getSeekStepMs = { inputs.seekStepMs },
+        getHasNextEpisode = { inputs.hasNextEpisode },
+        getHasPreviousEpisode = { inputs.hasPreviousEpisode },
         getCurrentPositionMs = { inputs.positionMs },
         getDurationMs = { inputs.durationMs },
         onSeekCommit = { probe.seekTargets += it },
@@ -366,6 +370,11 @@ class PlayerActionExecutorTest {
         inputs.playbackSpeed = 2.0f
         probe.events.clear()
         assertTrue(ex.executeAction(PlayerAction.CYCLE_SPEED))
+        assertEquals(listOf<VideoPlayerUiEvent>(VideoPlayerUiEvent.SetPlaybackSpeed(3.0f)), probe.events)
+
+        inputs.playbackSpeed = 5.0f
+        probe.events.clear()
+        assertTrue(ex.executeAction(PlayerAction.CYCLE_SPEED))
         assertEquals(listOf<VideoPlayerUiEvent>(VideoPlayerUiEvent.SetPlaybackSpeed(1.0f)), probe.events)
     }
 
@@ -479,6 +488,26 @@ class PlayerActionExecutorTest {
         // orientation summon like the volume arms.
         assertEquals(listOf(true, true), probe.showControlsWrites)
         assertEquals(1, probe.orientationToggles)
+    }
+
+    @Test
+    fun `episode arms stay unmapped when no adjacent episode exists`() = runTest {
+        // The movie case: no sibling episode and an empty queue — the
+        // headset/remote NEXT key must fall through, not be swallowed by a
+        // no-op event (the "where they exist, unmapped otherwise" rule).
+        val inputs = Inputs(hasNextEpisode = false, hasPreviousEpisode = false)
+        val probe = Probe()
+        val ex = executor(backgroundScope, inputs, probe)
+
+        assertFalse(ex.executeAction(PlayerAction.NEXT_EPISODE))
+        assertFalse(ex.executeAction(PlayerAction.PREVIOUS_EPISODE))
+        assertTrue(probe.events.isEmpty())
+
+        // The availability reads are live: once a next episode resolves the
+        // same executor instance executes.
+        inputs.hasNextEpisode = true
+        assertTrue(ex.executeAction(PlayerAction.NEXT_EPISODE))
+        assertEquals(listOf<VideoPlayerUiEvent>(VideoPlayerUiEvent.PlayNextEpisode), probe.events)
     }
 
     // ---- continuous class ----

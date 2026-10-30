@@ -8,9 +8,9 @@ import org.koin.dsl.module
 
 /**
  * App-authored Koin definitions for the Android actuals of the admin
- * statistics seams (admin flip — the AndroidDownloadSeamsModule
- * precedent: legacy-side resources the shared module cannot see get their
- * Koin defs in the composition root that sees both).
+ * statistics seams (admin flip — legacy-side composition-root defs for the
+ * seam actuals that stayed out of the shared module's family modules, the
+ * download seams' former AndroidDownloadSeamsModule arrangement).
  *
  * [AdminStatisticsLabelProvider] is the locale seam of the Koin-owned
  * [com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl]

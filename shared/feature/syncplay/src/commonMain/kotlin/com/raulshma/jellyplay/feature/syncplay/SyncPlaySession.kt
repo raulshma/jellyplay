@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.Flow
  * active group id, the reconnect timestamp, the WebSocket event stream) and
  * the transport commands it fires (pause/unpause/seek/stop/repeat/shuffle/
  * ignore-wait). The manager's constructor closure is the JVM SyncPlay stack
- * (OkHttp `JellyfinApiClient` + `JellyfinWebSocketClient` + `TimeSyncManager`
- * + `java.util.concurrent` mirrors), so commonMain cannot name the class.
+ * (the OkHttp-backed family clients + `JellyfinWebSocketClient` +
+ * `TimeSyncManager` + `java.util.concurrent` mirrors), so commonMain cannot
+ * name the class.
  * Promoted-interface precedent (DownloadIntake/DownloadQueue): the interface
  * carries exactly the host-facing surface, the jvmShared actual delegates to
  * the process-wide `SyncPlayManager` single (same DI graph — android/desktop

@@ -144,6 +144,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // A process that survived a previous exit must not leak the stale
+        // "host finishing" signal into this session (see onDestroy).
+        com.raulshma.jellyplay.feature.player.video.PlayerHostExitState.isHostFinishing = false
         // Clear any orientation lock a previous in-nav player (e.g. Live TV) may
         // have written onto this singleTask activity before the process was
         // killed. Because configChanges includes orientation, MainActivity is
@@ -151,6 +154,12 @@ class MainActivity : FragmentActivity() {
         // in landscape with no control to unlock it. UNSPECIFIED follows the
         // system auto-rotate setting, matching the fresh-install default.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // The launch-intent classification FIRST — the cold-start session
+        // restoration's skip signal rides the ShellInfra bundle below (an
+        // explicit launch destination — shortcut / deep link / shared text /
+        // search — is never hijacked by a "resume last watched?" prompt). The
+        // dispatch still runs through the same single classification.
+        val launchDisposition = handleIncomingIntent(intent)
         // Bundled once here (before the splash gate below reads the session
         // coordinator's restore flag) so the shell host's cross-cutting
         // services — the infrastructure providers plus the three shell
@@ -168,6 +177,11 @@ class MainActivity : FragmentActivity() {
             updateCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             syncPlayOpenCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             whatsNewCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
+            sessionRestorationControllerLazy = lazy {
+                KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController>()
+            },
+            launchedWithExplicitDestination =
+                launchDisposition != null && launchDisposition != IncomingIntentDisposition.None,
             userMessageBusLazy = lazy { KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>() },
             externalPlayerReportsLazy = lazy { KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports>() },
             // Remote navigation ladder: synthesized D-pad/select/menu
@@ -239,8 +253,6 @@ class MainActivity : FragmentActivity() {
                 LocalNetworkAccess.PERMISSION
             )
         }
-
-        handleIncomingIntent(intent)
 
         // Pre-Android 13 per-app language: observe the saved language and apply
         // it on cold start, then recreate when the user changes it at runtime.
@@ -390,6 +402,21 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    /**
+     * The player VM's teardown reads this (through PlayerHostExitState) to
+     * tell an in-app player close from the host itself going away: only a
+     * genuine exit (finished, not a configuration recreation) suppresses the
+     * cold-start restore prompt's handled-offer marker, so an app swiped
+     * from recents mid-playback still prompts on the next launch. Written
+     * BEFORE super.onDestroy() — the ViewModelStore clear that runs the
+     * player's onCleared teardown follows it.
+     */
+    override fun onDestroy() {
+        com.raulshma.jellyplay.feature.player.video.PlayerHostExitState.isHostFinishing =
+            isFinishing && !isChangingConfigurations
+        super.onDestroy()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -399,16 +426,20 @@ class MainActivity : FragmentActivity() {
     /**
      * One dispatch line over the pure [IncomingIntentRequest] fold (deeplink
      * package): the fold owns the action vocabulary and classifies the intent
-     * into the shell entry point.
+     * into the shell entry point. Returns the disposition — onCreate feeds it
+     * to [ShellInfra]'s `launchedWithExplicitDestination` (the cold-start
+     * session restoration's skip signal); onNewIntent ignores it.
      */
-    private fun handleIncomingIntent(intent: Intent?) {
-        if (intent == null) return
-        when (val disposition = IncomingIntentRequest.from(intent).classify()) {
-            is IncomingIntentDisposition.Shortcut -> viewModel.handleShortcutIntent(disposition)
-            IncomingIntentDisposition.DeepLink -> viewModel.handleDeepLink(intent)
-            is IncomingIntentDisposition.SharedText -> viewModel.handleSharedText(disposition.sharedText)
-            is IncomingIntentDisposition.Search -> viewModel.handleSearchQuery(disposition.query)
-            IncomingIntentDisposition.None -> Unit
+    private fun handleIncomingIntent(intent: Intent?): IncomingIntentDisposition? {
+        if (intent == null) return null
+        return IncomingIntentRequest.from(intent).classify().also { disposition ->
+            when (disposition) {
+                is IncomingIntentDisposition.Shortcut -> viewModel.handleShortcutIntent(disposition)
+                IncomingIntentDisposition.DeepLink -> viewModel.handleDeepLink(intent)
+                is IncomingIntentDisposition.SharedText -> viewModel.handleSharedText(disposition.sharedText)
+                is IncomingIntentDisposition.Search -> viewModel.handleSearchQuery(disposition.query)
+                IncomingIntentDisposition.None -> Unit
+            }
         }
     }
 

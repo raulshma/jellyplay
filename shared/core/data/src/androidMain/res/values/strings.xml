@@ -30,6 +30,11 @@
         <item quantity="one">%1$d download in progress</item>
         <item quantity="other">%1$d downloads in progress</item>
     </plurals>
+    <plurals name="data_auto_download_suggestions">
+        <item quantity="one">%1$d new episode ready to download</item>
+        <item quantity="other">%1$d new episodes ready to download</item>
+    </plurals>
+    <string name="data_auto_download_suggestions_text">Auto-download is set to ask before downloading. Tap to review.</string>
 
     <!-- Admin statistics: content-type breakdown labels -->
     <string name="data_label_movies">Movies</string>

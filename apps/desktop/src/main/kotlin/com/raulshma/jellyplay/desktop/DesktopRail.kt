@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.desktop
 import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.serialization.SavedStateConfiguration
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
+import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
 import com.raulshma.jellyplay.core.ui.navigation.NavDestination
+import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.reflect.KClass
 import kotlinx.serialization.KSerializer
@@ -12,41 +14,45 @@ import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.serializer
 
 /**
- * The rail renders the shared [NavDestination] registry — label, icon and
- * group come from the one destination-facts table in core/ui. Only the rail's
- * OWN display order stays here; it is per-shell policy, not a destination
- * fact.
+ * The rail renders the shared [NavDestination] registry — label, icon, group
+ * AND the display order come from the one destination-facts table in core/ui.
+ * Two things stay shell-side, both derivations over the registry rows rather
+ * than hand lists: the rail's OWN display order ([DESKTOP_RAIL_ROUTES] — the
+ * rows' [NavDestination.railOrder] positions, the recorded desktop order
+ * policy that deliberately differs from the registry's customization-UI
+ * order), and nothing else — PRIMARY ELIGIBILITY is the registry's placement
+ * descriptor ([NavDestination.primarySurfaces], filtered into
+ * [DESKTOP_RAIL_ITEMS]).
  *
- * Every listed route MUST have a registry row: resolution below fails loudly
- * at class-init. A silent `mapNotNull` drop would let a route that lost
- * its row vanish off the rail with no failure anywhere.
- * DesktopRailRegistryContractTest pins this (internal visibility exists for
- * that test — nothing else in the module may depend on the rail internals).
+ * A destination joins (or moves on) the rail by editing its registry row's
+ * `railOrder` — a route listed without a row is impossible by construction
+ * (the order IS the row), but the former failure modes still fail loudly:
+ * NavDestinationRegistryTest pins railOrder presence ⇔ DesktopRail placement
+ * and dense 0..n-1 positions, and DesktopRailRegistryContractTest pins the
+ * exact sequence against the registry lookup. A silent drop can therefore
+ * only be a deliberate registry edit that removed both the placement and the
+ * order — never a forgotten row.
  */
-internal val DESKTOP_RAIL_ROUTES: List<Route> = listOf(
-    Route.Home,
-    Route.Search,
-    Route.Library,
-    Route.LiveTv,
-    Route.MusicBrowse,
-    Route.Downloads,
-    Route.Newsletter,
-    Route.WatchProgressHeatmap,
-    Route.SyncPlay,
-    Route.Requests,
-    Route.UpcomingCalendar,
-    Route.ArrQueue,
-    Route.Shortcuts,
-    Route.Settings,
-    Route.AdminDashboard,
-)
+internal val DESKTOP_RAIL_ROUTES: List<Route> = NAV_DESTINATIONS
+    .mapNotNull { row -> row.railOrder?.let { order -> row to order } }
+    .sortedBy { (_, order) -> order }
+    .map { (row, _) -> row.route }
 
+/**
+ * The rail's items: the listed routes resolved to their registry rows, kept
+ * only when the registry places them on this surface
+ * ([NavPrimarySurface.DesktopRail]) — the placement eligibility vote is the
+ * registry's; the list above contributes the order. DesktopRailRegistryContractTest
+ * pins the filtered membership equal to the descriptor's DesktopRail set both
+ * ways, so a listed-but-unplaced route drops here (and fails the contract
+ * test) instead of rendering on a surface the registry didn't place it on.
+ */
 internal val DESKTOP_RAIL_ITEMS: List<NavDestination> = DESKTOP_RAIL_ROUTES.map { route ->
     checkNotNull(NAV_DESTINATION_BY_ROUTE[route]) {
         "DESKTOP_RAIL_ROUTES lists ${route::class.simpleName} but the NAV_DESTINATIONS registry " +
             "has no row for it — register the destination or drop it from the rail list."
     }
-}
+}.filter { NavPrimarySurface.DesktopRail in it.primarySurfaces }
 
 /**
  * Rail + tab-switch destinations; Home is the start tab (same as the Android

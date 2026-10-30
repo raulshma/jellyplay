@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.network.api.NewsletterApiClient
+import com.raulshma.jellyplay.core.data.util.DefaultArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
@@ -87,6 +88,7 @@ class NewsletterViewModelTest {
     private fun createViewModel(): NewsletterViewModel = NewsletterViewModel(
         newsletterApiClient = mediaRepository,
         imageUrlProvider = imageUrlProvider,
+        artworkUrls = DefaultArtworkUrls(imageUrlProvider),
         notificationStore = notificationStore,
         authRepository = authRepository,
     )

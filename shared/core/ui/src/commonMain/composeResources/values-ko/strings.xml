@@ -406,4 +406,10 @@
          (ADR 0010 wave), translated together with the default file. -->
     <string name="core_action_hide_from_continue_watching">이어보기에서 제거</string>
     <string name="core_action_show_from_continue_watching">이어보기에 표시</string>
+
+    <string name="download_sheet_new_episodes">새 에피소드:</string>
+    <string name="download_sheet_policy_default">기본값</string>
+    <string name="download_sheet_policy_instant">즉시</string>
+    <string name="download_sheet_policy_ask">묻기</string>
+    <string name="download_sheet_policy_never">안 함</string>
 </resources>

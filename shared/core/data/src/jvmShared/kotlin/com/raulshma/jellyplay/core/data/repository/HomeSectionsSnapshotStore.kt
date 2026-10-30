@@ -36,7 +36,7 @@ import kotlinx.coroutines.withContext
  * ## Dependency direction
  *
  * The store depends on `HomeSectionCacheDao` + [HomeSession] + [TimeSource]
- * only — **never** on `MediaRepository`. `MediaRepositoryImpl` instead
+ * only — **never** on the repository. `MediaRepositoryImpl` instead
  * depends on the store, so the three legacy entry points (`getHomeSections`'
  * persist hook, `getCachedHomeSections`, `getOfflineHomeLayout`) become thin
  * passthroughs over the snapshot. This keeps the Koin construction graph

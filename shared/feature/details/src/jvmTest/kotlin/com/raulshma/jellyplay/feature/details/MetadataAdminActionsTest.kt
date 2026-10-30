@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -46,6 +47,7 @@ class MetadataAdminActionsTest {
         scope: kotlinx.coroutines.CoroutineScope? = null,
         session: MutableStateFlow<DetailSession?> = MutableStateFlow(null),
         isAdmin: Boolean = false,
+        onRefreshAccepted: () -> Unit = {},
     ): MetadataAdminActions {
         every { authRepository.currentUser } returns flowOf(
             UserInfo(id = "u1", name = "u", serverAddress = "http://s", accessToken = "t", isAdmin = isAdmin),
@@ -56,7 +58,8 @@ class MetadataAdminActionsTest {
             messages = messages.flow,
             strings = strings,
             editorRepository = editorRepository,
-            mediaRepository = mockk<MediaRepository>(relaxed = true),
+            libraryFeed = mockk<LibraryFeed>(relaxed = true),
+            onRefreshAccepted = onRefreshAccepted,
             authRepository = authRepository,
         )
     }
@@ -110,6 +113,50 @@ class MetadataAdminActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) }
+    }
+
+    @Test
+    fun `accepted refresh schedules exactly one delayed screen reload`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "My Series", mediaType = MediaType.SERIES),
+        )
+        var reloads = 0
+        actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail)), onRefreshAccepted = { reloads++ })
+            .refreshScreenItem(MetadataRefreshOption.DEFAULT)
+        advanceUntilIdle()
+
+        assertEquals(1, reloads)
+    }
+
+    @Test
+    fun `a newer refresh replaces the pending reload`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "My Series", mediaType = MediaType.SERIES),
+        )
+        var reloads = 0
+        val session: MutableStateFlow<DetailSession?> = MutableStateFlow(DetailSession(itemId = "m1", detail = detail))
+        val admin = actions(this, session, onRefreshAccepted = { reloads++ })
+        admin.refreshScreenItem(MetadataRefreshOption.DEFAULT)
+        advanceTimeBy(2_500)
+        admin.refreshScreenItem(MetadataRefreshOption.REPLACE_IMAGES)
+        advanceUntilIdle()
+
+        assertEquals(1, reloads)
+    }
+
+    @Test
+    fun `failed refresh schedules no reload`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "My Series", mediaType = MediaType.SERIES),
+        )
+        coEvery { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) } returns
+            Result.failure(IllegalStateException("boom"))
+        var reloads = 0
+        actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail)), onRefreshAccepted = { reloads++ })
+            .refreshScreenItem(MetadataRefreshOption.DEFAULT)
+        advanceUntilIdle()
+
+        assertEquals(0, reloads)
     }
 
     @Test

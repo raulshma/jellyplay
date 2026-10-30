@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
@@ -35,8 +35,8 @@ import okio.Path
 import okio.Path.Companion.toPath
 
 /**
- * Pins [BookSessionLoader] — the open sequence extracted from
- * BookReaderViewModel's `openBook`: the error taxonomy (cannot-open vs
+ * Pins [BookSessionLoader] - the open sequence: the error taxonomy
+ * (cannot-open vs
  * unsupported-format with its dotted-extension derivation), the
  * download-header probe fallback, the reflowable/paged resume math, the
  * hook positions (reset before the detail fetch, format latch after the
@@ -47,7 +47,7 @@ import okio.Path.Companion.toPath
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookSessionLoaderTest {
 
-    private val mediaRepository = mockk<MediaRepository>()
+    private val detailFeed = mockk<DetailFeed>()
     private val playbackRepository = mockk<PlaybackRepository>()
     private val playbackIdentity = mockk<PlaybackIdentity>()
     private val contentResolver = FakeContentResolver()
@@ -64,7 +64,7 @@ class BookSessionLoaderTest {
     )
 
     private fun stubDetail(path: String?, positionTicks: Long = 0L) {
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(detail(path, positionTicks))
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.success(detail(path, positionTicks))
     }
 
     private fun TestScope.loader(
@@ -75,7 +75,7 @@ class BookSessionLoaderTest {
         parseDispatcher: CoroutineDispatcher = StandardTestDispatcher(testScheduler),
     ): BookSessionLoader = BookSessionLoader(
         scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
-        mediaRepository = mediaRepository,
+        detailFeed = detailFeed,
         playbackRepository = playbackRepository,
         playbackIdentity = playbackIdentity,
         contentResolver = contentResolver,
@@ -132,7 +132,7 @@ class BookSessionLoaderTest {
 
     @Test
     fun `detail fetch failure classifies cannot open`() = runTest {
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.failure(IllegalStateException("offline"))
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } returns Result.failure(IllegalStateException("offline"))
         stubPlayback()
 
         val outcome = loader().open("item-1", jump = null)
@@ -241,7 +241,7 @@ class BookSessionLoaderTest {
     @Test
     fun `session reset runs before the detail fetch`() = runTest {
         val order = mutableListOf<String>()
-        coEvery { mediaRepository.getMediaDetail("item-1") } answers {
+        coEvery { detailFeed.getMediaDetail("item-1", force = false) } answers {
             order += "detail"
             Result.success(detail("comic.cbz"))
         }

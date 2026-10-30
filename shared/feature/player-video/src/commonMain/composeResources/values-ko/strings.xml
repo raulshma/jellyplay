@@ -193,7 +193,8 @@
     <string name="player_video_rendering">렌더링</string>
     <string name="player_video_deinterlace">디인터레이스 · %1$s</string>
     <string name="player_video_passthrough">패스스루</string>
-    <string name="player_video_stats_for_nerds">전문가 통계</string>
+        <string name="player_video_stats_close">닫기</string>
+<string name="player_video_stats_for_nerds">전문가 통계</string>
     <string name="player_video_stats_for_nerds_on">전문가 통계 \u00B7 켜짐</string>
     <string name="player_video_video_filters">비디오 필터</string>
     <string name="player_video_video_filters_on">비디오 필터 \u00B7 켜짐</string>
@@ -330,7 +331,16 @@
     <string name="player_video_watched">시청함</string>
     <string name="player_video_time_left">%1$s 남음</string>
     <string name="player_video_now_playing">재생 중</string>
-    <string name="player_video_quality_title">품질</string>
+        <string name="player_video_playback_options">재생 옵션</string>
+    <string name="player_video_playback_options_desc">엔진, 서버 스트림 전달 방식, 화질을 전환합니다. 변경 사항은 현재 세션에 적용됩니다.</string>
+    <string name="player_video_playback_options_engine_section">엔진</string>
+    <string name="player_video_playback_options_delivery_section">전달 방식</string>
+    <string name="player_video_playback_options_quality_section">화질</string>
+    <string name="player_video_quality_unavailable">이 재생에서는 화질을 사용할 수 없습니다(강제 다이렉트 재생, 오프라인, 캐스트 또는 SyncPlay).</string>
+    <string name="player_video_playback_mode_auto_desc">서버가 선택(가능하면 다이렉트 재생)</string>
+    <string name="player_video_playback_mode_force_direct_desc">파일을 그대로 재생(트랜스코딩 없음)</string>
+    <string name="player_video_playback_mode_force_transcode_desc">항상 서버를 통해 트랜스코딩</string>
+<string name="player_video_quality_title">품질</string>
     <string name="player_video_quality_description">적응형 스트림의 경우 변경 사항이 즉시 적용됩니다. 다이렉트 재생에서는 최대 재생 비트레이트를 설정합니다.</string>
     <string name="player_video_adaptive_bitrate_cap">적응형 비트레이트 상한</string>
     <string name="player_video_adaptive_bitrate_on">종량제 네트워크에서 품질 제한</string>
@@ -390,4 +400,32 @@
     <string name="player_video_transcode_switched">트랜스코딩 스트림으로 전환됨 — 다시 버퍼링하는 중</string>
     <string name="player_video_direct_play_unavailable">이 항목은 다이렉트 재생이 불가능합니다 — 트랜스코딩으로 전환합니다</string>
     <string name="player_video_vlc_client_cert_unsupported">클라이언트 인증서는 VLC 엔진에서 지원되지 않습니다 — mTLS 서버는 ExoPlayer 또는 mpv로 전환하세요</string>
+
+    <!-- Missing-key catch-up: translated 2026-10-26 (i18n parity ratchet) -->
+    <string name="pause_details_starring">출연진</string>
+    <string name="player_video_curve_auto">자동(mpv 기본값)</string>
+    <string name="player_video_curve_bt2390">BT.2390</string>
+    <string name="player_video_curve_bt2446a">BT.2446A</string>
+    <string name="player_video_curve_clip">클립</string>
+    <string name="player_video_curve_hable">Hable</string>
+    <string name="player_video_curve_linear">리니어</string>
+    <string name="player_video_curve_spline">스플라인</string>
+    <string name="player_video_deband_heavy">강함</string>
+    <string name="player_video_deband_light">약함</string>
+    <string name="player_video_deband_medium">중간</string>
+    <string name="player_video_deband_off">끄기</string>
+    <string name="player_video_delete_offer_delete">삭제</string>
+    <string name="player_video_delete_offer_failed">‘%1$s’을(를) 삭제하지 못했습니다 — 아직 서버에 있습니다</string>
+    <string name="player_video_delete_offer_keep">유지</string>
+    <string name="player_video_delete_offer_title">서버에서 ‘%1$s’을(를) 삭제할까요?</string>
+    <string name="player_video_hdr_format_auto">자동</string>
+    <string name="player_video_hdr_format_dv_only">Dolby Vision만</string>
+    <string name="player_video_hdr_format_hdr10_only">HDR10만</string>
+    <string name="player_video_hdr_format_prefer_dv">Dolby Vision 선호</string>
+    <string name="player_video_hdr_format_preference_caption">항목이 여러 HDR 형식을 제공할 때 디스플레이에 도달할 형식을 지정합니다. 다음 재생부터 적용됩니다.</string>
+    <string name="player_video_hdr_format_preference_section">선호 HDR 형식</string>
+    <string name="player_video_hdr_format_sdr_only">SDR만</string>
+    <string name="player_video_render_deband">디밴딩</string>
+    <string name="player_video_render_motion_interpolation">모션 보간</string>
+    <string name="player_video_render_tone_curve">톤 매핑 커브(HDR → SDR)</string>
 </resources>

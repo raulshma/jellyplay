@@ -13,6 +13,31 @@ enum class JellyPlayPluginStatus {
 }
 
 /**
+ * Why the last capabilities probe was refused: the plugin answered, but its
+ * `contractVersion` falls outside the range this client understands (the
+ * plugin's docs/CONTRACT.md versioning rule, client side). The status stays
+ * UNAVAILABLE — every gate fails closed exactly as if the plugin were absent;
+ * this carries the diagnostic the plain status cannot: whether the server
+ * plugin needs an update (served version behind) or the app does (served
+ * version ahead).
+ */
+data class JellyPlayContractMismatch(
+    val servedContractVersion: Int,
+    val supportedRange: IntRange,
+    val pluginVersion: String,
+) {
+    /**
+     * The supported range's presentation fold: a single-version range renders
+     * as `1`, a real range as `1–2` (en-dash). The settings screen's error
+     * banner and the admin dashboard's one-line hint both consume this —
+     * a second hand-fold of it is a defect (the SeerrMediaKind precedent:
+     * derived presentation lives in core:model beside the type).
+     */
+    val supportedRangeLabel: String
+        get() = with(supportedRange) { if (first == last) "$first" else "$first–$last" }
+}
+
+/**
  * Stable feature keys reported by the plugin's capabilities handshake.
  * Keep byte-identical with the plugin's JellyPlayContract.Features (the
  * wire keys are the cross-repo contract — see the plugin repo's
@@ -28,6 +53,7 @@ object JellyPlayPluginFeatures {
     const val SeerrBridge = "seerr-bridge"
     const val Newsletter = "newsletter"
     const val Ratings = "ratings"
+    const val OmdbAwards = "omdb-awards"
     const val CustomRows = "custom-rows"
     const val SeasonalRows = "seasonal-rows"
     const val Hero = "hero"
@@ -62,6 +88,20 @@ data class JellyPlayPluginRating(
 data class JellyPlayEpisodeScore(
     val tmdbScore: Double? = null,
     val tmdbVotes: Int? = null,
+)
+
+/**
+ * The OMDb awards enrichment the detail screen's ratings block renders beside
+ * the external rating chips (the model projection of the plugin client's
+ * `JellyPlayOmdbAwards` wire shape — mapped at the core:network boundary).
+ * Every field is optional on the wire; absent fields render nothing (no empty
+ * badge), and the whole result is null when the plugin's OMDb source is
+ * unconfigured or has no data for the id.
+ */
+data class JellyPlayPluginOmdbAwards(
+    val awards: String? = null,
+    val boxOffice: String? = null,
+    val imdbRating: String? = null,
 )
 
 /**

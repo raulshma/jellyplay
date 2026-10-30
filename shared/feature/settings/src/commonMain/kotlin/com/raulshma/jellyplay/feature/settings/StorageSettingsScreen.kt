@@ -28,7 +28,10 @@ import androidx.compose.foundation.layout.Arrangement
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
+import com.raulshma.jellyplay.core.model.isEnabled
+import com.raulshma.jellyplay.core.model.CACHE_SIZE_DISABLED
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.formatBytes
@@ -77,12 +80,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lege
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_legend_downloads
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_legend_images
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_manual_bandwidth_cap
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_applies_after_restart
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_download_storage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_simultaneous_downloads
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_metered_network_behavior
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_offline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_timeouts
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_ask
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_instant
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_mode_never
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_online
@@ -110,15 +117,18 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi
 import com.raulshma.jellyplay.feature.settings.generated.resources.storage_sd_card
 
 /**
- * The declared storage screen groups in LazyColumn order — the derivation
- * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
- * the scroll target can never drift from the UI. All three groups always
- * render, so no advanced offset applies.
+ * The storage screen's ONE ordered group declaration — the derivation-only
+ * shape (group ids/order; every slot uses the default declared-admission
+ * count hook, the content slots stay empty) that BOTH the screen and the
+ * catalog contract test's section-7 pins consume, so a reordered or
+ * re-flagged group cannot strand a stale replica (the mirror-drift class
+ * ADR-0009's amendment closes). Per-group row emission stays hand-written:
+ * the screen maps each slot to its body inline.
  */
-private val storageScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.storageCache.itemIdSet,
-    SettingsScreenGroups.storageNetwork.itemIdSet,
-    SettingsScreenGroups.storageDownloads.itemIdSet,
+internal val StorageSettingsScreenSlots: List<PreferenceScreenGroup> = listOf(
+    SettingsScreenGroups.storageCache.asScreenGroup(),
+    SettingsScreenGroups.storageNetwork.asScreenGroup(),
+    SettingsScreenGroups.storageDownloads.asScreenGroup(),
 )
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -137,25 +147,21 @@ fun StorageSettingsScreen(
         showAdvanced = showAdvanced,
         parentsOn = rowParentsOn(
             StorageRows.DownloadSchedule.id to preferences.downloadScheduleEnabled,
-            StorageRows.AutoDownloadNewEpisodes.id to preferences.autoDownloadNewEpisodes,
+            StorageRows.AutoDownloadMode.id to preferences.autoDownloadMode.isEnabled,
             StorageRows.AutoDownloadKeepDays.id to (preferences.autoDownloadKeepDays > 0),
         ),
     )
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
-    PreferenceScreenScaffold(
-        title = stringResource(Res.string.settings_downloads_storage_title),
-        onBack = onBack,
-        focusTag = "storage_init",
-        highlightSettingId = highlightSettingId,
-        highlightGroups = storageScreenGroups,
-        advancedToggle = PreferenceAdvancedToggle(
-            showAdvanced = showAdvanced,
-            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
-        ),
-        pickerHost = true,
-    ) { activePicker ->
-            item {
+    // The screen's group bodies mapped onto the ONE ordered declaration
+    // ([StorageSettingsScreenSlots], in LazyColumn order — the shell derives
+    // the deep-link scroll resolution and the hidden-settings hint count from
+    // it, and the contract test pins the same declaration). Slots stop at
+    // GROUP grain: the row emission inside each slot is the hand-written
+    // body, unchanged (ADR-0009).
+    val storageGroups = StorageSettingsScreenSlots.withContent(
+        bodies = listOf(
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Database,
                     title = stringResource(Res.string.settings_storage),
@@ -249,6 +255,7 @@ fun StorageSettingsScreen(
                             title = rowTitle(StorageRows.ClearCache),
                             subtitle = rowSubtitle(StorageRows.ClearCache),
                             highlighted = highlightSettingId == StorageRows.ClearCache.id,
+                            showChevron = false,
                             onClick = { viewModel.clearCache() },
                         )
                         SettingListItem(
@@ -256,6 +263,7 @@ fun StorageSettingsScreen(
                             title = rowTitle(StorageRows.ClearImageCache),
                             subtitle = rowSubtitle(StorageRows.ClearImageCache),
                             highlighted = highlightSettingId == StorageRows.ClearImageCache.id,
+                            showChevron = false,
                             onClick = { viewModel.clearImageCache() },
                         )
                         if (showAdvanced) {
@@ -311,28 +319,44 @@ fun StorageSettingsScreen(
                             )
                             val maxCacheSizeTitle = rowTitle(StorageRows.MaxCacheSize)
                             val maxCacheUnlimited = stringResource(Res.string.settings_unlimited)
+                            val maxCacheDisabled = stringResource(Res.string.settings_disabled)
+                            val maxCacheRestartHint = stringResource(Res.string.settings_max_cache_applies_after_restart)
+                            val maxCacheLabel: (Int) -> String = {
+                                when (it) {
+                                    CACHE_SIZE_DISABLED -> maxCacheDisabled
+                                    0 -> maxCacheUnlimited
+                                    else -> "$it MB"
+                                }
+                            }
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
                                 title = maxCacheSizeTitle,
                                 subtitle = rowSubtitle(StorageRows.MaxCacheSize),
-                                trailingText = if (preferences.maxCacheSizeMb == 0) maxCacheUnlimited else "${preferences.maxCacheSizeMb} MB",
+                                trailingText = maxCacheLabel(preferences.maxCacheSizeMb),
                                 highlighted = highlightSettingId == StorageRows.MaxCacheSize.id,
                                 onClick = {
                                     activePicker.value = PickerState.List(
                                         title = maxCacheSizeTitle,
-                                        items = listOf(0, 250, 500, 1000, 2000, 5000),
-                                        label = { if (it == 0) maxCacheUnlimited else "$it MB" },
+                                        items = listOf(CACHE_SIZE_DISABLED, 0, 250, 500, 1000, 2000, 5000),
+                                        label = maxCacheLabel,
+                                        // The Coil/OkHttp caches read the size once
+                                        // per process — only Disabled takes effect
+                                        // immediately (it also wipes the image cache
+                                        // below); every other value is next-launch.
+                                        subtitle = { if (it == CACHE_SIZE_DISABLED) "" else maxCacheRestartHint },
                                         isSelected = { it == preferences.maxCacheSizeMb },
-                                        onSelect = { viewModel.edit { scope -> scope.networkOffline.setMaxCacheSize(it) } },
+                                        onSelect = {
+                                            viewModel.edit { scope -> scope.networkOffline.setMaxCacheSize(it) }
+                                            if (it == CACHE_SIZE_DISABLED) viewModel.clearImageCache()
+                                        },
                                     )
                                 },
                             )
                         }
                     }
                 }
-            }
-
-            item {
+        },
+        { activePicker ->
                 SettingsGroup(
                     icon = Tabler.Outline.Cloud,
                     title = stringResource(Res.string.settings_network_offline),
@@ -493,9 +517,8 @@ fun StorageSettingsScreen(
                     )
                     }
                 }
-            }
-
-            item {
+        },
+        { activePicker ->
                 // Android 16 Live Updates opt-in (the download-progress
                 // notification's promoted rendering). Null below API 36 /
                 // on desktop — the row does not exist there.
@@ -550,14 +573,41 @@ fun StorageSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setSmartDownloadsEnabled(it) } }
                     )
 
-                    SettingToggleItem(
-                        icon = Tabler.Outline.Download,
-                        title = rowTitle(StorageRows.AutoDownloadNewEpisodes),
-                        subtitle = rowSubtitle(StorageRows.AutoDownloadNewEpisodes),
-                        checked = preferences.autoDownloadNewEpisodes,
-                        highlighted = highlightSettingId == StorageRows.AutoDownloadNewEpisodes.id,
-                        onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
+                    // The tri-state new-episode policy (gh-181): the old on/off
+                    // toggle became Instantly / Ask / Never.
+                    val autoDownloadModeTitle = rowTitle(StorageRows.AutoDownloadMode)
+                    val modeLabels = mapOf(
+                        AutoDownloadMode.INSTANT to stringResource(Res.string.settings_auto_download_mode_instant),
+                        AutoDownloadMode.ASK to stringResource(Res.string.settings_auto_download_mode_ask),
+                        AutoDownloadMode.NEVER to stringResource(Res.string.settings_auto_download_mode_never),
                     )
+                    SettingListItem(
+                        icon = Tabler.Outline.Download,
+                        title = autoDownloadModeTitle,
+                        subtitle = rowSubtitle(StorageRows.AutoDownloadMode),
+                        trailingText = modeLabels.getValue(preferences.autoDownloadMode),
+                        highlighted = highlightSettingId == StorageRows.AutoDownloadMode.id,
+                        onClick = {
+                            val modes = listOf(AutoDownloadMode.INSTANT, AutoDownloadMode.ASK, AutoDownloadMode.NEVER)
+                            activePicker.value = PickerState.List(
+                                title = autoDownloadModeTitle,
+                                items = modes,
+                                label = { modeLabels.getValue(it) },
+                                isSelected = { it == preferences.autoDownloadMode },
+                                onSelect = { viewModel.setAutoDownloadMode(it) },
+                            )
+                        }
+                    )
+
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadCheckNow.id, rowFlags)) {
+                        SettingListItem(
+                            icon = Tabler.Outline.Refresh,
+                            title = rowTitle(StorageRows.AutoDownloadCheckNow),
+                            subtitle = rowSubtitle(StorageRows.AutoDownloadCheckNow),
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadCheckNow.id,
+                            onClick = { viewModel.checkForNewEpisodesNow() },
+                        )
+                    }
 
                     // The auto-download retention-policy cluster: every row
                     // rides the toggle (their declared WhenOn gate, which
@@ -682,6 +732,7 @@ fun StorageSettingsScreen(
                                 }
                             } ?: stringResource(Res.string.settings_auto_download_clean_up_now_subtitle),
                             highlighted = highlightSettingId == StorageRows.AutoDownloadCleanUpNow.id,
+                            showChevron = false,
                             onClick = { viewModel.cleanupDownloadsNow() },
                         )
                     }
@@ -844,27 +895,29 @@ fun StorageSettingsScreen(
                     }
                     }
                 }
-            }
+        },
+        ),
+    )
 
-            if (!showAdvanced) {
-                item {
-                    HiddenSettingsHint(
-                        // Derived from the fused declarations (hiddenRowsFor):
-                        // the cache group's five advanced tuning rows; the
-                        // network/downloads groups carry no advanced gates).
-                        hiddenCount = hiddenRowsFor(
-                            listOf(
-                                SettingsScreenGroups.storageCache,
-                                SettingsScreenGroups.storageNetwork,
-                                SettingsScreenGroups.storageDownloads,
-                            ),
-                            rowFlags,
-                        ),
-                        onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
-                    )
-                }
-            }
-    }
+    PreferenceScreenScaffold(
+        title = stringResource(Res.string.settings_downloads_storage_title),
+        onBack = onBack,
+        focusTag = "storage_init",
+        highlightSettingId = highlightSettingId,
+        groups = storageGroups,
+        advancedToggle = PreferenceAdvancedToggle(
+            showAdvanced = showAdvanced,
+            onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
+        ),
+        hiddenHint = PreferenceHiddenHint(
+            // Derived in the shell from the declaration above: the cache
+            // group's five advanced tuning rows; the network/downloads slots
+            // carry no advanced gates.
+            rowFlags = rowFlags,
+            onShowAdvanced = { viewModel.setShowAdvancedSettings(true) },
+        ),
+        pickerHost = true,
+    )
 }
 
 @Composable

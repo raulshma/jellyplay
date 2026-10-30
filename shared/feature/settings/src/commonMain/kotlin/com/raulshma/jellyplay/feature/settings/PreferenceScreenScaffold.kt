@@ -66,16 +66,149 @@ internal data class PreferenceResetAction(
 )
 
 /**
+ * The optional hidden-settings hint ([HiddenSettingsHint], emitted as the
+ * trailing item while advanced settings are hidden): [rowFlags] are the
+ * admission flags the shell's derived count evaluates — the same flags the
+ * screen's row totals and emission `if`s read, with `showAdvanced` false (the
+ * state the count describes) — and [onShowAdvanced] reveals them.
+ */
+@Immutable
+internal data class PreferenceHiddenHint(
+    val rowFlags: RowAdmissionFlags,
+    val onShowAdvanced: () -> Unit,
+)
+
+/**
+ * One settings screen group slot — the descriptor of the ONE ordered
+ * declaration a screen states for its group sequence
+ * ([PreferenceScreenScaffold.groups]). The shell derives everything else from
+ * that single declaration: the deep-link scroll resolution (the [idSet]s plus
+ * the [SettingsScreenSection] fold), the whole-group advanced gating (an
+ * [advancedOnly] slot composes only behind the toggle — the hand-written
+ * `if (showAdvanced) { item { … } }` twin the section flag used to require is
+ * gone) and the hidden-rows count ([PreferenceHiddenHint] +
+ * [hiddenRowsFor]).
+ *
+ * Payload-bearing AT GROUP GRAIN ONLY: [content] is the group's one render
+ * slot, the hand-written group body moved verbatim from the screen's
+ * `item { … }` block. Per ADR-0009 the row emission stays hand-written — the
+ * [SettingsItemList] totals and emission `if`s inside [content] are unchanged,
+ * and the shell never sees row grain (no row-driven loop, no per-row slot
+ * registry).
+ */
+internal class PreferenceScreenGroup(
+    /** The group's setting ids — the deep-link scroll identity slot. */
+    val idSet: Set<String>,
+    /** True when the slot only composes behind the advanced toggle. */
+    val advancedOnly: Boolean = false,
+    /**
+     * The content-count hook: how many of the group's rows the screen emits
+     * under [RowAdmissionFlags] — the rows the flags vocabulary cannot
+     * express (the playback engine branch's per-engine prefix). The shell's
+     * hidden-count derivation differences it across the advanced leg;
+     * content-only slots keep the zero default.
+     */
+    val emittedRows: (RowAdmissionFlags) -> Int = { 0 },
+    /** The group's one render slot — the hand-written group body. */
+    val content: @Composable (MutableState<PickerState<*>?>) -> Unit = {},
+)
+
+/**
+ * The declared-group [PreferenceScreenGroup]: the slot's scroll identity and
+ * content-count contribution derive from the group's row declaration —
+ * [emittedRows] is the hook (how many of the group's rows the screen emits
+ * under [RowAdmissionFlags]; the default reads the declared admissions via
+ * [rowTotalFor]), and the hidden count the shell derives differences it
+ * across the advanced leg. The +1 screen-local terms a group's body adds to
+ * its own total cancel in that difference unless they ride the advanced
+ * toggle — exactly the rows the hook is for. (The extension shape follows
+ * the `asRowGroup`/`asSearchGroup` decoration precedent. [content] defaults
+ * to an empty slot — the derivation-only shape the contract-test replicas
+ * use; every screen slot passes its hand-written body.)
+ */
+internal fun SettingsSearchItemGroup.asScreenGroup(
+    advancedOnly: Boolean = false,
+    emittedRows: (RowAdmissionFlags) -> Int = { flags -> rowTotalFor(this, flags) },
+    content: @Composable (MutableState<PickerState<*>?>) -> Unit = {},
+): PreferenceScreenGroup = PreferenceScreenGroup(
+    idSet = itemIdSet,
+    advancedOnly = advancedOnly,
+    emittedRows = emittedRows,
+    content = content,
+)
+
+/**
+ * Attaches a group's hand-written body to a derivation-only slot from a
+ * screen's hoisted `XScreenSlots` declaration — the screen-side half of the
+ * ONE ordered declaration (ADR-0009 amendment). The declaration carries the
+ * group ids/order, the whole-group advanced gating and the content-count
+ * hook (and is what the contract test's section-7 pins consume); the screen
+ * maps each slot to its body inline at the call site, carrying the
+ * derivation members over verbatim — re-deriving them here is exactly the
+ * stale-replica drift the hoist exists to rule out.
+ */
+internal fun PreferenceScreenGroup.withContent(
+    content: @Composable (MutableState<PickerState<*>?>) -> Unit,
+): PreferenceScreenGroup = PreferenceScreenGroup(
+    idSet = idSet,
+    advancedOnly = advancedOnly,
+    emittedRows = emittedRows,
+    content = content,
+)
+
+/**
+ * Pairs a screen's ordered slot declaration with its ordered body list in ONE
+ * zip-style call — the whole-list counterpart of the single-slot
+ * [PreferenceScreenGroup.withContent]. Reordering a declaration used to
+ * silently re-pair the indexed `XScreenSlots[n].withContent { … }` bodies with
+ * the wrong derivation members; here the count `check` fails loudly on any
+ * length drift and the pairing is positional end-to-end, so a reordered
+ * declaration can only move its body with it. The bodies stay the screens'
+ * hand-written group bodies, in the same LazyColumn order they always passed.
+ */
+internal fun List<PreferenceScreenGroup>.withContent(
+    bodies: List<@Composable (MutableState<PickerState<*>?>) -> Unit>,
+): List<PreferenceScreenGroup> {
+    check(size == bodies.size) { "slot/body count mismatch: $size slots vs ${bodies.size} bodies" }
+    return mapIndexed { i, slot -> slot.withContent(bodies[i]) }
+}
+
+/**
+ * The hidden-count derivation over a screen's [PreferenceScreenGroup]
+ * declaration — the shell's [PreferenceHiddenHint] count: each slot's
+ * [PreferenceScreenGroup.emittedRows] count under the advanced leg forced on
+ * minus the count as [RowAdmissionFlags] carries it, summed. The delta shape
+ * is what makes it honest (rows hidden for other reasons count nothing —
+ * they are hidden under both evaluations). Pure (and internal) so
+ * `SettingsCatalogScreenContractTest` can pin it against the same
+ * declarations the screens pass.
+ */
+internal fun hiddenRowsFor(
+    groups: List<PreferenceScreenGroup>,
+    flags: RowAdmissionFlags,
+): Int = groups.sumOf { group ->
+    group.emittedRows(flags.copy(showAdvanced = true)) - group.emittedRows(flags)
+}
+
+/**
  * The settings sub-screen chassis: the ~35 lines of identical chrome every
  * preference screen hand-copied — background-color state, initial TV focus
  * grab ([TvGrabInitialFocus], tag preserved verbatim per screen), the list
  * state, the optional deep-link highlight-scroll derivation
  * ([rememberHighlightScrollIndex] + [HighlightScrollEffect], active only when
- * [highlightGroups] is non-null), the optional advanced toggle and reset
+ * a group sequence is declared), the optional advanced toggle and reset
  * action in the top bar, the [JellyPlayScreenScaffold] →
  * [CenteredBringIntoView] → [LazyColumn] stack (`fillMaxSize` + inner padding
  * + [tvFocusRestorer] + focus requester, adaptive start/end/bottom content
  * padding), and the optional [SettingsPickerDialog] host.
+ *
+ * A screen states its group sequence ONCE, as [groups] — the ordered
+ * [PreferenceScreenGroup] declaration the shell derives the scroll
+ * resolution, the whole-group advanced gating and the [hiddenHint] count
+ * from. The slots stop at GROUP grain: each group's rows stay hand-written
+ * inside its [PreferenceScreenGroup.content] (ADR-0009). Screens whose layout
+ * deviates (row-item lists, bespoke bodies) pass no [groups] and keep the
+ * inline [content] block — the two paths are exclusive.
  *
  * Screens whose chrome deviates (input forms with `imePadding`, directory
  * pages with `verticalArrangement`, bespoke column layouts) stay inline —
@@ -87,6 +220,12 @@ internal data class PreferenceResetAction(
  * modifier chain keeps its original order (`fillMaxSize` → `padding` →
  * `tvFocusRestorer` → `focusRequester`).
  *
+ * @param groups the ONE ordered group declaration — scroll ids, advanced
+ *   gating and hidden-count derivation all read it. Null on the inline
+ *   [content] path (the legacy hand-written `item { … }` blocks).
+ * @param hiddenHint when non-null (declaration path only), the shell renders
+ *   [HiddenSettingsHint] as the trailing item while advanced settings are
+ *   hidden, its count derived from [groups].
  * @param pickerHost when true, the scaffold renders the single root
  *   [SettingsPickerDialog] (including dismissal). Screens with no pickers
  *   pass `false` and get no dialog host at all.
@@ -101,21 +240,29 @@ internal data class PreferenceResetAction(
     androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
     ExperimentalFoundationApi::class,
 )
+/** Sentinel default so the exclusive-paths check can use reference equality. */
+private val NoInlineContent: LazyListScope.(MutableState<PickerState<*>?>) -> Unit = { _ -> }
+
 @Composable
 internal fun PreferenceScreenScaffold(
     title: String,
     onBack: () -> Unit,
     focusTag: String,
     highlightSettingId: String? = null,
-    highlightGroups: List<Set<String>>? = null,
-    adjustForAdvanced: (groupIndex: Int) -> Int = { it },
+    groups: List<PreferenceScreenGroup>? = null,
     advancedToggle: PreferenceAdvancedToggle? = null,
+    hiddenHint: PreferenceHiddenHint? = null,
     reset: PreferenceResetAction? = null,
     pickerHost: Boolean = false,
     pickerHostState: MutableState<PickerState<*>?>? = null,
     actions: @Composable () -> Unit = {},
-    content: LazyListScope.(activePicker: MutableState<PickerState<*>?>) -> Unit,
+    highlightGroups: List<Set<String>>? = null,
+    adjustForAdvanced: (groupIndex: Int) -> Int = { it },
+    content: LazyListScope.(activePicker: MutableState<PickerState<*>?>) -> Unit = NoInlineContent,
 ) {
+    check(groups == null || content !== NoInlineContent) {
+        "PreferenceScreenScaffold: pass groups or content, not both — the paths are exclusive"
+    }
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
@@ -127,12 +274,21 @@ internal fun PreferenceScreenScaffold(
         tag = focusTag,
     )
 
+    val showAdvanced = advancedToggle?.showAdvanced ?: false
+    val declaredSections = groups?.map { SettingsScreenSection(it.idSet, it.advancedOnly) }
+    val effectiveHighlightGroups = declaredSections?.map { it.idSet } ?: highlightGroups
+    val effectiveAdjust = if (declaredSections != null) {
+        deriveAdjustForAdvanced(declaredSections, showAdvanced)
+    } else {
+        adjustForAdvanced
+    }
+
     val scrollState = rememberLazyListState()
-    if (highlightGroups != null) {
+    if (effectiveHighlightGroups != null) {
         val scrollIndex = rememberHighlightScrollIndex(
             highlightSettingId,
-            highlightGroups,
-            adjustForAdvanced,
+            effectiveHighlightGroups,
+            effectiveAdjust,
         )
         HighlightScrollEffect(scrollState, scrollIndex)
     }
@@ -180,7 +336,26 @@ internal fun PreferenceScreenScaffold(
                     bottom = adaptiveInfo.bottomPadding(isTv),
                 ),
             ) {
-                content(activePicker)
+                if (groups != null) {
+                    // The declaration path: one slot per group, in declaration
+                    // order — the whole-group advanced gate the shell owns (no
+                    // hand-written `if (showAdvanced)` twin to drift).
+                    groups.forEach { group ->
+                        if (!group.advancedOnly || showAdvanced) {
+                            item { group.content(activePicker) }
+                        }
+                    }
+                    if (hiddenHint != null && !showAdvanced) {
+                        item {
+                            HiddenSettingsHint(
+                                hiddenCount = hiddenRowsFor(groups, hiddenHint.rowFlags),
+                                onShowAdvanced = hiddenHint.onShowAdvanced,
+                            )
+                        }
+                    }
+                } else {
+                    content(activePicker)
+                }
             }
         }
     }

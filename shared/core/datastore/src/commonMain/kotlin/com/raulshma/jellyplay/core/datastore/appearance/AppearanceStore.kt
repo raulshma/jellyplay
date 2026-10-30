@@ -107,6 +107,7 @@ class AppearanceStore constructor(
         val SAKURA_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.SAKURA_ACCENT.keyName)
         val VECTOR_POP_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.VECTOR_POP_ACCENT.keyName)
         val BACKDROP_THEME_MUSIC_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.keyName)
+        val DETAILS_AWARDS_BADGES_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.DETAILS_AWARDS_BADGES_ENABLED.keyName)
         val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.keyName)
         val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey(AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.keyName)
         val DATE_FORMAT_PREFERENCE = stringPreferencesKey(AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.keyName)
@@ -171,6 +172,7 @@ class AppearanceStore constructor(
         blueLightFilterEnabled = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.readFrom(prefs),
         blueLightFilterStrength = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.readFrom(prefs),
         backdropThemeMusicEnabled = AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.readFrom(prefs),
+        detailsAwardsBadgesEnabled = AppearancePreferenceSpecs.DETAILS_AWARDS_BADGES_ENABLED.readFrom(prefs),
         hapticsEnabled = AppearancePreferenceSpecs.HAPTICS_ENABLED.readFrom(prefs),
         dateFormatPreference = AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.readFrom(prefs),
         appFontScale = AppearancePreferenceSpecs.APP_FONT_SCALE.readFrom(prefs),
@@ -270,6 +272,11 @@ class AppearanceStore constructor(
         dataStore.edit { AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.writeTo(it, enabled) }
     }
 
+    /** The details screen's external-award badges (OMDb/oscars-derived). Default on. */
+    suspend fun setDetailsAwardsBadgesEnabled(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.DETAILS_AWARDS_BADGES_ENABLED.writeTo(it, enabled) }
+    }
+
     suspend fun setHapticsEnabled(enabled: Boolean) {
         dataStore.edit { AppearancePreferenceSpecs.HAPTICS_ENABLED.writeTo(it, enabled) }
     }
@@ -353,6 +360,7 @@ class AppearanceStore constructor(
             AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.writeTo(prefs, slice.blueLightFilterEnabled)
             AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.writeTo(prefs, slice.blueLightFilterStrength)
             AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.writeTo(prefs, slice.backdropThemeMusicEnabled)
+            AppearancePreferenceSpecs.DETAILS_AWARDS_BADGES_ENABLED.writeTo(prefs, slice.detailsAwardsBadgesEnabled)
             AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.writeTo(prefs, slice.synthwaveAccent)
             AppearancePreferenceSpecs.SOOTHING_ACCENT.writeTo(prefs, slice.soothingAccent)
             // Same normalization as setThemeVariant: backup JSON can carry any
@@ -403,6 +411,8 @@ data class AppearanceSlice(
     val blueLightFilterEnabled: Boolean = false,
     val blueLightFilterStrength: Float = 0.3f,
     val backdropThemeMusicEnabled: Boolean = false,
+    /** The details screen's external-award badges (OMDb/oscars-derived). Default on. */
+    val detailsAwardsBadgesEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
     val dateFormatPreference: DateFormatPreference = DateFormatPreference.SYSTEM,
     val appFontScale: AppFontScale = AppFontScale.DEFAULT,

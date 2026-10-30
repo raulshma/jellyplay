@@ -26,33 +26,13 @@ class VideoPlayerSeekStateTest {
         assertEquals(120_000L, state.gestures.swipeSeekMaxMs)
     }
 
-    @Test
-    fun defaults_currentPositionIsZero() {
-        val state = VideoPlayerUiState()
-        assertEquals(0L, state.currentPosition)
-    }
-
-    @Test
-    fun defaults_durationIsZero() {
-        val state = VideoPlayerUiState()
-        assertEquals(0L, state.duration)
-    }
-
-    @Test
-    fun defaults_bufferedPositionIsZero() {
-        val state = VideoPlayerUiState()
-        assertEquals(0L, state.bufferedPosition)
-    }
+    // The former defaults_currentPositionIsZero / defaults_durationIsZero /
+    // defaults_bufferedPositionIsZero pins died with the root snapshot fields:
+    // live position/duration ride the ViewModel's dedicated flows, and the
+    // state no longer seeds them (the whole point of the Structural/live-state
+    // split).
 
     // ─── seekTo: position update ───────────────────────────────────────────────
-
-    @Test
-    fun seekTo_updatesCurrentPosition() {
-        val state = VideoPlayerUiState(duration = 3_600_000L)
-        val seekTarget = 1_800_000L
-        val updated = state.copy(currentPosition = seekTarget)
-        assertEquals(seekTarget, updated.currentPosition)
-    }
 
     @Test
     fun seekTo_clampsToZero() {
@@ -172,13 +152,6 @@ class VideoPlayerSeekStateTest {
     }
 
     // ─── Buffered position ─────────────────────────────────────────────────────
-
-    @Test
-    fun bufferedPosition_canBeUpdated() {
-        val state = VideoPlayerUiState(duration = 3_600_000L)
-        val updated = state.copy(bufferedPosition = 600_000L)
-        assertEquals(600_000L, updated.bufferedPosition)
-    }
 
     @Test
     fun bufferedPosition_isAtLeastCurrentPosition_invariant() {

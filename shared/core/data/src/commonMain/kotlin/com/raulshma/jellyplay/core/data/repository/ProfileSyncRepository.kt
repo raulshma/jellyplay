@@ -434,6 +434,13 @@ class ProfileSyncRepository(
              * cycle-start basis instead of re-diffing.
              */
             val resolvedKeys = mutableMapOf<String, MutableSet<String>>()
+            // The resolved rows indexed per namespace ONCE for the whole cycle
+            // (the delta sweep's arbitratedKeys idiom, value face): the former
+            // per-adapter `filter { ns == … }` + associateBy re-scanned the
+            // whole payload and rebuilt its map once per adapter.
+            val remoteByNamespace = resolved.settings
+                .groupBy { it.ns }
+                .mapValues { (_, entries) -> entries.associateBy { it.key } }
 
             for (adapter in cycleAdapters) {
                 val state = cycleState.getValue(adapter.namespace)
@@ -446,9 +453,7 @@ class ProfileSyncRepository(
                 // nothing — local deletes included (they are abandoned; the
                 // server's view wins).
                 val deletes = if (forceRemoteWins) emptySet() else state.deletes
-                val remote = resolved.settings
-                    .filter { it.ns == adapter.namespace }
-                    .associateBy { it.key }
+                val remote = remoteByNamespace[adapter.namespace].orEmpty()
 
                 // ADOPT: clean keys lost to another device — or, in the
                 // force-remote-wins recovery path, EVERY differing key

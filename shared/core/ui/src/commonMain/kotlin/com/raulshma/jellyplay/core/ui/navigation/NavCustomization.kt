@@ -38,15 +38,6 @@ val Route.navKey: String
         ?: this::class.simpleName ?: toString()
 
 /**
- * The string key under which [Route.Shortcuts] is hidden via
- * [com.raulshma.jellyplay.core.model.UserPreferences.hiddenNavItems].
- *
- * Centralised so the nav-bar composition (`JellyPlayApp`) and the customization
- * UI (`NavigationCustomizationGroup`) reference one source of truth.
- */
-val SHORTCUTS_NAV_KEY: String = Route.Shortcuts.navKey
-
-/**
  * Every top-level destination whose [navKey] is customizable through the nav
  * preferences — the union of the Android floating-bar and desktop-rail
  * vocabularies. Derived from the [NAV_KEYS_BY_ROUTE] registration so a new

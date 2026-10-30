@@ -9,8 +9,8 @@ import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.StreakInfo
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
-import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -61,9 +61,10 @@ sealed interface HeatmapEvent {
 
 class WatchProgressHeatmapViewModel(
     private val watchHistoryRepository: WatchHistoryRepository,
-    private val mediaRepository: MediaRepository,
-    /** Day-detail poster URLs (the ImageUrlProvider seam). */
-    private val imageUrlProvider: ImageUrlProvider,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
+    /** Day-detail poster URLs (the ArtworkUrls seam — the resolved item's own image tag rides along). */
+    private val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     private companion object {
@@ -206,11 +207,13 @@ class WatchProgressHeatmapViewModel(
     private suspend fun resolveItems(itemIds: List<String>) {
         val unresolved = itemIds.filter { it !in cachedResolvedItems }
         val resolved = resolveSemaphore.mapConcurrent(unresolved) { itemId ->
-            mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+            detailFeed.getMediaDetail(itemId, force = false).getOrNull()?.let { detail ->
                 itemId to ResolvedMediaItem(
                     name = detail.item.name,
                     mediaType = detail.item.mediaType,
-                    imageUrl = imageUrlProvider.getImageUrl(itemId, 200),
+                    // The detail's item is in hand, so the thumbnail URL
+                    // carries its image tag (the etag cache-buster).
+                    imageUrl = artworkUrls.poster(detail.item, 200),
                 )
             }
         }.filterNotNull()

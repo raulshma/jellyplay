@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.subtitle
 import android.content.Context
 import android.graphics.Typeface
 import android.net.Uri
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.yubyf.truetypeparser.TTFFile
@@ -29,9 +30,32 @@ import kotlinx.coroutines.withContext
  */
 class AndroidFontProvider(
     private val context: Context,
+    /**
+     * When wired, [prewarm] also rewrites the persisted selected-font paths
+     * out of the legacy cache location — the store half of the fonts-dir move
+     * below. Optional so tests can construct the provider without Koin.
+     */
+    private val subtitleStore: SubtitleLanguageStore? = null,
 ) : FontProvider {
     private val fontsDir: File by lazy {
-        File(context.cacheDir, "subtitle-fonts").apply { mkdirs() }
+        // Persistent home (filesDir), not the cache: the fonts dir is ASSETS —
+        // the settings "Clear cache" button, the auto-delete-on-background
+        // sweep and the cache-disabled setting all sweep cacheDir, and with
+        // `sub-font-provider=none` an emptied dir means NO subtitles render
+        // at all. One-time content migration from the legacy cacheDir
+        // location carries installed user fonts across the move; the
+        // persisted selected-font paths are rewritten in
+        // [migratePersistedFontPaths].
+        val legacy = File(context.cacheDir, "subtitle-fonts")
+        val dir = File(context.filesDir, "subtitle-fonts").apply { mkdirs() }
+        if (legacy.isDirectory && dir.list().isNullOrEmpty()) {
+            runCatching {
+                legacy.listFiles()?.forEach { f ->
+                    runCatching { f.copyTo(File(dir, f.name), overwrite = false) }
+                }
+            }
+        }
+        dir
     }
 
     /**
@@ -39,9 +63,18 @@ class AndroidFontProvider(
      * subset (en,de,es,fr,it,pt,ja,ko,zh) of "Droid Sans Fallback", regenerated
      * via tools/font/subset_subfont.py.
      */
-    private val bundledFallback: File by lazy {
-        File(fontsDir, "subfont.ttf").also { f ->
-            if (!f.exists() || f.length() == 0L) {
+    private val bundledFallback: File by lazy { File(fontsDir, "subfont.ttf") }
+
+    /**
+     * Copies the bundled fallback in when missing. Re-checked on every use —
+     * NOT a one-shot copy — so a mid-process wipe (system clear-storage edge)
+     * self-heals on the next engine start instead of leaving libass with
+     * zero fonts under `sub-font-provider=none`.
+     */
+    private fun ensureBundledFallback() {
+        val f = bundledFallback
+        if (!f.exists() || f.length() == 0L) {
+            runCatching {
                 context.assets.open("subfont.ttf").use { inp ->
                     f.outputStream().use { out -> inp.copyTo(out) }
                 }
@@ -68,7 +101,25 @@ class AndroidFontProvider(
     override suspend fun prewarm() {
         withContext(Dispatchers.IO) {
             loadFontBytesInternal()
+            migratePersistedFontPaths()
         }
+    }
+
+    /**
+     * Triggers the store-side half of the fonts-dir move: the persisted
+     * selected-font paths are rewritten by [SubtitleLanguageStore.migrateLegacyFontPaths]
+     * (one DataStore transaction, persisted one-shot gate — this provider
+     * only supplies the legacy/new prefix pair). Runs after
+     * [loadFontBytesInternal], so the files exist before a rewritten path is
+     * first resolved. A concurrent user style-write in the same window is
+     * last-writer-wins on the single DataStore — an acceptable race for a
+     * one-time rename.
+     */
+    private suspend fun migratePersistedFontPaths() {
+        subtitleStore?.migrateLegacyFontPaths(
+            legacyPathPrefix = File(context.cacheDir, "subtitle-fonts").absolutePath,
+            newPathPrefix = fontsDir.absolutePath,
+        )
     }
 
     /** Cache-populating read of every font file's bytes; runs on IO. */
@@ -119,6 +170,7 @@ class AndroidFontProvider(
      * which previously re-parsed the TTF from disk each time.
      */
     fun typefaceFor(style: SubtitleStyle): Typeface {
+        ensureBundledFallback()
         val fontFile = style.fontFamilyPath
             ?.let(::File)
             ?.takeIf(File::isFile)
@@ -164,13 +216,16 @@ class AndroidFontProvider(
      * libass uses the system fontconfig by default (matching mpvkt).
      */
     fun provideFontsDir(): File {
-        bundledFallback // force lazy init
+        ensureBundledFallback()
         runCatching { File(fontsDir, "fonts.conf").delete() }
         return fontsDir
     }
 
     /** Absolute path to the bundled fallback, for engines that accept a font file. */
-    fun bundledFallbackPath(): String = bundledFallback.absolutePath
+    fun bundledFallbackPath(): String {
+        ensureBundledFallback()
+        return bundledFallback.absolutePath
+    }
 
     /**
      * The font family name parsed from the bundled fallback [subfont.ttf], e.g.
@@ -181,7 +236,7 @@ class AndroidFontProvider(
      * `sub-fonts-dir`. Cached; null if the bundled font failed to parse.
      */
     private val bundledFallbackFamily: String? by lazy {
-        bundledFallback // ensure copied
+        ensureBundledFallback()
         parseFontFamily(bundledFallback)
     }
 

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.MediaType
@@ -35,7 +35,8 @@ import kotlinx.coroutines.withContext
 internal class HomeHeroVideoLoader(
     private val libraryApiClient: LibraryApiClient,
     private val playbackRepository: PlaybackRepository,
-    private val mediaRepository: MediaRepository,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val seerrRepository: SeerrRepository,
     private val clock: () -> Long = ::monotonicNowMillis,
     private val ttlMs: Long = DEFAULT_TTL_MS,
@@ -112,7 +113,7 @@ internal class HomeHeroVideoLoader(
      */
     private suspend fun fetchTrailerKey(itemId: String, mediaType: MediaType): String? =
         withContext(Dispatchers.IO) {
-            val tmdbId = mediaRepository.getMediaDetail(itemId).getOrNull()
+            val tmdbId = detailFeed.getMediaDetail(itemId, force = false).getOrNull()
                 ?.providerIds?.get("tmdb")?.toIntOrNull()
                 ?: return@withContext null
             seerrRepository.getTmdbVideos(tmdbId, mediaType).getOrNull()

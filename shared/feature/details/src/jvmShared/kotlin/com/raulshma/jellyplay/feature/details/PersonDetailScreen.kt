@@ -116,6 +116,9 @@ private fun PersonFilmography(
     biography: String?,
     credits: Map<String, PersonInfo>,
     costars: List<PersonRef>,
+    /** Tag-aware poster URL for a filmography card (the item carries its own tag). */
+    posterUrl: (MediaItem) -> String,
+    /** Raw id getter for the co-star avatars — PersonRef carries no image tag. */
     getImageUrl: (String) -> String,
     onItemClick: (String) -> Unit,
     onPersonClick: (String) -> Unit,
@@ -225,7 +228,8 @@ private fun PersonFilmography(
             androidx.compose.foundation.layout.Column(modifier = itemModifier) {
                 PosterCard(
                     item = item,
-                    imageUrl = getImageUrl(item.id),
+                    // Keyed on the item (not its id) so a tag change re-keys.
+                    imageUrl = remember(item) { posterUrl(item) },
                     onClick = clickHandler,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -463,6 +467,7 @@ fun PersonDetailScreen(
                 biography = success.biography,
                 credits = credits,
                 costars = costars,
+                posterUrl = viewModel::poster,
                 getImageUrl = viewModel::getImageUrl,
                 onItemClick = onItemClick,
                 onPersonClick = onPersonClick,

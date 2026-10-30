@@ -36,6 +36,14 @@ data class DetailExternalRatings(
     val imdbUrl: String? = null,
     /** Deep link for the TMDB chip. */
     val tmdbUrl: String? = null,
+    /**
+     * The OMDb awards line (the companion plugin's `omdb-awards` enrichment —
+     * e.g. "Won 4 Oscars. 101 wins & 190 nominations."). Rendered as a
+     * truncated badge after the score chips; null renders nothing (no empty
+     * badge). Not an [isEmpty] leg: the badge supplements the score chips
+     * and never stands a strip up alone.
+     */
+    val awards: String? = null,
 ) {
     /** True when no chip would render — the strip's silent-absence contract. */
     val isEmpty: Boolean

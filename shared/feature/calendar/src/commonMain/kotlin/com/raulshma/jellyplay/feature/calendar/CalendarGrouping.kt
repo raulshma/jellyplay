@@ -25,21 +25,11 @@ data class CalendarDay(
 )
 
 /**
- * Parses an [ArrCalendarItem]'s effective release date. Mirrors the parse in
- * `ArrRepositoryImpl.matchesWindow` (`airDateUtc` is a full ISO-8601 UTC
- * timestamp; only the leading `yyyy-MM-dd` is meaningful for day grouping).
- * [LocalDate.parse] is strict ISO-8601 (the calendar's ISO format), so a
- * malformed prefix throws [kotlinx.datetime.DateTimeFormatException] and the
- * runCatching degrades to null — exactly the old
- * `DateTimeFormatter.ISO_LOCAL_DATE` + `DateTimeParseException` contract.
- */
-fun ArrCalendarItem.releaseDate(): LocalDate? =
-    airDateUtc?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-
-/**
  * Groups items by their release day, applies [filter], and sorts. Days with no
  * matching items after filtering are omitted so the LazyColumn only renders
- * non-empty sections.
+ * non-empty sections. The day parse itself is [ArrCalendarItem.airDateDay] —
+ * the one home of the `airDateUtc` rule (the repository's calendar window
+ * filter reads the same method).
  */
 fun groupByDay(
     items: List<ArrCalendarItem>,
@@ -51,7 +41,7 @@ fun groupByDay(
         CalendarFilter.SERIES -> items.filter { it.mediaType == ArrMediaType.SERIES }
     }
     return filtered
-        .mapNotNull { item -> item.releaseDate()?.let { it to item } }
+        .mapNotNull { item -> item.airDateDay()?.let { it to item } }
         .groupBy({ it.first }, { it.second })
         .map { (date, dayItems) -> CalendarDay(date = date, items = dayItems.sortedWith(dayComparator())) }
         .sortedBy { it.date }

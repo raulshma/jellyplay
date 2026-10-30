@@ -310,51 +310,15 @@ interface LibraryApiClient {
     // The playlist ×8 and collection ×4 members left for the
     // [PlaylistApiClient] / [CollectionApiClient] family seams (the
     // one-impl-many-seams idiom: [LibraryApiClientImpl] implements all three;
-    // the JellyfinApiClient union carries them; consumers narrow to the seam
-    // they read).
-
-    /**
-     * The ONE user-data write member — the parameterized fold of the four
-     * former write verbs over [UserDataWrite]; the outcome carries the
-     * post-toggle favorite state ([UserDataWriteOutcome.FavoriteNow]) so the
-     * single member serves the flip and the replay funnels alike.
-     */
-    suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome>
-
-    /**
-     * Reads the server-persisted home-layout slice from Jellyfin's
-     * DisplayPreferences API — the stored JSON payload plus its schema
-     * version and write-time stamp (see [HomeLayoutServerState]). Never
-     * fails on "nothing stored": a fresh user decodes to all-null state.
-     */
-    suspend fun readHomeLayoutDisplayPreferences(userId: String): Result<HomeLayoutServerState>
-
-    /**
-     * Writes the home-layout slice into the server's DisplayPreferences
-     * store: the [json] payload under the `jellyplay.homeLayout` custom-pref
-     * key, plus the [schemaVersion] and a write-time stamp companion keys —
-     * the transport documented on the HomeLayoutSync constants. A manual
-     * "upload layout" action or the debounced autopush; no auto-pull exists
-     * (silent overwrites avoided by design).
-     */
-    suspend fun writeHomeLayoutDisplayPreferences(userId: String, json: String, schemaVersion: Int): Result<Unit>
-
-    fun getImageUrl(
-        itemId: String,
-        imageType: String = "Primary",
-        maxWidth: Int? = 400,
-        imageIndex: Int? = null,
-        tag: String? = null,
-    ): String
-
-    fun getBackdropImageUrl(
-        itemId: String,
-        maxWidth: Int = 1280,
-        tag: String? = null,
-    ): String
-
-    suspend fun getChildItemImageUrls(
-        parentId: String,
-        limit: Int = 4,
-    ): List<String>
+    // consumers narrow to the seam they read).
+    //
+    // The oddball trio left the same way, and the carve is COMPLETE: the
+    // user-data write funnel (with its FavoriteFlagCache state) on
+    // [UserDataApiClient], the home-layout DisplayPreferences pair on
+    // [HomeLayoutApiClient] (its one consumer is HomeLayoutSyncController),
+    // and the image-URL builders + child-image row read on [ImageUrlApiClient].
+    // The two one-line forwards the stay-behind consumers still rode
+    // (writeUserData → PlayedStateSyncImpl, getChildItemImageUrls →
+    // MediaRepositoryImpl) are gone — both consumers inject their family
+    // seams now, and nothing on this interface forwards or delegates.
 }

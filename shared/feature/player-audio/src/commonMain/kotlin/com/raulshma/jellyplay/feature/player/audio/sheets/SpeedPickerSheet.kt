@@ -22,13 +22,15 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Gauge
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.feature.player.audio.components.PlayerSpeedSlider
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.audio.generated.resources.audio_speed_title
 
-private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+/** The chip rungs: the shared [PlaybackSpeedLadder.fullRungs] ladder (core:model owns the speeds). */
+private val SPEED_OPTIONS = PlaybackSpeedLadder.fullRungs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

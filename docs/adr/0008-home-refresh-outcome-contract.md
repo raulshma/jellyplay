@@ -57,7 +57,8 @@ executable spec for the token/mirror/roll invariants; the four KDoc
 homes shrink to the fetcher's as canonical plus pointers. This uses the
 ADR-0006 test-lane rules as written: file IO and JVM seams stay in
 `jvmTest`, and no `:shared:core:test-fixtures` dependency is added
-(the fixture is a test-local adapter, not a shared double).
+(the fixture is a test-local adapter, not a shared double; superseded
+by the 2026-10-28 amendment below).
 
 ## Consequences
 
@@ -72,3 +73,17 @@ ADR-0006 test-lane rules as written: file IO and JVM seams stay in
 - Future proposals: do not re-propose a sealed outcome type
   for this seam unless `Result<HomeSection?>` stops expressing a real
   outcome (e.g. a fourth outcome or per-outcome payload appears).
+
+## Amendment (2026-10-28) — the HomeSectionSources fake moved to test-fixtures
+
+The suite works as designed, but the fake itself became a shared double:
+`FakeHomeSectionSources` is single-homed in `:shared:core:test-fixtures`
+(commonMain, test-scoped consumers per ADR-0006 rule 4) and both the
+core:network fetcher suite and this contract suite import it — retiring a
+second hand-copy of the 13 members that had drifted on
+resolve-vs-throw semantics. The "no test-fixtures dependency" clause
+above is superseded. The ten-line port adapter stays test-local in
+core:data's jvmTest, and feature/home's roll contract now drives the REAL
+fetcher over the promoted fake (its hand-built network half is deleted;
+the repo half remains a documented protocol double —
+`MediaRepositoryImpl`'s constructor is internal to core:data).

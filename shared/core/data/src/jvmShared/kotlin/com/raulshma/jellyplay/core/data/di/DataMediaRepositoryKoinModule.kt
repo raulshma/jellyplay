@@ -7,13 +7,16 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.CollectionOperations
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
 import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
@@ -26,6 +29,7 @@ import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
 import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWritesImpl
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepositoryImpl
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncer
 import com.raulshma.jellyplay.core.data.repository.UserDataAnnouncerImpl
@@ -47,6 +51,7 @@ import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.HomeSectionsSnapshotStore
+import com.raulshma.jellyplay.core.data.repository.MediaFreshnessLedger
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
@@ -90,7 +95,11 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         PlayedStateSyncImpl(
+            // Reconcile's fresh-detail read rides the wide client; the flip /
+            // toggleFavorite writes ride the UserDataApiClient family single
+            // (the former LibraryApiClient.writeUserData forward is gone).
             apiClient = get(),
+            userDataApiClient = get(),
             offlineRepository = get(),
             playbackOutboxRepository = get(),
             offlineModeManager = get(),
@@ -143,32 +152,46 @@ internal val dataMediaRepositoryModule: Module = module {
     // the writes that caused it; declared before its two consumers.
     single { RecentLocalUserDataWritesImpl() }
     single<RecentLocalUserDataWrites> { get<RecentLocalUserDataWritesImpl>() }
+    // The media freshness ledger: the ONE owner of the freshness/cache
+    // chassis (spec registry, #157 stale-read ladder, home write-generation
+    // funnel, identity-transition clear, eviction ladders) — extracted from
+    // MediaRepositoryImpl. Declared BEFORE its one consumer below (the
+    // HomeSectionsSnapshotStore precedent), so its registry registrations
+    // happen at the same graph point the impl's construction used to run
+    // them.
+    single {
+        MediaFreshnessLedger(
+            homeSession = get(),
+            sessionCacheRegistry = get(),
+            homeSnapshotStore = get(),
+            episodeCatalogue = get(),
+            internals = get(),
+            homeSectionsCachePort = get(),
+            timeSource = get(),
+        )
+    }
     single {
         MediaRepositoryImpl(
             libraryApiClient = get(),
             collectionApiClient = get(),
+            // The image-URL family single (the collectionApiClient precedent):
+            // the photo-folder cover probe's child-image row read.
+            imageUrlApiClient = get(),
             homeSectionsCachePort = get(),
             homeSnapshotStore = get(),
             playedStateSync = get(),
-            episodeCatalogue = get(),
             userDataRealtimeChannel = get(),
-            timeSource = get(),
-            homeSession = get(),
-            sessionCacheRegistry = get(),
             internals = get(),
             userDataAnnouncer = get(),
+            ledger = get(),
         )
     }
-    single<MediaRepository> { get<MediaRepositoryImpl>() }
     // Family seams over the same single (the SonarrSeriesOperations
-    // over-the-impl pattern in dataSeerrArrModule): the music-catalogue reads
-    // and the user-data writes, so single-family consumers inject the seam
-    // instead of the union. UserDataMutatorImpl already does (the user-data
-    // family's clean sole consumer); the music playback stack + feature:music
-    // ViewModels migrated too — they inject MusicCatalogue for the catalogue
-    // reads and keep MediaRepository only as mixed consumers (detail reads,
-    // the user-data feed). getAlbumTracks is the one member still dual-declared:
-    // the detail provider's session resolves detail + album tracks together.
+    // over-the-impl pattern in dataSeerrArrModule): every family the former
+    // MediaRepository union carried, aliased onto this one impl so
+    // single-family consumers inject the seam alone and mixed consumers
+    // compose the families they read (e.g. the detail provider's session
+    // resolves DetailFeed + MusicCatalogue together).
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
     // The browse-catalogue enrichments (filter-sheet tags, the detail
     // franchise row) — same over-the-impl aliasing for their two screens.
@@ -176,6 +199,16 @@ internal val dataMediaRepositoryModule: Module = module {
     // The series-notification family (the per-series Next Up diff read).
     single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
+    // The photo-folder family (the cached child-image-URL read the prefetcher
+    // fans out over): the SeriesNotificationReads one-member pattern, aliased
+    // over the same impl single.
+    single<PhotoFolderReads> { get<MediaRepositoryImpl>() }
+    // The detail-read family (the detail fetch + the similar-items row) and
+    // the collection-operations family (the collection page read + the two
+    // collection edits): the same over-the-impl aliasing, so a detail-read-
+    // only or collections-only consumer injects the seam alone.
+    single<DetailFeed> { get<MediaRepositoryImpl>() }
+    single<CollectionOperations> { get<MediaRepositoryImpl>() }
     // The home-feed family (the sections payload, the single-row edge-pull
     // refetch, the SWR snapshot reads, the discover-row verbs) and the
     // user-data change feed: the same over-the-impl aliasing, so the home
@@ -183,6 +216,11 @@ internal val dataMediaRepositoryModule: Module = module {
     // refetchers take it beside the surfaces they are mixed consumers of.
     single<HomeFeed> { get<MediaRepositoryImpl>() }
     single<UserDataChanges> { get<MediaRepositoryImpl>() }
+    // The library/browse family (folders, latest, paged browse, search,
+    // genres, studios): the same over-the-impl aliasing, so browse-only
+    // consumers (library screens, search, the music collection hosts, photo
+    // albums, the settings library-views) inject the seam alone.
+    single<LibraryFeed> { get<MediaRepositoryImpl>() }
     // Module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
@@ -193,7 +231,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // Family-repository split: the SyncPlay family is 4 stateless members on
     // its own impl (contract: see SyncPlayRepositoryImpl). Single-family
     // consumers (SyncPlayViewModel, WatchPartyActions) inject the family
-    // type, not the MediaRepository union.
+    // type, not a wide media surface.
     single {
         SyncPlayRepositoryImpl(
             syncPlayApiClient = get(),
@@ -214,9 +252,8 @@ internal val dataMediaRepositoryModule: Module = module {
         )
     }
     single<PlaylistRepository> { get<PlaylistRepositoryImpl>() }
-    // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain)
-    // since it left MediaRepositoryImpl — no longer a view of the
-    // media single.
+    // Lyrics engine: its own impl (the LRC/LRCLIB fetch-parse-cache chain),
+    // independent of the media single.
     single {
         LyricsRepositoryImpl(
             apiClient = get(),
@@ -244,7 +281,7 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         MediaSearchEngineImpl(
-            mediaRepository = get(),
+            libraryFeed = get(),
             seerrRepository = get(),
             searchHistoryRepository = get(),
             serverIdentityStore = get(),
@@ -266,7 +303,7 @@ internal val dataMediaRepositoryModule: Module = module {
     single {
         PlaybackSourceResolverImpl(
             downloadRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             playbackRepository = get(),
             offlineRepository = get(),
             offlinePlaybackFacade = get(),
@@ -276,7 +313,8 @@ internal val dataMediaRepositoryModule: Module = module {
 
     single {
         UnifiedMediaDetailProviderImpl(
-            mediaRepository = get(),
+            detailFeed = get(),
+            musicCatalogue = get(),
             cacheInvalidation = get(),
             offlineRepository = get(),
             downloadRepository = get(),
@@ -285,6 +323,7 @@ internal val dataMediaRepositoryModule: Module = module {
             offlineModeManager = get(),
             localStreamProbe = get(),
             appScope = get(DatastoreQualifiers.applicationScope),
+            timeSource = get<TimeSource>(),
         )
     }
     single<MediaDetailProvider> { get<UnifiedMediaDetailProviderImpl>() }
@@ -292,7 +331,7 @@ internal val dataMediaRepositoryModule: Module = module {
     single {
         OfflineFirstItemResolverImpl(
             offlineRepository = get(),
-            mediaRepository = get(),
+            detailFeed = get(),
             offlineModeManager = get(),
             imageUrlProvider = get(),
         )
@@ -323,11 +362,9 @@ internal val dataMediaRepositoryModule: Module = module {
     }
     single {
         SyncPlayManager(
-            // Narrow family seams, not the JellyfinApiClient union (the
-            // PlaybackRepositoryImpl ctor precedent): the manager only
-            // touches SyncPlay group lifecycle/ping + Auth's capability
-            // broadcast, and the family singles compose the same impls
-            // JellyfinApiClientImpl does.
+            // Narrow family seams (the PlaybackRepositoryImpl ctor
+            // precedent): the manager only touches SyncPlay group
+            // lifecycle/ping + Auth's capability broadcast.
             syncPlayApiClient = get<SyncPlayApiClient>(),
             authApiClient = get<AuthApiClient>(),
             webSocketClient = get(),

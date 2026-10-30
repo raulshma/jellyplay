@@ -47,12 +47,15 @@ class MpvUserSubtitleKeysTest {
     }
 
     @Test
-    fun `functional keys never become user-owned`() {
+    fun `functional keys never become user-owned but the font keys yield`() {
         val owned = MpvUserSubtitleKeys.ownedKeys(
             "sub-visibility=no\nsub-delay=-0.5\nsub-use-margins=yes\nsub-font-provider=fontconfig\nsub-color=green",
             "secondary-sub-delay=1\nsub-ass-force-margins=yes\nsub-fonts-dir=/tmp\nsub-border-style=box",
         )
-        assertEquals(setOf("sub-color", "sub-border-style"), owned)
+        // sub-font-provider / sub-fonts-dir are user-overridable (the escape
+        // hatch for custom font dirs / re-enabled providers); the runtime-driven
+        // functional set never yields.
+        assertEquals(setOf("sub-color", "sub-border-style", "sub-font-provider", "sub-fonts-dir"), owned)
     }
 
     // ── filterOwned ─────────────────────────────────────────────────────────

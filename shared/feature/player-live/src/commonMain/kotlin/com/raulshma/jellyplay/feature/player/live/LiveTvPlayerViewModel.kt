@@ -129,6 +129,14 @@ class LiveTvPlayerViewModel(
      */
     private val playbackFocus: com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus =
         com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
+    /**
+     * The system media-session factory (gh-178 headset control during live
+     * playback). Android binds the [LiveMediaSessionFactory] in
+     * androidPlayerLiveModule; desktop resolves null (the live screen never
+     * composes there — the module's documented-latent rule), and jvmTest
+     * constructs the VM bare.
+     */
+    private val mediaSessionFactory: LiveMediaSessionFactory? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LiveTvPlayerUiState())
@@ -174,6 +182,8 @@ class LiveTvPlayerViewModel(
         lastChannelStore = lastChannelStore,
         transcodeReasonsRenderer = transcodeReasonsRenderer,
         playbackRepository = playbackRepository,
+        mediaSessionFactory = mediaSessionFactory,
+        channelImageUrl = { channelId, maxWidth, tag -> imageUrlProvider.getImageUrl(channelId, maxWidth, tag) },
     )
 
     /**
@@ -622,9 +632,9 @@ class LiveTvPlayerViewModel(
     /** Exposes the live engine for PlayerView attachment (null before first load). */
     fun engineForRendering(): LivePlayerEngine? = playbackSession.engineForRendering()
 
-    /** Channel logo URL for the chrome/zap toast; null when no image tag. */
+    /** Channel logo URL for the chrome/zap toast; null when no image tag. The tag rides the URL as the etag cache-buster. */
     fun logoUrlFor(channel: LiveTvChannel): String? =
-        if (!channel.imageTag.isNullOrBlank()) imageUrlProvider.getImageUrl(channel.id) else null
+        if (!channel.imageTag.isNullOrBlank()) imageUrlProvider.getImageUrl(channel.id, tag = channel.imageTag) else null
 
     /**
      * Releases the live session and resets playback state. Called from

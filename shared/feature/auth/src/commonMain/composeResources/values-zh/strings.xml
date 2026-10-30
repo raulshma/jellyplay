@@ -72,6 +72,7 @@
     <string name="auth_loading">加载中…</string>
     <string name="auth_no_servers_added_title">未添加服务器</string>
     <string name="auth_no_servers_added_desc">添加您的 Jellyfin 服务器以开始</string>
+    <string name="auth_restore_backup">从备份恢复</string>
     <string name="auth_remove_server">移除服务器</string>
     <string name="auth_remove_server_title">移除服务器？</string>
     <string name="auth_remove_server_message">这将移除“%1$s”及其上保存的所有用户。此操作无法撤销。</string>

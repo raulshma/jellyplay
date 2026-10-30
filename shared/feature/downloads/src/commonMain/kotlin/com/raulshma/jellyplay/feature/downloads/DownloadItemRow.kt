@@ -56,15 +56,10 @@ import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_delete
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_lower_priority
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_more_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_move_to_front
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_pause
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_resume
-import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_retry
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_stream
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_selection_hint
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_cancelled
@@ -79,8 +74,9 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_st
  * One download row: thumbnail, title/context line, status body, and the
  * per-status action cluster. The cluster's AVAILABILITY is the module's
  * [DownloadActions.availableActions] fold over the admission table (a status'
- * buttons exist exactly when the table admits them); only PLACEMENT — which
- * slot a button renders in, its icon, tint, and order — stays this file's
+ * buttons exist exactly when the table admits them); the buttons' FACES come
+ * from the module's face table ([DownloadActionFaces]); only PLACEMENT —
+ * which slot a button renders in, its tint, and order — stays this file's
  * per-status code, and dispatch flows through the single [onAction] sink
  * instead of a callback per verb.
  */
@@ -365,16 +361,14 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.PAUSE,
                                 available = available,
-                                icon = Tabler.Outline.PlayerPause,
-                                contentDescription = stringResource(Res.string.downloads_action_pause),
+                                face = DownloadBulkAction.PAUSE.face,
                                 tint = MaterialTheme.colorScheme.primary,
                                 onAction = onAction,
                             )
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -389,8 +383,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -405,8 +398,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -415,16 +407,14 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.RESUME,
                                 available = available,
-                                icon = Tabler.Outline.PlayerPlay,
-                                contentDescription = stringResource(Res.string.downloads_action_resume),
+                                face = DownloadBulkAction.RESUME.face,
                                 tint = MaterialTheme.colorScheme.primary,
                                 onAction = onAction,
                             )
                             RowActionSlot(
                                 action = DownloadBulkAction.CANCEL,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                face = DownloadActionFaces.rowCancel,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -433,8 +423,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.RETRY_FAILED,
                                 available = available,
-                                icon = Tabler.Outline.Refresh,
-                                contentDescription = stringResource(Res.string.downloads_action_retry),
+                                face = DownloadBulkAction.RETRY_FAILED.face,
                                 tint = MaterialTheme.colorScheme.primary,
                                 onAction = onAction,
                             )
@@ -450,8 +439,7 @@ internal fun DownloadItemRow(
                             RowActionSlot(
                                 action = DownloadBulkAction.DELETE,
                                 available = available,
-                                icon = Tabler.Outline.Trash,
-                                contentDescription = stringResource(Res.string.downloads_action_delete),
+                                face = DownloadBulkAction.DELETE.face,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onAction = onAction,
                             )
@@ -472,22 +460,22 @@ internal fun DownloadItemRow(
  * One inline slot for a bulk action: renders [DownloadActionButton] only while
  * the module's admission fold ([available]) admits [action] for this row's
  * status, and dispatches it through the row's single sink. The per-status
- * branches above own placement (slot, icon, tint, order); this slot owns the
- * admission — a table change re-dresses rows without touching them.
+ * branches above own placement (slot, tint, order); the icon + label come
+ * from the module's face table via [face] — this slot owns the admission, a
+ * table change re-dresses rows without touching them.
  */
 @Composable
 private fun RowActionSlot(
     action: DownloadBulkAction,
     available: List<DownloadBulkAction>,
-    icon: ImageVector,
-    contentDescription: String,
+    face: DownloadActionFace,
     tint: Color,
     onAction: (DownloadBulkAction) -> Unit,
 ) {
     if (action in available) {
         DownloadActionButton(
-            icon = icon,
-            contentDescription = contentDescription,
+            icon = face.icon,
+            contentDescription = stringResource(face.labelRes),
             tint = tint,
             onClick = { onAction(action) },
         )
@@ -576,17 +564,20 @@ private fun CompletedRowOverflowMenu(
 }
 
 /**
- * "Storage used" header line, as a narrow binder (VideoPlayerScreen's
+ * "Storage used" header, as a narrow binder (VideoPlayerScreen's
  * ChapterPickerBinder pattern): the total rides the live download-progress
  * tick — bytes accumulate mid-transfer — so the StateFlow is collected
  * INSIDE this leaf. Only this header recomposes per tick; the downloads screen
  * body that hosts it does not.
  *
- * When a download storage cap is set ([maxStorageBytes] non-null — the same
- * value [com.raulshma.jellyplay.core.data.repository.StoragePolicy] enforces),
- * a slim quota bar renders under the text: fill turns warning-colored at 90%
- * and error-colored at the cap, and the whole row is clickable into the
- * storage settings screen where the cap is adjustable.
+ * One line either way: with a download storage cap set ([maxStorageBytes]
+ * non-null — the same value [com.raulshma.jellyplay.core.data.repository.StoragePolicy]
+ * enforces) the line is the quota bar plus its "X of Y used" label — the
+ * label carries both numbers, so the plain-text line is dropped rather than
+ * saying the same thing twice. Without a cap the "Storage used" text renders
+ * alone. The bar's fill turns warning-colored at 90% and error-colored at the
+ * cap, and the whole row is clickable into the storage settings screen where
+ * the cap is adjustable.
  */
 @Composable
 internal fun DownloadsStorageUsedText(
@@ -599,48 +590,50 @@ internal fun DownloadsStorageUsedText(
     val totalStorage by totalStorageBytes.collectAsStateWithLifecycle()
     val maxStorage by maxStorageBytes.collectAsStateWithLifecycle()
     if (totalStorage > 0) {
-        Column(
-            modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
-        ) {
+        val maxBytes = maxStorage
+        if (maxBytes != null && maxBytes > 0) {
+            val fraction = (totalStorage.toFloat() / maxBytes.toFloat()).coerceIn(0f, 1f)
+            val quotaColor = when {
+                fraction >= 1f -> MaterialTheme.colorScheme.error
+                fraction >= 0.9f -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.primary
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp)
+                    .then(
+                        if (onOpenStorageSettings != null) {
+                            Modifier.clickable(onClick = onOpenStorageSettings)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) {
+                JellyPlayLinearProgressIndicator(
+                    progress = { fraction },
+                    color = quotaColor,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    stringResource(Res.string.downloads_storage_quota, formatBytes(totalStorage), formatBytes(maxBytes)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
             Text(
                 stringResource(Res.string.downloads_storage_used, formatBytes(totalStorage)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
             )
-            val maxBytes = maxStorage
-            if (maxBytes != null && maxBytes > 0) {
-                val fraction = (totalStorage.toFloat() / maxBytes.toFloat()).coerceIn(0f, 1f)
-                val quotaColor = when {
-                    fraction >= 1f -> MaterialTheme.colorScheme.error
-                    fraction >= 0.9f -> MaterialTheme.colorScheme.tertiary
-                    else -> MaterialTheme.colorScheme.primary
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            if (onOpenStorageSettings != null) {
-                                Modifier.clickable(onClick = onOpenStorageSettings)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .padding(top = 4.dp),
-                ) {
-                    JellyPlayLinearProgressIndicator(
-                        progress = { fraction },
-                        color = quotaColor,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        stringResource(Res.string.downloads_storage_quota, formatBytes(totalStorage), formatBytes(maxBytes)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
         }
     }
 }

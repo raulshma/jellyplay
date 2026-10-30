@@ -142,6 +142,10 @@ data class PlaybackPreferences(
     val videoDefaultSpeed: Float = 1.0f,
     val videoDefaultAspectRatio: String = "AUTO",
     val videoAutoplayNext: Boolean = true,
+    /** Back-to-back autoplay cap; `0` = unlimited. Mirrors `VideoPlayerSlice.autoplayEpisodeLimit`. */
+    val autoplayEpisodeLimit: Int = 0,
+    /** Show the next-episode details card after an episode finishes (default on). */
+    val showNextEpisodeDetailsAfterFinish: Boolean = true,
     val trailerAutoplay: Boolean = true,
     val cinemaModeEnabled: Boolean = false,
     /**
@@ -165,6 +169,8 @@ data class PlaybackPreferences(
     val videoPassOutProtectionHours: Int = 0,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
+    /** The trickplay preview's presentation: bubble, filmstrip or fullscreen. Default BUBBLE. */
+    val trickplayMode: TrickplayMode = TrickplayMode.BUBBLE,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
     /**
      * Per-type auto-skip delay (ms) added on top of a segment's start before
@@ -174,6 +180,10 @@ data class PlaybackPreferences(
     val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
     /** Skip-on-forward-seek. Default off — see `VideoPlayerSlice`. */
     val skipSegmentsOnSeek: Boolean = false,
+    /** Seconds before item end that the "Next up" button appears (5–120). Default 30. */
+    val nextUpButtonPrerollSec: Int = 30,
+    /** The skip-intro/segment invitation countdown length (3–30 s). */
+    val skipPromptDurationMs: Long = 10_000L,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
     val videoPreloadBufferSize: PreloadBufferSize = PreloadBufferSize.MEDIUM,
@@ -201,13 +211,63 @@ data class PlaybackPreferences(
      */
     val autoEnterPip: Boolean = true,
     val autoPlayCountdownSec: Int = 10,
+    /** What happens to an interrupted session on cold start (OFF / ASK / AUTO). Default ASK. */
+    val sessionRestoreMode: SessionRestoreMode = SessionRestoreMode.ASK,
+    /** Offer to delete the watched movie file after playback finishes. Default off. */
+    val offerDeleteAfterPlaybackMovies: Boolean = false,
+    /** Offer to delete the watched episode file after playback finishes. Default off. */
+    val offerDeleteAfterPlaybackEpisodes: Boolean = false,
+    /** The user-authored device-profile JSON merged over the server's transcode decision. Empty = nothing. */
+    val customDeviceProfileJson: String = "",
     val incognitoModeEnabled: Boolean = false,
     val showClockInPlayer: Boolean = false,
+    /** Ambient blur: the paused frame blurs behind the pause surface. Default off. */
+    val ambientBlurEnabled: Boolean = false,
     val tvZoomModePercent: Float = 0f,
+    /** How bitmap subtitle (PGS/VobSub) planes scale onto the frame. Default FIT. */
+    val bitmapSubtitleScaleMode: BitmapSubtitleScaleMode = BitmapSubtitleScaleMode.FIT,
+    /** What replaces the video after a long pause. Default OFF (keep the paused frame). */
+    val pauseScreensaverMode: PauseScreensaverMode = PauseScreensaverMode.OFF,
+    /** Minutes of pause before the pause screensaver arms (1–60). Default 5. */
+    val pauseScreensaverAfterMinutes: Int = 5,
+    /** Whether the pause surface shows item details. Default off. */
+    val pauseDetailsEnabled: Boolean = false,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
+    /**
+     * The delivery method (Auto / Force Direct Play / Force Transcode). It
+     * governs whether the quality cap applies at all, so the Settings row
+     * renders it beside the quality/transcode cluster. Default AUTO — the
+     * legacy `force_direct_play` migration no longer forces DIRECT_PLAY on
+     * absent keys (Issue #1).
+     */
+    val playbackMode: PlaybackMode = PlaybackMode.AUTO,
+    /** The HDR delivery posture for direct play (which HDR family may reach the display). Default AUTO. */
+    val hdrFormatPreference: HdrFormatPreference = HdrFormatPreference.AUTO,
+    /** Force transcode for sources taller than this height in px; `0` = off. */
+    val forceTranscodeAboveHeight: Int = 0,
+    /** The preferred video codec when the server transcodes. Default AUTO (server decides). */
+    val preferredTranscodeVideoCodec: TranscodeVideoCodecPreference = TranscodeVideoCodecPreference.AUTO,
+    /** The preferred audio codec when the server transcodes. Default AUTO (server decides). */
+    val preferredTranscodeAudioCodec: TranscodeAudioCodecPreference = TranscodeAudioCodecPreference.AUTO,
+    /**
+     * The home-network streaming quality as the persisted enum NAME
+     * ([StreamingQuality] vocabulary). Default "AUTO". Stored by
+     * `NetworkOfflineStore`; rendered beside the transcode cluster.
+     */
+    val homeStreamingQuality: String = "AUTO",
     val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
     /** Which copy plays when a download and a reachable server both exist. */
     val offlinePlaybackPreference: OfflinePlaybackPreference = OfflinePlaybackPreference.PREFER_DOWNLOADED,
+    /** mpv `tone-mapping` curve family (HDR→SDR). Default AUTO. */
+    val mpvToneMappingCurve: MpvToneMappingCurve = MpvToneMappingCurve.AUTO,
+    /** mpv deband strength (OFF / LIGHT / MEDIUM / HEAVY). Default OFF. */
+    val mpvDebandMode: MpvDebandMode = MpvDebandMode.OFF,
+    /** mpv motion interpolation. Default off. */
+    val mpvMotionInterpolation: Boolean = false,
+    /** Raw `input.conf`-style key bindings text for mpv; empty applies nothing. */
+    val mpvInputConf: String = "",
+    /** Custom on-screen button definitions; empty applies nothing. */
+    val mpvCustomButtons: String = "",
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
     val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),

@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.core.data.remote
 
 import android.util.Log
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.playback.AudioRemoteControlSurface
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
@@ -16,8 +16,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
 /**
- * Routes remote "Play" / "Playstate" / "GeneralCommand" messages to
- * [AudioPlaybackManager] (which owns the singleton audio engine).
+ * Routes remote "Play" / "Playstate" / "GeneralCommand" messages to the
+ * audio family's [AudioRemoteControlSurface] face (the Audio shell seam's
+ * role-split — the Koin alias onto the [com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager]
+ * single; ONLY the DI module names the concrete class).
  *
  * [handlePlaystate] and [handleGeneral] marshal to the main thread because
  * the underlying ExoPlayer instance must only be touched from the
@@ -30,8 +32,9 @@ import kotlinx.coroutines.withContext
  * DesktopAudioQueueManager).
  */
 class AndroidAudioRemoteControlDispatcher(
-    private val audioPlaybackManager: AudioPlaybackManager,
-    private val mediaRepository: MediaRepository,
+    private val audioPlaybackManager: AudioRemoteControlSurface,
+    /** The detail-read family seam. */
+    private val detailFeed: DetailFeed,
     private val remoteNavigationBridge: RemoteNavigationBridge,
 ) : AudioRemoteControlDispatcher {
 
@@ -139,7 +142,7 @@ class AndroidAudioRemoteControlDispatcher(
     private suspend fun buildQueueItems(itemIds: List<String>): List<AudioQueueItem> = coroutineScope {
         itemIds.map { id ->
             async {
-                mediaRepository.getMediaDetail(id).getOrNull()?.let { detail ->
+                detailFeed.getMediaDetail(id, force = false).getOrNull()?.let { detail ->
                     AudioQueueItem(
                         id = id,
                         name = detail.item.name,

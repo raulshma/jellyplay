@@ -5,8 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
@@ -31,8 +29,21 @@ import kotlinx.serialization.encodeToString
  * reset-key list end-to-end. Mirrors the `PlaybackStore` / `AppearanceStore`
  * shape.
  *
- * **LRU-cap invariants owned here:** the two per-item maps
- * ([setMediaStreamSelection] / [setVideoEffectsForItem]) are capped at 100
+ * **Spec derivation:** every key this store owns is declared exactly once as a
+ * row in [PlayerEnginePreferenceSpecs] (wire name, default, reset category,
+ * read/write encoding) and the machinery below is derived from those rows —
+ * each [Keys] member rebuilds its row's typed key from the row's wire name,
+ * each [read] projection row delegates to its row encoding (the memoised JSON
+ * decodes live in the rows now), the three config setters and the config rows
+ * of [restore] delegate to the rows' derived writes, and [resetKeysFor]
+ * filters the rows by reset category. The two per-item maps' rows carry the
+ * documented write opt-out (encode = null): their writes are the
+ * read-modify-write verbs below, each owning the clear-on-neutral/null
+ * semantics plus the 100-entry LRU cap.
+ *
+ * **LRU-cap invariants owned here (hand-written by decision — a read-modify-
+ * write with a cross-entry cap cannot be a row encoding):** the two per-item
+ * maps ([setMediaStreamSelection] / [setVideoEffectsForItem]) are capped at 100
  * entries — when an insert pushes the size over 100, the oldest entries
  * (insertion order) are evicted in the same atomic edit so the JSON blob never
  * grows unbounded. Which player is *selected* by default is owned by
@@ -45,6 +56,12 @@ import kotlinx.serialization.encodeToString
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [PlayerEnginePreferenceSpecs] row + one [PlayerEngineSlice] property + one
+ * [read] / [restore] row (and its setter) + one write-through test line. See
+ * the spec KDoc.
  */
 class PlayerEngineStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -54,89 +71,40 @@ class PlayerEngineStore constructor(
 
     private val json get() = PreferenceCodec.json
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [PlayerEnginePreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key of
+     * the same name). Kept as a plain object rather than folded into the rows
+     * because it is the reflection anchor for the JVM reset-coverage guard and
+     * the key-identity reference for the hand-written per-item verbs below.
+     */
     internal object Keys {
-        val MPV_CONFIG = stringPreferencesKey("mpv_config")
-        val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
-        val EXO_CONFIG = stringPreferencesKey("exo_config")
-        val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
-        val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey("video_effects_selections")
+        val MPV_CONFIG = stringPreferencesKey(PlayerEnginePreferenceSpecs.MPV_CONFIG.keyName)
+        val LIBVLC_CONFIG = stringPreferencesKey(PlayerEnginePreferenceSpecs.LIBVLC_CONFIG.keyName)
+        val EXO_CONFIG = stringPreferencesKey(PlayerEnginePreferenceSpecs.EXO_CONFIG.keyName)
+        val MEDIA_STREAM_SELECTIONS = stringPreferencesKey(PlayerEnginePreferenceSpecs.MEDIA_STREAM_SELECTIONS.keyName)
+        val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey(PlayerEnginePreferenceSpecs.VIDEO_EFFECTS_SELECTIONS.keyName)
     }
-
-    // Memoisation holders for the JSON-decoded engine-config blobs, keyed on the
-    // raw string so the decode is skipped when the underlying key has not
-    // changed on a given `dataStore.data` emission.
-    private var cachedMpvConfig: ParsedCache<MpvEngineConfig> = ParsedCache(null, MpvEngineConfig())
-    private var cachedLibVlcConfig: ParsedCache<LibVlcEngineConfig> = ParsedCache(null, LibVlcEngineConfig())
-    private var cachedExoPlayerConfig: ParsedCache<ExoPlayerEngineConfig> = ParsedCache(null, ExoPlayerEngineConfig())
-    private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
-    private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
 
     val playerEngine: StateFlow<PlayerEngineSlice> =
         dataStore.sliceStateFlow(scope, seed = PlayerEngineSlice(), read = ::read)
 
     /**
      * Pure read of the engine-config fields from a raw [Preferences] snapshot,
-     * memoising each JSON blob via [ParsedCache] so an unrelated preference
-     * write does not re-decode them. Exposed so the facade can fold these into
-     * the whole-`UserPreferences` projection without duplicating the read logic.
+     * each field delegated to its [PlayerEnginePreferenceSpecs] row encoding
+     * (which memoises each JSON blob so an unrelated preference write does not
+     * re-decode it). Exposed so the facade can fold these into the
+     * whole-`UserPreferences` projection without duplicating the read logic.
      */
-    internal fun read(prefs: Preferences): PlayerEngineSlice {
-        // MemoizeNull (this store's pre-promotion policy at every site): a
-        // null raw is a cacheable input — the decode inputs are exactly the
-        // raw string, so a memoised default is safe to serve.
-        val mpvConfig = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.MPV_CONFIG],
-            cache = cachedMpvConfig,
-            default = MpvEngineConfig(),
-            parse = { json.decodeFromString<MpvEngineConfig>(it) },
-            cacheRef = { cachedMpvConfig = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val libVlcConfig = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.LIBVLC_CONFIG],
-            cache = cachedLibVlcConfig,
-            default = LibVlcEngineConfig(),
-            parse = { json.decodeFromString<LibVlcEngineConfig>(it) },
-            cacheRef = { cachedLibVlcConfig = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val exoPlayerConfig = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.EXO_CONFIG],
-            cache = cachedExoPlayerConfig,
-            default = ExoPlayerEngineConfig(),
-            parse = { json.decodeFromString<ExoPlayerEngineConfig>(it) },
-            cacheRef = { cachedExoPlayerConfig = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val mediaStreamSelections = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.MEDIA_STREAM_SELECTIONS],
-            cache = cachedMediaStreamSelections,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, MediaStreamSelection>>(it) },
-            cacheRef = { cachedMediaStreamSelections = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        val videoEffectsByItem = PreferenceCodec.cachedJson(
-            raw = prefs[Keys.VIDEO_EFFECTS_SELECTIONS],
-            cache = cachedVideoEffectsByItem,
-            default = emptyMap(),
-            parse = { json.decodeFromString<Map<String, VideoEffectsConfig>>(it) },
-            cacheRef = { cachedVideoEffectsByItem = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-        return PlayerEngineSlice(
-            mpvConfig = mpvConfig,
-            libVlcConfig = libVlcConfig,
-            exoPlayerConfig = exoPlayerConfig,
-            mediaStreamSelections = mediaStreamSelections,
-            videoEffectsByItem = videoEffectsByItem,
-        )
-    }
+    internal fun read(prefs: Preferences): PlayerEngineSlice = PlayerEngineSlice(
+        mpvConfig = PlayerEnginePreferenceSpecs.MPV_CONFIG.readFrom(prefs),
+        libVlcConfig = PlayerEnginePreferenceSpecs.LIBVLC_CONFIG.readFrom(prefs),
+        exoPlayerConfig = PlayerEnginePreferenceSpecs.EXO_CONFIG.readFrom(prefs),
+        mediaStreamSelections = PlayerEnginePreferenceSpecs.MEDIA_STREAM_SELECTIONS.readFrom(prefs),
+        videoEffectsByItem = PlayerEnginePreferenceSpecs.VIDEO_EFFECTS_SELECTIONS.readFrom(prefs),
+    )
 
     private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
         val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
@@ -157,19 +125,21 @@ class PlayerEngineStore constructor(
     }
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — the three config setters delegate to their row's derived
+    // write; the per-item verbs below are the documented write opt-out of
+    // their rows (read-modify-write + LRU cap, never a single-slot write).
     // ------------------------------------------------------------------
 
     suspend fun setMpvConfig(config: MpvEngineConfig) {
-        dataStore.edit { it[Keys.MPV_CONFIG] = json.encodeToString(config) }
+        dataStore.edit { PlayerEnginePreferenceSpecs.MPV_CONFIG.writeTo(it, config) }
     }
 
     suspend fun setLibVlcConfig(config: LibVlcEngineConfig) {
-        dataStore.edit { it[Keys.LIBVLC_CONFIG] = json.encodeToString(config) }
+        dataStore.edit { PlayerEnginePreferenceSpecs.LIBVLC_CONFIG.writeTo(it, config) }
     }
 
     suspend fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
-        dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
+        dataStore.edit { PlayerEnginePreferenceSpecs.EXO_CONFIG.writeTo(it, config) }
     }
 
     /**
@@ -248,41 +218,32 @@ class PlayerEngineStore constructor(
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. Every engine-config key this store owns descends under
-     * `PreferenceResetCategory.PLAYER_ENGINES`. The two per-item maps
-     * ([Keys.MEDIA_STREAM_SELECTIONS] / [Keys.VIDEO_EFFECTS_SELECTIONS]) are
-     * runtime state and deliberately excluded from category reset (facade's
-     * `resetExcludedKeys`), so they appear in no category list here.
+     * [category] — the [PlayerEnginePreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. The three engine-config
+     * keys this store owns descend under `PreferenceResetCategory.PLAYER_ENGINES`.
+     * The two per-item maps ([Keys.MEDIA_STREAM_SELECTIONS] /
+     * [Keys.VIDEO_EFFECTS_SELECTIONS]) are runtime state and deliberately
+     * excluded from category reset (facade's `resetExcludedKeys`), so they
+     * appear in no category list here.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.PLAYER_ENGINES -> listOf(
-            Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        PlayerEnginePreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore. The three engine configs use the `encodeDefaultsJson` +
-     * serializer round-trip from [restorePreferences]; the two per-item maps use
-     * the plain `json` round-trip from [restorePerItemMaps] (with neutral-entry
-     * stripping and the 100-entry [capMap] eviction folded in so the bound has a
-     * single owner).
+     * DataStore. The three engine configs write through their rows' derived
+     * writes (the lenient `json` encode — value-equivalent to the
+     * defaults-encoding the pre-spec restore used, since the omitted defaults
+     * decode back to their Kotlin defaults); the two per-item maps keep their
+     * hand-written rows (the rows' documented write opt-out — with
+     * neutral-entry stripping and the 100-entry [capMap] eviction folded in so
+     * the bound has a single owner).
      */
     suspend fun restore(slice: PlayerEngineSlice) {
         dataStore.edit { prefs ->
-            prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<MpvEngineConfig>(),
-                slice.mpvConfig,
-            )
-            prefs[Keys.LIBVLC_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<LibVlcEngineConfig>(),
-                slice.libVlcConfig,
-            )
-            prefs[Keys.EXO_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
-                kotlinx.serialization.serializer<ExoPlayerEngineConfig>(),
-                slice.exoPlayerConfig,
-            )
+            PlayerEnginePreferenceSpecs.MPV_CONFIG.writeTo(prefs, slice.mpvConfig)
+            PlayerEnginePreferenceSpecs.LIBVLC_CONFIG.writeTo(prefs, slice.libVlcConfig)
+            PlayerEnginePreferenceSpecs.EXO_CONFIG.writeTo(prefs, slice.exoPlayerConfig)
 
             val streams = slice.mediaStreamSelections
                 .filter { (_, v) -> v.audioStreamIndex != null || v.subtitleStreamIndex != null }
@@ -349,14 +310,19 @@ class PlayerEngineStore constructor(
 
 /**
  * The player-engine configuration preference slice. Plain data class.
- * Defaults mirror the projection defaults in [PlayerEngineStore.read].
+ * Every default IS its [PlayerEnginePreferenceSpecs] row's declared default —
+ * read off the row via a plain accessor, so a preference's default is stated
+ * exactly once, in its spec, and cannot drift between the spec (what an absent
+ * key reads) and the slice (what a fresh in-memory instance serves). The
+ * spec-default equality is pinned field-for-field by
+ * `PlayerEngineSpecDerivationTest`.
  */
 @Immutable
 @Serializable
 data class PlayerEngineSlice(
-    val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
-    val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
-    val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),
-    val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
-    val videoEffectsByItem: Map<String, VideoEffectsConfig> = emptyMap(),
+    val mpvConfig: MpvEngineConfig = PlayerEnginePreferenceSpecs.MPV_CONFIG.default,
+    val libVlcConfig: LibVlcEngineConfig = PlayerEnginePreferenceSpecs.LIBVLC_CONFIG.default,
+    val exoPlayerConfig: ExoPlayerEngineConfig = PlayerEnginePreferenceSpecs.EXO_CONFIG.default,
+    val mediaStreamSelections: Map<String, MediaStreamSelection> = PlayerEnginePreferenceSpecs.MEDIA_STREAM_SELECTIONS.default,
+    val videoEffectsByItem: Map<String, VideoEffectsConfig> = PlayerEnginePreferenceSpecs.VIDEO_EFFECTS_SELECTIONS.default,
 )

@@ -239,6 +239,9 @@ object BackupSliceKey {
     const val AUDIO_CACHE = "audioCache"
     const val LIBRARY = "library"
     const val NAVIGATION = "navigation"
+
+    /** User-defined shortcuts (definitions + header/overflow pin orders). */
+    const val SHORTCUTS = "shortcuts"
     const val NETWORK_OFFLINE = "networkOffline"
     const val NOTIFICATION = "notification"
     const val SCREENSAVER = "screensaver"

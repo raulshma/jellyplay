@@ -303,6 +303,9 @@ class EngineConfigBuilderTest {
 
     @Test
     fun buildFromPreferences_engineSpecificPropagated() {
+        // Non-mpv payloads pass through by identity; an mpv payload is
+        // deliberately COPIED — the four persisted render prefs fold into it
+        // unconditionally (see foldEngineSpecific), pinned below.
         val mpvConfig: EngineSpecificConfig = MpvEngineConfig()
         val config = EngineConfigBuilder.buildFromPreferences(
             agg = VideoPlayerAggregate(),
@@ -310,7 +313,127 @@ class EngineConfigBuilderTest {
             itemId = null,
             engineSpecific = mpvConfig,
         )
-        assertSame(mpvConfig, config.engineSpecific)
+        assertEquals(
+            MpvEngineConfig(
+                toneMappingCurve = com.raulshma.jellyplay.core.model.MpvToneMappingCurve.AUTO,
+                debandMode = com.raulshma.jellyplay.core.model.MpvDebandMode.OFF,
+                motionInterpolation = false,
+                bitmapSubtitleScaleMode = com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.FIT,
+            ),
+            config.engineSpecific,
+        )
+    }
+
+    @Test
+    fun buildFromPreferences_mpvRenderPrefsFoldIntoTheEngineConfig() {
+        val agg = VideoPlayerAggregate(
+            videoPlayer = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice(
+                mpvToneMappingCurve = com.raulshma.jellyplay.core.model.MpvToneMappingCurve.BT_2390,
+                mpvDebandMode = com.raulshma.jellyplay.core.model.MpvDebandMode.HEAVY,
+                mpvMotionInterpolation = true,
+                bitmapSubtitleScaleMode = com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.COVER,
+            ),
+        )
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = MpvEngineConfig(shaderPack = com.raulshma.jellyplay.core.model.MpvShaderPack.ANIME4K_A),
+        )
+        val mpv = config.engineSpecific as MpvEngineConfig
+        assertEquals(com.raulshma.jellyplay.core.model.MpvToneMappingCurve.BT_2390, mpv.toneMappingCurve)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvDebandMode.HEAVY, mpv.debandMode)
+        assertEquals(true, mpv.motionInterpolation)
+        assertEquals(com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.COVER, mpv.bitmapSubtitleScaleMode)
+        // The non-folded fields ride the original config untouched.
+        assertEquals(com.raulshma.jellyplay.core.model.MpvShaderPack.ANIME4K_A, mpv.shaderPack)
+    }
+
+    @Test
+    fun buildFromPreferences_mpvInputConfFoldsBlankToNull() {
+        // Blank (the default) applies nothing: userInputConf lands null so
+        // the engine layer skips the input.conf sync entirely.
+        val agg = VideoPlayerAggregate()
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = MpvEngineConfig(),
+        )
+        assertNull((config.engineSpecific as MpvEngineConfig).userInputConf)
+    }
+
+    @Test
+    fun buildFromPreferences_mpvInputConfFoldsIntoTheEngineConfigOnBothPaths() {
+        val agg = VideoPlayerAggregate(
+            videoPlayer = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice(
+                mpvInputConf = "MBTN_RIGHT cycle pause",
+            ),
+        )
+        val fromPrefs = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = MpvEngineConfig(),
+        )
+        assertEquals("MBTN_RIGHT cycle pause", (fromPrefs.engineSpecific as MpvEngineConfig).userInputConf)
+        // The runtime path (the slices entry) folds identically — the two
+        // build paths cannot drift.
+        val fromSlices = EngineConfigBuilder.build(
+            state = baselineState(),
+            effects = baselineEffects(),
+            equalizerEnabled = false,
+            agg = agg,
+            engineSpecific = MpvEngineConfig(),
+        )
+        assertEquals("MBTN_RIGHT cycle pause", (fromSlices.engineSpecific as MpvEngineConfig).userInputConf)
+    }
+
+    @Test
+    fun buildFromPreferences_exoBitmapSubtitleScaleModeFolds() {
+        // The Exo side is FIT-only today (Media3 constraint — see the field's
+        // KDoc); the fold still carries the pref so the seam stays symmetric.
+        val agg = VideoPlayerAggregate(
+            videoPlayer = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice(
+                bitmapSubtitleScaleMode = com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.STRETCH,
+            ),
+        )
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(),
+        )
+        assertEquals(
+            com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.STRETCH,
+            (config.engineSpecific as ExoPlayerEngineConfig).bitmapSubtitleScaleMode,
+        )
+    }
+
+    @Test
+    fun build_hdrFormatPreferenceFoldsFromThePlaybackSliceOnBothPaths() {
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(hdrFormatPreference = com.raulshma.jellyplay.core.model.HdrFormatPreference.SDR_ONLY),
+        )
+        val fromPrefs = EngineConfigBuilder.buildFromPreferences(agg, emptyList(), null, null)
+        assertEquals(
+            com.raulshma.jellyplay.core.model.HdrFormatPreference.SDR_ONLY,
+            fromPrefs.hdrFormatPreference,
+        )
+        val fromSlices = EngineConfigBuilder.buildFromSlices(
+            subtitleStyle = SubtitleStyle(),
+            videoEffects = VideoEffectsConfig(),
+            dialogueBoostEnabled = false,
+            dialogueBoostStrength = EffectStrength.MODERATE,
+            mediaStreams = emptyList(),
+            effects = baselineEffects(),
+            equalizerEnabled = false,
+            agg = agg,
+        )
+        assertEquals(
+            com.raulshma.jellyplay.core.model.HdrFormatPreference.SDR_ONLY,
+            fromSlices.hdrFormatPreference,
+        )
     }
 
     @Test
@@ -318,12 +441,58 @@ class EngineConfigBuilderTest {
         val exoConfig: EngineSpecificConfig = ExoPlayerEngineConfig(audioOffloadMode = ExoPlayerEngineConfig().audioOffloadMode)
         val vlcConfig: EngineSpecificConfig = LibVlcEngineConfig(networkCaching = 1500)
 
+        // The Exo payload is deliberately COPIED — the playback slice's HDR
+        // format preference AND the video-player slice's bitmap-subtitle
+        // scale mode fold into it (see foldEngineSpecific); under the neutral
+        // AUTO pref the HDR fold is the original's null-standing, and the
+        // scale-mode fold writes the pref's FIT default (the mode prefs are
+        // the source of truth — the same unconditional-write convention the
+        // mpv render prefs follow).
         val exoBuilt = EngineConfigBuilder.buildFromPreferences(VideoPlayerAggregate(), emptyList(), null, exoConfig)
-        assertSame(exoConfig, exoBuilt.engineSpecific)
+        assertEquals(
+            (exoConfig as ExoPlayerEngineConfig).copy(
+                bitmapSubtitleScaleMode = com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.FIT,
+            ),
+            exoBuilt.engineSpecific,
+        )
 
         val vlcBuilt = EngineConfigBuilder.buildFromPreferences(VideoPlayerAggregate(), emptyList(), null, vlcConfig)
         assertSame(vlcConfig, vlcBuilt.engineSpecific)
         assertNotNull(vlcBuilt.engineSpecific as LibVlcEngineConfig)
+    }
+
+    @Test
+    fun buildFromPreferences_hdrFormatPreferenceFoldsIntoTheExoEngineConfig() {
+        // A non-AUTO posture lands on the blob's nullable field verbatim —
+        // the DECODER-side half the Exo MIME ordering consumes.
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(
+                hdrFormatPreference = com.raulshma.jellyplay.core.model.HdrFormatPreference.DOLBY_VISION_ONLY,
+            ),
+        )
+        val built = EngineConfigBuilder.buildFromPreferences(
+            agg = agg,
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(preferredVideoMimeTypes = listOf("video/hevc")),
+        )
+        val exo = built.engineSpecific as ExoPlayerEngineConfig
+        assertEquals(
+            com.raulshma.jellyplay.core.model.HdrFormatPreference.DOLBY_VISION_ONLY,
+            exo.hdrFormatPreference,
+        )
+        // The non-folded fields ride the original config untouched.
+        assertEquals(listOf("video/hevc"), exo.preferredVideoMimeTypes)
+        // AUTO folds to the blob's null = unset (the engine's default
+        // negotiation stands) — the same AUTO/null equivalence the Exo MIME
+        // table applies.
+        val autoBuilt = EngineConfigBuilder.buildFromPreferences(
+            agg = VideoPlayerAggregate(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = ExoPlayerEngineConfig(hdrFormatPreference = com.raulshma.jellyplay.core.model.HdrFormatPreference.SDR_ONLY),
+        )
+        assertNull((autoBuilt.engineSpecific as ExoPlayerEngineConfig).hdrFormatPreference)
     }
 
     @Test

@@ -19,8 +19,10 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.image.rowCardDecodeSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
+import kotlin.math.roundToInt
 
 /**
  * Wide (16:9 landscape) media card for Home continue-watching / next-up rows.
@@ -112,6 +114,14 @@ fun WideMediaCard(
                 modifier = imageModifier,
                 contentScale = ContentScale.Crop,
                 crossfade = false,
+                // Aspect-correct decode bounds (rowCardDecodeSize, ~2× density
+                // of the card's width): without it the 16:9 frame silently fell
+                // to MediaImage's 384² square default and under-decoded the
+                // width on ≥2× density phones.
+                size = rowCardDecodeSize(
+                    width = (cardWidth.value * 2).roundToInt(),
+                    aspectRatio = 16f / 9f,
+                ),
             )
         },
         title = title,

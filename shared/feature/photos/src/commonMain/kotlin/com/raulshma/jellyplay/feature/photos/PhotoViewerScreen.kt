@@ -598,7 +598,7 @@ fun PhotoViewerScreen(
                             onPhotoClick = { index ->
                                 viewModel.navigateTo(index)
                             },
-                            getThumbnailUrl = { viewModel.getThumbnailUrl(it) },
+                            thumbnailUrl = viewModel::getThumbnailUrl,
                             focusRequester = filmstripFocusRequester,
                             onBack = { showFilmstrip = false },
                         )
@@ -619,8 +619,10 @@ private fun PhotoImage(
     onDoubleTap: (currentScale: Float) -> Unit,
     colorFilter: androidx.compose.ui.graphics.ColorFilter? = null,
 ) {
-    val imageUrl = remember(photo.id) {
-        viewModel.getImageUrl(photo.id, maxWidth = null)
+    val imageUrl = remember(photo) {
+        // Original resolution (null maxWidth — the param is omitted on the
+        // wire), the photo's own Primary tag as the cache-buster.
+        viewModel.getImageUrl(photo, maxWidth = null)
     }
     var lastTapTime by remember { mutableStateOf(0L) }
     // The decode ladder rasterizes against this Box — the image Fits inside
@@ -892,7 +894,8 @@ private fun PhotoFilmstrip(
     siblings: List<com.raulshma.jellyplay.core.model.MediaItem>,
     currentIndex: Int,
     onPhotoClick: (Int) -> Unit,
-    getThumbnailUrl: (String) -> String,
+    /** Item-based thumbnail builder — the sibling MediaItem is in hand here. */
+    thumbnailUrl: (com.raulshma.jellyplay.core.model.MediaItem) -> String,
     focusRequester: FocusRequester,
     onBack: () -> Unit,
 ) {
@@ -953,7 +956,7 @@ private fun PhotoFilmstrip(
                     contentAlignment = Alignment.Center,
                 ) {
                     MediaImage(
-                        url = getThumbnailUrl(item.id),
+                        url = thumbnailUrl(item),
                         contentDescription = item.name,
                         blurHash = item.blurHashes.primary,
                         modifier = Modifier.fillMaxSize(),

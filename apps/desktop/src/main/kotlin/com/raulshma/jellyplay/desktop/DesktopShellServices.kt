@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.platform.LocalFocusManager
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.remote.ActivePlayerController
@@ -20,15 +21,22 @@ import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
+import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.ui.message.UserMessage
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.NavigationState
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationController
+import com.raulshma.jellyplay.feature.player.video.session.SessionRestorationSnapshot
+import com.raulshma.jellyplay.feature.player.video.session.dismissalFingerprint
+import com.raulshma.jellyplay.feature.player.video.session.latestResumeVideoSnapshot
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
 import com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSectionRegistry
@@ -176,12 +184,33 @@ internal class DesktopShellServices(
      *  - [appRuntimeStateStore] — the first-run onboarding gate's one-shot
      *    `onboarding_completed` read;
      *  - [appearanceStore] — the stored manual layout override behind the
-     *    adaptive shell wiring.
+     *    adaptive shell wiring;
+     *  - [offlineModeManager] — the shortcut-action surface's TOGGLE_OFFLINE
+     *    arm (the same platform single the home VM reads its offline
+     *    state through; the manual toggle is the desktop manager's
+     *    documented only path to OFFLINE_MANUAL).
      */
     val networkMonitor: NetworkMonitor,
     val navigationStore: NavigationStore,
     val appRuntimeStateStore: AppRuntimeStateStore,
     val appearanceStore: AppearanceStore,
+    val offlineModeManager: OfflineModeManager,
+
+    /**
+     * The cold-start session restoration's seams (the holder constructs the
+     * [SessionRestorationController] directly, the sessionController idiom):
+     * the persisted [SessionRestoreMode] read, the ONE server resume fetch
+     * mapped through [latestResumeVideoSnapshot], and the prompt-dismissal
+     * marker's read/write (the feature's one local-storage exception — see
+     * [SessionRestoreDismissal]). The factory passes the real reads over its
+     * PlaybackStore/LibraryApiClient Koin singles; the defaults are the
+     * JVM-test no-ops (the holder's suites construct the holder without
+     * these and must observe nothing).
+     */
+    val sessionRestoreMode: () -> SessionRestoreMode = { SessionRestoreMode.OFF },
+    val fetchResumeSnapshot: suspend () -> SessionRestorationSnapshot? = { null },
+    val readSessionRestoreDismissal: suspend () -> String? = { null },
+    val persistSessionRestoreDismissal: suspend (SessionRestorationSnapshot) -> Unit = {},
 ) {
     /** The shared session-policy wiring — see class KDoc. */
     val sessionController = ShellSessionController(
@@ -201,6 +230,19 @@ internal class DesktopShellServices(
         scope = scope,
         repository = appUpdateRepository,
         showMessage = showMessage,
+    )
+
+    /**
+     * The cold-start session restoration controller (see [sessionRestoreMode]):
+     * ONE evaluation per process, the decision applied by the scaffold's
+     * effect — the prompt lives in the shell, never the player screen. The
+     * no-op default seams make construction inert in the JVM suites.
+     */
+    val sessionRestoration = SessionRestorationController(
+        restoreMode = sessionRestoreMode,
+        fetchLatestSnapshot = fetchResumeSnapshot,
+        readDismissal = readSessionRestoreDismissal,
+        persistDismissal = persistSessionRestoreDismissal,
     )
 
     /**
@@ -329,6 +371,10 @@ internal val desktopShellServicePrewarms: List<(Koin) -> Any> = listOf(
     { it.get<NavigationStore>() },
     { it.get<AppRuntimeStateStore>() },
     { it.get<AppearanceStore>() },
+    { it.get<OfflineModeManager>() },
+    // The session-restoration seams' Koin reads (factory koinInject order below).
+    { it.get<PlaybackStore>() },
+    { it.get<LibraryApiClient>() },
 )
 
 /**
@@ -384,6 +430,13 @@ internal fun rememberDesktopShellServices(
     val navigationStore: NavigationStore = koinInject()
     val appRuntimeStateStore: AppRuntimeStateStore = koinInject()
     val appearanceStore: AppearanceStore = koinInject()
+    val offlineModeManager: OfflineModeManager = koinInject()
+    // The cold-start session restoration's collaborators (holder seam lambdas
+    // below): the persisted restore mode and the ONE resume fetch, mapped once
+    // and cached nowhere (server-authoritative — incognito histories simply
+    // have no resume data to find).
+    val playbackStore: PlaybackStore = koinInject()
+    val libraryApiClient: LibraryApiClient = koinInject()
 
     val services = remember(
         scope,
@@ -407,6 +460,9 @@ internal fun rememberDesktopShellServices(
         navigationStore,
         appRuntimeStateStore,
         appearanceStore,
+        offlineModeManager,
+        playbackStore,
+        libraryApiClient,
     ) {
         DesktopShellServices(
             scope = scope,
@@ -430,6 +486,19 @@ internal fun rememberDesktopShellServices(
             navigationStore = navigationStore,
             appRuntimeStateStore = appRuntimeStateStore,
             appearanceStore = appearanceStore,
+            offlineModeManager = offlineModeManager,
+            sessionRestoreMode = { playbackStore.playback.value.sessionRestoreMode },
+            fetchResumeSnapshot = {
+                latestResumeVideoSnapshot(
+                    libraryApiClient
+                        .getContinueWatching(limit = DESKTOP_RESUME_SNAPSHOT_FETCH_LIMIT)
+                        .getOrThrow(),
+                )
+            },
+            readSessionRestoreDismissal = { playbackStore.sessionRestoreDismissalNow().takeIf { it.isNotEmpty() } },
+            persistSessionRestoreDismissal = { snapshot ->
+                playbackStore.setSessionRestoreDismissal(dismissalFingerprint(snapshot))
+            },
         )
     }
 
@@ -455,3 +524,6 @@ internal fun rememberDesktopShellServices(
 
     return services
 }
+
+/** The one-shot cold-start fetch's row budget (the recency pick runs client-side). */
+private const val DESKTOP_RESUME_SNAPSHOT_FETCH_LIMIT = 5

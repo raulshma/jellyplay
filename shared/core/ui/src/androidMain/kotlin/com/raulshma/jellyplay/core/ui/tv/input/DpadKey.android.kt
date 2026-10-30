@@ -27,6 +27,8 @@ private fun mapComposeKey(key: Key): Int = when (key) {
     Key.MediaPlay, Key.MediaPause, Key.MediaPlayPause -> NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
     Key.MediaFastForward -> NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD
     Key.MediaRewind -> NativeKeyEvent.KEYCODE_MEDIA_REWIND
+    Key.MediaNext, Key.MediaSkipForward, Key.MediaStepForward -> NativeKeyEvent.KEYCODE_MEDIA_NEXT
+    Key.MediaPrevious, Key.MediaSkipBackward, Key.MediaStepBackward -> NativeKeyEvent.KEYCODE_MEDIA_PREVIOUS
     Key.Menu -> NativeKeyEvent.KEYCODE_MENU
     else -> 0
 }
@@ -44,11 +46,21 @@ private fun nativeKeyCodeToAction(keyCode: Int): DpadAction? = when (keyCode) {
     NativeKeyEvent.KEYCODE_ENTER,
     NativeKeyEvent.KEYCODE_NUMPAD_ENTER -> DpadAction.Select
     NativeKeyEvent.KEYCODE_BACK -> DpadAction.Back
+    // The wired single-button headset's hook code: the same toggle a remote's
+    // play/pause key carries (devices that route the hook as a window key —
+    // BT AVRCP never arrives here, it goes to the media session).
+    NativeKeyEvent.KEYCODE_HEADSETHOOK,
     NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
     NativeKeyEvent.KEYCODE_MEDIA_PLAY,
     NativeKeyEvent.KEYCODE_MEDIA_PAUSE -> DpadAction.PlayPause
     NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> DpadAction.FastForward
     NativeKeyEvent.KEYCODE_MEDIA_REWIND -> DpadAction.Rewind
+    NativeKeyEvent.KEYCODE_MEDIA_NEXT,
+    NativeKeyEvent.KEYCODE_MEDIA_SKIP_FORWARD,
+    NativeKeyEvent.KEYCODE_MEDIA_STEP_FORWARD -> DpadAction.Next
+    NativeKeyEvent.KEYCODE_MEDIA_PREVIOUS,
+    NativeKeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD,
+    NativeKeyEvent.KEYCODE_MEDIA_STEP_BACKWARD -> DpadAction.Previous
     NativeKeyEvent.KEYCODE_MENU -> DpadAction.Menu
     else -> null
 }

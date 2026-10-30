@@ -74,6 +74,10 @@ class UpNextControllerTest {
     private var smartDownloadsEnabled = false
     private var durationMs = 0L
     private var deleteResult = false
+    // Binge controls (#17): the autoplay-episode cap leaf and the
+    // after-finish keep-gate's pref arm.
+    private val autoplayLimit = MutableStateFlow(0)
+    private var showDetailsAfterFinish = false
 
     // Recording sinks.
     private val markedPlayed = mutableListOf<String>()
@@ -148,6 +152,8 @@ class UpNextControllerTest {
             closePlayer = { closeRequests++ },
             cancelAutoplayDecision = { cancelDecisionCalls++ },
             setAutoplayCancelledMirror = { autoplayCancelledMirror = it },
+            autoplayEpisodeLimit = autoplayLimit,
+            isShowDetailsAfterFinishEnabled = { showDetailsAfterFinish },
             isSmartDownloadsEnabled = { smartDownloadsEnabled },
             getDurationMs = { durationMs },
             deleteDownload = { _ ->
@@ -623,6 +629,189 @@ class UpNextControllerTest {
 
         assertEquals(1, cancelDecisionCalls, "the autoplay decision clock is cancelled first")
         assertTrue(autoplayCancelledMirror, "the Up Next overlay's cancelled mirror follows")
+    }
+
+    // ── autoplay episode limit (the #17 binge controls) ────────────────────
+
+    @Test
+    fun `engine-end auto-advances grow the streak and arm the cap`() = runTest(dispatcher) {
+        stubSeason(episode("ep2"), episode("ep3"))
+        autoplayLimit.value = 2
+        val c = controller()
+
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "one auto-advance under a cap of 2 does not arm")
+
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value, "the streak reached the cap")
+        assertFalse(c.canAutoAdvance(), "the end-of-playback gate blocks further auto-advances")
+    }
+
+    @Test
+    fun `countdown expiry counts as an auto-advance too`() = runTest(dispatcher) {
+        autoplayLimit.value = 1
+        stubSeason(episode("ep2"), episode("ep3"))
+        val c = controller()
+
+        c.advanceUnattended()
+        advanceUntilIdle()
+
+        assertTrue(c.isAutoplayLimitReached.value, "the countdown ran out with no user press — an auto-advance")
+        assertEquals(listOf("ep3" to 0L), initialized, "the expiry arm still advances")
+    }
+
+    @Test
+    fun `manual play-next resets the streak`() = runTest(dispatcher) {
+        stubSeason(episode("ep2"), episode("ep3"))
+        autoplayLimit.value = 1
+        val c = controller()
+
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value)
+
+        c.playNextManually()
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "a deliberate user pick restarts the unattended streak")
+        assertTrue(c.canAutoAdvance())
+    }
+
+    @Test
+    fun `manual verbs reset the streak - episode pick and queue row and mark-and-skip`() = runTest(dispatcher) {
+        // The queue must exist BEFORE the controller: the projections capture
+        // the queue's flow at construction.
+        videoQueue = VideoQueueController()
+        stubSeason(episode("ep2"), episode("ep3"))
+        autoplayLimit.value = 1
+        val c = controller()
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value)
+
+        c.playEpisode("ep9")
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "a manual episode pick resets")
+
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value)
+        videoQueue?.enqueueLast(VideoQueueItem(itemId = "movie-1", title = "movie-1"))
+        c.playQueueItem(0)
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "a manual queue-row pick resets")
+
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value)
+        hasNext = false
+        c.markWatchedAndSkip()
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "the deliberate mark-watched-and-skip advance resets")
+    }
+
+    @Test
+    fun `player-open reset arm clears an armed cap`() = runTest(dispatcher) {
+        stubSeason(episode("ep2"), episode("ep3"))
+        autoplayLimit.value = 1
+        val c = controller()
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value)
+
+        c.resetAutoAdvanceStreak()
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "a fresh player open restarts the streak")
+    }
+
+    @Test
+    fun `limit 0 is unlimited - the cap never arms`() = runTest(dispatcher) {
+        stubSeason(episode("ep2"), episode("ep3"))
+        val c = controller()
+        repeat(5) {
+            c.advanceUnattended()
+            advanceUntilIdle()
+        }
+        assertFalse(c.isAutoplayLimitReached.value, "0 = unlimited")
+        assertTrue(c.canAutoAdvance())
+    }
+
+    @Test
+    fun `raising the cap leaf mid-session disarms a reached limit`() = runTest(dispatcher) {
+        stubSeason(episode("ep2"), episode("ep3"))
+        autoplayLimit.value = 1
+        val c = controller()
+        c.advanceUnattended()
+        advanceUntilIdle()
+        assertTrue(c.isAutoplayLimitReached.value)
+
+        autoplayLimit.value = 0
+        advanceUntilIdle()
+        assertFalse(c.isAutoplayLimitReached.value, "the reactive verdict tracks the settings change")
+        assertTrue(c.canAutoAdvance())
+    }
+
+    // ── the after-finish keep gate (#17 showNextEpisodeDetailsAfterFinish) ──
+
+    @Test
+    fun `after-finish card is kept when the pref is on with autoplay off`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        showDetailsAfterFinish = true
+        val c = controller()
+        advanceUntilIdle()
+
+        assertTrue(c.upNextCard.value != null)
+        assertTrue(
+            c.shouldKeepUpNextCardAfterFinish(autoplayEnabled = false, autoplayCancelled = false),
+            "pref on + a next item + no auto-advance pending → keep the card",
+        )
+    }
+
+    @Test
+    fun `after-finish card is kept when the autoplay cap is reached`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        showDetailsAfterFinish = true
+        autoplayLimit.value = 1
+        val c = controller()
+        c.advanceUnattended()
+        advanceUntilIdle()
+
+        assertTrue(
+            c.shouldKeepUpNextCardAfterFinish(autoplayEnabled = true, autoplayCancelled = false),
+            "autoplay enabled but the cap reached — no advance will happen, the card stays",
+        )
+    }
+
+    @Test
+    fun `after-finish keep is gated by the pref and the cancelled and no-next arms`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        val c = controller()
+        advanceUntilIdle()
+
+        // The pref is off → current behavior (close).
+        assertFalse(c.shouldKeepUpNextCardAfterFinish(autoplayEnabled = false, autoplayCancelled = false))
+
+        showDetailsAfterFinish = true
+        // The user cancelled the countdown → the dismissed card stays dismissed.
+        assertFalse(c.shouldKeepUpNextCardAfterFinish(autoplayEnabled = false, autoplayCancelled = true))
+
+        // No next item → nothing to keep (the unchanged close path). The SAME
+        // queue instance the controller's projection captured is drained.
+        videoQueue?.clear()
+        advanceUntilIdle()
+        assertTrue(c.upNextCard.value == null)
+        assertFalse(c.shouldKeepUpNextCardAfterFinish(autoplayEnabled = false, autoplayCancelled = false))
+
+        // Autoplay enabled under the cap would have advanced before this gate.
+        autoplayLimit.value = 0
+        videoQueue?.enqueueLast(VideoQueueItem(itemId = "movie-2", title = "movie-2"))
+        advanceUntilIdle()
+        assertTrue(c.upNextCard.value != null)
+        assertFalse(
+            c.shouldKeepUpNextCardAfterFinish(autoplayEnabled = true, autoplayCancelled = false),
+            "an enabled autoplay under the cap advances — the keep gate is defensive there",
+        )
     }
 
     // ── smart-download cleanup ─────────────────────────────────────────────

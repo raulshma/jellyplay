@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.IdentifyResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MetadataRefreshParams
+import com.raulshma.jellyplay.core.network.api.ImageUrlApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
@@ -16,6 +17,8 @@ import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
  */
 class MetadataEditorRepositoryImpl(
     private val libraryApiClient: LibraryApiClient,
+    /** The item-image-URL family seam (the pure builders carved off LibraryApiClient). */
+    private val imageApiClient: ImageUrlApiClient,
     metadataApiClient: MetadataApiClient,
     private val playbackApiClient: PlaybackApiClient,
 ) : MetadataEditorRepository, MetadataApiClient by metadataApiClient {
@@ -40,7 +43,7 @@ class MetadataEditorRepositoryImpl(
         maxWidth: Int?,
         imageIndex: Int?,
         tag: String?,
-    ): String = libraryApiClient.getImageUrl(itemId, imageType, maxWidth, imageIndex, tag)
+    ): String = imageApiClient.getImageUrl(itemId, imageType, maxWidth, imageIndex, tag)
 
     override suspend fun downloadRemoteSubtitle(itemId: String, subtitleId: String): Result<Unit> =
         playbackApiClient.downloadRemoteSubtitle(itemId, subtitleId)

@@ -44,6 +44,7 @@ class VideoPlayerSpecDerivationTest {
     private val expectedStoredType: Map<String, KClass<*>> = mapOf(
         "video_seek_duration_ms" to Long::class,
         "video_controls_timeout_ms" to Long::class,
+        "skip_prompt_duration_ms" to Long::class,
         "video_hide_osd_on_pause" to Boolean::class,
         "video_resume_on_headset_plug" to Boolean::class,
         "video_default_orientation" to String::class,
@@ -73,14 +74,20 @@ class VideoPlayerSpecDerivationTest {
         "video_auto_skip_outro" to Boolean::class,
         "trickplay_enabled" to Boolean::class,
         "trickplay_on_seek_gesture" to Boolean::class,
+        "trickplay_mode" to String::class,
         "video_episode_browser_enabled" to Boolean::class,
         "video_show_playback_metadata" to Boolean::class,
         "video_preload_buffer_size" to String::class,
         "video_cache_size_mb" to Int::class,
         "show_clock_in_player" to Boolean::class,
         "show_time_remaining" to Boolean::class,
+        "ambient_blur_enabled" to Boolean::class,
         "tv_zoom_mode_percent" to Float::class,
+        "bitmap_subtitle_scale_mode" to String::class,
         "incognito_mode_enabled" to Boolean::class,
+        "pause_screensaver_mode" to String::class,
+        "pause_screensaver_after_minutes" to Int::class,
+        "pause_details_enabled" to Boolean::class,
         "segment_behaviors" to String::class,
         "segment_skip_delays_ms" to String::class,
         "skip_intro_enabled" to String::class,
@@ -88,6 +95,14 @@ class VideoPlayerSpecDerivationTest {
         "auto_skip_intro" to String::class,
         "auto_skip_outro" to String::class,
         "skip_segments_on_seek" to Boolean::class,
+        "next_up_button_preroll_sec" to Int::class,
+        "mpv_tone_mapping_curve" to String::class,
+        "mpv_deband_mode" to String::class,
+        "mpv_motion_interpolation" to Boolean::class,
+        "mpv_input_conf" to String::class,
+        "mpv_custom_buttons" to String::class,
+        "autoplay_episode_limit" to Int::class,
+        "show_next_episode_details_after_finish" to Boolean::class,
     )
 
     /**
@@ -192,6 +207,7 @@ class VideoPlayerSpecDerivationTest {
         val slice = VideoPlayerSlice()
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.default, slice.videoSeekDurationMs)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.default, slice.videoControlsTimeoutMs)
+        assertEquals(VideoPlayerPreferenceSpecs.SKIP_PROMPT_DURATION_MS.default, slice.skipPromptDurationMs)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.default, slice.videoHideOsdOnPause)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.default, slice.videoResumeOnHeadsetPlug)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.default, slice.videoDefaultOrientation)
@@ -205,6 +221,8 @@ class VideoPlayerSpecDerivationTest {
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_MULTIPLIER.default, slice.videoHoldSpeedMultiplier)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_SPEED.default, slice.videoDefaultSpeed)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_NEXT.default, slice.videoAutoplayNext)
+        assertEquals(VideoPlayerPreferenceSpecs.AUTOPLAY_EPISODE_LIMIT.default, slice.autoplayEpisodeLimit)
+        assertEquals(VideoPlayerPreferenceSpecs.SHOW_NEXT_EPISODE_DETAILS_AFTER_FINISH.default, slice.showNextEpisodeDetailsAfterFinish)
         assertEquals(VideoPlayerPreferenceSpecs.STILL_WATCHING_MODE.default, slice.stillWatchingMode)
         assertEquals(VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.default, slice.stillWatchingEpisodeThreshold)
         assertEquals(VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.default, slice.trailerAutoplay)
@@ -220,25 +238,37 @@ class VideoPlayerSpecDerivationTest {
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_INDICATOR_SIDE.default, slice.videoGestureIndicatorSide)
         assertEquals(VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.default, slice.trickplayEnabled)
         assertEquals(VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.default, slice.trickplayOnSeekGesture)
+        assertEquals(VideoPlayerPreferenceSpecs.TRICKPLAY_MODE.default, slice.trickplayMode)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.default, slice.videoEpisodeBrowserEnabled)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.default, slice.videoShowPlaybackMetadata)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.default, slice.videoPreloadBufferSize)
         assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CACHE_SIZE_MB.default, slice.videoCacheSizeMb)
         assertEquals(VideoPlayerPreferenceSpecs.SHOW_CLOCK_IN_PLAYER.default, slice.showClockInPlayer)
         assertEquals(VideoPlayerPreferenceSpecs.SHOW_TIME_REMAINING.default, slice.showTimeRemaining)
+        assertEquals(VideoPlayerPreferenceSpecs.AMBIENT_BLUR_ENABLED.default, slice.ambientBlurEnabled)
         assertEquals(VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.default, slice.tvZoomModePercent)
+        assertEquals(VideoPlayerPreferenceSpecs.BITMAP_SUBTITLE_SCALE_MODE.default, slice.bitmapSubtitleScaleMode)
         assertEquals(VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.default, slice.incognitoModeEnabled)
+        assertEquals(VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_MODE.default, slice.pauseScreensaverMode)
+        assertEquals(VideoPlayerPreferenceSpecs.PAUSE_SCREENSAVER_AFTER_MINUTES.default, slice.pauseScreensaverAfterMinutes)
+        assertEquals(VideoPlayerPreferenceSpecs.PAUSE_DETAILS_ENABLED.default, slice.pauseDetailsEnabled)
         assertEquals(VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.default, slice.segmentBehaviors)
         assertEquals(VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.default, slice.segmentSkipDelaysMs)
         assertEquals(VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.default, slice.skipSegmentsOnSeek)
-        // Totality: every slice field is covered above — the 41 pinned
-        // properties are ALL the slice's fields (46 rows - 5 legacy-only rows
+        assertEquals(VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC.default, slice.nextUpButtonPrerollSec)
+        assertEquals(VideoPlayerPreferenceSpecs.MPV_TONE_MAPPING_CURVE.default, slice.mpvToneMappingCurve)
+        assertEquals(VideoPlayerPreferenceSpecs.MPV_DEBAND_MODE.default, slice.mpvDebandMode)
+        assertEquals(VideoPlayerPreferenceSpecs.MPV_MOTION_INTERPOLATION.default, slice.mpvMotionInterpolation)
+        assertEquals(VideoPlayerPreferenceSpecs.MPV_INPUT_CONF.default, slice.mpvInputConf)
+        assertEquals(VideoPlayerPreferenceSpecs.MPV_CUSTOM_BUTTONS.default, slice.mpvCustomButtons)
+        // Totality: every slice field is covered above — the 56 pinned
+        // properties are ALL the slice's fields (61 rows - 5 legacy-only rows
         // with no slice property). A field added without a spec-default pin
         // above (and without bumping this count) fails here. Statics
         // (the @Serializable Companion, Compose's $stable) don't count.
         val instanceFields = VideoPlayerSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(41, instanceFields)
+        assertEquals(56, instanceFields)
     }
 
     @Test

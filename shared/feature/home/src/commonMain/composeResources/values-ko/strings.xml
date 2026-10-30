@@ -132,4 +132,11 @@
          event; the screen resolves the text). -->
     <string name="home_new_sections_announcement">홈의 새 콘텐츠: %1$s</string>
     <string name="home_new_sections_customize">맞춤 설정</string>
+    <!-- PENDING TRANSLATION: copied verbatim from the default locale by StringsPropagator — translate each entry and fold it into the groups above. -->
+    <string name="home_hero_pause_video">Pause video</string>
+    <string name="home_airs_date_format">Airs %1$s</string>
+    <string name="home_presence_chip_label">%1$s is watching %2$s</string>
+    <string name="home_presence_join">Join</string>
+    <string name="home_presence_dismiss_cd">Hide this session</string>
+    <string name="home_watch_party_join_failed">Couldn't join the watch party</string>
 </resources>

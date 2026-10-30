@@ -68,7 +68,7 @@ class DownloadRepositoryImplSubtitlesTest {
     private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
     private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val detailFeed: DetailFeed = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val playbackIdentity: PlaybackIdentity = mockk(relaxed = true)
     private val preferencesStore: DownloadsStore = mockk(relaxed = true)
@@ -98,7 +98,7 @@ class DownloadRepositoryImplSubtitlesTest {
         httpClient = testClient,
         json = json,
         timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
-        mediaRepository = MediaRepositoryAccess { mediaRepository },
+        mediaRepository = MediaRepositoryAccess { detailFeed },
     )
 
     private fun repository(testClient: OkHttpClient = OkHttpClient()) = DownloadRepositoryImpl(
@@ -107,7 +107,7 @@ class DownloadRepositoryImplSubtitlesTest {
         playbackStateDao = playbackStateDao,
         syncBaselineDao = syncBaselineDao,
         database = database,
-        mediaRepository = MediaRepositoryAccess { mediaRepository },
+        mediaRepository = MediaRepositoryAccess { detailFeed },
         episodeCatalogue = mockk(relaxed = true),
         imageUrlProvider = mockk(relaxed = true),
 

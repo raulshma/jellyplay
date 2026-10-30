@@ -71,3 +71,25 @@ val DownloadQuality.maxBitrate: Int?
         DownloadQuality.LOW_480P -> 1_500_000
     }
 
+/**
+ * One pending "Ask before download" candidate (gh-181): an episode of a
+ * downloaded series found new on the server while the effective auto-download
+ * mode was [AutoDownloadMode.ASK]. A prompt, not a queue entry — the user
+ * confirms it on the Downloads screen (which enqueues through the normal
+ * intake) or dismisses it.
+ */
+@Immutable
+@Serializable
+data class AutoDownloadSuggestion(
+    val episodeId: String,
+    val seriesId: String,
+    val seriesName: String,
+    val seasonId: String,
+    val seasonName: String,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+    val name: String,
+    val suggestedAt: Long = 0L,
+)
+
+

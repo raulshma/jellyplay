@@ -20,8 +20,7 @@ import org.jellyfin.sdk.api.client.extensions.*
  * ballooned — this family shares nothing with the library read paths or the
  * home hot path: no caches, no LRU, no fetcher, no favorite-flag store).
  * Constructed over the SAME [JellyfinApiEngine] single the wide client uses
- * (Koin passes the engine; the union's [com.raulshma.jellyplay.core.network.JellyfinApiClientImpl]
- * delegates this seam here), so the wire calls, the retry chassis
+ * (Koin passes the engine), so the wire calls, the retry chassis
  * ([JellyfinApiEngine.withApi]) and the atomic-session identity reads are the
  * ones this client has always answered with — the split is pure relocation.
  */

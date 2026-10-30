@@ -87,12 +87,12 @@ class EpisodeFormattingTest {
 
         assertEquals(
             listOf("https://serv/img/series-42/primary"),
-            seasonItem.seriesImageFallback { id -> "https://serv/img/$id/primary" },
+            seasonItem.seriesImageFallback { "https://serv/img/${it.seriesId}/primary" },
         )
-        assertEquals(emptyList<String>(), movie.seriesImageFallback { id -> "https://serv/img/$id/primary" })
+        assertEquals(emptyList<String>(), movie.seriesImageFallback { "https://serv/img/${it.seriesId}/primary" })
 
         val noSeriesId = seasonItem.copy(seriesId = null)
-        assertEquals(emptyList<String>(), noSeriesId.seriesImageFallback { id -> "https://serv/img/$id/primary" })
+        assertEquals(emptyList<String>(), noSeriesId.seriesImageFallback { "https://serv/img/${it.seriesId}/primary" })
     }
 
     // ── episodeCode + episodeCardCode: the plain-string SxxExx core ─────────

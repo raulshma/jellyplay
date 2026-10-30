@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
 import com.raulshma.jellyplay.core.model.EpisodeStreamInfo
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
+import com.raulshma.jellyplay.core.model.MediaImageTags
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.ItemQualityBadge
@@ -93,6 +94,19 @@ internal fun BaseItemDto.toMediaItem(now: DateTime = DateTime.now()) = MediaItem
     blurHashes = ImageBlurHashes(
         primary = imageBlurHashes?.get(ImageType.PRIMARY)?.values?.firstOrNull(),
         backdrop = imageBlurHashes?.get(ImageType.BACKDROP)?.values?.firstOrNull(),
+    ),
+    // Server image etags — the cache-buster half of every artwork URL (see
+    // MediaImageTags). Tags ship in every item payload by default, so no
+    // projection change is needed to carry them.
+    imageTags = MediaImageTags(
+        primary = imageTags?.get(ImageType.PRIMARY),
+        backdrop = backdropImageTags?.firstOrNull(),
+        logo = imageTags?.get(ImageType.LOGO),
+        parentPrimary = parentPrimaryImageTag,
+        parentThumb = parentThumbImageTag,
+        seriesPrimary = seriesPrimaryImageTag,
+        seriesThumb = seriesThumbImageTag,
+        album = albumPrimaryImageTag,
     ),
     normalizationGain = normalizationGain,
     playCount = userData?.playCount ?: 0,

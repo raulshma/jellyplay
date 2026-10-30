@@ -1,39 +1,54 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audio.AudioPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCachePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEnginePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.library.LibraryPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.notification.NotificationPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflinePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.reader.ReaderPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfilePreferenceSpecs
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlin.test.Test
-import kotlin.test.fail
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
- * The spec↔diff cross-pin guard for the Factory Reset review (the
- * PreferenceCategoryPresentationTest self-consistency pins' missing twin):
- * every SPEC row that participates in a reset category AND declares a search
- * face (a user-facing knob — the same search tier the settings screens
- * derive from) must have a [DiffField] row in that category's
- * [PreferenceCategoryViews] registry, matched by the label resource KEY the
- * spec's [PreferenceSearchSpec.titleKey] names. Without this pin a preference
- * added everywhere BUT the diff registry is silently absent from the
- * reset/import review — the user resets a knob they were never shown
- * (e.g. a layout-override pair that is declared, projected into the slice,
- * and diff-registered by no row).
+ * The spec↔diff cross-pin guard for the Factory Reset review — the OUTSIDE-IN
+ * twin of the ratchet that now lives in [diffRows] itself. The registration
+ * inverted: a category's review rows pair spec rows (filtered by reset
+ * category + search face — the exact filter below) with feature-side
+ * read/format entries, and the pairing is enforced AT REGISTRY INIT — a
+ * read pairing no spec row fails there, and a spec row without a read (or a
+ * [diffFieldOmissions] entry) fails there too. Touching
+ * [PreferenceCategoryViews] below exercises that init: a broken pairing is a
+ * hard initialization failure, not a silent review gap.
  *
- * Match rule: key-level (spec titleKey == DiffField labelRes key) — the same
- * binding the fused rows' [verifyRowResourceKey] enforces between specs and
- * search faces, so a spec whose titleKey is a settings resource is covered by
- * exactly the resource its screen face uses. Sanctioned omissions live in
- * [exceptions] below, each with its reason; the list stays minimal rather
- * than pre-emptively admitting a lazy row.
+ * What still needs this runtime test:
+ *  - the omissions ledger's exact shape (the documented exceptions, keyed per
+ *    category — a new entry must land here loudly);
+ *  - every ledger entry still pairs a searchable spec row (stale-exception
+ *    detection against the live specs);
+ *  - the outside-in coverage contract: every spec row the filter selects is
+ *    covered by its category's registry rows by label-resource key — the same
+ *    binding the fused rows' verifyRowResourceKey enforces between specs and
+ *    search faces.
  *
- * Scope: the seven spec-backed stores. The spec-less stores (the audio /
- * effects / navigation / library residuals) have no spec tier to cross-pin —
- * their diff coverage is the human review the registry comments document.
+ * Scope: the nineteen spec-backed stores. A store without a spec tier has no
+ * registration here — its diff coverage is the human review the registry
+ * comments document.
  */
 class PreferenceSpecDiffFieldRatchetTest {
 
@@ -46,70 +61,106 @@ class PreferenceSpecDiffFieldRatchetTest {
         "HomeDiscoveryPreferenceSpecs" to HomeDiscoveryPreferenceSpecs.all,
         "ScreensaverPreferenceSpecs" to ScreensaverPreferenceSpecs.all,
         "ExperimentalPreferenceSpecs" to ExperimentalPreferenceSpecs.all,
+        "AudioEffectsPreferenceSpecs" to AudioEffectsPreferenceSpecs.all,
+        "PlayerEnginePreferenceSpecs" to PlayerEnginePreferenceSpecs.all,
+        "NotificationPreferenceSpecs" to NotificationPreferenceSpecs.all,
+        // The reader rows carry no search face and no reset category, so every
+        // row auto-skips the loop below — registered for the same totality the
+        // other domains get (a future searchable+resettable reader row is
+        // ratcheted by construction).
+        "ReaderPreferenceSpecs" to ReaderPreferenceSpecs.all,
+        // The library and downloads rows carry no search face either (their
+        // catalog rows stay the feature-side residuals the appearance/storage
+        // screens render), so every row auto-skips the loop below — registered
+        // for the same totality (a future search-bearing row is ratcheted by
+        // construction).
+        "LibraryPreferenceSpecs" to LibraryPreferenceSpecs.all,
+        "DownloadsPreferenceSpecs" to DownloadsPreferenceSpecs.all,
+        // The audio-player, audio-cache and network/offline rows carry no
+        // search face either (their catalog rows stay the feature-side
+        // residuals the audio/network screens render), so every row
+        // auto-skips the loop below — registered for the same totality (a
+        // future search-bearing row is ratcheted by construction).
+        "AudioPreferenceSpecs" to AudioPreferenceSpecs.all,
+        "AudioCachePreferenceSpecs" to AudioCachePreferenceSpecs.all,
+        "NetworkOfflinePreferenceSpecs" to NetworkOfflinePreferenceSpecs.all,
+        // The SyncPlay/casting rows all carry search faces (the hand fused
+        // rows' ss_* keys, which the SYNCPLAY_CASTING diff registry already
+        // pins), so they hit the loop below; the volume-memory toggle's
+        // ss_remember_volume_title face is pinned by its PLAYBACK diff
+        // read, and the two navigation toggles' faces by the HOME_DISCOVERY
+        // reads that were always there (the customization blobs and the
+        // levels blob carry no search face and auto-skip).
+        "SyncPlayCastPreferenceSpecs" to SyncPlayCastPreferenceSpecs.all,
+        "VolumeProfilePreferenceSpecs" to VolumeProfilePreferenceSpecs.all,
+        "NavigationPreferenceSpecs" to NavigationPreferenceSpecs.all,
     )
 
-    /**
-     * Sanctioned omissions — (declaring source, spec titleKey) pairs the
-     * reset review deliberately covers under a different resource or not at
-     * all, each with its reason. Add an entry ONLY with the reason written
-     * beside it.
-     */
-    private val exceptions: Set<Pair<String, String>> = setOf(
-        // The per-variant accent picker's search face is the core:ui alias
-        // resource (the search hit restates the enum's core_ui_* faces — no
-        // settings-side ss_* key exists); the diff row reads the swatch under
-        // ss_style_accent_title, the alias row the settings screen renders.
-        "AppearancePreferenceSpecs" to "core_ui_accent_color_title",
-        // The color-style knob IS surfaced — under settings_theme_style (the
-        // one-key-family fold: the spec's core_ui_* search face restates the
-        // row's screen face; the diff row reads the same colorStyle slice
-        // field).
-        "AppearancePreferenceSpecs" to "core_ui_color_style_title",
-        // The per-library home-section overrides are surfaced by the
-        // diff_library_home_overrides row (same slice field, count format) —
-        // the configure-libraries search face is the screen entrance's
-        // wording, not a second knob.
-        "HomeDiscoveryPreferenceSpecs" to "ss_configure_libraries_title",
-        // The excluded-series and hidden-CW sets are surfaced by their
-        // diff_* count rows (diff_next_up_excluded_series /
-        // diff_hidden_cw_items) — the ss_* faces are the management screens'
-        // entrances, not separate reset keys.
-        "HomeDiscoveryPreferenceSpecs" to "ss_next_up_hidden_title",
-        "HomeDiscoveryPreferenceSpecs" to "ss_unhide_cw_title",
-        // All three are members of the ONE enabled_experimental_features set
-        // key (keyName identical on the three spec rows): the reset review
-        // surfaces the set (diff_experimental_enabled_features, count) — per-
-        // member rows would triple-count a single reset key.
-        "ExperimentalPreferenceSpecs" to "ss_HOME_CARD_CLIPPING_title",
-        "ExperimentalPreferenceSpecs" to "ss_MEDIA_CARD_PEEK_title",
-        "ExperimentalPreferenceSpecs" to "ss_DIRECT_ARR_INTEGRATION_title",
-    )
+    private val filteredSpecs: List<Triple<String, PreferenceResetCategory, String>> =
+        specSources
+            .flatMap { (source, specs) -> specs.map { source to it } }
+            .mapNotNull { (source, spec) ->
+                val search = spec.search ?: return@mapNotNull null
+                val category = spec.resetCategory ?: return@mapNotNull null
+                Triple(source, category, search.titleKey)
+            }
+
+    @Test
+    fun `the omissions ledger is exactly the documented exceptions`() {
+        // A new sanctioned omission lands here WITH its reason beside it in
+        // diffFieldOmissions — the ledger stays minimal rather than
+        // pre-emptively admitting a lazy row.
+        assertEquals(
+            mapOf(
+                PreferenceResetCategory.APPEARANCE to setOf(
+                    "core_ui_accent_color_title",
+                    "core_ui_color_style_title",
+                ),
+                PreferenceResetCategory.HOME_DISCOVERY to setOf(
+                    "ss_configure_libraries_title",
+                    "ss_next_up_hidden_title",
+                    "ss_unhide_cw_title",
+                ),
+                PreferenceResetCategory.EXPERIMENTAL to setOf(
+                    "ss_HOME_CARD_CLIPPING_title",
+                    "ss_MEDIA_CARD_PEEK_title",
+                    "ss_DIRECT_ARR_INTEGRATION_title",
+                ),
+            ),
+            diffFieldOmissions,
+            "the omissions ledger drifted — every entry is a reviewed decision",
+        )
+    }
+
+    @Test
+    fun `every omission ledger entry pairs a searchable spec row`() {
+        val filteredKeys = filteredSpecs.map { (source, category, key) -> category to key }.toSet()
+        val stale = diffFieldOmissions
+            .flatMap { (category, keys) -> keys.map { category to it } }
+            .filterNot { it in filteredKeys }
+        assertEquals(emptyList(), stale, "ledger entries that no longer pair a spec row")
+    }
 
     @Test
     fun `every spec-backed reset row has a diff field row in its category`() {
-        val problems = mutableListOf<String>()
-        for ((source, specs) in specSources) {
-            for (spec in specs) {
-                val search = spec.search ?: continue // legacy/no-search row: no user-facing face to pin
-                val category = spec.resetCategory ?: continue // reset participation owned elsewhere (the SHOW_ADVANCED_SETTINGS shape)
-                val view = PreferenceCategoryViews.firstOrNull { it.category == category }
-                if (view == null) {
-                    problems += "  - $source/'${search.titleKey}': reset category $category has no PreferenceCategoryViews entry"
-                    continue
-                }
-                val covered = view.diffFields.any { it.labelRes.key == search.titleKey }
-                if (!covered && (source to search.titleKey) !in exceptions) {
-                    problems += "  - $source/'${search.titleKey}' (${spec.keyName}, $category) has no DiffField row — " +
+        // The registry init (touched by reading PreferenceCategoryViews) has
+        // already enforced the pairing — this pin restates the contract from
+        // the outside: label-resource-key coverage per category, the ledger
+        // being the only sanctioned gap.
+        val covered = PreferenceCategoryViews.associate { view ->
+            view.category to view.diffFields.map { it.labelRes.key }.toSet()
+        }
+        val problems = filteredSpecs.mapNotNull { (source, category, titleKey) ->
+            val keys = covered[category]
+            when {
+                keys == null ->
+                    "  - $source/'$titleKey': reset category $category has no PreferenceCategoryViews entry"
+                titleKey !in keys && (category to titleKey) !in diffFieldOmissions.entries.flatMap { (c, k) -> k.map { c to it } } ->
+                    "  - $source/'$titleKey' ($category) has no diff row — " +
                         "the reset review resets a knob it never shows"
-                }
+                else -> null
             }
         }
-        if (problems.isNotEmpty()) {
-            fail(
-                "the diff registries are missing spec-backed rows (add the DiffField row — label + " +
-                    "slice read + format mirroring its category's siblings — or exception-list it here " +
-                    "with the reason):\n" + problems.joinToString("\n")
-            )
-        }
+        assertTrue(problems.isEmpty(), problems.joinToString("\n"))
     }
 }

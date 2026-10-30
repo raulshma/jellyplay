@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.shortcuts.ShortcutsStore
 
 /**
  * Construction-time bundle of the five datastore stores the home feature
@@ -27,4 +28,6 @@ internal class HomeStores(
     val experimental: ExperimentalStore,
     val playback: PlaybackStore,
     val seerrPreferences: SeerrPreferencesStore,
+    /** User shortcuts (header pins) — read-only here; the editor owns writes. */
+    val shortcuts: ShortcutsStore,
 )

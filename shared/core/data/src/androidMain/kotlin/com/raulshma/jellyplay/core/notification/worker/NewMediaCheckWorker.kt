@@ -16,7 +16,8 @@ import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
 import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
@@ -39,7 +40,8 @@ import kotlinx.datetime.toKotlinLocalDate
 class NewMediaCheckWorker(
     appContext: Context,
     private val workerParams: WorkerParameters,
-    private val mediaRepository: MediaRepository,
+    private val libraryFeed: LibraryFeed,
+    private val detailFeed: DetailFeed,
     /** The series-notification family seam (the per-series Next Up diff read). */
     private val seriesNotificationReads: SeriesNotificationReads,
     private val seenMediaRepository: SeenMediaRepository,
@@ -110,7 +112,7 @@ class NewMediaCheckWorker(
         }
 
     private suspend fun checkForNewMedia(prefs: NotificationPreferences) {
-        val foldersResult = mediaRepository.getLibraryFolders()
+        val foldersResult = libraryFeed.getLibraryFolders(force = false)
         val folders = foldersResult.getOrDefault(emptyList())
         if (folders.isEmpty()) return
 
@@ -279,7 +281,7 @@ class NewMediaCheckWorker(
         calendarRows: List<ArrCalendarItem>,
     ) {
         if (calendarRows.isEmpty()) return
-        val tvdbId = mediaRepository.getMediaDetail(seriesId)
+        val tvdbId = detailFeed.getMediaDetail(seriesId, force = false)
             .getOrNull()
             ?.providerIds?.get("tvdb")?.toIntOrNull()
             ?: return
@@ -318,7 +320,7 @@ class NewMediaCheckWorker(
     ): Pair<LibraryFolder, List<com.raulshma.jellyplay.core.model.MediaItem>>? {
         if (isStopped) return null
 
-        val latestResult = mediaRepository.getLatestMedia(
+        val latestResult = libraryFeed.getLatestMedia(
             parentId = folder.id,
             limit = prefs.maxPerCheck,
         )

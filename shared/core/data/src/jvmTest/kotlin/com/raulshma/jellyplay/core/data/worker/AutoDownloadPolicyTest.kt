@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
+import com.raulshma.jellyplay.core.data.repository.SeriesDownloadPolicyStore
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.model.AutoDownloadMode
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -35,12 +37,13 @@ class AutoDownloadPolicyTest {
 
     private val episodeCatalogue: EpisodeCatalogue = mockk()
     private val downloadRepository: DownloadRepository = mockk()
+    private val policyStore: SeriesDownloadPolicyStore = mockk()
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
 
     /** Slice override per test — defaults to the gate-on legacy shape. */
-    private var slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0)
+    private var slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0)
 
     @BeforeTest
     fun setup() {
@@ -49,13 +52,16 @@ class AutoDownloadPolicyTest {
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
-        coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
+        coEvery { policyStore.seriesPolicies(any()) } returns emptyMap()
+        coEvery { policyStore.recordAutoDownloadSuggestions(any()) } returns 0
+        coEvery { downloadIntake.startSeries(any(), any(), any()) } returns Result.success(emptyList())
         every { serverIdentityStore.activeServerId } returns MutableStateFlow("srv-1")
     }
 
     private fun check() = AutoDownloadCheck(
         downloadsStore = downloadsStore,
         downloadRepository = downloadRepository,
+        policyStore = policyStore,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
         serverIdentityStore = serverIdentityStore,
@@ -95,7 +101,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `lookahead takes only the episodes after the downloaded anchor`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 2)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 2)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -117,7 +123,7 @@ class AutoDownloadPolicyTest {
         // Numbering jumps 5 → 10 → 11: the anchor is positional (10), so the
         // window is the next two episodes in order (11 and the unnumbered
         // tail), never a numeric +N arithmetic.
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 2)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 2)
         givenSnapshot(
             episodeInSeason("ep-5", "season-1", 5),
             episodeInSeason("ep-10", "season-1", 10),
@@ -137,7 +143,7 @@ class AutoDownloadPolicyTest {
     fun `mid-season start anchors on the first downloaded episode - earlier episodes are never fetched`() = runTest {
         // The user started downloading from the middle of the season: the
         // window opens after their anchor, the earlier episodes stay untouched.
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 3)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 3)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -161,7 +167,7 @@ class AutoDownloadPolicyTest {
         // snapshot carries (the server userData flag PlayedStateSync reads):
         // ep-3 was watched online, so the window opens at ep-4 despite nothing
         // being downloaded in this season.
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 2)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 2)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -179,7 +185,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `a season with no downloaded and no watched episode enqueues nothing`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 3)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 3)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -192,7 +198,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `lookahead zero restores the legacy take-them-all behavior`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -208,7 +214,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `an anchor at the season end opens no window`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 3)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 3)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -224,7 +230,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `max-per-pass truncates the season batch and stops the pass`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 3)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 3)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -239,7 +245,7 @@ class AutoDownloadPolicyTest {
 
         val outcome = check().checkOnce(attempt = 0)
 
-        assertEquals(AutoDownloadCheck.Outcome.Complete, outcome)
+        assertEquals(AutoDownloadCheck.Outcome.Complete(), outcome)
         coVerify(exactly = 1) {
             downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-1", "ep-2", "ep-3")))
         }
@@ -248,7 +254,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `max-per-pass carries the remaining budget across series`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 3)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 3)
         coEvery { downloadRepository.downloadCoverage() } returns
             flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1", "s2")))
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(
@@ -285,7 +291,7 @@ class AutoDownloadPolicyTest {
 
     @Test
     fun `max-per-pass zero is unlimited`() = runTest {
-        slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 0)
+        slice = DownloadsSlice(autoDownloadMode = AutoDownloadMode.INSTANT, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 0)
         givenSnapshot(
             episodeInSeason("ep-1", "season-1", 1),
             episodeInSeason("ep-2", "season-1", 2),
@@ -305,14 +311,14 @@ class AutoDownloadPolicyTest {
     @Test
     fun `a non-allow-listed active server no-ops the pass`() = runTest {
         slice = DownloadsSlice(
-            autoDownloadNewEpisodes = true,
+            autoDownloadMode = AutoDownloadMode.INSTANT,
             autoDownloadLookahead = 0,
             autoDownloadServers = setOf("srv-other"),
         )
 
         val outcome = check().checkOnce(attempt = 0)
 
-        assertEquals(AutoDownloadCheck.Outcome.Complete, outcome)
+        assertEquals(AutoDownloadCheck.Outcome.Complete(), outcome)
         coVerify(exactly = 0) { downloadRepository.sweepExpiredAutoDownloads() }
         coVerify(exactly = 0) { downloadRepository.downloadCoverage() }
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
@@ -321,7 +327,7 @@ class AutoDownloadPolicyTest {
     @Test
     fun `an allow-listed active server runs the pass`() = runTest {
         slice = DownloadsSlice(
-            autoDownloadNewEpisodes = true,
+            autoDownloadMode = AutoDownloadMode.INSTANT,
             autoDownloadLookahead = 0,
             autoDownloadServers = setOf("srv-1"),
         )
@@ -374,7 +380,7 @@ class AutoDownloadPolicyTest {
 
         val outcome = check().checkOnce(attempt = 0)
 
-        assertEquals(AutoDownloadCheck.Outcome.Complete, outcome)
+        assertEquals(AutoDownloadCheck.Outcome.Complete(), outcome)
         coVerify(exactly = 1) {
             downloadIntake.startSeries("s1", episodeIds = mapOf("season-1" to listOf("ep-1")))
         }

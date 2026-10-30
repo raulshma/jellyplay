@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.DetailFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,11 +14,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * Loads + partitions the full cast & crew for an item. Reuses the same cached
  * `getMediaDetail` path the detail screen warms (so opening Cast & Crew from a
  * loaded detail screen is usually a cache hit) and splits the flat `people`
- * list via [partitionCastAndCrew]. Mirrors [PersonDetailViewModel].
+ * list via [partitionCastAndCrew]. Mirrors [PersonDetailViewModel]. Injects
+ * only [DetailFeed] — the detail read is this screen's whole repository need.
  */
 class CastAndCrewViewModel constructor(
-    private val mediaRepository: MediaRepository,
+    private val detailFeed: DetailFeed,
     private val imageUrlProvider: ImageUrlProvider,
+    private val artworkUrls: ArtworkUrls,
 ) : JellyPlayViewModel() {
 
     private val _uiState = MutableStateFlow<CastAndCrewUiState>(CastAndCrewUiState.Loading)
@@ -27,7 +31,7 @@ class CastAndCrewViewModel constructor(
         launch {
             // No feature-level retry: the repository path already retries
             // (and coordinates retry with address failover) in the engine.
-            val result = mediaRepository.getMediaDetail(itemId)
+            val result = detailFeed.getMediaDetail(itemId, force = false)
             _uiState.value = result.fold(
                 onSuccess = { detail ->
                     val partition = partitionCastAndCrew(detail.people)
@@ -43,4 +47,6 @@ class CastAndCrewViewModel constructor(
     }
 
     fun getImageUrl(personId: String): String = imageUrlProvider.getImageUrl(personId)
+
+    fun personPortrait(person: PersonInfo): String = artworkUrls.personPortrait(person)
 }

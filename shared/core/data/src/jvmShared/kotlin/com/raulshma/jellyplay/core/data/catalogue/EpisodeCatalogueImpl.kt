@@ -70,8 +70,8 @@ import kotlinx.coroutines.sync.withLock
 class EpisodeCatalogueImpl(
     /**
      * Seasons / per-season episodes / all-episodes reads (the PlaybackRepositoryImpl
-     * ctor precedent: the LibraryApiClient family seam, not the JellyfinApiClient
-     * union — the family single composes the same impl the union delegates to).
+     * ctor precedent: the LibraryApiClient family seam — the family single
+     * composes the same impl the retired JellyfinApiClient union delegated to).
      */
     private val libraryApiClient: LibraryApiClient,
     private val offlineRepository: OfflineRepository,

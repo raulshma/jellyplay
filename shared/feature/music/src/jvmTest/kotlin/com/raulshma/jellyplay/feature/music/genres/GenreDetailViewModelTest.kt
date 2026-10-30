@@ -4,7 +4,8 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.LibraryFeed
+import com.raulshma.jellyplay.core.data.util.ArtworkUrls
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -42,7 +43,7 @@ class GenreDetailViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val libraryFeed: LibraryFeed = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
 
@@ -57,12 +58,13 @@ class GenreDetailViewModelTest {
     }
 
     private fun createViewModel(handle: SavedStateHandle = SavedStateHandle(mapOf("genreId" to "g1", "genreName" to "Rock"))): GenreDetailViewModel {
-        every { mediaRepository.getMediaItemsPaged(any(), any(), any(), any()) } returns
+        every { libraryFeed.getMediaItemsPaged(any(), any(), any(), any()) } returns
             flowOf(PagingData.empty<MediaItem>())
         return GenreDetailViewModel(
             savedStateHandle = handle,
-            mediaRepository = mediaRepository,
+            libraryFeed = libraryFeed,
             imageUrlProvider = imageUrlProvider,
+            artworkUrls = ArtworkUrls.EMPTY,
             audioQueueFacade = audioQueueFacade,
         )
     }
@@ -72,7 +74,7 @@ class GenreDetailViewModelTest {
         createViewModel()
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 parentId = null,
                 filters = LibraryFilters(
                     mediaTypes = listOf(MediaType.AUDIO),
@@ -90,7 +92,7 @@ class GenreDetailViewModelTest {
         createViewModel(SavedStateHandle(emptyMap()))
 
         verify(exactly = 1) {
-            mediaRepository.getMediaItemsPaged(
+            libraryFeed.getMediaItemsPaged(
                 parentId = null,
                 filters = LibraryFilters(
                     mediaTypes = listOf(MediaType.AUDIO),

@@ -25,8 +25,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -478,10 +480,27 @@ internal class EditorViewModel(
 
     // endregion
 
+    /**
+     * The server-side refresh is async — the request is ACCEPTED (204), not
+     * finished — so an immediate reload would read pre-refresh state. On
+     * acceptance, schedule one delayed reload of the whole editor data
+     * (metadata + image infos) once the server has had time to apply it; a
+     * new refresh or the ViewModel being cleared cancels the pending one.
+     */
+    private var refreshReloadJob: Job? = null
+
     private fun refreshMetadata(option: MetadataRefreshOption) {
         launch {
             val itemId = _uiState.value.mediaDetail?.item?.id ?: return@launch
-            editorRepository.refreshItemMetadata(itemId, option.toRefreshParams()).onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+            editorRepository.refreshItemMetadata(itemId, option.toRefreshParams())
+                .onSuccess {
+                    refreshReloadJob?.cancel()
+                    refreshReloadJob = launch {
+                        delay(MetadataEditorRepository.REFRESH_APPLY_DELAY_MS)
+                        loadEditorData(itemId)
+                    }
+                }
+                .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
 
@@ -509,6 +528,7 @@ internal class EditorViewModel(
         editorRepository.getItemImageInfo(itemId)
             .onSuccess { infos -> _uiState.update { it.copy(imageInfos = infos) } }
     }
+
 }
 
 /** The single fetch's payload for the load ladder behind `loadEditorData`. */

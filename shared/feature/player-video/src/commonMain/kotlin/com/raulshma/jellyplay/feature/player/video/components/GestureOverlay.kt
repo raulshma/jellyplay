@@ -65,6 +65,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -86,6 +87,7 @@ import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.SwipeEdge
 import com.raulshma.jellyplay.core.model.SwipeSide
+import com.raulshma.jellyplay.feature.player.video.playerSystemGestureTopInsetPx
 
 private fun brightnessIcon(value: Float) = when {
     value <= 0f -> Tabler.Outline.BrightnessDown
@@ -197,6 +199,7 @@ internal fun GestureOverlay(
     val a11yVolumeDecreaseLabel = stringResource(Res.string.a11y_volume_decrease)
     val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
     val deadZonePx = with(LocalDensity.current) { 30.dp.toPx() }
+    val topSystemGestureInsetPx = playerSystemGestureTopInsetPx()
 
     var lastBrightnessBoundHaptic by remember { mutableLongStateOf(0L) }
     var lastVolumeBoundHaptic by remember { mutableLongStateOf(0L) }
@@ -269,9 +272,16 @@ internal fun GestureOverlay(
                         showControls,
                         edgeThresholdPx,
                         deadZonePx,
+                        topSystemGestureInsetPx,
                     ) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            // Decide from the initial down, before any callbacks.
+                            // awaitEachGesture waits for release without consuming
+                            // the stream, even after the finger leaves this band.
+                            if (down.type == PointerType.Touch && down.position.y < topSystemGestureInsetPx) {
+                                return@awaitEachGesture
+                            }
                             val startX = down.position.x
                             val startY = down.position.y
                             var decided = false

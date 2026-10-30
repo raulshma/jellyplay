@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
@@ -211,6 +212,80 @@ data class HdrOutputDecision(
         const val NOTICE_DV_NON_DV_DISPLAY =
             "Dolby Vision on a display without DV support - colors may be incorrect" +
                 " (consider the mpv engine)"
+
+        /** The SDR_ONLY arm forced HDR content down to an SDR output. */
+        const val NOTICE_PREFERENCE_SDR_ONLY =
+            "SDR output forced by the HDR format preference"
+
+        /** A family-only preference disallowed the content's HDR family. */
+        const val NOTICE_PREFERENCE_FAMILY_RESTRICTED =
+            "Output restricted by the HDR format preference - tone mapped to SDR"
+    }
+}
+
+/**
+ * The OUTPUT-side half of the user's HDR delivery posture
+ * ([HdrFormatPreference]) — the pure restriction a resolved HDR output
+ * decision is folded through before an engine applies it. What is
+ * honestly enforceable, per arm:
+ *
+ *  - **[HdrFormatPreference.SDR_ONLY]** — fully enforceable on both engines
+ *    with an HDR output surface: tone mapping is forced on and HDR
+ *    passthrough never engages (mpv engines read the same preference to
+ *    hold `target-colorspace-hint` off; Exo's GL tone-map path covers the
+ *    render half).
+ *  - **[HdrFormatPreference.HDR10_ONLY] / [HdrFormatPreference.DOLBY_VISION_ONLY]**
+ *    — OUTPUT-level restriction only: when the content family is not in the
+ *    allowed set the decision is forced down to tone-mapped SDR. The stream
+ *    itself still direct-plays and DECODES — the device profile carries no
+ *    HDR-family direct-play condition, so this is a "don't show me this
+ *    family's HDR" posture, not a "don't direct play it" one; on an engine
+ *    with no tone-mapping surface (VLC) the arms are unenforceable and the
+ *    pref simply does not reach a decision.
+ *  - **[HdrFormatPreference.PREFER_DV_OVER_HDR10]** — a DECODER concern
+ *    (which family's decoder wins when the device decodes both): modeled on
+ *    the Exo side by [com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig.hdrFormatPreference],
+ *    which the Exo engine's owners consume; this output policy treats it as
+ *    [HdrFormatPreference.AUTO] (no output restriction).
+ *
+ * HDR10+ content is allowed under HDR10_ONLY — the same baseline-layer
+ * compatibility fold [DisplayHdrSupport.supportsContent] uses.
+ */
+fun applyHdrFormatPreference(
+    decision: HdrOutputDecision,
+    content: HdrContentInfo,
+    preference: HdrFormatPreference,
+): HdrOutputDecision {
+    if (preference == HdrFormatPreference.AUTO || !content.isHdr) return decision
+    return when (preference) {
+        HdrFormatPreference.AUTO,
+        HdrFormatPreference.PREFER_DV_OVER_HDR10,
+        -> decision
+
+        HdrFormatPreference.SDR_ONLY -> HdrOutputDecision(
+            toneMappingActive = true,
+            notice = HdrOutputDecision.NOTICE_PREFERENCE_SDR_ONLY,
+        )
+
+        HdrFormatPreference.HDR10_ONLY ->
+            if (content == HdrContentInfo.HDR10 || content == HdrContentInfo.HDR10_PLUS) {
+                decision
+            } else {
+                HdrOutputDecision(
+                    toneMappingActive = true,
+                    notice = HdrOutputDecision.NOTICE_PREFERENCE_FAMILY_RESTRICTED,
+                )
+            }
+
+        HdrFormatPreference.DOLBY_VISION_ONLY ->
+            if (content == HdrContentInfo.DOLBY_VISION) {
+                decision
+            } else {
+                HdrOutputDecision(
+                    toneMappingActive = true,
+                    notice = HdrOutputDecision.NOTICE_PREFERENCE_FAMILY_RESTRICTED,
+                )
+            }
     }
 }
 
@@ -233,39 +308,47 @@ data class HdrOutputDecision(
  *  - AUTO + HDR content + SDR display → tone mapping requested + notice.
  *  - AUTO + HDR content + probe unavailable (`null`) → native (the pre-feature
  *    behavior — never regress a device because its display probe failed).
+ *
+ * [formatPreference] (the user's [HdrFormatPreference], AUTO by default) is
+ * folded through [applyHdrFormatPreference] AFTER the display negotiation —
+ * an explicit posture wins over any native-HDR expectation.
  */
 fun resolveExoHdrOutput(
     content: HdrContentInfo,
     display: DisplayHdrSupport?,
     mode: ExoHdrToneMappingMode,
+    formatPreference: HdrFormatPreference = HdrFormatPreference.AUTO,
 ): HdrOutputDecision {
     if (!content.isHdr) return HdrOutputDecision.NONE
-    if (mode == ExoHdrToneMappingMode.OFF) {
+    val resolved = if (mode == ExoHdrToneMappingMode.OFF) {
         // The user opted out of the GL path — native output either way, but a
         // KNOWN-incompatible display gets the washed-out explanation rather
         // than silence; a compatible one still gets the honest HDR badge.
         if (display != null && !display.supportsContent(content)) {
-            return HdrOutputDecision(
+            HdrOutputDecision(
                 unhandledHdr = true,
                 notice = HdrOutputDecision.NOTICE_SDR_NO_TONE_MAPPING,
             )
+        } else {
+            HdrOutputDecision(hdrOutputExpected = display?.supportsContent(content) == true)
         }
-        return HdrOutputDecision(hdrOutputExpected = display?.supportsContent(content) == true)
+    } else {
+        val displayKnownCompatible = display != null && display.supportsContent(content)
+        when {
+            displayKnownCompatible -> HdrOutputDecision(hdrOutputExpected = true)
+            display == null -> HdrOutputDecision.NONE
+            content == HdrContentInfo.DOLBY_VISION -> HdrOutputDecision(
+                toneMappingActive = true,
+                unhandledHdr = true,
+                notice = HdrOutputDecision.NOTICE_DV_NON_DV_DISPLAY,
+            )
+            else -> HdrOutputDecision(
+                toneMappingActive = true,
+                notice = HdrOutputDecision.NOTICE_SDR_DISPLAY,
+            )
+        }
     }
-    val displayKnownCompatible = display != null && display.supportsContent(content)
-    if (displayKnownCompatible) return HdrOutputDecision(hdrOutputExpected = true)
-    if (display == null) return HdrOutputDecision.NONE
-    return when (content) {
-        HdrContentInfo.DOLBY_VISION -> HdrOutputDecision(
-            toneMappingActive = true,
-            unhandledHdr = true,
-            notice = HdrOutputDecision.NOTICE_DV_NON_DV_DISPLAY,
-        )
-        else -> HdrOutputDecision(
-            toneMappingActive = true,
-            notice = HdrOutputDecision.NOTICE_SDR_DISPLAY,
-        )
-    }
+    return applyHdrFormatPreference(resolved, content, formatPreference)
 }
 
 /**
@@ -278,20 +361,27 @@ fun resolveExoHdrOutput(
  *
  * Before the per-file probe lands, [targetIsHdr] is `false` (the safe
  * fallback: the tone-mapping preset is written, HDR→HDR suppression closed) —
- * exactly the desktop's pre-probe posture.
+ * exactly the desktop's pre-probe posture. [formatPreference] is folded
+ * through [applyHdrFormatPreference] last — SDR_ONLY in particular holds the
+ * passthrough arm off entirely (the engines mirror that by not arming
+ * `target-colorspace-hint` under the same preference).
  */
 fun resolveMpvHdrOutput(
     content: HdrContentInfo,
     passthroughRequested: Boolean,
     targetIsHdr: Boolean,
-): HdrOutputDecision = when {
-    !content.isHdr -> HdrOutputDecision.NONE
-    passthroughRequested && targetIsHdr -> HdrOutputDecision(hdrOutputExpected = true)
-    passthroughRequested -> HdrOutputDecision(
-        toneMappingActive = true,
-        notice = HdrOutputDecision.NOTICE_SDR_DISPLAY,
-    )
-    else -> HdrOutputDecision(toneMappingActive = true)
+    formatPreference: HdrFormatPreference = HdrFormatPreference.AUTO,
+): HdrOutputDecision {
+    val resolved = when {
+        !content.isHdr -> HdrOutputDecision.NONE
+        passthroughRequested && targetIsHdr -> HdrOutputDecision(hdrOutputExpected = true)
+        passthroughRequested -> HdrOutputDecision(
+            toneMappingActive = true,
+            notice = HdrOutputDecision.NOTICE_SDR_DISPLAY,
+        )
+        else -> HdrOutputDecision(toneMappingActive = true)
+    }
+    return applyHdrFormatPreference(resolved, content, formatPreference)
 }
 
 // ── The status-card verdict (pure, testable; the HDR sheet renders it) ──

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.util
 
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PhotoFolderReads
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.sync.Semaphore
@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.Semaphore
  * @Singleton/@Inject pair was stripped per the DataKoinModule convention.
  */
 class PhotoFolderPrefetcher(
-    private val mediaRepository: MediaRepository,
+    private val photoFolderReads: PhotoFolderReads,
 ) {
     suspend fun prefetch(
         items: List<MediaItem>,
@@ -32,11 +32,14 @@ class PhotoFolderPrefetcher(
         }
         if (toFetch.isEmpty()) return emptyMap()
         return Semaphore(concurrency).mapConcurrent(toFetch) { folder ->
-            folder.id to mediaRepository.getPhotoFolderChildImageUrls(folder.id)
+            folder.id to photoFolderReads.getPhotoFolderChildImageUrls(folder.id, limit = PREVIEW_LIMIT)
         }.toMap()
     }
 
     companion object {
         const val DEFAULT_CONCURRENCY = 4
+
+        /** The per-folder preview count (the seam member's no-default-args rule). */
+        private const val PREVIEW_LIMIT = 4
     }
 }

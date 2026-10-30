@@ -10,8 +10,8 @@ import kotlin.test.assertSame
  * Pins the player sheet registry (the sheet-module pilot wave): every
  * [PlayerSheet] member is registered exactly once, in declaration order, the
  * Saver's restore enumeration rides the registry, and the migrated sheets
- * (wave 1 pilots Hdr, Render; wave 2 SubtitleHub) route through their modules
- * while the rest stay hand-written.
+ * (wave 1 pilots Hdr, Render; wave 2 SubtitleHub; wave 3 PlaybackMode) route
+ * through their modules while the rest stay hand-written.
  *
  * Totality technique: [PlayerSheet] is a sealed CLASS, so the home registry's
  * `HomeSectionType.entries` walk has no direct equivalent — and
@@ -94,11 +94,13 @@ class PlayerSheetRegistryTest {
         assertSame(HdrSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.Hdr))
         assertSame(RenderSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.Render))
         assertSame(SubtitleHubSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.SubtitleHub))
+        assertSame(PlaybackModeSheetModule, PlayerSheetRegistry.moduleFor(PlayerSheet.PlaybackMode))
         // The migrated() factory derives the registration's key half from the
         // module — the two cannot drift.
         assertEquals(PlayerSheet.Hdr, HdrSheetModule.sheet)
         assertEquals(PlayerSheet.Render, RenderSheetModule.sheet)
         assertEquals(PlayerSheet.SubtitleHub, SubtitleHubSheetModule.sheet)
+        assertEquals(PlayerSheet.PlaybackMode, PlaybackModeSheetModule.sheet)
     }
 
     @Test
@@ -109,7 +111,9 @@ class PlayerSheetRegistryTest {
         // The rest of the registry is the pending carrier: every
         // un-migrated key resolves to null exactly like a raw lookup.
         for (sheet in PlayerSheetRegistry.all) {
-            if (sheet != PlayerSheet.Hdr && sheet != PlayerSheet.Render && sheet != PlayerSheet.SubtitleHub) {
+            if (sheet != PlayerSheet.Hdr && sheet != PlayerSheet.Render &&
+                sheet != PlayerSheet.SubtitleHub && sheet != PlayerSheet.PlaybackMode
+            ) {
                 assertNull(PlayerSheetRegistry.moduleFor(sheet), "sheet=$sheet")
             }
         }

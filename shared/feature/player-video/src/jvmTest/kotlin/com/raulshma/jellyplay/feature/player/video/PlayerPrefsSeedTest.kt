@@ -3,11 +3,15 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.MpvDebandMode
+import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -15,6 +19,7 @@ import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.TrickplayMode
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
@@ -33,14 +38,14 @@ import kotlin.test.assertTrue
  * Pins the [PlayerPrefsSeed] aggregate → uiState mapping: which pref feeds
  * which seeded uiState leaf at session-load time. Extracted from
  * [SessionLoadPipeline]'s inline `onPrefsProjected { copy(...) }`; these tests
- * make the 32-leaf inventory explicit so a leaf cannot silently move, drop, or
+ * make the 45-leaf inventory explicit so a leaf cannot silently move, drop, or
  * change default without this file noticing (the change-time counterpart of
  * the same vocabulary lives in [SettingsProjector]).
  *
  * [baseState] deliberately differs from the defaults for every seeded leaf and
  * carries sentinel values on leaves the seed must NOT touch
  * (`isHoldSpeedActive`, `autoplayCancelled`, `detectedAspectRatio`,
- * `segments`, `isLoadingEpisodes`, title/position/subtitleStyle…), so
+ * `segments`, `isLoadingEpisodes`, title/playbackSpeed/subtitleStyle…), so
  * "exactly the expected leaves changed" is checkable per test.
  */
 class PlayerPrefsSeedTest {
@@ -54,7 +59,7 @@ class PlayerPrefsSeedTest {
      */
     private fun baseState() = VideoPlayerUiState(
         title = "Persisted Title",
-        currentPosition = 42L,
+        playbackSpeed = 2.5f,
         subtitleStyle = SubtitleStyle.DEFAULT.copy(offsetMs = 123L),
         preferredPlayerType = PlayerType.EXTERNAL,
         uiPrefs = PlayerUiPrefsState(
@@ -67,6 +72,22 @@ class PlayerPrefsSeedTest {
             showClock = false,
             showTimeRemaining = false,
             keepScreenOnDuringVideo = true,
+            // The seeded render/pause/continuation leaves carried at values
+            // that differ from representativeAgg's — so a missed seed is a
+            // visible assertion failure, not a same-value pass.
+            trickplayMode = TrickplayMode.FULLSCREEN,
+            pauseScreensaverMode = PauseScreensaverMode.CLOCK,
+            pauseScreensaverAfterMinutes = 12,
+            ambientBlurEnabled = true,
+            pauseDetailsEnabled = true,
+            mpvToneMappingCurve = MpvToneMappingCurve.HABLE,
+            mpvDebandMode = MpvDebandMode.HEAVY,
+            mpvMotionInterpolation = true,
+            bitmapSubtitleScaleMode = BitmapSubtitleScaleMode.STRETCH,
+            mpvCustomButtons = "[{\"label\":\"base\"}]",
+            nextUpButtonPrerollSec = 60,
+            autoplayEpisodeLimit = 7,
+            showNextEpisodeDetailsAfterFinish = false,
             streamingQuality = StreamingQuality.LOW_360P,
             adaptiveBitrateEnabled = false,
             playbackMode = PlaybackMode.FORCE_TRANSCODE,
@@ -168,6 +189,21 @@ class PlayerPrefsSeedTest {
             videoAutoSkipOutro = autoSkipOutro,
             tvZoomModePercent = 25f,
             videoDefaultAspectRatio = "16:9",
+            // The seeded render/pause/continuation prefs — non-default on
+            // every leaf the seed must carry.
+            trickplayMode = TrickplayMode.FILMSTRIP,
+            mpvToneMappingCurve = MpvToneMappingCurve.BT_2446A,
+            mpvDebandMode = MpvDebandMode.MEDIUM,
+            mpvMotionInterpolation = true,
+            bitmapSubtitleScaleMode = BitmapSubtitleScaleMode.COVER,
+            mpvCustomButtons = "[{\"label\":\"agg\"}]",
+            pauseScreensaverMode = PauseScreensaverMode.LOGO,
+            pauseScreensaverAfterMinutes = 9,
+            ambientBlurEnabled = true,
+            pauseDetailsEnabled = true,
+            nextUpButtonPrerollSec = 45,
+            autoplayEpisodeLimit = 3,
+            showNextEpisodeDetailsAfterFinish = false,
             segmentBehaviors = mapOf(
                 MediaSegmentType.INTRO to SegmentBehavior.SHOW_BUTTON,
                 MediaSegmentType.OUTRO to SegmentBehavior.SHOW_BUTTON,
@@ -185,14 +221,14 @@ class PlayerPrefsSeedTest {
     // ── Full-leaf inventory ──────────────────────────────────────────────────
 
     @Test
-    fun representativeAggregate_seedsAllThirtyTwoLeaves_exactly() {
+    fun representativeAggregate_seedsAllFortyFiveLeaves_exactly() {
         val base = baseState()
         val seeded = seed(representativeAgg())(base)
 
         // root (1)
         assertEquals(PlayerType.MPV, seeded.preferredPlayerType)
 
-        // uiPrefs (13)
+        // uiPrefs (26)
         assertEquals(OrientationMode.LOCKED_PORTRAIT, seeded.uiPrefs.defaultOrientation)
         assertEquals(7_500L, seeded.uiPrefs.controlsTimeoutMs)
         assertTrue(seeded.uiPrefs.hideOsdOnPause)
@@ -206,6 +242,20 @@ class PlayerPrefsSeedTest {
         assertEquals(StreamingQuality.UHD_4K, seeded.uiPrefs.streamingQuality)
         assertTrue(seeded.uiPrefs.adaptiveBitrateEnabled)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, seeded.uiPrefs.playbackMode)
+        // The render/pause/continuation block (13).
+        assertEquals(TrickplayMode.FILMSTRIP, seeded.uiPrefs.trickplayMode)
+        assertEquals(MpvToneMappingCurve.BT_2446A, seeded.uiPrefs.mpvToneMappingCurve)
+        assertEquals(MpvDebandMode.MEDIUM, seeded.uiPrefs.mpvDebandMode)
+        assertTrue(seeded.uiPrefs.mpvMotionInterpolation)
+        assertEquals(BitmapSubtitleScaleMode.COVER, seeded.uiPrefs.bitmapSubtitleScaleMode)
+        assertEquals("[{\"label\":\"agg\"}]", seeded.uiPrefs.mpvCustomButtons)
+        assertEquals(PauseScreensaverMode.LOGO, seeded.uiPrefs.pauseScreensaverMode)
+        assertEquals(9, seeded.uiPrefs.pauseScreensaverAfterMinutes)
+        assertTrue(seeded.uiPrefs.ambientBlurEnabled)
+        assertTrue(seeded.uiPrefs.pauseDetailsEnabled)
+        assertEquals(45, seeded.uiPrefs.nextUpButtonPrerollSec)
+        assertEquals(3, seeded.uiPrefs.autoplayEpisodeLimit)
+        assertFalse(seeded.uiPrefs.showNextEpisodeDetailsAfterFinish)
 
         // gestures (13 + the input mapping)
         val g = seeded.gestures
@@ -249,7 +299,7 @@ class PlayerPrefsSeedTest {
 
         // ── NOT seeded: session state + controller-owned leaves survive. ──
         assertEquals("Persisted Title", seeded.title)
-        assertEquals(42L, seeded.currentPosition)
+        assertEquals(2.5f, seeded.playbackSpeed, 0.0001f)
         assertEquals(123L, seeded.subtitleStyle.offsetMs)
         assertTrue(seeded.gestures.isHoldSpeedActive, "hold-speed activity is session state")
         assertTrue(seeded.autoplay.autoplayCancelled, "the user's cancellation is not a pref")

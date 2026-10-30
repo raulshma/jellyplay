@@ -74,11 +74,12 @@ internal fun effectiveAspectRatio(selected: AspectRatio, detected: AspectRatio?)
     if (selected == AspectRatio.AUTO) detected ?: AspectRatio.FIT else selected
 
 /**
- * Skip-segment button visibility precedence: a segment must exist and its
+ * Skip-segment button AVAILABILITY precedence: a segment must exist and its
  * configured behavior must ask for a button, and the button is suppressed by
- * PiP and the cinema-intro overlay. During an OUTRO the up-next overlay wins
- * (its own play affordance replaces the skip button); up-next does not
- * suppress non-OUTRO segments.
+ * the cinema-intro overlay. During an OUTRO the up-next overlay wins (its own
+ * play affordance replaces the skip button); up-next does not suppress
+ * non-OUTRO segments. PiP/controls visibility gate the prompt's SHOWING (the
+ * timed-skip pipeline owns that), not its availability.
  */
 internal fun isSkipSegmentButtonVisible(
     activeSegment: MediaSegment?,
@@ -86,8 +87,9 @@ internal fun isSkipSegmentButtonVisible(
     isInPipMode: Boolean,
     isCinemaIntroVisible: Boolean,
     shouldShowUpNext: Boolean,
+    areControlsVisible: Boolean,
 ): Boolean =
-    activeSegment != null &&
+    areControlsVisible && activeSegment != null &&
         segmentBehavior == SegmentBehavior.SHOW_BUTTON &&
         !isInPipMode &&
         !isCinemaIntroVisible &&
@@ -147,6 +149,24 @@ internal data class WatchedActionDecision(
     val watchedAdvancesToNext: Boolean,
     val unwatchedMarkApplied: Boolean,
 )
+
+/**
+ * The pause-details overlay's gate (#13): when the pref is on and playback is
+ * paused, the player renders a quiet item-details panel (title, metadata
+ * line, synopsis, cast ribbon — all data already in the uiState projection).
+ * [hasDetails] means the session actually carries displayable content (a
+ * title or a synopsis); [screensaverActive] is the #11 paused-idle
+ * screensaver's live state — the details YIELD to it (the screensaver covers
+ * the whole surface; a details panel under a clock would be unreadable
+ * twice). Pure so the precedence stays pinned by [PauseDetailsPolicyTest]
+ * instead of living inline in the overlay stack.
+ */
+internal fun shouldShowPauseDetails(
+    enabled: Boolean,
+    isPaused: Boolean,
+    hasDetails: Boolean,
+    screensaverActive: Boolean,
+): Boolean = enabled && isPaused && hasDetails && !screensaverActive
 
 /**
  * The decision matrix for the two mark-and-exit overflow actions. Pure so the
