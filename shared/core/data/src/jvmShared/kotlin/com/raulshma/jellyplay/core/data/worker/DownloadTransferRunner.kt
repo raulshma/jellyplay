@@ -237,7 +237,15 @@ class DownloadTransferRunner(
         // fall back to the HEAD probe when the body is chunked/transcoded.
         val effectiveTotalSize = if (totalSize > 0L) totalSize else probedTotalSize
 
-        if (effectiveTotalSize > 0L && existingBytes == 0L) {
+        // Persist it on a fresh transfer — and BACKFILL a resume whose row
+        // still carries the insert-time 0 (the first attempt was killed
+        // before its own write, or a legacy row): without the backfill leg a
+        // row that ever missed the total kept 0 forever and every progress
+        // fraction derived from it read 0 (the v0.11.6 downloads-progress
+        // regression). [entity] is the row as loaded at worker start — its
+        // total is the DB value this run inherited; a known total is never
+        // clobbered by a differing one.
+        if (effectiveTotalSize > 0L && (existingBytes == 0L || entity.totalSizeBytes == 0L)) {
             dao.updateTotalSize(downloadId, effectiveTotalSize)
         }
 

@@ -153,12 +153,18 @@ class DownloadRepositoryImpl(
     // structural `distinctUntilChanged` over up to 500 x ~25-field items is
     // always unequal while bytes move — so it never suppresses anything on
     // that path. Compare only the fields the rendered lists depend on
-    // (id order, per-item downloadedBytes, status); emissions differing in
-    // other fields alone (e.g. a speed update) no longer re-emit downstream.
+    // (id order, per-item downloadedBytes, status, totalSizeBytes); emissions
+    // differing in other fields alone (e.g. a speed update) no longer re-emit
+    // downstream. The total is in the key because the engine's
+    // `updateTotalSize` write lands with no concurrent status/byte change
+    // (probe + response headers after the DOWNLOADING flip) — suppressing it
+    // froze the fraction denominators at the insert-time 0 for the whole
+    // transfer (the v0.11.6 downloads-progress regression).
     private fun List<DownloadItem>.rendersSameAs(other: List<DownloadItem>): Boolean {
         if (size != other.size) return false
         return zip(other).all { (o, n) ->
-            o.id == n.id && o.downloadedBytes == n.downloadedBytes && o.status == n.status
+            o.id == n.id && o.downloadedBytes == n.downloadedBytes &&
+                o.status == n.status && o.totalSizeBytes == n.totalSizeBytes
         }
     }
 

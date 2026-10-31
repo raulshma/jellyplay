@@ -550,13 +550,23 @@ class DownloadLibraryGroupingTest {
     }
 
     @Test
-    fun collapsed_group_fraction_is_null_without_an_actively_downloading_episode() {
-        // Paused + completed-only groups hide the header's aggregate bar —
-        // "downloads in progress" gates it.
+    fun collapsed_group_fraction_gates_on_the_active_set_not_downloading_alone() {
+        // The header bar spans the group's whole to-download set, so a
+        // PAUSED-only group still lights it (the series was started and the
+        // bar should say how far it got) — 600 / 800.
         val items = listOf(
-            episode("ep1").copy(status = DownloadStatus.PAUSED, downloadedBytes = 200),
-            episode("ep2"),
+            episode("ep1", totalBytes = 400).copy(status = DownloadStatus.PAUSED, downloadedBytes = 200),
+            episode("ep2", totalBytes = 400),
         )
+        val fraction = downloadGroupProgressFraction(items, emptyMap())
+        assertEquals(0.75f, fraction)
+    }
+
+    @Test
+    fun collapsed_group_fraction_is_null_for_a_completed_only_group() {
+        // Nothing left to download — no bar (a finished group must not pin a
+        // permanent 100% bar over its history).
+        val items = listOf(episode("ep1", totalBytes = 400), episode("ep2", totalBytes = 400))
         assertNull(downloadGroupProgressFraction(items, emptyMap()))
     }
 
@@ -564,7 +574,8 @@ class DownloadLibraryGroupingTest {
     fun collapsed_group_fraction_blends_completed_structural_and_live_bytes() {
         // ep1 landed whole (500/500); ep2 is half-way by LIVE bytes (250/500)
         // — its stale structural bytes are overridden by the live value — and
-        // ep3's unprobed total contributes to neither sum: 750/1000.
+        // ep3's unprobed total weighs in at the group's average known size
+        // (500): 750 / 1500.
         val items = listOf(
             episode("ep1", totalBytes = 500),
             episode("ep2", totalBytes = 500).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 100),
@@ -574,34 +585,158 @@ class DownloadLibraryGroupingTest {
             items,
             mapOf("ep2" to DownloadProgress(id = "ep2", downloadedBytes = 250, speedBytesPerSec = 0, totalSizeBytes = 500)),
         )
-        assertEquals(0.75f, fraction)
+        assertEquals(0.5f, fraction)
     }
 
     @Test
-    fun aggregate_fraction_excludes_items_outside_the_status_set_and_unknown_totals() {
-        // A paused row (outside the DOWNLOADING gate) and a pending row with
-        // no probed size yet contribute to neither sum — only ep3's 100/400
-        // shapes the fraction.
+    fun aggregate_ring_sums_span_the_to_download_set_while_the_gate_uses_the_status_set() {
+        // The status set drives VISIBILITY only; the sums span the whole
+        // to-download set so finishing one media and starting the next cannot
+        // rebase the ring. ep1's landed 400 bytes and ep2's estimated size
+        // (the 400/400 average) both count: (400 + 100) / 1200.
         val items = listOf(
             episode("ep1", totalBytes = 400).copy(status = DownloadStatus.PAUSED),
             episode("ep2").copy(status = DownloadStatus.PENDING),
             episode("ep3", totalBytes = 400).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 100),
         )
         val fraction = aggregateProgressFraction(items, setOf(DownloadStatus.DOWNLOADING), emptyMap())
-        assertEquals(0.25f, fraction)
+        assertEquals(500f / 1200f, fraction)
     }
 
     @Test
     fun aggregate_fraction_covers_the_whole_active_set_for_the_app_bar_ring() {
-        // The app-bar ring gates on the Active set: a paused row counts with
-        // its structural bytes, a queued row without a probed size costs
-        // nothing — (300 + 150) / 1200.
+        // The app-bar ring gates on the Active set (a paused row counts for
+        // visibility), and the queued row without a probed size weighs in at
+        // the average known size (600): (300 + 150) / 1800.
         val items = listOf(
             episode("ep1", totalBytes = 600).copy(status = DownloadStatus.PAUSED, downloadedBytes = 300),
             episode("ep2", totalBytes = 600).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 150),
             episode("ep3").copy(status = DownloadStatus.QUEUED),
         )
         val fraction = aggregateProgressFraction(items, DownloadStatusFilter.ACTIVE_STATUSES, emptyMap())
-        assertEquals(0.375f, fraction)
+        assertEquals(450f / 1800f, fraction)
+    }
+
+    @Test
+    fun collapsed_group_fraction_uses_the_live_total_when_structural_is_stale_zero() {
+        // The v0.11.6 regression shape: the structural list froze at the
+        // DOWNLOADING flip — BEFORE the engine's updateTotalSize write — so the
+        // in-flight row still carries totalSizeBytes = 0 (the insert default)
+        // while the live progress row already has the learned total. The live
+        // total must override the structural denominator: 750 / 1000 (before
+        // the fix this summed to Σ total = 0 → a flat 0% header bar).
+        val items = listOf(
+            episode("ep1", totalBytes = 500),
+            episode("ep2").copy(status = DownloadStatus.DOWNLOADING),
+        )
+        val fraction = downloadGroupProgressFraction(
+            items,
+            mapOf("ep2" to DownloadProgress(id = "ep2", downloadedBytes = 250, speedBytesPerSec = 0, totalSizeBytes = 500)),
+        )
+        assertEquals(0.75f, fraction)
+    }
+
+    @Test
+    fun aggregate_ring_fraction_uses_the_live_total_when_structural_is_stale_zero() {
+        // Same stale-structural shape for the app-bar ring: one in-flight row
+        // with the frozen insert-time total (0) and the live row carrying the
+        // learned size — 250 / 500, not the 0% the Σ structural total = 0 fold
+        // used to produce.
+        val items = listOf(
+            episode("ep1").copy(status = DownloadStatus.DOWNLOADING),
+        )
+        val fraction = aggregateProgressFraction(
+            items,
+            DownloadStatusFilter.ACTIVE_STATUSES,
+            mapOf("ep1" to DownloadProgress(id = "ep1", downloadedBytes = 250, speedBytesPerSec = 0, totalSizeBytes = 500)),
+        )
+        assertEquals(0.5f, fraction)
+    }
+
+    @Test
+    fun fraction_prefers_the_structural_total_when_the_live_row_has_none() {
+        // A live row without a learned total (chunked transfer, size still
+        // unknown) must not zero out a known structural total — the known
+        // value stands and only the bytes come from live: 300 / 400.
+        val items = listOf(
+            episode("ep1", totalBytes = 400).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 100),
+        )
+        val fraction = aggregateProgressFraction(
+            items,
+            DownloadStatusFilter.ACTIVE_STATUSES,
+            mapOf("ep1" to DownloadProgress(id = "ep1", downloadedBytes = 300, speedBytesPerSec = 0, totalSizeBytes = 0)),
+        )
+        assertEquals(0.75f, fraction)
+    }
+
+    @Test
+    fun ring_does_not_rebase_when_a_member_completes_and_the_next_starts() {
+        // The reporter's oscillation: one media transferring at a time made
+        // the ring climb toward 100% and collapse toward 0 at every item
+        // boundary, because the completing member left BOTH sums the moment
+        // it flipped COMPLETED. Landed media stay in the sums while the batch
+        // runs: (500 + 10) / (500 + 500) — not the 10/500 rebase the
+        // active-set-only fold produced.
+        val items = listOf(
+            episode("mv1", totalBytes = 500),
+            episode("mv2", totalBytes = 500).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 0),
+        )
+        val fraction = aggregateProgressFraction(
+            items,
+            DownloadStatusFilter.ACTIVE_STATUSES,
+            mapOf("mv2" to DownloadProgress(id = "mv2", downloadedBytes = 10, speedBytesPerSec = 0, totalSizeBytes = 500)),
+        )
+        assertEquals(0.51f, fraction)
+    }
+
+    @Test
+    fun ring_counts_completed_media_and_estimates_queued_ones() {
+        // Top-header spec: % of the TOTAL media to download, INCLUDING queued.
+        // mv1 landed (500), mv2 at 250/1000 live, mv3 queued with no probed
+        // size — estimated at the average known size (750): 750 / 2250 = 1/3.
+        // Without the estimate the queued row cost nothing: 250 / 1500.
+        val items = listOf(
+            episode("mv1", totalBytes = 500),
+            episode("mv2", totalBytes = 1000).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 0),
+            episode("mv3").copy(status = DownloadStatus.QUEUED),
+        )
+        val fraction = aggregateProgressFraction(
+            items,
+            DownloadStatusFilter.ACTIVE_STATUSES,
+            mapOf("mv2" to DownloadProgress(id = "mv2", downloadedBytes = 250, speedBytesPerSec = 0, totalSizeBytes = 1000)),
+        )
+        assertEquals(1f / 3f, fraction)
+    }
+
+    @Test
+    fun queued_only_group_lights_the_bar_at_zero() {
+        // A series whose episodes are all queued (nothing started yet) shows
+        // its 0% bar — the header fills as the series' transfers progress,
+        // per the header spec ("% of the total media to download").
+        val items = listOf(
+            episode("ep1").copy(status = DownloadStatus.QUEUED),
+            episode("ep2").copy(status = DownloadStatus.QUEUED),
+        )
+        assertEquals(0f, downloadGroupProgressFraction(items, emptyMap()))
+    }
+
+    @Test
+    fun failed_rows_leave_the_ring_sums_until_retried() {
+        // A dead failed row (stale partial bytes + probed total) must not
+        // stall the ring below a reachable 100% nor drag the estimate — it
+        // leaves the sums until a retry flips it back into the active set:
+        // (500 + 100) / (500 + 500). With mv3 folded in the denominator
+        // would be 6000 and the ring pinned near 10% forever.
+        val items = listOf(
+            episode("mv1", totalBytes = 500),
+            episode("mv2", totalBytes = 500).copy(status = DownloadStatus.DOWNLOADING, downloadedBytes = 0),
+            episode("mv3", totalBytes = 5000).copy(status = DownloadStatus.FAILED, downloadedBytes = 1000),
+        )
+        val fraction = aggregateProgressFraction(
+            items,
+            DownloadStatusFilter.ACTIVE_STATUSES,
+            mapOf("mv2" to DownloadProgress(id = "mv2", downloadedBytes = 100, speedBytesPerSec = 0, totalSizeBytes = 500)),
+        )
+        assertEquals(0.6f, fraction)
     }
 }

@@ -392,7 +392,7 @@ class DownloadsViewModel(
             // itself (album detail's per-track bars). Bytes/speed arrive
             // through [progressById] here, so a second
             // projection drops the per-tick fields and only list-structure
-            // changes (ids in order, per-item status) re-emit uiState.
+            // changes (ids in order, per-item status or total) re-emit uiState.
             queue.getAllDownloads()
                 .catch { e ->
                     _uiState.update {
@@ -414,18 +414,17 @@ class DownloadsViewModel(
     }
 
     /**
-     * True when two lists differ only in per-tick progress fields — i.e. the
-     * screen has nothing structural to re-render. Every real transition
-     * (queue admission, pause/resume, completion, failure, insert/delete)
-     * changes some row's status or the id sequence, so id order + status is
-     * the complete structural key.
+     * True when two lists differ only in per-tick progress fields — nothing
+     * structural. Key: id order + status + total size — `updateTotalSize`
+     * lands after the DOWNLOADING flip with no concurrent status/byte change,
+     * and suppressing it froze every denominator at 0 (v0.11.6 regression).
      */
     private fun sameListStructure(old: List<DownloadItem>, new: List<DownloadItem>): Boolean {
         if (old.size != new.size) return false
         for (i in old.indices) {
             val o = old[i]
             val n = new[i]
-            if (o.id != n.id || o.status != n.status) return false
+            if (o.id != n.id || o.status != n.status || o.totalSizeBytes != n.totalSizeBytes) return false
         }
         return true
     }

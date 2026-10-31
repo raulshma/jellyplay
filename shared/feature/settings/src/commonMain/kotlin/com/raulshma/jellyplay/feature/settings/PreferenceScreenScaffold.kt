@@ -241,7 +241,20 @@ internal fun hiddenRowsFor(
     ExperimentalFoundationApi::class,
 )
 /** Sentinel default so the exclusive-paths check can use reference equality. */
-private val NoInlineContent: LazyListScope.(MutableState<PickerState<*>?>) -> Unit = { _ -> }
+internal val NoInlineContent: LazyListScope.(MutableState<PickerState<*>?>) -> Unit = { _ -> }
+
+/**
+ * The two content paths are exclusive: a screen either declares [groups]
+ * (its [content] slot stays at the [NoInlineContent] default) or hands the
+ * hand-written inline [content] block (and no [groups]). Pure + internal so
+ * the contract test pins the full truth table at unit speed — the identity
+ * leg (a groups declaration beside the sentinel default) is exactly the
+ * leg the v0.11.6 regression got backwards.
+ */
+internal fun preferencePathsAreExclusive(
+    groups: List<PreferenceScreenGroup>?,
+    content: LazyListScope.(MutableState<PickerState<*>?>) -> Unit,
+): Boolean = groups == null || content === NoInlineContent
 
 @Composable
 internal fun PreferenceScreenScaffold(
@@ -260,7 +273,7 @@ internal fun PreferenceScreenScaffold(
     adjustForAdvanced: (groupIndex: Int) -> Int = { it },
     content: LazyListScope.(activePicker: MutableState<PickerState<*>?>) -> Unit = NoInlineContent,
 ) {
-    check(groups == null || content !== NoInlineContent) {
+    check(preferencePathsAreExclusive(groups, content)) {
         "PreferenceScreenScaffold: pass groups or content, not both — the paths are exclusive"
     }
     val adaptiveInfo = LocalAdaptiveInfo.current

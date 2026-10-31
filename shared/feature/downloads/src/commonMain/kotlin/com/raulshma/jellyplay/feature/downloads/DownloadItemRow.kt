@@ -86,9 +86,11 @@ internal fun DownloadItemRow(
     item: DownloadItem,
     modifier: Modifier = Modifier,
     /**
-     * Live byte/speed override from the progress split (see the screen's
-     * progressById) — present while this row is in flight, null otherwise,
-     * in which case the item's own (already current) fields render.
+     * Live byte/speed/total override from the progress split (see the
+     * screen's progressById) — present while this row is in flight, null
+     * otherwise, in which case the item's own (already current) fields
+     * render. The total override only fires when the live row learned a size
+     * (> 0); see the merge at the top of the body.
      */
     liveProgress: DownloadProgress?,
     formatBytes: (Long) -> String,
@@ -119,11 +121,20 @@ internal fun DownloadItemRow(
 ) {
     // Merge once at the top: the live values while the row ticks, the item's
     // structural values otherwise (statuses outside the in-flight set never
-    // tick, so their structural bytes are always current).
+    // tick, so their structural bytes are always current). The total merges
+    // like the bytes: the engine learns the size AFTER the row flipped to
+    // DOWNLOADING (and the resume path backfills late), so the structural
+    // item can still carry the insert-time 0 while the live row has the
+    // authoritative value — the same live-total override the fraction sums
+    // apply (summedTransferFraction) and DownloadProgress.progressFraction
+    // (the detail screen) already derive. A live total of 0 falls back to the
+    // structural value; with both 0 the bar/text/ETA keep their unknown-size
+    // fallbacks (0f / bytes-only / no ETA).
     val downloadedBytes = liveProgress?.downloadedBytes ?: item.downloadedBytes
     val speedBytesPerSec = liveProgress?.speedBytesPerSec ?: item.speedBytesPerSec
-    val progress = if (item.totalSizeBytes > 0) {
-        downloadedBytes.toFloat() / item.totalSizeBytes
+    val totalSizeBytes = liveProgress?.totalSizeBytes?.takeIf { it > 0L } ?: item.totalSizeBytes
+    val progress = if (totalSizeBytes > 0) {
+        downloadedBytes.toFloat() / totalSizeBytes
     } else 0f
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -256,8 +267,8 @@ internal fun DownloadItemRow(
                         // has no ETA; each line ellipsizes its own tail rather
                         // than wrapping the row taller.
                         Text(
-                            if (item.totalSizeBytes > 0) {
-                                "${formatBytes(downloadedBytes)} / ${formatBytes(item.totalSizeBytes)}"
+                            if (totalSizeBytes > 0) {
+                                "${formatBytes(downloadedBytes)} / ${formatBytes(totalSizeBytes)}"
                             } else {
                                 formatBytes(downloadedBytes)
                             },
@@ -270,7 +281,7 @@ internal fun DownloadItemRow(
                         Text(
                             buildString {
                                 val speedText = formatSpeed(speedBytesPerSec)
-                                val etaText = formatEta(downloadedBytes, item.totalSizeBytes, speedBytesPerSec)
+                                val etaText = formatEta(downloadedBytes, totalSizeBytes, speedBytesPerSec)
                                 if (speedText.isNotEmpty()) append(speedText)
                                 if (etaText.isNotEmpty()) {
                                     if (isNotEmpty()) append(" · ")

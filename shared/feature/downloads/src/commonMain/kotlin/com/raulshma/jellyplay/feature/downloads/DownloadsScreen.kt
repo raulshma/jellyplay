@@ -282,8 +282,9 @@ fun DownloadsScreen(
                 )
             }
             // Accumulated transfer ring (left of the resync action): one
-            // determinate ring over EVERY in-flight download with the whole
-            // batch's percent inside. Hidden while nothing is in flight.
+            // determinate ring over the whole to-download set (landed media
+            // stay counted, queued ones estimated) with the batch's percent
+            // inside. Hidden while nothing is in flight.
             DownloadsAggregateProgressRing(
                 downloads = downloads,
                 progressById = viewModel.progressById,
@@ -511,13 +512,15 @@ fun DownloadsScreen(
                                 groupTransferAction(DownloadBulkAction.CANCEL, groupItems, it.episodeIds, viewModel)
                             }
                             // Collapsed-group aggregate bar: only groups with an
-                            // actively DOWNLOADING episode read the live progress
+                            // episode in the Active set read the live progress
                             // map here — the same deferred hot-read gate the
-                            // DOWNLOADING item rows apply — so idle headers never
+                            // in-flight item rows apply — so idle headers never
                             // subscribe and a progress tick re-executes just the
-                            // in-flight groups' row scopes.
+                            // live groups' row scopes. Queued/paused-only groups
+                            // light the bar at their (possibly 0%) fraction; the
+                            // function itself gates the same way.
                             val groupProgress = header?.let {
-                                if (groupItems.any { item -> item.status == DownloadStatus.DOWNLOADING }) {
+                                if (groupItems.any { item -> item.status in DownloadStatusFilter.ACTIVE_STATUSES }) {
                                     downloadGroupProgressFraction(groupItems, progressById.value)
                                 } else {
                                     null
@@ -845,15 +848,16 @@ private fun DownloadListHeaderRow(
 
 /**
  * The app bar's accumulated-transfer ring (sits left of the resync action):
- * ONE determinate ring summarizing every in-flight download — the Active
- * status set (PENDING/QUEUED/DOWNLOADING/PAUSED, the same set the status
- * filter's Active view folds) as Σ downloaded / Σ total — with the whole
- * batch's percent rendered inside the ring. Hidden entirely while nothing is
- * in flight ([aggregateProgressFraction] yields null). The live byte map is
- * read INSIDE this leaf (the screen's deferred hot-read pattern, same as the
- * storage header) so a 2 s progress tick re-executes this ring alone, never
- * the screen body; the structural list arrives as a parameter that only
- * changes on status transitions.
+ * ONE determinate ring reading "% of the total media to download" — the sums
+ * span the whole to-download set (landed media stay counted, queued media
+ * estimate at the average known size, failed rows leave until retried) while
+ * the Active status set (PENDING/QUEUED/DOWNLOADING/PAUSED, the same set the
+ * status filter's Active view folds) gates visibility. Hidden entirely while
+ * nothing is in flight ([aggregateProgressFraction] yields null). The live
+ * byte map is read INSIDE this leaf (the screen's deferred hot-read pattern,
+ * same as the storage header) so a 2 s progress tick re-executes this ring
+ * alone, never the screen body; the structural list arrives as a parameter
+ * that only changes on status transitions.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
