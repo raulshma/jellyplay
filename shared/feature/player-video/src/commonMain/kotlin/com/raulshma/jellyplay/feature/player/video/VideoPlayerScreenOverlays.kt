@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.Flow
@@ -134,6 +135,8 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     // Trickplay overlay for seek gestures. Drag-seek shows the preview in
     // EVERY presentation mode (#7) — the mode only changes WHAT renders, the
     // center anchor stays except the full-surface mode filling the box.
+    // e2e: the overlay carries a stable tag — presence = the gesture
+    // trickplay pipeline is live (the 65c87a407 regression net).
     AnimatedVisibility(
         visible = inputs.trickplayOnSeekGesture && inputs.gestureTrickplayVisible,
         enter = fadeIn(tween(150, easing = AlphaEasing)),
@@ -144,7 +147,7 @@ internal fun BoxScope.PlayerCenterOverlayTier(
             TrickplayAnchor.FULL_SURFACE ->
                 Modifier.align(Alignment.Center).fillMaxSize()
             else -> Modifier.align(Alignment.Center)
-        },
+        }.testTag("player-trickplay-gesture-overlay"),
     ) {
         // Collected HERE — inside the visible overlay's own recompose scope,
         // not the tier's: the feeds emit per drag frame, and only the

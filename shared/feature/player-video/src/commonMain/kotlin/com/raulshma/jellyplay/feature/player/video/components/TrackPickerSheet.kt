@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -171,7 +172,11 @@ internal fun androidx.compose.foundation.layout.ColumnScope.TrackPickerSection(
                         onSelect(track)
                         onPickDismiss()
                     },
-                    modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
+                    // e2e: keyed by the track's stream index so tests can
+                    // address a specific option regardless of label text.
+                    modifier = Modifier
+                        .testTag("player-track-row-${track.index}")
+                        .ifElse(isTarget, Modifier.focusRequester(focusRequester)),
                 )
             }
         }

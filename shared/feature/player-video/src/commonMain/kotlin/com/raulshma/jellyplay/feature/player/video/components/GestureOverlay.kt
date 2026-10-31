@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -401,7 +402,9 @@ internal fun GestureOverlay(
             SeekCircleOverlay(
                 isLeft = isLeft,
                 seekOffsetMs = seekState.offsetMs,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("player-seek-gesture-overlay"),
             )
         }
 
@@ -423,6 +426,7 @@ internal fun GestureOverlay(
                 isAtBound = brightnessValue <= 0.01f || brightnessValue >= 0.99f,
                 modifier = Modifier
                     .align(brightnessAlignment)
+                    .testTag("player-brightness-overlay")
                     .then(
                         if (opposite) Modifier.padding(end = 24.dp)
                         else Modifier.padding(start = 24.dp)
@@ -438,6 +442,7 @@ internal fun GestureOverlay(
                 isAtBound = volumeValue <= 0.01f || volumeValue >= 0.99f,
                 modifier = Modifier
                     .align(volumeAlignment)
+                    .testTag("player-volume-overlay")
                     .then(
                         if (opposite) Modifier.padding(start = 24.dp)
                         else Modifier.padding(end = 24.dp)

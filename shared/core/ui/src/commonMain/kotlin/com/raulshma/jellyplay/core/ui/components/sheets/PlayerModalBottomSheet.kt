@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -141,6 +142,8 @@ private fun InWindowPlayerSheet(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                // e2e: presence = the sheet is fully slid in.
+                .testTag("player-sheet")
                 .fillMaxWidth(SHEET_WIDTH_FRACTION)
                 .heightIn(max = maxHeight * SHEET_HEIGHT_FRACTION)
                 .imePadding()

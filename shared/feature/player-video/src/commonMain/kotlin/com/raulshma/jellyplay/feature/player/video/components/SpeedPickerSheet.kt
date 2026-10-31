@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -93,7 +94,10 @@ internal fun SpeedPickerSheet(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             )
                         },
-                        modifier = Modifier.weight(1f),
+                        // e2e: rung-addressable ("player-speed-chip-1.5").
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("player-speed-chip-$speed"),
                         shape = ShapeCache.smoothPill,
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),

@@ -26,6 +26,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -239,7 +242,17 @@ class PlayerActivity : FragmentActivity() {
                     darkTheme = darkTheme,
                 ) {
                     when (args) {
-                        is PlayerActivityArgs.Video -> Box(Modifier.fillMaxSize()) {
+                        is PlayerActivityArgs.Video -> Box(
+                            // e2e: the player-window semantics root opts into
+                            // testTagsAsResourceId so instrumented tests can
+                            // address the tagged controls via UIAutomator
+                            // (By.res). Sheets are in-window (PlayerModalBottomSheet's
+                            // InWindowPlayerSheet), so this single root covers them.
+                            Modifier
+                                .fillMaxSize()
+                                .testTag("player-root")
+                                .semantics { testTagsAsResourceId = true },
+                        ) {
                             VideoPlayerScreen(
                                 itemId = args.itemId,
                                 mediaSourceId = args.mediaSourceId,

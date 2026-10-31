@@ -63,6 +63,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -155,7 +156,9 @@ fun NextEpisodeOverlay(
         modifier = modifier,
     ) {
         Surface(
-            modifier = Modifier.width(300.dp),
+            modifier = Modifier
+                .width(300.dp)
+                .testTag("player-up-next-card"),
             shape = ShapeCache.smooth24,
             color = playerScrimColor().copy(alpha = 0.8f),
             border = BorderStroke(1.dp, playerOnScrim().copy(alpha = 0.1f))
@@ -195,6 +198,7 @@ fun NextEpisodeOverlay(
                         Box(
                             modifier = Modifier
                                 .size(52.dp)
+                                .testTag("player-up-next-play")
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                                 .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), CircleShape)
@@ -319,6 +323,7 @@ fun NextEpisodeOverlay(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
                                 color = playerOnScrim().copy(alpha = 0.85f),
+                                modifier = Modifier.testTag("player-up-next-countdown"),
                             )
                         }
                     }

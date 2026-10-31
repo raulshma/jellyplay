@@ -8,6 +8,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
@@ -28,6 +29,7 @@ internal fun PipButton(
     FilledTonalIconButton(
         onClick = onClick,
         modifier = modifier
+            .testTag("player-pip-button")
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
         shape = IconButtonDefaults.smallRoundShape,

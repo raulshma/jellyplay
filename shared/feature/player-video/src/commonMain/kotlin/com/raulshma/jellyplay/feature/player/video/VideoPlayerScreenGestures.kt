@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
@@ -862,6 +863,7 @@ internal fun PlayerGestureOverlayTier(
             ) {
                 Text(
                     text = "${playbackSpeed}x",
+                    modifier = Modifier.testTag("player-hold-speed-pill"),
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,

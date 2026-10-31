@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -26,6 +27,7 @@ internal fun PlayerSpeedButton(
     FilledTonalIconButton(
         onClick = onClick,
         modifier = modifier
+            .testTag("player-speed-button")
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, IconButtonDefaults.smallRoundShape),
         shape = IconButtonDefaults.smallRoundShape,

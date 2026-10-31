@@ -41,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -463,6 +464,7 @@ internal fun PlayerControls(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("player-title"),
                         )
                         if (subtitle.isNotBlank()) {
                             Text(
@@ -586,6 +588,7 @@ internal fun PlayerControls(
                     onClick = transport.onPlayPause,
                     modifier = Modifier
                         .size(80.dp)
+                        .testTag("player-play-pause")
                         .then(tvPlayPauseFocusState.focusModifier)
                         .tvFocusIndicator(tvPlayPauseFocusState, CircleShape)
                         .ifElse(isTv, Modifier.focusRequester(tvPlayPauseFocusRequester)),

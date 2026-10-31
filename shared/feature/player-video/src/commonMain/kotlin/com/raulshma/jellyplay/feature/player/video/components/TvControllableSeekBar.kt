@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -206,6 +207,9 @@ internal fun TvControllableSeekBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
+                // e2e: the drag/slot target for scrub tests (UIAutomator
+                // addressable; the drag handlers live on this node).
+                .testTag("player-seekbar")
                 // a11y: the Canvas-drawn seekbar previously carried no
                 // semantics, so TalkBack ignored the primary scrub control
                 // entirely. Expose it as a Role.Slider with a ProgressBarRangeInfo
@@ -503,6 +507,7 @@ internal fun TvControllableSeekBar(
                         fontWeight = FontWeight.Medium,
                     ),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.testTag("player-position-text"),
                 )
                 val endLabel = if (duration > 0) {
                     remainingText ?: durationText
@@ -516,6 +521,7 @@ internal fun TvControllableSeekBar(
                         fontWeight = FontWeight.Medium,
                     ),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.testTag("player-duration-text"),
                 )
             }
         }
