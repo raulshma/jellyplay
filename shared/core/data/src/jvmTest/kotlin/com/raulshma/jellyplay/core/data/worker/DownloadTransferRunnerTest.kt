@@ -311,6 +311,48 @@ class DownloadTransferRunnerTest {
         coVerify { dao.markCompleted("dl-1", 4096L, any()) }
     }
 
+    @Test
+    fun `206 resume backfills a zero row total from the response Content-Range`() = runTest {
+        // The v0.11.6 gap: a resume never wrote updateTotalSize (the fresh-only
+        // guard), so a row whose first attempt was killed before the write —
+        // or any legacy row — kept totalSizeBytes = 0 forever and every
+        // progress fraction on the downloads screen read 0. The resume must
+        // backfill the total the 206's Content-Range carries, without
+        // clobbering a row that already knows it (pinned by the happy path
+        // above asserting no second write? — see the no-clobber test below).
+        tempFile.writeBytes(ByteArray(1024)) // existing partial
+        val remaining = ByteArray(3072) { it.toByte() }
+        client.enqueue(
+            FakeDownloadTransferClient.Reply.Status(code = 206, body = remaining, totalSize = 4096L),
+        )
+
+        val result = runner().transfer(
+            entity(downloadedBytes = 1024L, totalSizeBytes = 0L), existingBytes = 1024L,
+            notificationId = 1, accessToken = null, probedTotalSize = 4096L,
+        )
+
+        assertEquals(TransferOutcome.Success, result)
+        coVerify { dao.updateTotalSize("dl-1", 4096L) }
+    }
+
+    @Test
+    fun `206 resume does not clobber a known row total`() = runTest {
+        // The backfill only fires for rows still carrying the 0 insert default.
+        tempFile.writeBytes(ByteArray(1024))
+        val remaining = ByteArray(3072) { it.toByte() }
+        client.enqueue(
+            FakeDownloadTransferClient.Reply.Status(code = 206, body = remaining, totalSize = 4096L),
+        )
+
+        val result = runner().transfer(
+            entity(downloadedBytes = 1024L, totalSizeBytes = 4096L), existingBytes = 1024L,
+            notificationId = 1, accessToken = null, probedTotalSize = 4096L,
+        )
+
+        assertEquals(TransferOutcome.Success, result)
+        coVerify(exactly = 0) { dao.updateTotalSize(any(), any()) }
+    }
+
     // ---- kill mid-transfer → gated persist → resume completes ---------------
 
     @Test

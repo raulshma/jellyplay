@@ -405,8 +405,13 @@ class DownloadTransferGateTest {
         assertTrue(client.requests[0].head, "the first request must be the HEAD re-probe")
         assertEquals("bytes=100-", client.requests[1].range)
         coVerify { dao.markCompleted("dl-1", 1024L, any()) }
-        // Resume never re-writes the total (updateTotalSize is fresh-start-only).
-        coVerify(exactly = 0) { dao.updateTotalSize(any(), any()) }
+        // The row's total was the insert-time 0 (the fixture default) and the
+        // GET body carried no size — the re-probe is the only teacher, and the
+        // resume backfills from it (the fresh-start-only guard is gone: it
+        // left such rows at 0 forever, zeroing every progress fraction — the
+        // v0.11.6 downloads-progress regression). A row that already knows
+        // its total is never clobbered (pinned in DownloadTransferRunnerTest).
+        coVerify { dao.updateTotalSize("dl-1", 1024L) }
         // No summary duty on the transfer path: the port saw nothing and the
         // count query was never issued (DownloadSummarySurface owns it).
         assertEquals(emptyList(), notifications.calls)

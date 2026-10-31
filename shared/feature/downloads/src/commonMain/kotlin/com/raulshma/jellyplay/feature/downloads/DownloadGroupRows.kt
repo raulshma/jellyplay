@@ -252,9 +252,10 @@ internal fun DownloadGroupHeader(
     formatBytes: (Long) -> String = Long::toString,
     /**
      * The group's live whole-group transfer fraction (Σ downloaded / Σ total
-     * over ALL its episodes, completed ones counted as landed — see
-     * [downloadGroupProgressFraction]) while at least one episode is
-     * DOWNLOADING — renders the collapsed header's aggregate bar; null
+     * over ALL its episodes, completed ones counted as landed, queued ones
+     * estimated at the group's average known size — see
+     * [downloadGroupProgressFraction]) while at least one episode is in the
+     * Active set — renders the collapsed header's aggregate bar; null
      * (nothing in flight, or the group is expanded) hides it.
      */
     groupProgress: Float? = null,
