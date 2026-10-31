@@ -479,6 +479,13 @@ dependencies {
     testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    // Player E2E (app/src/androidTest .../e2e/player): cross-activity flows
+    // (MainActivity details -> PlayerActivity -> PiP/background) need a
+    // device-wide automation API, not one bound to a single activity.
+    androidTestImplementation(libs.androidx.uiautomator)
+    // Server-side assertions against the Dockerized Jellyfin fixture
+    // (progress ticks / played state) straight from the test process.
+    androidTestImplementation(libs.okhttp)
 
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test)

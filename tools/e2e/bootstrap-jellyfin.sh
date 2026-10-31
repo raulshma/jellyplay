@@ -29,6 +29,9 @@ CONTAINER="jellyplay-e2e"
 USERNAME="harness"
 PASSWORD="harness-e2e-pass"
 ITEM_FILE="$STATE_DIR/item-id.txt"
+SHOWS_DIR="$STATE_DIR/shows"
+TRACKS_ID_FILE="$STATE_DIR/tracks-clip-id.txt"
+EPISODE_IDS_FILE="$STATE_DIR/episode-ids.txt"
 
 # All logging to STDERR: wait_for_item PRINTS the item id on stdout for
 # command substitution, and a stdout log line would be captured into the id
@@ -52,9 +55,18 @@ if ! docker info >/dev/null 2>&1; then
   docker info >/dev/null 2>&1 || { log "FATAL: docker daemon did not come up"; exit 1; }
 fi
 
-mkdir -p "$MEDIA_DIR" "$CONFIG_DIR"
-WIN_MEDIA="$(cd "$MEDIA_DIR" && pwd -W)"
-WIN_CONFIG="$(cd "$CONFIG_DIR" && pwd -W)"
+mkdir -p "$MEDIA_DIR" "$CONFIG_DIR" "$SHOWS_DIR"
+# Docker volume hosts: Git Bash/MSYS needs the Windows form (pwd -W); Linux
+# and macOS mount the POSIX path as-is.
+if (cd "$MEDIA_DIR" && pwd -W) >/dev/null 2>&1; then
+  WIN_MEDIA="$(cd "$MEDIA_DIR" && pwd -W)"
+  WIN_CONFIG="$(cd "$CONFIG_DIR" && pwd -W)"
+  WIN_SHOWS="$(cd "$SHOWS_DIR" && pwd -W)"
+else
+  WIN_MEDIA="$MEDIA_DIR"
+  WIN_CONFIG="$CONFIG_DIR"
+  WIN_SHOWS="$SHOWS_DIR"
+fi
 
 # --- media: one short, recognizable movie clip -------------------------------
 if [ ! -f "$MEDIA_DIR/Harness Test Clip (2026).mp4" ]; then
@@ -95,6 +107,59 @@ for i in $(seq 1 "$PROBE_COUNT"); do
   fi
 done
 
+# --- player-e2e media: multi-track clip + trickplay target --------------------
+# "E2E Tracks Clip" (240 s @ 640x360, long enough for trickplay tile
+# extraction): TWO audio tracks (440 Hz "eng" / 880 Hz "deu") for the audio
+# sheet, an embedded mov_text subtitle for the hub, and an EXTERNAL .srt
+# sibling (Jellyfin pairs `Name.en.srt` with `Name.mp4` on scan).
+TRACKS_NAME="E2E Tracks Clip (2026)"
+if [ ! -f "$MEDIA_DIR/$TRACKS_NAME.mp4" ]; then
+  log "generating $TRACKS_NAME.mp4 (240 s, 2 audio tracks + mov_text sub)"
+  ffmpeg -hide_banner -loglevel error -y \
+    -f lavfi -i "testsrc2=duration=240:size=640x360:rate=24" \
+    -f lavfi -i "sine=frequency=440:duration=240" \
+    -f lavfi -i "sine=frequency=880:duration=240" \
+    -map 0:v -map 1:a -map 2:a \
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -c:s mov_text \
+    -metadata:s:a:0 language=eng -metadata:s:a:1 language=deu \
+    -metadata:s:s:0 language=eng \
+    -movflags +faststart \
+    "$MEDIA_DIR/$TRACKS_NAME.mp4"
+fi
+if [ ! -f "$MEDIA_DIR/$TRACKS_NAME.en.srt" ]; then
+  cat > "$MEDIA_DIR/$TRACKS_NAME.en.srt" <<'SRT'
+1
+00:00:01,000 --> 00:00:05,000
+E2E external subtitle cue one
+
+2
+00:00:06,000 --> 00:00:10,000
+E2E external subtitle cue two
+
+3
+00:01:00,000 --> 00:01:05,000
+E2E external subtitle cue three
+SRT
+fi
+
+# --- player-e2e media: series for the Up-Next flow -----------------------------
+# "Harness Show" S01E01-E03 (150 s each, distinct tone per episode so a
+# wrong-episode assert is audibly honest). S01E0x filenames make Jellyfin's
+# parser set ParentIndexNumber/IndexNumber; " - Harness E01" becomes the
+# episode display Name (what the player title bar shows).
+SHOW_DIR="$SHOWS_DIR/Harness Show (2026)/Season 1"
+if [ ! -f "$SHOW_DIR/Harness Show S01E03 - Harness E03.mp4" ]; then
+  log "generating Harness Show episodes (3 x 150 s)"
+  mkdir -p "$SHOW_DIR"
+  for e in 1 2 3; do
+    ffmpeg -hide_banner -loglevel error -y \
+      -f lavfi -i "testsrc2=duration=150:size=640x360:rate=24" \
+      -f lavfi -i "sine=frequency=$((440 + e * 100)):duration=150" \
+      -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest -movflags +faststart \
+      "$SHOW_DIR/Harness Show S01E0$e - Harness E0$e.mp4"
+  done
+fi
+
 # --- container ----------------------------------------------------------------
 if docker inspect "$CONTAINER" >/dev/null 2>&1; then
   log "removing stale container $CONTAINER"
@@ -108,6 +173,7 @@ log "starting $CONTAINER from $IMAGE on port $PORT"
 MSYS_NO_PATHCONV=1 docker run -d --name "$CONTAINER" \
   -p "$PORT:8096" \
   -v "$WIN_MEDIA:/media" \
+  -v "$WIN_SHOWS:/shows" \
   -v "$WIN_CONFIG:/config" \
   -e TZ=UTC \
   "$IMAGE" >/dev/null
@@ -202,6 +268,11 @@ if ! curl -sf -m 10 -H "$AUTH" "$BASE/Library/VirtualFolders" | grep -q 'E2E Med
   curl -sf -m 30 -X POST -H "$AUTH" \
     "$BASE/Library/VirtualFolders?name=E2E%20Media&collectionType=movies&paths=/media&refreshLibrary=true" >/dev/null
 fi
+if ! curl -sf -m 10 -H "$AUTH" "$BASE/Library/VirtualFolders" | grep -q 'E2E Shows'; then
+  log "adding library 'E2E Shows' -> /shows"
+  curl -sf -m 30 -X POST -H "$AUTH" \
+    "$BASE/Library/VirtualFolders?name=E2E%20Shows&collectionType=tvshows&paths=/shows&refreshLibrary=true" >/dev/null
+fi
 
 # --- items: exact-Name id lookup + deterministic primary-image upload ---------
 # Id extraction is NAME-SCOPED (split the search response into per-object lines
@@ -212,20 +283,23 @@ fi
 # parser splits "Foo (2026).mp4" into Name="Foo" + ProductionYear=2026, so a
 # lookup keyed on the full filename stem never matches (first run's
 # lesson: the scan HAD produced every item; the lookup just could not see them).
-item_id_by_name() { # item_id_by_name <display name> -> echoes 32-hex id or empty
+item_id_by_type() { # item_id_by_type <display name> <IncludeItemTypes> -> echoes 32-hex id or empty
   curl -sf -m 10 -G -H "$AUTH" \
     --data-urlencode "searchTerm=$1" \
     --data-urlencode "Recursive=true" \
-    --data-urlencode "IncludeItemTypes=Movie" \
+    --data-urlencode "IncludeItemTypes=$2" \
     "$BASE/Items" \
     | tr '{' '\n' | grep -F "\"Name\":\"$1\"" \
     | grep -oE '"[Ii]d":"[0-9a-f]{32}"' | head -1 | grep -oE '[0-9a-f]{32}' || true
 }
+item_id_by_name() { # item_id_by_name <display name> -> echoes 32-hex id or empty (movies)
+  item_id_by_type "$1" "Movie"
+}
 
-wait_for_item() { # wait_for_item <display name> -> echoes id; triggers one library refresh
+wait_for_item_type() { # wait_for_item_type <display name> <IncludeItemTypes> -> echoes id; triggers one library refresh
   local id="" refreshed=0 _scan
   for _scan in $(seq 1 45); do
-    id="$(item_id_by_name "$1")"
+    id="$(item_id_by_type "$1" "$2")"
     if [ -n "$id" ]; then printf '%s' "$id"; return 0; fi
     if [ "$refreshed" -eq 0 ]; then
       log "item '$1' not scanned yet - requesting library refresh"
@@ -235,6 +309,9 @@ wait_for_item() { # wait_for_item <display name> -> echoes id; triggers one libr
     sleep 2
   done
   return 1
+}
+wait_for_item() { # wait_for_item <display name> -> echoes id (movies)
+  wait_for_item_type "$1" "Movie"
 }
 
 # Ensure the INTENDED poster is the item's primary image — not merely that A
@@ -285,4 +362,45 @@ for i in $(seq 1 "$PROBE_COUNT"); do
 done
 
 printf '%s' "$ITEM_ID" > "$ITEM_FILE"
-log "OK: $BASE | user=$USERNAME password=$PASSWORD | item=$ITEM_ID ($SERVER_VERSION) | cache-probe items:$PROBE_IDS"
+
+# --- player-e2e items: tracks clip + trickplay tiles + episode ids -------------
+TRACKS_ID="$(wait_for_item "$TRACKS_NAME")" \
+  || { log "FATAL: library scan never produced '$TRACKS_NAME'"; exit 1; }
+printf '%s' "$TRACKS_ID" > "$TRACKS_ID_FILE"
+log "tracks-clip item: $TRACKS_ID"
+
+# Trickplay tiles: stock Jellyfin extracts them in the scheduled task, not on
+# scan. Find the task by name and run it, then poll the item's trickplay
+# endpoint until the tile manifest answers non-empty (240 s clip, default
+# 10 s interval -> ~24 tiles; generation for a 640x360 clip is fast).
+if ! curl -sf -m 10 -H "$AUTH" "$BASE/Items/$TRACKS_ID/Trickplay" | grep -q 'Width'; then
+  TASK_ID="$(curl -sf -m 10 -H "$AUTH" "$BASE/ScheduledTasks" \
+    | tr '{' '\n' | grep -i 'trickplay' \
+    | grep -oE '"[Ii]d":"[0-9a-f-]{36}"' | head -1 | grep -oE '[0-9a-f-]{36}' || true)"
+  if [ -n "$TASK_ID" ]; then
+    log "triggering trickplay generation task $TASK_ID"
+    curl -sf -m 15 -X POST -H "$AUTH" "$BASE/ScheduledTasks/Running/$TASK_ID" >/dev/null || true
+  else
+    log "WARN: no trickplay scheduled task found - trickplay tests may skip"
+  fi
+  for _ in $(seq 1 60); do
+    if curl -sf -m 10 -H "$AUTH" "$BASE/Items/$TRACKS_ID/Trickplay" | grep -q 'Width'; then
+      log "trickplay tiles ready for $TRACKS_ID"
+      break
+    fi
+    sleep 3
+  done
+  curl -sf -m 10 -H "$AUTH" "$BASE/Items/$TRACKS_ID/Trickplay" | grep -q 'Width' \
+    || log "WARN: trickplay tiles never appeared (extraction lag) - re-run bootstrap"
+fi
+
+EPISODE_IDS=""
+for e in 1 2 3; do
+  EP_NAME="Harness E0$e"
+  EP_ID="$(wait_for_item_type "$EP_NAME" "Episode")" \
+    || { log "FATAL: library scan never produced episode '$EP_NAME'"; exit 1; }
+  EPISODE_IDS="$EPISODE_IDS $EP_ID"
+done
+printf '%s' "$EPISODE_IDS" > "$EPISODE_IDS_FILE"
+
+log "OK: $BASE | user=$USERNAME password=$PASSWORD | item=$ITEM_ID ($SERVER_VERSION) | cache-probe items:$PROBE_IDS | tracks-clip=$TRACKS_ID | episodes:$EPISODE_IDS"

@@ -25,6 +25,7 @@ Toolset-wide (individual tools may need only a subset — see table):
 | `desktop-native-dialog-pass.sh` | Desktop native-dialog flows inside the real windowed app: the AWT FileDialog settings-backup export/import round trip (SAVE with the production prefill, LOAD, ESC cancel) typed into by a Robot driver, asserting the exported file's existence + v2 JSON shape and the VM's status lines — server-free, the audit-F9 lane | wave 22F — live |
 | `desktop-native-dialog-flows-pass.sh` | The four remaining native-dialog flows (editor image picker, editor subtitle picker, insights heatmap share, player subtitle upload): real sign-in + route pushes + REAL Robot mouse clicks through the harness-gated `HarnessClickBridge` (`jellyplay.flowpass.*` props), the REAL AWT LOAD dialogs typed by the shared driver, server-side post-conditions (Primary image tag change / subtitle stream deltas / heatmap PNG under the redirected tmpdir) | wave 23 — live |
 | `device-settings-smoke-pass.sh` | SETTINGS RELEASE GATE on a physical phone (release variant, R8 on): deep-links `jellyplay://settings`, walks every sub-screen row (Home Screen, Appearance, Playback, Language, Downloads & Storage, Notifications, Security, Privacy & Data + best-effort power-user-gated rows), and fails on process death, a fresh crash-buffer entry, or a screen that never renders — the class the v0.11.6 PreferenceScreenScaffold crash-on-open belonged to. Requires an already-signed-in install; drives release APKs (debug-keystore-signed locally) via `SKIP_INSTALL=1` after a first build+install round | live — release gate, run before publishing |
+| `run-player-e2e.sh` | ON-DEVICE VIDEO-PLAYER E2E (instrumented, `app/src/androidTest .../e2e/player`): drives the real app (first-run login → details → PlayerActivity) against the Docker fixture via `adb reverse`, asserting on tagged player UI (`testTagsAsResourceId`) AND server-side truth (progress ticks). Covers playback lifecycle + seek + server reporting (ExoPlayer & mpv), gesture seek/double-tap/brightness/volume/hold-speed, gesture trickplay (the 65c87a407 regression net), audio/subtitle track switching + 1.5x speed, Up-Next advance E01→E02, PiP pin + remote actions, background audio via media session, and resume across `am force-stop` | live — physical device, run on a phone (arm64, API 28+) |
 
 ## Running bootstrap-jellyfin.sh
 
@@ -36,8 +37,14 @@ Starts (or restarts) the `jellyplay-e2e` Docker container on port 8096 with
 persisted state under `tools/e2e/.state/` (gitignored), runs the first-run
 wizard over the API, ensures user `harness` / `harness-e2e-pass`, generates
 the 12 s testsrc movie + poster PLUS the large-poster library (8 movies with
-2560x1440 posters), adds the `E2E Media`
-library and waits for the item scan. Idempotent: re-running skips completed
+2560x1440 posters), the player-e2e media — "E2E Tracks Clip (2026)" (240 s,
+2 audio tracks eng/deu + embedded mov_text + external `.srt`, the trickplay
+extraction target) and the "Harness Show (2026)" series (3 x 150 s episodes
+for the Up-Next flow; tiles for the tracks clip are extracted via the
+trickplay scheduled task and polled until present) — adds the `E2E Media`
+(movies) and `E2E Shows` (tvshows) libraries and waits for the item scans.
+Runs on Linux/macOS too (volume paths are portable; the Git Bash `pwd -W`
+form is used only when available). Idempotent: re-running skips completed
 stages (per-item name lookup + byte-compared poster replacement; the scan
 itself extracts small primaries from the video pixels which the size check
 replaces). 10.11 quirks handled inside: wizard POSTs need browser-like
@@ -46,6 +53,45 @@ with 404), JSON key casing varies per endpoint, and the file parser splits
 "Name (Year).mp4" into Name + ProductionYear (lookups use display names).
 If the config volume rots (wizard 401s before poster repair), wipe
 `tools/e2e/.state/config` and re-run.
+
+## Running run-player-e2e.sh
+
+```bash
+tools/e2e/run-player-e2e.sh
+```
+
+One command = fixture + device prep + instrumented suite + artifacts:
+
+1. Bootstraps the fixture (skippable with `SKIP_FIXTURE=1` when already up).
+2. Prepares the device: wake, dismiss keyguard, pre-grant
+   `POST_NOTIFICATIONS` / `ACCESS_LOCAL_NETWORK` (best-effort per API level),
+   disables Google autofill (it overwrites typed credentials), `pm clear`s
+   the app for a hermetic first-run login (skip with `KEEP_APP_STATE=1`),
+   and `adb reverse tcp:8096` so the device reaches the fixture on loopback.
+3. Runs `./gradlew :app:connectedPhoneDebugAndroidTest` — the suite in
+   `app/src/androidTest/java/com/raulshma/jellyplay/e2e/player/`.
+4. Pulls failure artifacts (screenshot + view-hierarchy XML per failed test)
+   into `tools/e2e/.results/player-e2e/` and prints the `VERDICT` line.
+
+Env overrides:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ANDROID_SERIAL` | first `adb devices` entry | device to target |
+| `KEEP_APP_STATE` | `0` | `1` = skip `pm clear` (reuse existing signed-in app) |
+| `E2E_CLASS` | all | one test class, e.g. `com.raulshma.jellyplay.e2e.player.TrickplayE2eTest` |
+| `E2E_SERVER_URL` | `http://127.0.0.1:8096` | fixture base the tests use (must match the reverse/port) |
+| `SKIP_FIXTURE` | `0` | `1` = assume the fixture is already up |
+
+Requires: one arm64 phone on API 28+ over adb (wireless TLS ok), docker +
+ffmpeg for the fixture. The player window opts into `testTagsAsResourceId`
+(PlayerActivity) — the suite addresses controls via their `player-*` test
+tags and everything pre-player via stable en-US text/content descriptions;
+server-side assertions read progress ticks straight from the fixture REST
+API. Runtime budget: roughly 10–20 min for the full suite (two engines ×
+lifecycle/gesture parameterization).
+
+
 
 ## Running msi-boot-pass.sh
 
