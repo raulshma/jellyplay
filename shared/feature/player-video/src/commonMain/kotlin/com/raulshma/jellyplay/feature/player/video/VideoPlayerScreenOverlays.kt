@@ -24,9 +24,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
@@ -419,25 +423,40 @@ internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
  * seek-bar / D-pad scrub (seek overlay bitmap + the TV mirror, which renders
  * no gesture overlay) and the gesture-swipe preview. The two former inline
  * `LaunchedEffect(Unit)` collectors differed only in the position source, the
- * gating flag and the target write — the combined
- * `Triple(position, gate, info)` snapshot read, the `conflate()` +
- * `distinctUntilChanged()` pipeline that suppresses no-op emissions (neither
- * the position nor the gating flags changed), and the gate check live here
- * exactly once. The state reads stay inside [snapshotFlow]'s block via the
- * getter lambdas, so snapshot tracking is byte-identical to the inline form;
- * each feed's clear-on-end LaunchedEffect stays at its call site (their
- * clear semantics genuinely differ).
+ * gating flag and the target write — the combined `Triple(position, gate, info)`
+ * read, the conflation that keeps only the latest drag frame, and the gate
+ * check live here exactly once. The state reads stay inside [snapshotFlow]'s
+ * block via the getter lambdas, so snapshot tracking is byte-identical to the
+ * inline form; each feed's clear-on-end LaunchedEffect stays at its call site
+ * (their clear semantics genuinely differ).
+ *
+ * `snapshotFlow` observes only SNAPSHOT state (Compose `MutableState`) — a
+ * `StateFlow.value` read inside the block registers no dependency, so a feed
+ * whose position/gate arrive as StateFlows (the gesture feed) would run the
+ * block exactly once and never again. Such inputs must be announced through
+ * [changePulses] instead: every pulse re-reads the Triple and re-runs the gate
+ * check (deduped to the same distinctUntilChanged semantics the emitted form
+ * had). The gesture feed pulses with its drag flows; the seek-bar feed (pure
+ * Compose state) keeps the default empty pulse stream.
  */
 internal suspend fun collectTrickplayThumbnails(
     positionMs: () -> Long,
     gate: () -> Boolean,
     trickplayInfo: () -> TrickplayInfo?,
     onFetch: suspend (positionMs: Long, trickplayInfo: TrickplayInfo?) -> Unit,
+    changePulses: Flow<Unit> = emptyFlow(),
 ) {
-    snapshotFlow { Triple(positionMs(), gate(), trickplayInfo()) }
+    var lastInputs: Triple<Long, Boolean, TrickplayInfo?>? = null
+    merge(
+        snapshotFlow { Triple(positionMs(), gate(), trickplayInfo()) }.map { },
+        changePulses,
+    )
         .conflate()
-        .distinctUntilChanged()
-        .collect { (pos, shouldFetch, info) ->
+        .collect {
+            val inputs = Triple(positionMs(), gate(), trickplayInfo())
+            if (inputs == lastInputs) return@collect
+            lastInputs = inputs
+            val (pos, shouldFetch, info) = inputs
             if (shouldFetch) {
                 onFetch(pos, info)
             }

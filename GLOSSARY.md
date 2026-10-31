@@ -708,7 +708,12 @@ collectors' gates (seek-bar + TV mirror, gesture), the TV-mirror
 divergence (the gesture feed's gate deliberately carries no
 `trickplayInfo != null` conjunct), and the seek-clear/grace-clear
 effects, as one hoist the screen consumes. Gate reads arrive as getter
-lambdas so `snapshotFlow` tracking is byte-identical.
+lambdas so `snapshotFlow` tracking is byte-identical. `snapshotFlow`
+observes ONLY snapshot state — a `StateFlow.value` read registers no
+dependency — so the gesture feed's drag StateFlows ride the shared
+collector's `changePulses` (each pulse re-reads the gate Triple and
+re-checks, deduped) instead of the block; the feed effects are keyed on
+the gesture controller so a rebuild re-arms them.
 
 **Playback request plan** — `PlaybackRequestPlan.of(inputs)` (commonMain,
 the plan-fold shape): the 20-field `PlaybackRequest` build decisions —

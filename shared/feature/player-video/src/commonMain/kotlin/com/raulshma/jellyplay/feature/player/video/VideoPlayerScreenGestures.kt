@@ -68,6 +68,7 @@ import com.raulshma.jellyplay.feature.player.video.state.WheelRowDisposition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -927,7 +928,9 @@ internal fun rememberTrickplayFeeds(
     LaunchedEffect(Unit) {
         // Seek-bar / D-pad scrub feed: the seek overlay bitmap plus the TV
         // mirror (TV renders no gesture overlay, so the seek-bar thumbnail
-        // IS its scrub preview).
+        // IS its scrub preview). The seek screen state is Compose snapshot
+        // state, so the collector's snapshotFlow tracks it directly — no
+        // change pulses needed.
         collectTrickplayThumbnails(
             positionMs = seekPositionMs,
             gate = { isSeeking() && trickplayEnabled() && trickplayInfo() != null },
@@ -949,11 +952,18 @@ internal fun rememberTrickplayFeeds(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(gestureController) {
         // Gesture-swipe feed: unlike the seek feed, its gate does NOT include
         // trickplayInfo != null — a null info with the gesture active still
         // flips the overlay visible (with a null bitmap) so the swipe preview
         // placeholder shows; the onFetch body encodes that divergence.
+        //
+        // The drag streams are StateFlows, which snapshotFlow does NOT
+        // observe (a StateFlow.value read registers no snapshot dependency —
+        // the feed would run once and go dead), so they ride changePulses:
+        // every isSeeking/seekPositionMs flip re-runs the gate check.
+        // Keyed on the controller: a rebuild (engine swap, cast connect)
+        // mints new flows the frozen collector must follow.
         collectTrickplayThumbnails(
             positionMs = { gestureController.seekPositionMs.value },
             gate = { gestureController.isSeeking.value && trickplayOnSeekGesture() },
@@ -966,15 +976,19 @@ internal fun rememberTrickplayFeeds(
                     null
                 }
             },
+            changePulses = combine(
+                gestureController.isSeeking,
+                gestureController.seekPositionMs,
+            ) { _, _ -> },
         )
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(gestureController) {
         // Flow-collected (not a composition key): keying the former
         // LaunchedEffect on isGestureSeeking subscribed this scope to every
         // drag's start/end flips. collectLatest keeps the former restart
         // semantics — a new gesture starting inside the 1 s grace cancels
-        // the pending clear.
+        // the pending clear. Keyed on the controller like the feed above.
         gestureController.isSeeking.collectLatest { seeking ->
             if (!seeking && feeds.gestureVisible) {
                 delay(1000)
