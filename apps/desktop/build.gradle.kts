@@ -176,13 +176,12 @@ compose.desktop {
             // THE BLOCKER: both ProGuard releases that exist today fail on
             // this graph's Kotlin metadata. 7.7.0 (the plugin default)
             // bundles kotlin-metadata-jvm 2.1.0 → cannot read this build's
-            // Kotlin 2.3.21 module metadata ("version 2.3.0 > max 2.2.0");
-            // 7.8.0 (latest, `version` below) reads ≤2.3 → dies on the
-            // kotlin-stdlib 2.4.10 the desktop runtime classpath resolves
-            // (the Compose/Kotlin 2.4 toolchain side of the same story as
-            // the klib notes). A ProGuard with kotlin-metadata-jvm ≥2.4
-            // (or CMP moving to R8) unblocks this; then run the A/B + e2e
-            // smoke.
+            // Kotlin 2.4.21 module metadata; 7.8.0 (latest, `version` below)
+            // reads ≤2.3 → dies on the kotlin-stdlib 2.4.21 the desktop
+            // runtime classpath resolves (the Compose/Kotlin 2.4 toolchain
+            // side of the same story as the klib notes). A ProGuard with
+            // kotlin-metadata-jvm ≥2.4 (or CMP moving to R8) unblocks this;
+            // then run the A/B + e2e smoke.
             version = "7.8.0"
             isEnabled = false
             obfuscate = false
