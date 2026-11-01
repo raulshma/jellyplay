@@ -35,6 +35,11 @@ navigation3 = "1.2.0"
 # artifact — the fork's POM depends on it too, so only -ui needs swapping.
 jbNavigation3Ui = "1.2.0"
 lifecycleViewmodelNav3 = "2.11.0"
+# HELD at 1.8.12: the 1.9.x line is a BREAKING release — built on the Jellyfin
+# 12.0 API and drops every older server (10.11 included). Bumping means
+# requiring Jellyfin Server 12+ from all users; that is a product decision for
+# a dedicated migration cycle (also moves to the Android KMP plugin layout and
+# reworks device-info language handling), not a routine version bump.
 jellyfinSdk = "1.8.12"
 media3 = "1.11.1"
 # Fork pin (NOT the google artifact): the latest fork published on Maven
@@ -56,17 +61,17 @@ multiplatformMarkdownRenderer = "0.41.0"
 # 3.0.3 is the latest stable (2026-09-09). Its POM pins androidx.sqlite 2.7.1
 # (sqlite + sqlite-async) — matched below.
 room3 = "3.0.3"
-datastore = "1.2.1"
-okio = "3.9.0"
+datastore = "1.3.0"
+okio = "3.18.2"
 javakeyring = "1.0.4"
 # Aligned with room3-runtime 3.0.3's POM (androidx.sqlite:sqlite 2.7.1,
 # sqlite-async 2.7.1, sqlite-framework 2.7.0). Bundled driver for desktop
 # stays compatible per the same release train.
 androidxSqlite = "2.7.1"
-paging = "3.5.0"
-pagingCompose = "3.5.0"
-workManager = "2.11.2"
-kotlinxSerialization = "1.11.0"
+paging = "3.5.3"
+pagingCompose = "3.5.3"
+workManager = "2.12.0"
+kotlinxSerialization = "1.12.0"
 kotlinxCoroutines = "1.11.0"
 # kotlinx.collections.immutable — the persistent collections behind the
 # @Immutable state bags' list fields (skippability without unstable List
@@ -83,7 +88,7 @@ kotlinxCollectionsImmutable = "0.4.0"
 # no new serialization version enters the graph.
 kotlinxDatetime = "0.8.0"
 palette = "1.0.0"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 collection = "1.6.0"
 activityCompose = "1.13.0"
 coreSplashScreen = "1.2.0"
@@ -109,7 +114,7 @@ jna = "5.17.0"
 libvlc = "3.7.5"
 assMedia = "0.5.0"
 truetypeParser = "2.1.4"
-okhttp = "5.4.0"
+okhttp = "5.5.1"
 tvMaterial = "1.1.0"
 tablerIcons = "2.2.1"
 biometric = "1.4.0-alpha07"
