@@ -56,7 +56,7 @@ androidDesugarJdkLibs = "2.1.5"
 # needs a split again, keep the android pin >= the shared pin.
 coil = "3.6.3"
 coilAndroid = "3.6.3"
-multiplatformMarkdownRenderer = "0.41.0"
+multiplatformMarkdownRenderer = "0.46.0"
 # Room 3 (spike/room3): androidx.room3 package, KSP-only, coroutine DB ops.
 # 3.0.3 is the latest stable (2026-09-09). Its POM pins androidx.sqlite 2.7.1
 # (sqlite + sqlite-async) — matched below.
@@ -89,7 +89,7 @@ kotlinxCollectionsImmutable = "0.4.0"
 kotlinxDatetime = "0.8.0"
 palette = "1.0.0"
 coreKtx = "1.19.1"
-collection = "1.6.0"
+collection = "1.7.0"
 activityCompose = "1.13.0"
 coreSplashScreen = "1.2.0"
 lifecycle = "2.11.0"
@@ -102,44 +102,51 @@ mockk = "1.14.11"
 # both consumers get it via this ref.
 orgJson = "20260814"
 coroutinesTest = "1.11.0"
+# HELD at 4.16.1: 4.17's AndroidInterceptors fd shadowing breaks on this
+# build's JDK 21 daemon — "Failed to interact with raw FileDescriptor
+# internals" (IllegalAccessException deep-reflecting java.io.FileDescriptor)
+# across the core:data / core:ui androidHostTest lanes (Robolectric bug,
+# reprobed 2026-11-02). Revisit when a 4.17.x patch fixes the interceptor.
 robolectric = "4.16.1"
 androidxTestCore = "1.7.0"
 uiautomator = "2.4.0"
-playServicesCast = "22.3.1"
-mediarouter = "1.9.0-alpha01"
-slf4j = "2.0.18"
+playServicesCast = "23.0.0"
+mediarouter = "1.9.0-rc01"
+slf4j = "2.0.20"
 libmpv = "0.1.12"
 # JNA for the desktop libmpv binding (MpvDesktopEngine)
-jna = "5.17.0"
-libvlc = "3.7.5"
-assMedia = "0.5.0"
+jna = "5.19.1"
+# libvlc pinned to the 3.x line — the 4.x entries on Maven are EAP builds.
+libvlc = "3.7.7"
+assMedia = "0.5.1"
 truetypeParser = "2.1.4"
 okhttp = "5.5.1"
 tvMaterial = "1.1.0"
+tvprovider = "1.1.0"
 tablerIcons = "2.2.1"
 biometric = "1.4.0-alpha07"
 # androidx.biometric: still pre-release-only beyond 1.1.0; 1.4.0-alpha07 is latest.
 # androidx.security:security-crypto graduated to 1.1.0 stable (2025).
 # Used only by SeerrSecureCredentialsStore (AES256-GCM + AES256-SIV via Keystore-backed MasterKey).
 security = "1.1.0"
-benchmarkMacro = "1.5.0-alpha07"
-# androidx.benchmark 1.5.x alphas: required for the Baseline Profile Gradle plugin
-# to be compatible with AGP 9.x (fixes b/443311090 in 1.5.0-alpha01). The plugin
-# and benchmark-macro-junit4 share the androidx.benchmark release train, so the
-# same version.ref is used for both.
-baselineprofile = "1.5.0-alpha07"
+benchmarkMacro = "1.5.0"
+# androidx.benchmark 1.5.0 (stable): the AGP 9 compatibility the line was
+# pinned in alpha for (b/443311090, fixed in 1.5.0-alpha01) has graduated.
+# The plugin and benchmark-macro-junit4 share the androidx.benchmark release
+# train, so the same version.ref is used for both.
+baselineprofile = "1.5.0"
 # Apache PDFBox — desktop PDF page rendering for the book reader
 # (shared/feature:player-book jvmMain only; Android renders pages through the
 # platform android.graphics.pdf.PdfRenderer). Apache-2.0.
-pdfbox = "3.0.5"
+pdfbox = "3.0.8"
 # pdfbox-android — Android PDF outline parsing for the book reader's TOC
 # (pages still render through the platform PdfRenderer). Tom Roush's port of
 # the PDFBox 2.0.x line (same outline-walk API as desktop under the
 # com.tom_roush package); 2.0.27.0 is the latest stable 2.0.x. Apache-2.0.
 pdfboxAndroid = "2.0.27.0"
-junrar = "8.1.1"
+junrar = "8.1.2"
 composeWebviewMultiplatform = "2.0.3"
-aboutLibraries = "15.0.4"
+aboutLibraries = "15.3.0"
 # LeakCanary — debug-only memory leak detection for the Android app.
 # 2.14 is the latest stable (3.0 still alpha as of 2026-09).
 leakcanary = "2.14"
@@ -336,7 +343,7 @@ org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 # Android TV
 tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
-tvprovider = { group = "androidx.tvprovider", name = "tvprovider", version = "1.1.0" }
+tvprovider = { group = "androidx.tvprovider", name = "tvprovider", version.ref = "tvprovider" }
 
 # Biometric
 biometric-ktx = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
