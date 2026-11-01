@@ -5,35 +5,35 @@ ksp = "2.3.13"
 kover = "0.9.11"
 # Gradle official test-retry plugin — CI-only flake absorption (root build gate).
 test-retry = "1.6.6"
-composeBom = "2026.06.01"
-composeMaterial3 = "1.5.0-alpha25"
-composeMaterial3Adaptive = "1.3.0-rc01"
+composeBom = "2026.09.00"
+composeMaterial3 = "1.5.0-beta02"
+composeMaterial3Adaptive = "1.3.0"
 # material3-adaptive-navigation-suite lives in the androidx.compose.material3
 # group (NOT .adaptive) and tracks the material3 release line, not the adaptive
 # one.
-composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
+composeMaterial3AdaptiveNavigationSuite = "1.5.0-beta02"
 # JetBrains Compose Multiplatform distribution — the ONLY publisher of real
 # JVM compose binaries (androidx publishes Android AARs + IDE stubs only,
-# verified via .module metadata of ui 1.12.0 / material3 1.5.0-alpha25). On the
-# Android target these redirect to the androidx artifacts.
-composeMultiplatform = "1.11.1"
-# JB material3 rides its own train; the 1.11.x line never stabilised past
-# alpha (latest release overall is 1.9.0). Pin the 1.12 line: coil 3.6.3
-# already raises JB foundation to 1.12.0, and 1.11.0-alpha07 was compiled
-# against foundation 1.11.0-beta03 (its CustomStyle SAM descriptor predates
-# the applyStyle(CustomStyleScope) shape), which surfaces as an
-# AbstractMethodError in Compose UI host tests. 1.12.0-alpha03 targets
-# foundation 1.12.0-beta01 and stays binary-compatible with 1.12.0.
+# verified via .module metadata). On the Android target these redirect to the
+# androidx artifacts.
+composeMultiplatform = "1.12.2"
+# JB material3 rides its own train and has NO stable 1.12 release — the 1.12
+# line stops at 1.12.0-alpha03, and the next stop is 1.13.0-beta01 which pairs
+# with the CMP 1.13 toolchain (mixing it onto foundation 1.12.x risks the
+# AbstractMethodError class of break the 1.11.0-alpha07 pin once caused — see
+# git history). So the alpha pin STAYS while composeMultiplatform sits on the
+# 1.12 stable line: alpha03 targets foundation 1.12.x and is binary-compatible
+# with CMP 1.12.2. Revisit both together when CMP 1.13 goes stable.
 composeMultiplatformMaterial3 = "1.12.0-alpha03"
 # Koin: shared-module DI. Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles.
 koin = "4.2.2"
-navigation3 = "1.1.5"
+navigation3 = "1.2.0"
 # JetBrains fork of navigation3-ui: google's -ui artifact ships Android plus
 # jvm/linux STUBS only (runtime throws "Implemented only in JetBrains fork");
 # the fork holds the real desktop NavDisplay. Runtime stays on the google
 # artifact — the fork's POM depends on it too, so only -ui needs swapping.
-jbNavigation3Ui = "1.1.1"
+jbNavigation3Ui = "1.2.0"
 lifecycleViewmodelNav3 = "2.11.0"
 jellyfinSdk = "1.8.12"
 media3 = "1.11.1"
