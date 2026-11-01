@@ -127,8 +127,13 @@ internal fun DetailBackdrop(
             .fillMaxWidth()
             .height(backdropHeight)
             .graphicsLayer {
-                val scrollOffset = scrollOffsetState.value
-                translationY = -scrollOffset * 0.5f
+                // The alpha fade always runs; the translate/zoom parallax is
+                // the detail_backdrop_parallax pref (off = a static backdrop
+                // under the arriving content).
+                if (preferences.backdropParallax) {
+                    val scrollOffset = scrollOffsetState.value
+                    translationY = -scrollOffset * 0.5f
+                }
                 alpha = 1f - (scrollFractionState.value * 0.8f)
             },
     ) {
@@ -157,11 +162,18 @@ internal fun DetailBackdrop(
             val backdropModifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    val scale = 1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
+                    // The scroll-driven zoom is part of the parallax posture —
+                    // off renders the backdrop at its fixed scale (blur mode's
+                    // cover boost still applies so the blur edges never show).
+                    val parallaxScale = if (preferences.backdropParallax) {
+                        1f + (scrollOffsetState.value * 0.001f).coerceAtLeast(0f)
+                    } else {
+                        1f
+                    }
                     // Blur mode over-scales so the blur edges never show.
                     val coverBoost = if (coverHero == BookCoverHero.BLURRED) 1.25f else 1f
-                    scaleX = scale * coverBoost
-                    scaleY = scale * coverBoost
+                    scaleX = parallaxScale * coverBoost
+                    scaleY = parallaxScale * coverBoost
                 }
             // Prefer the on-disk backdrop (DetailAssets.backdropPath, or the
             // book cover's poster path) for a LOCAL origin; fall back to the
@@ -191,7 +203,9 @@ internal fun DetailBackdrop(
                 // performanceModeAware stays true: MediaImage now tiers the
                 // clamp so a ≥1080 request decodes at 768² in performance mode
                 // (crisp full-screen on phones) instead of 256².
-                size = CoilSize(1920, 1080),
+                // The decode target is the detail_backdrop_resolution pref —
+                // the shipped FHD_1920 keeps today's 1920x1080 request.
+                size = CoilSize(preferences.backdropResolution.decodeWidth, preferences.backdropResolution.decodeHeight),
             )
         }
 
@@ -243,6 +257,9 @@ internal fun DetailBackdrop(
             }
         }
 
+        // The appearance row's backdrop-dim multiplier: read in composable
+        // context (a CompositionLocal read can't happen inside drawWithCache).
+        val backdropDim = com.raulshma.jellyplay.core.ui.components.LocalBackdropDim.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -251,6 +268,11 @@ internal fun DetailBackdrop(
                 // a fresh gradient on every draw pass of the colour animation.
                 .drawWithCache {
                     val backgroundColor = backgroundColorState.value
+                    // The dim multiplier scales the gradient's alpha stops (NONE
+                    // lifts the dim entirely, HEAVIER deepens it); DEFAULT (1f)
+                    // reproduces the shipped fade. Stops clamp so HEAVIER can't
+                    // overshoot opaque.
+                    val dim = backdropDim.multiplier
                     // Bottom-anchored fade, identical on every window size class.
                     // The scroll spacer puts body content at baseBackdropHeight
                     // - 150dp on every tier, so starting the gradient 50dp earlier
@@ -261,8 +283,8 @@ internal fun DetailBackdrop(
                     val scrimBrush = Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            backgroundColor.copy(alpha = 0.4f),
-                            backgroundColor.copy(alpha = 0.9f),
+                            backgroundColor.copy(alpha = (0.4f * dim).coerceIn(0f, 1f)),
+                            backgroundColor.copy(alpha = (0.9f * dim).coerceIn(0f, 1f)),
                             backgroundColor,
                         ),
                         startY = (baseBackdropHeight - 200.dp).toPx(),

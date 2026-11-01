@@ -6,22 +6,32 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.Flow
@@ -33,10 +43,15 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_exit_confirm_confirm
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_exit_confirm_message
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_exit_confirm_stay
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_exit_confirm_title
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
+import com.raulshma.jellyplay.core.model.BufferingVeil
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.TrickplayMode
@@ -165,6 +180,7 @@ internal fun BoxScope.PlayerCenterOverlayTier(
                 positionMs = gestureSeekPositionMs,
                 deltaMs = gestureDeltaMs,
                 durationMs = inputs.durationMs,
+                showTimestamp = uiState.uiPrefs.seekPreviewTime,
             )
             is TrickplayPresentation.Filmstrip -> TrickplayFilmstripOverlay(
                 tileIndices = presentation.tileIndices,
@@ -174,11 +190,13 @@ internal fun BoxScope.PlayerCenterOverlayTier(
                 loadTile = { position ->
                     viewModel.loadTrickplayThumbnail(position) as? PlatformBitmap
                 },
+                showTimestamp = uiState.uiPrefs.seekPreviewTime,
             )
             TrickplayPresentation.Fullscreen -> TrickplayFullscreenOverlay(
                 bitmap = gestureBitmap,
                 positionMs = gestureSeekPositionMs,
                 durationMs = inputs.durationMs,
+                showTimestamp = uiState.uiPrefs.seekPreviewTime,
             )
         }
     }
@@ -296,7 +314,13 @@ internal fun BoxScope.PlayerCenterOverlayTier(
 
     // Buffering spinner fades/scales in and out — an abrupt pop mid-playback
     // reads as a glitch, especially at seek boundaries where it toggles fast.
-    val bufferingVisible = uiState.isBuffering && uiState.playerError == null && !inputs.isPlaying && inputs.playbackIntended
+    // The display RULE is the buffering-veil pref's fold: DEFAULT keeps the
+    // playback-intended gate, ALWAYS shows on any stall, HIDDEN never shows.
+    val bufferingVisible = uiState.uiPrefs.bufferingVeil != BufferingVeil.HIDDEN &&
+        uiState.isBuffering &&
+        uiState.playerError == null &&
+        !inputs.isPlaying &&
+        (uiState.uiPrefs.bufferingVeil == BufferingVeil.ALWAYS || inputs.playbackIntended)
     val bufferingFade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     val bufferingScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
     AnimatedVisibility(
@@ -372,6 +396,8 @@ internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
     positionMs: Long,
     durationMs: Long,
     loadTile: suspend (positionMs: Long) -> PlatformBitmap?,
+    /** The scrub preview's target timestamp (the seek-preview-time pref). */
+    seekPreviewTime: Boolean = true,
 ) {
     val anchor = trickplayAnchor(trickplayMode, trickplayInfo != null)
     AnimatedVisibility(
@@ -401,6 +427,7 @@ internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
                 bitmap = bitmap,
                 positionMs = positionMs,
                 durationMs = durationMs,
+                showTimestamp = seekPreviewTime,
             )
             is TrickplayPresentation.Filmstrip -> TrickplayFilmstripOverlay(
                 tileIndices = presentation.tileIndices,
@@ -408,11 +435,13 @@ internal fun BoxScope.PlayerSeekScrubTrickplayOverlay(
                 tileAspect = trickplayTileAspect(trickplayInfo),
                 positionMs = positionMs,
                 loadTile = loadTile,
+                showTimestamp = seekPreviewTime,
             )
             TrickplayPresentation.Fullscreen -> TrickplayFullscreenOverlay(
                 bitmap = bitmap,
                 positionMs = positionMs,
                 durationMs = durationMs,
+                showTimestamp = seekPreviewTime,
             )
         }
     }
@@ -461,4 +490,119 @@ internal suspend fun collectTrickplayThumbnails(
                 onFetch(pos, info)
             }
         }
+}
+// ── Confirm-exit (the video_confirm_exit pref) ──────────────────────────────
+
+/**
+ * The back ladder's exit interposer: the first exit-intent BACK raises the
+ * overlay, a second BACK — or the Close button — completes the exit. The
+ * controller owns only the visible state + the two arms; the overlay render
+ * is [ExitConfirmOverlay]. Deliberately NOT a Dialog window: the overlay
+ * lives in the surface Box so a second BACK still reaches the SCREEN's back
+ * handler (a Dialog would swallow the press into its own dismiss-on-back) —
+ * the pref's "second BACK exits" semantics stay exact.
+ *
+ * Not saveable: a config-change restore while the confirm is up simply
+ * stands it down (the safe direction — no stale exit intent survives).
+ */
+internal class PlayerExitConfirmController(
+    private val confirmEnabled: () -> Boolean,
+    private val onExit: () -> Unit,
+) {
+    var visible by mutableStateOf(false)
+        private set
+
+    /** The screen back handler's Exit-verdict arm. */
+    fun onBackPress() {
+        if (confirmEnabled() && !visible) visible = true else onExit()
+    }
+
+    /** The overlay's Stay arm (and the scrim tap): stands the confirm down. */
+    fun stay() {
+        visible = false
+    }
+
+    /** The overlay's Close arm: completes the exit the ladder armed. */
+    fun close() {
+        visible = false
+        onExit()
+    }
+}
+
+/** Remember the [PlayerExitConfirmController] (reader-lambda rule: stable handles only). */
+@Composable
+internal fun rememberExitConfirmController(
+    confirmEnabled: () -> Boolean,
+    onExit: () -> Unit,
+): PlayerExitConfirmController = remember { PlayerExitConfirmController(confirmEnabled, onExit) }
+
+/**
+ * The in-player exit confirmation: a scrim (tap = stay) with a centered card
+ * carrying the title, the hint line and the Stay / Close pill pair.
+ */
+@Composable
+internal fun BoxScope.ExitConfirmOverlay(controller: PlayerExitConfirmController) {
+    if (!controller.visible) return
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { controller.stay() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = ShapeCache.smooth28,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.padding(24.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    stringResource(Res.string.player_video_exit_confirm_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.padding(top = 8.dp))
+                Text(
+                    stringResource(Res.string.player_video_exit_confirm_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.padding(top = 16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        stringResource(Res.string.player_video_exit_confirm_stay),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .clip(ShapeCache.smoothPill)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .padding(horizontal = 20.dp, vertical = 10.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { controller.stay() },
+                    )
+                    Text(
+                        stringResource(Res.string.player_video_exit_confirm_confirm),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .clip(ShapeCache.smoothPill)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .padding(horizontal = 20.dp, vertical = 10.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { controller.close() },
+                    )
+                }
+            }
+        }
+    }
 }

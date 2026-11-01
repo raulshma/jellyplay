@@ -170,6 +170,7 @@ class HomeRefresherFetchTest {
                 discoverEnabled = { false },
                 directArrEnabled = { false },
                 androidTvWatchNextEnabled = { true },
+                refreshCadence = { com.raulshma.jellyplay.core.model.HomeRefreshCadence.DEFAULT },
             ),
         ).also { refresher = it }
     }

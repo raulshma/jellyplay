@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
@@ -63,6 +64,16 @@ internal fun AppearanceSlice.appearanceTheme(): AppearanceTheme = AppearanceThem
     colorStyle = colorStyle,
     accentColorSwatch = accentColorSwatch,
 )
+
+/**
+ * Splits the `detail_section_order` row's stored CSV into the section-order
+ * token list (trim, drop empties; duplicates the store setter already
+ * prevents are tolerated here). The ONE parse both detail-facing projections
+ * (media-detail + appearance screen) share; empty/raw-blank = the empty list
+ * (= canonical order at the consumption side).
+ */
+internal fun splitSectionOrderCsv(raw: String): List<String> =
+    raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
 // ---------------------------------------------------------------------------
 // Audio surface: the fields one audio surface reads off AudioSlice +
@@ -320,6 +331,7 @@ internal fun AppearanceCoreValues.toAppearancePreferences(): AppearancePreferenc
  */
 internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
     appearance: AppearanceSlice,
+    navigation: NavigationSlice,
     home: HomeDiscoverySlice,
     library: LibrarySlice,
     experimental: ExperimentalSlice,
@@ -333,6 +345,7 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         accentColorSwatch = accentColorSwatch,
         colorStyle = colorStyle,
         navBarShowLabels = navBarShowLabels,
+        startTab = navigation.startTab,
         homeHeroEnabled = homeHeroEnabled,
         homeBackdropEnabled = homeBackdropEnabled,
         performanceMode = performanceMode,
@@ -388,6 +401,34 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         trailerPreviewOnFocus = library.trailerPreviewOnFocus,
         showPromotedActionsLandscape = library.showPromotedActionsLandscape,
         showDownloadProgress = library.showDownloadProgress,
+        castItemSize = library.detailCastItemSize,
+        castSeeAllLimit = library.detailCastSeeAllLimit,
+        backdropParallax = library.detailBackdropParallax,
+        overviewCollapseLines = library.detailOverviewCollapseLines,
+        hideWatchedEpisodes = library.detailHideWatchedEpisodes,
+        confirmMarkPlayed = library.detailConfirmMarkPlayed,
+        showStudioChips = library.detailShowStudioChips,
+        showGenreChips = library.detailShowGenreChips,
+        showTagChips = library.detailShowTagChips,
+        showSkipChips = library.detailShowSkipChips,
+        seasonTabsArtwork = library.detailSeasonTabsArtwork,
+        peopleGridDensity = library.detailPeopleGridDensity,
+        showTrailerBadges = library.detailShowTrailerBadges,
+        persistSectionHides = library.detailPersistSectionHides,
+        similarItemsLimit = library.detailSimilarLimit,
+        upcomingEpisodesLimit = library.detailUpcomingLimit,
+        sectionOrder = splitSectionOrderCsv(library.detailSectionOrder),
+        staggerStyle = library.detailStaggerStyle,
+        backdropResolution = library.detailBackdropResolution,
+        chapterCardSize = library.detailChapterCardSize,
+        reviewsPreviewLines = library.detailReviewsPreviewLines,
+        filmographySort = library.detailFilmographySort,
+        franchiseBoxLimit = library.detailFranchiseBoxLimit,
+        franchiseMemberLimit = library.detailFranchiseMemberLimit,
+        smartPlayPriority = library.detailSmartPlayPriority,
+        streamFallbackLanguage = library.detailStreamFallbackLanguage,
+        promotedRailSource = library.detailPromotedRailSource,
+        episodeOverviewPreview = library.detailEpisodeOverviewPreview,
         confirmLibraryReset = library.confirmLibraryReset,
         showShareMediaOption = experimental.showShareMediaOption,
         hideSearchHistory = experimental.hideSearchHistory,
@@ -403,6 +444,16 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         newsletterDayOfWeek = notification.newsletterDayOfWeek,
         enabledNewsletterSections = notification.enabledNewsletterSections,
         newsletterSectionOrder = notification.newsletterSectionOrder,
+        timeUse24h = appearance.timeUse24h,
+        cardPressAnimations = appearance.cardPressAnimations,
+        pullToRefreshEnabled = appearance.pullToRefreshEnabled,
+        appBackdropDim = appearance.appBackdropDim,
+        hapticsIntensity = appearance.hapticsIntensity,
+        imageQualityPreset = appearance.imageQualityPreset,
+        appListDensity = appearance.appListDensity,
+        appPressEffect = appearance.appPressEffect,
+        appFlatCards = appearance.appFlatCards,
+        appOverscrollStyle = appearance.appOverscrollStyle,
     )
 
 /**
@@ -417,6 +468,7 @@ internal fun mainScreenPreferences(
     home: HomeDiscoverySlice,
     navigation: NavigationSlice,
     experimental: ExperimentalSlice,
+    networkOffline: NetworkOfflineSlice,
     playback: PlaybackSlice,
 ): MainPreferences =
     MainPreferences(
@@ -457,6 +509,18 @@ internal fun mainScreenPreferences(
         navItemOrder = navigation.navItemOrder,
         hideBottomNavOnScroll = navigation.hideBottomNavOnScroll,
         navBarShowLabels = navigation.navBarShowLabels,
+        startTab = navigation.startTab,
+        timeUse24h = appearance.timeUse24h,
+        cardPressAnimations = appearance.cardPressAnimations,
+        pullToRefreshEnabled = appearance.pullToRefreshEnabled,
+        appBackdropDim = appearance.appBackdropDim,
+        hapticsIntensity = appearance.hapticsIntensity,
+        imageQualityPreset = appearance.imageQualityPreset,
+        appListDensity = appearance.appListDensity,
+        appPressEffect = appearance.appPressEffect,
+        appFlatCards = appearance.appFlatCards,
+        appOverscrollStyle = appearance.appOverscrollStyle,
+        dataSaverEnabled = networkOffline.dataSaverEnabled,
         preferredPlayer = playback.preferredPlayer,
         preferredExternalPlayer = playback.preferredExternalPlayer,
         enabledExperimentalFeatures = experimental.enabledExperimentalFeatures,

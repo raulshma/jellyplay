@@ -6,9 +6,16 @@ import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
+import com.raulshma.jellyplay.core.model.DetailBackdropResolution
+import com.raulshma.jellyplay.core.model.DetailChapterCardSize
+import com.raulshma.jellyplay.core.model.DetailDensity
+import com.raulshma.jellyplay.core.model.DetailStaggerStyle
+import com.raulshma.jellyplay.core.model.FilmographySort
 import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.PromotedRailSource
+import com.raulshma.jellyplay.core.model.SmartPlayPriority
 import kotlinx.serialization.encodeToString
 
 /**
@@ -25,6 +32,7 @@ import kotlinx.serialization.encodeToString
 private var cachedDefaultLibrarySortOrders: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
 private var cachedLibraryViewModes: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
 private var cachedLibraryFilters: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
+private var cachedDetailHiddenFranchiseIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
 
 /**
  * The library-browsing domain's single preference declaration: one
@@ -300,6 +308,238 @@ object LibraryPreferenceSpecs {
             default = true,
             resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
         ),
+        // ── The detail-screen QoL knobs (density / limits / chips / ────────
+        // sections). All residual rows: no search face (the feature-side
+        // rows on the appearance screen's "Library & Cards" group own the
+        // catalog entries), every row in the legacy HOME_DISCOVERY bucket.
+        // The int rows' bounds are catalog metadata only — the store's
+        // setters are the clamp owners (the poster-size precedent).
+
+        /** Cast rail item size on the media-detail header (people geometry). */
+        PreferenceSpec.enumRow(
+            keyName = "detail_cast_item_size",
+            default = DetailDensity.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Cast "See all" threshold: the row hides people behind it above this count. */
+        PreferenceSpec.plainInt(
+            keyName = "detail_cast_see_all_limit",
+            default = DETAIL_CAST_SEE_ALL_LIMIT_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_CAST_SEE_ALL_LIMIT_MIN,
+            max = DETAIL_CAST_SEE_ALL_LIMIT_MAX,
+        ),
+        /** Parallax (translate + zoom) scroll on the detail hero backdrop. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_backdrop_parallax",
+            default = true,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Overview synopsis collapsed line count (the "Read more" toggle). */
+        PreferenceSpec.plainInt(
+            keyName = "detail_overview_collapse_lines",
+            default = DETAIL_OVERVIEW_COLLAPSE_LINES_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_OVERVIEW_COLLAPSE_LINES_MIN,
+            max = DETAIL_OVERVIEW_COLLAPSE_LINES_MAX,
+        ),
+        /** Hide played episodes from season lists. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_hide_watched_episodes",
+            default = false,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Ask for confirmation before marking a single item played/unplayed. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_confirm_mark_played",
+            default = false,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Header studio chips. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_show_studio_chips",
+            default = true,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Header genre chips. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_show_genre_chips",
+            default = true,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Header tag chips. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_show_tag_chips",
+            default = true,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Header skip-intro/credits availability chips. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_show_skip_chips",
+            default = true,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Small poster thumbnails on the season tab bar. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_season_tabs_artwork",
+            default = false,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Cast & Crew grid density (the grid's column minimum). */
+        PreferenceSpec.enumRow(
+            keyName = "detail_people_grid_density",
+            default = DetailDensity.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Local/remote source badges on the trailer cards. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_show_trailer_badges",
+            default = true,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /**
+         * Persist the detail screen's inline section hides (the franchise
+         * eye-hide memory) instead of keeping them session-only. The Up-Next
+         * eye-hide persists through `show_detail_up_next` unconditionally.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_persist_section_hides",
+            default = false,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /**
+         * The persisted franchise eye-hide memory (collection ids the user
+         * eye-hid while `detail_persist_section_hides` was on). JSON id set;
+         * not surfaced as a settings row — managed inline by the eye-hide
+         * (the my-media-hidden-libraries precedent: the spec stays faceless).
+         */
+        PreferenceSpec.derived(
+            keyName = "detail_hidden_franchise_ids",
+            default = emptySet<String>(),
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            read = { _, raw ->
+                PreferenceCodec.cachedJson(
+                    raw = raw,
+                    cache = cachedDetailHiddenFranchiseIds,
+                    default = emptySet(),
+                    parse = { PreferenceCodec.json.decodeFromString<Set<String>>(it) },
+                    cacheRef = { cachedDetailHiddenFranchiseIds = it },
+                    nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+                )
+            },
+            encode = { PreferenceCodec.json.encodeToString(it) },
+        ),
+        /** "More like this" row bound (both stock arms). */
+        PreferenceSpec.plainInt(
+            keyName = "detail_similar_limit",
+            default = DETAIL_SIMILAR_LIMIT_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_SIMILAR_LIMIT_MIN,
+            max = DETAIL_SIMILAR_LIMIT_MAX,
+        ),
+        /** "Airing next" strip bound. */
+        PreferenceSpec.plainInt(
+            keyName = "detail_upcoming_limit",
+            default = DETAIL_UPCOMING_LIMIT_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_UPCOMING_LIMIT_MIN,
+            max = DETAIL_UPCOMING_LIMIT_MAX,
+        ),
+        // ── The detail-screen QoL knobs, wave 2 (D17–D28). Same residual
+        // shape as the wave above: no search face (the feature-side rows on
+        // the appearance screen's "Library & Cards" group own the catalog
+        // entries), every row in the legacy HOME_DISCOVERY bucket. The int
+        // rows' bounds are catalog metadata only — the store's setters are
+        // the clamp owners.
+
+        /**
+         * The detail body's stored section permutation (CSV over the
+         * section-kind names). Declaration-only string row (the downloads
+         * list-state precedent): the read is the plain typed slot, the
+         * setter/restore lines stay hand-written, and the feature side owns
+         * the reconcile (unknown tokens dropped, missing appended canonically).
+         */
+        PreferenceSpec.string(
+            keyName = "detail_section_order",
+            default = "",
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Entrance-stagger step: FAST=0.03f / DEFAULT=0.045f (shipped) / SLOW=0.06f. */
+        PreferenceSpec.enumRow(
+            keyName = "detail_stagger_style",
+            default = DetailStaggerStyle.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Hero-backdrop decode target: 1280x720 / 1920x1080 (shipped) / 2560x1440. */
+        PreferenceSpec.enumRow(
+            keyName = "detail_backdrop_resolution",
+            default = DetailBackdropResolution.FHD_1920,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Chapter thumbnail card size multiplier (±20% over the shipped geometry). */
+        PreferenceSpec.enumRow(
+            keyName = "detail_chapter_card_size",
+            default = DetailChapterCardSize.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Review-card preview line count (int, clamped 2..12). */
+        PreferenceSpec.plainInt(
+            keyName = "detail_reviews_preview_lines",
+            default = DETAIL_REVIEWS_PREVIEW_LINES_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_REVIEWS_PREVIEW_LINES_MIN,
+            max = DETAIL_REVIEWS_PREVIEW_LINES_MAX,
+        ),
+        /** Person filmography ordering (DEFAULT = the shipped newest-first year sort). */
+        PreferenceSpec.enumRow(
+            keyName = "detail_filmography_sort",
+            default = FilmographySort.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Franchise arm BoxSet-row bound (int, clamped 1..5). */
+        PreferenceSpec.plainInt(
+            keyName = "detail_franchise_box_limit",
+            default = DETAIL_FRANCHISE_BOX_LIMIT_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_FRANCHISE_BOX_LIMIT_MIN,
+            max = DETAIL_FRANCHISE_BOX_LIMIT_MAX,
+        ),
+        /** Franchise arm per-row member page bound (int, clamped 10..100). */
+        PreferenceSpec.plainInt(
+            keyName = "detail_franchise_member_limit",
+            default = DETAIL_FRANCHISE_MEMBER_LIMIT_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+            min = DETAIL_FRANCHISE_MEMBER_LIMIT_MIN,
+            max = DETAIL_FRANCHISE_MEMBER_LIMIT_MAX,
+        ),
+        /** Smart-play dispatch candidate preference (DEFAULT = resume > next-up > replay). */
+        PreferenceSpec.enumRow(
+            keyName = "detail_smart_play_priority",
+            default = SmartPlayPriority.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /**
+         * Stream-picker fallback language (3-letter code). Declaration-only
+         * string row like [detail_section_order]; the setter validates
+         * (lowercase, 3-letter tokens only, else the default).
+         */
+        PreferenceSpec.string(
+            keyName = "detail_stream_fallback_language",
+            default = DETAIL_STREAM_FALLBACK_LANGUAGE_DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** Which ⋮-menu preset the landscape/TV promoted rail shows. */
+        PreferenceSpec.enumRow(
+            keyName = "detail_promoted_rail_source",
+            default = PromotedRailSource.DEFAULT,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
+        /** 2-line overview snippets on the season lists' episode rows. */
+        PreferenceSpec.plainBoolean(
+            keyName = "detail_episode_overview_preview",
+            default = false,
+            resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        ),
     )
 
     /**
@@ -397,6 +637,70 @@ object LibraryPreferenceSpecs {
     val SHOW_PROMOTED_ACTIONS_LANDSCAPE: PreferenceSpec<Boolean> get() = row("show_promoted_actions_landscape")
 
     val SHOW_DOWNLOAD_PROGRESS: PreferenceSpec<Boolean> get() = row("show_download_progress")
+
+    // The detail-screen QoL knobs (see the detailToggles group's trailing
+    // block for the per-row docs).
+
+    val DETAIL_CAST_ITEM_SIZE: PreferenceSpec<DetailDensity> get() = row("detail_cast_item_size")
+
+    val DETAIL_CAST_SEE_ALL_LIMIT: PreferenceSpec<Int> get() = row("detail_cast_see_all_limit")
+
+    val DETAIL_BACKDROP_PARALLAX: PreferenceSpec<Boolean> get() = row("detail_backdrop_parallax")
+
+    val DETAIL_OVERVIEW_COLLAPSE_LINES: PreferenceSpec<Int> get() = row("detail_overview_collapse_lines")
+
+    val DETAIL_HIDE_WATCHED_EPISODES: PreferenceSpec<Boolean> get() = row("detail_hide_watched_episodes")
+
+    val DETAIL_CONFIRM_MARK_PLAYED: PreferenceSpec<Boolean> get() = row("detail_confirm_mark_played")
+
+    val DETAIL_SHOW_STUDIO_CHIPS: PreferenceSpec<Boolean> get() = row("detail_show_studio_chips")
+
+    val DETAIL_SHOW_GENRE_CHIPS: PreferenceSpec<Boolean> get() = row("detail_show_genre_chips")
+
+    val DETAIL_SHOW_TAG_CHIPS: PreferenceSpec<Boolean> get() = row("detail_show_tag_chips")
+
+    val DETAIL_SHOW_SKIP_CHIPS: PreferenceSpec<Boolean> get() = row("detail_show_skip_chips")
+
+    val DETAIL_SEASON_TABS_ARTWORK: PreferenceSpec<Boolean> get() = row("detail_season_tabs_artwork")
+
+    val DETAIL_PEOPLE_GRID_DENSITY: PreferenceSpec<DetailDensity> get() = row("detail_people_grid_density")
+
+    val DETAIL_SHOW_TRAILER_BADGES: PreferenceSpec<Boolean> get() = row("detail_show_trailer_badges")
+
+    val DETAIL_PERSIST_SECTION_HIDES: PreferenceSpec<Boolean> get() = row("detail_persist_section_hides")
+
+    val DETAIL_HIDDEN_FRANCHISE_IDS: PreferenceSpec<Set<String>> get() = row("detail_hidden_franchise_ids")
+
+    val DETAIL_SIMILAR_LIMIT: PreferenceSpec<Int> get() = row("detail_similar_limit")
+
+    val DETAIL_UPCOMING_LIMIT: PreferenceSpec<Int> get() = row("detail_upcoming_limit")
+
+    // The detail-screen QoL knobs, wave 2 (see the detailToggles group's
+    // trailing block for the per-row docs).
+
+    val DETAIL_SECTION_ORDER: PreferenceSpec<String> get() = row("detail_section_order")
+
+    val DETAIL_STAGGER_STYLE: PreferenceSpec<DetailStaggerStyle> get() = row("detail_stagger_style")
+
+    val DETAIL_BACKDROP_RESOLUTION: PreferenceSpec<DetailBackdropResolution> get() = row("detail_backdrop_resolution")
+
+    val DETAIL_CHAPTER_CARD_SIZE: PreferenceSpec<DetailChapterCardSize> get() = row("detail_chapter_card_size")
+
+    val DETAIL_REVIEWS_PREVIEW_LINES: PreferenceSpec<Int> get() = row("detail_reviews_preview_lines")
+
+    val DETAIL_FILMOGRAPHY_SORT: PreferenceSpec<FilmographySort> get() = row("detail_filmography_sort")
+
+    val DETAIL_FRANCHISE_BOX_LIMIT: PreferenceSpec<Int> get() = row("detail_franchise_box_limit")
+
+    val DETAIL_FRANCHISE_MEMBER_LIMIT: PreferenceSpec<Int> get() = row("detail_franchise_member_limit")
+
+    val DETAIL_SMART_PLAY_PRIORITY: PreferenceSpec<SmartPlayPriority> get() = row("detail_smart_play_priority")
+
+    val DETAIL_STREAM_FALLBACK_LANGUAGE: PreferenceSpec<String> get() = row("detail_stream_fallback_language")
+
+    val DETAIL_PROMOTED_RAIL_SOURCE: PreferenceSpec<PromotedRailSource> get() = row("detail_promoted_rail_source")
+
+    val DETAIL_EPISODE_OVERVIEW_PREVIEW: PreferenceSpec<Boolean> get() = row("detail_episode_overview_preview")
 
     /** The rows keyed by wire name — the accessor lookup's memo (built once). */
     private val rowsByName: Map<String, PreferenceSpec<*>> by lazy { all.associateBy { it.keyName } }

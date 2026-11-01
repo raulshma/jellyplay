@@ -1005,4 +1005,27 @@
     <string name="ss_jellyplay_feature_analytics_subtitle">The play-history dashboard in the admin area (admin only)</string>
     <string name="settings_nav_customize_shortcuts">Customize shortcuts</string>
     <string name="settings_nav_customize_shortcuts_subtitle">Header and overflow menu shortcuts</string>
+    <string name="settings_time_use_24h">24-Hour Time</string>
+    <string name="settings_time_use_24h_subtitle">Use the 24-hour clock instead of the system format</string>
+    <string name="settings_card_press_animations">Card Press Animation</string>
+    <string name="settings_card_press_animations_subtitle">The media cards' animated press-scale effect</string>
+    <string name="settings_pull_to_refresh">Pull to Refresh</string>
+    <string name="settings_pull_to_refresh_subtitle">The swipe-down refresh gesture on browse screens</string>
+    <string name="settings_start_tab">Start Tab</string>
+    <string name="settings_start_tab_subtitle">Which top-level destination opens on launch</string>
+    <string name="settings_start_tab_default">Default (Home)</string>
+    <string name="settings_backdrop_dim">Backdrop Dimming</string>
+    <string name="settings_backdrop_dim_subtitle">How strongly artwork backdrops are dimmed app-wide</string>
+    <string name="settings_haptics_intensity">Haptics Intensity</string>
+    <string name="settings_haptics_intensity_subtitle">How strong confirmation vibrations feel</string>
+    <string name="settings_image_quality">Image Quality</string>
+    <string name="settings_image_quality_subtitle">Cap the JPEG quality the server returns for artwork</string>
+    <string name="settings_list_density">List Density</string>
+    <string name="settings_list_density_subtitle">The spacing of settings and list rows</string>
+    <string name="settings_press_effect">Press Effect</string>
+    <string name="settings_press_effect_subtitle">The touch feedback shown on clickable surfaces</string>
+    <string name="settings_flat_cards">Flat Cards</string>
+    <string name="settings_flat_cards_subtitle">Remove the outline stroke from media cards</string>
+    <string name="settings_overscroll">Overscroll Effect</string>
+    <string name="settings_overscroll_subtitle">The stretch or glow at the ends of scrollable lists</string>
 </resources>

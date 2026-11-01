@@ -899,8 +899,7 @@ internal class PlaybackSession(
             playbackSourceResolver.resolveStartPositionTicks(itemId, startPositionTicks)
         },
         onSessionPrefsApplied = { agg ->
-            autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
-            autoplayController.setStillWatchingThreshold(agg.videoPlayer.stillWatchingEpisodeThreshold)
+            autoplayController.seedSessionPrefs(agg)
         },
         // The per-item hydration body (its every collaborator is
         // session-internal): the videoFx mirror write, the engine-config
@@ -2424,6 +2423,7 @@ internal class PlaybackSession(
             // redundant emission (no change) doesn't allocate a fresh uiState.
             networkMonitor.isMetered.collect { metered ->
                 if (uiState.value.isConnectionMetered != metered) {
+                    autoplayController.setConnectionMetered(metered)
                     uiState.update { it.copy(isConnectionMetered = metered) }
                 }
             }

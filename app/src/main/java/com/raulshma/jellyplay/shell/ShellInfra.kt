@@ -56,6 +56,8 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class ShellInfra(
     val networkStatusLazy: Lazy<StateFlow<NetworkStatus>>,
+    /** The active connection's metered flag — the data-saver row's metered signal. */
+    val networkMeteredLazy: Lazy<StateFlow<Boolean>>,
     val audioPlaybackManagerLazy: Lazy<ShellAudioSurface>,
     val remoteNavigationBridgeLazy: Lazy<RemoteNavigationBridge>,
     val remoteControlReceiverLazy: Lazy<RemoteControlReceiver>,

@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
@@ -14,6 +16,7 @@ import androidx.compose.ui.Modifier
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.delay
@@ -97,11 +100,29 @@ fun JellyPlayPreferenceTheme(
     // LocalMotionFlags.kt), so this is the single channel carrying the flags —
     // scheme selection and every LocalReducedMotion call-site guard read the same
     // values and cannot drift apart.
+    // The global-chrome locals ride the same channel (backdrop dim, haptic
+    // strength, image quality, list density, data saver, press effect, flat
+    // cards, overscroll) — all defaulting to the shipped behavior, so a shell
+    // that skips this provider changes nothing. The press effect overrides
+    // LocalIndication only when the user left the Material ripple.
+    val pressIndication = pressEffectIndication(preferences.appPressEffect)
+    val overscrollDisabled = preferences.appOverscrollStyle == OverscrollStyle.NONE
     CompositionLocalProvider(
         LocalPerformanceMode provides preferences.performanceMode,
         LocalReduceMotionEnabled provides preferences.reduceMotionEnabled,
         LocalReducedMotion provides (preferences.performanceMode || preferences.reduceMotionEnabled),
+        LocalBackdropDim provides preferences.appBackdropDim,
+        LocalHapticsIntensity provides preferences.hapticsIntensity,
+        LocalImageQualityCap provides preferences.imageQualityPreset.quality,
+        LocalListDensity provides preferences.appListDensity,
+        LocalImagesDataSaver provides preferences.dataSaverEnabled,
+        LocalFlatCards provides preferences.appFlatCards,
+        LocalPressEffectStyle provides preferences.appPressEffect,
     ) {
+        CompositionLocalProvider(
+            *(if (pressIndication != null) arrayOf(LocalIndication provides pressIndication) else emptyArray()),
+            *(if (overscrollDisabled) arrayOf(LocalOverscrollFactory provides DisabledOverscrollFactory) else emptyArray()),
+        ) {
         JellyPlayTheme(
             darkTheme = darkTheme,
             dynamicColor = preferences.theme.dynamicTheming,
@@ -129,6 +150,7 @@ fun JellyPlayPreferenceTheme(
                     }
                 }
             }
+        }
         }
     }
 }

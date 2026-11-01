@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -14,9 +15,19 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowBarToDown
+import com.composables.icons.tabler.outline.Clock
+import com.composables.icons.tabler.outline.Compass
 import com.composables.icons.tabler.outline.Menu2
+import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Wand
+import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
+import com.raulshma.jellyplay.core.model.BackdropDimLevel
+import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageQualityPreset
+import com.raulshma.jellyplay.core.model.ListDensity
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.model.OverscrollStyle
+import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATION_BY_ROUTE
 import com.raulshma.jellyplay.core.ui.navigation.NAV_DESTINATIONS
 import com.raulshma.jellyplay.core.ui.navigation.NavPrimarySurface
@@ -26,6 +37,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_auto_hide
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_start_tab_default
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_bar_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_customize_shortcuts
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_customize_shortcuts_subtitle
@@ -127,6 +139,10 @@ fun NavigationCustomizationGroup(
     viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
     onCustomizeShortcuts: () -> Unit = {},
+    /** The appearance-screen slice — the global interface rows read it (24h clock, press animation, pull-to-refresh). */
+    screen: AppearanceScreenPreferences,
+    /** The scaffold's picker host state — the start-tab list picker rides it. */
+    activePicker: MutableState<PickerState<*>?>,
 ) {
     val isTv = LocalTvMode.current
     // The row set per form factor derives from the registry's placement
@@ -155,7 +171,8 @@ fun NavigationCustomizationGroup(
         initiallyExpanded = true,
         modifier = modifier,
     ) {
-        SettingsItemList(total = navItems.size + 1) {
+        // hide-on-scroll toggle + the 11 global interface & interaction rows
+        SettingsItemList(total = navItems.size + 1 + 11) {
         SettingToggleItem(
             icon = Tabler.Outline.ArrowBarToDown,
             title = rowTitle(AppearanceRows.NavHideOnScroll),
@@ -164,6 +181,162 @@ fun NavigationCustomizationGroup(
             ),
             checked = preferences.hideBottomNavOnScroll,
             onCheckedChange = { viewModel.edit { scope -> scope.navigation.setHideBottomNavOnScroll(it) } },
+        )
+
+        // ── Global interface & interaction rows ──
+        val startTabTitle = rowTitle(AppearanceRows.StartTab)
+        val defaultTabLabel = stringResource(Res.string.settings_start_tab_default)
+        val startTabLabels = navItems.associateWith { stringResource(it.labelRes) }
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.StartTab),
+            title = startTabTitle,
+            subtitle = rowSubtitle(AppearanceRows.StartTab),
+            trailingText = preferences.startTab.ifBlank { defaultTabLabel },
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = startTabTitle,
+                    items = navItems,
+                    label = { startTabLabels.getValue(it) },
+                    isSelected = { it.key == preferences.startTab },
+                    onSelect = { viewModel.edit { scope -> scope.navigation.setStartTab(it.key) } },
+                )
+            },
+        )
+
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.TimeUse24h),
+            title = rowTitle(AppearanceRows.TimeUse24h),
+            subtitle = rowSubtitle(AppearanceRows.TimeUse24h),
+            checked = screen.timeUse24h,
+            onCheckedChange = { viewModel.edit { scope -> scope.appearance.setTimeUse24h(it) } },
+        )
+
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.CardPressAnimations),
+            title = rowTitle(AppearanceRows.CardPressAnimations),
+            subtitle = rowSubtitle(AppearanceRows.CardPressAnimations),
+            checked = screen.cardPressAnimations,
+            onCheckedChange = { viewModel.edit { scope -> scope.appearance.setCardPressAnimations(it) } },
+        )
+
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.PullToRefresh),
+            title = rowTitle(AppearanceRows.PullToRefresh),
+            subtitle = rowSubtitle(AppearanceRows.PullToRefresh),
+            checked = screen.pullToRefreshEnabled,
+            onCheckedChange = { viewModel.edit { scope -> scope.appearance.setPullToRefreshEnabled(it) } },
+        )
+
+        // ── Global chrome rows (appearance-store enums + the flat-cards toggle) ──
+        val backdropDimTitle = rowTitle(AppearanceRows.BackdropDim)
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.BackdropDim),
+            title = backdropDimTitle,
+            subtitle = rowSubtitle(AppearanceRows.BackdropDim),
+            trailingText = screen.appBackdropDim.displayName,
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = backdropDimTitle,
+                    items = BackdropDimLevel.entries.toList(),
+                    label = { it.displayName },
+                    isSelected = { it == screen.appBackdropDim },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setAppBackdropDim(it) } },
+                )
+            },
+        )
+
+        val hapticsIntensityTitle = rowTitle(AppearanceRows.HapticsIntensity)
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.HapticsIntensity),
+            title = hapticsIntensityTitle,
+            subtitle = rowSubtitle(AppearanceRows.HapticsIntensity),
+            trailingText = screen.hapticsIntensity.displayName,
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = hapticsIntensityTitle,
+                    items = HapticsIntensity.entries.toList(),
+                    label = { it.displayName },
+                    isSelected = { it == screen.hapticsIntensity },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setHapticsIntensity(it) } },
+                )
+            },
+        )
+
+        val imageQualityTitle = rowTitle(AppearanceRows.ImageQuality)
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.ImageQuality),
+            title = imageQualityTitle,
+            subtitle = rowSubtitle(AppearanceRows.ImageQuality),
+            trailingText = screen.imageQualityPreset.displayName,
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = imageQualityTitle,
+                    items = ImageQualityPreset.entries.toList(),
+                    label = { it.displayName },
+                    isSelected = { it == screen.imageQualityPreset },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setImageQualityPreset(it) } },
+                )
+            },
+        )
+
+        val listDensityTitle = rowTitle(AppearanceRows.ListDensity)
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.ListDensity),
+            title = listDensityTitle,
+            subtitle = rowSubtitle(AppearanceRows.ListDensity),
+            trailingText = screen.appListDensity.displayName,
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = listDensityTitle,
+                    items = ListDensity.entries.toList(),
+                    label = { it.displayName },
+                    isSelected = { it == screen.appListDensity },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setAppListDensity(it) } },
+                )
+            },
+        )
+
+
+        val pressEffectTitle = rowTitle(AppearanceRows.PressEffect)
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.PressEffect),
+            title = pressEffectTitle,
+            subtitle = rowSubtitle(AppearanceRows.PressEffect),
+            trailingText = screen.appPressEffect.displayName,
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = pressEffectTitle,
+                    items = PressEffectStyle.entries.toList(),
+                    label = { it.displayName },
+                    isSelected = { it == screen.appPressEffect },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setAppPressEffect(it) } },
+                )
+            },
+        )
+
+        SettingToggleItem(
+            icon = rowIcon(AppearanceRows.FlatCards),
+            title = rowTitle(AppearanceRows.FlatCards),
+            subtitle = rowSubtitle(AppearanceRows.FlatCards),
+            checked = screen.appFlatCards,
+            onCheckedChange = { viewModel.edit { scope -> scope.appearance.setAppFlatCards(it) } },
+        )
+
+        val overscrollTitle = rowTitle(AppearanceRows.Overscroll)
+        SettingListItem(
+            icon = rowIcon(AppearanceRows.Overscroll),
+            title = overscrollTitle,
+            subtitle = rowSubtitle(AppearanceRows.Overscroll),
+            trailingText = screen.appOverscrollStyle.displayName,
+            onClick = {
+                activePicker.value = PickerState.List(
+                    title = overscrollTitle,
+                    items = OverscrollStyle.entries.toList(),
+                    label = { it.displayName },
+                    isSelected = { it == screen.appOverscrollStyle },
+                    onSelect = { viewModel.edit { scope -> scope.appearance.setAppOverscrollStyle(it) } },
+                )
+            },
         )
 
         // ── Reorderable item list ──

@@ -22,4 +22,6 @@ data class NavigationCustomizationPreferences(
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,
+    /** The start tab (a top-level destination key; "" = the shipped Home default). */
+    val startTab: String = "",
 )

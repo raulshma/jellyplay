@@ -61,29 +61,40 @@ internal object DetailPlayPolicies {
      * immediately (trivially reversible via the same button). Season actions
      * set [isSeasonAction] — a season mark is always series-scoped, so it
      * confirms regardless of the parent item's resolved type.
+     * [requireConfirmation] is the detail_confirm_mark_played pref: when on,
+     * single-item marks confirm too (the series/season rows keep their
+     * unconditional confirm).
      */
     fun requiresMarkPlayedConfirmation(
         mediaType: MediaType?,
         isSeasonAction: Boolean = false,
-    ): Boolean = isSeasonAction || mediaType == MediaType.SERIES
+        requireConfirmation: Boolean = false,
+    ): Boolean = isSeasonAction || mediaType == MediaType.SERIES || requireConfirmation
 
     /**
      * Dispatches exactly one of [confirm] or [action] per the
-     * [requiresMarkPlayedConfirmation] table (mediaType × season action):
+     * [requiresMarkPlayedConfirmation] table (mediaType × season action × the
+     * confirm-mark-played pref):
      * SERIES → confirm (series dialog); MOVIE / EPISODE / SEASON /
      * unresolved → direct; any season action → confirm (season dialog) —
      * which makes the season direct branch unreachable, exactly as the
-     * screen's original per-callback bodies behaved. Played vs unplayed is
-     * NOT a gate input: the two directions differ only in the dialog verb /
-     * message, which the caller tracks alongside.
+     * screen's original per-callback bodies behaved;
+     * [requireConfirmation] on → single-item marks confirm as well. Played
+     * vs unplayed is NOT a gate input: the two directions differ only in the
+     * dialog verb / message, which the caller tracks alongside.
      */
     fun dispatchMarkPlayedAction(
         mediaType: MediaType?,
         isSeasonAction: Boolean,
         confirm: () -> Unit,
         action: () -> Unit,
+        requireConfirmation: Boolean = false,
     ) {
-        if (requiresMarkPlayedConfirmation(mediaType, isSeasonAction)) confirm() else action()
+        if (requiresMarkPlayedConfirmation(mediaType, isSeasonAction, requireConfirmation)) {
+            confirm()
+        } else {
+            action()
+        }
     }
 }
 

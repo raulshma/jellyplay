@@ -22,7 +22,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,8 +50,10 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.ControlLayout
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.PlayerSeekBarStyle
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
@@ -360,6 +364,35 @@ internal fun PlayerControls(
     tvNextEpisodeFocusRequester: FocusRequester? = null,
     isSkipSegmentVisible: Boolean = false,
     isNextEpisodeVisible: Boolean = false,
+    // -- The player-chrome customization cluster (prefs mirrors; all defaulted
+    //    so previews/tests render the stock chrome). --
+    /** The control-overlay enter/exit animations; off snaps the transitions. */
+    overlayAnimations: Boolean = true,
+    /** The center prev/play/next cluster; off renders only the play button. */
+    showPrevNextButtons: Boolean = true,
+    /**
+     * The button clusters' arrangement (the control-layout pref): DEFAULT
+     * keeps prev|play|next and the full secondary cluster, SWAPPED_SEEK
+     * mirrors the center row, MINIMAL drops the secondary cluster's
+     * non-essential buttons (PiP, rotate — the ⋮ menu carries their verbs).
+     */
+    controlLayout: ControlLayout = ControlLayout.DEFAULT,
+    /** The active-engine chip in the top bar; null (or off) hides it. */
+    showEngineBadge: Boolean = false,
+    /** The engine chip's label — the caller resolves the active engine's name. */
+    engineBadgeLabel: String = "",
+    /** The seek bar's thickness. */
+    seekBarStyle: PlayerSeekBarStyle = PlayerSeekBarStyle.DEFAULT,
+    /** The seek bar's buffered bands. */
+    showBufferedRange: Boolean = true,
+    /** The seek bar's chapter markers. */
+    showChapterMarkers: Boolean = true,
+    /** The seek bar's elapsed/total labels. */
+    showSeekTimestamps: Boolean = true,
+    /** The buffered-percentage readout beside the seek bar's time row. */
+    showBufferPercent: Boolean = false,
+    /** The seek-scrub preview's target timestamp. */
+    seekPreviewTime: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // High-frequency position/buffered streams are collected in the leaf
@@ -417,8 +450,8 @@ internal fun PlayerControls(
     ) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = playerTopControlsEnter(),
-            exit = playerTopControlsExit(),
+            enter = playerTopControlsEnter(overlayAnimations),
+            exit = playerTopControlsExit(overlayAnimations),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .then(
@@ -471,6 +504,24 @@ internal fun PlayerControls(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    // The active-engine chip: a passive identity label (the
+                    // user asked for it; it renders nothing when off or when
+                    // the label resolves empty).
+                    if (showEngineBadge && engineBadgeLabel.isNotBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = ShapeCache.smoothPill,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        ) {
+                            Text(
+                                text = engineBadgeLabel,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
                     }
@@ -536,8 +587,8 @@ internal fun PlayerControls(
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = playerPlayButtonEnter(),
-            exit = playerPlayButtonExit(),
+            enter = playerPlayButtonEnter(overlayAnimations),
+            exit = playerPlayButtonExit(overlayAnimations),
             modifier = Modifier.align(Alignment.Center)
         ) {
             Row(
@@ -561,73 +612,98 @@ internal fun PlayerControls(
                 // the double-tap seek zones stay reachable whenever the
                 // chrome is dismissed. The ⋮ menu carries the same episode
                 // verbs (previous-episode item; next rides mark-watched-&-skip).
+                // The customization toggle drops the episode pair (the ⋮ menu
+                // still carries the verbs); the play button always renders.
+                // The control-layout pref's SWAPPED_SEEK arm mirrors the row
+                // (next | play | prev); DEFAULT keeps prev | play | next.
                 val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                FilledTonalIconButton(
-                    onClick = transport.onPreviousEpisode,
-                    enabled = transport.hasPreviousEpisode,
-                    modifier = Modifier
-                        .size(IconButtonDefaults.mediumContainerSize())
-                        .then(tvPreviousEpisodeFocusState.focusModifier)
-                        .tvFocusIndicator(tvPreviousEpisodeFocusState, IconButtonDefaults.largeRoundShape),
-                    shape = IconButtonDefaults.largeRoundShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerSkipBack, stringResource(Res.string.player_video_previous_episode),
-                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
-                    )
-                }
-
                 val tvPlayPauseFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                FilledIconButton(
-                    onClick = transport.onPlayPause,
-                    modifier = Modifier
-                        .size(80.dp)
-                        .then(tvPlayPauseFocusState.focusModifier)
-                        .tvFocusIndicator(tvPlayPauseFocusState, CircleShape)
-                        .ifElse(isTv, Modifier.focusRequester(tvPlayPauseFocusRequester)),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-                ) {
-                    Icon(
-                        if (transport.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                        if (transport.isPlaying) stringResource(Res.string.player_video_pause) else stringResource(Res.string.player_video_play),
-                        modifier = Modifier.size(40.dp),
-                    )
+                val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
+
+                val previousEpisodeButton: @Composable () -> Unit = {
+                    if (showPrevNextButtons) {
+                        FilledTonalIconButton(
+                            onClick = transport.onPreviousEpisode,
+                            enabled = transport.hasPreviousEpisode,
+                            modifier = Modifier
+                                .size(IconButtonDefaults.mediumContainerSize())
+                                .then(tvPreviousEpisodeFocusState.focusModifier)
+                                .tvFocusIndicator(tvPreviousEpisodeFocusState, IconButtonDefaults.largeRoundShape),
+                            shape = IconButtonDefaults.largeRoundShape,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            ),
+                        ) {
+                            Icon(
+                                Tabler.Outline.PlayerSkipBack, stringResource(Res.string.player_video_previous_episode),
+                                modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
+                            )
+                        }
+                    }
                 }
 
-                val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                FilledTonalIconButton(
-                    onClick = transport.onNextEpisode,
-                    enabled = transport.hasNextEpisode,
-                    modifier = Modifier
-                        .size(IconButtonDefaults.mediumContainerSize())
-                        .then(tvNextEpisodeFocusState.focusModifier)
-                        .tvFocusIndicator(tvNextEpisodeFocusState, IconButtonDefaults.largeRoundShape),
-                    shape = IconButtonDefaults.largeRoundShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                ) {
-                    Icon(
-                        Tabler.Outline.PlayerSkipForward, stringResource(Res.string.player_video_next_episode),
-                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
-                    )
+                val playPauseButton: @Composable () -> Unit = {
+                    FilledIconButton(
+                        onClick = transport.onPlayPause,
+                        modifier = Modifier
+                            .size(80.dp)
+                            .then(tvPlayPauseFocusState.focusModifier)
+                            .tvFocusIndicator(tvPlayPauseFocusState, CircleShape)
+                            .ifElse(isTv, Modifier.focusRequester(tvPlayPauseFocusRequester)),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    ) {
+                        Icon(
+                            if (transport.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                            if (transport.isPlaying) stringResource(Res.string.player_video_pause) else stringResource(Res.string.player_video_play),
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                }
+
+                val nextEpisodeButton: @Composable () -> Unit = {
+                    if (showPrevNextButtons) {
+                        FilledTonalIconButton(
+                            onClick = transport.onNextEpisode,
+                            enabled = transport.hasNextEpisode,
+                            modifier = Modifier
+                                .size(IconButtonDefaults.mediumContainerSize())
+                                .then(tvNextEpisodeFocusState.focusModifier)
+                                .tvFocusIndicator(tvNextEpisodeFocusState, IconButtonDefaults.largeRoundShape),
+                            shape = IconButtonDefaults.largeRoundShape,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            ),
+                        ) {
+                            Icon(
+                                Tabler.Outline.PlayerSkipForward, stringResource(Res.string.player_video_next_episode),
+                                modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
+                            )
+                        }
+                    }
+                }
+
+                if (controlLayout == ControlLayout.SWAPPED_SEEK) {
+                    nextEpisodeButton()
+                    playPauseButton()
+                    previousEpisodeButton()
+                } else {
+                    previousEpisodeButton()
+                    playPauseButton()
+                    nextEpisodeButton()
                 }
             }
         }
 
         AnimatedVisibility(
             visible = isVisible,
-            enter = playerBottomControlsEnter(),
-            exit = playerBottomControlsExit(),
+            enter = playerBottomControlsEnter(overlayAnimations),
+            exit = playerBottomControlsExit(overlayAnimations),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Column(
@@ -668,6 +744,12 @@ internal fun PlayerControls(
                     showTimeRemaining = showTimeRemaining,
                     abRepeatStartMs = abRepeat.aMs,
                     abRepeatEndMs = abRepeat.bMs,
+                    style = seekBarStyle,
+                    showBufferedRange = showBufferedRange,
+                    showChapterMarkers = showChapterMarkers,
+                    showTimestamps = showSeekTimestamps,
+                    showBufferPercent = showBufferPercent,
+                    seekPreviewTime = seekPreviewTime,
                     onSeekStart = transport.onSeekStart,
                     onSeekEnd = transport.onSeekEnd,
                     onSeekPositionChange = transport.onSeekPositionChange,
@@ -738,12 +820,19 @@ internal fun PlayerControls(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            PipButton(onClick = gestures.onPipClick)
-                            PlayerIconButton(
-                                icon = Tabler.Outline.Rotate,
-                                contentDescription = stringResource(Res.string.player_video_rotate_screen),
-                                onClick = gestures.onToggleOrientation,
-                            )
+                            // MINIMAL drops the non-essential conveniences
+                            // (PiP, rotate) — the ⋮ menu carries their verbs;
+                            // Lock / ⋮ always render, Mute follows.
+                            if (controlLayout != ControlLayout.MINIMAL) {
+                                PipButton(onClick = gestures.onPipClick)
+                            }
+                            if (controlLayout != ControlLayout.MINIMAL) {
+                                PlayerIconButton(
+                                    icon = Tabler.Outline.Rotate,
+                                    contentDescription = stringResource(Res.string.player_video_rotate_screen),
+                                    onClick = gestures.onToggleOrientation,
+                                )
+                            }
                             PlayerIconButton(
                                 icon = Tabler.Outline.DotsVertical,
                                 contentDescription = stringResource(Res.string.player_video_more_options),
@@ -781,10 +870,12 @@ internal fun PlayerControls(
                             if (!isTv) {
                                 MuteButton(isMuted = transport.isMuted, onClick = transport.onMuteClick)
                             }
-                            if (!isTv) {
+                            // MINIMAL drops the non-essential conveniences
+                            // (PiP, rotate) — same arm as the portrait cluster.
+                            if (!isTv && controlLayout != ControlLayout.MINIMAL) {
                                 PipButton(onClick = gestures.onPipClick)
                             }
-                            if (!isTv) {
+                            if (!isTv && controlLayout != ControlLayout.MINIMAL) {
                                 PlayerIconButton(
                                     icon = Tabler.Outline.Rotate,
                                     contentDescription = stringResource(Res.string.player_video_rotate_screen),

@@ -114,6 +114,7 @@ internal class ShellEnvironmentHost(
                 showQualityBadges = preferences.showQualityBadges,
                 showNewBadges = preferences.showNewBadges,
                 antiSpoilerHome = preferences.antiSpoilerHome,
+                cardPressAnimations = preferences.cardPressAnimations,
             ),
         ) {
             content()

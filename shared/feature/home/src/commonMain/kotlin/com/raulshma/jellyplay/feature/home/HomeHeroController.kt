@@ -299,6 +299,25 @@ internal fun rememberHeroController(
      * [homeHeroStyleDecision] fold); null keeps the shipped 8 s idle cadence.
      */
     timedAdvanceMs: Long? = null,
+    /**
+     * The carousel's idle auto-rotation dwell in ms (the
+     * `home_hero_idle_rotation_ms` pref, clamped 3000-30000 at the setter).
+     * Used only while no [timedAdvanceMs] applies.
+     */
+    idleRotationMs: Long = HeroController.IDLE_ROTATION_DELAY_MS,
+    /**
+     * The `hero_scroll_defer` pref: when false, rotation ticks on its dwell
+     * even while the home list is scrolling (the shipped defer window is
+     * skipped).
+     */
+    scrollDeferEnabled: Boolean = true,
+    /**
+     * The `home_hero_random_start` pref: the first non-empty candidate pool
+     * mounts at a random index instead of 0. Read once at controller
+     * construction (the controller is remembered per backdrop builder) — a
+     * mid-session flip applies on the next home mount.
+     */
+    randomStart: Boolean = false,
 ): HeroController {
     // Conveyor transform: Context.isTv() (UI_MODE check on
     // LocalContext) is Android-only; LocalTvMode is the shared core:ui
@@ -309,11 +328,12 @@ internal fun rememberHeroController(
     // controller resolving backdrops through a stale capture. The call site
     // remembers the lambda per view model, so this re-runs only on a real VM
     // change — never per recomposition.
-    val controller = remember(getBackdropUrl) {
+    val controller = remember(getBackdropUrl, randomStart) {
         HeroController(
             getBackdropUrl,
             initialAutoRotateEnabled = !isTvForRotation,
             focusGatesRotation = isTvForRotation,
+            randomStart = randomStart,
         )
     }
 
@@ -381,10 +401,12 @@ internal fun rememberHeroController(
     // drops a pending delay on each emission. [RotationGates] is the flow's
     // element only; the cadence still reads its own controller state so the
     // policy stays the single decision point.
-    LaunchedEffect(listState, candidatesEpoch, timedAdvanceMs) {
+    LaunchedEffect(listState, candidatesEpoch, timedAdvanceMs, idleRotationMs, scrollDeferEnabled) {
         snapshotFlow {
             RotationGates(
-                isScrolling = listState.isScrollInProgress,
+                // The `hero_scroll_defer` pref: off = the scroll signal is
+                // not consulted, so rotation keeps its dwell mid-scroll.
+                isScrolling = listState.isScrollInProgress && scrollDeferEnabled,
                 autoRotate = controller.autoRotateEnabled,
                 focusInHero = controller.focusInHero,
                 lifecycleResumed = lifecycleResumed.value,
@@ -395,7 +417,7 @@ internal fun rememberHeroController(
                     val cadence = controller.rotationCadence(
                         isScrolling = gates.isScrolling,
                         lifecycleResumed = gates.lifecycleResumed,
-                        advanceMs = timedAdvanceMs ?: HeroController.IDLE_ROTATION_DELAY_MS,
+                        advanceMs = timedAdvanceMs ?: idleRotationMs,
                     )
                 ) {
                     RotationCadence.None -> return@collectLatest
@@ -500,6 +522,13 @@ internal class HeroController(
      * starves rotation forever (Issue #9's "never ticks on phone").
      */
     private val focusGatesRotation: Boolean = true,
+    /**
+     * The `home_hero_random_start` pref: the FIRST non-empty
+     * [updateCandidates] mounts at a random index instead of 0 (a single-entry
+     * pool still mounts at 0). Every later update leaves the index alone — the
+     * randomization is a start position, not a per-refresh reshuffle.
+     */
+    private val randomStart: Boolean = false,
 ) {
     /**
      * The focus gate as one predicate, so [rotationCadence] and
@@ -514,6 +543,8 @@ internal class HeroController(
     var candidates: List<MediaItem> by mutableStateOf(emptyList())
         private set
     private var featuredIndex by mutableIntStateOf(0)
+    /** The random-start latch — flips on the first non-empty candidate pool. */
+    private var startResolved = false
     var showSurprise: Boolean by mutableStateOf(false)
         private set
     var autoRotateEnabled: Boolean by mutableStateOf(initialAutoRotateEnabled)
@@ -557,6 +588,16 @@ internal class HeroController(
 
     fun updateCandidates(items: List<MediaItem>) {
         candidates = items
+        // The random-start latch: the first non-empty pool picks its featured
+        // index once (single-entry pools stay at 0 — there is nothing to
+        // randomize). Later updates keep the current position, exactly like
+        // the shipped first-item start does.
+        if (!startResolved && items.isNotEmpty()) {
+            startResolved = true
+            if (randomStart && items.size > 1) {
+                featuredIndex = kotlin.random.Random.nextInt(items.size)
+            }
+        }
     }
 
     /**

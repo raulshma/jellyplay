@@ -60,7 +60,17 @@ internal fun AppearanceSlice.mergeWith(
         handMode = if (importAppearance) incoming.handMode else handMode,
         layoutMode = if (importAppearance) incoming.layoutMode else layoutMode,
         tvOverscan = if (importAppearance) incoming.tvOverscan else tvOverscan,
+        timeUse24h = if (importAppearance) incoming.timeUse24h else timeUse24h,
+        cardPressAnimations = if (importAppearance) incoming.cardPressAnimations else cardPressAnimations,
+        appBackdropDim = if (importAppearance) incoming.appBackdropDim else appBackdropDim,
+        hapticsIntensity = if (importAppearance) incoming.hapticsIntensity else hapticsIntensity,
+        imageQualityPreset = if (importAppearance) incoming.imageQualityPreset else imageQualityPreset,
+        appListDensity = if (importAppearance) incoming.appListDensity else appListDensity,
+        appPressEffect = if (importAppearance) incoming.appPressEffect else appPressEffect,
+        appFlatCards = if (importAppearance) incoming.appFlatCards else appFlatCards,
+        appOverscrollStyle = if (importAppearance) incoming.appOverscrollStyle else appOverscrollStyle,
         hapticsEnabled = if (importMisc) incoming.hapticsEnabled else hapticsEnabled,
+        pullToRefreshEnabled = if (importMisc) incoming.pullToRefreshEnabled else pullToRefreshEnabled,
     )
 }
 

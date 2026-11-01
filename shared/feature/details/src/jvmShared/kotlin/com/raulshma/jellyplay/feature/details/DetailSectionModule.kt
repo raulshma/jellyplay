@@ -474,6 +474,8 @@ internal object TmdbReviewsSectionModule : DetailSectionModule {
                         com.raulshma.jellyplay.core.ui.navigation.Route.Reviews(scope.state.itemId),
                     )
                 },
+                // The detail_reviews_preview_lines pref (the shipped 6).
+                previewLines = scope.state.preferences.reviewsPreviewLines,
             )
         }
     }
@@ -487,6 +489,8 @@ internal object TmdbReviewsSectionModule : DetailSectionModule {
 private fun ReviewsSection(
     reviews: List<TmdbReview>,
     onAllReviews: () -> Unit,
+    /** Per-card preview line cap (the detail_reviews_preview_lines pref; the shipped 6). */
+    previewLines: Int = 6,
 ) {
     val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
     val split = remember(reviews) { tmdbReviewsPreviewSplit(reviews) }
@@ -503,7 +507,7 @@ private fun ReviewsSection(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             split.preview.forEach { review ->
                 FadingItem {
-                    TmdbReviewCard(review = review, contentMaxLines = 6)
+                    TmdbReviewCard(review = review, contentMaxLines = previewLines)
                 }
             }
             split.allCount?.let { allCount ->
@@ -644,9 +648,6 @@ internal object UpcomingEpisodesSectionModule : DetailSectionModule {
 
     override val kind: DetailSectionKind = DetailSectionKind.UPCOMING_EPISODES
 
-    /** The upcoming strip's row bound (an "airing next" rail; small by design) — moved with the arm. */
-    private const val UPCOMING_STRIP_LIMIT = 12
-
     override fun isAdmitted(
         state: DetailContentState,
         detail: MediaDetail,
@@ -665,9 +666,10 @@ internal object UpcomingEpisodesSectionModule : DetailSectionModule {
             gate = { it.remoteDiscoveryAllowed && it.mediaType == MediaType.SERIES },
         ) { inputs ->
             // The user-pref half of the gate rides the body (the franchise
-            // convention).
+            // convention); the strip bound rides the same snapshot (the
+            // detail_upcoming_limit pref).
             if (!host.detailPreferences().showUpcomingStrip) return@DetailEnrichment
-            strip.upcomingEpisodes(parentId = inputs.itemId, limit = UPCOMING_STRIP_LIMIT)
+            strip.upcomingEpisodes(parentId = inputs.itemId, limit = host.detailPreferences().upcomingEpisodesLimit)
                 .onSuccess { upcoming ->
                     if (!host.isCurrent(inputs.itemId)) return@onSuccess
                     host.updateState { it.copy(upcomingEpisodes = upcoming) }
@@ -747,13 +749,17 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
             // a preference read, not snapshot state (the externalRatings
             // convention).
             if (!host.detailPreferences().showMoreInCollection) return@DetailEnrichment
+            // The arm's bounds are the detail_franchise_box_limit /
+            // detail_franchise_member_limit prefs (the shipped 2 x 50 are the
+            // FRANCHISE_* constants the defaults mirror).
+            val franchisePrefs = host.detailPreferences()
             // The franchise read rides the repository's cache (the detail
             // cluster's boxsets-containing member): the enumerate-then-probe
             // fan-out below is the costliest enrichment, so a re-entry inside
             // its TTL window re-serves the row instead of re-probing.
             val boxSets = similar.boxSetsContaining(inputs.itemId)
                 .getOrNull()
-                ?.take(FRANCHISE_MAX_COLLECTIONS)
+                ?.take(franchisePrefs.franchiseBoxLimit)
                 .orEmpty()
             if (boxSets.isEmpty()) return@DetailEnrichment
             // The shared bounded-parallel members hydration (the
@@ -762,7 +768,7 @@ internal object MoreInCollectionSectionModule : DetailSectionModule {
             // (mapConcurrentCatching is order-preserving), so the rows keep
             // the server's default order.
             val rows = host.mapConcurrent(boxSets) { boxSet ->
-                val members = strip.collectionItems(collectionId = boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
+                val members = strip.collectionItems(collectionId = boxSet.id, limit = franchisePrefs.franchiseMemberLimit)
                     .getOrNull()
                     ?.items
                     // The loaded item never renders inside its own franchise
@@ -847,14 +853,24 @@ internal object DetailSectionRegistry {
      * [DetailSectionKind] declaration order. Every kind is module-owned (the
      * former hand fold retired with the last module wave), and the sort is
      * the structural pin on "registry modules never reorder the emission".
+     * [sectionOrder] then applies the user's stored permutation (the
+     * `detail_section_order` pref, split by the projection) — an empty list
+     * (the default) keeps the emission byte-identical to the shipped order;
+     * [applyDetailSectionOrder] reconciles a stored one (unknown tokens
+     * dropped, missing sections appended canonically, the chrome kinds
+     * pinned).
      */
     fun admittedSections(
         state: DetailContentState,
         detail: MediaDetail,
         showActionButtons: Boolean = true,
         showMediaInfo: Boolean = true,
+        sectionOrder: List<String> = emptyList(),
     ): List<DetailSectionKind> =
-        admittedKinds(state, detail, showActionButtons, showMediaInfo).sortedBy { it.ordinal }
+        applyDetailSectionOrder(
+            admittedKinds(state, detail, showActionButtons, showMediaInfo).sortedBy { it.ordinal },
+            sectionOrder,
+        )
 
     /**
      * The modules' enrichment registrations for the ViewModel's fan-out, in

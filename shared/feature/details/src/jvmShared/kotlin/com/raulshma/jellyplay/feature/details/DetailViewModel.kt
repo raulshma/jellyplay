@@ -490,6 +490,37 @@ class DetailViewModel internal constructor(
                 loader.update { it.copy(canManageMetadata = isAdmin) }
             }
         }
+        // Seed the franchise eye-hide memory from its persisted home (the
+        // library store's `detail_hidden_franchise_ids` set — the write side
+        // of the detail_persist_section_hides pref). The persisted set merges
+        // into the CURRENT item's session-hidden set whenever either leg
+        // changes: the set itself (a hide written by this or an earlier
+        // session) or the item id — the session map is keyed per item, so a
+        // freshly loaded item inherits the persisted memory here rather than
+        // at construction (which runs before any item id exists).
+        scope.launch {
+            combine(
+                stores.libraryStore.library
+                    .map { it.detailHiddenFranchiseIds }
+                    .distinctUntilChanged(),
+                _session.map { it?.itemId }.distinctUntilChanged(),
+            ) { persisted, itemId -> persisted to itemId }
+                .collect { (persisted, itemId) ->
+                    if (itemId == null || persisted.isEmpty()) return@collect
+                    loader.update { state ->
+                        val existing = state.hiddenFranchiseCollections[itemId].orEmpty()
+                        val merged = existing + persisted
+                        if (merged.size == existing.size) {
+                            state
+                        } else {
+                            state.copy(
+                                hiddenFranchiseCollections =
+                                    state.hiddenFranchiseCollections + (itemId to merged),
+                            )
+                        }
+                    }
+                }
+        }
         // Mirror the CURRENT series' new-episode notification opt-in
         // into the content bag, so the ⋮ entry's checkmark and the upcoming rows'
         // bell stay true to the store even when the config changes out from
@@ -1052,9 +1083,13 @@ class DetailViewModel internal constructor(
      * hide's pattern, per row and per item instead of one global switch.
      * Session memory by design (the map is a surviving leaf of
      * [DetailUiState.clearedForReload], so it survives navigation and
-     * refresh but not a process restart; cross-launch persistence would
-     * need a store slice). Idempotent: a second hide of the same row is a
-     * no-op on the set.
+     * refresh but not a process restart). Idempotent: a second hide of the
+     * same row is a no-op on the set.
+     *
+     * With the `detail_persist_section_hides` pref on, the hide ALSO lands
+     * in the library store's `detail_hidden_franchise_ids` set (a merged
+     * whole-set write; the read side seeds the session memory from the same
+     * set — see the init collector) so it survives a process restart.
      */
     private fun hideFranchiseRow(collectionId: String) {
         val itemId = _session.value?.itemId ?: return
@@ -1066,6 +1101,13 @@ class DetailViewModel internal constructor(
                         )
                     ),
             )
+        }
+        if (preferences.value.persistSectionHides) {
+            launch {
+                stores.libraryStore.setDetailHiddenFranchiseIds(
+                    preferences.value.hiddenFranchiseIds + collectionId,
+                )
+            }
         }
     }
 

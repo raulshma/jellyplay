@@ -102,6 +102,7 @@ internal fun JellyPlayApp(
                     // registration) is never built for auth/onboarding
                     // sessions.
                     com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides infra.networkStatusLazy.value,
+                    com.raulshma.jellyplay.core.ui.components.LocalNetworkMetered provides infra.networkMeteredLazy.value,
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {

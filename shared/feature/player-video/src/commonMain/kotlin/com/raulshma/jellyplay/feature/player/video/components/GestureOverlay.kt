@@ -75,6 +75,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import kotlinx.coroutines.flow.StateFlow
@@ -100,11 +101,24 @@ private fun volumeIcon(value: Float) = when {
     else -> Tabler.Outline.Volume
 }
 
-private fun applySensitivityCurve(rawDelta: Float): Float {
+/**
+ * The brightness/volume swipe sensitivity curve: the drag's normalized travel
+ * mapped through a power curve whose exponent the [PlayerSwipeSensitivity]
+ * pref picks — RELAXED → 1.0 (linear, slower), DEFAULT → 0.8 (the long-standing
+ * value), SENSITIVE → 0.6 (faster). Pure so the mapping stays testable.
+ */
+internal fun applySensitivityCurve(rawDelta: Float, exponent: Float): Float {
     val sign = if (rawDelta >= 0) 1f else -1f
     val magnitude = abs(rawDelta)
-    val curved = (magnitude / 0.5f).pow(0.8f) * 0.5f
+    val curved = (magnitude / 0.5f).pow(exponent) * 0.5f
     return sign * curved.coerceIn(0f, 0.5f)
+}
+
+/** The [PlayerSwipeSensitivity] → curve-exponent fold (the pref's storage is the enum NAME). */
+internal fun swipeSensitivityExponent(sensitivity: PlayerSwipeSensitivity): Float = when (sensitivity) {
+    PlayerSwipeSensitivity.RELAXED -> 1.0f
+    PlayerSwipeSensitivity.DEFAULT -> 0.8f
+    PlayerSwipeSensitivity.SENSITIVE -> 0.6f
 }
 
 // a11y step magnitude for the brightness/volume custom actions. Brightness and
@@ -146,6 +160,8 @@ internal fun GestureOverlay(
      */
     gates: GestureSwipeGates,
     swipeSeekMaxMs: Long,
+    /** The brightness/volume swipe-curve sensitivity (the curve-exponent pref). */
+    swipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
     showControls: Boolean,
     onSeekGesture: (Long) -> Unit,
     onBrightnessGesture: (Float) -> Unit,
@@ -187,6 +203,11 @@ internal fun GestureOverlay(
     // remembered state like the callbacks, same pattern.
     val currentVolumeValue by rememberUpdatedState(volumeValue)
     val currentBrightnessValue by rememberUpdatedState(brightnessValue)
+    // The swipe curve's exponent: the pref read resolves per recomposition,
+    // but the pointerInput block below freezes its captures — the live-read
+    // delegate (the callbacks' pattern) keeps a mid-session pref flip
+    // applying to the NEXT drag.
+    val currentSensitivityExponent by rememberUpdatedState(swipeSensitivityExponent(swipeSensitivity))
 
 
     // Resolved eagerly: the semantics {} block below is not a composable
@@ -340,7 +361,7 @@ internal fun GestureOverlay(
                                         val halfWidth = size.width / 2f
                                         val dy = change.position.y - change.previousPosition.y
                                         val rawDelta = -(dy / size.height) * 0.5f
-                                        val delta = applySensitivityCurve(rawDelta)
+                                        val delta = applySensitivityCurve(rawDelta, currentSensitivityExponent)
                                         // Monotonic clock — avoids the wall-clock syscall of
                                         // System.currentTimeMillis() per move event and is immune
                                         // to wall-clock jumps. Gesture timing is duration-based

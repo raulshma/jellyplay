@@ -6,12 +6,20 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
+import com.raulshma.jellyplay.core.model.DetailBackdropResolution
+import com.raulshma.jellyplay.core.model.DetailChapterCardSize
+import com.raulshma.jellyplay.core.model.DetailDensity
+import com.raulshma.jellyplay.core.model.DetailStaggerStyle
+import com.raulshma.jellyplay.core.model.FilmographySort
 import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.PromotedRailSource
+import com.raulshma.jellyplay.core.model.SmartPlayPriority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -99,6 +107,36 @@ class LibraryStore constructor(
         val TRAILER_PREVIEW_ON_FOCUS = booleanPreferencesKey(LibraryPreferenceSpecs.TRAILER_PREVIEW_ON_FOCUS.keyName)
         val SHOW_PROMOTED_ACTIONS_LANDSCAPE = booleanPreferencesKey(LibraryPreferenceSpecs.SHOW_PROMOTED_ACTIONS_LANDSCAPE.keyName)
         val SHOW_DOWNLOAD_PROGRESS = booleanPreferencesKey(LibraryPreferenceSpecs.SHOW_DOWNLOAD_PROGRESS.keyName)
+        val DETAIL_CAST_ITEM_SIZE = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_CAST_ITEM_SIZE.keyName)
+        val DETAIL_CAST_SEE_ALL_LIMIT = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_CAST_SEE_ALL_LIMIT.keyName)
+        val DETAIL_BACKDROP_PARALLAX = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_BACKDROP_PARALLAX.keyName)
+        val DETAIL_OVERVIEW_COLLAPSE_LINES = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_OVERVIEW_COLLAPSE_LINES.keyName)
+        val DETAIL_HIDE_WATCHED_EPISODES = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_HIDE_WATCHED_EPISODES.keyName)
+        val DETAIL_CONFIRM_MARK_PLAYED = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_CONFIRM_MARK_PLAYED.keyName)
+        val DETAIL_SHOW_STUDIO_CHIPS = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_SHOW_STUDIO_CHIPS.keyName)
+        val DETAIL_SHOW_GENRE_CHIPS = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_SHOW_GENRE_CHIPS.keyName)
+        val DETAIL_SHOW_TAG_CHIPS = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_SHOW_TAG_CHIPS.keyName)
+        val DETAIL_SHOW_SKIP_CHIPS = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_SHOW_SKIP_CHIPS.keyName)
+        val DETAIL_SEASON_TABS_ARTWORK = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_SEASON_TABS_ARTWORK.keyName)
+        val DETAIL_PEOPLE_GRID_DENSITY = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_PEOPLE_GRID_DENSITY.keyName)
+        val DETAIL_SHOW_TRAILER_BADGES = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_SHOW_TRAILER_BADGES.keyName)
+        val DETAIL_PERSIST_SECTION_HIDES = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_PERSIST_SECTION_HIDES.keyName)
+        val DETAIL_HIDDEN_FRANCHISE_IDS = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_HIDDEN_FRANCHISE_IDS.keyName)
+        val DETAIL_SIMILAR_LIMIT = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_SIMILAR_LIMIT.keyName)
+        val DETAIL_UPCOMING_LIMIT = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_UPCOMING_LIMIT.keyName)
+        // The detail-screen QoL knobs, wave 2.
+        val DETAIL_SECTION_ORDER = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_SECTION_ORDER.keyName)
+        val DETAIL_STAGGER_STYLE = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_STAGGER_STYLE.keyName)
+        val DETAIL_BACKDROP_RESOLUTION = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_BACKDROP_RESOLUTION.keyName)
+        val DETAIL_CHAPTER_CARD_SIZE = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_CHAPTER_CARD_SIZE.keyName)
+        val DETAIL_REVIEWS_PREVIEW_LINES = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_REVIEWS_PREVIEW_LINES.keyName)
+        val DETAIL_FILMOGRAPHY_SORT = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_FILMOGRAPHY_SORT.keyName)
+        val DETAIL_FRANCHISE_BOX_LIMIT = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_FRANCHISE_BOX_LIMIT.keyName)
+        val DETAIL_FRANCHISE_MEMBER_LIMIT = intPreferencesKey(LibraryPreferenceSpecs.DETAIL_FRANCHISE_MEMBER_LIMIT.keyName)
+        val DETAIL_SMART_PLAY_PRIORITY = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_SMART_PLAY_PRIORITY.keyName)
+        val DETAIL_STREAM_FALLBACK_LANGUAGE = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_STREAM_FALLBACK_LANGUAGE.keyName)
+        val DETAIL_PROMOTED_RAIL_SOURCE = stringPreferencesKey(LibraryPreferenceSpecs.DETAIL_PROMOTED_RAIL_SOURCE.keyName)
+        val DETAIL_EPISODE_OVERVIEW_PREVIEW = booleanPreferencesKey(LibraryPreferenceSpecs.DETAIL_EPISODE_OVERVIEW_PREVIEW.keyName)
     }
 
     val library: StateFlow<LibrarySlice> =
@@ -140,6 +178,39 @@ class LibraryStore constructor(
         trailerPreviewOnFocus = LibraryPreferenceSpecs.TRAILER_PREVIEW_ON_FOCUS.readFrom(prefs),
         showPromotedActionsLandscape = LibraryPreferenceSpecs.SHOW_PROMOTED_ACTIONS_LANDSCAPE.readFrom(prefs),
         showDownloadProgress = LibraryPreferenceSpecs.SHOW_DOWNLOAD_PROGRESS.readFrom(prefs),
+        detailCastItemSize = LibraryPreferenceSpecs.DETAIL_CAST_ITEM_SIZE.readFrom(prefs),
+        detailCastSeeAllLimit = LibraryPreferenceSpecs.DETAIL_CAST_SEE_ALL_LIMIT.readFrom(prefs),
+        detailBackdropParallax = LibraryPreferenceSpecs.DETAIL_BACKDROP_PARALLAX.readFrom(prefs),
+        detailOverviewCollapseLines = LibraryPreferenceSpecs.DETAIL_OVERVIEW_COLLAPSE_LINES.readFrom(prefs),
+        detailHideWatchedEpisodes = LibraryPreferenceSpecs.DETAIL_HIDE_WATCHED_EPISODES.readFrom(prefs),
+        detailConfirmMarkPlayed = LibraryPreferenceSpecs.DETAIL_CONFIRM_MARK_PLAYED.readFrom(prefs),
+        detailShowStudioChips = LibraryPreferenceSpecs.DETAIL_SHOW_STUDIO_CHIPS.readFrom(prefs),
+        detailShowGenreChips = LibraryPreferenceSpecs.DETAIL_SHOW_GENRE_CHIPS.readFrom(prefs),
+        detailShowTagChips = LibraryPreferenceSpecs.DETAIL_SHOW_TAG_CHIPS.readFrom(prefs),
+        detailShowSkipChips = LibraryPreferenceSpecs.DETAIL_SHOW_SKIP_CHIPS.readFrom(prefs),
+        detailSeasonTabsArtwork = LibraryPreferenceSpecs.DETAIL_SEASON_TABS_ARTWORK.readFrom(prefs),
+        detailPeopleGridDensity = LibraryPreferenceSpecs.DETAIL_PEOPLE_GRID_DENSITY.readFrom(prefs),
+        detailShowTrailerBadges = LibraryPreferenceSpecs.DETAIL_SHOW_TRAILER_BADGES.readFrom(prefs),
+        detailPersistSectionHides = LibraryPreferenceSpecs.DETAIL_PERSIST_SECTION_HIDES.readFrom(prefs),
+        detailHiddenFranchiseIds = LibraryPreferenceSpecs.DETAIL_HIDDEN_FRANCHISE_IDS.readFrom(prefs),
+        detailSimilarLimit = LibraryPreferenceSpecs.DETAIL_SIMILAR_LIMIT.readFrom(prefs),
+        detailUpcomingLimit = LibraryPreferenceSpecs.DETAIL_UPCOMING_LIMIT.readFrom(prefs),
+        // The wave-2 knobs: the two declaration-only string rows via their
+        // plain readStored (the downloads list-state precedent), the rest via
+        // their row encodings.
+        detailSectionOrder = LibraryPreferenceSpecs.DETAIL_SECTION_ORDER.readStored(prefs) ?: "",
+        detailStaggerStyle = LibraryPreferenceSpecs.DETAIL_STAGGER_STYLE.readFrom(prefs),
+        detailBackdropResolution = LibraryPreferenceSpecs.DETAIL_BACKDROP_RESOLUTION.readFrom(prefs),
+        detailChapterCardSize = LibraryPreferenceSpecs.DETAIL_CHAPTER_CARD_SIZE.readFrom(prefs),
+        detailReviewsPreviewLines = LibraryPreferenceSpecs.DETAIL_REVIEWS_PREVIEW_LINES.readFrom(prefs),
+        detailFilmographySort = LibraryPreferenceSpecs.DETAIL_FILMOGRAPHY_SORT.readFrom(prefs),
+        detailFranchiseBoxLimit = LibraryPreferenceSpecs.DETAIL_FRANCHISE_BOX_LIMIT.readFrom(prefs),
+        detailFranchiseMemberLimit = LibraryPreferenceSpecs.DETAIL_FRANCHISE_MEMBER_LIMIT.readFrom(prefs),
+        detailSmartPlayPriority = LibraryPreferenceSpecs.DETAIL_SMART_PLAY_PRIORITY.readFrom(prefs),
+        detailStreamFallbackLanguage = LibraryPreferenceSpecs.DETAIL_STREAM_FALLBACK_LANGUAGE.readStored(prefs)
+            ?: DETAIL_STREAM_FALLBACK_LANGUAGE_DEFAULT,
+        detailPromotedRailSource = LibraryPreferenceSpecs.DETAIL_PROMOTED_RAIL_SOURCE.readFrom(prefs),
+        detailEpisodeOverviewPreview = LibraryPreferenceSpecs.DETAIL_EPISODE_OVERVIEW_PREVIEW.readFrom(prefs),
     )
 
     // ------------------------------------------------------------------
@@ -281,6 +352,190 @@ class LibraryStore constructor(
         dataStore.edit { LibraryPreferenceSpecs.SHOW_DOWNLOAD_PROGRESS.writeTo(it, enabled) }
     }
 
+    suspend fun setDetailCastItemSize(density: DetailDensity) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_CAST_ITEM_SIZE.writeTo(it, density) }
+    }
+
+    /** Cast "See all" threshold; clamped to [DETAIL_CAST_SEE_ALL_LIMIT_MIN]..[DETAIL_CAST_SEE_ALL_LIMIT_MAX]. */
+    suspend fun setDetailCastSeeAllLimit(limit: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_CAST_SEE_ALL_LIMIT.writeTo(
+                it,
+                limit.coerceIn(DETAIL_CAST_SEE_ALL_LIMIT_MIN, DETAIL_CAST_SEE_ALL_LIMIT_MAX),
+            )
+        }
+    }
+
+    suspend fun setDetailBackdropParallax(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_BACKDROP_PARALLAX.writeTo(it, enabled) }
+    }
+
+    /** Overview collapsed line count; clamped to [DETAIL_OVERVIEW_COLLAPSE_LINES_MIN]..[DETAIL_OVERVIEW_COLLAPSE_LINES_MAX]. */
+    suspend fun setDetailOverviewCollapseLines(lines: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_OVERVIEW_COLLAPSE_LINES.writeTo(
+                it,
+                lines.coerceIn(DETAIL_OVERVIEW_COLLAPSE_LINES_MIN, DETAIL_OVERVIEW_COLLAPSE_LINES_MAX),
+            )
+        }
+    }
+
+    suspend fun setDetailHideWatchedEpisodes(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_HIDE_WATCHED_EPISODES.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailConfirmMarkPlayed(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_CONFIRM_MARK_PLAYED.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailShowStudioChips(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SHOW_STUDIO_CHIPS.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailShowGenreChips(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SHOW_GENRE_CHIPS.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailShowTagChips(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SHOW_TAG_CHIPS.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailShowSkipChips(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SHOW_SKIP_CHIPS.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailSeasonTabsArtwork(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SEASON_TABS_ARTWORK.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailPeopleGridDensity(density: DetailDensity) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_PEOPLE_GRID_DENSITY.writeTo(it, density) }
+    }
+
+    suspend fun setDetailShowTrailerBadges(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SHOW_TRAILER_BADGES.writeTo(it, enabled) }
+    }
+
+    suspend fun setDetailPersistSectionHides(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_PERSIST_SECTION_HIDES.writeTo(it, enabled) }
+    }
+
+    /** The persisted franchise eye-hide memory (whole-set write; the DetailViewModel merges). */
+    suspend fun setDetailHiddenFranchiseIds(ids: Set<String>) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_HIDDEN_FRANCHISE_IDS.writeTo(it, ids) }
+    }
+
+    /** "More like this" row bound; clamped to [DETAIL_SIMILAR_LIMIT_MIN]..[DETAIL_SIMILAR_LIMIT_MAX]. */
+    suspend fun setDetailSimilarLimit(limit: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_SIMILAR_LIMIT.writeTo(
+                it,
+                limit.coerceIn(DETAIL_SIMILAR_LIMIT_MIN, DETAIL_SIMILAR_LIMIT_MAX),
+            )
+        }
+    }
+
+    /** "Airing next" strip bound; clamped to [DETAIL_UPCOMING_LIMIT_MIN]..[DETAIL_UPCOMING_LIMIT_MAX]. */
+    suspend fun setDetailUpcomingLimit(limit: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_UPCOMING_LIMIT.writeTo(
+                it,
+                limit.coerceIn(DETAIL_UPCOMING_LIMIT_MIN, DETAIL_UPCOMING_LIMIT_MAX),
+            )
+        }
+    }
+
+    // ── The wave-2 detail QoL setters ────────────────────────────────────
+
+    /**
+     * The detail body's section permutation: normalizes the token list
+     * (trim, drop empties, dedupe keeping first occurrence) and stores the
+     * joined CSV. Tokens are NOT validated here — the consumption side
+     * reconciles against the known section list (unknown dropped, missing
+     * appended), so a settings-vocabulary drift can never strand a stale
+     * stored value.
+     */
+    suspend fun setDetailSectionOrder(order: List<String>) {
+        val csv = order.map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .joinToString(",")
+        dataStore.edit { it[Keys.DETAIL_SECTION_ORDER] = csv }
+    }
+
+    suspend fun setDetailStaggerStyle(style: DetailStaggerStyle) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_STAGGER_STYLE.writeTo(it, style) }
+    }
+
+    suspend fun setDetailBackdropResolution(resolution: DetailBackdropResolution) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_BACKDROP_RESOLUTION.writeTo(it, resolution) }
+    }
+
+    suspend fun setDetailChapterCardSize(size: DetailChapterCardSize) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_CHAPTER_CARD_SIZE.writeTo(it, size) }
+    }
+
+    /** Review-card preview line count; clamped to [DETAIL_REVIEWS_PREVIEW_LINES_MIN]..[DETAIL_REVIEWS_PREVIEW_LINES_MAX]. */
+    suspend fun setDetailReviewsPreviewLines(lines: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_REVIEWS_PREVIEW_LINES.writeTo(
+                it,
+                lines.coerceIn(DETAIL_REVIEWS_PREVIEW_LINES_MIN, DETAIL_REVIEWS_PREVIEW_LINES_MAX),
+            )
+        }
+    }
+
+    suspend fun setDetailFilmographySort(sort: FilmographySort) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_FILMOGRAPHY_SORT.writeTo(it, sort) }
+    }
+
+    /** Franchise BoxSet-row bound; clamped to [DETAIL_FRANCHISE_BOX_LIMIT_MIN]..[DETAIL_FRANCHISE_BOX_LIMIT_MAX]. */
+    suspend fun setDetailFranchiseBoxLimit(limit: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_FRANCHISE_BOX_LIMIT.writeTo(
+                it,
+                limit.coerceIn(DETAIL_FRANCHISE_BOX_LIMIT_MIN, DETAIL_FRANCHISE_BOX_LIMIT_MAX),
+            )
+        }
+    }
+
+    /** Franchise per-row member page bound; clamped to [DETAIL_FRANCHISE_MEMBER_LIMIT_MIN]..[DETAIL_FRANCHISE_MEMBER_LIMIT_MAX]. */
+    suspend fun setDetailFranchiseMemberLimit(limit: Int) {
+        dataStore.edit {
+            LibraryPreferenceSpecs.DETAIL_FRANCHISE_MEMBER_LIMIT.writeTo(
+                it,
+                limit.coerceIn(DETAIL_FRANCHISE_MEMBER_LIMIT_MIN, DETAIL_FRANCHISE_MEMBER_LIMIT_MAX),
+            )
+        }
+    }
+
+    suspend fun setDetailSmartPlayPriority(priority: SmartPlayPriority) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_SMART_PLAY_PRIORITY.writeTo(it, priority) }
+    }
+
+    /**
+     * The stream-picker fallback language: lowercases the token and accepts
+     * only 3-letter codes — anything else resets to
+     * [DETAIL_STREAM_FALLBACK_LANGUAGE_DEFAULT] (the shipped "eng").
+     */
+    suspend fun setDetailStreamFallbackLanguage(language: String) {
+        val normalized = language.trim().lowercase()
+        val stored = if (normalized.length == 3 && normalized.all { it in 'a'..'z' }) {
+            normalized
+        } else {
+            DETAIL_STREAM_FALLBACK_LANGUAGE_DEFAULT
+        }
+        dataStore.edit { it[Keys.DETAIL_STREAM_FALLBACK_LANGUAGE] = stored }
+    }
+
+    suspend fun setDetailPromotedRailSource(source: PromotedRailSource) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_PROMOTED_RAIL_SOURCE.writeTo(it, source) }
+    }
+
+    suspend fun setDetailEpisodeOverviewPreview(enabled: Boolean) {
+        dataStore.edit { LibraryPreferenceSpecs.DETAIL_EPISODE_OVERVIEW_PREVIEW.writeTo(it, enabled) }
+    }
+
     suspend fun setLibraryGroupBy(groupBy: GroupBy) {
         dataStore.edit { LibraryPreferenceSpecs.LIBRARY_GROUP_BY.writeTo(it, groupBy) }
     }
@@ -350,6 +605,38 @@ class LibraryStore constructor(
             LibraryPreferenceSpecs.TRAILER_PREVIEW_ON_FOCUS.writeTo(prefs, slice.trailerPreviewOnFocus)
             LibraryPreferenceSpecs.SHOW_PROMOTED_ACTIONS_LANDSCAPE.writeTo(prefs, slice.showPromotedActionsLandscape)
             LibraryPreferenceSpecs.SHOW_DOWNLOAD_PROGRESS.writeTo(prefs, slice.showDownloadProgress)
+            LibraryPreferenceSpecs.DETAIL_CAST_ITEM_SIZE.writeTo(prefs, slice.detailCastItemSize)
+            LibraryPreferenceSpecs.DETAIL_CAST_SEE_ALL_LIMIT.writeTo(prefs, slice.detailCastSeeAllLimit)
+            LibraryPreferenceSpecs.DETAIL_BACKDROP_PARALLAX.writeTo(prefs, slice.detailBackdropParallax)
+            LibraryPreferenceSpecs.DETAIL_OVERVIEW_COLLAPSE_LINES.writeTo(prefs, slice.detailOverviewCollapseLines)
+            LibraryPreferenceSpecs.DETAIL_HIDE_WATCHED_EPISODES.writeTo(prefs, slice.detailHideWatchedEpisodes)
+            LibraryPreferenceSpecs.DETAIL_CONFIRM_MARK_PLAYED.writeTo(prefs, slice.detailConfirmMarkPlayed)
+            LibraryPreferenceSpecs.DETAIL_SHOW_STUDIO_CHIPS.writeTo(prefs, slice.detailShowStudioChips)
+            LibraryPreferenceSpecs.DETAIL_SHOW_GENRE_CHIPS.writeTo(prefs, slice.detailShowGenreChips)
+            LibraryPreferenceSpecs.DETAIL_SHOW_TAG_CHIPS.writeTo(prefs, slice.detailShowTagChips)
+            LibraryPreferenceSpecs.DETAIL_SHOW_SKIP_CHIPS.writeTo(prefs, slice.detailShowSkipChips)
+            LibraryPreferenceSpecs.DETAIL_SEASON_TABS_ARTWORK.writeTo(prefs, slice.detailSeasonTabsArtwork)
+            LibraryPreferenceSpecs.DETAIL_PEOPLE_GRID_DENSITY.writeTo(prefs, slice.detailPeopleGridDensity)
+            LibraryPreferenceSpecs.DETAIL_SHOW_TRAILER_BADGES.writeTo(prefs, slice.detailShowTrailerBadges)
+            LibraryPreferenceSpecs.DETAIL_PERSIST_SECTION_HIDES.writeTo(prefs, slice.detailPersistSectionHides)
+            LibraryPreferenceSpecs.DETAIL_HIDDEN_FRANCHISE_IDS.writeTo(prefs, slice.detailHiddenFranchiseIds)
+            LibraryPreferenceSpecs.DETAIL_SIMILAR_LIMIT.writeTo(prefs, slice.detailSimilarLimit)
+            LibraryPreferenceSpecs.DETAIL_UPCOMING_LIMIT.writeTo(prefs, slice.detailUpcomingLimit)
+            // The wave-2 knobs: the two declaration-only string rows keep
+            // their hand-written plain slot writes (the confirm-reset
+            // precedent), the rest delegate to their row encodings.
+            prefs[Keys.DETAIL_SECTION_ORDER] = slice.detailSectionOrder
+            LibraryPreferenceSpecs.DETAIL_STAGGER_STYLE.writeTo(prefs, slice.detailStaggerStyle)
+            LibraryPreferenceSpecs.DETAIL_BACKDROP_RESOLUTION.writeTo(prefs, slice.detailBackdropResolution)
+            LibraryPreferenceSpecs.DETAIL_CHAPTER_CARD_SIZE.writeTo(prefs, slice.detailChapterCardSize)
+            LibraryPreferenceSpecs.DETAIL_REVIEWS_PREVIEW_LINES.writeTo(prefs, slice.detailReviewsPreviewLines)
+            LibraryPreferenceSpecs.DETAIL_FILMOGRAPHY_SORT.writeTo(prefs, slice.detailFilmographySort)
+            LibraryPreferenceSpecs.DETAIL_FRANCHISE_BOX_LIMIT.writeTo(prefs, slice.detailFranchiseBoxLimit)
+            LibraryPreferenceSpecs.DETAIL_FRANCHISE_MEMBER_LIMIT.writeTo(prefs, slice.detailFranchiseMemberLimit)
+            LibraryPreferenceSpecs.DETAIL_SMART_PLAY_PRIORITY.writeTo(prefs, slice.detailSmartPlayPriority)
+            prefs[Keys.DETAIL_STREAM_FALLBACK_LANGUAGE] = slice.detailStreamFallbackLanguage
+            LibraryPreferenceSpecs.DETAIL_PROMOTED_RAIL_SOURCE.writeTo(prefs, slice.detailPromotedRailSource)
+            LibraryPreferenceSpecs.DETAIL_EPISODE_OVERVIEW_PREVIEW.writeTo(prefs, slice.detailEpisodeOverviewPreview)
         }
     }
 }
@@ -362,6 +649,39 @@ class LibraryStore constructor(
 internal const val DEFAULT_POSTER_SIZE = 1.0f
 internal const val POSTER_SIZE_MIN = 0.7f
 internal const val POSTER_SIZE_MAX = 1.4f
+
+/**
+ * The detail-screen QoL int knobs' bounds. Catalog metadata lives on the
+ * rows; these are the clamp owners' (the setters') bounds — the shipped
+ * values and the range the settings pickers offer.
+ */
+internal const val DETAIL_CAST_SEE_ALL_LIMIT_DEFAULT = 12
+internal const val DETAIL_CAST_SEE_ALL_LIMIT_MIN = 6
+internal const val DETAIL_CAST_SEE_ALL_LIMIT_MAX = 24
+internal const val DETAIL_OVERVIEW_COLLAPSE_LINES_DEFAULT = 3
+internal const val DETAIL_OVERVIEW_COLLAPSE_LINES_MIN = 3
+internal const val DETAIL_OVERVIEW_COLLAPSE_LINES_MAX = 8
+internal const val DETAIL_SIMILAR_LIMIT_DEFAULT = 12
+internal const val DETAIL_SIMILAR_LIMIT_MIN = 6
+internal const val DETAIL_SIMILAR_LIMIT_MAX = 24
+internal const val DETAIL_UPCOMING_LIMIT_DEFAULT = 12
+internal const val DETAIL_UPCOMING_LIMIT_MIN = 4
+internal const val DETAIL_UPCOMING_LIMIT_MAX = 24
+
+/**
+ * The wave-2 detail QoL int knobs' bounds (catalog metadata on the rows; the
+ * setters are the clamp owners) and the validated string row's default.
+ */
+internal const val DETAIL_REVIEWS_PREVIEW_LINES_DEFAULT = 6
+internal const val DETAIL_REVIEWS_PREVIEW_LINES_MIN = 2
+internal const val DETAIL_REVIEWS_PREVIEW_LINES_MAX = 12
+internal const val DETAIL_FRANCHISE_BOX_LIMIT_DEFAULT = 2
+internal const val DETAIL_FRANCHISE_BOX_LIMIT_MIN = 1
+internal const val DETAIL_FRANCHISE_BOX_LIMIT_MAX = 5
+internal const val DETAIL_FRANCHISE_MEMBER_LIMIT_DEFAULT = 50
+internal const val DETAIL_FRANCHISE_MEMBER_LIMIT_MIN = 10
+internal const val DETAIL_FRANCHISE_MEMBER_LIMIT_MAX = 100
+internal const val DETAIL_STREAM_FALLBACK_LANGUAGE_DEFAULT = "eng"
 
 /**
  * The library browsing preference slice. Plain data class. Every default IS
@@ -420,4 +740,67 @@ data class LibrarySlice(
     val showPromotedActionsLandscape: Boolean = LibraryPreferenceSpecs.SHOW_PROMOTED_ACTIONS_LANDSCAPE.default,
     /** Show live download progress on season episode rows. */
     val showDownloadProgress: Boolean = LibraryPreferenceSpecs.SHOW_DOWNLOAD_PROGRESS.default,
+    // ── The detail-screen QoL knobs ──────────────────────────────────────
+
+    /** Cast rail item size on the media-detail header (people geometry). */
+    val detailCastItemSize: DetailDensity = LibraryPreferenceSpecs.DETAIL_CAST_ITEM_SIZE.default,
+    /** Cast "See all" threshold: people hide behind it above this count. */
+    val detailCastSeeAllLimit: Int = LibraryPreferenceSpecs.DETAIL_CAST_SEE_ALL_LIMIT.default,
+    /** Parallax (translate + zoom) scroll on the detail hero backdrop. */
+    val detailBackdropParallax: Boolean = LibraryPreferenceSpecs.DETAIL_BACKDROP_PARALLAX.default,
+    /** Overview synopsis collapsed line count (the "Read more" toggle). */
+    val detailOverviewCollapseLines: Int = LibraryPreferenceSpecs.DETAIL_OVERVIEW_COLLAPSE_LINES.default,
+    /** Hide played episodes from season lists. */
+    val detailHideWatchedEpisodes: Boolean = LibraryPreferenceSpecs.DETAIL_HIDE_WATCHED_EPISODES.default,
+    /** Ask for confirmation before marking a single item played/unplayed. */
+    val detailConfirmMarkPlayed: Boolean = LibraryPreferenceSpecs.DETAIL_CONFIRM_MARK_PLAYED.default,
+    /** Header studio chips. */
+    val detailShowStudioChips: Boolean = LibraryPreferenceSpecs.DETAIL_SHOW_STUDIO_CHIPS.default,
+    /** Header genre chips. */
+    val detailShowGenreChips: Boolean = LibraryPreferenceSpecs.DETAIL_SHOW_GENRE_CHIPS.default,
+    /** Header tag chips. */
+    val detailShowTagChips: Boolean = LibraryPreferenceSpecs.DETAIL_SHOW_TAG_CHIPS.default,
+    /** Header skip-intro/credits availability chips. */
+    val detailShowSkipChips: Boolean = LibraryPreferenceSpecs.DETAIL_SHOW_SKIP_CHIPS.default,
+    /** Small poster thumbnails on the season tab bar. */
+    val detailSeasonTabsArtwork: Boolean = LibraryPreferenceSpecs.DETAIL_SEASON_TABS_ARTWORK.default,
+    /** Cast & Crew grid density (the grid's column minimum). */
+    val detailPeopleGridDensity: DetailDensity = LibraryPreferenceSpecs.DETAIL_PEOPLE_GRID_DENSITY.default,
+    /** Local/remote source badges on the trailer cards. */
+    val detailShowTrailerBadges: Boolean = LibraryPreferenceSpecs.DETAIL_SHOW_TRAILER_BADGES.default,
+    /** Persist the detail screen's inline section hides (the franchise eye-hide memory). */
+    val detailPersistSectionHides: Boolean = LibraryPreferenceSpecs.DETAIL_PERSIST_SECTION_HIDES.default,
+    /** The persisted franchise eye-hide memory (collection ids). */
+    val detailHiddenFranchiseIds: Set<String> = LibraryPreferenceSpecs.DETAIL_HIDDEN_FRANCHISE_IDS.default,
+    /** "More like this" row bound (both stock arms). */
+    val detailSimilarLimit: Int = LibraryPreferenceSpecs.DETAIL_SIMILAR_LIMIT.default,
+    /** "Airing next" strip bound. */
+    val detailUpcomingLimit: Int = LibraryPreferenceSpecs.DETAIL_UPCOMING_LIMIT.default,
+    // ── The detail-screen QoL knobs, wave 2 ──────────────────────────────
+
+    /** The detail body's stored section permutation (CSV; empty = canonical order). */
+    val detailSectionOrder: String = LibraryPreferenceSpecs.DETAIL_SECTION_ORDER.default ?: "",
+    /** Entrance-stagger step (FAST/DEFAULT/SLOW). */
+    val detailStaggerStyle: DetailStaggerStyle = LibraryPreferenceSpecs.DETAIL_STAGGER_STYLE.default,
+    /** Hero-backdrop decode target (720p/1080p/1440p). */
+    val detailBackdropResolution: DetailBackdropResolution = LibraryPreferenceSpecs.DETAIL_BACKDROP_RESOLUTION.default,
+    /** Chapter thumbnail card size multiplier (0.8/1.0/1.2). */
+    val detailChapterCardSize: DetailChapterCardSize = LibraryPreferenceSpecs.DETAIL_CHAPTER_CARD_SIZE.default,
+    /** Review-card preview line count (clamped 2..12). */
+    val detailReviewsPreviewLines: Int = LibraryPreferenceSpecs.DETAIL_REVIEWS_PREVIEW_LINES.default,
+    /** Person filmography ordering. */
+    val detailFilmographySort: FilmographySort = LibraryPreferenceSpecs.DETAIL_FILMOGRAPHY_SORT.default,
+    /** Franchise BoxSet-row bound (clamped 1..5). */
+    val detailFranchiseBoxLimit: Int = LibraryPreferenceSpecs.DETAIL_FRANCHISE_BOX_LIMIT.default,
+    /** Franchise per-row member page bound (clamped 10..100). */
+    val detailFranchiseMemberLimit: Int = LibraryPreferenceSpecs.DETAIL_FRANCHISE_MEMBER_LIMIT.default,
+    /** Smart-play dispatch candidate preference. */
+    val detailSmartPlayPriority: SmartPlayPriority = LibraryPreferenceSpecs.DETAIL_SMART_PLAY_PRIORITY.default,
+    /** Stream-picker fallback language (3-letter code). */
+    val detailStreamFallbackLanguage: String = LibraryPreferenceSpecs.DETAIL_STREAM_FALLBACK_LANGUAGE.default
+        ?: DETAIL_STREAM_FALLBACK_LANGUAGE_DEFAULT,
+    /** Which ⋮-menu preset the landscape/TV promoted rail shows. */
+    val detailPromotedRailSource: PromotedRailSource = LibraryPreferenceSpecs.DETAIL_PROMOTED_RAIL_SOURCE.default,
+    /** 2-line overview snippets on the season lists' episode rows. */
+    val detailEpisodeOverviewPreview: Boolean = LibraryPreferenceSpecs.DETAIL_EPISODE_OVERVIEW_PREVIEW.default,
 )

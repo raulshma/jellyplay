@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
 import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
 import com.raulshma.jellyplay.core.model.PlayerAction
 import com.raulshma.jellyplay.core.model.PlayerInputKey
@@ -78,6 +79,8 @@ internal class PlayerActionExecutor(
     private val getSupportsAudioDelay: () -> Boolean,
     private val getAudioDelayMs: () -> Long,
     private val getSeekStepMs: () -> Long,
+    /** The keyboard modifier seek-step ladder family (the keyboard-seek-preset pref). */
+    private val getSeekPreset: () -> KeyboardSeekPreset = { KeyboardSeekPreset.DEFAULT },
     // Episode-navigation availability (the "where they exist, unmapped
     // otherwise" rule): next folds the sibling + queue mirror (queue-first,
     // incl. movies), previous reads the adjacent-episode snapshot.
@@ -398,12 +401,14 @@ internal class PlayerActionExecutor(
                     isShiftPressed = keyEvent.isShiftPressed,
                     isCtrlPressed = keyEvent.isCtrlPressed,
                     isAltPressed = keyEvent.isAltPressed,
+                    seekPreset = getSeekPreset(),
                 )?.stepMs
                     ?: keyboardSeekStepMs(
                         isShiftPressed = keyEvent.isShiftPressed,
                         isCtrlPressed = keyEvent.isCtrlPressed,
                         isAltPressed = keyEvent.isAltPressed,
                         configuredStepMs = getSeekStepMs(),
+                        preset = getSeekPreset(),
                     )
                 seekState.addOffset(
                     targetDirection = if (binding.action == PlayerAction.SEEK_FORWARD) 1 else -1,

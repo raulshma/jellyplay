@@ -34,7 +34,15 @@ public object SleepTimerSheetPolicy {
      * 5:00) cancels immediately — the user is this close to expiry anyway.
      */
     public fun requiresCancelConfirmation(remainingMs: Long): Boolean =
-        remainingMs > CANCEL_CONFIRM_THRESHOLD_MS
+        requiresCancelConfirmation(remainingMs, CANCEL_CONFIRM_THRESHOLD_MS)
+
+    /**
+     * The threshold-parameterized overload (the `video_sleep_confirm_minutes`
+     * pref's minutes-to-ms): [thresholdMs] replaces the 5-minute default.
+     * The strictly-greater boundary semantics carry over.
+     */
+    public fun requiresCancelConfirmation(remainingMs: Long, thresholdMs: Long): Boolean =
+        remainingMs > thresholdMs
 
     /**
      * The projected stop instant: `now + remaining` (remaining clamped at 0

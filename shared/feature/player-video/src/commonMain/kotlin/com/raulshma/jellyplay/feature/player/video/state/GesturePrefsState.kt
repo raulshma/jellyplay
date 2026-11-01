@@ -3,9 +3,15 @@ package com.raulshma.jellyplay.feature.player.video.state
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
+import com.raulshma.jellyplay.core.model.HoldSeekCadence
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
+import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
+import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputMap
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
 import com.raulshma.jellyplay.core.model.RefreshRateMode
+import com.raulshma.jellyplay.core.model.SpeedPillClearance
 
 /**
  * Gesture / hold-speed / brightness / frame-rate preference slice. The
@@ -42,4 +48,19 @@ data class GesturePrefsState(
      * gate).
      */
     val inputMap: PlayerInputMap = PlayerInputDefaults.defaultMap(),
+    /** The brightness/volume swipe-curve sensitivity. Default DEFAULT (exponent 0.8). */
+    val swipeSensitivity: PlayerSwipeSensitivity = PlayerSwipeSensitivity.DEFAULT,
+    /** The center double-tap zone's action. Default AUTO (zoom reset when zoomed, else play/pause). */
+    val centerDoubleTapAction: PlayerCenterDoubleTapAction = PlayerCenterDoubleTapAction.AUTO,
+    /** The left/right double-tap zone split. Default DEFAULT (35/65). */
+    val doubleTapZoneBias: PlayerDoubleTapZoneBias = PlayerDoubleTapZoneBias.DEFAULT,
+    /** The gesture overlays' dismiss delay (200–2 000). */
+    val gestureOverlayLingerMs: Long = 800L,
+    // ── The second QoL wave's gesture/input cadence + placement mirrors. ──
+    /** The double-tap-and-hold repeat cadence family. Default DEFAULT (400→150ms). */
+    val holdSeekCadence: HoldSeekCadence = HoldSeekCadence.DEFAULT,
+    /** The hold-speed pill's clearance above the bottom controls. Default DEFAULT (180dp). */
+    val speedPillClearance: SpeedPillClearance = SpeedPillClearance.DEFAULT,
+    /** The keyboard modifier seek-step ladder family. Default DEFAULT (VLC's ladder). */
+    val keyboardSeekPreset: KeyboardSeekPreset = KeyboardSeekPreset.DEFAULT,
 )

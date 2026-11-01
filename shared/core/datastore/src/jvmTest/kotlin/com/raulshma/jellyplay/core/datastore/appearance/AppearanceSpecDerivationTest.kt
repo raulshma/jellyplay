@@ -70,6 +70,16 @@ class AppearanceSpecDerivationTest {
         "tv_overscan" to String::class,
         "haptics_enabled" to Boolean::class,
         "show_advanced_settings" to Boolean::class,
+        "time_use_24h" to Boolean::class,
+        "card_press_animations" to Boolean::class,
+        "pull_to_refresh_enabled" to Boolean::class,
+        "app_backdrop_dim" to String::class,
+        "haptics_intensity" to String::class,
+        "image_quality_preset" to String::class,
+        "app_list_density" to String::class,
+        "app_press_effect" to String::class,
+        "app_flat_cards" to Boolean::class,
+        "app_overscroll_style" to String::class,
     )
 
     @Test
@@ -149,6 +159,15 @@ class AppearanceSpecDerivationTest {
                 "hand_mode",
                 "layout_mode",
                 "tv_overscan",
+                "time_use_24h",
+                "card_press_animations",
+                "app_backdrop_dim",
+                "haptics_intensity",
+                "image_quality_preset",
+                "app_list_density",
+                "app_press_effect",
+                "app_flat_cards",
+                "app_overscroll_style",
             ).sorted(),
             appearanceKeys.sorted(),
         )
@@ -158,8 +177,8 @@ class AppearanceSpecDerivationTest {
     fun `haptics resets under MISC_APP and advanced-settings contributes to no category here`() {
         val store = AppearanceStore(TestDataStoreProvider.get(), scope)
         assertEquals(
-            listOf("haptics_enabled"),
-            store.resetKeysFor(PreferenceResetCategory.MISC_APP).map { it.name },
+            listOf("haptics_enabled", "pull_to_refresh_enabled").sorted(),
+            store.resetKeysFor(PreferenceResetCategory.MISC_APP).map { it.name }.sorted(),
         )
         // The reset-owner ledger: show_advanced_settings' EXPERIMENTAL list
         // entry is ExperimentalStore's, exactly as the hand-written lists did.

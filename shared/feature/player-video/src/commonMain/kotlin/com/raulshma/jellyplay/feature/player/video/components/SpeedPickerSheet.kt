@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PlaybackSpeedLadder
+import com.raulshma.jellyplay.core.model.SpeedPresetSet
 import com.raulshma.jellyplay.core.ui.player.SpeedSlider
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
@@ -41,7 +42,12 @@ internal fun SpeedPickerSheet(
     currentSpeed: Float,
     onSelect: (Float) -> Unit,
     onDismiss: () -> Unit,
+    /** The chip preset family (the speed-preset-set pref; the slider keeps the full range). */
+    presetSet: SpeedPresetSet = SpeedPresetSet.DEFAULT,
 ) {
+    // The sheet's chip rungs fold the preset-set pref over the shared ladder
+    // (CYCLE_SPEED's [SPEED_OPTIONS] stays on fullRungs regardless).
+    val speedOptions = PlaybackSpeedLadder.rungs(presetSet)
     PickerSheetScaffold(
         title = "Playback Speed",
         icon = Tabler.Outline.Gauge,
@@ -50,13 +56,13 @@ internal fun SpeedPickerSheet(
         if (isTv) {
             LazyColumn(modifier = Modifier.verticalWrapAround()) {
                 items(
-                    count = SPEED_OPTIONS.size,
-                    key = { SPEED_OPTIONS[it] },
+                    count = speedOptions.size,
+                    key = { speedOptions[it] },
                     contentType = { "speed" },
                 ) { i ->
-                    val speed = SPEED_OPTIONS[i]
+                    val speed = speedOptions[i]
                     val isSelected = speed == currentSpeed
-                    val isFirstOrSelected = isSelected || (SPEED_OPTIONS.none { it == currentSpeed } && speed == 1.0f)
+                    val isFirstOrSelected = isSelected || (speedOptions.none { it == currentSpeed } && speed == 1.0f)
                     TvFocusableOptionRow(
                         selected = isSelected,
                         onClick = { onSelect(speed); onDismiss() },
@@ -82,7 +88,7 @@ internal fun SpeedPickerSheet(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SPEED_OPTIONS.forEach { speed ->
+                speedOptions.forEach { speed ->
                     val isSelected = speed == currentSpeed
                     FilterChip(
                         selected = isSelected,

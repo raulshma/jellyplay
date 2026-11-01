@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -129,6 +130,35 @@ class HomeDiscoverySpecDerivationTest {
         "show_clock_on_home" to Boolean::class,
         "show_settings_in_home_search" to Boolean::class,
         "hide_top_header_on_scroll" to Boolean::class,
+        "home_greeting_enabled" to Boolean::class,
+        "home_hide_see_all" to Boolean::class,
+        "home_card_scale" to String::class,
+        "home_card_corner_radius" to Int::class,
+        "home_show_mode_switch" to Boolean::class,
+        "home_clock_show_date" to Boolean::class,
+        "home_newsletter_banner_enabled" to Boolean::class,
+        "home_always_show_user_switcher" to Boolean::class,
+        "home_cw_progress_style" to String::class,
+        "home_presence_chips_limit" to Int::class,
+        "home_genre_rail_limit" to Int::class,
+        "home_ask_continue_remember" to Boolean::class,
+        "home_rows_animations" to Boolean::class,
+        "home_opaque_dock" to Boolean::class,
+        "home_pre_section_order" to String::class,
+        "home_new_badge_sections" to String::class,
+        "home_refresh_cadence" to String::class,
+        "home_hero_idle_rotation_ms" to Int::class,
+        "hero_scroll_defer" to Boolean::class,
+        "home_discover_pattern" to String::class,
+        "home_newsletter_window" to String::class,
+        "home_presence_poll_seconds" to Int::class,
+        "home_trickplay_peek_ms" to Int::class,
+        "home_search_results_height_dp" to Int::class,
+        "home_my_media_columns" to Int::class,
+        "home_stats_metrics" to String::class,
+        "home_new_badge_days" to Int::class,
+        "home_row_unwatched_counters" to Boolean::class,
+        "home_hero_random_start" to Boolean::class,
         "home_ns_migrated" to Boolean::class,
         "home_v3_upgrade_baseline_done" to Boolean::class,
     )
@@ -188,6 +218,26 @@ class HomeDiscoverySpecDerivationTest {
     }
 
     @Test
+    fun `the model-side canonical mirrors match the spec's canonical sets`() {
+        // HomeDiscoveryPreferenceSpecsDefaults mirrors the spec's canonical
+        // CSV token sets core-side (the projection's defaults must not
+        // reference the datastore module), so the mirror is pinned against
+        // the declaration — a vocabulary change here must move both.
+        assertEquals(
+            HomeDiscoveryPreferenceSpecs.HOME_PRE_SECTION_ORDER_CANONICAL,
+            HomeDiscoveryPreferenceSpecsDefaults.PRE_SECTION_ORDER_CANONICAL,
+        )
+        assertEquals(
+            HomeDiscoveryPreferenceSpecs.HOME_STATS_METRICS_CANONICAL.toSet(),
+            HomeDiscoveryPreferenceSpecsDefaults.STATS_METRICS_CANONICAL,
+        )
+        assertEquals(
+            HomeDiscoveryPreferenceSpecs.HOME_NEW_BADGE_SECTIONS_CANONICAL.toSet(),
+            HomeDiscoveryPreferenceSpecsDefaults.NEW_BADGE_SECTIONS_CANONICAL,
+        )
+    }
+
+    @Test
     fun `the namespace migration copy lists derive from the rows by storage`() {
         // legacyKeys: every row except the global markers.
         assertEquals(
@@ -215,18 +265,30 @@ class HomeDiscoverySpecDerivationTest {
                 "classic_rows",
                 "hide_top_header_on_scroll",
                 "hide_watched_items",
+                "home_always_show_user_switcher",
+                "home_ask_continue_remember",
                 "home_backdrop_enabled",
+                "home_clock_show_date",
                 "home_cw_exclude_active_sessions",
                 "home_focus_backdrop",
                 "home_genre_rail",
+                "home_greeting_enabled",
                 "home_hero_enabled",
                 "home_hero_video_enabled",
                 "home_hero_video_tv_enabled",
+                "home_hide_see_all",
                 "home_layout_autopush",
                 "home_new_section_announcements",
+                "home_newsletter_banner_enabled",
+                "home_opaque_dock",
                 "home_presence_chips",
+                "home_rows_animations",
+                "home_row_unwatched_counters",
+                "home_show_mode_switch",
                 "home_stats_card",
                 "home_trickplay_preview",
+                "hero_scroll_defer",
+                "home_hero_random_start",
                 "merge_continue_watching_next_up",
                 "next_up_rewatching",
                 "show_clock_on_home",
@@ -242,8 +304,17 @@ class HomeDiscoverySpecDerivationTest {
         assertEquals(
             listOf(
                 "home_announced_version",
+                "home_card_corner_radius",
                 "home_enabled_section_types_version",
+                "home_genre_rail_limit",
+                "home_hero_idle_rotation_ms",
                 "home_hero_slideshow_interval_sec",
+                "home_my_media_columns",
+                "home_new_badge_days",
+                "home_presence_chips_limit",
+                "home_presence_poll_seconds",
+                "home_search_results_height_dp",
+                "home_trickplay_peek_ms",
                 "next_up_max_days",
             ).sorted(),
             HomeDiscoveryPreferenceSpecs.intCopyRows.map { it.keyName }.sorted(),
@@ -251,13 +322,21 @@ class HomeDiscoverySpecDerivationTest {
         assertEquals(
             listOf(
                 "continue_watching_click_behavior",
+                "home_card_scale",
+                "home_cw_progress_style",
+                "home_discover_pattern",
                 "home_discover_rows",
                 "home_enabled_section_types",
                 "home_hero_style",
                 "home_layout_presets",
                 "home_library_section_overrides",
                 "home_mode",
+                "home_new_badge_sections",
+                "home_newsletter_window",
+                "home_pre_section_order",
+                "home_refresh_cadence",
                 "home_section_order",
+                "home_stats_metrics",
                 "hidden_cw_item_ids",
                 "last_viewed_season_by_series",
                 "my_media_hidden_library_ids",

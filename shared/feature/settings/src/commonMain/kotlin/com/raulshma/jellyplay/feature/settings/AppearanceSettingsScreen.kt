@@ -158,22 +158,25 @@ private fun appearanceScreenGroups(
             activePicker = activePicker,
         )
     },
-    { _ ->
+    { activePicker ->
         // Floating navigation bar customization (enable/disable items, reorder,
-        // hide-on-scroll).
+        // hide-on-scroll) + the global interface/interaction rows.
         val navPrefs by viewModel.navigationCustomizationPreferences.collectAsStateWithLifecycle()
         NavigationCustomizationGroup(
             preferences = navPrefs,
             viewModel = viewModel,
             onCustomizeShortcuts = onCustomizeShortcuts,
+            screen = preferences,
+            activePicker = activePicker,
         )
     },
-    { _ ->
+    { activePicker ->
         // Library & Cards: commonly-used display toggles, shown regardless of Advanced mode.
         AppearanceLibraryGroup(
             preferences = preferences,
             highlightSettingId = highlightSettingId,
             viewModel = viewModel,
+            activePicker = activePicker,
         )
     },
     // Remaining groups are expert-level; the shell keeps them behind the Advanced gate.

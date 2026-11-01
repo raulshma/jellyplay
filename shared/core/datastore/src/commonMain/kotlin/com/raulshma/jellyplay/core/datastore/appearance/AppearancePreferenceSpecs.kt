@@ -4,13 +4,19 @@ import androidx.datastore.preferences.core.Preferences
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.BackdropDimLevel
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageQualityPreset
 import com.raulshma.jellyplay.core.model.LayoutMode
+import com.raulshma.jellyplay.core.model.ListDensity
+import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
 import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
@@ -541,6 +547,160 @@ object AppearancePreferenceSpecs {
     )
 
     // ------------------------------------------------------------------
+    // Global display & interaction QoL (opt-in; defaults = shipped behavior)
+    // ------------------------------------------------------------------
+
+    /** The app-wide 24-hour clock override (null-system via the `false`/`true` switch; default false = follow system). */
+    val TIME_USE_24H: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "time_use_24h",
+        default = false,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "time_use_24h",
+            titleKey = "ss_time_use_24h_title",
+            subtitleKey = "ss_time_use_24h_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("24 hour", "24h", "clock", "time", "format", "am", "pm"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The media cards' animated press-scale. Default on. */
+    val CARD_PRESS_ANIMATIONS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "card_press_animations",
+        default = true,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "card_press_animations",
+            titleKey = "ss_card_press_animations_title",
+            subtitleKey = "ss_card_press_animations_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("press", "animation", "scale", "cards", "touch", "effect"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The pull-to-refresh gesture master toggle (home + detail surfaces). Default on. */
+    val PULL_TO_REFRESH_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "pull_to_refresh_enabled",
+        default = true,
+        resetCategory = PreferenceResetCategory.MISC_APP,
+        search = PreferenceSearchSpec(
+            id = "pull_to_refresh_enabled",
+            titleKey = "ss_pull_to_refresh_title",
+            subtitleKey = "ss_pull_to_refresh_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("pull", "refresh", "swipe", "gesture", "edge"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The app-wide backdrop dim level (a multiplier over each surface's own scrim). Default = shipped look. */
+    val APP_BACKDROP_DIM: PreferenceSpec<BackdropDimLevel> = PreferenceSpec.enumRow(
+        keyName = "app_backdrop_dim",
+        default = BackdropDimLevel.DEFAULT,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "app_backdrop_dim",
+            titleKey = "ss_app_backdrop_dim_title",
+            subtitleKey = "ss_app_backdrop_dim_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("backdrop", "dim", "scrim", "darken", "brightness", "overlay"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The confirmation-haptic strength remap. Default = shipped mapping. */
+    val HAPTICS_INTENSITY: PreferenceSpec<HapticsIntensity> = PreferenceSpec.enumRow(
+        keyName = "haptics_intensity",
+        default = HapticsIntensity.MEDIUM,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "haptics_intensity",
+            titleKey = "ss_haptics_intensity_title",
+            subtitleKey = "ss_haptics_intensity_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("haptic", "vibration", "intensity", "feedback", "strength", "buzz"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The server image-request quality override. Default = original (no parameter). */
+    val IMAGE_QUALITY_PRESET: PreferenceSpec<ImageQualityPreset> = PreferenceSpec.enumRow(
+        keyName = "image_quality_preset",
+        default = ImageQualityPreset.ORIGINAL,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "image_quality_preset",
+            titleKey = "ss_image_quality_title",
+            subtitleKey = "ss_image_quality_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("image", "quality", "poster", "resolution", "bandwidth", "compression", "jpeg"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** Settings/list row density. Default = shipped spacing. */
+    val APP_LIST_DENSITY: PreferenceSpec<ListDensity> = PreferenceSpec.enumRow(
+        keyName = "app_list_density",
+        default = ListDensity.DEFAULT,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "app_list_density",
+            titleKey = "ss_app_list_density_title",
+            subtitleKey = "ss_app_list_density_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("list", "density", "compact", "roomy", "spacing", "row", "padding"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The press-feedback style for clickable surfaces. Default = Material ripple. */
+    val APP_PRESS_EFFECT: PreferenceSpec<PressEffectStyle> = PreferenceSpec.enumRow(
+        keyName = "app_press_effect",
+        default = PressEffectStyle.DEFAULT,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "app_press_effect",
+            titleKey = "ss_app_press_effect_title",
+            subtitleKey = "ss_app_press_effect_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("ripple", "press", "effect", "touch", "feedback", "indication", "click"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** Flat cards: remove the card shells' elevation/shadow. Default off. */
+    val APP_FLAT_CARDS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "app_flat_cards",
+        default = false,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "app_flat_cards",
+            titleKey = "ss_app_flat_cards_title",
+            subtitleKey = "ss_app_flat_cards_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("flat", "cards", "elevation", "shadow", "depth", "borderless"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    /** The scrollable containers' overscroll effect. Default = platform. */
+    val APP_OVERSCROLL_STYLE: PreferenceSpec<OverscrollStyle> = PreferenceSpec.enumRow(
+        keyName = "app_overscroll_style",
+        default = OverscrollStyle.PLATFORM,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "app_overscroll_style",
+            titleKey = "ss_app_overscroll_title",
+            subtitleKey = "ss_app_overscroll_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("overscroll", "scroll", "glow", "stretch", "bounce", "edge"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
+    // ------------------------------------------------------------------
     // Settings-search standalone entries: catalog facts without a single
     // backing knob of this store.
     // ------------------------------------------------------------------
@@ -616,6 +776,16 @@ object AppearancePreferenceSpecs {
         HAND_MODE,
         LAYOUT_MODE,
         TV_OVERSCAN,
+        TIME_USE_24H,
+        CARD_PRESS_ANIMATIONS,
+        PULL_TO_REFRESH_ENABLED,
+        APP_BACKDROP_DIM,
+        HAPTICS_INTENSITY,
+        IMAGE_QUALITY_PRESET,
+        APP_LIST_DENSITY,
+        APP_PRESS_EFFECT,
+        APP_FLAT_CARDS,
+        APP_OVERSCROLL_STYLE,
     )
 
     /**
@@ -665,6 +835,16 @@ object AppearancePreferenceSpecs {
         REDUCE_MOTION_ENABLED.searchEntry(),
         BLUE_LIGHT_FILTER_ENABLED.searchEntry(),
         BLUE_LIGHT_FILTER_STRENGTH.searchEntry(),
+        TIME_USE_24H.searchEntry(),
+        CARD_PRESS_ANIMATIONS.searchEntry(),
+        PULL_TO_REFRESH_ENABLED.searchEntry(),
+        APP_BACKDROP_DIM.searchEntry(),
+        HAPTICS_INTENSITY.searchEntry(),
+        IMAGE_QUALITY_PRESET.searchEntry(),
+        APP_LIST_DENSITY.searchEntry(),
+        APP_PRESS_EFFECT.searchEntry(),
+        APP_FLAT_CARDS.searchEntry(),
+        APP_OVERSCROLL_STYLE.searchEntry(),
     )
 
     /** The projection hook for [searchEntries]: a row's declared search entry. */

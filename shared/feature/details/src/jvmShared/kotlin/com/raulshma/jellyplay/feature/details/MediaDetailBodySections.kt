@@ -602,14 +602,18 @@ internal fun DetailHeaderSection(
                             BookReadingProgress.NotStarted, BookReadingProgress.Unknown -> Unit
                         }
                     }
-                    SegmentAvailabilityChip(
-                        hasIntro = state.core.hasIntroSegment,
-                        hasCredits = state.core.hasCreditSegment,
-                    )
+                    // The skip-intro/credits availability chips (the
+                    // detail_show_skip_chips pref; on by default).
+                    if (state.preferences.showSkipChips) {
+                        SegmentAvailabilityChip(
+                            hasIntro = state.core.hasIntroSegment,
+                            hasCredits = state.core.hasCreditSegment,
+                        )
+                    }
                 }
             }
 
-            item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
+            item.genres.takeIf { it.isNotEmpty() && state.preferences.showGenreChips }?.let { genres ->
                 Spacer(Modifier.height(14.dp))
                 // Genre chips: tappable → a filtered library section (REMOTE only).
                 // LOCAL origin renders as non-clickable labels — gated by
@@ -635,7 +639,9 @@ internal fun DetailHeaderSection(
                 )
             }
 
-            detail.tagItems.takeIf { it.isNotEmpty() && state.core.capabilities.tagNavigation }?.let { tags ->
+            detail.tagItems.takeIf {
+                it.isNotEmpty() && state.preferences.showTagChips && state.core.capabilities.tagNavigation
+            }?.let { tags ->
                 Spacer(Modifier.height(10.dp))
                 // Tag chips: tappable → a filtered library section (REMOTE only).
                 // Same tagNavigation gate as genres; tagItems carry a name + id
@@ -659,7 +665,7 @@ internal fun DetailHeaderSection(
                 )
             }
 
-            detail.studios.takeIf { it.isNotEmpty() && !isBook }?.let { studios ->
+            detail.studios.takeIf { it.isNotEmpty() && !isBook && state.preferences.showStudioChips }?.let { studios ->
                 Spacer(Modifier.height(10.dp))
                 // Studio chips: REMOTE keeps click -> StudioDetail; LOCAL
                 // (detail.item.studios names only, no server id) renders as
@@ -884,10 +890,12 @@ internal fun DetailOverviewSection(
             if (overview != null) {
                 FadingItem {
                     // F5: cap the overview so long synopses don't push everything
-                    // below the fold, with a "Read more" toggle (collapsed=4 lines).
+                    // below the fold, with a "Read more" toggle (the collapsed
+                    // line count is the detail_overview_collapse_lines pref —
+                    // the shipped value was 4).
                     ExpandableText(
                         text = overview,
-                        collapsedMaxLines = 4,
+                        collapsedMaxLines = state.preferences.overviewCollapseLines,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
                         ),
@@ -985,6 +993,9 @@ internal fun DetailChaptersSection(
                                 chapter.startPositionTicks,
                             ),
                             onClick = chapterClick,
+                            // The detail_chapter_card_size pref (±20% over the
+                            // shipped geometry — the enum carries the multiplier).
+                            cardScale = state.preferences.chapterCardSize.scale,
                             modifier = focusModifier,
                         )
                     }
@@ -1345,9 +1356,12 @@ internal fun DetailCastSection(
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         Column {
                 // "See all" appears only when the cast is large enough to hide
-                // people behind the single row, and only for a navigable (remote)
-                // origin — the Cast & Crew screen re-fetches the full people list.
-                val showSeeAllCast = detail.people.size > 12 && state.core.capabilities.personNavigation
+                // people behind the single row (the detail_cast_see_all_limit
+                // pref — the shipped threshold was 12), and only for a
+                // navigable (remote) origin — the Cast & Crew screen re-fetches
+                // the full people list.
+                val showSeeAllCast = detail.people.size > state.preferences.castSeeAllLimit &&
+                    state.core.capabilities.personNavigation
                 FadingItem {
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
@@ -1403,6 +1417,7 @@ internal fun DetailCastSection(
                                 imageUrl = personImageUrl,
                                 onClick = personClick,
                                 modifier = focusModifier,
+                                density = state.preferences.castItemSize,
                             )
                         } else {
                             // Local portrait preferred, then server URL fallback.
@@ -1742,12 +1757,18 @@ private fun ChapterTile(
     imageUrl: String,
     timestamp: String,
     onClick: () -> Unit,
+    /**
+     * The detail_chapter_card_size pref's multiplier over the shipped fixed
+     * geometry (180 dp card / 104 dp thumbnail): COMPACT 0.8, DEFAULT 1.0,
+     * LARGE 1.2 (±20%).
+     */
+    cardScale: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.04f)
     Column(
         modifier = modifier
-            .width(180.dp)
+            .width((180 * cardScale).dp)
             .then(focusState.focusModifier)
             .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12))
             .clickable(onClick = onClick),
@@ -1755,7 +1776,7 @@ private fun ChapterTile(
     ) {
         Box(
             modifier = Modifier
-                .height(104.dp)
+                .height((104 * cardScale).dp)
                 .fillMaxWidth()
                 .clip(ShapeCache.smooth12)
                 .background(MaterialTheme.colorScheme.surfaceVariant),

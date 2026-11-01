@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.NewsletterBannerWindow
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -83,6 +84,19 @@ import kotlinx.coroutines.flow.receiveAsFlow
  * advance.
  */
 internal const val HOME_VISIT_STAMP_DWELL_MS = 10_000L
+
+/** Milliseconds per day — the `home_new_badge_days` window's cutoff arithmetic. */
+internal const val HOME_NEW_BADGE_WINDOW_MS_PER_DAY = 86_400_000L
+
+/**
+ * The `home_newsletter_window` WEEKENDS verdict, pure over the clock's
+ * "today": Saturday or Sunday in the platform zone. The DEFAULT verdict is
+ * the plugin gate's own flow, so this is the only new calendar read.
+ */
+internal fun isNewsletterWeekend(today: kotlinx.datetime.LocalDate): Boolean =
+    today.dayOfWeek == kotlinx.datetime.DayOfWeek.SATURDAY ||
+        today.dayOfWeek == kotlinx.datetime.DayOfWeek.SUNDAY
+
 
 internal class HomeViewModel(
     private val episodeCatalogue: EpisodeCatalogue,
@@ -315,6 +329,15 @@ internal class HomeViewModel(
     private var seerrPreferences = SeerrPreferences()
 
     /**
+     * The `home_refresh_cadence` mirror, owned by the prefs collector below
+     * and re-read by the refresher per loop iteration through
+     * [HomeFetchInputs.refreshCadence] — the same provider posture as the
+     * mirrors above (a cadence change applies from the next loop tick
+     * without rebuilding anything).
+     */
+    private var homeRefreshCadence = com.raulshma.jellyplay.core.model.HomeRefreshCadence.DEFAULT
+
+    /**
      * The discover / *arr flags the refresher re-reads per fetch. Private
      * mirrors owned by the prefs collectors below, like [seerrPreferences] —
      * NOT reads of the render state: `HomeUiState.discoverEnabled` /
@@ -354,6 +377,7 @@ internal class HomeViewModel(
             discoverEnabled = { discoverEnabled },
             directArrEnabled = { directArrEnabled },
             androidTvWatchNextEnabled = { androidTvWatchNextEnabled },
+            refreshCadence = { homeRefreshCadence },
         ),
     )
 
@@ -721,6 +745,12 @@ internal class HomeViewModel(
                 sectionPrefs = newSectionPrefs
                 androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
                 directArrEnabled = prefs.experimental.directArrEnabled()
+                homeRefreshCadence = prefs.home.homeRefreshCadence
+                // The NEW-badge window cutoff: computed once per prefs
+                // emission against the VM clock — arrivals older than this
+                // stop badgeing even though they postdate the last visit.
+                val newBadgeCutoff = clock.nowEpochMillis() -
+                    prefs.home.homeNewBadgeDays * HOME_NEW_BADGE_WINDOW_MS_PER_DAY
                 _uiState.update { it.copy(
                     homeMode = prefs.home.homeMode,
                     // The appearance quintet as one embedded slice (the
@@ -732,6 +762,7 @@ internal class HomeViewModel(
                         colorStyle = prefs.appearance.colorStyle,
                         accentColorSwatch = prefs.appearance.accentColorSwatch,
                         performanceMode = prefs.appearance.performanceMode,
+                        pullToRefreshEnabled = prefs.appearance.pullToRefreshEnabled,
                     ),
                     // The resume-row overlay mirror (quick-action toggle
                     // resolution reads it; the same snapshot the section
@@ -744,6 +775,16 @@ internal class HomeViewModel(
                     showClock = prefs.home.showClockOnHome,
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
+                    homeGreetingEnabled = prefs.home.homeGreetingEnabled,
+                    homeHideSeeAll = prefs.home.homeHideSeeAll,
+                    homeCardScale = prefs.home.homeCardScale,
+                    homeCardCornerRadius = prefs.home.homeCardCornerRadius,
+                    homeShowModeSwitch = prefs.home.homeShowModeSwitch,
+                    homeClockShowDate = prefs.home.homeClockShowDate,
+                    homeAlwaysShowUserSwitcher = prefs.home.homeAlwaysShowUserSwitcher,
+                    homeCwProgressStyle = prefs.home.homeCwProgressStyle,
+                    homeRowsAnimations = prefs.home.homeRowsAnimations,
+                    homeOpaqueDock = prefs.home.homeOpaqueDock,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
                     // Stats + genre render gates — the same snapshot the fetch collectors below read.
                     statsCardEnabled = prefs.home.homeStatsCard,
@@ -752,6 +793,21 @@ internal class HomeViewModel(
                     // wide-card trickplay peek, same snapshot posture.
                     focusBackdropEnabled = prefs.home.homeFocusBackdrop,
                     trickplayPreviewEnabled = prefs.home.homeTrickplayPreview,
+                    // The QoL wave-3 mirrors: the render knobs the screen and
+                    // rows read (cadence / newsletter window / presence poll
+                    // ride their own collectors below, not the render state).
+                    homePreSectionOrder = prefs.home.homePreSectionOrder,
+                    homeNewBadgeSections = prefs.home.homeNewBadgeSections,
+                    homeHeroIdleRotationMs = prefs.home.homeHeroIdleRotationMs,
+                    heroScrollDefer = prefs.home.heroScrollDefer,
+                    homeHeroRandomStart = prefs.home.homeHeroRandomStart,
+                    homeDiscoverPattern = prefs.home.homeDiscoverPattern,
+                    homeMyMediaColumns = prefs.home.homeMyMediaColumns,
+                    homeStatsMetrics = prefs.home.homeStatsMetrics,
+                    homeNewBadgeCutoffEpochMs = newBadgeCutoff,
+                    homeRowUnwatchedCounters = prefs.home.homeRowUnwatchedCounters,
+                    homeSearchResultsHeightDp = prefs.home.homeSearchResultsHeightDp,
+                    homeTrickplayPeekMs = prefs.home.homeTrickplayPeekMs,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
                     directArrEnabled = prefs.experimental.directArrEnabled(),
                     // The section-config sheet's mirrors, likewise one slice.
@@ -820,9 +876,27 @@ internal class HomeViewModel(
         }
 
         launch {
-            newsletterTriggerManager.shouldShowBanner().collect { showBanner ->
-                _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
+            // The banner's own pref ANDs the gate's weekday window logic: the
+            // digest stays configurable in notification settings, this hides
+            // only the home banner. The `home_newsletter_window` pref
+            // qualifies that AND: DEFAULT keeps the gate's weekday verdict,
+            // ALWAYS drops it (the banner shows every day the issue is due),
+            // WEEKENDS replaces it with a Sat/Sun check off the VM clock.
+            combine(
+                newsletterTriggerManager.shouldShowBanner(),
+                prefs.homeDiscovery.homeDiscovery
+                    .map { it.homeNewsletterBannerEnabled to it.homeNewsletterWindow }
+                    .distinctUntilChanged(),
+            ) { gateAllows, (prefAllows, window) ->
+                when (window) {
+                    NewsletterBannerWindow.DEFAULT -> gateAllows && prefAllows
+                    NewsletterBannerWindow.ALWAYS -> prefAllows
+                    NewsletterBannerWindow.WEEKENDS -> prefAllows && isNewsletterWeekend(clock.today())
+                }
             }
+                .collect { showBanner ->
+                    _uiState.update { it.copy(newsletterBannerVisible = showBanner) }
+                }
         }
 
         // ── Personal stats card ──────────────────────────────────────
@@ -870,14 +944,17 @@ internal class HomeViewModel(
                     .map { it == OfflineMode.ONLINE }
                     .distinctUntilChanged(),
                 authRepository.currentUser.map { it?.id }.distinctUntilChanged(),
-            ) { enabled, hasSections, online, userId ->
-                GenreRailTrigger(enabled, hasSections, online, userId)
+                prefs.homeDiscovery.homeDiscovery
+                    .map { it.homeGenreRailLimit }
+                    .distinctUntilChanged(),
+            ) { enabled, hasSections, online, userId, limit ->
+                GenreRailTrigger(enabled, hasSections, online, userId, limit)
             },
         ) { trigger ->
             val chips = if (
                 trigger.enabled && trigger.hasSections && trigger.online && trigger.userId != null
             ) {
-                genreRailCache.genres(trigger.userId)
+                genreRailCache.genres(trigger.userId, limit = trigger.limit)
             } else {
                 emptyList()
             }
@@ -907,8 +984,11 @@ internal class HomeViewModel(
                     .map { it == OfflineMode.ONLINE }
                     .distinctUntilChanged(),
                 _homeForeground.flow,
-            ) { enabled, userId, online, foreground ->
-                PresenceGate(enabled, userId, online, foreground)
+                prefs.homeDiscovery.homeDiscovery
+                    .map { it.homePresenceChipsLimit to it.homePresencePollSeconds }
+                    .distinctUntilChanged(),
+            ) { enabled, userId, online, foreground, (limit, pollSeconds) ->
+                PresenceGate(enabled, userId, online, foreground, limit, pollSeconds)
             },
         ) { chips ->
             // The chips' own flow (see [presenceChips]) — never a
@@ -1034,6 +1114,8 @@ internal class HomeViewModel(
         val hasSections: Boolean,
         val online: Boolean,
         val userId: String?,
+        /** The rail's chip cap (the `home_genre_rail_limit` pref, clamped 6-36). */
+        val limit: Int = HomeGenreRailCache.GENRE_RAIL_LIMIT,
     )
 
     // The presence gate ([PresenceGate]) lives beside
@@ -1062,6 +1144,8 @@ internal class HomeViewModel(
             is HomeUiEvent.LoadSeerrServiceDetails -> loadSeerrServiceDetails(event.mediaType)
             is HomeUiEvent.LoadTvSeasons -> loadTvSeasons(event.tmdbId)
             is HomeUiEvent.DismissNewsletterBanner -> _uiState.update { it.copy(newsletterBannerVisible = false) }
+            is HomeUiEvent.SetContinueWatchingClickBehavior ->
+                scope.launch { prefs.homeDiscovery.setContinueWatchingClickBehavior(event.behavior) }
             is HomeUiEvent.SwitchUser -> switchUser(event.userId)
             is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
             is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)

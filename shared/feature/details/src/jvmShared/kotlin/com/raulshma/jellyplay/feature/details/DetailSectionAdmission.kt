@@ -125,6 +125,50 @@ internal fun showsSeasonTree(mediaType: MediaType): Boolean =
     mediaType == MediaType.SERIES || mediaType == MediaType.EPISODE || mediaType == MediaType.SEASON
 
 /**
+ * The section kinds the `detail_section_order` customization may NOT move —
+ * the body's chrome: the always-admitted header, the play/download action row
+ * (the portrait body's second slot), and the book reading card (a book's
+ * media-info slot stand-in). Everything else the settings editor lists is
+ * reorderable; kinds outside the editor's vocabulary (the conditional
+ * collection/Seerr/plugin rows) keep their canonical slots.
+ */
+private val PINNED_SECTION_KINDS: Set<DetailSectionKind> = setOf(
+    DetailSectionKind.HEADER,
+    DetailSectionKind.ACTION_ROW,
+    DetailSectionKind.BOOK_READING_CARD,
+)
+
+/**
+ * Applies the stored section permutation ([orderTokens], the CSV the
+ * `detail_section_order` pref persists, split by the projection) to the
+ * admitted kinds, the nav-order way: stored entries in their stored order
+ * first (unknown tokens dropped, duplicates collapsed to the first
+ * occurrence), then the remaining admitted kinds in canonical order. An empty
+ * [orderTokens] is the shipped behavior — canonical order, byte-identical.
+ * The pinned chrome kinds ([PINNED_SECTION_KINDS]) stay ahead of everything,
+ * in canonical order, regardless of the stored tokens. Pure → directly
+ * unit-testable.
+ */
+internal fun applyDetailSectionOrder(
+    admitted: List<DetailSectionKind>,
+    orderTokens: List<String>,
+): List<DetailSectionKind> {
+    if (orderTokens.isEmpty()) return admitted
+    val pinned = admitted.filter { it in PINNED_SECTION_KINDS }
+    val reorderable = admitted.filter { it !in PINNED_SECTION_KINDS }
+    val byName = reorderable.associateBy { it.name }
+    val seen = mutableSetOf<DetailSectionKind>()
+    val ordered = buildList {
+        for (token in orderTokens) {
+            val kind = byName[token] ?: continue // unknown token — dropped
+            if (seen.add(kind)) add(kind) // duplicate token — first occurrence wins
+        }
+    }
+    val missing = reorderable.filter { it !in seen }
+    return pinned + ordered + missing
+}
+
+/**
  * Which detail entries carry a PARENT series whose context they render — the
  * header's series link and the detail backdrop both resolve through
  * `MediaItem.seriesId`: EPISODE, and — since #168 — SEASON. SERIES is the

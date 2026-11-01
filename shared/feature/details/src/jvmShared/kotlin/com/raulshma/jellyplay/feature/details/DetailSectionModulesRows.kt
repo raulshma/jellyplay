@@ -148,6 +148,9 @@ private fun DetailRelatedVideosSection(
         VideosSection(
             trailers = state.core.trailers,
             urls = callbacks.artwork.urls,
+            // The detail_show_trailer_badges pref: the Local/remote source
+            // badge on the cards (on by default).
+            showSourceBadges = state.preferences.showTrailerBadges,
             onVideoClick = callbacks.seerr.onVideoClick,
             onPlayLocal = { trailerId ->
                 // A local (server-hosted) trailer plays through the
@@ -168,6 +171,7 @@ private fun DetailRelatedVideosSection(
 private fun VideosSection(
     trailers: List<DetailUiState.TrailerEntry>,
     urls: ArtworkUrls,
+    showSourceBadges: Boolean,
     onVideoClick: (SeerrRelatedVideo) -> Unit,
     onPlayLocal: (String) -> Unit,
 ) {
@@ -185,8 +189,9 @@ private fun VideosSection(
         themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
     }
     // The local-source badge resolved once (the merged row mixes the two
-    // card variants; the badge marks the server-hosted entries).
-    val localBadge = stringResource(Res.string.detail_trailer_badge_local)
+    // card variants; the badge marks the server-hosted entries). Null under
+    // the badges-off pref (the card renders no pill).
+    val localBadge = if (showSourceBadges) stringResource(Res.string.detail_trailer_badge_local) else null
     Column {
         FadingItem {
             Text(

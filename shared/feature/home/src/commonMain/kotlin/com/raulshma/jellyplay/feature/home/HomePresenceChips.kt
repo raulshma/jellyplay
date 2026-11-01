@@ -92,14 +92,14 @@ internal object HomePresenceChipsMath {
      * non-null with a resolvable item id). Order is the server's — the cap
      * keeps the first [MAX_CHIPS].
      */
-    fun otherUsersPlaying(sessions: List<SessionInfo>, currentUserId: String?): List<SessionInfo> =
+    fun otherUsersPlaying(sessions: List<SessionInfo>, currentUserId: String?, limit: Int = MAX_CHIPS): List<SessionInfo> =
         sessions.filter { session ->
             val playing = session.nowPlayingItem
             session.userId.isNotBlank() &&
                 session.userId != currentUserId &&
                 playing != null &&
                 playing.id.isNotBlank()
-        }.take(MAX_CHIPS)
+        }.take(limit)
 
     /**
      * "Alex is watching <the show>" for episodes — the series name reads
@@ -214,9 +214,10 @@ internal class HomePresenceChipsController(
 
     /**
      * The current chips for [currentUserId]: probe-once gated (see the class
-     * KDoc), filtered, capped, joined with the visible SyncPlay group list.
+     * KDoc), filtered, capped at [limit], joined with the visible SyncPlay
+     * group list.
      */
-    suspend fun refresh(currentUserId: String?): List<HomePresenceChip> {
+    suspend fun refresh(currentUserId: String?, limit: Int = HomePresenceChipsMath.MAX_CHIPS): List<HomePresenceChip> {
         // A user switch is a fresh home session for this controller's memory:
         // re-arm the probe (the admin capability can differ) and drop the
         // previous user's dismissals.
@@ -239,7 +240,7 @@ internal class HomePresenceChipsController(
         // chips for this emission — the verdict stays.
         val sessions = sessionsResult.getOrNull() ?: return emptyList()
 
-        val candidates = HomePresenceChipsMath.otherUsersPlaying(sessions, currentUserId)
+        val candidates = HomePresenceChipsMath.otherUsersPlaying(sessions, currentUserId, limit)
             .filter { it.id !in dismissedSessionIds }
         if (candidates.isEmpty()) return emptyList()
 
@@ -299,10 +300,13 @@ internal class HomePresenceChipsController(
             fun PresenceGate.isOpen(): Boolean =
                 enabled && online && foreground && userId != null
             while (true) {
-                val chips = if (pollGate.isOpen()) refresh(pollGate.userId) else emptyList()
+                val chips = if (pollGate.isOpen()) refresh(pollGate.userId, pollGate.limit) else emptyList()
                 onChips(chips)
                 if (!pollGate.isOpen()) break
-                delay(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS)
+                // The `home_presence_poll_seconds` cadence (clamped 15-300 at
+                // the setter) replaces the shared 60 s foreground interval;
+                // the gate flow's distinctUntilChanged re-polls on a change.
+                delay(pollGate.pollSeconds * 1000L)
             }
         }
     }
@@ -322,6 +326,14 @@ internal data class PresenceGate(
     val userId: String?,
     val online: Boolean,
     val foreground: Boolean,
+    /** The rendered chips' cap (the `home_presence_chips_limit` pref, clamped 2-8). */
+    val limit: Int = HomePresenceChipsMath.MAX_CHIPS,
+    /**
+     * The poll cadence in seconds (the `home_presence_poll_seconds` pref,
+     * clamped 15-300 at the setter; default 60 = the shipped foreground
+     * interval).
+     */
+    val pollSeconds: Int = 60,
 )
 
 /**

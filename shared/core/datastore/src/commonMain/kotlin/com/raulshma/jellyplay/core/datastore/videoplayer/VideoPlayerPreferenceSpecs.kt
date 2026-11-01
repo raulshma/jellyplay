@@ -11,19 +11,34 @@ import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
+import com.raulshma.jellyplay.core.model.BufferingVeil
+import com.raulshma.jellyplay.core.model.ControlLayout
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
+import com.raulshma.jellyplay.core.model.HoldSeekCadence
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
+import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseFadeStyle
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
+import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
+import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
+import com.raulshma.jellyplay.core.model.PlayerHoldSpeedPillStyle
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputMap
+import com.raulshma.jellyplay.core.model.PollCadence
+import com.raulshma.jellyplay.core.model.SpeedPillClearance
+import com.raulshma.jellyplay.core.model.SpeedPresetSet
+import com.raulshma.jellyplay.core.model.PlayerSeekBarStyle
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StillWatchingMode
+import com.raulshma.jellyplay.core.model.TvTimeoutScale
 import com.raulshma.jellyplay.core.model.TrickplayMode
 import com.raulshma.jellyplay.core.model.ensureControlsSummonable
 import kotlinx.serialization.encodeToString
@@ -216,6 +231,69 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        /*
+         * Player control-overlay enter/exit animations (top bar, bottom bar,
+         * center play button). Default **on**; off snaps the chrome transitions
+         * (the spec read seam stays player-side — the screen passes the flag
+         * into the core:ui motion functions, which are plain parameters).
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_overlay_animations",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_overlay_animations",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_overlay_animations",
+                subtitleKey = "ss_video_overlay_animations_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("overlay", "animations", "controls", "transitions", "motion", "chrome"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * How long (ms) the "Resumed — tap to restart" chip stays up; 0 never
+         * shows it. Clamped to 0–10 000 (the setter is the clamp owner); the
+         * picker offers 0/2/3/5 s.
+         */
+        PreferenceSpec.plainLong(
+            keyName = "video_resume_chip_ms",
+            default = 3_000L,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 0L,
+            max = 10_000L,
+            search = PreferenceSearchSpec(
+                id = "video_resume_chip_ms",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_resume_chip_ms",
+                subtitleKey = "ss_video_resume_chip_ms_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("resume", "chip", "restart", "duration", "toast", "banner"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The center prev/play/next cluster on the player controls. Default
+         * **on**; off renders only the play button (the episode verbs stay in
+         * the overflow menu).
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_show_prev_next_buttons",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_show_prev_next_buttons",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_show_prev_next_buttons",
+                subtitleKey = "ss_video_show_prev_next_buttons_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("previous", "next", "buttons", "episode", "transport", "cluster"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
     )
 
     /** Orientation / aspect / layout. */
@@ -394,6 +472,107 @@ object VideoPlayerPreferenceSpecs {
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("controls", "buttons", "gesture", "bindings", "remap", "customize", "input", "keyboard", "swipe", "brightness", "volume"),
                 routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            ),
+        ),
+        /*
+         * The brightness/volume swipe curve's sensitivity: how much drag travel
+         * maps onto the adjusted value (RELAXED → exponent 1.0, DEFAULT → 0.8,
+         * SENSITIVE → 0.6 — the [applySensitivityCurve] seam).
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_swipe_sensitivity",
+            default = PlayerSwipeSensitivity.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_swipe_sensitivity",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_swipe_sensitivity",
+                subtitleKey = "ss_video_swipe_sensitivity_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("swipe", "sensitivity", "gesture", "brightness", "volume", "curve"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * How long (ms) the swipe gesture overlays (seek circle, brightness /
+         * volume bars) linger before dismissing. Clamped to 200–2 000 (the
+         * setter is the clamp owner); the picker offers 400/800/1200.
+         */
+        PreferenceSpec.plainLong(
+            keyName = "video_gesture_overlay_linger_ms",
+            default = 800L,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 200L,
+            max = 2_000L,
+            search = PreferenceSearchSpec(
+                id = "video_gesture_overlay_linger_ms",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_gesture_overlay_linger_ms",
+                subtitleKey = "ss_video_gesture_overlay_linger_ms_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("gesture", "overlay", "linger", "dismiss", "delay", "timeout"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * What a double-tap on the surface's CENTER zone does: AUTO resets the
+         * pinch zoom when zoomed and toggles play/pause otherwise (the
+         * long-standing behavior); the other arms force their action.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_center_double_tap_action",
+            default = PlayerCenterDoubleTapAction.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_center_double_tap_action",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_center_double_tap_action",
+                subtitleKey = "ss_video_center_double_tap_action_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("double tap", "center", "play", "pause", "zoom", "reset"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The left/right double-tap seek zones' width (the center zone takes
+         * the remainder): DEFAULT → 35/65, EVEN → 50/50, EXTREME → 25/75 —
+         * the [DoubleTapHoldSeekPolicy.seekZone] seam.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_double_tap_zone_bias",
+            default = PlayerDoubleTapZoneBias.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_double_tap_zone_bias",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_double_tap_zone_bias",
+                subtitleKey = "ss_video_double_tap_zone_bias_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("double tap", "zone", "seek", "sides", "width", "split"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The hold-speed indicator pill's chrome: the speed readout or an
+         * icon-only compact pill.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_hold_speed_pill_style",
+            default = PlayerHoldSpeedPillStyle.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_hold_speed_pill_style",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_hold_speed_pill_style",
+                subtitleKey = "ss_video_hold_speed_pill_style_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("hold", "speed", "pill", "indicator", "icon", "minimal"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
             ),
         ),
     )
@@ -725,6 +904,145 @@ object VideoPlayerPreferenceSpecs {
                 subtitleKey = "ss_playback_metadata_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("metadata", "codec", "bitrate", "stream stats", "debug"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The seek-bar chrome cluster: bar thickness, the buffered bands,
+         * the chapter markers, the elapsed/total labels, the buffered
+         * percentage readout and the scrub-preview timestamp — the seek bar's
+         * presentation knobs, all beside the trickplay toggles above.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_seek_bar_style",
+            default = PlayerSeekBarStyle.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_seek_bar_style",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_seek_bar_style",
+                subtitleKey = "ss_video_seek_bar_style_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("seek bar", "thickness", "tall", "scrubber", "style", "progress"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "video_show_buffered_range",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_show_buffered_range",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_show_buffered_range",
+                subtitleKey = "ss_video_show_buffered_range_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("buffered", "range", "bands", "seek bar", "shading", "cache"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "video_show_chapter_markers",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_show_chapter_markers",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_show_chapter_markers",
+                subtitleKey = "ss_video_show_chapter_markers_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("chapter", "markers", "seek bar", "ticks", "notches"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "video_hide_seek_timestamps",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_hide_seek_timestamps",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_hide_seek_timestamps",
+                subtitleKey = "ss_video_hide_seek_timestamps_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("hide", "timestamps", "elapsed", "total", "labels", "minimal"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The buffered-percentage readout beside the seek bar's time row,
+         * derived from the engine's real buffered ranges (furthest buffered
+         * position ÷ duration) — rendered only while buffering is knowable.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_show_buffer_percent",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_show_buffer_percent",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_show_buffer_percent",
+                subtitleKey = "ss_video_show_buffer_percent_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("buffer", "percent", "percentage", "readout", "seek bar", "health"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "video_seek_preview_time",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_seek_preview_time",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_seek_preview_time",
+                subtitleKey = "ss_video_seek_preview_time_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("seek", "preview", "timestamp", "time", "scrub", "target"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The active-engine chip ("MPV"/"Exo"…) in the player's top bar.
+         * Default off.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_show_engine_badge",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_show_engine_badge",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_show_engine_badge",
+                subtitleKey = "ss_video_show_engine_badge_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("engine", "badge", "chip", "mpv", "exo", "vlc"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The player episode browser filters fully-watched episodes out of the
+         * season list. Default off — the browser shows every episode.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_episode_browser_hide_watched",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_episode_browser_hide_watched",
+                // One-key family: a single screen-face key.
+                titleKey = "settings_video_episode_browser_hide_watched",
+                subtitleKey = "ss_video_episode_browser_hide_watched_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("episode", "browser", "hide", "watched", "filter", "list"),
                 routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
                 isAdvanced = true,
             ),
@@ -1154,6 +1472,280 @@ object VideoPlayerPreferenceSpecs {
     )
 
     /**
+     * The second QoL wave's transport/HUD cadence + preset families: the TV
+     * timeout multiplier, the keyboard seek ladder, the hold-seek cadence,
+     * the hold-speed pill clearance, the pause fade, the control layout,
+     * the zoom ceiling, the poll cadence, the sleep-confirm threshold, the
+     * ambient-under-FILL gate, the buffering veil, the speed preset set, the
+     * autoplay-on-metered gate and the exit confirmation — every row an
+     * opt-in/qualifier over an existing behavior (defaults preserve it).
+     */
+    private val chromeQol: List<PreferenceSpec<*>> = listOf(
+        /*
+         * The TV form factor's controls-auto-hide multiplier over the base
+         * timeout pref: X2 keeps the long-standing doubling, X1/X3 scale it.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_tv_timeout_scale",
+            default = TvTimeoutScale.X2,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_tv_timeout_scale",
+                titleKey = "ss_video_tv_timeout_scale_title",
+                subtitleKey = "ss_video_tv_timeout_scale_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("tv", "controls", "timeout", "hide", "overlay", "multiplier"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The hardware-keyboard modifier seek-step ladder family (VLC's
+         * Shift/Ctrl/Alt+Ctrl arrows plus Home/End/PgUp/PgDn rows); DEFAULT
+         * keeps the current magnitudes, CONSERVATIVE/AGGRESSIVE scale the set.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_keyboard_seek_preset",
+            default = KeyboardSeekPreset.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_keyboard_seek_preset",
+                titleKey = "ss_video_keyboard_seek_preset_title",
+                subtitleKey = "ss_video_keyboard_seek_preset_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("keyboard", "seek", "arrow", "shift", "ctrl", "step", "shortcut"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The double-tap-and-hold continuous seek's repeat cadence family;
+         * DEFAULT keeps the 400→150ms acceleration.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_hold_seek_cadence",
+            default = HoldSeekCadence.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_hold_seek_cadence",
+                titleKey = "ss_video_hold_seek_cadence_title",
+                subtitleKey = "ss_video_hold_seek_cadence_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("hold", "seek", "repeat", "cadence", "speed", "double tap", "gesture"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The hold-speed pill's clearance above the bottom controls;
+         * DEFAULT keeps the 180dp placement.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_speed_pill_clearance",
+            default = SpeedPillClearance.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_speed_pill_clearance",
+                titleKey = "ss_video_speed_pill_clearance_title",
+                subtitleKey = "ss_video_speed_pill_clearance_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("hold", "speed", "pill", "position", "clearance", "placement", "offset"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The pause-details panel's fade-in/out durations; DEFAULT keeps
+         * the 200/300ms motion.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_pause_fade_style",
+            default = PauseFadeStyle.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_pause_fade_style",
+                titleKey = "ss_video_pause_fade_style_title",
+                subtitleKey = "ss_video_pause_fade_style_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("pause", "details", "fade", "animation", "transition", "speed"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The control button clusters' arrangement: DEFAULT keeps the
+         * prev/play/next center row and the full secondary cluster,
+         * SWAPPED_SEEK mirrors the center row, MINIMAL drops the secondary
+         * cluster's non-essential buttons.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_control_layout",
+            default = ControlLayout.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_control_layout",
+                titleKey = "ss_video_control_layout_title",
+                subtitleKey = "ss_video_control_layout_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("controls", "layout", "buttons", "arrangement", "swap", "minimal", "cluster"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The pinch-zoom ceiling (the 1..max clamp); X3 keeps the
+         * long-standing 1..3 clamp.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_max_zoom",
+            default = MaxZoom.X3,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_max_zoom",
+                titleKey = "ss_video_max_zoom_title",
+                subtitleKey = "ss_video_max_zoom_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("zoom", "pinch", "maximum", "limit", "crop", "scale"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The engine's position-poll cadence family (controls-visible /
+         * hidden ms); DEFAULT keeps 250/1000.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_poll_cadence",
+            default = PollCadence.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_poll_cadence",
+                titleKey = "ss_video_poll_cadence_title",
+                subtitleKey = "ss_video_poll_cadence_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("poll", "cadence", "position", "refresh", "battery", "tick", "update"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The sleep-timer cancel-confirmation threshold in minutes
+         * (cancelling with MORE than this much left asks for
+         * confirmation); clamped to 1–30 (the setter is the clamp owner).
+         */
+        PreferenceSpec.plainInt(
+            keyName = "video_sleep_confirm_minutes",
+            default = 5,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            min = 1,
+            max = 30,
+            search = PreferenceSearchSpec(
+                id = "video_sleep_confirm_minutes",
+                titleKey = "ss_video_sleep_confirm_minutes_title",
+                subtitleKey = "ss_video_sleep_confirm_minutes_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("sleep", "timer", "cancel", "confirm", "threshold", "minutes"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * Allow the ambient backdrop under the FILL aspect override
+         * (CROP stays gated — the row's arm is the FILL suppression
+         * only). Default off.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_ambient_under_fill",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_ambient_under_fill",
+                titleKey = "ss_video_ambient_under_fill_title",
+                subtitleKey = "ss_video_ambient_under_fill_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("ambient", "backdrop", "blur", "fill", "stretch", "aspect", "glow"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The buffering spinner's display rule: DEFAULT keeps the
+         * playback-intended gate, ALWAYS shows on any stall, HIDDEN never
+         * shows.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_buffering_veil",
+            default = BufferingVeil.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_buffering_veil",
+                titleKey = "ss_video_buffering_veil_title",
+                subtitleKey = "ss_video_buffering_veil_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("buffering", "spinner", "loading", "veil", "stall", "indicator", "hide"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The speed sheet's chip preset family; DEFAULT keeps the full
+         * ladder (CYCLE_SPEED and the settings picker stay on it regardless).
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_speed_preset_set",
+            default = SpeedPresetSet.DEFAULT,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_speed_preset_set",
+                titleKey = "ss_video_speed_preset_set_title",
+                subtitleKey = "ss_video_speed_preset_set_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("speed", "presets", "sheet", "chips", "rungs", "playback speed"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * Skip autoplay-next while the connection is metered (cellular /
+         * metered Wi-Fi). Default off. Unavailable platforms treat the
+         * connection as unmetered (desktop).
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_autoplay_wifi_only",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_autoplay_wifi_only",
+                titleKey = "ss_video_autoplay_wifi_only_title",
+                subtitleKey = "ss_video_autoplay_wifi_only_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("autoplay", "wifi", "wi-fi", "metered", "cellular", "data", "next"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The exit confirmation: the first BACK raises an in-player
+         * confirm; a second BACK (or the dialog's confirm) exits. Default
+         * off — BACK exits directly.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "video_confirm_exit",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_confirm_exit",
+                titleKey = "ss_video_confirm_exit_title",
+                subtitleKey = "ss_video_confirm_exit_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("exit", "back", "confirm", "close", "quit", "accidental", "player"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+    )
+
+    /**
      * The absent-blob fallback: the factory mapping gated by the user's
      * legacy gesture config (tier mode + the two per-behavior switches), so
      * the first read after an upgrade reproduces the pre-mapping behavior
@@ -1233,7 +1825,8 @@ object VideoPlayerPreferenceSpecs {
             stillWatchingHud +
             trickplayBrowser +
             mediaSegments +
-            mpvRender
+            mpvRender +
+            chromeQol
 
     /**
      * Category reset participation, derived as the rows whose declared
@@ -1482,6 +2075,77 @@ object VideoPlayerPreferenceSpecs {
     val AUTO_SKIP_OUTRO: PreferenceSpec<String?> get() = row("auto_skip_outro")
 
     val SKIP_SEGMENTS_ON_SEEK: PreferenceSpec<Boolean> get() = row("skip_segments_on_seek")
+
+    val VIDEO_OVERLAY_ANIMATIONS: PreferenceSpec<Boolean> get() = row("video_overlay_animations")
+
+    val VIDEO_RESUME_CHIP_MS: PreferenceSpec<Long> get() = row("video_resume_chip_ms")
+
+    /** The clamp every [VIDEO_RESUME_CHIP_MS] read/write shares. */
+    val VIDEO_RESUME_CHIP_MS_BOUNDS: ClosedRange<Long> = 0L..10_000L
+
+    val VIDEO_SHOW_PREV_NEXT_BUTTONS: PreferenceSpec<Boolean> get() = row("video_show_prev_next_buttons")
+
+    val VIDEO_SWIPE_SENSITIVITY: PreferenceSpec<PlayerSwipeSensitivity> get() = row("video_swipe_sensitivity")
+
+    val VIDEO_GESTURE_OVERLAY_LINGER_MS: PreferenceSpec<Long> get() = row("video_gesture_overlay_linger_ms")
+
+    /** The clamp every [VIDEO_GESTURE_OVERLAY_LINGER_MS] read/write shares. */
+    val VIDEO_GESTURE_OVERLAY_LINGER_MS_BOUNDS: ClosedRange<Long> = 200L..2_000L
+
+    val VIDEO_CENTER_DOUBLE_TAP_ACTION: PreferenceSpec<PlayerCenterDoubleTapAction> get() = row("video_center_double_tap_action")
+
+    val VIDEO_DOUBLE_TAP_ZONE_BIAS: PreferenceSpec<PlayerDoubleTapZoneBias> get() = row("video_double_tap_zone_bias")
+
+    val VIDEO_HOLD_SPEED_PILL_STYLE: PreferenceSpec<PlayerHoldSpeedPillStyle> get() = row("video_hold_speed_pill_style")
+
+    val VIDEO_SEEK_BAR_STYLE: PreferenceSpec<PlayerSeekBarStyle> get() = row("video_seek_bar_style")
+
+    val VIDEO_SHOW_BUFFERED_RANGE: PreferenceSpec<Boolean> get() = row("video_show_buffered_range")
+
+    val VIDEO_SHOW_CHAPTER_MARKERS: PreferenceSpec<Boolean> get() = row("video_show_chapter_markers")
+
+    val VIDEO_HIDE_SEEK_TIMESTAMPS: PreferenceSpec<Boolean> get() = row("video_hide_seek_timestamps")
+
+    val VIDEO_SHOW_BUFFER_PERCENT: PreferenceSpec<Boolean> get() = row("video_show_buffer_percent")
+
+    val VIDEO_SEEK_PREVIEW_TIME: PreferenceSpec<Boolean> get() = row("video_seek_preview_time")
+
+    val VIDEO_SHOW_ENGINE_BADGE: PreferenceSpec<Boolean> get() = row("video_show_engine_badge")
+
+    val VIDEO_EPISODE_BROWSER_HIDE_WATCHED: PreferenceSpec<Boolean> get() = row("video_episode_browser_hide_watched")
+
+    // ── The second QoL wave's accessors (the chromeQol group). ──
+
+    val VIDEO_TV_TIMEOUT_SCALE: PreferenceSpec<TvTimeoutScale> get() = row("video_tv_timeout_scale")
+
+    val VIDEO_KEYBOARD_SEEK_PRESET: PreferenceSpec<KeyboardSeekPreset> get() = row("video_keyboard_seek_preset")
+
+    val VIDEO_HOLD_SEEK_CADENCE: PreferenceSpec<HoldSeekCadence> get() = row("video_hold_seek_cadence")
+
+    val VIDEO_SPEED_PILL_CLEARANCE: PreferenceSpec<SpeedPillClearance> get() = row("video_speed_pill_clearance")
+
+    val VIDEO_PAUSE_FADE_STYLE: PreferenceSpec<PauseFadeStyle> get() = row("video_pause_fade_style")
+
+    val VIDEO_CONTROL_LAYOUT: PreferenceSpec<ControlLayout> get() = row("video_control_layout")
+
+    val VIDEO_MAX_ZOOM: PreferenceSpec<MaxZoom> get() = row("video_max_zoom")
+
+    val VIDEO_POLL_CADENCE: PreferenceSpec<PollCadence> get() = row("video_poll_cadence")
+
+    val VIDEO_SLEEP_CONFIRM_MINUTES: PreferenceSpec<Int> get() = row("video_sleep_confirm_minutes")
+
+    /** The clamp every [VIDEO_SLEEP_CONFIRM_MINUTES] read/write shares. */
+    val VIDEO_SLEEP_CONFIRM_MINUTES_BOUNDS: ClosedRange<Int> = 1..30
+
+    val VIDEO_AMBIENT_UNDER_FILL: PreferenceSpec<Boolean> get() = row("video_ambient_under_fill")
+
+    val VIDEO_BUFFERING_VEIL: PreferenceSpec<BufferingVeil> get() = row("video_buffering_veil")
+
+    val VIDEO_SPEED_PRESET_SET: PreferenceSpec<SpeedPresetSet> get() = row("video_speed_preset_set")
+
+    val VIDEO_AUTOPLAY_WIFI_ONLY: PreferenceSpec<Boolean> get() = row("video_autoplay_wifi_only")
+
+    val VIDEO_CONFIRM_EXIT: PreferenceSpec<Boolean> get() = row("video_confirm_exit")
 
     /** The rows keyed by wire name — the accessor lookup's memo (built once). */
     private val rowsByName: Map<String, PreferenceSpec<*>> by lazy { all.associateBy { it.keyName } }

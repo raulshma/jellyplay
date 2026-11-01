@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
+import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -127,9 +128,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 // ── Player overlay/animation timing (ms) ─────────────────────────────────
 // Named so the tuning is discoverable instead of scattered as bare literals.
 // (The seek-chip pair moved to the state module's SeekChipCommitClock.)
-
-/** "Resumed — tap to restart" chip lifetime (3s). */
-private const val RESUME_CHIP_DISPLAY_MS = 3_000L
+// (The resume chip's lifetime moved to the store's `video_resume_chip_ms`
+// pref — uiState.uiPrefs.resumeChipMs; 0 never shows the chip.)
 
 /**
  * Platform seam: nudging the system media (STREAM_MUSIC) volume for
@@ -184,9 +184,13 @@ fun VideoPlayerScreen(
     val restartLabel = stringResource(CoreUiRes.string.core_restart)
     LaunchedEffect(viewModel) {
         viewModel.resumeReminder.collect {
-            // Specified as a 3s chip. SnackbarDuration has no 3s
-            // preset (Short ≈ 1.5s), so show it Indefinite and auto-dismiss
-            // after 3s unless the user taps "Restart" first.
+            // 0 = never show the chip (the pref's documented off arm).
+            val chipDisplayMs = uiState.uiPrefs.resumeChipMs
+            if (chipDisplayMs <= 0L) return@collect
+            // Specified as a 3s chip by default (the pref). SnackbarDuration
+            // has no 3s preset (Short ≈ 1.5s), so show it Indefinite and
+            // auto-dismiss after the pref's window unless the user taps
+            // "Restart" first.
             val snackbarJob = scope.launch {
                 val result = resumeChipHostState.showSnackbar(
                     message = resumedMessage,
@@ -198,7 +202,7 @@ fun VideoPlayerScreen(
                 }
             }
             scope.launch {
-                delay(RESUME_CHIP_DISPLAY_MS)
+                delay(chipDisplayMs)
                 resumeChipHostState.currentSnackbarData?.dismiss()
             }
             snackbarJob.join()
@@ -277,6 +281,7 @@ fun VideoPlayerScreen(
         isOverflowMenuOpen = { isOverflowMenuOpen },
         controlsHasFocus = { controlsHasFocus },
         hideOsdOnPause = { uiState.uiPrefs.hideOsdOnPause },
+        tvTimeoutScale = { uiState.uiPrefs.tvTimeoutScale },
         onVisibilityChange = { viewModel.onEvent(VideoPlayerUiEvent.SetControlsVisible(it)) },
     )
 
@@ -431,12 +436,13 @@ fun VideoPlayerScreen(
     // so there is nothing to suppress. The ladder's verdict is the chrome
     // module's (sheet → close, TV-visible → hide, else exit — the hide arm
     // is TV-only: a touch BACK exits with the controls up).
+    val exitConfirm = rememberExitConfirmController({ uiState.uiPrefs.confirmExit }) { currentOnBack() }
     JellyPlayBackHandler(enabled = true) {
         when (chrome.backVerdict(hideArm = isTv)) {
             PlayerChromeBackVerdict.CloseSheet -> currentSheet = PlayerSheet.None
             PlayerChromeBackVerdict.HideControls -> chrome.hide()
             PlayerChromeBackVerdict.SummonControls -> {}
-            PlayerChromeBackVerdict.Exit -> onBack()
+            PlayerChromeBackVerdict.Exit -> exitConfirm.onBackPress()
         }
     }
 
@@ -914,6 +920,7 @@ fun VideoPlayerScreen(
             getSupportsAudioDelay = { uiState.engineCapabilities.supportsAudioDelay },
             getAudioDelayMs = { viewModel.sessionSlices.controls.effectsState.value.audioDelayMs },
             getSeekStepMs = { currentSeekDurationMs },
+            getSeekPreset = { uiState.gestures.keyboardSeekPreset },
             getHasNextEpisode = { uiState.episodes.nextEpisode != null || uiState.hasQueuedNext },
             getHasPreviousEpisode = { uiState.episodes.previousEpisode != null },
             getCurrentPositionMs = { viewModel.sessionSlices.controls.engine?.currentPositionMs ?: 0L },
@@ -1139,6 +1146,8 @@ fun VideoPlayerScreen(
                         gates = inputGates,
                         isScreenLocked = isScreenLocked,
                         doubleTapHoldSeekEnabled = uiState.gestures.doubleTapHoldSeekEnabled,
+                        doubleTapZoneBias = uiState.gestures.doubleTapZoneBias,
+                        holdSeekCadence = uiState.gestures.holdSeekCadence,
                         dispatcher = { currentDispatcher },
                         holdRepeatScope = scope,
                         // Tap arms dismiss the paused-idle screensaver (#11)
@@ -1164,15 +1173,29 @@ fun VideoPlayerScreen(
                             performConfirmHaptic()
                         },
                         onDoubleTapCenter = {
-                            if (videoZoom > 1f) {
-                                videoZoom = 1f
-                            } else {
-                                currentDoTogglePlayPause()
-                                performConfirmHaptic()
+                            // The center-zone knob: AUTO keeps the long-standing
+                            // arm (zoom reset when zoomed, else play/pause); the
+                            // other arms force their action.
+                            when (uiState.gestures.centerDoubleTapAction) {
+                                PlayerCenterDoubleTapAction.AUTO -> {
+                                    if (videoZoom > 1f) {
+                                        videoZoom = 1f
+                                    } else {
+                                        currentDoTogglePlayPause()
+                                        performConfirmHaptic()
+                                    }
+                                }
+                                PlayerCenterDoubleTapAction.PLAY_PAUSE -> {
+                                    currentDoTogglePlayPause()
+                                    performConfirmHaptic()
+                                }
+                                PlayerCenterDoubleTapAction.ZOOM_RESET -> {
+                                    videoZoom = 1f
+                                }
                             }
                         },
                         applyZoomDelta = { delta ->
-                            videoZoom = (videoZoom * delta).coerceIn(1f, 3f)
+                            videoZoom = (videoZoom * delta).coerceIn(1f, maxZoomScale(uiState.uiPrefs.maxZoom))
                             viewModel.onEvent(VideoPlayerUiEvent.UserInteraction)
                         },
                         onScrubbingStarted = { viewModel.setScrubbing(true) },
@@ -1207,10 +1230,10 @@ fun VideoPlayerScreen(
             AmbientBackdropLayer(
                 imageUrl = uiState.media.artworkUrl,
                 videoAspect = ambientVideoAspect,
-                enabled = uiState.uiPrefs.ambientBlurEnabled &&
-                    effectiveAspectRatio(aspectRatio, detectedAspectRatio).let { effective ->
-                        effective != AspectRatio.FILL && effective != AspectRatio.CROP
-                    },
+                enabled = ambientBackdropGate(
+                    uiState.uiPrefs.ambientBlurEnabled, effectiveAspectRatio(aspectRatio, detectedAspectRatio),
+                    uiState.uiPrefs.ambientUnderFill,
+                ),
             )
 
             // Platform surface seam: Android hosts the engine's
@@ -1347,6 +1370,10 @@ fun VideoPlayerScreen(
                 gates = inputGates,
                 isScreenLocked = isScreenLocked,
                 swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
+                swipeSensitivity = uiState.gestures.swipeSensitivity,
+                overlayLingerMs = uiState.gestures.gestureOverlayLingerMs,
+                holdSpeedPillStyle = uiState.uiPrefs.holdSpeedPillStyle,
+                pillClearance = uiState.gestures.speedPillClearance,
                 chrome = chrome,
                 viewModel = viewModel,
                 windowOps = windowOps,
@@ -1434,8 +1461,8 @@ fun VideoPlayerScreen(
                     hasDetails = uiState.title.isNotBlank() || uiState.media.overview.isNotBlank(),
                     screensaverActive = pauseIdleActive,
                 ),
-                enter = fadeIn(tween(200, easing = AlphaEasing)),
-                exit = fadeOut(tween(300, easing = AlphaEasing)),
+                enter = fadeIn(tween(pauseDetailsFadeInMs(uiState.uiPrefs.pauseFadeStyle), easing = AlphaEasing)),
+                exit = fadeOut(tween(pauseDetailsFadeOutMs(uiState.uiPrefs.pauseFadeStyle), easing = AlphaEasing)),
             ) {
                 PauseDetailsOverlay(
                     title = uiState.title,
@@ -1456,7 +1483,7 @@ fun VideoPlayerScreen(
                     },
                 )
             }
-
+            ExitConfirmOverlay(exitConfirm)
             // Controller-owned slices, collected here (through the session's
             // controls slice) because this scope genuinely consumes them: the
             // status bundle keys on effectsState.decoderMode and PlayerControls'
@@ -1796,6 +1823,20 @@ fun VideoPlayerScreen(
                 tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
                 isSkipSegmentVisible = isSkipSegmentVisible,
                 isNextEpisodeVisible = isNextEpisodeVisible,
+                // The player-chrome customization cluster (prefs mirrors).
+                overlayAnimations = uiState.uiPrefs.overlayAnimations,
+                showPrevNextButtons = uiState.uiPrefs.showPrevNextButtons,
+                controlLayout = uiState.uiPrefs.controlLayout,
+                showEngineBadge = uiState.uiPrefs.showEngineBadge,
+                // The engine chip's label: the session's preferred engine —
+                // the identity the engine stack was built from this session.
+                engineBadgeLabel = uiState.preferredPlayerType.displayName,
+                seekBarStyle = uiState.uiPrefs.seekBarStyle,
+                showBufferedRange = uiState.uiPrefs.showBufferedRange,
+                showChapterMarkers = uiState.uiPrefs.showChapterMarkers,
+                showSeekTimestamps = !uiState.uiPrefs.hideSeekTimestamps,
+                showBufferPercent = uiState.uiPrefs.showBufferPercent,
+                seekPreviewTime = uiState.uiPrefs.seekPreviewTime,
                 modifier = Modifier.fillMaxSize(),
             )
             } // end PlayerDarkTheme (control bars)
@@ -1836,6 +1877,7 @@ fun VideoPlayerScreen(
                 positionMs = seekPositionMs,
                 durationMs = duration,
                 loadTile = loadSeekTile,
+                seekPreviewTime = uiState.uiPrefs.seekPreviewTime,
             )
 
             // ── Paused-idle screensaver surface (#11) ───────────────────────

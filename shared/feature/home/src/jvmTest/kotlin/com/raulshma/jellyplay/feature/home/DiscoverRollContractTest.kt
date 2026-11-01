@@ -282,6 +282,7 @@ class DiscoverRollContractTest {
                 discoverEnabled = { false },
                 directArrEnabled = { false },
                 androidTvWatchNextEnabled = { true },
+                refreshCadence = { com.raulshma.jellyplay.core.model.HomeRefreshCadence.DEFAULT },
             ),
             bookTocCacheRepository = bookTocCacheRepository,
         ).also { refresher = it }

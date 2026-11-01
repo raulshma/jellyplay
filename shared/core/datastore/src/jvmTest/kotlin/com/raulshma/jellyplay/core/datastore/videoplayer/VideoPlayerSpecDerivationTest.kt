@@ -103,6 +103,36 @@ class VideoPlayerSpecDerivationTest {
         "mpv_custom_buttons" to String::class,
         "autoplay_episode_limit" to Int::class,
         "show_next_episode_details_after_finish" to Boolean::class,
+        "video_overlay_animations" to Boolean::class,
+        "video_resume_chip_ms" to Long::class,
+        "video_show_prev_next_buttons" to Boolean::class,
+        "video_swipe_sensitivity" to String::class,
+        "video_gesture_overlay_linger_ms" to Long::class,
+        "video_center_double_tap_action" to String::class,
+        "video_double_tap_zone_bias" to String::class,
+        "video_hold_speed_pill_style" to String::class,
+        "video_seek_bar_style" to String::class,
+        "video_show_buffered_range" to Boolean::class,
+        "video_show_chapter_markers" to Boolean::class,
+        "video_hide_seek_timestamps" to Boolean::class,
+        "video_show_buffer_percent" to Boolean::class,
+        "video_seek_preview_time" to Boolean::class,
+        "video_show_engine_badge" to Boolean::class,
+        "video_episode_browser_hide_watched" to Boolean::class,
+        "video_tv_timeout_scale" to String::class,
+        "video_keyboard_seek_preset" to String::class,
+        "video_hold_seek_cadence" to String::class,
+        "video_speed_pill_clearance" to String::class,
+        "video_pause_fade_style" to String::class,
+        "video_control_layout" to String::class,
+        "video_max_zoom" to String::class,
+        "video_poll_cadence" to String::class,
+        "video_sleep_confirm_minutes" to Int::class,
+        "video_ambient_under_fill" to Boolean::class,
+        "video_buffering_veil" to String::class,
+        "video_speed_preset_set" to String::class,
+        "video_autoplay_wifi_only" to Boolean::class,
+        "video_confirm_exit" to Boolean::class,
     )
 
     /**
@@ -261,14 +291,44 @@ class VideoPlayerSpecDerivationTest {
         assertEquals(VideoPlayerPreferenceSpecs.MPV_MOTION_INTERPOLATION.default, slice.mpvMotionInterpolation)
         assertEquals(VideoPlayerPreferenceSpecs.MPV_INPUT_CONF.default, slice.mpvInputConf)
         assertEquals(VideoPlayerPreferenceSpecs.MPV_CUSTOM_BUTTONS.default, slice.mpvCustomButtons)
-        // Totality: every slice field is covered above — the 56 pinned
-        // properties are ALL the slice's fields (61 rows - 5 legacy-only rows
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.default, slice.videoOverlayAnimations)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.default, slice.videoResumeChipMs)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.default, slice.videoShowPrevNextButtons)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.default, slice.videoSwipeSensitivity)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.default, slice.videoGestureOverlayLingerMs)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.default, slice.videoCenterDoubleTapAction)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_ZONE_BIAS.default, slice.videoDoubleTapZoneBias)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_PILL_STYLE.default, slice.videoHoldSpeedPillStyle)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SEEK_BAR_STYLE.default, slice.videoSeekBarStyle)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFERED_RANGE.default, slice.videoShowBufferedRange)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_CHAPTER_MARKERS.default, slice.videoShowChapterMarkers)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_HIDE_SEEK_TIMESTAMPS.default, slice.videoHideSeekTimestamps)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFER_PERCENT.default, slice.videoShowBufferPercent)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SEEK_PREVIEW_TIME.default, slice.videoSeekPreviewTime)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SHOW_ENGINE_BADGE.default, slice.videoShowEngineBadge)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_HIDE_WATCHED.default, slice.videoEpisodeBrowserHideWatched)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_TV_TIMEOUT_SCALE.default, slice.videoTvTimeoutScale)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_KEYBOARD_SEEK_PRESET.default, slice.videoKeyboardSeekPreset)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SEEK_CADENCE.default, slice.videoHoldSeekCadence)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SPEED_PILL_CLEARANCE.default, slice.videoSpeedPillClearance)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_PAUSE_FADE_STYLE.default, slice.videoPauseFadeStyle)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CONTROL_LAYOUT.default, slice.videoControlLayout)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_MAX_ZOOM.default, slice.videoMaxZoom)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_POLL_CADENCE.default, slice.videoPollCadence)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES.default, slice.videoSleepConfirmMinutes)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_AMBIENT_UNDER_FILL.default, slice.videoAmbientUnderFill)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_BUFFERING_VEIL.default, slice.videoBufferingVeil)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_SPEED_PRESET_SET.default, slice.videoSpeedPresetSet)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_WIFI_ONLY.default, slice.videoAutoplayWifiOnly)
+        assertEquals(VideoPlayerPreferenceSpecs.VIDEO_CONFIRM_EXIT.default, slice.videoConfirmExit)
+        // Totality: every slice field is covered above — the 86 pinned
+        // properties are ALL the slice's fields (91 rows - 5 legacy-only rows
         // with no slice property). A field added without a spec-default pin
         // above (and without bumping this count) fails here. Statics
         // (the @Serializable Companion, Compose's $stable) don't count.
         val instanceFields = VideoPlayerSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(56, instanceFields)
+        assertEquals(86, instanceFields)
     }
 
     @Test

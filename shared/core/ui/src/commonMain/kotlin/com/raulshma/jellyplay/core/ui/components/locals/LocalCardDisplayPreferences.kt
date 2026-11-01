@@ -25,6 +25,8 @@ data class CardDisplayPreferences(
      * unwatched count) regardless of the individual flags above.
      */
     val antiSpoilerHome: Boolean = false,
+    /** The cards' animated press-scale (the `card_press_animations` pref). Default on. */
+    val cardPressAnimations: Boolean = true,
 )
 
 val LocalCardDisplayPreferences: ProvidableCompositionLocal<CardDisplayPreferences> =

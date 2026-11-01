@@ -128,18 +128,36 @@ private const val COIL_SIZE_EXTRA_KEY = "coil#size"
 @Composable
 fun rememberMediaImageMemoryCacheKey(url: String?, size: CoilSize): MemoryCache.Key? {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
-    return remember(url, size, performanceMode) {
-        if (url.isNullOrEmpty()) {
+    val qualityCap = com.raulshma.jellyplay.core.ui.components.LocalImageQualityCap.current
+    val effectiveUrl = if (url.isNullOrEmpty()) null else mediaImageUrl(url, qualityCap)
+    return remember(effectiveUrl, size, performanceMode) {
+        if (effectiveUrl.isNullOrEmpty()) {
             null
         } else {
             MemoryCache.Key(
-                key = url,
+                key = effectiveUrl,
                 extras = mapOf(
                     COIL_SIZE_EXTRA_KEY to mediaImageDecodeSize(size, performanceMode).toString(),
                 ),
             )
         }
     }
+}
+
+/**
+ * The request URL with the image-quality cap applied (the appearance row's
+ * [com.raulshma.jellyplay.core.model.ImageQualityPreset]): a null cap keeps
+ * the URL verbatim (the shipped original-quality request); otherwise
+ * Jellyfin's `quality` query parameter is appended — `&` on an existing
+ * query string, `?` otherwise. The SAME transform runs in the request path
+ * and in [rememberMediaImageMemoryCacheKey]'s handoff-key derivation, so the
+ * list→detail placeholder handoff keeps matching when a cap is active.
+ * Pure; JVM-testable.
+ */
+fun mediaImageUrl(url: String, qualityCap: Int?): String {
+    if (qualityCap == null) return url
+    val separator = if (url.contains('?')) '&' else '?'
+    return "${url}${separator}quality=$qualityCap"
 }
 
 @Composable
@@ -183,6 +201,11 @@ fun MediaImage(
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
     val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    val qualityCap = com.raulshma.jellyplay.core.ui.components.LocalImageQualityCap.current
+    // Data-saver (the network-domain master + the shell's metered signal)
+    // holds back EVERY media image — the blurHash keeps showing; the request
+    // re-runs on its own when the connection stops being metered.
+    val dataSaverActive = com.raulshma.jellyplay.core.ui.components.rememberImagesDataSaverActive()
     // Performance mode lowers decode size to save memory, but callers that
     // explicitly request [Size.ORIGINAL] (e.g. the full-screen photo viewer)
     // need the unmodified resolution — capping them to 256² produces blurry
@@ -193,10 +216,11 @@ fun MediaImage(
     // or reduce motion (blurHash is a memory/quality optimization and stays
     // gated on performance mode alone).
     val effectiveCrossfade = if (reducedMotion) false else crossfade
+    val effectiveUrl = remember(url, qualityCap) { mediaImageUrl(url, qualityCap) }
     val context = LocalPlatformContext.current
-    val imageRequest = remember(url, effectiveSize, effectiveCrossfade, placeholderMemoryCacheKey) {
+    val imageRequest = remember(effectiveUrl, effectiveSize, effectiveCrossfade, placeholderMemoryCacheKey) {
         val builder = ImageRequest.Builder(context)
-            .data(url)
+            .data(effectiveUrl)
             .crossfade(effectiveCrossfade)
             .size(effectiveSize)
         if (placeholderMemoryCacheKey != null) {
@@ -214,27 +238,40 @@ fun MediaImage(
             )
         }
 
-        // The fallback chain lives in a dedicated child composable so a state
-        // change (advance to the next URL after an Error) only recomposes this
-        // subtree instead of the whole Box (including the BlurHash layer). The
-        // parent [MediaImage] is now stateless wrt the fallback index. The
-        // chain also resets (and re-issues the request) when the host screen
-        // bumps [LocalImageReloadEpoch] — the manual escape from a chain that
-        // exhausted its auto-retries on a persistent failure, since the URL
-        // itself never changes. Transient failures no longer strand the image
-        // on its blurHash: the chain schedules bounded automatic retries on
-        // its own (see [FallbackAsyncImage]).
-        FallbackAsyncImage(
-            primaryRequest = imageRequest,
-            fallbackUrls = fallbackUrls,
-            effectiveSize = effectiveSize,
-            effectiveCrossfade = effectiveCrossfade,
-            contentDescription = contentDescription,
-            contentScale = contentScale,
-            colorFilter = colorFilter,
-            showPlaceholder = effectiveBlurHash.isNullOrEmpty(),
-            placeholderIcon = placeholderIcon,
-        )
+        if (dataSaverActive) {
+            // Data saver: stay on the blurHash (or the plain surface — the
+            // same look as a load in flight); the request re-runs on its own
+            // when the connection stops being metered or the mode flips off.
+            if (effectiveBlurHash.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+            }
+        } else {
+            // The fallback chain lives in a dedicated child composable so a state
+            // change (advance to the next URL after an Error) only recomposes this
+            // subtree instead of the whole Box (including the BlurHash layer). The
+            // parent [MediaImage] is now stateless wrt the fallback index. The
+            // chain also resets (and re-issues the request) when the host screen
+            // bumps [LocalImageReloadEpoch] — the manual escape from a chain that
+            // exhausted its auto-retries on a persistent failure, since the URL
+            // itself never changes. Transient failures no longer strand the image
+            // on its blurHash: the chain schedules bounded automatic retries on
+            // its own (see [FallbackAsyncImage]).
+            FallbackAsyncImage(
+                primaryRequest = imageRequest,
+                fallbackUrls = fallbackUrls,
+                effectiveSize = effectiveSize,
+                effectiveCrossfade = effectiveCrossfade,
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                colorFilter = colorFilter,
+                showPlaceholder = effectiveBlurHash.isNullOrEmpty(),
+                placeholderIcon = placeholderIcon,
+            )
+        }
     }
 }
 

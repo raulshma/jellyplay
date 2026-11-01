@@ -60,6 +60,7 @@ val detailsModule: Module = module {
             detailFeed = get(),
             imageUrlProvider = get(),
             artworkUrls = get(),
+            projections = get(),
         )
     }
     viewModel {

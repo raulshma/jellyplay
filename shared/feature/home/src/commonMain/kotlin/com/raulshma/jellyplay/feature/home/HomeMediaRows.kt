@@ -108,6 +108,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.LocalDate
 import com.raulshma.jellyplay.feature.home.generated.resources.home_airs_date_format
+import com.raulshma.jellyplay.feature.home.generated.resources.home_row_unwatched_count
 import com.raulshma.jellyplay.feature.home.generated.resources.home_see_all
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 
@@ -265,7 +266,10 @@ internal data class HomeRowMetrics(
 internal fun homeRowMetrics(widthScale: Float? = null): HomeRowMetrics {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val baseWidth = adaptiveInfo.rowCardWidth(isTv)
+    // The card-size pref scales the poster base width; the wide-card 1.6×
+    // scale multiplies on top of it (the 260dp floor keeps resume cards
+    // legible at SMALL).
+    val baseWidth = adaptiveInfo.rowCardWidth(isTv) * LocalHomeRowChrome.current.cardScale
     return HomeRowMetrics(
         cardWidth = widthScale
             ?.let { scale -> (baseWidth * scale).coerceAtLeast(260.dp) }
@@ -532,6 +536,19 @@ internal fun HomeMediaRow(
     showNewBadges: Boolean = false,
     homeLastVisitEpochMs: Long = 0L,
     /**
+     * The `home_new_badge_days` arrival cutoff (epoch ms, computed VM-side):
+     * arrivals older than this stop badgeing even though they postdate the
+     * last visit. [Long.MIN_VALUE] = no cutoff (the shipped predicate).
+     */
+    homeNewBadgeCutoffEpochMs: Long = Long.MIN_VALUE,
+    /**
+     * The `home_row_unwatched_counters` toggle: renders the row's
+     * unwatched-item count beside the title, derived from the loaded items
+     * (no new server queries) — only meaningful on the rows whose fetch
+     * projects play state (the caller gates that).
+     */
+    showUnwatchedCounters: Boolean = false,
+    /**
      * Renders each card's air-date chip ([HomeAirsDateChip], the details
      * screen's "Airs <date>" vocabulary) in the poster's top-start
      * corner. The Upcoming row is the only caller — its items are unaired
@@ -597,6 +614,14 @@ internal fun HomeMediaRow(
     } else {
         Modifier
     }
+    // The header's unwatched counter: derived from the LOADED items (the
+    // row's capped page — never a server total), so the count is honest about
+    // what it counts: what this row is showing.
+    val unwatchedCount = if (showUnwatchedCounters) {
+        remember(effectiveItems) { effectiveItems.count { !it.isPlayed } }
+    } else {
+        null
+    }
 
     Column(modifier = modifier) {
         HomeRowTitle(
@@ -608,6 +633,7 @@ internal fun HomeMediaRow(
             onRollClick = onRollClick,
             rollInProgress = rollInProgress,
             accessibilityLabel = rollAccessibilityLabel,
+            unwatchedCount = unwatchedCount,
         )
         HomeItemRow(
             items = effectiveItems,
@@ -626,10 +652,11 @@ internal fun HomeMediaRow(
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
             // The per-card NEW decision — the row's section flag ∧ the
             // card prefs' global toggle ∧ the item's arrival-vs-previous-visit
-            // predicate. Resolved here (not in the card) so the card stays a
+            // predicate (∧ the `home_new_badge_days` window cutoff).
+            // Resolved here (not in the card) so the card stays a
             // pure renderer and the remember slots stay in the row.
-            val isNewArrival = remember(item.id, item.dateCreatedEpochMs, homeLastVisitEpochMs) {
-                item.isNewForHome(homeLastVisitEpochMs)
+            val isNewArrival = remember(item.id, item.dateCreatedEpochMs, homeLastVisitEpochMs, homeNewBadgeCutoffEpochMs) {
+                item.isNewForHome(homeLastVisitEpochMs, homeNewBadgeCutoffEpochMs)
             }
             val showNewBadge = showNewBadges && cardPrefs.showNewBadges && isNewArrival
             // Memoize progress so per-card arithmetic runs only when ticks change,
@@ -727,9 +754,16 @@ internal fun HomeLibraryTilesRow(
     // TV-only: reports the D-pad-focused tile so the screen's Menu key can
     // open its quick actions.
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
+    /**
+     * The `home_my_media_columns` width override: non-null sizes each tile so
+     * exactly that many fit the screen width; null keeps the shipped chassis
+     * width.
+     */
+    tileWidthOverride: androidx.compose.ui.unit.Dp? = null,
 ) {
     val metrics = homeRowMetrics(widthScale = 1.6f)
     if (items.isEmpty()) return
+    val tileWidth = tileWidthOverride ?: metrics.cardWidth
     Column(modifier = modifier) {
         HomeRowTitle(
             title = title,
@@ -739,7 +773,7 @@ internal fun HomeLibraryTilesRow(
         HomeItemRow(
             items = items,
             key = { it.id },
-            cardWidth = metrics.cardWidth,
+            cardWidth = tileWidth,
             spacing = metrics.spacing,
             contentPad = metrics.contentPad,
             clippingEnabled = clippingEnabled,
@@ -756,7 +790,7 @@ internal fun HomeLibraryTilesRow(
                 imageUrl = remember(item) { imageUrlFor(item) },
                 onClick = memoizedClick,
                 onLongClick = memoizedLongClick,
-                modifier = mod.width(metrics.cardWidth),
+                modifier = mod.width(tileWidth),
             )
         }
     }
@@ -958,6 +992,12 @@ internal fun HomeRowTitle(
     /** True while that re-roll's fetch is in flight — tumbles the dice icon and absorbs taps. */
     rollInProgress: Boolean = false,
     accessibilityLabel: String? = null,
+    /**
+     * The `home_row_unwatched_counters` counter: the row's unwatched-item
+     * count (derivable from the loaded items — no new server queries),
+     * rendered as a trailing count beside the title. Null renders nothing.
+     */
+    unwatchedCount: Int? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -995,6 +1035,15 @@ internal fun HomeRowTitle(
                 .weight(1f)
                 .semantics { heading() },
         )
+        if (unwatchedCount != null && unwatchedCount > 0) {
+            Text(
+                text = stringResource(Res.string.home_row_unwatched_count, unwatchedCount),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
         if (onRollClick != null) {
             Spacer(modifier = Modifier.width(12.dp))
             // The dice tumbles while the re-fetch runs — the only affordance

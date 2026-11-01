@@ -129,6 +129,15 @@ import org.jetbrains.compose.resources.pluralStringResource
 internal val LocalDetailEntrance = compositionLocalOf<Float> { 1f }
 
 /**
+ * The stagger step the shared entrance cascade subtracts per delayIndex,
+ * provided by [DetailContentBody] from the `detail_stagger_style` preference
+ * (FAST/DEFAULT/SLOW over the shipped [DETAIL_STAGGER_STEP]). The default is
+ * the shipped step so reads outside a provider scope (tests) animate exactly
+ * as before.
+ */
+internal val LocalDetailStaggerStep = compositionLocalOf { DETAIL_STAGGER_STEP }
+
+/**
  * Drives the single shared entrance animation. Returns the current progress as a
  * snapshot-read [Float] so consumers re-render only while the animation runs.
  *
@@ -138,13 +147,16 @@ internal val LocalDetailEntrance = compositionLocalOf<Float> { 1f }
  * (e.g. the lowest section at alpha ~0.46), making the lower half of the detail
  * body look dim once the animation finishes. Driving past `1f` lets the stagger
  * only delay each section's *start* — all of them clamp to alpha 1.0 at rest.
+ * [staggerStep] is the preference-scaled step (the SAME value
+ * [LocalDetailStaggerStep] carries to the sections — a mismatched pair would
+ * leave high-index sections permanently dim).
  */
 @Composable
-private fun rememberDetailEntranceProgress(): Float {
+private fun rememberDetailEntranceProgress(staggerStep: Float = DETAIL_STAGGER_STEP): Float {
     val animatable = remember { Animatable(0f) }
     val spec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    val target = 1f + DETAIL_MAX_STAGGER_INDEX * DETAIL_STAGGER_STEP
-    LaunchedEffect(spec) {
+    val target = 1f + DETAIL_MAX_STAGGER_INDEX * staggerStep
+    LaunchedEffect(spec, staggerStep) {
         animatable.animateTo(target, spec)
     }
     return animatable.asState().value
@@ -218,27 +230,39 @@ internal fun DetailContentBody(
     // while the poster row used adaptiveInfo.contentPadding, causing misalignment on phones).
     val bodyContentPad = adaptiveInfo.contentPadding(isTv)
 
+    // The stagger preference scales the whole cascade: the driver's target
+    // AND every section's per-index offset read the same step (the shared
+    // driver contract — a mismatched pair would leave high-index sections
+    // permanently dim).
+    val staggerStep = state.preferences.staggerStyle.step
+
     // Single shared entrance animation drives every FadingItem / StaggeredDetailSection
     // in the body — replaces ~33 per-element LaunchedEffect + animateFloatAsState pairs.
-    val entranceProgress = rememberDetailEntranceProgress()
+    val entranceProgress = rememberDetailEntranceProgress(staggerStep)
 
     // The body's admission is the detail section registry's modules — every
     // [DetailSectionKind] is module-owned (the former hand fold retired with
     // the last module wave), re-sorted into the enum's declaration order (=
-    // the emission order). Memoized on exactly the admission inputs
-    // (detail == state.core.detail) so the module row evaluation + re-sort is
-    // not re-executed per recomposition (the screen-level entrance animation
-    // re-runs this body per frame while it plays).
+    // the emission order), then reconciled against the user's stored section
+    // permutation (the detail_section_order pref; empty = canonical). Memoized
+    // on exactly the admission inputs (detail == state.core.detail) so the
+    // module row evaluation + re-sort is not re-executed per recomposition
+    // (the screen-level entrance animation re-runs this body per frame while
+    // it plays).
     val admittedSections = remember(state, showActionButtons, showMediaInfo) {
         DetailSectionRegistry.admittedSections(
             state = state,
             detail = detail,
             showActionButtons = showActionButtons,
             showMediaInfo = showMediaInfo,
+            sectionOrder = state.preferences.sectionOrder,
         )
     }
 
-    CompositionLocalProvider(LocalDetailEntrance provides entranceProgress) {
+    CompositionLocalProvider(
+        LocalDetailEntrance provides entranceProgress,
+        LocalDetailStaggerStep provides staggerStep,
+    ) {
         Box(
             modifier = modifier.fillMaxWidth(),
             contentAlignment = contentAlignment,

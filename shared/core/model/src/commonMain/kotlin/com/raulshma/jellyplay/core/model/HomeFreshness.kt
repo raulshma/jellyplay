@@ -59,6 +59,28 @@ object HomeFreshness {
     /** Foreground periodic-refresh interval. */
     const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
 
+    /**
+     * The [HomeRefreshCadence.RELAXED] periodic-refresh interval — five
+     * minutes, for installs that treat home as a glance surface and would
+     * rather the loop stay quiet.
+     */
+    const val REFRESH_INTERVAL_RELAXED_MS = 5 * 60_000L
+
+    /**
+     * The periodic-loop interval for [cadence], or `null` for
+     * [HomeRefreshCadence.MANUAL] — the "no automatic refresh" verdict the
+     * refresher's loop and stale-on-start check both honor (pull-to-refresh
+     * stays available either way). [EAGER] paces the loop at
+     * [MIN_REFRESH_INTERVAL_MS] — the jitter guard's floor, so the two
+     * cadence bounds can never drift apart.
+     */
+    fun intervalMsFor(cadence: HomeRefreshCadence): Long? = when (cadence) {
+        HomeRefreshCadence.DEFAULT -> REFRESH_INTERVAL_FOREGROUND_MS
+        HomeRefreshCadence.EAGER -> MIN_REFRESH_INTERVAL_MS
+        HomeRefreshCadence.RELAXED -> REFRESH_INTERVAL_RELAXED_MS
+        HomeRefreshCadence.MANUAL -> null
+    }
+
     /** Minimum spacing between any two periodic-loop fetches (jitter guard). */
     const val MIN_REFRESH_INTERVAL_MS = 30_000L
 

@@ -272,7 +272,7 @@ fun MediaDetailScreen(
     // lambda only arms the single request value + ViewModel call.
     // mediaType is read fresh at invocation (not captured) so the gate always
     // sees the loaded item's type.
-    val dispatchMarkPlayedAction = remember(viewModel, markPlayedConfirm) {
+    val dispatchMarkPlayedAction = remember(viewModel, markPlayedConfirm, preferences.confirmMarkPlayed) {
         { isSeasonAction: Boolean, toWatched: Boolean, seasonId: String? ->
             val request = MarkPlayedConfirmRequest(
                 scope = if (isSeasonAction) {
@@ -297,8 +297,9 @@ fun MediaDetailScreen(
                 markPlayedRequest = request
             }
             // Direct dispatch: reachable only for item-level marks on
-            // movies/episodes (the season row of the gate always confirms, so
-            // the season callbacks never take this branch).
+            // movies/episodes with the confirm-mark-played pref off (the
+            // season row of the gate always confirms, so the season callbacks
+            // never take this branch).
             val action: () -> Unit = {
                 if (toWatched) viewModel.onEvent(DetailUiEvent.MarkPlayed)
                 else viewModel.onEvent(DetailUiEvent.MarkUnplayed)
@@ -308,6 +309,7 @@ fun MediaDetailScreen(
                 isSeasonAction = isSeasonAction,
                 confirm = confirm,
                 action = action,
+                requireConfirmation = preferences.confirmMarkPlayed,
             )
         }
     }

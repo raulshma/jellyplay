@@ -32,7 +32,10 @@ import com.raulshma.jellyplay.core.model.MediaType
 internal data class SeasonsPresentation(
     /** Season tabs to render (SEASON pages carry only the entry season). */
     val seasons: List<MediaItem>,
-    /** Per-season episode lists with specials (season 0) dropped when the preference asks. */
+    /**
+     * Per-season episode lists with specials (season 0) dropped and played
+     * episodes hidden when the preferences ask.
+     */
     val episodes: Map<String, List<MediaItem>>,
     /** Spoiler-safe thumbnails; always false for a LOCAL origin (local cards always show art). */
     val hideEpisodeThumbnails: Boolean,
@@ -44,6 +47,15 @@ internal data class SeasonsPresentation(
     val showStreamBadges: Boolean = true,
     /** Render the in-flight download bar + percent chip on episode rows. */
     val showDownloadProgress: Boolean = true,
+    /** Render a small season poster beside each season tab label. */
+    val showSeasonTabArtwork: Boolean = false,
+    /**
+     * 2-line overview snippets on the episode rows (the
+     * detail_episode_overview_preview pref): the compact row gains the
+     * snippet (it shows none without it) and the card's shipped 3-line
+     * overview tightens to 2 — off (the default) renders exactly today.
+     */
+    val episodeOverviewPreview: Boolean = false,
     /**
      * Downloaded episode ids — gates the per-episode delete badge. Null hides
      * the affordance entirely (a plain remote series with no downloads).
@@ -76,6 +88,11 @@ internal data class SeasonsPresentation(
             // canonical ascending playback order, same as online.
             val effectiveSkipSpecials = !isLocalOrigin && state.preferences.skipSpecials
             val effectiveHideThumbnails = !isLocalOrigin && state.preferences.hideEpisodeThumbnails
+            // The hide-watched filter mirrors the skip-specials pattern: a
+            // LOCAL origin renders every episode (the offline fold's isPlayed
+            // state is best-effort and the rows are the user's on-disk
+            // library), REMOTE drops the played entries per the pref.
+            val effectiveHideWatched = !isLocalOrigin && state.preferences.hideWatchedEpisodes
             return SeasonsPresentation(
                 seasons = if (item.mediaType == MediaType.SEASON) {
                     // A SEASON entry carries the parent series' whole snapshot
@@ -87,16 +104,19 @@ internal data class SeasonsPresentation(
                 } else {
                     state.core.seasons
                 },
-                episodes = if (effectiveSkipSpecials) {
-                    state.core.episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
-                } else {
-                    state.core.episodes
+                episodes = state.core.episodes.mapValues { (_, eps) ->
+                    eps.filter { episode ->
+                        (!effectiveSkipSpecials || episode.seasonNumber != 0) &&
+                            (!effectiveHideWatched || !episode.isPlayed)
+                    }
                 },
                 hideEpisodeThumbnails = effectiveHideThumbnails,
                 episodesDescending = state.preferences.episodesDescending,
                 compactEpisodeList = state.preferences.compactEpisodeList,
                 showStreamBadges = state.preferences.showEpisodeStreamBadges,
                 showDownloadProgress = state.preferences.showDownloadProgress,
+                showSeasonTabArtwork = state.preferences.seasonTabsArtwork,
+                episodeOverviewPreview = state.preferences.episodeOverviewPreview,
                 // Downloaded-episode set: for a LOCAL origin every episode is
                 // downloaded; for a REMOTE series we surface the loaded
                 // downloadedEpisodeIds (populated at screen-open, and

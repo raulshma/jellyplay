@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseFadeStyle
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 
@@ -182,3 +184,29 @@ internal fun decideWatchedActions(
     watchedAdvancesToNext = hasNext || isInSyncPlay,
     unwatchedMarkApplied = !incognito,
 )
+// ── The second QoL wave's pref folds (pure; consumed by the screen root) ──
+
+/** The ambient-backdrop gate: the pref AND the aspect rule (CROP always excluded; FILL admits via the under-fill pref). */
+internal fun ambientBackdropGate(enabled: Boolean, effective: AspectRatio, allowUnderFill: Boolean): Boolean =
+    enabled && effective != AspectRatio.CROP && (allowUnderFill || effective != AspectRatio.FILL)
+
+/** The pinch-zoom ceiling (the max-zoom pref's arm; X3 keeps the long-standing 1..3 clamp). */
+internal fun maxZoomScale(maxZoom: MaxZoom): Float = when (maxZoom) {
+    MaxZoom.X2 -> 2f
+    MaxZoom.X3 -> 3f
+    MaxZoom.X4 -> 4f
+}
+
+/** The pause-details panel's fade-IN duration (the pause-fade-style pref's family). */
+internal fun pauseDetailsFadeInMs(style: PauseFadeStyle): Int = when (style) {
+    PauseFadeStyle.FAST -> 100
+    PauseFadeStyle.DEFAULT -> 200
+    PauseFadeStyle.SLOW -> 400
+}
+
+/** The pause-details panel's fade-OUT duration (the pause-fade-style pref's family). */
+internal fun pauseDetailsFadeOutMs(style: PauseFadeStyle): Int = when (style) {
+    PauseFadeStyle.FAST -> 150
+    PauseFadeStyle.DEFAULT -> 300
+    PauseFadeStyle.SLOW -> 500
+}

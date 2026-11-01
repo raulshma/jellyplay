@@ -1286,41 +1286,45 @@ class SettingsCatalogScreenContractTest {
             rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()),
         )
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size + 1,
+            SettingsScreenGroups.appearanceLibrary.items.size + 1 + DETAIL_SECTION_ORDER_EDITOR_ROWS,
             appearanceLibraryScreenRowTotal(),
         )
         // Declared rows (the library-content + detail-display residuals and
         // the spec-backed toggles) plus the screen-local
-        // confirm-library-reset action row.
+        // confirm-library-reset action row and the section-order editor's
+        // reorderable rows.
         assertEquals(
-            SettingsScreenGroups.appearanceLibrary.items.size + 1, // +1: the screen-local confirm-library-reset action row
+            SettingsScreenGroups.appearanceLibrary.items.size +
+                1 + // +1: the screen-local confirm-library-reset action row
+                DETAIL_SECTION_ORDER_EDITOR_ROWS,
             appearanceLibraryScreenRowTotal(),
         )
     }
 
     @Test
     fun `home cards row total is the card-display toggles with the TV-gated trickplay fork`() {
-        // The card-display quartet plus the badge/spoiler toggles: every row
-        // renders unconditionally on the home hub except the
-        // TV-only trickplay row (its declared RowAdmission.Tv), so the strict
-        // derivation counts all eight on TV and all but the trickplay row
-        // off it.
-        assertEquals(8, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
+        // The card-display quartet plus the badge/spoiler/trickplay toggles
+        // and the QoL wave-3 badge-window/counter rows: every row renders
+        // unconditionally on the home hub except the two TV-only trickplay
+        // rows (the preview toggle and the peek hold — both declared
+        // RowAdmission.Tv), so the strict derivation counts all twelve on TV
+        // and all but the trickplay pair off it.
+        assertEquals(12, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
         assertEquals(
             SettingsScreenGroups.homeCards.items.size,
             homeCardsScreenRowTotal(isTv = true),
         )
         assertEquals(
-            SettingsScreenGroups.homeCards.items.size - 1,
+            SettingsScreenGroups.homeCards.items.size - 2,
             homeCardsScreenRowTotal(isTv = false),
         )
         assertTrue(
             SettingsScreenGroups.homeCards.items.all { !it.isAdvanced },
             "the cards rows must stay always-on",
         )
-        // The trickplay row is the one TV fork.
+        // The trickplay pair is the TV fork.
         assertEquals(
-            listOf(HomeRows.TrickplayPreview.id),
+            listOf(HomeRows.TrickplayPreview.id, HomeRows.HomeTrickplayPeekMs.id),
             SettingsScreenGroups.homeCards.items
                 .filter { SettingsScreenGroups.homeCards.admissionOf(it.id) == RowAdmission.Tv }
                 .map { it.id },

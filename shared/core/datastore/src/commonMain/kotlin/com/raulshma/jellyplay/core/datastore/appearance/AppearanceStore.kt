@@ -10,13 +10,19 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.BackdropDimLevel
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageQualityPreset
 import com.raulshma.jellyplay.core.model.LayoutMode
+import com.raulshma.jellyplay.core.model.ListDensity
+import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.PressEffectStyle
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.TvOverscan
 import kotlinx.coroutines.CoroutineScope
@@ -118,6 +124,16 @@ class AppearanceStore constructor(
         val HAND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.HAND_MODE.keyName)
         val LAYOUT_MODE = stringPreferencesKey(AppearancePreferenceSpecs.LAYOUT_MODE.keyName)
         val TV_OVERSCAN = stringPreferencesKey(AppearancePreferenceSpecs.TV_OVERSCAN.keyName)
+        val TIME_USE_24H = booleanPreferencesKey(AppearancePreferenceSpecs.TIME_USE_24H.keyName)
+        val CARD_PRESS_ANIMATIONS = booleanPreferencesKey(AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.keyName)
+        val PULL_TO_REFRESH_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.keyName)
+        val APP_BACKDROP_DIM = stringPreferencesKey(AppearancePreferenceSpecs.APP_BACKDROP_DIM.keyName)
+        val HAPTICS_INTENSITY = stringPreferencesKey(AppearancePreferenceSpecs.HAPTICS_INTENSITY.keyName)
+        val IMAGE_QUALITY_PRESET = stringPreferencesKey(AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.keyName)
+        val APP_LIST_DENSITY = stringPreferencesKey(AppearancePreferenceSpecs.APP_LIST_DENSITY.keyName)
+        val APP_PRESS_EFFECT = stringPreferencesKey(AppearancePreferenceSpecs.APP_PRESS_EFFECT.keyName)
+        val APP_FLAT_CARDS = booleanPreferencesKey(AppearancePreferenceSpecs.APP_FLAT_CARDS.keyName)
+        val APP_OVERSCROLL_STYLE = stringPreferencesKey(AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.keyName)
         val HAPTICS_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.HAPTICS_ENABLED.keyName)
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey(AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.keyName)
     }
@@ -182,6 +198,16 @@ class AppearanceStore constructor(
         handMode = AppearancePreferenceSpecs.HAND_MODE.readFrom(prefs),
         layoutMode = AppearancePreferenceSpecs.LAYOUT_MODE.readFrom(prefs),
         tvOverscan = AppearancePreferenceSpecs.TV_OVERSCAN.readFrom(prefs),
+        timeUse24h = AppearancePreferenceSpecs.TIME_USE_24H.readFrom(prefs),
+        cardPressAnimations = AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.readFrom(prefs),
+        pullToRefreshEnabled = AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.readFrom(prefs),
+        appBackdropDim = AppearancePreferenceSpecs.APP_BACKDROP_DIM.readFrom(prefs),
+        hapticsIntensity = AppearancePreferenceSpecs.HAPTICS_INTENSITY.readFrom(prefs),
+        imageQualityPreset = AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.readFrom(prefs),
+        appListDensity = AppearancePreferenceSpecs.APP_LIST_DENSITY.readFrom(prefs),
+        appPressEffect = AppearancePreferenceSpecs.APP_PRESS_EFFECT.readFrom(prefs),
+        appFlatCards = AppearancePreferenceSpecs.APP_FLAT_CARDS.readFrom(prefs),
+        appOverscrollStyle = AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.readFrom(prefs),
     )
 
     // ------------------------------------------------------------------
@@ -314,6 +340,58 @@ class AppearanceStore constructor(
         dataStore.edit { AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(it, overscan) }
     }
 
+    /** The app-wide 24-hour clock override. Default off (follow system). */
+    suspend fun setTimeUse24h(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.TIME_USE_24H.writeTo(it, enabled) }
+    }
+
+    /** The media cards' animated press-scale. Default on. */
+    suspend fun setCardPressAnimations(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.writeTo(it, enabled) }
+    }
+
+    /** The pull-to-refresh gesture master toggle. Default on. */
+    suspend fun setPullToRefreshEnabled(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.writeTo(it, enabled) }
+    }
+
+    /** The app-wide backdrop dim level. Default = shipped look. */
+    suspend fun setAppBackdropDim(level: BackdropDimLevel) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_BACKDROP_DIM.writeTo(it, level) }
+    }
+
+    /** The confirmation-haptic strength remap. Default = shipped mapping. */
+    suspend fun setHapticsIntensity(intensity: HapticsIntensity) {
+        dataStore.edit { AppearancePreferenceSpecs.HAPTICS_INTENSITY.writeTo(it, intensity) }
+    }
+
+    /** The server image-request quality override. Default = original. */
+    suspend fun setImageQualityPreset(preset: ImageQualityPreset) {
+        dataStore.edit { AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.writeTo(it, preset) }
+    }
+
+    /** Settings/list row density. Default = shipped spacing. */
+    suspend fun setAppListDensity(density: ListDensity) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_LIST_DENSITY.writeTo(it, density) }
+    }
+
+    /** Data-saver imagery gating reads the NETWORK domain's data_saver_enabled — no appearance-side setter. */
+
+    /** The press-feedback style. Default = Material ripple. */
+    suspend fun setAppPressEffect(style: PressEffectStyle) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_PRESS_EFFECT.writeTo(it, style) }
+    }
+
+    /** Flat cards. Default off. */
+    suspend fun setAppFlatCards(enabled: Boolean) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_FLAT_CARDS.writeTo(it, enabled) }
+    }
+
+    /** The scrollable containers' overscroll effect. Default = platform. */
+    suspend fun setAppOverscrollStyle(style: OverscrollStyle) {
+        dataStore.edit { AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.writeTo(it, style) }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
@@ -380,6 +458,16 @@ class AppearanceStore constructor(
             AppearancePreferenceSpecs.HAND_MODE.writeTo(prefs, slice.handMode)
             AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(prefs, slice.layoutMode)
             AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(prefs, slice.tvOverscan)
+            AppearancePreferenceSpecs.TIME_USE_24H.writeTo(prefs, slice.timeUse24h)
+            AppearancePreferenceSpecs.CARD_PRESS_ANIMATIONS.writeTo(prefs, slice.cardPressAnimations)
+            AppearancePreferenceSpecs.PULL_TO_REFRESH_ENABLED.writeTo(prefs, slice.pullToRefreshEnabled)
+            AppearancePreferenceSpecs.APP_BACKDROP_DIM.writeTo(prefs, slice.appBackdropDim)
+            AppearancePreferenceSpecs.HAPTICS_INTENSITY.writeTo(prefs, slice.hapticsIntensity)
+            AppearancePreferenceSpecs.IMAGE_QUALITY_PRESET.writeTo(prefs, slice.imageQualityPreset)
+            AppearancePreferenceSpecs.APP_LIST_DENSITY.writeTo(prefs, slice.appListDensity)
+            AppearancePreferenceSpecs.APP_PRESS_EFFECT.writeTo(prefs, slice.appPressEffect)
+            AppearancePreferenceSpecs.APP_FLAT_CARDS.writeTo(prefs, slice.appFlatCards)
+            AppearancePreferenceSpecs.APP_OVERSCROLL_STYLE.writeTo(prefs, slice.appOverscrollStyle)
         }
     }
 }
@@ -422,4 +510,24 @@ data class AppearanceSlice(
     val handMode: HandMode = HandMode.RIGHT,
     val layoutMode: LayoutMode = LayoutMode.AUTO,
     val tvOverscan: TvOverscan = TvOverscan.FIVE,
+    /** The app-wide 24-hour clock override. Default off (follow system). */
+    val timeUse24h: Boolean = false,
+    /** The media cards' animated press-scale. Default on. */
+    val cardPressAnimations: Boolean = true,
+    /** The pull-to-refresh gesture master toggle. Default on. */
+    val pullToRefreshEnabled: Boolean = true,
+    /** The app-wide backdrop dim level. Default = shipped look. */
+    val appBackdropDim: BackdropDimLevel = BackdropDimLevel.DEFAULT,
+    /** The confirmation-haptic strength remap. Default = shipped mapping. */
+    val hapticsIntensity: HapticsIntensity = HapticsIntensity.MEDIUM,
+    /** The server image-request quality override. Default = original. */
+    val imageQualityPreset: ImageQualityPreset = ImageQualityPreset.ORIGINAL,
+    /** Settings/list row density. Default = shipped spacing. */
+    val appListDensity: ListDensity = ListDensity.DEFAULT,
+    /** The press-feedback style for clickable surfaces. Default = Material ripple. */
+    val appPressEffect: PressEffectStyle = PressEffectStyle.DEFAULT,
+    /** Flat cards: remove the card shells' elevation/shadow. Default off. */
+    val appFlatCards: Boolean = false,
+    /** The scrollable containers' overscroll effect. Default = platform. */
+    val appOverscrollStyle: OverscrollStyle = OverscrollStyle.PLATFORM,
 )

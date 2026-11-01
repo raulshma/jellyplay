@@ -120,6 +120,7 @@ internal fun PlayerSheetRouter(
                 currentSpeed = uiState.playbackSpeed,
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackSpeed(it)) },
                 onDismiss = inputs.dismissSheet,
+                presetSet = uiState.uiPrefs.speedPresetSet,
             )
         }
         is PlayerSheet.Audio -> {
@@ -254,9 +255,17 @@ internal fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Episodes -> {
+            // The watch filter (the episode-browser pref): fully-watched
+            // episodes drop out of the jump list when it's on — the raw season
+            // list stays the adjacency machinery's source.
+            val browserEpisodes = if (uiState.episodes.videoEpisodeBrowserHideWatched) {
+                uiState.episodes.seasonEpisodes.filterNot { it.isPlayed }
+            } else {
+                uiState.episodes.seasonEpisodes
+            }
             EpisodePickerSheet(
                 seasons = uiState.episodes.seriesSeasons,
-                episodes = uiState.episodes.seasonEpisodes,
+                episodes = browserEpisodes,
                 currentSeasonId = uiState.episodes.currentSeasonId,
                 currentEpisodeId = inputs.itemId,
                 isLoading = uiState.episodes.isLoadingEpisodes,
@@ -362,6 +371,7 @@ internal fun PlayerSheetRouter(
                 isEndOfEpisodeMode = sleepTimerState.sleepTimerEndOfEpisode,
                 lastUsedDurationMs = sleepTimerState.sleepTimerLastUsedDurationMs,
                 sleepTimerRemainingFlow = inputs.sleepTimerRemainingFlow,
+                cancelConfirmThresholdMs = moduleScope.uiState.uiPrefs.sleepConfirmMinutes * 60_000L,
                 onSelectDuration = { sheets.startSleepTimer(it) },
                 onSelectEndOfEpisode = { sheets.startSleepTimerEndOfEpisode() },
                 onCancel = { sheets.cancelSleepTimer() },
@@ -424,6 +434,7 @@ private fun SleepTimerSheetBinder(
     isEndOfEpisodeMode: Boolean,
     lastUsedDurationMs: Long,
     sleepTimerRemainingFlow: StateFlow<Long>,
+    cancelConfirmThresholdMs: Long,
     onSelectDuration: (Long) -> Unit,
     onSelectEndOfEpisode: () -> Unit,
     onCancel: () -> Unit,
@@ -439,5 +450,6 @@ private fun SleepTimerSheetBinder(
         onSelectEndOfEpisode = onSelectEndOfEpisode,
         onCancel = onCancel,
         onDismiss = onDismiss,
+        cancelConfirmThresholdMs = cancelConfirmThresholdMs,
     )
 }

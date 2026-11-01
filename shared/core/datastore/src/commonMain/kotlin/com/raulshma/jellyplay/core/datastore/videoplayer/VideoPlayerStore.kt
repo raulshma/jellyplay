@@ -11,19 +11,34 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
+import com.raulshma.jellyplay.core.model.BufferingVeil
+import com.raulshma.jellyplay.core.model.ControlLayout
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
+import com.raulshma.jellyplay.core.model.HoldSeekCadence
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
+import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseFadeStyle
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
+import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
+import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
+import com.raulshma.jellyplay.core.model.PlayerHoldSpeedPillStyle
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputMap
+import com.raulshma.jellyplay.core.model.PollCadence
+import com.raulshma.jellyplay.core.model.SpeedPillClearance
+import com.raulshma.jellyplay.core.model.SpeedPresetSet
+import com.raulshma.jellyplay.core.model.PlayerSeekBarStyle
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StillWatchingMode
+import com.raulshma.jellyplay.core.model.TvTimeoutScale
 import com.raulshma.jellyplay.core.model.TrickplayMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
@@ -145,6 +160,36 @@ class VideoPlayerStore constructor(
         val AUTO_SKIP_INTRO = stringPreferencesKey(VideoPlayerPreferenceSpecs.AUTO_SKIP_INTRO.keyName)
         val AUTO_SKIP_OUTRO = stringPreferencesKey(VideoPlayerPreferenceSpecs.AUTO_SKIP_OUTRO.keyName)
         val SKIP_SEGMENTS_ON_SEEK = booleanPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.keyName)
+        val VIDEO_OVERLAY_ANIMATIONS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.keyName)
+        val VIDEO_RESUME_CHIP_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.keyName)
+        val VIDEO_SHOW_PREV_NEXT_BUTTONS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.keyName)
+        val VIDEO_SWIPE_SENSITIVITY = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.keyName)
+        val VIDEO_GESTURE_OVERLAY_LINGER_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.keyName)
+        val VIDEO_CENTER_DOUBLE_TAP_ACTION = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.keyName)
+        val VIDEO_DOUBLE_TAP_ZONE_BIAS = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_ZONE_BIAS.keyName)
+        val VIDEO_HOLD_SPEED_PILL_STYLE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_PILL_STYLE.keyName)
+        val VIDEO_SEEK_BAR_STYLE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SEEK_BAR_STYLE.keyName)
+        val VIDEO_SHOW_BUFFERED_RANGE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFERED_RANGE.keyName)
+        val VIDEO_SHOW_CHAPTER_MARKERS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_CHAPTER_MARKERS.keyName)
+        val VIDEO_HIDE_SEEK_TIMESTAMPS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HIDE_SEEK_TIMESTAMPS.keyName)
+        val VIDEO_SHOW_BUFFER_PERCENT = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFER_PERCENT.keyName)
+        val VIDEO_SEEK_PREVIEW_TIME = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SEEK_PREVIEW_TIME.keyName)
+        val VIDEO_SHOW_ENGINE_BADGE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SHOW_ENGINE_BADGE.keyName)
+        val VIDEO_EPISODE_BROWSER_HIDE_WATCHED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_HIDE_WATCHED.keyName)
+        val VIDEO_TV_TIMEOUT_SCALE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_TV_TIMEOUT_SCALE.keyName)
+        val VIDEO_KEYBOARD_SEEK_PRESET = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_KEYBOARD_SEEK_PRESET.keyName)
+        val VIDEO_HOLD_SEEK_CADENCE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SEEK_CADENCE.keyName)
+        val VIDEO_SPEED_PILL_CLEARANCE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SPEED_PILL_CLEARANCE.keyName)
+        val VIDEO_PAUSE_FADE_STYLE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_PAUSE_FADE_STYLE.keyName)
+        val VIDEO_CONTROL_LAYOUT = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CONTROL_LAYOUT.keyName)
+        val VIDEO_MAX_ZOOM = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_MAX_ZOOM.keyName)
+        val VIDEO_POLL_CADENCE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_POLL_CADENCE.keyName)
+        val VIDEO_SLEEP_CONFIRM_MINUTES = intPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES.keyName)
+        val VIDEO_AMBIENT_UNDER_FILL = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_AMBIENT_UNDER_FILL.keyName)
+        val VIDEO_BUFFERING_VEIL = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_BUFFERING_VEIL.keyName)
+        val VIDEO_SPEED_PRESET_SET = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SPEED_PRESET_SET.keyName)
+        val VIDEO_AUTOPLAY_WIFI_ONLY = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_WIFI_ONLY.keyName)
+        val VIDEO_CONFIRM_EXIT = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CONFIRM_EXIT.keyName)
     }
 
     /**
@@ -214,6 +259,39 @@ class VideoPlayerStore constructor(
         segmentSkipDelaysMs = VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.readFrom(prefs),
         skipSegmentsOnSeek = VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.readFrom(prefs),
         nextUpButtonPrerollSec = VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC.readFrom(prefs),
+        videoOverlayAnimations = VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.readFrom(prefs),
+        videoResumeChipMs = VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.readFrom(prefs)
+            .coerceIn(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS_BOUNDS),
+        videoShowPrevNextButtons = VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.readFrom(prefs),
+        videoSwipeSensitivity = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.readFrom(prefs),
+        videoGestureOverlayLingerMs = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.readFrom(prefs)
+            .coerceIn(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS_BOUNDS),
+        videoCenterDoubleTapAction = VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.readFrom(prefs),
+        videoDoubleTapZoneBias = VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_ZONE_BIAS.readFrom(prefs),
+        videoHoldSpeedPillStyle = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_PILL_STYLE.readFrom(prefs),
+        videoSeekBarStyle = VideoPlayerPreferenceSpecs.VIDEO_SEEK_BAR_STYLE.readFrom(prefs),
+        videoShowBufferedRange = VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFERED_RANGE.readFrom(prefs),
+        videoShowChapterMarkers = VideoPlayerPreferenceSpecs.VIDEO_SHOW_CHAPTER_MARKERS.readFrom(prefs),
+        videoHideSeekTimestamps = VideoPlayerPreferenceSpecs.VIDEO_HIDE_SEEK_TIMESTAMPS.readFrom(prefs),
+        videoShowBufferPercent = VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFER_PERCENT.readFrom(prefs),
+        videoSeekPreviewTime = VideoPlayerPreferenceSpecs.VIDEO_SEEK_PREVIEW_TIME.readFrom(prefs),
+        videoShowEngineBadge = VideoPlayerPreferenceSpecs.VIDEO_SHOW_ENGINE_BADGE.readFrom(prefs),
+        videoEpisodeBrowserHideWatched = VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_HIDE_WATCHED.readFrom(prefs),
+        videoTvTimeoutScale = VideoPlayerPreferenceSpecs.VIDEO_TV_TIMEOUT_SCALE.readFrom(prefs),
+        videoKeyboardSeekPreset = VideoPlayerPreferenceSpecs.VIDEO_KEYBOARD_SEEK_PRESET.readFrom(prefs),
+        videoHoldSeekCadence = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SEEK_CADENCE.readFrom(prefs),
+        videoSpeedPillClearance = VideoPlayerPreferenceSpecs.VIDEO_SPEED_PILL_CLEARANCE.readFrom(prefs),
+        videoPauseFadeStyle = VideoPlayerPreferenceSpecs.VIDEO_PAUSE_FADE_STYLE.readFrom(prefs),
+        videoControlLayout = VideoPlayerPreferenceSpecs.VIDEO_CONTROL_LAYOUT.readFrom(prefs),
+        videoMaxZoom = VideoPlayerPreferenceSpecs.VIDEO_MAX_ZOOM.readFrom(prefs),
+        videoPollCadence = VideoPlayerPreferenceSpecs.VIDEO_POLL_CADENCE.readFrom(prefs),
+        videoSleepConfirmMinutes = VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES.readFrom(prefs)
+            .coerceIn(VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES_BOUNDS),
+        videoAmbientUnderFill = VideoPlayerPreferenceSpecs.VIDEO_AMBIENT_UNDER_FILL.readFrom(prefs),
+        videoBufferingVeil = VideoPlayerPreferenceSpecs.VIDEO_BUFFERING_VEIL.readFrom(prefs),
+        videoSpeedPresetSet = VideoPlayerPreferenceSpecs.VIDEO_SPEED_PRESET_SET.readFrom(prefs),
+        videoAutoplayWifiOnly = VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_WIFI_ONLY.readFrom(prefs),
+        videoConfirmExit = VideoPlayerPreferenceSpecs.VIDEO_CONFIRM_EXIT.readFrom(prefs),
         mpvToneMappingCurve = VideoPlayerPreferenceSpecs.MPV_TONE_MAPPING_CURVE.readFrom(prefs),
         mpvDebandMode = VideoPlayerPreferenceSpecs.MPV_DEBAND_MODE.readFrom(prefs),
         mpvMotionInterpolation = VideoPlayerPreferenceSpecs.MPV_MOTION_INTERPOLATION.readFrom(prefs),
@@ -531,6 +609,174 @@ class VideoPlayerStore constructor(
         dataStore.edit { VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.writeTo(it, enabled) }
     }
 
+    /** Player control-overlay enter/exit animations (default on). */
+    suspend fun setVideoOverlayAnimations(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.writeTo(it, enabled) }
+    }
+
+    /** "Restart" resume-chip display duration; 0 = never show. Clamped to the row's declared 0–10 000 bounds. */
+    suspend fun setVideoResumeChipMs(ms: Long) {
+        dataStore.edit {
+            VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.writeTo(
+                it,
+                ms.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS_BOUNDS),
+            )
+        }
+    }
+
+    /** The center prev/play/next cluster (default on; off renders only the play button). */
+    suspend fun setVideoShowPrevNextButtons(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.writeTo(it, enabled) }
+    }
+
+    /** Brightness/volume swipe-curve sensitivity (RELAXED / DEFAULT / SENSITIVE). */
+    suspend fun setVideoSwipeSensitivity(sensitivity: PlayerSwipeSensitivity) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.writeTo(it, sensitivity) }
+    }
+
+    /** Gesture-overlay dismiss delay. Clamped to the row's declared 200–2 000 bounds. */
+    suspend fun setVideoGestureOverlayLingerMs(ms: Long) {
+        dataStore.edit {
+            VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.writeTo(
+                it,
+                ms.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS_BOUNDS),
+            )
+        }
+    }
+
+    /** The center double-tap zone's action (AUTO / PLAY_PAUSE / ZOOM_RESET). */
+    suspend fun setVideoCenterDoubleTapAction(action: PlayerCenterDoubleTapAction) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.writeTo(it, action) }
+    }
+
+    /** The left/right double-tap zone split (DEFAULT / EVEN / EXTREME). */
+    suspend fun setVideoDoubleTapZoneBias(bias: PlayerDoubleTapZoneBias) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_ZONE_BIAS.writeTo(it, bias) }
+    }
+
+    /** The hold-speed pill's chrome (DEFAULT readout / MINIMAL icon-only). */
+    suspend fun setVideoHoldSpeedPillStyle(style: PlayerHoldSpeedPillStyle) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_PILL_STYLE.writeTo(it, style) }
+    }
+
+    /** The seek bar's thickness (DEFAULT / TALL). */
+    suspend fun setVideoSeekBarStyle(style: PlayerSeekBarStyle) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SEEK_BAR_STYLE.writeTo(it, style) }
+    }
+
+    /** The seek bar's buffered bands (default on). */
+    suspend fun setVideoShowBufferedRange(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFERED_RANGE.writeTo(it, enabled) }
+    }
+
+    /** The seek bar's chapter markers (default on). */
+    suspend fun setVideoShowChapterMarkers(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_CHAPTER_MARKERS.writeTo(it, enabled) }
+    }
+
+    /** Hides the seek bar's elapsed/total labels (minimal mode). Default off. */
+    suspend fun setVideoHideSeekTimestamps(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_HIDE_SEEK_TIMESTAMPS.writeTo(it, enabled) }
+    }
+
+    /** The buffered-percentage readout beside the seek bar's time row. Default off. */
+    suspend fun setVideoShowBufferPercent(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFER_PERCENT.writeTo(it, enabled) }
+    }
+
+    /** The seek-scrub preview's target timestamp. Default on. */
+    suspend fun setVideoSeekPreviewTime(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SEEK_PREVIEW_TIME.writeTo(it, enabled) }
+    }
+
+    /** The active-engine chip in the player's top bar. Default off. */
+    suspend fun setVideoShowEngineBadge(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SHOW_ENGINE_BADGE.writeTo(it, enabled) }
+    }
+
+    /** The episode browser filters fully-watched episodes. Default off. */
+    suspend fun setVideoEpisodeBrowserHideWatched(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_HIDE_WATCHED.writeTo(it, enabled) }
+    }
+
+    /** The TV controls-auto-hide timeout multiplier (X1 / X2 / X3). */
+    suspend fun setVideoTvTimeoutScale(scale: TvTimeoutScale) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_TV_TIMEOUT_SCALE.writeTo(it, scale) }
+    }
+
+    /** The keyboard modifier seek-step ladder family (CONSERVATIVE / DEFAULT / AGGRESSIVE). */
+    suspend fun setVideoKeyboardSeekPreset(preset: KeyboardSeekPreset) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_KEYBOARD_SEEK_PRESET.writeTo(it, preset) }
+    }
+
+    /** The double-tap-and-hold repeat cadence family (RELAXED / DEFAULT / RAPID). */
+    suspend fun setVideoHoldSeekCadence(cadence: HoldSeekCadence) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_HOLD_SEEK_CADENCE.writeTo(it, cadence) }
+    }
+
+    /** The hold-speed pill's clearance above the bottom controls (COMPACT / DEFAULT / ROOMY). */
+    suspend fun setVideoSpeedPillClearance(clearance: SpeedPillClearance) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SPEED_PILL_CLEARANCE.writeTo(it, clearance) }
+    }
+
+    /** The pause-details panel's fade durations (FAST / DEFAULT / SLOW). */
+    suspend fun setVideoPauseFadeStyle(style: PauseFadeStyle) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_PAUSE_FADE_STYLE.writeTo(it, style) }
+    }
+
+    /** The control button clusters' arrangement (DEFAULT / SWAPPED_SEEK / MINIMAL). */
+    suspend fun setVideoControlLayout(layout: ControlLayout) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CONTROL_LAYOUT.writeTo(it, layout) }
+    }
+
+    /** The pinch-zoom ceiling (X2 / X3 / X4). */
+    suspend fun setVideoMaxZoom(maxZoom: MaxZoom) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_MAX_ZOOM.writeTo(it, maxZoom) }
+    }
+
+    /** The engine's position-poll cadence family (LOW_POWER / DEFAULT / RESPONSIVE). */
+    suspend fun setVideoPollCadence(cadence: PollCadence) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_POLL_CADENCE.writeTo(it, cadence) }
+    }
+
+    /**
+     * The sleep-timer cancel-confirmation threshold in minutes. Clamped to
+     * the row's declared 1–30 bounds (the setter is the clamp owner).
+     */
+    suspend fun setVideoSleepConfirmMinutes(minutes: Int) {
+        dataStore.edit {
+            VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES.writeTo(
+                it,
+                minutes.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES_BOUNDS),
+            )
+        }
+    }
+
+    /** Allow the ambient backdrop under the FILL aspect override. Default off. */
+    suspend fun setVideoAmbientUnderFill(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_AMBIENT_UNDER_FILL.writeTo(it, enabled) }
+    }
+
+    /** The buffering spinner's display rule (DEFAULT / ALWAYS / HIDDEN). */
+    suspend fun setVideoBufferingVeil(veil: BufferingVeil) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_BUFFERING_VEIL.writeTo(it, veil) }
+    }
+
+    /** The speed sheet's chip preset family (COMPACT / DEFAULT / EXTENDED). */
+    suspend fun setVideoSpeedPresetSet(presetSet: SpeedPresetSet) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_SPEED_PRESET_SET.writeTo(it, presetSet) }
+    }
+
+    /** Skip autoplay-next while the connection is metered. Default off. */
+    suspend fun setVideoAutoplayWifiOnly(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_WIFI_ONLY.writeTo(it, enabled) }
+    }
+
+    /** The first BACK shows an in-player exit confirmation. Default off. */
+    suspend fun setVideoConfirmExit(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CONFIRM_EXIT.writeTo(it, enabled) }
+    }
+
     suspend fun setSegmentBehaviors(behaviors: Map<MediaSegmentType, SegmentBehavior>) {
         dataStore.edit { VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.writeTo(it, behaviors) }
     }
@@ -659,6 +905,45 @@ class VideoPlayerStore constructor(
                 prefs,
                 slice.nextUpButtonPrerollSec.coerceIn(VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC_BOUNDS),
             )
+            VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.writeTo(prefs, slice.videoOverlayAnimations)
+            VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.writeTo(
+                prefs,
+                slice.videoResumeChipMs.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS_BOUNDS),
+            )
+            VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.writeTo(prefs, slice.videoShowPrevNextButtons)
+            VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.writeTo(prefs, slice.videoSwipeSensitivity)
+            VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.writeTo(
+                prefs,
+                slice.videoGestureOverlayLingerMs.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS_BOUNDS),
+            )
+            VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.writeTo(prefs, slice.videoCenterDoubleTapAction)
+            VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_ZONE_BIAS.writeTo(prefs, slice.videoDoubleTapZoneBias)
+            VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_PILL_STYLE.writeTo(prefs, slice.videoHoldSpeedPillStyle)
+            VideoPlayerPreferenceSpecs.VIDEO_SEEK_BAR_STYLE.writeTo(prefs, slice.videoSeekBarStyle)
+            VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFERED_RANGE.writeTo(prefs, slice.videoShowBufferedRange)
+            VideoPlayerPreferenceSpecs.VIDEO_SHOW_CHAPTER_MARKERS.writeTo(prefs, slice.videoShowChapterMarkers)
+            VideoPlayerPreferenceSpecs.VIDEO_HIDE_SEEK_TIMESTAMPS.writeTo(prefs, slice.videoHideSeekTimestamps)
+            VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFER_PERCENT.writeTo(prefs, slice.videoShowBufferPercent)
+            VideoPlayerPreferenceSpecs.VIDEO_SEEK_PREVIEW_TIME.writeTo(prefs, slice.videoSeekPreviewTime)
+            VideoPlayerPreferenceSpecs.VIDEO_SHOW_ENGINE_BADGE.writeTo(prefs, slice.videoShowEngineBadge)
+            VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_HIDE_WATCHED.writeTo(prefs, slice.videoEpisodeBrowserHideWatched)
+            VideoPlayerPreferenceSpecs.VIDEO_TV_TIMEOUT_SCALE.writeTo(prefs, slice.videoTvTimeoutScale)
+            VideoPlayerPreferenceSpecs.VIDEO_KEYBOARD_SEEK_PRESET.writeTo(prefs, slice.videoKeyboardSeekPreset)
+            VideoPlayerPreferenceSpecs.VIDEO_HOLD_SEEK_CADENCE.writeTo(prefs, slice.videoHoldSeekCadence)
+            VideoPlayerPreferenceSpecs.VIDEO_SPEED_PILL_CLEARANCE.writeTo(prefs, slice.videoSpeedPillClearance)
+            VideoPlayerPreferenceSpecs.VIDEO_PAUSE_FADE_STYLE.writeTo(prefs, slice.videoPauseFadeStyle)
+            VideoPlayerPreferenceSpecs.VIDEO_CONTROL_LAYOUT.writeTo(prefs, slice.videoControlLayout)
+            VideoPlayerPreferenceSpecs.VIDEO_MAX_ZOOM.writeTo(prefs, slice.videoMaxZoom)
+            VideoPlayerPreferenceSpecs.VIDEO_POLL_CADENCE.writeTo(prefs, slice.videoPollCadence)
+            VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES.writeTo(
+                prefs,
+                slice.videoSleepConfirmMinutes.coerceIn(VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES_BOUNDS),
+            )
+            VideoPlayerPreferenceSpecs.VIDEO_AMBIENT_UNDER_FILL.writeTo(prefs, slice.videoAmbientUnderFill)
+            VideoPlayerPreferenceSpecs.VIDEO_BUFFERING_VEIL.writeTo(prefs, slice.videoBufferingVeil)
+            VideoPlayerPreferenceSpecs.VIDEO_SPEED_PRESET_SET.writeTo(prefs, slice.videoSpeedPresetSet)
+            VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_WIFI_ONLY.writeTo(prefs, slice.videoAutoplayWifiOnly)
+            VideoPlayerPreferenceSpecs.VIDEO_CONFIRM_EXIT.writeTo(prefs, slice.videoConfirmExit)
             VideoPlayerPreferenceSpecs.MPV_TONE_MAPPING_CURVE.writeTo(prefs, slice.mpvToneMappingCurve)
             VideoPlayerPreferenceSpecs.MPV_DEBAND_MODE.writeTo(prefs, slice.mpvDebandMode)
             VideoPlayerPreferenceSpecs.MPV_MOTION_INTERPOLATION.writeTo(prefs, slice.mpvMotionInterpolation)
@@ -773,6 +1058,67 @@ data class VideoPlayerSlice(
     val skipSegmentsOnSeek: Boolean = VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.default,
     /** Seconds before item end that the "Next up" button appears (5–120). */
     val nextUpButtonPrerollSec: Int = VideoPlayerPreferenceSpecs.NEXT_UP_BUTTON_PREROLL_SEC.default,
+    /** Player control-overlay enter/exit animations. Default **on**. */
+    val videoOverlayAnimations: Boolean = VideoPlayerPreferenceSpecs.VIDEO_OVERLAY_ANIMATIONS.default,
+    /** "Restart" resume-chip display duration (0–10 000); 0 = never show. */
+    val videoResumeChipMs: Long = VideoPlayerPreferenceSpecs.VIDEO_RESUME_CHIP_MS.default,
+    /** The center prev/play/next cluster. Default **on**. */
+    val videoShowPrevNextButtons: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_PREV_NEXT_BUTTONS.default,
+    /** Brightness/volume swipe-curve sensitivity. Default DEFAULT (exponent 0.8). */
+    val videoSwipeSensitivity: PlayerSwipeSensitivity = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SENSITIVITY.default,
+    /** Gesture-overlay dismiss delay (200–2 000). */
+    val videoGestureOverlayLingerMs: Long = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_OVERLAY_LINGER_MS.default,
+    /** The center double-tap zone's action. Default AUTO (zoom reset when zoomed, else play/pause). */
+    val videoCenterDoubleTapAction: PlayerCenterDoubleTapAction =
+        VideoPlayerPreferenceSpecs.VIDEO_CENTER_DOUBLE_TAP_ACTION.default,
+    /** The left/right double-tap zone split. Default DEFAULT (35/65). */
+    val videoDoubleTapZoneBias: PlayerDoubleTapZoneBias = VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_ZONE_BIAS.default,
+    /** The hold-speed pill's chrome. Default DEFAULT (speed readout). */
+    val videoHoldSpeedPillStyle: PlayerHoldSpeedPillStyle = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_PILL_STYLE.default,
+    /** The seek bar's thickness. Default DEFAULT. */
+    val videoSeekBarStyle: PlayerSeekBarStyle = VideoPlayerPreferenceSpecs.VIDEO_SEEK_BAR_STYLE.default,
+    /** The seek bar's buffered bands. Default **on**. */
+    val videoShowBufferedRange: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFERED_RANGE.default,
+    /** The seek bar's chapter markers. Default **on**. */
+    val videoShowChapterMarkers: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_CHAPTER_MARKERS.default,
+    /** Hides the seek bar's elapsed/total labels. Default **off**. */
+    val videoHideSeekTimestamps: Boolean = VideoPlayerPreferenceSpecs.VIDEO_HIDE_SEEK_TIMESTAMPS.default,
+    /** The buffered-percentage readout beside the seek bar's time row. Default **off**. */
+    val videoShowBufferPercent: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_BUFFER_PERCENT.default,
+    /** The seek-scrub preview's target timestamp. Default **on**. */
+    val videoSeekPreviewTime: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SEEK_PREVIEW_TIME.default,
+    /** The active-engine chip in the player's top bar. Default **off**. */
+    val videoShowEngineBadge: Boolean = VideoPlayerPreferenceSpecs.VIDEO_SHOW_ENGINE_BADGE.default,
+    /** The episode browser filters fully-watched episodes. Default **off**. */
+    val videoEpisodeBrowserHideWatched: Boolean = VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_HIDE_WATCHED.default,
+    /** The TV controls-auto-hide timeout multiplier. Default X2 (the long-standing doubling). */
+    val videoTvTimeoutScale: TvTimeoutScale = VideoPlayerPreferenceSpecs.VIDEO_TV_TIMEOUT_SCALE.default,
+    /** The keyboard modifier seek-step ladder family. Default DEFAULT (VLC's ladder). */
+    val videoKeyboardSeekPreset: KeyboardSeekPreset = VideoPlayerPreferenceSpecs.VIDEO_KEYBOARD_SEEK_PRESET.default,
+    /** The double-tap-and-hold repeat cadence family. Default DEFAULT. */
+    val videoHoldSeekCadence: HoldSeekCadence = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SEEK_CADENCE.default,
+    /** The hold-speed pill's clearance above the bottom controls. Default DEFAULT (180dp). */
+    val videoSpeedPillClearance: SpeedPillClearance = VideoPlayerPreferenceSpecs.VIDEO_SPEED_PILL_CLEARANCE.default,
+    /** The pause-details panel's fade durations. Default DEFAULT (200/300ms). */
+    val videoPauseFadeStyle: PauseFadeStyle = VideoPlayerPreferenceSpecs.VIDEO_PAUSE_FADE_STYLE.default,
+    /** The control button clusters' arrangement. Default DEFAULT. */
+    val videoControlLayout: ControlLayout = VideoPlayerPreferenceSpecs.VIDEO_CONTROL_LAYOUT.default,
+    /** The pinch-zoom ceiling. Default X3 (the long-standing 1..3 clamp). */
+    val videoMaxZoom: MaxZoom = VideoPlayerPreferenceSpecs.VIDEO_MAX_ZOOM.default,
+    /** The engine's position-poll cadence family. Default DEFAULT (250/1000ms). */
+    val videoPollCadence: PollCadence = VideoPlayerPreferenceSpecs.VIDEO_POLL_CADENCE.default,
+    /** The sleep-timer cancel-confirmation threshold in minutes (1–30). Default 5. */
+    val videoSleepConfirmMinutes: Int = VideoPlayerPreferenceSpecs.VIDEO_SLEEP_CONFIRM_MINUTES.default,
+    /** Allow the ambient backdrop under the FILL aspect override. Default **off**. */
+    val videoAmbientUnderFill: Boolean = VideoPlayerPreferenceSpecs.VIDEO_AMBIENT_UNDER_FILL.default,
+    /** The buffering spinner's display rule. Default DEFAULT. */
+    val videoBufferingVeil: BufferingVeil = VideoPlayerPreferenceSpecs.VIDEO_BUFFERING_VEIL.default,
+    /** The speed sheet's chip preset family. Default DEFAULT (the full ladder). */
+    val videoSpeedPresetSet: SpeedPresetSet = VideoPlayerPreferenceSpecs.VIDEO_SPEED_PRESET_SET.default,
+    /** Skip autoplay-next while the connection is metered. Default **off**. */
+    val videoAutoplayWifiOnly: Boolean = VideoPlayerPreferenceSpecs.VIDEO_AUTOPLAY_WIFI_ONLY.default,
+    /** The first BACK shows an in-player exit confirmation. Default **off**. */
+    val videoConfirmExit: Boolean = VideoPlayerPreferenceSpecs.VIDEO_CONFIRM_EXIT.default,
     /** mpv `tone-mapping` curve family (HDR→SDR). Default AUTO. */
     val mpvToneMappingCurve: MpvToneMappingCurve = VideoPlayerPreferenceSpecs.MPV_TONE_MAPPING_CURVE.default,
     /** mpv deband strength. Default OFF. */

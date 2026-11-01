@@ -153,7 +153,7 @@ internal object SettingsScreenGroups {
 
     /** Derives from [AppearanceThemeRows]: 17 spec-backed rows + 2 residuals. */
     val appearanceTheme = AppearanceThemeGroup
-    /** Derives from [AppearanceNavigationRows]: spec-less residual rows. */
+    /** Derives from [AppearanceNavigationRows]: spec-less residual rows + the spec-backed global-chrome seven. */
     val appearanceNavigation = AppearanceNavigationGroup
     /** Derives from [AppearanceLibraryRows]: 3 spec-backed rows + 5 residuals, every row [RowAdmission.Always]. */
     val appearanceLibrary = AppearanceLibraryGroup

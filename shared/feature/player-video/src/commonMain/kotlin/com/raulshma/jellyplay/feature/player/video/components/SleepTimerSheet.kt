@@ -80,8 +80,10 @@ internal fun SleepTimerSheet(
     onSelectEndOfEpisode: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
+    /** The cancel-confirm threshold in ms (the sleep-confirm-minutes pref). */
+    cancelConfirmThresholdMs: Long = SleepTimerSheetPolicy.CANCEL_CONFIRM_THRESHOLD_MS,
 ) {
-    // cancelling a timer with more than five minutes left asks for
+    // cancelling a timer with more than the configured minutes left asks for
     // confirmation (a fat-finger cancel of a long timer is the expensive
     // accident); the deferred lambda mirrors the repo's ConfirmState idiom.
     val cancelConfirm = rememberConfirmState()
@@ -110,9 +112,14 @@ internal fun SleepTimerSheet(
                                 .focusRequester(focusRequester) // Focus the cancel option by default if active
                                 .tvFocusIndicator(cancelFocusState, shape)
                                 .clickable {
-                                    requestCancel(cancelConfirm, remainingMs) {
-                                        onCancel(); onDismiss()
-                                    }
+                                    requestCancel(
+                                        confirm = cancelConfirm,
+                                        remainingMs = remainingMs,
+                                        thresholdMs = cancelConfirmThresholdMs,
+                                        onCancel = {
+                                            onCancel(); onDismiss()
+                                        },
+                                    )
                                 }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -201,6 +208,7 @@ internal fun SleepTimerSheet(
                         originalMs = lastUsedDurationMs,
                         cancelConfirm = cancelConfirm,
                         onCancel = onCancel,
+                        cancelConfirmThresholdMs = cancelConfirmThresholdMs,
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -286,8 +294,9 @@ private fun requestCancel(
     confirm: ConfirmState,
     remainingMs: Long,
     onCancel: () -> Unit,
+    thresholdMs: Long = SleepTimerSheetPolicy.CANCEL_CONFIRM_THRESHOLD_MS,
 ) {
-    if (SleepTimerSheetPolicy.requiresCancelConfirmation(remainingMs)) {
+    if (SleepTimerSheetPolicy.requiresCancelConfirmation(remainingMs, thresholdMs)) {
         confirm.request(onCancel)
     } else {
         onCancel()
@@ -320,6 +329,7 @@ private fun ActiveTimerSection(
     originalMs: Long,
     cancelConfirm: ConfirmState,
     onCancel: () -> Unit,
+    cancelConfirmThresholdMs: Long,
 ) {
     var displayRemaining by remember(remainingMs) { mutableLongStateOf(remainingMs) }
 
@@ -382,7 +392,12 @@ private fun ActiveTimerSection(
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.clickable {
-                    requestCancel(cancelConfirm, displayRemaining) { onCancel() }
+                    requestCancel(
+                        confirm = cancelConfirm,
+                        remainingMs = displayRemaining,
+                        thresholdMs = cancelConfirmThresholdMs,
+                        onCancel = { onCancel() },
+                    )
                 },
             )
         }

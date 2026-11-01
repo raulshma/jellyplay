@@ -54,6 +54,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.components.LocalCardProgressStyle
+import com.raulshma.jellyplay.core.ui.components.LocalCardShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
 import org.koin.compose.viewmodel.koinViewModel
@@ -444,6 +446,9 @@ private fun MainHomeContent(
         listState = listState,
         getBackdropUrl = heroBackdropUrlBuilder,
         timedAdvanceMs = heroStyleDecision.autoAdvanceMs,
+        idleRotationMs = state.homeHeroIdleRotationMs.toLong(),
+        scrollDeferEnabled = state.heroScrollDefer,
+        randomStart = state.homeHeroRandomStart,
     )
 
     // Global nav overflow "Surprise Me": the hero controller lives here
@@ -633,7 +638,7 @@ private fun MainHomeContent(
     val allDiscoverItems = remember(state.discoverSections) {
         discoverSectionOrder.flatMap { state.discoverSections[it] ?: emptyList() }.distinctBy { it.id }
     }
-    val discoverRows = rememberDiscoverRows(allDiscoverItems)
+    val discoverRows = rememberDiscoverRows(allDiscoverItems, state.homeDiscoverPattern)
 
     // The search SESSION (expanded flag + close ordering) lives in one holder
     // — see HomeSearchSession. The data half stays in the VM's search holder;
@@ -672,7 +677,27 @@ private fun MainHomeContent(
     // content subtree: every forced refresh bumps the counter (HomeRefresher),
     // resetting image chains that failed on a transient error so the next
     // pull-to-refresh actually recovers cards stuck on their blurHash.
-    CompositionLocalProvider(LocalImageReloadEpoch provides state.imageReloadEpoch) {
+    // The row-chrome locals carry the display-QoL prefs (card scale/radius,
+    // See-All visibility, CW progress style) to every row arm; the shape and
+    // progress locals are the core-ui read sites of the same prefs.
+    val rowChrome = remember(state.homeHideSeeAll, state.homeCardScale, state.homeCardCornerRadius, state.homeCwProgressStyle, state.homeRowsAnimations) {
+        HomeRowChrome(
+            hideSeeAll = state.homeHideSeeAll,
+            cardScale = state.homeCardScale.toScaleFactor(),
+            cornerRadius = state.homeCardCornerRadius.dp,
+            cwProgressStyle = state.homeCwProgressStyle,
+            rowsAnimations = state.homeRowsAnimations,
+        )
+    }
+    val cardShapeOverride = remember(state.homeCardCornerRadius) {
+        homeCardShapeFor(state.homeCardCornerRadius)
+    }
+    CompositionLocalProvider(
+        LocalImageReloadEpoch provides state.imageReloadEpoch,
+        LocalHomeRowChrome provides rowChrome,
+        LocalCardShape provides cardShapeOverride,
+        LocalCardProgressStyle provides state.homeCwProgressStyle,
+    ) {
     ArtworkThemeWrapper(
         imageUrl = heroController.backdropUrl,
         dynamicTheming = state.appearance.dynamicTheming,
@@ -684,7 +709,9 @@ private fun MainHomeContent(
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { viewModel.onEvent(HomeUiEvent.PullToRefresh) },
-            enabled = !isTv && !isSearchFocused,
+            // The pull-to-refresh master toggle (appearance) ANDs the TV and
+            // search gates.
+            enabled = !isTv && !isSearchFocused && state.appearance.pullToRefreshEnabled,
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(
@@ -774,8 +801,9 @@ private fun MainHomeContent(
             )
             CompositionLocalProvider(
                 LocalMediaQuickActionController provides quickActionController,
-                // The wide-card trickplay peek's pref gate.
+                // The wide-card trickplay peek's pref gate + hold time.
                 LocalHomeTrickplayPreview provides state.trickplayPreviewEnabled,
+                LocalHomeTrickplayPeekMs provides state.homeTrickplayPeekMs,
             ) {
                 Box(
                     modifier = Modifier
@@ -988,8 +1016,15 @@ private fun HomeSurfaceContent(
                         homeLastVisitEpochMs = state.homeLastVisitEpochMs,
                         statsCard = statsCardData,
                         statsCardEnabled = state.statsCardEnabled,
+                        statsMetrics = state.homeStatsMetrics,
                         genreChips = state.genreChips,
                         genreRailEnabled = state.genreRailEnabled,
+                        preSectionOrder = state.homePreSectionOrder,
+                        newBadgeSections = state.homeNewBadgeSections,
+                        newBadgeCutoffEpochMs = state.homeNewBadgeCutoffEpochMs,
+                        discoverPattern = state.homeDiscoverPattern,
+                        myMediaColumns = state.homeMyMediaColumns,
+                        rowUnwatchedCounters = state.homeRowUnwatchedCounters,
                     ),
                     // WHAT renders was decided by the fold — the
                     // feed carries the online or offline surface
@@ -1021,6 +1056,11 @@ private fun HomeSurfaceContent(
                 callbacks = HomeContentCallbacks(
                     onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
                     onDismissNewsletterBanner = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner) } },
+                    onRememberAskContinueChoice = remember(viewModel) {
+                        { behavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior ->
+                            viewModel.onEvent(HomeUiEvent.SetContinueWatchingClickBehavior(behavior))
+                        }
+                    },
                     onNewsletterClick = callbacks.onNewsletterClick,
                     onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                     onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
@@ -1209,6 +1249,11 @@ private fun HomeDockArea(
             homeHeroEnabled = state.homeHeroEnabled,
             hasFeaturedItem = heroHasFeaturedItem,
             hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
+            homeClockShowDate = state.homeClockShowDate,
+            homeOpaqueDock = state.homeOpaqueDock,
+            homeGreetingEnabled = state.homeGreetingEnabled,
+            homeShowModeSwitch = state.homeShowModeSwitch,
+            homeAlwaysShowUserSwitcher = state.homeAlwaysShowUserSwitcher,
             headerShortcuts = headerShortcuts,
         ),
         dockCallbacks = HomeDockCallbacks(
@@ -1225,6 +1270,7 @@ private fun HomeDockArea(
         onHeroFocusDown = remember(heroFocusRequester) {
             { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
         },
+        searchResultsMaxHeightDp = state.homeSearchResultsHeightDp.dp,
         searchResultsContent = { settingsResults ->
             // The results slice is collected in this slot (NOT mirrored into
             // HomeUiState, like the per-keystroke query) so each isSearching →
@@ -1483,6 +1529,8 @@ private fun HomeTopDockScrim(
     settingsSearch: (Flow<String>) -> Flow<List<ResolvedSettingsItem>>,
     onHeroFocusDown: () -> Boolean,
     searchResultsContent: @Composable (List<ResolvedSettingsItem>) -> Unit,
+    /** The search overlay's results-pane height cap (the `home_search_results_height_dp` pref). */
+    searchResultsMaxHeightDp: Dp = 400.dp,
 ) {
     val onSurface = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
     val baseIconColor = if (isLightTheme) onSurface else androidx.compose.ui.graphics.Color.White
@@ -1571,6 +1619,7 @@ private fun HomeTopDockScrim(
         state = dockState,
         callbacks = dockCallbacks,
         searchResultsContent = { searchResultsContent(settingsResults) },
+        searchResultsMaxHeightDp = searchResultsMaxHeightDp,
         modifier = Modifier
             .then(
                 if (isTv) {

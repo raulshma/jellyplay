@@ -302,13 +302,30 @@ val MediaItem.seriesIdForDetail: String?
  * and a zero/never-stamped [lastVisitEpochMs] (first visit — everything in
  * the library predates no stamp, and stamping happens ~10s into the visit,
  * so the first session would otherwise badge the entire library).
+ *
+ * [arrivalCutoffEpochMs] caps how old an arrival may be and still badge
+ * (the `home_new_badge_days` window): arrivals older than the cutoff stop
+ * badgeing even though they postdate a long-absent user's last visit. The
+ * default [Long.MIN_VALUE] is "no cutoff" — the pure visit-based predicate,
+ * the shipped behavior.
  */
-fun isNewForHome(dateCreatedEpochMs: Long?, lastVisitEpochMs: Long): Boolean =
-    dateCreatedEpochMs != null && lastVisitEpochMs > 0L && dateCreatedEpochMs > lastVisitEpochMs
+fun isNewForHome(
+    dateCreatedEpochMs: Long?,
+    lastVisitEpochMs: Long,
+    arrivalCutoffEpochMs: Long = Long.MIN_VALUE,
+): Boolean =
+    dateCreatedEpochMs != null &&
+        lastVisitEpochMs > 0L &&
+        dateCreatedEpochMs > lastVisitEpochMs &&
+        dateCreatedEpochMs >= arrivalCutoffEpochMs
 
 /** [isNewForHome] against the item's own [MediaItem.dateCreatedEpochMs]. */
-fun MediaItem.isNewForHome(lastVisitEpochMs: Long): Boolean =
-    isNewForHome(dateCreatedEpochMs = dateCreatedEpochMs, lastVisitEpochMs = lastVisitEpochMs)
+fun MediaItem.isNewForHome(lastVisitEpochMs: Long, arrivalCutoffEpochMs: Long = Long.MIN_VALUE): Boolean =
+    isNewForHome(
+        dateCreatedEpochMs = dateCreatedEpochMs,
+        lastVisitEpochMs = lastVisitEpochMs,
+        arrivalCutoffEpochMs = arrivalCutoffEpochMs,
+    )
 
 @Immutable
 @Serializable

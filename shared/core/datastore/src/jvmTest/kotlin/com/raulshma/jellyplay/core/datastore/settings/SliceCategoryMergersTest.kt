@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
+import com.raulshma.jellyplay.core.model.BackdropDimLevel
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
@@ -18,6 +19,9 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.HapticsIntensity
+import com.raulshma.jellyplay.core.model.ImageQualityPreset
+import com.raulshma.jellyplay.core.model.ListDensity
 import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.LayoutMode
@@ -30,6 +34,8 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.PressEffectStyle
+import com.raulshma.jellyplay.core.model.OverscrollStyle
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -123,6 +129,16 @@ class SliceCategoryMergersTest {
         layoutMode = LayoutMode.PHONE,
         tvOverscan = TvOverscan.TEN,
         hapticsEnabled = false,
+        timeUse24h = true,
+        cardPressAnimations = false,
+        pullToRefreshEnabled = false,
+        appBackdropDim = BackdropDimLevel.HEAVIER,
+        hapticsIntensity = HapticsIntensity.STRONG,
+        imageQualityPreset = ImageQualityPreset.HIGH_90,
+        appListDensity = ListDensity.COMPACT,
+        appPressEffect = PressEffectStyle.SUBTLE,
+        appFlatCards = true,
+        appOverscrollStyle = OverscrollStyle.NONE,
     )
 
     @Test
@@ -136,14 +152,29 @@ class SliceCategoryMergersTest {
     fun `appearance slice with APPEARANCE only replaces appearance fields but keeps haptics`() {
         val current = AppearanceSlice()
         val merged = current.mergeWith(appearanceIncoming, setOf(PreferenceResetCategory.APPEARANCE))
-        assertEquals(appearanceIncoming.copy(hapticsEnabled = current.hapticsEnabled), merged)
+        assertEquals(
+            appearanceIncoming.copy(
+                hapticsEnabled = current.hapticsEnabled,
+                // MISC_APP-only rows keep their current values under a
+                // plain-APPEARANCE import.
+                pullToRefreshEnabled = current.pullToRefreshEnabled,
+            ),
+            merged,
+        )
     }
 
     @Test
     fun `appearance slice with MISC_APP only replaces haptics but keeps appearance fields`() {
         val current = AppearanceSlice()
         val merged = current.mergeWith(appearanceIncoming, setOf(PreferenceResetCategory.MISC_APP))
-        assertEquals(current.copy(hapticsEnabled = false), merged)
+        assertEquals(
+            current.copy(
+                hapticsEnabled = false,
+                // The MISC_APP rows travel with the misc import.
+                pullToRefreshEnabled = false,
+            ),
+            merged,
+        )
     }
 
     @Test

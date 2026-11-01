@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.feature.player.video.chrome.KEY_SEEK_STEP_HOME_END_MS
-import com.raulshma.jellyplay.feature.player.video.chrome.KEY_SEEK_STEP_PAGE_MS
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
+import com.raulshma.jellyplay.feature.player.video.chrome.keyboardSeekStepTable
 import com.raulshma.jellyplay.feature.player.video.chrome.keyboardSeekStepMs
 
 /**
@@ -50,7 +50,10 @@ internal fun mediaKeySeek(
     isShiftPressed: Boolean = false,
     isCtrlPressed: Boolean = false,
     isAltPressed: Boolean = false,
+    /** The modifier-ladder magnitude family (the keyboard-seek-preset pref). */
+    seekPreset: KeyboardSeekPreset = KeyboardSeekPreset.DEFAULT,
 ): PlayerKeySeek? {
+    val table = keyboardSeekStepTable(seekPreset)
     fun modifierStepped(direction: Int) = PlayerKeySeek(
         direction = direction,
         stepMs = keyboardSeekStepMs(
@@ -58,6 +61,7 @@ internal fun mediaKeySeek(
             isCtrlPressed = isCtrlPressed,
             isAltPressed = isAltPressed,
             configuredStepMs = configuredStepMs,
+            preset = seekPreset,
         ),
     )
 
@@ -72,10 +76,10 @@ internal fun mediaKeySeek(
         PlayerKeyCodes.KEYCODE_J,
         -> modifierStepped(direction = -1)
 
-        PlayerKeyCodes.KEYCODE_PAGE_UP -> PlayerKeySeek(direction = 1, stepMs = KEY_SEEK_STEP_PAGE_MS)
-        PlayerKeyCodes.KEYCODE_PAGE_DOWN -> PlayerKeySeek(direction = -1, stepMs = KEY_SEEK_STEP_PAGE_MS)
-        PlayerKeyCodes.KEYCODE_MOVE_HOME -> PlayerKeySeek(direction = -1, stepMs = KEY_SEEK_STEP_HOME_END_MS)
-        PlayerKeyCodes.KEYCODE_MOVE_END -> PlayerKeySeek(direction = 1, stepMs = KEY_SEEK_STEP_HOME_END_MS)
+        PlayerKeyCodes.KEYCODE_PAGE_UP -> PlayerKeySeek(direction = 1, stepMs = table.pageMs)
+        PlayerKeyCodes.KEYCODE_PAGE_DOWN -> PlayerKeySeek(direction = -1, stepMs = table.pageMs)
+        PlayerKeyCodes.KEYCODE_MOVE_HOME -> PlayerKeySeek(direction = -1, stepMs = table.homeEndMs)
+        PlayerKeyCodes.KEYCODE_MOVE_END -> PlayerKeySeek(direction = 1, stepMs = table.homeEndMs)
 
         else -> null
     }

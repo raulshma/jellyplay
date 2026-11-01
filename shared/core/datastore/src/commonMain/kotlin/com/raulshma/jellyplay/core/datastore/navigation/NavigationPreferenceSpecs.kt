@@ -99,8 +99,33 @@ object NavigationPreferenceSpecs {
         ),
     )
 
+    /**
+     * The app's start tab — the top-level destination key (a
+     * [com.raulshma.jellyplay.core.ui.navigation.NavDestination.key]) the
+     * shell opens on launch, or "" for the shipped Home default. A string
+     * (not an enum) so the registry owns the vocabulary: the settings picker
+     * lists the current visible top-level destinations and the shell resolves
+     * the key through the destination registry.
+     */
+    private val START_TAB_ROW: PreferenceSpec<String> = PreferenceSpec.derived(
+        keyName = "start_tab",
+        default = "",
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        read = { _, raw -> raw ?: "" },
+        encode = { it },
+        search = PreferenceSearchSpec(
+            id = "start_tab",
+            titleKey = "ss_start_tab_title",
+            subtitleKey = "ss_start_tab_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("start", "launch", "open", "tab", "destination", "home screen", "startup"),
+            routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+        ),
+    )
+
     /** The hidden-items set + custom ordering (the customization sheet's data). */
     private val items: List<PreferenceSpec<*>> = listOf(
+        START_TAB_ROW,
         /*
          * The hidden bottom-bar items (JSON blob; decode memoised on the raw
          * string — see [cachedHiddenNavItems]). Not searchable — the set is
@@ -199,6 +224,8 @@ object NavigationPreferenceSpecs {
     val HIDDEN_NAV_ITEMS: PreferenceSpec<Set<String>> get() = row("hidden_nav_items")
 
     val NAV_ITEM_ORDER: PreferenceSpec<List<String>> get() = row("nav_item_order")
+
+    val START_TAB: PreferenceSpec<String> get() = row("start_tab")
 
     /** The rows keyed by wire name — the accessor lookup's memo (built once). */
     private val rowsByName: Map<String, PreferenceSpec<*>> by lazy { all.associateBy { it.keyName } }

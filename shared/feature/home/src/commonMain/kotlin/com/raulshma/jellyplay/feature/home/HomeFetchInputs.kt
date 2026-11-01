@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.model.HomeRefreshCadence
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 
@@ -61,4 +62,11 @@ internal data class HomeFetchInputs(
      * `androidTvWatchNextEnabled` mirror.
      */
     val androidTvWatchNextEnabled: () -> Boolean,
+    /**
+     * The home feed's refresh cadence (the `home_refresh_cadence` pref) —
+     * re-read per periodic-loop iteration, so a cadence change applies from
+     * the next tick ([HomeFreshness.intervalMsFor] maps it; MANUAL stops the
+     * loop entirely). Backed by the VM's `homeRefreshCadence` mirror.
+     */
+    val refreshCadence: () -> HomeRefreshCadence,
 )

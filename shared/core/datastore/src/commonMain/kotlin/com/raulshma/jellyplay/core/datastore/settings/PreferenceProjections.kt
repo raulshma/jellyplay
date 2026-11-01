@@ -284,6 +284,7 @@ class PreferenceProjections constructor(
                 hiddenNavItems = nav.hiddenNavItems,
                 navItemOrder = nav.navItemOrder,
                 hideBottomNavOnScroll = nav.hideBottomNavOnScroll,
+                startTab = nav.startTab,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), NavigationCustomizationPreferences())
@@ -335,6 +336,7 @@ class PreferenceProjections constructor(
     ) { g1, notification ->
         g1.appearanceCoreValues().toAppearanceScreenPreferences(
             appearance = g1.appearance,
+            navigation = g1.navigation,
             home = g1.home,
             library = g1.library,
             experimental = g1.experimental,
@@ -390,6 +392,35 @@ class PreferenceProjections constructor(
                 showNewBadges = home.showNewBadges,
                 homeTrickplayPreview = home.homeTrickplayPreview,
                 antiSpoilerHome = home.antiSpoilerHome,
+                homeGreetingEnabled = home.homeGreetingEnabled,
+                homeHideSeeAll = home.homeHideSeeAll,
+                homeCardScale = home.homeCardScale,
+                homeCardCornerRadius = home.homeCardCornerRadius,
+                homeShowModeSwitch = home.homeShowModeSwitch,
+                homeClockShowDate = home.homeClockShowDate,
+                homeNewsletterBannerEnabled = home.homeNewsletterBannerEnabled,
+                homeAlwaysShowUserSwitcher = home.homeAlwaysShowUserSwitcher,
+                homeCwProgressStyle = home.homeCwProgressStyle,
+                homePresenceChipsLimit = home.homePresenceChipsLimit,
+                homeGenreRailLimit = home.homeGenreRailLimit,
+                homeAskContinueRemember = home.homeAskContinueRemember,
+                homeRowsAnimations = home.homeRowsAnimations,
+                homeOpaqueDock = home.homeOpaqueDock,
+                homePreSectionOrder = home.homePreSectionOrder,
+                homeNewBadgeSections = home.homeNewBadgeSections,
+                homeRefreshCadence = home.homeRefreshCadence,
+                homeHeroIdleRotationMs = home.homeHeroIdleRotationMs,
+                heroScrollDefer = home.heroScrollDefer,
+                homeDiscoverPattern = home.homeDiscoverPattern,
+                homeNewsletterWindow = home.homeNewsletterWindow,
+                homePresencePollSeconds = home.homePresencePollSeconds,
+                homeTrickplayPeekMs = home.homeTrickplayPeekMs,
+                homeSearchResultsHeightDp = home.homeSearchResultsHeightDp,
+                homeMyMediaColumns = home.homeMyMediaColumns,
+                homeStatsMetrics = home.homeStatsMetrics,
+                homeNewBadgeDays = home.homeNewBadgeDays,
+                homeRowUnwatchedCounters = home.homeRowUnwatchedCounters,
+                homeHeroRandomStart = home.homeHeroRandomStart,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), HomeScreenPreferences())
@@ -465,6 +496,35 @@ class PreferenceProjections constructor(
             trailerPreviewOnFocus = library.trailerPreviewOnFocus,
             showPromotedActionsLandscape = library.showPromotedActionsLandscape,
             showDownloadProgress = library.showDownloadProgress,
+            castItemSize = library.detailCastItemSize,
+            castSeeAllLimit = library.detailCastSeeAllLimit,
+            backdropParallax = library.detailBackdropParallax,
+            overviewCollapseLines = library.detailOverviewCollapseLines,
+            hideWatchedEpisodes = library.detailHideWatchedEpisodes,
+            confirmMarkPlayed = library.detailConfirmMarkPlayed,
+            showStudioChips = library.detailShowStudioChips,
+            showGenreChips = library.detailShowGenreChips,
+            showTagChips = library.detailShowTagChips,
+            showSkipChips = library.detailShowSkipChips,
+            seasonTabsArtwork = library.detailSeasonTabsArtwork,
+            peopleGridDensity = library.detailPeopleGridDensity,
+            showTrailerBadges = library.detailShowTrailerBadges,
+            persistSectionHides = library.detailPersistSectionHides,
+            hiddenFranchiseIds = library.detailHiddenFranchiseIds,
+            similarItemsLimit = library.detailSimilarLimit,
+            upcomingEpisodesLimit = library.detailUpcomingLimit,
+            sectionOrder = splitSectionOrderCsv(library.detailSectionOrder),
+            staggerStyle = library.detailStaggerStyle,
+            backdropResolution = library.detailBackdropResolution,
+            chapterCardSize = library.detailChapterCardSize,
+            reviewsPreviewLines = library.detailReviewsPreviewLines,
+            filmographySort = library.detailFilmographySort,
+            franchiseBoxLimit = library.detailFranchiseBoxLimit,
+            franchiseMemberLimit = library.detailFranchiseMemberLimit,
+            smartPlayPriority = library.detailSmartPlayPriority,
+            streamFallbackLanguage = library.detailStreamFallbackLanguage,
+            promotedRailSource = library.detailPromotedRailSource,
+            episodeOverviewPreview = library.detailEpisodeOverviewPreview,
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
@@ -582,13 +642,15 @@ class PreferenceProjections constructor(
             ::MainScreenBundle,
         ),
         stores.playback.playback,
-    ) { g1, playback ->
+        stores.networkOffline.networkOffline,
+    ) { g1, playback, networkOffline ->
         mainScreenPreferences(
             appearance = g1.appearance,
             security = g1.security,
             home = g1.home,
             navigation = g1.navigation,
             experimental = g1.experimental,
+            networkOffline = networkOffline,
             playback = playback,
         )
     }.distinctUntilChanged()

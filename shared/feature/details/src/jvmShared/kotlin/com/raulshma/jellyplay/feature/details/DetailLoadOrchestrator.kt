@@ -847,7 +847,11 @@ internal class DetailLoadOrchestrator(
     private fun computeSeasonSmartPlayTarget(season: MediaItem) {
         scope.launch(smartPlayDispatcher) {
             val sorted = _state.value.sortedEpisodes.takeIf { it.isNotEmpty() }
-            val result = sorted?.let { SmartPlayResolver.resolveSeason(season.id, it) }
+            // The detail_smart_play_priority pref reorders the dispatch
+            // candidates (DEFAULT = the shipped resume > next-up > replay).
+            val result = sorted?.let {
+                SmartPlayResolver.resolveSeason(season.id, it, preferences.value.smartPlayPriority)
+            }
             _state.update {
                 it.copy(smartPlayTarget = result?.toUiTarget())
             }
@@ -862,7 +866,7 @@ internal class DetailLoadOrchestrator(
                 _state.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
-            val result = SmartPlayResolver.resolveSeries(sorted)
+            val result = SmartPlayResolver.resolveSeries(sorted, preferences.value.smartPlayPriority)
             if (result == null) {
                 _state.update { it.copy(smartPlayTarget = null) }
                 return@launch

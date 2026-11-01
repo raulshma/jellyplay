@@ -27,6 +27,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.heightIn
+import com.raulshma.jellyplay.core.model.ListDensity
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -136,6 +138,29 @@ private fun Modifier.highlightGlow(glowAlpha: Float, shape: androidx.compose.ui.
             } else Modifier
         )
 
+
+
+/**
+ * The list-density setting's face on the shared list rows: COMPACT sets the
+ * headline in the smaller bodyMedium style (rows tighten around the shorter
+ * text), ROOMY enforces a taller row minimum, DEFAULT keeps Material's
+ * shipped row. Both [SettingListItem] and [SettingToggleItem] read it, so
+ * one setting governs every settings row's density.
+ */
+private val ListDensity.headlineStyle: androidx.compose.ui.text.TextStyle
+    @Composable get() = when (this) {
+        ListDensity.COMPACT -> MaterialTheme.typography.bodyMedium
+        ListDensity.DEFAULT -> MaterialTheme.typography.bodyLarge
+        ListDensity.ROOMY -> MaterialTheme.typography.bodyLarge
+    }
+
+/** The ROOMY row-height floor (no-op for the other densities). */
+private val ListDensity.rowMinHeight: androidx.compose.ui.unit.Dp
+    get() = when (this) {
+        ListDensity.ROOMY -> 88.dp
+        else -> androidx.compose.ui.unit.Dp.Unspecified
+    }
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingListItem(
@@ -221,7 +246,7 @@ private fun SettingListItemImpl(
         headlineContent = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = LocalListDensity.current.headlineStyle,
                 fontWeight = FontWeight.Medium,
                 color = headlineColor,
                 maxLines = 1,
@@ -290,6 +315,12 @@ private fun SettingListItemImpl(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                LocalListDensity.current.rowMinHeight
+                    .takeIf { it != androidx.compose.ui.unit.Dp.Unspecified }
+                    ?.let { Modifier.heightIn(min = it) }
+                    ?: Modifier,
+            )
             .then(modifier)
             .pressScale(
                 interactionSource = interactionSource,
@@ -397,7 +428,7 @@ private fun SettingToggleItemImpl(
         headlineContent = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = LocalListDensity.current.headlineStyle,
                 fontWeight = FontWeight.Medium,
                 color = headlineColor,
                 maxLines = 1,
@@ -440,6 +471,12 @@ private fun SettingToggleItemImpl(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                LocalListDensity.current.rowMinHeight
+                    .takeIf { it != androidx.compose.ui.unit.Dp.Unspecified }
+                    ?.let { Modifier.heightIn(min = it) }
+                    ?: Modifier,
+            )
             .then(modifier)
             .pressScale(
                 interactionSource = interactionSource,

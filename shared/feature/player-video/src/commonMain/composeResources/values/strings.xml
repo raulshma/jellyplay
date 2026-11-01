@@ -448,4 +448,10 @@
 
     <!-- #13 pause-details overlay: the cast ribbon's prefix (names join with separators) -->
     <string name="pause_details_starring">Starring</string>
+
+    <!-- Confirm-exit overlay (the video_confirm_exit pref's in-player confirm). -->
+    <string name="player_video_exit_confirm_title">Close the player?</string>
+    <string name="player_video_exit_confirm_message">Press back again — or confirm — to close the player.</string>
+    <string name="player_video_exit_confirm_confirm">Close</string>
+    <string name="player_video_exit_confirm_stay">Stay</string>
 </resources>

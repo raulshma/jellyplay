@@ -5,13 +5,28 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.model.BufferingVeil
+import com.raulshma.jellyplay.core.model.ControlLayout
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
+import com.raulshma.jellyplay.core.model.HoldSeekCadence
 import com.raulshma.jellyplay.core.model.InputPattern
+import com.raulshma.jellyplay.core.model.KeyboardSeekPreset
+import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PauseFadeStyle
+import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
+import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
+import com.raulshma.jellyplay.core.model.PlayerHoldSpeedPillStyle
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
+import com.raulshma.jellyplay.core.model.PlayerSeekBarStyle
+import com.raulshma.jellyplay.core.model.PlayerSwipeSensitivity
+import com.raulshma.jellyplay.core.model.PollCadence
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.SpeedPillClearance
+import com.raulshma.jellyplay.core.model.SpeedPresetSet
+import com.raulshma.jellyplay.core.model.TvTimeoutScale
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StillWatchingMode
 import kotlinx.coroutines.CoroutineScope
@@ -359,6 +374,129 @@ class VideoPlayerStoreTest {
     }
 
     @Test
+    fun `player chrome customization setters round-trip, coerce and reset`() = runTest {
+        // The 16 player-chrome knobs, consolidated: set every one, assert the
+        // slice, reset to defaults, assert the defaults again.
+
+        // ── set all 16 ──
+        store.setVideoOverlayAnimations(false)
+        store.setVideoResumeChipMs(5_000L)
+        store.setVideoShowPrevNextButtons(false)
+        store.setVideoSwipeSensitivity(PlayerSwipeSensitivity.SENSITIVE)
+        store.setVideoGestureOverlayLingerMs(1_200L)
+        store.setVideoCenterDoubleTapAction(PlayerCenterDoubleTapAction.PLAY_PAUSE)
+        store.setVideoDoubleTapZoneBias(PlayerDoubleTapZoneBias.EXTREME)
+        store.setVideoHoldSpeedPillStyle(PlayerHoldSpeedPillStyle.MINIMAL)
+        store.setVideoSeekBarStyle(PlayerSeekBarStyle.TALL)
+        store.setVideoShowBufferedRange(false)
+        store.setVideoShowChapterMarkers(false)
+        store.setVideoHideSeekTimestamps(true)
+        store.setVideoShowBufferPercent(true)
+        store.setVideoSeekPreviewTime(false)
+        store.setVideoShowEngineBadge(true)
+        store.setVideoEpisodeBrowserHideWatched(true)
+        store.setVideoTvTimeoutScale(TvTimeoutScale.X3)
+        store.setVideoKeyboardSeekPreset(KeyboardSeekPreset.AGGRESSIVE)
+        store.setVideoHoldSeekCadence(HoldSeekCadence.RAPID)
+        store.setVideoSpeedPillClearance(SpeedPillClearance.ROOMY)
+        store.setVideoPauseFadeStyle(PauseFadeStyle.FAST)
+        store.setVideoControlLayout(ControlLayout.MINIMAL)
+        store.setVideoMaxZoom(MaxZoom.X4)
+        store.setVideoPollCadence(PollCadence.LOW_POWER)
+        store.setVideoSleepConfirmMinutes(15)
+        store.setVideoAmbientUnderFill(true)
+        store.setVideoBufferingVeil(BufferingVeil.HIDDEN)
+        store.setVideoSpeedPresetSet(SpeedPresetSet.EXTENDED)
+        store.setVideoAutoplayWifiOnly(true)
+        store.setVideoConfirmExit(true)
+
+        with(store.videoPlayer.first()) {
+            assertFalse(videoOverlayAnimations)
+            assertEquals(5_000L, videoResumeChipMs)
+            assertFalse(videoShowPrevNextButtons)
+            assertEquals(PlayerSwipeSensitivity.SENSITIVE, videoSwipeSensitivity)
+            assertEquals(1_200L, videoGestureOverlayLingerMs)
+            assertEquals(PlayerCenterDoubleTapAction.PLAY_PAUSE, videoCenterDoubleTapAction)
+            assertEquals(PlayerDoubleTapZoneBias.EXTREME, videoDoubleTapZoneBias)
+            assertEquals(PlayerHoldSpeedPillStyle.MINIMAL, videoHoldSpeedPillStyle)
+            assertEquals(PlayerSeekBarStyle.TALL, videoSeekBarStyle)
+            assertFalse(videoShowBufferedRange)
+            assertFalse(videoShowChapterMarkers)
+            assertTrue(videoHideSeekTimestamps)
+            assertTrue(videoShowBufferPercent)
+            assertFalse(videoSeekPreviewTime)
+            assertTrue(videoShowEngineBadge)
+            assertTrue(videoEpisodeBrowserHideWatched)
+            assertEquals(TvTimeoutScale.X3, videoTvTimeoutScale)
+            assertEquals(KeyboardSeekPreset.AGGRESSIVE, videoKeyboardSeekPreset)
+            assertEquals(HoldSeekCadence.RAPID, videoHoldSeekCadence)
+            assertEquals(SpeedPillClearance.ROOMY, videoSpeedPillClearance)
+            assertEquals(PauseFadeStyle.FAST, videoPauseFadeStyle)
+            assertEquals(ControlLayout.MINIMAL, videoControlLayout)
+            assertEquals(MaxZoom.X4, videoMaxZoom)
+            assertEquals(PollCadence.LOW_POWER, videoPollCadence)
+            assertEquals(15, videoSleepConfirmMinutes)
+            assertTrue(videoAmbientUnderFill)
+            assertEquals(BufferingVeil.HIDDEN, videoBufferingVeil)
+            assertEquals(SpeedPresetSet.EXTENDED, videoSpeedPresetSet)
+            assertTrue(videoAutoplayWifiOnly)
+            assertTrue(videoConfirmExit)
+        }
+
+        // Bounds coercion: the two bounded longs clamp at both ends (the
+        // setter is the clamp owner).
+        store.setVideoResumeChipMs(-1L)
+        assertEquals(0L, store.videoPlayer.first().videoResumeChipMs)
+        store.setVideoResumeChipMs(99_999L)
+        assertEquals(10_000L, store.videoPlayer.first().videoResumeChipMs)
+        store.setVideoGestureOverlayLingerMs(1L)
+        assertEquals(200L, store.videoPlayer.first().videoGestureOverlayLingerMs)
+        store.setVideoGestureOverlayLingerMs(99_999L)
+        assertEquals(2_000L, store.videoPlayer.first().videoGestureOverlayLingerMs)
+
+        // The sleep-confirm threshold clamps at both ends (1–30; the setter
+        // is the clamp owner).
+        store.setVideoSleepConfirmMinutes(0)
+        assertEquals(1, store.videoPlayer.first().videoSleepConfirmMinutes)
+        store.setVideoSleepConfirmMinutes(99)
+        assertEquals(30, store.videoPlayer.first().videoSleepConfirmMinutes)
+
+        // ── reset → defaults ──
+        store.setVideoOverlayAnimations(true)
+        store.setVideoResumeChipMs(3_000L)
+        store.setVideoShowPrevNextButtons(true)
+        store.setVideoSwipeSensitivity(PlayerSwipeSensitivity.DEFAULT)
+        store.setVideoGestureOverlayLingerMs(800L)
+        store.setVideoCenterDoubleTapAction(PlayerCenterDoubleTapAction.AUTO)
+        store.setVideoDoubleTapZoneBias(PlayerDoubleTapZoneBias.DEFAULT)
+        store.setVideoHoldSpeedPillStyle(PlayerHoldSpeedPillStyle.DEFAULT)
+        store.setVideoSeekBarStyle(PlayerSeekBarStyle.DEFAULT)
+        store.setVideoShowBufferedRange(true)
+        store.setVideoShowChapterMarkers(true)
+        store.setVideoHideSeekTimestamps(false)
+        store.setVideoShowBufferPercent(false)
+        store.setVideoSeekPreviewTime(true)
+        store.setVideoShowEngineBadge(false)
+        store.setVideoEpisodeBrowserHideWatched(false)
+        store.setVideoTvTimeoutScale(TvTimeoutScale.X2)
+        store.setVideoKeyboardSeekPreset(KeyboardSeekPreset.DEFAULT)
+        store.setVideoHoldSeekCadence(HoldSeekCadence.DEFAULT)
+        store.setVideoSpeedPillClearance(SpeedPillClearance.DEFAULT)
+        store.setVideoPauseFadeStyle(PauseFadeStyle.DEFAULT)
+        store.setVideoControlLayout(ControlLayout.DEFAULT)
+        store.setVideoMaxZoom(MaxZoom.X3)
+        store.setVideoPollCadence(PollCadence.DEFAULT)
+        store.setVideoSleepConfirmMinutes(5)
+        store.setVideoAmbientUnderFill(false)
+        store.setVideoBufferingVeil(BufferingVeil.DEFAULT)
+        store.setVideoSpeedPresetSet(SpeedPresetSet.DEFAULT)
+        store.setVideoAutoplayWifiOnly(false)
+        store.setVideoConfirmExit(false)
+
+        assertEquals(VideoPlayerSlice(), store.videoPlayer.first())
+    }
+
+    @Test
     fun `restore(slice) round-trips a fully-populated slice`() = runTest {
         val slice = VideoPlayerSlice(
             videoSeekDurationMs = 15_000L,
@@ -396,6 +534,20 @@ class VideoPlayerStoreTest {
             incognitoModeEnabled = true,
             segmentBehaviors = SegmentBehavior.DEFAULT_BEHAVIORS + (MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
             skipSegmentsOnSeek = true,
+            videoTvTimeoutScale = TvTimeoutScale.X1,
+            videoKeyboardSeekPreset = KeyboardSeekPreset.CONSERVATIVE,
+            videoHoldSeekCadence = HoldSeekCadence.RELAXED,
+            videoSpeedPillClearance = SpeedPillClearance.COMPACT,
+            videoPauseFadeStyle = PauseFadeStyle.SLOW,
+            videoControlLayout = ControlLayout.SWAPPED_SEEK,
+            videoMaxZoom = MaxZoom.X2,
+            videoPollCadence = PollCadence.RESPONSIVE,
+            videoSleepConfirmMinutes = 10,
+            videoAmbientUnderFill = true,
+            videoBufferingVeil = BufferingVeil.ALWAYS,
+            videoSpeedPresetSet = SpeedPresetSet.COMPACT,
+            videoAutoplayWifiOnly = true,
+            videoConfirmExit = true,
         )
 
         store.restore(slice)

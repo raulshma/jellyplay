@@ -86,7 +86,9 @@ internal fun MainContent(
     val stripPlayerRoutesOnRestore = remember { model.consumeStateLossRestore() }
 
     val navigationState = rememberNavigationState(
-        startRoute = Route.Home,
+        // The start-tab pref resolves through the destination registry; a
+        // blank/unknown key keeps the shipped Home start.
+        startRoute = com.raulshma.jellyplay.core.ui.navigation.startRouteFor(preferences.startTab) ?: Route.Home,
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
         stripPlayerRoutesOnRestore = stripPlayerRoutesOnRestore,
     )
@@ -310,6 +312,10 @@ internal fun MainContent(
                 // plus the !isTv guard.
                 com.raulshma.jellyplay.core.ui.components.LocalFloatingNavPresent
                     provides (!isTv && !isExpanded && !isFullScreenRoute),
+                // The 24-hour clock override (the `time_use_24h` pref): every
+                // wall-clock consumer reads it through rememberIs24HourFormat.
+                com.raulshma.jellyplay.core.ui.components.LocalTimeFormat24hOverride
+                    provides preferences.timeUse24h,
             ) {
             // Hoist the saveable-state holder above the isTv/isFullScreenRoute branches so that
             // navigation-entry saveable state (scroll position, form fields, etc.) survives

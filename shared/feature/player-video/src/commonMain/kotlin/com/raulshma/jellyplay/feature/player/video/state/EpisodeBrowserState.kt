@@ -16,4 +16,10 @@ data class EpisodeBrowserState(
     val currentSeasonId: String? = null,
     val isLoadingEpisodes: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,
+    /**
+     * The browser filters fully-watched episodes out of [seasonEpisodes].
+     * The filter applies at the picker's feed (the sheet seam), not here —
+     * the raw season list stays the adjacency/season machinery's source.
+     */
+    val videoEpisodeBrowserHideWatched: Boolean = false,
 )

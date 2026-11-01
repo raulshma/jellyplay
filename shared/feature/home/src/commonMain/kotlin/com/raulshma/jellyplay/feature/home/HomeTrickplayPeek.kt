@@ -37,6 +37,15 @@ val LocalHomeTrickplayPreview: ProvidableCompositionLocal<Boolean> =
 private const val PEEK_HOLD_MS = 2_500L
 
 /**
+ * The `home_trickplay_peek_ms` pref mirror (clamped 1000-5000 at the setter),
+ * provided by the home screen beside [LocalHomeTrickplayPreview]. Null (no
+ * provider) keeps the shipped [PEEK_HOLD_MS] — a wide row hosted outside home
+ * renders the default hold.
+ */
+val LocalHomeTrickplayPeekMs: ProvidableCompositionLocal<Int?> =
+    staticCompositionLocalOf { null }
+
+/**
  * Longest sprite-sheet edge allowed through the bounded decoder. Jellyfin
  * generates sheets at 320–640 px tile widths on ≤10-column grids, so 2048 px
  * keeps every real sheet at native resolution while a hostile payload cannot
@@ -122,6 +131,9 @@ internal fun rememberWideCardTrickplayPeek(
     val isTv = LocalTvMode.current
     val prefEnabled = LocalHomeTrickplayPreview.current
     val performanceMode = LocalPerformanceMode.current
+    // The `home_trickplay_peek_ms` hold time (the setter clamps to 1-5 s; a
+    // missing provider — a row hosted outside home — keeps the shipped hold).
+    val peekHoldMs = (LocalHomeTrickplayPeekMs.current ?: PEEK_HOLD_MS.toInt()).coerceIn(1000, 5000).toLong()
     val enabled = shouldLoadTrickplayPeek(
         isTv = isTv,
         prefEnabled = prefEnabled,
@@ -176,7 +188,7 @@ internal fun rememberWideCardTrickplayPeek(
                 )
                 // Hold above the progress bar, then fade (the overlay animates
                 // the null flip out). A refocus during the hold cancels here.
-                delay(PEEK_HOLD_MS)
+                delay(peekHoldMs)
                 loaded = null
             }
     }

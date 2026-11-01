@@ -28,11 +28,12 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 53-row order and projects the spec faces`() {
+    fun `playback player list keeps its 83-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(53, items.size)
+        assertEquals(83, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
-        assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
+        // The pass-2 chrome-QoL fourteen append; confirm-exit is the catalog tail.
+        assertEquals(PlaybackRows.ConfirmExit.id, items.last().id)
 
         val engine = items.first()
         assertEquals("ss_player_engine_title", engine.titleRes.key)
@@ -62,8 +63,12 @@ class SpecDerivedSearchItemsTest {
         ).forEach { id ->
             assertEquals(setOf(PlatformKind.ANDROID), items.single { it.id == id }.platforms, "$id must follow the capability seam")
         }
-        // The residual volume-memory row keeps its hand desktop tag.
-        assertEquals(setOf(PlatformKind.DESKTOP), items.last().platforms)
+        // The residual volume-memory row keeps its hand desktop tag (it no
+        // longer closes the list — the player QoL wave appended after it).
+        assertEquals(
+            setOf(PlatformKind.DESKTOP),
+            items.single { it.id == PlaybackRows.RememberVolumePerContentType.id }.platforms,
+        )
     }
 
     @Test
@@ -185,7 +190,7 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance library list keeps its 24-row order with the detail-display toggles in place`() {
+    fun `appearance library list keeps its 52-row order with the detail-display toggles in place`() {
         // The home-discovery watch-state quartet lives in
         // HomeCardsSearchItems; the appearance side keeps the library
         // residuals, the
@@ -195,7 +200,7 @@ class SpecDerivedSearchItemsTest {
         // reviews, awards badges, trailers, promoted actions, download
         // progress).
         val items = AppearanceLibrarySearchItems
-        assertEquals(24, items.size)
+        assertEquals(52, items.size)
         assertEquals(
             listOf(
                 AppearanceRows.HideEpisodeThumbnails.id,
@@ -221,6 +226,38 @@ class SpecDerivedSearchItemsTest {
                 AppearanceRows.ShowMoreInCollection.id,
                 AppearanceRows.ShowFilmographyRoles.id,
                 AppearanceRows.ShowFrequentCostars.id,
+                // The detail-screen QoL knobs (16 residual rows), declared
+                // between the costars toggle and the search-history toggle.
+                AppearanceRows.CastItemSize.id,
+                AppearanceRows.CastSeeAllLimit.id,
+                AppearanceRows.BackdropParallax.id,
+                AppearanceRows.OverviewCollapseLines.id,
+                AppearanceRows.HideWatchedEpisodes.id,
+                AppearanceRows.ConfirmMarkPlayed.id,
+                AppearanceRows.ShowStudioChips.id,
+                AppearanceRows.ShowGenreChips.id,
+                AppearanceRows.ShowTagChips.id,
+                AppearanceRows.ShowSkipChips.id,
+                AppearanceRows.SeasonTabsArtwork.id,
+                AppearanceRows.PeopleGridDensity.id,
+                AppearanceRows.ShowTrailerBadges.id,
+                AppearanceRows.PersistSectionHides.id,
+                AppearanceRows.SimilarLimit.id,
+                AppearanceRows.UpcomingLimit.id,
+                // The pass-2 detail-QoL wave-two twelve, declared between
+                // the upcoming-limit toggle and the search-history toggle.
+                AppearanceRows.SectionOrder.id,
+                AppearanceRows.StaggerStyle.id,
+                AppearanceRows.BackdropResolution.id,
+                AppearanceRows.ChapterCardSize.id,
+                AppearanceRows.ReviewsPreviewLines.id,
+                AppearanceRows.FilmographySort.id,
+                AppearanceRows.FranchiseBoxLimit.id,
+                AppearanceRows.FranchiseMemberLimit.id,
+                AppearanceRows.SmartPlayPriority.id,
+                AppearanceRows.StreamFallbackLanguage.id,
+                AppearanceRows.PromotedRailSource.id,
+                AppearanceRows.EpisodeOverviewPreview.id,
                 AppearanceRows.HideSearchHistory.id,
             ),
             items.map { it.id },
@@ -237,10 +274,14 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance navigation and newsletter lists stay residual-row projections`() {
-        // The spec-less residual groups: the fused rows still project their
-        // hand search faces directly.
-        assertEquals(2, AppearanceNavigationSearchItems.size)
+    fun `appearance navigation is a mixed projection and the newsletter list stays residual`() {
+        // The newsletter group is all-residual: the fused rows still project
+        // their hand search faces directly. The navigation group is mixed:
+        // its six residuals keep hand faces, and the pass-2 global-chrome
+        // seven (backdrop dim, haptics intensity, image quality, list
+        // density, press effect, flat cards, overscroll) project their
+        // spec faces.
+        assertEquals(13, AppearanceNavigationSearchItems.size)
         assertEquals(3, AppearanceNewsletterSearchItems.size)
     }
 
@@ -252,17 +293,27 @@ class SpecDerivedSearchItemsTest {
         // new-section/continue-watching knobs, the stats card, the
         // genre rail and the presence chips (17 rows), plus the
         // hidden-libraries restore row (18), plus the hero style and
-        // slideshow-interval rows (20).
-        assertEquals(20, HomeDisplaySearchItems.size)
+        // slideshow-interval rows (20), plus the display-QoL wave (12: clock
+        // date, opaque dock, greeting, mode switch, user switcher, newsletter
+        // banner, see-all, card scale/radius, rows animations, the genre and
+        // presence limits) → 32, plus the pass-2 display additions (11:
+        // hero idle rotation / scroll-defer / random start, stats metrics,
+        // presence poll, newsletter window, refresh cadence, discover
+        // pattern, pre-section order, search results height, My-Media
+        // columns) → 43.
+        assertEquals(43, HomeDisplaySearchItems.size)
         assertEquals(HomeRows.HomeMode.id, HomeDisplaySearchItems.first().id)
         assertEquals(HomeRows.UnhideCw.id, HomeDisplaySearchItems.last().id)
-        // The exclude-active-sessions toggle joined the Next Up quartet.
-        assertEquals(4, HomeNextUpSearchItems.size)
+        // The exclude-active-sessions toggle, the progress-style picker and
+        // the ask-continue remember toggle joined the Next Up quartet.
+        assertEquals(6, HomeNextUpSearchItems.size)
         // The layout auto-push row joined the layout drill-ins.
         assertEquals(5, HomeLayoutSearchItems.size)
         // The cards group: the card-display quartet plus the
-        // badge/spoiler toggles and the TV-gated trickplay fork (8 rows).
-        assertEquals(8, HomeCardsSearchItems.size)
+        // badge/spoiler toggles and the TV-gated trickplay fork, plus the
+        // pass-2 additions (new-badge sections/days, unwatched counters,
+        // trickplay peek) — 12 rows.
+        assertEquals(12, HomeCardsSearchItems.size)
 
         // The drill-in rows resolve their routes through the spec route kinds.
         assertIs<Route.PinnedHomeSections>(HomeLayoutSearchItems.single { it.id == HomeRows.PinnedHomeSections.id }.route)

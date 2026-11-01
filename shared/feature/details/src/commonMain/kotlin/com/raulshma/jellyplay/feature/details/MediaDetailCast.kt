@@ -22,11 +22,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.size.Size as CoilSize
+import com.raulshma.jellyplay.core.model.DetailDensity
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.ui.unit.Dp
 
 /**
  * Adapts a remote [PersonInfo] into the [OfflinePersonInfo] shape consumed by
@@ -44,13 +46,48 @@ internal fun PersonInfo.toOfflinePersonInfo(): OfflinePersonInfo = OfflinePerson
     blurHash = primaryBlurHash,
 )
 
+/**
+ * The cast rail's item geometry per [DetailDensity] (the
+ * `detail_cast_item_size` pref): the item column's width and the circular
+ * portrait's diameter. The shipped DEFAULT row is the historical fixed
+ * 80dp / 64dp pair; the pure mapping lives here so the rail (media-detail
+ * header) and any other PersonItem consumer agree on one source of truth.
+ */
+internal data class CastRailMetrics(
+    val itemWidth: Dp,
+    val imageSize: Dp,
+)
+
+/** The [DetailDensity] → cast-rail geometry fold (see [CastRailMetrics]). */
+internal fun DetailDensity.castRailMetrics(): CastRailMetrics = when (this) {
+    DetailDensity.COMPACT -> CastRailMetrics(itemWidth = 64.dp, imageSize = 52.dp)
+    DetailDensity.DEFAULT -> CastRailMetrics(itemWidth = 80.dp, imageSize = 64.dp)
+    DetailDensity.LARGE -> CastRailMetrics(itemWidth = 96.dp, imageSize = 80.dp)
+}
+
+/**
+ * The Cast & Crew grid's column-minimum per [DetailDensity] (the
+ * `detail_people_grid_density` pref): a ±40dp delta applied to the adaptive
+ * environment's base minimum (140–200dp by window class / TV — see
+ * `AdaptiveGridMinSize`), clamped so a cell always fits the 80dp person card.
+ * DEFAULT is the untouched environment value.
+ */
+internal fun DetailDensity.peopleGridMinSize(base: Dp): Dp = when (this) {
+    DetailDensity.COMPACT -> (base - 40.dp).coerceAtLeast(84.dp)
+    DetailDensity.DEFAULT -> base
+    DetailDensity.LARGE -> base + 40.dp
+}
+
 @Composable
 internal fun PersonItem(
     person: PersonInfo,
     imageUrl: String,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
+    /** The cast-rail density knob; DEFAULT is the historical fixed geometry. */
+    density: DetailDensity = DetailDensity.DEFAULT,
 ) {
+    val metrics = density.castRailMetrics()
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -64,7 +101,7 @@ internal fun PersonItem(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .width(80.dp)
+            .width(metrics.itemWidth)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(personFocusState.focusModifier)
             .then(Modifier.tvFocusIndicator(personFocusState, CircleShape))
@@ -79,11 +116,12 @@ internal fun PersonItem(
             contentDescription = person.name,
             blurHash = person.primaryBlurHash,
             modifier = Modifier
-                .size(64.dp)
+                .size(metrics.imageSize)
                 .clip(CircleShape),
             contentScale = ContentScale.Crop,
-            // 64.dp @ ~3× density renders at ~192 px; 128 px covers 2× density with margin.
-            size = CoilSize(128, 128),
+            // The decode target tracks the rendered circle (~2× the dp at the
+            // historical default: 64.dp → 128 px, the shipped size).
+            size = CoilSize((metrics.imageSize.value * 2).toInt(), (metrics.imageSize.value * 2).toInt()),
         )
         Spacer(Modifier.height(4.dp))
         Text(

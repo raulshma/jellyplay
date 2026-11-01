@@ -6,7 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import java.text.DateFormat
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -26,4 +28,14 @@ actual fun rememberWallClockTimeString(): String {
         }
     }
     return time
+}
+
+@Composable
+actual fun rememberWallClockHour(): Int = remember {
+    Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+}
+
+@Composable
+actual fun rememberWallClockDateString(): String = remember {
+    DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.getDefault()).format(Date())
 }

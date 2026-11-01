@@ -33,7 +33,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_counts
+import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_played_only
 import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_streak
+import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_unplayed_only
 import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_title
 import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_watch_approx
 import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_watch_exact
@@ -198,17 +200,26 @@ internal class HomeStatsCardLoader(
  * The compact stats card. [onClick] is null when the tap affordance is
  * not permitted (non-admin — the user-statistics detail is an admin area),
  * rendering the card as a plain non-clickable tile.
+ *
+ * [visibleMetrics] is the `home_stats_metrics` subset (played / unplayed /
+ * minutes): unselected figures hide from the card — the counts line renders
+ * only the selected counters (single-counter lines get their own resource),
+ * and the watch-minutes line drops when `minutes` is deselected.
  */
 @Composable
 internal fun HomeStatsCard(
     data: HomeStatsCardData,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    visibleMetrics: Set<String> = setOf("played", "unplayed", "minutes"),
 ) {
     val watchedHours = remember(data.approximateWatchMinutes, data.exactWatchHours) {
         data.exactWatchHours?.let { HomeStatsMath.watchHoursLabel(it) }
             ?: (data.approximateWatchMinutes / 60).toString()
     }
+    val showPlayed = "played" in visibleMetrics
+    val showUnplayed = "unplayed" in visibleMetrics
+    val showMinutes = "minutes" in visibleMetrics
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -251,20 +262,33 @@ internal fun HomeStatsCard(
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Text(
-                    text = stringResource(Res.string.home_stats_card_counts, data.playedCount, data.unplayedCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = stringResource(
-                        if (data.adminEnhanced) Res.string.home_stats_card_watch_exact
-                        else Res.string.home_stats_card_watch_approx,
-                        watchedHours,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // The counters line — the selected subset only: both selected
+                // renders the combined line, one selected its own line, none
+                // selected nothing.
+                val countsText = when {
+                    showPlayed && showUnplayed -> stringResource(Res.string.home_stats_card_counts, data.playedCount, data.unplayedCount)
+                    showPlayed -> stringResource(Res.string.home_stats_card_played_only, data.playedCount)
+                    showUnplayed -> stringResource(Res.string.home_stats_card_unplayed_only, data.unplayedCount)
+                    else -> null
+                }
+                if (countsText != null) {
+                    Text(
+                        text = countsText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (showMinutes) {
+                    Text(
+                        text = stringResource(
+                            if (data.adminEnhanced) Res.string.home_stats_card_watch_exact
+                            else Res.string.home_stats_card_watch_approx,
+                            watchedHours,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             if (data.currentStreakDays != null && data.currentStreakDays > 0) {

@@ -17,9 +17,15 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.data.repository.HomeLayoutRestoreFetch
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.HomeCardScale
+import com.raulshma.jellyplay.core.model.HomeCwProgressStyle
+import com.raulshma.jellyplay.core.model.HomeDiscoveryPreferenceSpecsDefaults
+import com.raulshma.jellyplay.core.model.HomeDiscoverPattern
 import com.raulshma.jellyplay.core.model.HomeHeroStyle
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeRefreshCadence
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.NewsletterBannerWindow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
@@ -78,6 +84,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_video
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_card_scale_small
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_card_scale_default
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_card_scale_large
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_progress_style_default
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_progress_style_thick
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_progress_style_percent
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_screen_layout
@@ -117,6 +129,30 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stats_metric_all
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stats_metric_no_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stats_metric_no_unplayed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_stats_metric_played_only
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_window_default
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_window_always
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_window_weekends
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_cadence_default
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_cadence_eager
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_cadence_relaxed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_cadence_manual
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_pattern_default
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_pattern_uniform
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_pattern_compact
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pre_section_stats_card
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pre_section_genre_rail
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pre_section_newsletter_banner
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tiles_columns_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_badge_sections_all
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_badge_sections_latest
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_badge_sections_recent
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_badge_sections_upcoming
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_badge_sections_none
 
 /**
  * The display group's `SettingsItemList(total = …)` row count, derived by
@@ -303,6 +339,48 @@ fun HomeSettingsScreen(
                                     },
                                 )
                             }
+                            // The carousel hero's idle dwell (the SLIDESHOW
+                            // style's own pacing takes precedence while that
+                            // style is selected).
+                            HomeRows.HomeHeroIdleRotation.id -> {
+                                val idleRotationTitle = rowTitle(HomeRows.HomeHeroIdleRotation)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeHeroIdleRotation),
+                                    title = idleRotationTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeHeroIdleRotation),
+                                    trailingText = "${preferences.homeHeroIdleRotationMs / 1000}s",
+                                    highlighted = highlightSettingId == HomeRows.HomeHeroIdleRotation.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = idleRotationTitle,
+                                            items = listOf(3, 5, 8, 10, 15, 20, 30),
+                                            label = { "${it}s" },
+                                            isSelected = { it * 1000 == preferences.homeHeroIdleRotationMs },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroIdleRotationMs(it * 1000) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HeroScrollDefer.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HeroScrollDefer),
+                                    title = rowTitle(HomeRows.HeroScrollDefer),
+                                    subtitle = rowSubtitle(HomeRows.HeroScrollDefer),
+                                    checked = preferences.heroScrollDefer,
+                                    highlighted = highlightSettingId == HomeRows.HeroScrollDefer.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHeroScrollDefer(it) } },
+                                )
+                            }
+                            HomeRows.HomeHeroRandomStart.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeHeroRandomStart),
+                                    title = rowTitle(HomeRows.HomeHeroRandomStart),
+                                    subtitle = rowSubtitle(HomeRows.HomeHeroRandomStart),
+                                    checked = preferences.homeHeroRandomStart,
+                                    highlighted = highlightSettingId == HomeRows.HomeHeroRandomStart.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHeroRandomStart(it) } },
+                                )
+                            }
                             HomeRows.HomeBackdrop.id -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Background,
@@ -353,6 +431,39 @@ fun HomeSettingsScreen(
                                     onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setStatsCard(it) } },
                                 )
                             }
+                            // The stats card's visible metrics — single-select
+                            // presets over the CSV set (the picker vocabulary
+                            // is single-select; the presets cover the sane
+                            // subsets).
+                            HomeRows.HomeStatsMetrics.id -> {
+                                val statsMetricsTitle = rowTitle(HomeRows.HomeStatsMetrics)
+                                val allMetrics = HomeDiscoveryPreferenceSpecsDefaults.STATS_METRICS_CANONICAL
+                                val metricPresets = listOf(
+                                    allMetrics to stringResource(Res.string.settings_stats_metric_all),
+                                    setOf("played", "unplayed") to stringResource(Res.string.settings_stats_metric_no_minutes),
+                                    setOf("played", "minutes") to stringResource(Res.string.settings_stats_metric_no_unplayed),
+                                    setOf("played") to stringResource(Res.string.settings_stats_metric_played_only),
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeStatsMetrics),
+                                    title = statsMetricsTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeStatsMetrics),
+                                    trailingText = metricPresets
+                                        .find { it.first == preferences.homeStatsMetrics }
+                                        ?.second
+                                        ?: stringResource(Res.string.settings_custom),
+                                    highlighted = highlightSettingId == HomeRows.HomeStatsMetrics.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = statsMetricsTitle,
+                                            items = metricPresets,
+                                            label = { it.second },
+                                            isSelected = { it.first == preferences.homeStatsMetrics },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeStatsMetrics(it.first) } },
+                                        )
+                                    },
+                                )
+                            }
                             HomeRows.GenreRail.id -> {
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Category,
@@ -391,6 +502,343 @@ fun HomeSettingsScreen(
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == HomeRows.ClockHome.id,
                                     onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowClockOnHome(it) } },
+                                )
+                            }
+                            HomeRows.HomeClockShowDate.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeClockShowDate),
+                                    title = rowTitle(HomeRows.HomeClockShowDate),
+                                    subtitle = rowSubtitle(HomeRows.HomeClockShowDate),
+                                    checked = preferences.homeClockShowDate,
+                                    highlighted = highlightSettingId == HomeRows.HomeClockShowDate.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeClockShowDate(it) } },
+                                )
+                            }
+                            HomeRows.HomeOpaqueDock.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeOpaqueDock),
+                                    title = rowTitle(HomeRows.HomeOpaqueDock),
+                                    subtitle = rowSubtitle(HomeRows.HomeOpaqueDock),
+                                    checked = preferences.homeOpaqueDock,
+                                    highlighted = highlightSettingId == HomeRows.HomeOpaqueDock.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeOpaqueDock(it) } },
+                                )
+                            }
+                            HomeRows.HomeGreeting.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeGreeting),
+                                    title = rowTitle(HomeRows.HomeGreeting),
+                                    subtitle = rowSubtitle(HomeRows.HomeGreeting),
+                                    checked = preferences.homeGreetingEnabled,
+                                    highlighted = highlightSettingId == HomeRows.HomeGreeting.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeGreetingEnabled(it) } },
+                                )
+                            }
+                            HomeRows.HomeShowModeSwitch.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeShowModeSwitch),
+                                    title = rowTitle(HomeRows.HomeShowModeSwitch),
+                                    subtitle = rowSubtitle(HomeRows.HomeShowModeSwitch),
+                                    checked = preferences.homeShowModeSwitch,
+                                    highlighted = highlightSettingId == HomeRows.HomeShowModeSwitch.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeShowModeSwitch(it) } },
+                                )
+                            }
+                            HomeRows.HomeAlwaysShowUserSwitcher.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeAlwaysShowUserSwitcher),
+                                    title = rowTitle(HomeRows.HomeAlwaysShowUserSwitcher),
+                                    subtitle = rowSubtitle(HomeRows.HomeAlwaysShowUserSwitcher),
+                                    checked = preferences.homeAlwaysShowUserSwitcher,
+                                    highlighted = highlightSettingId == HomeRows.HomeAlwaysShowUserSwitcher.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeAlwaysShowUserSwitcher(it) } },
+                                )
+                            }
+                            HomeRows.HomeNewsletterBanner.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeNewsletterBanner),
+                                    title = rowTitle(HomeRows.HomeNewsletterBanner),
+                                    subtitle = rowSubtitle(HomeRows.HomeNewsletterBanner),
+                                    checked = preferences.homeNewsletterBannerEnabled,
+                                    highlighted = highlightSettingId == HomeRows.HomeNewsletterBanner.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeNewsletterBannerEnabled(it) } },
+                                )
+                            }
+                            HomeRows.HomeNewsletterWindow.id -> {
+                                val newsletterWindowTitle = rowTitle(HomeRows.HomeNewsletterWindow)
+                                val newsletterWindowLabels = mapOf(
+                                    NewsletterBannerWindow.DEFAULT to stringResource(Res.string.settings_newsletter_window_default),
+                                    NewsletterBannerWindow.ALWAYS to stringResource(Res.string.settings_newsletter_window_always),
+                                    NewsletterBannerWindow.WEEKENDS to stringResource(Res.string.settings_newsletter_window_weekends),
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeNewsletterWindow),
+                                    title = newsletterWindowTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeNewsletterWindow),
+                                    trailingText = newsletterWindowLabels[preferences.homeNewsletterWindow]
+                                        ?: preferences.homeNewsletterWindow.name,
+                                    highlighted = highlightSettingId == HomeRows.HomeNewsletterWindow.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = newsletterWindowTitle,
+                                            items = NewsletterBannerWindow.entries,
+                                            label = { newsletterWindowLabels.getValue(it) },
+                                            isSelected = { it == preferences.homeNewsletterWindow },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeNewsletterWindow(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeHideSeeAll.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeHideSeeAll),
+                                    title = rowTitle(HomeRows.HomeHideSeeAll),
+                                    subtitle = rowSubtitle(HomeRows.HomeHideSeeAll),
+                                    checked = preferences.homeHideSeeAll,
+                                    highlighted = highlightSettingId == HomeRows.HomeHideSeeAll.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeHideSeeAll(it) } },
+                                )
+                            }
+                            HomeRows.HomeCardScale.id -> {
+                                val cardScaleTitle = rowTitle(HomeRows.HomeCardScale)
+                                val cardScaleLabels = mapOf(
+                                    HomeCardScale.SMALL to stringResource(Res.string.settings_card_scale_small),
+                                    HomeCardScale.DEFAULT to stringResource(Res.string.settings_card_scale_default),
+                                    HomeCardScale.LARGE to stringResource(Res.string.settings_card_scale_large),
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeCardScale),
+                                    title = cardScaleTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeCardScale),
+                                    trailingText = cardScaleLabels[preferences.homeCardScale]
+                                        ?: preferences.homeCardScale.name,
+                                    highlighted = highlightSettingId == HomeRows.HomeCardScale.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = cardScaleTitle,
+                                            items = HomeCardScale.entries,
+                                            label = { cardScaleLabels.getValue(it) },
+                                            isSelected = { it == preferences.homeCardScale },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeCardScale(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeCardCornerRadius.id -> {
+                                val cardRadiusTitle = rowTitle(HomeRows.HomeCardCornerRadius)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeCardCornerRadius),
+                                    title = cardRadiusTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeCardCornerRadius),
+                                    trailingText = "${preferences.homeCardCornerRadius}dp",
+                                    highlighted = highlightSettingId == HomeRows.HomeCardCornerRadius.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = cardRadiusTitle,
+                                            items = listOf(4, 8, 10, 12, 14, 16, 20, 24),
+                                            label = { "${it}dp" },
+                                            isSelected = { it == preferences.homeCardCornerRadius },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeCardCornerRadius(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeRowsAnimations.id -> {
+                                SettingToggleItem(
+                                    icon = rowIcon(HomeRows.HomeRowsAnimations),
+                                    title = rowTitle(HomeRows.HomeRowsAnimations),
+                                    subtitle = rowSubtitle(HomeRows.HomeRowsAnimations),
+                                    checked = preferences.homeRowsAnimations,
+                                    highlighted = highlightSettingId == HomeRows.HomeRowsAnimations.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeRowsAnimations(it) } },
+                                )
+                            }
+                            HomeRows.HomeRefreshCadence.id -> {
+                                val cadenceTitle = rowTitle(HomeRows.HomeRefreshCadence)
+                                val cadenceLabels = mapOf(
+                                    HomeRefreshCadence.DEFAULT to stringResource(Res.string.settings_refresh_cadence_default),
+                                    HomeRefreshCadence.EAGER to stringResource(Res.string.settings_refresh_cadence_eager),
+                                    HomeRefreshCadence.RELAXED to stringResource(Res.string.settings_refresh_cadence_relaxed),
+                                    HomeRefreshCadence.MANUAL to stringResource(Res.string.settings_refresh_cadence_manual),
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeRefreshCadence),
+                                    title = cadenceTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeRefreshCadence),
+                                    trailingText = cadenceLabels[preferences.homeRefreshCadence]
+                                        ?: preferences.homeRefreshCadence.name,
+                                    highlighted = highlightSettingId == HomeRows.HomeRefreshCadence.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = cadenceTitle,
+                                            items = HomeRefreshCadence.entries,
+                                            label = { cadenceLabels.getValue(it) },
+                                            isSelected = { it == preferences.homeRefreshCadence },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeRefreshCadence(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeDiscoverPattern.id -> {
+                                val discoverPatternTitle = rowTitle(HomeRows.HomeDiscoverPattern)
+                                val discoverPatternLabels = mapOf(
+                                    HomeDiscoverPattern.DEFAULT to stringResource(Res.string.settings_discover_pattern_default),
+                                    HomeDiscoverPattern.UNIFORM to stringResource(Res.string.settings_discover_pattern_uniform),
+                                    HomeDiscoverPattern.COMPACT to stringResource(Res.string.settings_discover_pattern_compact),
+                                )
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeDiscoverPattern),
+                                    title = discoverPatternTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeDiscoverPattern),
+                                    trailingText = discoverPatternLabels[preferences.homeDiscoverPattern]
+                                        ?: preferences.homeDiscoverPattern.name,
+                                    highlighted = highlightSettingId == HomeRows.HomeDiscoverPattern.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = discoverPatternTitle,
+                                            items = HomeDiscoverPattern.entries,
+                                            label = { discoverPatternLabels.getValue(it) },
+                                            isSelected = { it == preferences.homeDiscoverPattern },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeDiscoverPattern(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            // The pre-section block's order — single-select
+                            // presets over the orderable items (the picker
+                            // vocabulary is single-select; the presets are the
+                            // sane arrangements).
+                            HomeRows.HomePreSectionOrder.id -> {
+                                val preSectionTitle = rowTitle(HomeRows.HomePreSectionOrder)
+                                val statsLabel = stringResource(Res.string.settings_pre_section_stats_card)
+                                val genreLabel = stringResource(Res.string.settings_pre_section_genre_rail)
+                                val newsletterLabel = stringResource(Res.string.settings_pre_section_newsletter_banner)
+                                val orderPresets = listOf(
+                                    HomeDiscoveryPreferenceSpecsDefaults.PRE_SECTION_ORDER_CANONICAL,
+                                    listOf("newsletter_banner", "stats_card", "genre_rail"),
+                                    listOf("genre_rail", "stats_card", "newsletter_banner"),
+                                )
+                                fun orderLabel(tokens: List<String>): String = tokens.map { token ->
+                                    when (token) {
+                                        "stats_card" -> statsLabel
+                                        "genre_rail" -> genreLabel
+                                        else -> newsletterLabel
+                                    }
+                                }.joinToString(" → ")
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomePreSectionOrder),
+                                    title = preSectionTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomePreSectionOrder),
+                                    trailingText = orderPresets
+                                        .find { it == preferences.homePreSectionOrder }
+                                        ?.let { orderLabel(it) }
+                                        ?: stringResource(Res.string.settings_custom),
+                                    highlighted = highlightSettingId == HomeRows.HomePreSectionOrder.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = preSectionTitle,
+                                            items = orderPresets,
+                                            label = { orderLabel(it) },
+                                            isSelected = { it == preferences.homePreSectionOrder },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomePreSectionOrder(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeSearchResultsHeight.id -> {
+                                val searchHeightTitle = rowTitle(HomeRows.HomeSearchResultsHeight)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeSearchResultsHeight),
+                                    title = searchHeightTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeSearchResultsHeight),
+                                    trailingText = "${preferences.homeSearchResultsHeightDp}dp",
+                                    highlighted = highlightSettingId == HomeRows.HomeSearchResultsHeight.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = searchHeightTitle,
+                                            items = listOf(280, 320, 400, 480, 560, 640),
+                                            label = { "${it}dp" },
+                                            isSelected = { it == preferences.homeSearchResultsHeightDp },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeSearchResultsHeightDp(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeMyMediaColumns.id -> {
+                                val tilesColumnsTitle = rowTitle(HomeRows.HomeMyMediaColumns)
+                                val autoLabel = stringResource(Res.string.settings_tiles_columns_auto)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeMyMediaColumns),
+                                    title = tilesColumnsTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeMyMediaColumns),
+                                    trailingText = if (preferences.homeMyMediaColumns == 0) autoLabel else "${preferences.homeMyMediaColumns}",
+                                    highlighted = highlightSettingId == HomeRows.HomeMyMediaColumns.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = tilesColumnsTitle,
+                                            items = listOf(0, 2, 3, 4, 5, 6),
+                                            label = { if (it == 0) autoLabel else "$it" },
+                                            isSelected = { it == preferences.homeMyMediaColumns },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeMyMediaColumns(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomeGenreRailLimit.id -> {
+                                val genreLimitTitle = rowTitle(HomeRows.HomeGenreRailLimit)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomeGenreRailLimit),
+                                    title = genreLimitTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomeGenreRailLimit),
+                                    trailingText = "${preferences.homeGenreRailLimit}",
+                                    highlighted = highlightSettingId == HomeRows.HomeGenreRailLimit.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = genreLimitTitle,
+                                            items = listOf(6, 12, 18, 24, 30, 36),
+                                            label = { "$it" },
+                                            isSelected = { it == preferences.homeGenreRailLimit },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeGenreRailLimit(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomePresenceChipsLimit.id -> {
+                                val presenceLimitTitle = rowTitle(HomeRows.HomePresenceChipsLimit)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomePresenceChipsLimit),
+                                    title = presenceLimitTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomePresenceChipsLimit),
+                                    trailingText = "${preferences.homePresenceChipsLimit}",
+                                    highlighted = highlightSettingId == HomeRows.HomePresenceChipsLimit.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = presenceLimitTitle,
+                                            items = listOf(2, 3, 4, 5, 6, 7, 8),
+                                            label = { "$it" },
+                                            isSelected = { it == preferences.homePresenceChipsLimit },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomePresenceChipsLimit(it) } },
+                                        )
+                                    },
+                                )
+                            }
+                            HomeRows.HomePresencePollSeconds.id -> {
+                                val pollSecondsTitle = rowTitle(HomeRows.HomePresencePollSeconds)
+                                SettingListItem(
+                                    icon = rowIcon(HomeRows.HomePresencePollSeconds),
+                                    title = pollSecondsTitle,
+                                    subtitle = rowSubtitle(HomeRows.HomePresencePollSeconds),
+                                    trailingText = "${preferences.homePresencePollSeconds}s",
+                                    highlighted = highlightSettingId == HomeRows.HomePresencePollSeconds.id,
+                                    onClick = {
+                                        activePicker.value = PickerState.List(
+                                            title = pollSecondsTitle,
+                                            items = listOf(15, 30, 60, 90, 120, 180, 300),
+                                            label = { "${it}s" },
+                                            isSelected = { it == preferences.homePresencePollSeconds },
+                                            onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomePresencePollSeconds(it) } },
+                                        )
+                                    },
                                 )
                             }
                             HomeRows.HideTopHeader.id -> {
@@ -540,13 +988,48 @@ fun HomeSettingsScreen(
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpRewatching(it) } },
                     )
 
+                    val cwProgressStyleTitle = rowTitle(HomeRows.HomeCwProgressStyle)
+                    val progressStyleLabels = mapOf(
+                        HomeCwProgressStyle.DEFAULT to stringResource(Res.string.settings_progress_style_default),
+                        HomeCwProgressStyle.THICK to stringResource(Res.string.settings_progress_style_thick),
+                        HomeCwProgressStyle.PERCENT to stringResource(Res.string.settings_progress_style_percent),
+                    )
+                    SettingListItem(
+                        icon = rowIcon(HomeRows.HomeCwProgressStyle),
+                        title = cwProgressStyleTitle,
+                        subtitle = rowSubtitle(HomeRows.HomeCwProgressStyle),
+                        trailingText = progressStyleLabels[preferences.homeCwProgressStyle]
+                            ?: preferences.homeCwProgressStyle.name,
+                        highlighted = highlightSettingId == HomeRows.HomeCwProgressStyle.id,
+                        index = 3, count = nextUpTotal,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = cwProgressStyleTitle,
+                                items = HomeCwProgressStyle.entries,
+                                label = { progressStyleLabels.getValue(it) },
+                                isSelected = { it == preferences.homeCwProgressStyle },
+                                onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeCwProgressStyle(it) } },
+                            )
+                        },
+                    )
+
+                    SettingToggleItem(
+                        icon = rowIcon(HomeRows.HomeAskContinueRemember),
+                        title = rowTitle(HomeRows.HomeAskContinueRemember),
+                        subtitle = rowSubtitle(HomeRows.HomeAskContinueRemember),
+                        checked = preferences.homeAskContinueRemember,
+                        highlighted = highlightSettingId == HomeRows.HomeAskContinueRemember.id,
+                        index = 4, count = nextUpTotal,
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeAskContinueRemember(it) } },
+                    )
+
                     SettingToggleItem(
                         icon = Tabler.Outline.Ban,
                         title = rowTitle(HomeRows.ExcludeActiveSessions),
                         subtitle = if (preferences.excludeActiveSessions) stringResource(Res.string.settings_exclude_active_sessions_on) else stringResource(Res.string.settings_exclude_active_sessions_off),
                         checked = preferences.excludeActiveSessions,
                         highlighted = highlightSettingId == HomeRows.ExcludeActiveSessions.id,
-                        index = 3, count = nextUpTotal,
+                        index = 5, count = nextUpTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setExcludeActiveSessions(it) } },
                     )
                 }
@@ -692,7 +1175,7 @@ fun HomeSettingsScreen(
                     }
                 }
         },
-        SettingsScreenGroups.homeCards.asScreenGroup { _ ->
+        SettingsScreenGroups.homeCards.asScreenGroup { activePicker ->
                 // The "Library & Cards" card-display toggles — home-discovery
                 // knobs grouped beside the rest of the home hub — plus the
                 // badge/spoiler/trickplay toggles (the trickplay row is
@@ -772,6 +1255,72 @@ fun HomeSettingsScreen(
                             onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowNewBadges(it) } },
                         )
 
+                        // The NEW badge's per-section gate — single-select
+                        // presets over the badge-capable rows (the picker
+                        // vocabulary is single-select).
+                        run {
+                            val badgeSectionsTitle = rowTitle(HomeRows.HomeNewBadgeSections)
+                            val badgeSectionPresets = listOf(
+                                setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED, HomeSectionType.UPCOMING) to
+                                    stringResource(Res.string.settings_new_badge_sections_all),
+                                setOf(HomeSectionType.LATEST_MEDIA) to
+                                    stringResource(Res.string.settings_new_badge_sections_latest),
+                                setOf(HomeSectionType.RECENTLY_ADDED) to
+                                    stringResource(Res.string.settings_new_badge_sections_recent),
+                                setOf(HomeSectionType.UPCOMING) to
+                                    stringResource(Res.string.settings_new_badge_sections_upcoming),
+                                emptySet<HomeSectionType>() to
+                                    stringResource(Res.string.settings_new_badge_sections_none),
+                            )
+                            SettingListItem(
+                                icon = rowIcon(HomeRows.HomeNewBadgeSections),
+                                title = badgeSectionsTitle,
+                                subtitle = rowSubtitle(HomeRows.HomeNewBadgeSections),
+                                trailingText = badgeSectionPresets
+                                    .find { it.first == preferences.homeNewBadgeSections }
+                                    ?.second
+                                    ?: stringResource(Res.string.settings_custom),
+                                highlighted = highlightSettingId == HomeRows.HomeNewBadgeSections.id,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = badgeSectionsTitle,
+                                        items = badgeSectionPresets,
+                                        label = { it.second },
+                                        isSelected = { it.first == preferences.homeNewBadgeSections },
+                                        onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeNewBadgeSections(it.first) } },
+                                    )
+                                },
+                            )
+                        }
+
+                        val badgeDaysTitle = rowTitle(HomeRows.HomeNewBadgeDays)
+                        val badgeDaysFormat = stringResource(Res.string.settings_x_days)
+                        SettingListItem(
+                            icon = rowIcon(HomeRows.HomeNewBadgeDays),
+                            title = badgeDaysTitle,
+                            subtitle = rowSubtitle(HomeRows.HomeNewBadgeDays),
+                            trailingText = formatIntPattern(badgeDaysFormat, preferences.homeNewBadgeDays),
+                            highlighted = highlightSettingId == HomeRows.HomeNewBadgeDays.id,
+                            onClick = {
+                                activePicker.value = PickerState.List(
+                                    title = badgeDaysTitle,
+                                    items = listOf(1, 3, 7, 14, 21, 30),
+                                    label = { formatIntPattern(badgeDaysFormat, it) },
+                                    isSelected = { it == preferences.homeNewBadgeDays },
+                                    onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeNewBadgeDays(it) } },
+                                )
+                            },
+                        )
+
+                        SettingToggleItem(
+                            icon = rowIcon(HomeRows.HomeRowUnwatchedCounters),
+                            title = rowTitle(HomeRows.HomeRowUnwatchedCounters),
+                            subtitle = rowSubtitle(HomeRows.HomeRowUnwatchedCounters),
+                            checked = preferences.homeRowUnwatchedCounters,
+                            highlighted = highlightSettingId == HomeRows.HomeRowUnwatchedCounters.id,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeRowUnwatchedCounters(it) } },
+                        )
+
                         if (SettingsScreenGroups.homeCards.rowAdmitted(HomeRows.TrickplayPreview.id, RowAdmissionFlags(isTv = isTv))) {
                             SettingToggleItem(
                                 icon = rowIcon(HomeRows.TrickplayPreview),
@@ -780,6 +1329,24 @@ fun HomeSettingsScreen(
                                 checked = preferences.homeTrickplayPreview,
                                 highlighted = highlightSettingId == HomeRows.TrickplayPreview.id,
                                 onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setTrickplayPreview(it) } },
+                            )
+                            // The peek's hold time rides the TV-only toggle.
+                            val peekHoldTitle = rowTitle(HomeRows.HomeTrickplayPeekMs)
+                            SettingListItem(
+                                icon = rowIcon(HomeRows.HomeTrickplayPeekMs),
+                                title = peekHoldTitle,
+                                subtitle = rowSubtitle(HomeRows.HomeTrickplayPeekMs),
+                                trailingText = "${preferences.homeTrickplayPeekMs / 1000.0}s",
+                                highlighted = highlightSettingId == HomeRows.HomeTrickplayPeekMs.id,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = peekHoldTitle,
+                                        items = listOf(1000, 1500, 2000, 2500, 3000, 4000, 5000),
+                                        label = { "${it / 1000.0}s" },
+                                        isSelected = { it == preferences.homeTrickplayPeekMs },
+                                        onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setHomeTrickplayPeekMs(it) } },
+                                    )
+                                },
                             )
                         }
 
