@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.di
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.playback.AndroidDevicePerformanceProbe
+import com.raulshma.jellyplay.core.data.playback.DevicePerformanceProbe
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -43,4 +45,11 @@ fun androidCoreDataModule(context: Context): Module = module {
         androidWorkSchedulersModule(context),
         androidDownloadsSeamsModule(context),
     )
+
+    // Issue #186 §5.5: the platform AUTO-detection seam — the activity
+    // context feeds the ActivityManager/Build/MediaCodecList signal reads.
+    // The commonMain [VideoPerformanceResolver] single (dataSessionPlaybackModule)
+    // resolves this interface; desktop binds its own actual in
+    // desktopDataModule.
+    single<DevicePerformanceProbe> { AndroidDevicePerformanceProbe(context) }
 }

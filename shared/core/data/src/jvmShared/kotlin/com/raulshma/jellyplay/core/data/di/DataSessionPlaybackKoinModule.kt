@@ -5,11 +5,13 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioCachePolicyGuard
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
+import com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
@@ -25,6 +27,7 @@ import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.runtime.DevicePerformanceStore
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -124,6 +127,39 @@ internal val dataSessionPlaybackModule: Module = module {
     // PlayerCastController / PlaybackSession / PlayerSessionManager /
     // VideoPlayerViewModel) resolve this single from Koin directly.
     single { AdaptiveBitrateManager(get(), get(), get()) }
+
+    // Issue #186 §5.5: the performance-profile detection stack. The store is
+    // a per-device runtime seam (NOT a preference spec, never backed up) over
+    // the shared "user_prefs" file; the resolver rides the platform
+    // [DevicePerformanceProbe] binding from the platform data modules
+    // (androidCoreDataModule's AndroidDevicePerformanceProbe /
+    // desktopDataModule's DesktopDevicePerformanceProbe) and the SAME
+    // EpochMillisSource single above for the detection timestamp. The cap
+    // resolver is the single profile-ceiling layer over the stream caps (§5.7)
+    // — AdaptiveBitrateManager above stays the network/user ladder.
+    single {
+        DevicePerformanceStore(
+            get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    single {
+        VideoPerformanceResolver(
+            probe = get(),
+            store = get(),
+            playbackStore = get(),
+            timeSource = get<EpochMillisSource>(),
+        )
+    }
+
+    single {
+        PlaybackCapResolver(
+            adaptiveBitrateManager = get(),
+            performanceResolver = get(),
+            playbackStore = get(),
+        )
+    }
 
     // The settings screen's connection-speed probe (#9): the transfer rides
     // the shared download client (large-payload tuning, no HTTP cache — the
