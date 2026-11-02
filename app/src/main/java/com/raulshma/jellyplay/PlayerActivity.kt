@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
@@ -44,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.player.live.LivePlayerScreen
 import com.raulshma.jellyplay.feature.player.video.AndroidPlayerKeyBridge
+import com.raulshma.jellyplay.feature.player.video.PlayerOrientationHost
+import com.raulshma.jellyplay.feature.player.video.PlayerOrientationLock
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
 import com.raulshma.jellyplay.shell.AppLockRedirect
@@ -74,7 +77,8 @@ import org.koin.mp.KoinPlatform
  * on END/ERROR, source-rect hint, aspect-ratio clamp. The pure halves beside
  * this Activity: [PipLifecyclePolicy] owns the ordering machine and param
  * folds, [PipActionSet] owns the remote-action decision tables (the action-set
- * fold and the broadcast id codec); this class keeps only Android wiring.
+ * fold and the broadcast id codec), [PipOrientationPolicy] owns the PiP
+ * dock/restore orientation stash; this class keeps only Android wiring.
  * Both hosts feed it
  * through the same `core:data` PiP state singleton ([AndroidPipController],
  * the `PipController` port's impl) — VOD's VM and live's VM both resolve the
@@ -93,7 +97,7 @@ import org.koin.mp.KoinPlatform
  */
 // FragmentActivity for parity with MainActivity: androidx.biometric's prompt
 // requires a FragmentActivity host.
-class PlayerActivity : FragmentActivity() {
+class PlayerActivity : FragmentActivity(), PlayerOrientationHost {
 
     // PlayerActivity is the SOLE driver of the shared PlayerLifecycleManager
     // single (onPause/onResume/onTopResumed/onStop below). The singleton has
@@ -195,6 +199,13 @@ class PlayerActivity : FragmentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Restore the orientation intent (+ docked stash) saved by
+        // onSaveInstanceState BEFORE Compose composes: the screen's orientation
+        // effect then records onto a restored intent instead of a null one, and
+        // an instance recreated while docked re-docks from the saved stash
+        // (restoreOrientationState; see also onDestroy's finishing-only reset).
+        restoreOrientationState(savedInstanceState)
 
         launchArgs.value = PlayerActivityArgs.fromIntent(intent) ?: run {
             Log.w(TAG, "No itemId extra; finishing.")
@@ -379,8 +390,104 @@ class PlayerActivity : FragmentActivity() {
         // this the activity exits while still requesting landscape — leaving the
         // device rotated and the browse UI stuck in landscape after playback on
         // devices with system auto-rotate off (no in-app rotate on browse).
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // Finishing-only: a CONFIGURATION recreation must not clobber the
+        // request — the new instance restores the saved intent
+        // (restoreOrientationState) and re-locks from its own effect; an
+        // unconditional write here raced that restore (issue #186 RC-3).
+        if (isFinishing) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            orientationIntent = null
+            pipOrientationState = PipOrientationPolicy.State()
+        }
     }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Re-assert the player's orientation intent: some OEMs reset the
+        // window request during the expand rotation (or an unrelated config
+        // ripple — uiMode, keyboard) while the request and the intent have
+        // already diverged. The equality guard makes this a no-op whenever
+        // the request already matches, so it cannot loop with the system's
+        // own application of the request. Never while docked: PiP windows
+        // are system-letterboxed and must stay orientation-free (Issue #11).
+        if (isInPictureInPictureMode) return
+        val intent = orientationIntent ?: return
+        val requested = orientationLockConstant(intent)
+        if (requestedOrientation != requested) {
+            requestedOrientation = requested
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // The intent (RC-3: a plain field dies with the instance) plus the
+        // dock/stash pair when the activity is docked — restoreOrientationState
+        // rebuilds both into the new instance BEFORE Compose records over them.
+        outState.putString(KEY_ORIENTATION_INTENT, orientationIntent?.name)
+        if (pipOrientationState.docked) {
+            outState.putBoolean(KEY_PIP_DOCKED, true)
+            outState.putString(KEY_PIP_STASHED_INTENT, pipOrientationState.stashedIntent?.name)
+        }
+    }
+
+    /**
+     * onCreate-side twin of [onSaveInstanceState] — runs before `setContent`
+     * so the first composition's orientation effect records ONTO the restored
+     * intent. Two landing shapes: the recreate-in-PiP path (OEM recreations
+     * mid-transition) re-docks from the saved stash and keeps the window
+     * orientation-free; a recreation that already landed outside PiP applies
+     * the stash once and clears the dock state (the expand raced the
+     * recreate).
+     */
+    private fun restoreOrientationState(savedInstanceState: Bundle?) {
+        val saved = savedInstanceState ?: return
+        orientationIntent = saved.getString(KEY_ORIENTATION_INTENT)?.toPlayerOrientationLockOrNull()
+        if (!saved.getBoolean(KEY_PIP_DOCKED)) return
+        val stashed = saved.getString(KEY_PIP_STASHED_INTENT)?.toPlayerOrientationLockOrNull()
+        pipOrientationState = PipOrientationPolicy.State(stashedIntent = stashed, docked = true)
+        if (isInPictureInPictureMode) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            stashed?.let { requestedOrientation = orientationLockConstant(it) }
+            pipOrientationState = PipOrientationPolicy.State()
+        }
+    }
+
+    // ── Orientation vocabulary mapping ─────────────────────────────────────
+    // The PlayerOrientationLock ⇄ ActivityInfo constant folds the player
+    // screen's window seam carries privately; the Activity needs its own pair
+    // for the dock/restore writes (restoreOnPlayerExit's seam instance is a
+    // composition artifact, not reachable from lifecycle callbacks).
+
+    /** The `ActivityInfo` screen-orientation constant [mode] requests. */
+    private fun orientationLockConstant(mode: PlayerOrientationLock): Int = when (mode) {
+        PlayerOrientationLock.SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        PlayerOrientationLock.SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        PlayerOrientationLock.SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        PlayerOrientationLock.LOCKED_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        PlayerOrientationLock.LOCKED_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        PlayerOrientationLock.TV_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        PlayerOrientationLock.USER -> ActivityInfo.SCREEN_ORIENTATION_USER
+        PlayerOrientationLock.USER_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+        PlayerOrientationLock.UNSPECIFIED -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
+    /** The [PlayerOrientationLock] this raw screen-orientation constant maps to; unknown constants → null. */
+    private fun Int.toPlayerOrientationLockOrNull(): PlayerOrientationLock? = when (this) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> PlayerOrientationLock.SENSOR_LANDSCAPE
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT -> PlayerOrientationLock.SENSOR_PORTRAIT
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR -> PlayerOrientationLock.SENSOR
+        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE -> PlayerOrientationLock.LOCKED_LANDSCAPE
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT -> PlayerOrientationLock.LOCKED_PORTRAIT
+        ActivityInfo.SCREEN_ORIENTATION_USER -> PlayerOrientationLock.USER
+        ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE -> PlayerOrientationLock.USER_LANDSCAPE
+        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED -> PlayerOrientationLock.UNSPECIFIED
+        else -> null
+    }
+
+    /** Saved-state name → lock; a stale or corrupt name degrades to null, never a throw. */
+    private fun String.toPlayerOrientationLockOrNull(): PlayerOrientationLock? =
+        PlayerOrientationLock.entries.firstOrNull { it.name == this }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
@@ -437,16 +544,48 @@ class PlayerActivity : FragmentActivity() {
     // gesture is irrelevant in the floating window) and restores it on expand.
     private var savedBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
-    // Stashed orientation request so the PiP window can run orientation-free.
-    // A fixed-orientation request (the player's landscape lock) held while the
-    // activity floats in PiP leaves the task in a fixed-rotation conflict that
-    // the window manager resolves by CLOSING the activity — the Issue-#11
-    // teardown where any configuration ripple (e.g. an HDR-format pref flip
-    // made from Settings while playback floated in PiP) killed the session
-    // within seconds, 3/3 reproducible. PiP windows are system-letterboxed, so
-    // the lock has no meaning while docked; restore it on expand (a dismiss
-    // path hits onDestroy's UNSPECIFIED reset anyway).
-    private var savedPipOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    // The player's SEMANTIC orientation intent (PlayerOrientationHost): what
+    // the composing screen wants, recorded by VideoPlayerScreen's orientation
+    // effect (before its 400 ms settle) and the rotate toggle — never inferred
+    // from the window request, which can legitimately read UNSPECIFIED (cast,
+    // TV, or an entry racing the settle). Null = no concrete intent.
+    private var orientationIntent: PlayerOrientationLock? = null
+
+    // The PiP dock/restore machine over that intent (PipOrientationPolicy —
+    // its KDoc carries the full protocol): entry stashes the intent once and
+    // docks (idempotent), expand alone restores, dismiss clears, and the
+    // stash rides onSaveInstanceState so an OEM recreation during the PiP
+    // transition still expands to the pre-PiP orientation (issue #186: the
+    // old window-request stash was overwritten with UNSPECIFIED by repeat
+    // callbacks and did not survive recreation). Docked, the activity never
+    // holds a fixed-orientation request — the Issue-#11 fixed-rotation
+    // conflict that the WM "resolves" by CLOSING the activity — because the
+    // window request is written UNSPECIFIED once on dock and every
+    // lockOrientation write is suppressed while isInPictureInPictureMode.
+    private var pipOrientationState = PipOrientationPolicy.State()
+
+    /**
+     * [PlayerOrientationHost]: the screen's semantic intent landed. Outside
+     * PiP this replaces the intent ([PlayerOrientationLock.UNSPECIFIED]
+     * clears it). While docked the pre-PiP stash wins — a mid-PiP record
+     * (cast connecting, a pref flip reached through Settings) must not
+     * rewrite what expand will restore — EXCEPT when no stash exists at all:
+     * a fresh activity created directly into PiP has no pre-PiP state to
+     * preserve, so its first concrete intent becomes the stash expand
+     * restores. Recording never writes a window request.
+     */
+    override fun onPlayerOrientationIntentChanged(intent: PlayerOrientationLock) {
+        if (!isInPictureInPictureMode) {
+            orientationIntent = intent.takeUnless { it == PlayerOrientationLock.UNSPECIFIED }
+            return
+        }
+        if (pipOrientationState.stashedIntent == null &&
+            intent != PlayerOrientationLock.UNSPECIFIED
+        ) {
+            orientationIntent = intent
+            pipOrientationState = pipOrientationState.copy(stashedIntent = intent)
+        }
+    }
 
     // ── PIN/biometric lock gate ─────────────────────────────────
     //
@@ -585,12 +724,30 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
-            // Same fold for the orientation request: drop the landscape lock
-            // while docked (see savedPipOrientation) so the floating task never
-            // sits in the fixed-rotation conflict the WM "resolves" by closing
-            // the activity. Restored on exit below.
-            savedPipOrientation = requestedOrientation
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // Same fold for the orientation intent (PipOrientationPolicy — see
+            // pipOrientationState): stash the player's semantic intent once and
+            // dock, then drop the window request so the floating task never sits
+            // in the fixed-rotation conflict the WM "resolves" by closing the
+            // activity. Restored on exit below. onEntered is idempotent
+            // (State.docked): the repeat callbacks OEMs fire read the
+            // already-reset window request WITHOUT overwriting the first stash —
+            // the pre-screening window-request stash was the primary #186
+            // failure.
+            when (val decision = PipOrientationPolicy.onEntered(
+                state = pipOrientationState,
+                desiredIntent = orientationIntent,
+                currentRequested = requestedOrientation.toPlayerOrientationLockOrNull(),
+            )) {
+                is PipOrientationPolicy.Decision.Dock -> {
+                    pipOrientationState = pipOrientationState.copy(
+                        stashedIntent = decision.stash,
+                        docked = true,
+                    )
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                }
+                // Repeated callback: the first stash stands.
+                else -> {}
+            }
         } else {
             // PiP-expand gate re-check: some
             // OEMs keep the activity RESUMED through the whole PiP session,
@@ -606,10 +763,40 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = savedBrightness
             }
-            // Re-apply the player's orientation lock on expand (stashed on
+            // The lifecycle phase at callback time — computed once, consumed
+            // by BOTH folds below (orientation restore and the dismiss/expand
+            // protocol; PipLifecyclePolicy's KDoc carries the OEM-ordering
+            // spec). The orientation policy mirrors the enum (it stays pure of
+            // the lifecycle policy's Decision shape), so the value maps 1:1.
+            val lifecyclePhase = when {
+                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ->
+                    PipLifecyclePolicy.Phase.RESUMED
+                lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) ->
+                    PipLifecyclePolicy.Phase.STARTED_NOT_RESUMED
+                else -> PipLifecyclePolicy.Phase.BELOW_STARTED
+            }
+            val phase = when (lifecyclePhase) {
+                PipLifecyclePolicy.Phase.RESUMED -> PipOrientationPolicy.Phase.RESUMED
+                PipLifecyclePolicy.Phase.STARTED_NOT_RESUMED ->
+                    PipOrientationPolicy.Phase.STARTED_NOT_RESUMED
+                PipLifecyclePolicy.Phase.BELOW_STARTED -> PipOrientationPolicy.Phase.BELOW_STARTED
+            }
+            // Re-apply the player's orientation intent on expand (stashed on
             // entry; VideoPlayerScreen's lock effect only runs on composition,
-            // not on PiP exit).
-            requestedOrientation = savedPipOrientation
+            // not on PiP exit). RESTORE only: the expand path re-asserts the
+            // pre-PiP intent; a STARTED_NOT_RESUMED callback (the OEM ordering
+            // where expand lands before onResume, or a keep-alive dismissal)
+            // keeps the stash for onResume to apply, and a dismiss
+            // (BELOW_STARTED) clears WITHOUT writing — restoring on a dismiss
+            // would rotate the hidden activity / task mid-transition.
+            when (val orientationDecision = PipOrientationPolicy.onExited(pipOrientationState, phase)) {
+                is PipOrientationPolicy.Decision.Restore -> {
+                    requestedOrientation = orientationLockConstant(orientationDecision.intent)
+                    pipOrientationState = PipOrientationPolicy.State()
+                }
+                is PipOrientationPolicy.Decision.Clear -> pipOrientationState = PipOrientationPolicy.State()
+                else -> {}
+            }
             // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss; the
             // two are distinguished by lifecycle state at this callback and
             // the whole dismiss/expand fold (arm justExitedPip vs finish
@@ -618,13 +805,7 @@ class PlayerActivity : FragmentActivity() {
             // keyguard branches) lives in PipLifecyclePolicy.pipExited — its
             // KDoc carries the full OEM-ordering spec.
             val decision = PipLifecyclePolicy.pipExited(
-                phase = when {
-                    lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ->
-                        PipLifecyclePolicy.Phase.RESUMED
-                    lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) ->
-                        PipLifecyclePolicy.Phase.STARTED_NOT_RESUMED
-                    else -> PipLifecyclePolicy.Phase.BELOW_STARTED
-                },
+                phase = lifecyclePhase,
                 keepPlayerAlive = keepPlayerAliveAfterPipDismiss(),
                 isFinishing = isFinishing,
                 justExitedPip = justExitedPip,
@@ -685,6 +866,21 @@ class PlayerActivity : FragmentActivity() {
         justExitedPip = decision.justExitedPip
         if (decision.action == PipLifecyclePolicy.Action.Resume) {
             playerLifecycleManager.onActivityResume()
+        }
+        // Orientation re-assert for the OEMs where onPipModeChanged(false)
+        // fired BEFORE the activity reported RESUMED: that callback kept the
+        // stash (PipOrientationPolicy.Decision.Keep), so this resume — the
+        // first moment the activity is genuinely foreground — applies it.
+        // A resume while still in PiP, or with nothing stashed, is a no-op.
+        when (val orientationDecision = PipOrientationPolicy.onResumed(
+            state = pipOrientationState,
+            inPip = isInPictureInPictureMode,
+        )) {
+            is PipOrientationPolicy.Decision.Restore -> {
+                requestedOrientation = orientationLockConstant(orientationDecision.intent)
+                pipOrientationState = PipOrientationPolicy.State()
+            }
+            else -> {}
         }
     }
 
@@ -885,6 +1081,13 @@ class PlayerActivity : FragmentActivity() {
         // read must never wedge cold start; on timeout the check falls back
         // to the current Eagerly-collected StateFlow value.
         const val APP_LOCK_GATE_READ_TIMEOUT_MS = 1_000L
+
+        // Saved-state keys for the orientation intent / PiP dock stash
+        // (see onSaveInstanceState / restoreOrientationState). The enum's
+        // .name travels — stable across releases, parsed defensively.
+        private const val KEY_ORIENTATION_INTENT = "player_orientation_intent"
+        private const val KEY_PIP_DOCKED = "pip_orientation_docked"
+        private const val KEY_PIP_STASHED_INTENT = "pip_orientation_stash"
 
         // Launch extras live in PlayerActivityArgs — the single build/parse
         // adapter for this activity's intent contract.

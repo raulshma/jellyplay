@@ -525,17 +525,25 @@ fun VideoPlayerScreen(
     val syncPlayIgnoreWait by viewModel.sessionSlices.controls.syncPlayIgnoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
-        when (val decision = orientationLockDecision(
+        val decision = orientationLockDecision(
             isTv = isTv,
             isCastConnected = isCastConnected,
             preference = uiState.uiPrefs.defaultOrientation,
-        )) {
-            is OrientationLockDecision.Immediate -> windowOps.lockOrientation(decision.lock)
-            is OrientationLockDecision.SettleFirst -> {
-                delay(400)
-                windowOps.lockOrientation(decision.lock)
-            }
+        )
+        val lock = when (decision) {
+            is OrientationLockDecision.Immediate -> decision.lock
+            is OrientationLockDecision.SettleFirst -> decision.lock
         }
+        // Record intent BEFORE the settle so a fast PiP entry cannot lose it:
+        // the host's dock/restore stash starts from this semantic intent, and
+        // an entry landing inside the 400 ms window would otherwise stash the
+        // (still UNSPECIFIED) window request. lockOrientation records again
+        // (idempotent) and suppresses the window write itself while the host
+        // is docked — no isInPipMode key here: the host decides whether to
+        // write, so a PiP transition cannot recompose-storm this effect.
+        windowOps.recordOrientationIntent(lock)
+        if (decision is OrientationLockDecision.SettleFirst) delay(400)
+        windowOps.lockOrientation(lock)
     }
 
     // Segment / up-next overlay state is derived on the ViewModel from the
