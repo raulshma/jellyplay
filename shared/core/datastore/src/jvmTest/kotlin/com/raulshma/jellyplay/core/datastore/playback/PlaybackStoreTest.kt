@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,6 +90,8 @@ class PlaybackStoreTest {
         // engine this binary actually ships (desktop → MPV).
         assertEquals(platformEngineSupport.default, slice.preferredPlayer)
         assertEquals(StreamingQuality.AUTO, slice.streamingQuality)
+        // Absent key → AUTO: no migration; neutral until detection runs.
+        assertEquals(VideoPerformanceProfile.AUTO, slice.videoPerformanceProfile)
         // Empty store → AUTO: the legacy `force_direct_play` key's historical
         // `true` default used to migrate fresh installs into FORCE_DIRECT_PLAY,
         // silently defeating the quality cap (Issue #1). Only an EXPLICIT
@@ -109,6 +112,23 @@ class PlaybackStoreTest {
         assertFalse(settledSlice().autoEnterPip)
         store.setAutoEnterPip(true)
         assertTrue(settledSlice().autoEnterPip)
+    }
+
+    @Test
+    fun `video performance profile round-trips and resets to AUTO with playback`() = runTest {
+        // Write: an explicit tier persists verbatim.
+        store.setVideoPerformanceProfile(VideoPerformanceProfile.LOW)
+        assertEquals(VideoPerformanceProfile.LOW, settledSlice().videoPerformanceProfile)
+        store.setVideoPerformanceProfile(VideoPerformanceProfile.HIGH)
+        assertEquals(VideoPerformanceProfile.HIGH, settledSlice().videoPerformanceProfile)
+        // Reset: the key sits in the PLAYBACK reset category, so a playback
+        // reset removes it and the absent key reads AUTO again (the cached
+        // detection, if any, is runtime state - not touched here).
+        dataStore.edit { it.remove(PlaybackStore.Keys.VIDEO_PERFORMANCE_PROFILE) }
+        assertEquals(VideoPerformanceProfile.AUTO, settledSlice().videoPerformanceProfile)
+        // A corrupt stored name degrades to AUTO like every enum row.
+        dataStore.edit { it[stringPreferencesKey("video_performance_profile")] = "nonsense" }
+        assertEquals(VideoPerformanceProfile.AUTO, settledSlice().videoPerformanceProfile)
     }
 
     @Test
@@ -260,6 +280,7 @@ class PlaybackStoreTest {
         val slice = PlaybackSlice(
             preferredPlayer = PlayerType.MPV,
             streamingQuality = StreamingQuality.UHD_4K,
+            videoPerformanceProfile = VideoPerformanceProfile.LOW,
             cellularStreamingQuality = StreamingQuality.LOW_360P,
             playbackMode = PlaybackMode.FORCE_DIRECT_PLAY,
             liveStreamOption = LiveStreamOption.TRANSCODE,

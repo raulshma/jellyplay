@@ -40,6 +40,7 @@ class PlaybackSpecDerivationTest {
         "preferred_player" to String::class,
         "preferred_external_player" to String::class,
         "streaming_quality" to String::class,
+        "video_performance_profile" to String::class,
         "cellular_streaming_quality" to String::class,
         "hdr_format_preference" to String::class,
         "force_transcode_above_height" to Int::class,
@@ -124,6 +125,7 @@ class PlaybackSpecDerivationTest {
                 "preferred_player",
                 "preferred_external_player",
                 "streaming_quality",
+                "video_performance_profile",
                 "cellular_streaming_quality",
                 "hdr_format_preference",
                 "force_transcode_above_height",
@@ -214,6 +216,7 @@ class PlaybackSpecDerivationTest {
         assertEquals(PlaybackPreferenceSpecs.PREFERRED_PLAYER.default, slice.preferredPlayer)
         assertEquals(PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.default, slice.preferredExternalPlayer)
         assertEquals(PlaybackPreferenceSpecs.STREAMING_QUALITY.default, slice.streamingQuality)
+        assertEquals(PlaybackPreferenceSpecs.VIDEO_PERFORMANCE_PROFILE.default, slice.videoPerformanceProfile)
         assertEquals(PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.default, slice.cellularStreamingQuality)
         assertEquals(PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.default, slice.hdrFormatPreference)
         assertEquals(PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.default, slice.forceTranscodeAboveHeight)
@@ -244,14 +247,14 @@ class PlaybackSpecDerivationTest {
         assertEquals(PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.default, slice.pgsSubtitleDirectPlay)
         assertEquals(PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.default, slice.userDataSyncEnabled)
         assertEquals(PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.default, slice.androidTvWatchNextEnabled)
-        // Totality: the 33 pinned properties are ALL the slice's fields (34
+        // Totality: the 34 pinned properties are ALL the slice's fields (35
         // rows - the legacy-only force_direct_play with no slice property). A
         // field added without a spec-default pin above (and without bumping
         // this count) fails here. Statics (the @Serializable Companion,
         // Compose's $stable) don't count.
         val instanceFields = PlaybackSlice()::class.java.declaredFields
             .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
-        assertEquals(33, instanceFields)
+        assertEquals(34, instanceFields)
     }
 
     /** Writes [spec]'s default through its derived write (the default IS the row's T). */

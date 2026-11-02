@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.model.TvOverscan
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import java.lang.reflect.Modifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -205,6 +206,7 @@ class SliceCategoryMergersTest {
         preferredPlayer = PlayerType.MPV,
         preferredExternalPlayer = ExternalPlayerApp.VLC,
         streamingQuality = StreamingQuality.FHD_1080P,
+        videoPerformanceProfile = VideoPerformanceProfile.LOW,
         cellularStreamingQuality = StreamingQuality.HD_720P,
         hdrFormatPreference = HdrFormatPreference.SDR_ONLY,
         forceTranscodeAboveHeight = 1080,

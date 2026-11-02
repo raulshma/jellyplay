@@ -1,5 +1,9 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
+import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_title
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -108,5 +112,30 @@ class SettingsSearchCatalogTest {
         // members.
         assertEquals(SettingsScreenGroups.all.sumOf { it.items.size }, items.size)
         assertEquals(ExperimentalSettingsSearchItems.last().id, items.last().id)
+    }
+
+    /**
+     * The video-performance-profile search entry (issue #186): the spec side
+     * declares the semantics + resource keys in core:datastore, and the fused
+     * UI row (`PlaybackRows.VideoPerformanceProfile`, a separate wave) binds
+     * them into the catalog — the binding's `verifyResourceKey` fails fast at
+     * catalog init unless the declared keys match these generated resources.
+     * Pinned here so the binding contract is stated and checked before the
+     * row lands; the catalog's per-group count pin above flips with the row.
+     */
+    @Test
+    fun `the video performance profile spec entry declares the search faces the fused row must bind`() {
+        val spec = PlaybackPreferenceSpecs.searchEntries.single { it.id == "video_performance_profile" }
+        assertEquals("ss_performance_profile_title", spec.titleKey)
+        assertEquals("ss_performance_profile_subtitle", spec.subtitleKey)
+        assertEquals("ss_cat_playback", spec.categoryKey)
+        assertEquals(PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS, spec.routeKind)
+        assertTrue(spec.isAdvanced, "the profile row hides behind the advanced-settings gate")
+        assertTrue(spec.keywords.isNotEmpty(), "the profile entry carries no keywords")
+        // The declared keys ARE the generated resources' keys — the resource
+        // exists, and the future binding cannot silently swap a different
+        // string in under the spec.
+        assertEquals("ss_performance_profile_title", Res.string.ss_performance_profile_title.key)
+        assertEquals("ss_performance_profile_subtitle", Res.string.ss_performance_profile_subtitle.key)
     }
 }

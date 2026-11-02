@@ -295,6 +295,14 @@ data class PlaybackPreferences(
     val pauseDetailsEnabled: Boolean = false,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     /**
+     * The device performance profile — a ceiling layered over the user's
+     * explicit quality settings (issue #186): AUTO resolves to the detected
+     * device tier, LOW / MEDIUM / HIGH pin it. Profiles never change a saved
+     * quality; the stricter of profile and user cap wins. Default AUTO —
+     * neutral until detection runs.
+     */
+    val videoPerformanceProfile: VideoPerformanceProfile = VideoPerformanceProfile.AUTO,
+    /**
      * The delivery method (Auto / Force Direct Play / Force Transcode). It
      * governs whether the quality cap applies at all, so the Settings row
      * renders it beside the quality/transcode cluster. Default AUTO — the

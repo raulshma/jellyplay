@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import kotlinx.serialization.encodeToString
 
 /** The stereo-downmix loudness compensation bounds ([PlaybackSlice.downmixBoostDb] clamps to these). */
@@ -180,6 +181,33 @@ object PlaybackPreferenceSpecs {
                 subtitleKey = "ss_streaming_quality_subtitle",
                 categoryKey = "ss_cat_playback",
                 keywords = listOf("quality", "streaming", "resolution", "4k", "1080p", "sd"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
+        /*
+         * The device performance profile (issue #186) — a CEILING layered over
+         * the user's explicit quality settings, never a rewrite of them: AUTO
+         * resolves to the detected device tier at playback time, LOW / MEDIUM /
+         * HIGH pin the tier. The detected tier itself is per-device runtime
+         * state and deliberately has no row here (never persisted as a
+         * preference, never backed up or synced). Absent key on existing
+         * installs reads AUTO — no migration; the default is neutral until
+         * detection runs. Resets with PLAYBACK.
+         */
+        PreferenceSpec.enumRow(
+            keyName = "video_performance_profile",
+            default = VideoPerformanceProfile.AUTO,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "video_performance_profile",
+                titleKey = "ss_performance_profile_title",
+                subtitleKey = "ss_performance_profile_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf(
+                    "performance", "low end", "medium", "high end", "smooth",
+                    "stutter", "profile", "auto", "1080p", "bitrate", "device",
+                ),
                 routeKind = ROUTE_PLAYBACK_SETTINGS,
                 isAdvanced = true,
             ),
@@ -914,6 +942,8 @@ object PlaybackPreferenceSpecs {
     val PREFERRED_EXTERNAL_PLAYER: PreferenceSpec<ExternalPlayerApp> get() = row("preferred_external_player")
 
     val STREAMING_QUALITY: PreferenceSpec<StreamingQuality> get() = row("streaming_quality")
+
+    val VIDEO_PERFORMANCE_PROFILE: PreferenceSpec<VideoPerformanceProfile> get() = row("video_performance_profile")
 
     val CELLULAR_STREAMING_QUALITY: PreferenceSpec<StreamingQuality> get() = row("cellular_streaming_quality")
 

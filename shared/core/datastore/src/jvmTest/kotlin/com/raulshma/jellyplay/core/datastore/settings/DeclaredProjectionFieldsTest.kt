@@ -4,10 +4,17 @@ import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileSlice
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -19,6 +26,7 @@ import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -237,5 +245,34 @@ class DeclaredProjectionFieldsTest {
             ),
             appearance.appearanceTheme(),
         )
+    }
+
+    @Test
+    fun `playback projection carries the video performance profile off the slice`() {
+        // Every slice at its default except the profile, so the only value
+        // that differs between the derived projection and the same bundle at
+        // the default slice is this one field: a projection that drops it
+        // (or misroutes it) keeps AUTO and fails against the LOW pin, and a
+        // projection that disturbs a sibling field fails the full-equality
+        // half. PlaybackPreferences carries too many fields for a literal
+        // expected construction — the baseline-copy below is the same
+        // field-for-field guard at one override's distance.
+        val bundle = PlaybackCoreBundle(
+            playback = PlaybackSlice(videoPerformanceProfile = VideoPerformanceProfile.LOW),
+            video = VideoPlayerSlice(),
+            effects = AudioEffectsSlice(),
+            subtitle = SubtitleSlice(),
+            audio = AudioSlice(),
+            engine = PlayerEngineSlice(),
+            network = NetworkOfflineSlice(),
+        )
+        val sp = SyncPlayCastSlice()
+        val volume = VolumeProfileSlice()
+
+        val derived = bundle.toPlaybackPreferences(sp, volume)
+        assertEquals(VideoPerformanceProfile.LOW, derived.videoPerformanceProfile)
+
+        val baseline = bundle.copy(playback = PlaybackSlice()).toPlaybackPreferences(sp, volume)
+        assertEquals(baseline.copy(videoPerformanceProfile = VideoPerformanceProfile.LOW), derived)
     }
 }

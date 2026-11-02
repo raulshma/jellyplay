@@ -87,6 +87,7 @@ internal fun PlaybackSlice.mergeWith(
         preferredPlayer = if (importPlayback) incoming.preferredPlayer else preferredPlayer,
         preferredExternalPlayer = if (importPlayback) incoming.preferredExternalPlayer else preferredExternalPlayer,
         streamingQuality = if (importPlayback) incoming.streamingQuality else streamingQuality,
+        videoPerformanceProfile = if (importPlayback) incoming.videoPerformanceProfile else videoPerformanceProfile,
         cellularStreamingQuality = if (importPlayback) incoming.cellularStreamingQuality else cellularStreamingQuality,
         hdrFormatPreference = if (importPlayback) incoming.hdrFormatPreference else hdrFormatPreference,
         forceTranscodeAboveHeight = if (importPlayback) incoming.forceTranscodeAboveHeight else forceTranscodeAboveHeight,

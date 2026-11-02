@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -94,6 +95,7 @@ class PlaybackStore constructor(
         val PREFERRED_PLAYER = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_PLAYER.keyName)
         val PREFERRED_EXTERNAL_PLAYER = stringPreferencesKey(PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.keyName)
         val STREAMING_QUALITY = stringPreferencesKey(PlaybackPreferenceSpecs.STREAMING_QUALITY.keyName)
+        val VIDEO_PERFORMANCE_PROFILE = stringPreferencesKey(PlaybackPreferenceSpecs.VIDEO_PERFORMANCE_PROFILE.keyName)
         val CELLULAR_STREAMING_QUALITY = stringPreferencesKey(PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.keyName)
         val HDR_FORMAT_PREFERENCE = stringPreferencesKey(PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.keyName)
         val FORCE_TRANSCODE_ABOVE_HEIGHT = intPreferencesKey(PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.keyName)
@@ -146,6 +148,7 @@ class PlaybackStore constructor(
         preferredPlayer = PlaybackPreferenceSpecs.PREFERRED_PLAYER.readFrom(prefs),
         preferredExternalPlayer = PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.readFrom(prefs),
         streamingQuality = PlaybackPreferenceSpecs.STREAMING_QUALITY.readFrom(prefs),
+        videoPerformanceProfile = PlaybackPreferenceSpecs.VIDEO_PERFORMANCE_PROFILE.readFrom(prefs),
         cellularStreamingQuality = PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.readFrom(prefs),
         hdrFormatPreference = PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.readFrom(prefs),
         forceTranscodeAboveHeight = PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.readFrom(prefs),
@@ -194,6 +197,16 @@ class PlaybackStore constructor(
 
     suspend fun setStreamingQuality(quality: StreamingQuality) {
         dataStore.edit { PlaybackPreferenceSpecs.STREAMING_QUALITY.writeTo(it, quality) }
+    }
+
+    /**
+     * The device performance profile — a ceiling layered over the user's
+     * explicit quality settings (issue #186). AUTO re-enables detection;
+     * LOW / MEDIUM / HIGH pin the tier. The detected tier itself is per-device
+     * runtime state, deliberately NOT persisted through this store.
+     */
+    suspend fun setVideoPerformanceProfile(profile: VideoPerformanceProfile) {
+        dataStore.edit { PlaybackPreferenceSpecs.VIDEO_PERFORMANCE_PROFILE.writeTo(it, profile) }
     }
 
     suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
@@ -418,6 +431,7 @@ class PlaybackStore constructor(
             PlaybackPreferenceSpecs.PREFERRED_PLAYER.writeTo(prefs, slice.preferredPlayer)
             PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.writeTo(prefs, slice.preferredExternalPlayer)
             PlaybackPreferenceSpecs.STREAMING_QUALITY.writeTo(prefs, slice.streamingQuality)
+            PlaybackPreferenceSpecs.VIDEO_PERFORMANCE_PROFILE.writeTo(prefs, slice.videoPerformanceProfile)
             PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.writeTo(prefs, slice.cellularStreamingQuality)
             PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.writeTo(prefs, slice.hdrFormatPreference)
             PlaybackPreferenceSpecs.FORCE_TRANSCODE_ABOVE_HEIGHT.writeTo(prefs, slice.forceTranscodeAboveHeight)
@@ -473,6 +487,12 @@ data class PlaybackSlice(
     val preferredPlayer: PlayerType = PlaybackPreferenceSpecs.PREFERRED_PLAYER.default,
     val preferredExternalPlayer: ExternalPlayerApp = PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.default,
     val streamingQuality: StreamingQuality = PlaybackPreferenceSpecs.STREAMING_QUALITY.default,
+    /**
+     * The device performance profile ceiling (issue #186). Default AUTO —
+     * the absent key on existing installs reads AUTO, so the default is
+     * neutral until detection runs.
+     */
+    val videoPerformanceProfile: VideoPerformanceProfile = PlaybackPreferenceSpecs.VIDEO_PERFORMANCE_PROFILE.default,
     val cellularStreamingQuality: StreamingQuality = PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.default,
     /** The HDR delivery posture for direct play. Default AUTO (engine negotiation). */
     val hdrFormatPreference: HdrFormatPreference = PlaybackPreferenceSpecs.HDR_FORMAT_PREFERENCE.default,
