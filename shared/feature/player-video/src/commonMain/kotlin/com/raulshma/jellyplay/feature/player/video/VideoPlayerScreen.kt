@@ -511,40 +511,16 @@ fun VideoPlayerScreen(
     val aspectRatio = uiState.videoFx.aspectRatio
     val detectedAspectRatio = uiState.videoFx.detectedAspectRatio
 
-    val toggleOrientation: () -> Unit = remember(windowOps, uiState.uiPrefs.defaultOrientation) {
-        {
-            // Symmetric toggle (portrait ↔ the user's configured default
-            // landscape) lives in the platform actual: it reads the host's
-            // current orientation to decide the direction.
-            windowOps.toggleOrientation(
-                preferLockedLandscape = uiState.uiPrefs.defaultOrientation == OrientationMode.LOCKED_LANDSCAPE,
-            )
-        }
-    }
+    val toggleOrientation = rememberOrientationToggle(windowOps, uiState.uiPrefs.defaultOrientation)
 
     val syncPlayIgnoreWait by viewModel.sessionSlices.controls.syncPlayIgnoreWait.collectAsStateWithLifecycle()
 
-    LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
-        val decision = orientationLockDecision(
-            isTv = isTv,
-            isCastConnected = isCastConnected,
-            preference = uiState.uiPrefs.defaultOrientation,
-        )
-        val lock = when (decision) {
-            is OrientationLockDecision.Immediate -> decision.lock
-            is OrientationLockDecision.SettleFirst -> decision.lock
-        }
-        // Record intent BEFORE the settle so a fast PiP entry cannot lose it:
-        // the host's dock/restore stash starts from this semantic intent, and
-        // an entry landing inside the 400 ms window would otherwise stash the
-        // (still UNSPECIFIED) window request. lockOrientation records again
-        // (idempotent) and suppresses the window write itself while the host
-        // is docked — no isInPipMode key here: the host decides whether to
-        // write, so a PiP transition cannot recompose-storm this effect.
-        windowOps.recordOrientationIntent(lock)
-        if (decision is OrientationLockDecision.SettleFirst) delay(400)
-        windowOps.lockOrientation(lock)
-    }
+    PlayerOrientationLockEffect(
+        windowOps = windowOps,
+        isTv = isTv,
+        isCastConnected = isCastConnected,
+        defaultOrientation = uiState.uiPrefs.defaultOrientation,
+    )
 
     // Segment / up-next overlay state is derived on the ViewModel from the
     // high-frequency position flow but only re-emits at segment boundaries, so
