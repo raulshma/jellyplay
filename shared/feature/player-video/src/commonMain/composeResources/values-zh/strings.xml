@@ -428,4 +428,26 @@
     <string name="player_video_render_deband">去色带</string>
     <string name="player_video_render_motion_interpolation">运动插值</string>
     <string name="player_video_render_tone_curve">色调映射曲线（HDR → SDR）</string>
+    <string name="player_video_stats_profile">配置</string>
+    <string name="player_video_stats_effective_cap">实际上限</string>
+    <string name="player_video_stats_no_profile_cap">无配置上限</string>
+    <string name="player_video_stats_caps_bypassed">已绕过上限</string>
+    <string name="player_video_stats_detection_reasons">检测原因</string>
+    <string name="player_video_stats_try_auto_low">尝试 AUTO 或 LOW 以转码到 1080p</string>
+    <string name="player_video_stats_try_low_switch_engine">尝试 LOW；如果问题仍然存在，请切换播放引擎</string>
+    <string name="player_video_stats_try_lower_quality">降低画质 / 检查 Wi-Fi</string>
+    <string name="player_video_bypass_force_direct">强制直接播放</string>
+    <string name="player_video_bypass_download">下载</string>
+    <string name="player_video_bypass_live_tv">直播电视</string>
+    <string name="player_video_playback_options_performance_section">性能</string>
+    <string name="player_video_performance_detected_tier">检测到：%1$s</string>
+    <string name="player_video_performance_detecting">正在检测…</string>
+    <string name="player_video_performance_low_desc">流畅 · 1080p / 8 Mbps</string>
+    <string name="player_video_performance_medium_desc">均衡 · 1440p / 20 Mbps</string>
+    <string name="player_video_performance_high_desc">最高画质</string>
+    <string name="player_video_performance_caps_limited_direct_play">强制直接播放时，上限会受到限制。</string>
+    <string name="player_video_exit_confirm_title">关闭播放器？</string>
+    <string name="player_video_exit_confirm_message">再按一次返回 — 或确认 — 即可关闭播放器。</string>
+    <string name="player_video_exit_confirm_confirm">关闭</string>
+    <string name="player_video_exit_confirm_stay">留下</string>
 </resources>

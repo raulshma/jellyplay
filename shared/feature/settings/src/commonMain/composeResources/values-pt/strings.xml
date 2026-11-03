@@ -1225,4 +1225,27 @@
     <string name="settings_auto_download_mode_never">Nunca</string>
     <string name="settings_auto_download_check_now">Procurar novos episódios agora</string>
     <string name="settings_auto_download_check_now_subtitle">Executar uma passagem de descarregamento automático agora</string>
+    <string name="settings_time_use_24h">Formato de 24 horas</string>
+    <string name="settings_time_use_24h_subtitle">Usa o relógio de 24 horas em vez do formato do sistema</string>
+    <string name="settings_card_press_animations">Animação de toque dos cartões</string>
+    <string name="settings_card_press_animations_subtitle">O efeito animado de escala ao tocar dos cartões de mídia</string>
+    <string name="settings_pull_to_refresh">Puxar para atualizar</string>
+    <string name="settings_pull_to_refresh_subtitle">O gesto de deslizar para baixo para atualizar nas telas de navegação</string>
+    <string name="settings_start_tab">Aba inicial</string>
+    <string name="settings_start_tab_subtitle">Qual destino de nível superior abre ao iniciar</string>
+    <string name="settings_start_tab_default">Padrão (Início)</string>
+    <string name="settings_backdrop_dim">Escurecimento do fundo</string>
+    <string name="settings_backdrop_dim_subtitle">Quanto o fundo das artes é escurecido no app inteiro</string>
+    <string name="settings_haptics_intensity">Intensidade tátil</string>
+    <string name="settings_haptics_intensity_subtitle">A intensidade das vibrações de confirmação</string>
+    <string name="settings_image_quality">Qualidade da imagem</string>
+    <string name="settings_image_quality_subtitle">Limita a qualidade JPEG que o servidor retorna para as artes</string>
+    <string name="settings_list_density">Densidade das listas</string>
+    <string name="settings_list_density_subtitle">O espaçamento das linhas de ajustes e listas</string>
+    <string name="settings_press_effect">Efeito de toque</string>
+    <string name="settings_press_effect_subtitle">O retorno tátil das superfícies tocáveis</string>
+    <string name="settings_flat_cards">Cartões planos</string>
+    <string name="settings_flat_cards_subtitle">Remove o traço de contorno dos cartões de mídia</string>
+    <string name="settings_overscroll">Efeito de rolagem excedente</string>
+    <string name="settings_overscroll_subtitle">O estiramento ou brilho nas extremidades das listas roláveis</string>
 </resources>

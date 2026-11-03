@@ -127,16 +127,21 @@
     <string name="home_stats_card_watch_approx">已观看约 %1$s 小时</string>
     <string name="home_stats_card_watch_exact">已观看 %1$s 小时</string>
     <string name="home_stats_card_streak">连续观看 %1$d 天</string>
+    <string name="home_stats_card_played_only">已观看 %1$d 个</string>
+    <string name="home_stats_card_unplayed_only">未观看 %1$d 个</string>
 
     <!-- H21 new-section announcement snackbar (the VM emits the structural
          event; the screen resolves the text). -->
     <string name="home_new_sections_announcement">主屏幕新内容：%1$s</string>
     <string name="home_new_sections_customize">自定义</string>
-    <!-- PENDING TRANSLATION: copied verbatim from the default locale by StringsPropagator — translate each entry and fold it into the groups above. -->
-    <string name="home_hero_pause_video">Pause video</string>
-    <string name="home_airs_date_format">Airs %1$s</string>
-    <string name="home_presence_chip_label">%1$s is watching %2$s</string>
-    <string name="home_presence_join">Join</string>
-    <string name="home_presence_dismiss_cd">Hide this session</string>
-    <string name="home_watch_party_join_failed">Couldn't join the watch party</string>
+    <string name="home_hero_pause_video">暂停视频</string>
+    <string name="home_row_unwatched_count">%1$d 个未观看</string>
+    <string name="home_airs_date_format">%1$s 播出</string>
+    <string name="home_presence_chip_label">%1$s正在观看%2$s</string>
+    <string name="home_presence_join">加入</string>
+    <string name="home_presence_dismiss_cd">隐藏此会话</string>
+    <string name="home_watch_party_join_failed">无法加入观影派对</string>
+    <string name="home_greeting_morning">早上好，%1$s</string>
+    <string name="home_greeting_afternoon">下午好，%1$s</string>
+    <string name="home_greeting_evening">晚上好，%1$s</string>
 </resources>

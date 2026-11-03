@@ -78,6 +78,12 @@ class I18nParityRatchetTest {
      *  - `shared/feature/settings` 98 keys × 8 locales — large settings
      *    surface landed untranslated; translations tracked as a
      *    settings-module follow-up.
+     *
+     * Accepted gaps recorded 2026-11-03 (the v0.11.x cycle landed home /
+     * player-video / settings strings ahead of their translation pass) were
+     * translated in-full on 2026-11-04 (422 keys x8 locales folded into
+     * their group comments, PENDING blocks deleted) — the would-be entries
+     * never landed; the numbers must never rise.
      */
     private val baselineMissingKeys: Map<String, Int> = mapOf(
         "shared/core/ui:de" to 0,
@@ -96,14 +102,6 @@ class I18nParityRatchetTest {
         "shared/feature/details:ko" to 13,
         "shared/feature/details:pt" to 13,
         "shared/feature/details:zh" to 13,
-        "shared/feature/home:de" to 6,
-        "shared/feature/home:es" to 6,
-        "shared/feature/home:fr" to 6,
-        "shared/feature/home:it" to 6,
-        "shared/feature/home:ja" to 6,
-        "shared/feature/home:ko" to 6,
-        "shared/feature/home:pt" to 6,
-        "shared/feature/home:zh" to 6,
         // 98-baseline gap translated 2026-10-26 (259 settings keys x8 locales
         // landed with it) — entries deleted per the lower-a-baseline rule.
     )

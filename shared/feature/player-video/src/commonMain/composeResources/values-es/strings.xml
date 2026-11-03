@@ -429,4 +429,26 @@
     <string name="player_video_render_deband">Reducción de bandas</string>
     <string name="player_video_render_motion_interpolation">Interpolación de movimiento</string>
     <string name="player_video_render_tone_curve">Curva de mapeo tonal (HDR → SDR)</string>
+    <string name="player_video_stats_profile">Perfil</string>
+    <string name="player_video_stats_effective_cap">Límite efectivo</string>
+    <string name="player_video_stats_no_profile_cap">Sin límite de perfil</string>
+    <string name="player_video_stats_caps_bypassed">Límites omitidos</string>
+    <string name="player_video_stats_detection_reasons">Motivos de detección</string>
+    <string name="player_video_stats_try_auto_low">Prueba AUTO o LOW para transcodificar a 1080p</string>
+    <string name="player_video_stats_try_low_switch_engine">Prueba LOW; si persiste, cambia el motor del reproductor</string>
+    <string name="player_video_stats_try_lower_quality">Baja la calidad / comprueba el Wi-Fi</string>
+    <string name="player_video_bypass_force_direct">Forzar reproducción directa</string>
+    <string name="player_video_bypass_download">Descarga</string>
+    <string name="player_video_bypass_live_tv">TV en directo</string>
+    <string name="player_video_playback_options_performance_section">Rendimiento</string>
+    <string name="player_video_performance_detected_tier">Detectado: %1$s</string>
+    <string name="player_video_performance_detecting">Detectando…</string>
+    <string name="player_video_performance_low_desc">Fluida · 1080p / 8 Mbps</string>
+    <string name="player_video_performance_medium_desc">Equilibrada · 1440p / 20 Mbps</string>
+    <string name="player_video_performance_high_desc">Calidad máxima</string>
+    <string name="player_video_performance_caps_limited_direct_play">Los límites están restringidos en reproducción directa forzada.</string>
+    <string name="player_video_exit_confirm_title">¿Cerrar el reproductor?</string>
+    <string name="player_video_exit_confirm_message">Pulsa atrás otra vez — o confirma — para cerrar el reproductor.</string>
+    <string name="player_video_exit_confirm_confirm">Cerrar</string>
+    <string name="player_video_exit_confirm_stay">Quedarme</string>
 </resources>

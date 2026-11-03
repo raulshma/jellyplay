@@ -1222,4 +1222,27 @@
     <string name="settings_auto_download_mode_never">しない</string>
     <string name="settings_auto_download_check_now">今すぐ新エピソードを確認</string>
     <string name="settings_auto_download_check_now_subtitle">自動ダウンロードを今すぐ実行する</string>
+    <string name="settings_time_use_24h">24時間表記</string>
+    <string name="settings_time_use_24h_subtitle">システム形式の代わりに24時間時計を使います</string>
+    <string name="settings_card_press_animations">カードのタップアニメーション</string>
+    <string name="settings_card_press_animations_subtitle">メディアカードをタップしたときの拡大縮小アニメーション</string>
+    <string name="settings_pull_to_refresh">引っ張って更新</string>
+    <string name="settings_pull_to_refresh_subtitle">ブラウズ画面での下スワイプ更新ジェスチャー</string>
+    <string name="settings_start_tab">起動時のタブ</string>
+    <string name="settings_start_tab_subtitle">起動時に開く最上位の画面</string>
+    <string name="settings_start_tab_default">デフォルト（ホーム）</string>
+    <string name="settings_backdrop_dim">背景の暗さ</string>
+    <string name="settings_backdrop_dim_subtitle">アプリ全体でアートワーク背景をどれだけ暗くするか</string>
+    <string name="settings_haptics_intensity">ハプティクスの強さ</string>
+    <string name="settings_haptics_intensity_subtitle">確認時の振動の強さ</string>
+    <string name="settings_image_quality">画像品質</string>
+    <string name="settings_image_quality_subtitle">サーバーがアートワークに返すJPEG品質を制限します</string>
+    <string name="settings_list_density">リストの密度</string>
+    <string name="settings_list_density_subtitle">設定画面とリスト行の間隔</string>
+    <string name="settings_press_effect">タップ効果</string>
+    <string name="settings_press_effect_subtitle">押せるサーフェスに表示されるタッチフィードバック</string>
+    <string name="settings_flat_cards">フラットカード</string>
+    <string name="settings_flat_cards_subtitle">メディアカードの輪郭線をなくします</string>
+    <string name="settings_overscroll">オーバースクロール効果</string>
+    <string name="settings_overscroll_subtitle">スクロール可能なリストの端のストレッチ/グロー効果</string>
 </resources>

@@ -1223,4 +1223,27 @@
     <string name="settings_auto_download_mode_never">Nie</string>
     <string name="settings_auto_download_check_now">Jetzt nach neuen Episoden suchen</string>
     <string name="settings_auto_download_check_now_subtitle">Auto-Download-Durchlauf sofort ausführen</string>
+    <string name="settings_time_use_24h">24-Stunden-Uhr</string>
+    <string name="settings_time_use_24h_subtitle">Nutzt die 24-Stunden-Uhr statt des Systemformats</string>
+    <string name="settings_card_press_animations">Karten-Tippanimation</string>
+    <string name="settings_card_press_animations_subtitle">Der animierte Druck-Skaleneffekt der Medienkarten</string>
+    <string name="settings_pull_to_refresh">Ziehen zum Aktualisieren</string>
+    <string name="settings_pull_to_refresh_subtitle">Die nach-unten-wisch-Aktualisierungsgeste auf Browse-Screens</string>
+    <string name="settings_start_tab">Start-Tab</string>
+    <string name="settings_start_tab_subtitle">Welches Top-Ziel beim Start öffnet</string>
+    <string name="settings_start_tab_default">Standard (Home)</string>
+    <string name="settings_backdrop_dim">Backdrop-Abdunkelung</string>
+    <string name="settings_backdrop_dim_subtitle">Wie stark Backdrops app-weit abgedunkelt werden</string>
+    <string name="settings_haptics_intensity">Haptik-Intensität</string>
+    <string name="settings_haptics_intensity_subtitle">Wie stark Bestätigungsvibrationen empfunden werden</string>
+    <string name="settings_image_quality">Bildqualität</string>
+    <string name="settings_image_quality_subtitle">Begrenzt die JPEG-Qualität, die der Server für Artwork zurückgibt</string>
+    <string name="settings_list_density">Listendichte</string>
+    <string name="settings_list_density_subtitle">Der Abstand der Einstellungs- und Listenzeilen</string>
+    <string name="settings_press_effect">Tipp-Effekt</string>
+    <string name="settings_press_effect_subtitle">Das Touch-Feedback auf drückbaren Flächen</string>
+    <string name="settings_flat_cards">Flache Karten</string>
+    <string name="settings_flat_cards_subtitle">Entfernt die Konturlinie von Medienkarten</string>
+    <string name="settings_overscroll">Overscroll-Effekt</string>
+    <string name="settings_overscroll_subtitle">Das Strecken oder Glühen an den Enden scrollbarer Listen</string>
 </resources>

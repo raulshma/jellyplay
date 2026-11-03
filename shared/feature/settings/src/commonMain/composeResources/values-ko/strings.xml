@@ -1222,4 +1222,27 @@
     <string name="settings_auto_download_mode_never">안 함</string>
     <string name="settings_auto_download_check_now">지금 새 에피소드 확인</string>
     <string name="settings_auto_download_check_now_subtitle">자동 다운로드 지금 실행</string>
+    <string name="settings_time_use_24h">24시간제</string>
+    <string name="settings_time_use_24h_subtitle">시스템 형식 대신 24시간제 시계를 사용합니다</string>
+    <string name="settings_card_press_animations">카드 누르기 애니메이션</string>
+    <string name="settings_card_press_animations_subtitle">미디어 카드를 누를 때의 크기 조절 애니메이션 효과</string>
+    <string name="settings_pull_to_refresh">당겨서 새로고침</string>
+    <string name="settings_pull_to_refresh_subtitle">탐색 화면에서 아래로 스와이프하여 새로고침하는 제스처</string>
+    <string name="settings_start_tab">시작 탭</string>
+    <string name="settings_start_tab_subtitle">실행 시 열릴 최상위 화면</string>
+    <string name="settings_start_tab_default">기본값 (홈)</string>
+    <string name="settings_backdrop_dim">배경 어둡게</string>
+    <string name="settings_backdrop_dim_subtitle">앱 전체에서 아트워크 배경을 얼마나 어둡게 할지</string>
+    <string name="settings_haptics_intensity">햅틱 강도</string>
+    <string name="settings_haptics_intensity_subtitle">확인 진동이 느껴지는 강도</string>
+    <string name="settings_image_quality">이미지 품질</string>
+    <string name="settings_image_quality_subtitle">서버가 아트워크에 반환하는 JPEG 품질을 제한합니다</string>
+    <string name="settings_list_density">목록 밀도</string>
+    <string name="settings_list_density_subtitle">설정 및 목록 행의 간격</string>
+    <string name="settings_press_effect">누름 효과</string>
+    <string name="settings_press_effect_subtitle">누를 수 있는 표면에 표시되는 터치 피드백</string>
+    <string name="settings_flat_cards">플랫 카드</string>
+    <string name="settings_flat_cards_subtitle">미디어 카드의 외곽선을 제거합니다</string>
+    <string name="settings_overscroll">오버스크롤 효과</string>
+    <string name="settings_overscroll_subtitle">스크롤 목록 끝의 늘어남 또는 빛남 효과</string>
 </resources>

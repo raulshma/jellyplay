@@ -429,4 +429,26 @@
     <string name="player_video_render_deband">Debanding</string>
     <string name="player_video_render_motion_interpolation">Bewegungsinterpolation</string>
     <string name="player_video_render_tone_curve">Tone-Mapping-Kurve (HDR → SDR)</string>
+    <string name="player_video_stats_profile">Profil</string>
+    <string name="player_video_stats_effective_cap">Effektive Obergrenze</string>
+    <string name="player_video_stats_no_profile_cap">Keine Profil-Obergrenze</string>
+    <string name="player_video_stats_caps_bypassed">Obergrenzen umgangen</string>
+    <string name="player_video_stats_detection_reasons">Erkennungsgründe</string>
+    <string name="player_video_stats_try_auto_low">Wähle AUTO oder LOW, um auf 1080p zu transkodieren</string>
+    <string name="player_video_stats_try_low_switch_engine">Probiere LOW; falls es bleibt, wechsle die Player-Engine</string>
+    <string name="player_video_stats_try_lower_quality">Qualität senken / WLAN prüfen</string>
+    <string name="player_video_bypass_force_direct">Direct Play erzwingen</string>
+    <string name="player_video_bypass_download">Download</string>
+    <string name="player_video_bypass_live_tv">Live-TV</string>
+    <string name="player_video_playback_options_performance_section">Leistung</string>
+    <string name="player_video_performance_detected_tier">Erkannt: %1$s</string>
+    <string name="player_video_performance_detecting">Wird erkannt…</string>
+    <string name="player_video_performance_low_desc">Flüssig · 1080p / 8 Mbps</string>
+    <string name="player_video_performance_medium_desc">Ausgewogen · 1440p / 20 Mbps</string>
+    <string name="player_video_performance_high_desc">Maximale Qualität</string>
+    <string name="player_video_performance_caps_limited_direct_play">Im erzwungenen Direct Play sind Obergrenzen eingeschränkt.</string>
+    <string name="player_video_exit_confirm_title">Player schließen?</string>
+    <string name="player_video_exit_confirm_message">Drücke noch einmal Zurück — oder bestätige — um den Player zu schließen.</string>
+    <string name="player_video_exit_confirm_confirm">Schließen</string>
+    <string name="player_video_exit_confirm_stay">Bleiben</string>
 </resources>

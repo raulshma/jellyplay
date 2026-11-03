@@ -1224,4 +1224,27 @@
     <string name="settings_auto_download_mode_never">从不</string>
     <string name="settings_auto_download_check_now">立即检查新剧集</string>
     <string name="settings_auto_download_check_now_subtitle">立即执行一次自动下载</string>
+    <string name="settings_time_use_24h">24 小时制</string>
+    <string name="settings_time_use_24h_subtitle">使用 24 小时制而非系统格式</string>
+    <string name="settings_card_press_animations">卡片按压动画</string>
+    <string name="settings_card_press_animations_subtitle">媒体卡片按压时的缩放动画效果</string>
+    <string name="settings_pull_to_refresh">下拉刷新</string>
+    <string name="settings_pull_to_refresh_subtitle">浏览页面的下拉刷新手势</string>
+    <string name="settings_start_tab">启动标签页</string>
+    <string name="settings_start_tab_subtitle">启动时打开哪个顶层页面</string>
+    <string name="settings_start_tab_default">默认（首页）</string>
+    <string name="settings_backdrop_dim">背景压暗</string>
+    <string name="settings_backdrop_dim_subtitle">应用内艺术图背景的压暗程度</string>
+    <string name="settings_haptics_intensity">触感强度</string>
+    <string name="settings_haptics_intensity_subtitle">确认振动感受的强弱</string>
+    <string name="settings_image_quality">图像质量</string>
+    <string name="settings_image_quality_subtitle">限制服务器为艺术图返回的 JPEG 质量</string>
+    <string name="settings_list_density">列表密度</string>
+    <string name="settings_list_density_subtitle">设置页与列表行的间距</string>
+    <string name="settings_press_effect">按压效果</string>
+    <string name="settings_press_effect_subtitle">可点击表面上显示的触摸反馈</string>
+    <string name="settings_flat_cards">扁平卡片</string>
+    <string name="settings_flat_cards_subtitle">移除媒体卡片的外描边</string>
+    <string name="settings_overscroll">滚动越界效果</string>
+    <string name="settings_overscroll_subtitle">可滚动列表末端的拉伸或发光效果</string>
 </resources>

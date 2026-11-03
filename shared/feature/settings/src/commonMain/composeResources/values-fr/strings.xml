@@ -1224,4 +1224,27 @@
     <string name="settings_auto_download_mode_never">Jamais</string>
     <string name="settings_auto_download_check_now">Rechercher les nouveaux épisodes maintenant</string>
     <string name="settings_auto_download_check_now_subtitle">Lancer une passe de téléchargement automatique maintenant</string>
+    <string name="settings_time_use_24h">Format 24 heures</string>
+    <string name="settings_time_use_24h_subtitle">Utilise l’horloge 24 heures au lieu du format système</string>
+    <string name="settings_card_press_animations">Animation de pression des cartes</string>
+    <string name="settings_card_press_animations_subtitle">L’effet animé de rétrécissement au Press des cartes médias</string>
+    <string name="settings_pull_to_refresh">Tirer pour actualiser</string>
+    <string name="settings_pull_to_refresh_subtitle">Le geste de balayage vers le bas pour actualiser sur les écrans de navigation</string>
+    <string name="settings_start_tab">Onglet de démarrage</string>
+    <string name="settings_start_tab_subtitle">Quelle destination de premier niveau s’ouvre au lancement</string>
+    <string name="settings_start_tab_default">Par défaut (Accueil)</string>
+    <string name="settings_backdrop_dim">Assombrissement des fonds</string>
+    <string name="settings_backdrop_dim_subtitle">Intensité d’assombrissement des fonds d’images dans toute l’app</string>
+    <string name="settings_haptics_intensity">Intensité haptique</string>
+    <string name="settings_haptics_intensity_subtitle">L’intensité ressentie des vibrations de confirmation</string>
+    <string name="settings_image_quality">Qualité d’image</string>
+    <string name="settings_image_quality_subtitle">Plafonne la qualité JPEG que le serveur renvoie pour les images</string>
+    <string name="settings_list_density">Densité des listes</string>
+    <string name="settings_list_density_subtitle">L’espacement des rangées de réglages et de listes</string>
+    <string name="settings_press_effect">Effet de Press</string>
+    <string name="settings_press_effect_subtitle">Le retour tactile des surfaces pressables</string>
+    <string name="settings_flat_cards">Cartes plates</string>
+    <string name="settings_flat_cards_subtitle">Supprime le contour des cartes médias</string>
+    <string name="settings_overscroll">Effet de surdéfilement</string>
+    <string name="settings_overscroll_subtitle">L’étirement ou la lueur aux extrémités des listes défilables</string>
 </resources>

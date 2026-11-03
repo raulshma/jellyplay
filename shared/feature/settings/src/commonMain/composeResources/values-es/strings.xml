@@ -1224,4 +1224,27 @@
     <string name="settings_auto_download_mode_never">Nunca</string>
     <string name="settings_auto_download_check_now">Buscar nuevos episodios ahora</string>
     <string name="settings_auto_download_check_now_subtitle">Ejecutar una pasada de descarga automática ahora</string>
+    <string name="settings_time_use_24h">Formato de 24 horas</string>
+    <string name="settings_time_use_24h_subtitle">Usa el reloj de 24 horas en lugar del formato del sistema</string>
+    <string name="settings_card_press_animations">Animación de pulsación de tarjetas</string>
+    <string name="settings_card_press_animations_subtitle">El efecto animado de escala al pulsar de las tarjetas multimedia</string>
+    <string name="settings_pull_to_refresh">Deslizar para actualizar</string>
+    <string name="settings_pull_to_refresh_subtitle">El gesto de deslizar hacia abajo para actualizar en las pantallas de navegación</string>
+    <string name="settings_start_tab">Pestaña inicial</string>
+    <string name="settings_start_tab_subtitle">Qué destino de nivel superior se abre al iniciar</string>
+    <string name="settings_start_tab_default">Predeterminado (Inicio)</string>
+    <string name="settings_backdrop_dim">Atenuación del fondo</string>
+    <string name="settings_backdrop_dim_subtitle">Cuánto se atenúan los fondos de imágenes en toda la app</string>
+    <string name="settings_haptics_intensity">Intensidad háptica</string>
+    <string name="settings_haptics_intensity_subtitle">La intensidad de las vibraciones de confirmación</string>
+    <string name="settings_image_quality">Calidad de imagen</string>
+    <string name="settings_image_quality_subtitle">Limita la calidad JPEG que el servidor devuelve para las imágenes</string>
+    <string name="settings_list_density">Densidad de listas</string>
+    <string name="settings_list_density_subtitle">El espaciado de las filas de ajustes y listas</string>
+    <string name="settings_press_effect">Efecto de pulsación</string>
+    <string name="settings_press_effect_subtitle">La respuesta táctil de las superficies pulsables</string>
+    <string name="settings_flat_cards">Tarjetas planas</string>
+    <string name="settings_flat_cards_subtitle">Quita el trazo de contorno de las tarjetas multimedia</string>
+    <string name="settings_overscroll">Efecto de sobredesplazamiento</string>
+    <string name="settings_overscroll_subtitle">El estiramiento o resplandor en los extremos de las listas desplazables</string>
 </resources>
