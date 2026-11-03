@@ -201,9 +201,13 @@ class ControllerOwnershipTest {
         // the ~19 hand-listed pass-through ctor params and the end-of-media
         // fold + segment-skip dispatch + speed/cadence engine commands moved
         // onto PlaybackSession (the VM's constructor dropped 41 → 22 params,
-        // its playerSessionManager reach-throughs to zero). Lower the
+        // its playerSessionManager reach-throughs to zero). Raised to 1_119
+        // (2026-11-03) for the issue-#186 §5.11 performance-profile funnel
+        // arm, the resolver-resolution → uiPrefs mirror collector (the
+        // step-4 change-time counterpart of the load-time seed) and the
+        // overlay's expose-only detection passthrough. Lower the
         // ceiling when a slice moves out; never raise it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_110
+        val maxVideoPlayerViewModelLines = 1_119
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(
@@ -240,9 +244,12 @@ class ControllerOwnershipTest {
         // 3_016 (2026-11-03) for the issue-#186 performance-profile pair's
         // construction forwarding (the stores bundle's resolver + cap resolver
         // into the session manager and the load pipeline — the same
-        // construction-wiring raise shape as the 2026-10-28 entry). Lower the
-        // ceiling when a cluster moves out; never raise it to admit growth.
-        val maxPlaybackSessionLines = 3_016
+        // construction-wiring raise shape as the 2026-10-28 entry). Raised to
+        // 3_020 (2026-11-03) for the §5.8 tuning slice in the engine-config
+        // build (the uiPrefs-mirrored tuning the runtime rebuild folds).
+        // Lower the ceiling when a cluster moves out; never raise it to admit
+        // growth.
+        val maxPlaybackSessionLines = 3_020
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

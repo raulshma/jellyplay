@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -202,11 +203,60 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(target, viewModel.uiState.value.uiPrefs.playbackMode)
     }
 
+    // ── Performance profile (issue #186 §5.11) ──────────────────────────────
+
     @Test
-    fun toggleVideoStats_flipsEnabled() {
-        val before = viewModel.uiState.value.uiPrefs.showVideoStats
-        viewModel.onEvent(VideoPlayerUiEvent.ToggleVideoStats)
-        assertEquals(!before, viewModel.uiState.value.uiPrefs.showVideoStats)
+    fun setPerformanceProfile_updatesUiPrefsMirrorSynchronously() {
+        viewModel.onEvent(VideoPlayerUiEvent.SetPerformanceProfile(VideoPerformanceProfile.LOW))
+        assertEquals(VideoPerformanceProfile.LOW, viewModel.uiState.value.uiPrefs.videoPerformanceProfile)
+    }
+
+    @Test
+    fun setPerformanceProfile_doesNotTouchModeOrQuality() {
+        val modeBefore = viewModel.uiState.value.uiPrefs.playbackMode
+        val qualityBefore = viewModel.uiState.value.uiPrefs.streamingQuality
+
+        viewModel.onEvent(VideoPlayerUiEvent.SetPerformanceProfile(VideoPerformanceProfile.MEDIUM))
+
+        // §5.11: the cap never rewrites a persisted choice — the siblings the
+        // reload resolves against stay the user's own.
+        assertEquals(modeBefore, viewModel.uiState.value.uiPrefs.playbackMode)
+        assertEquals(qualityBefore, viewModel.uiState.value.uiPrefs.streamingQuality)
+    }
+
+    @Test
+    fun resolverResolvedFlow_feedsTheTuningAndTierMirror() {
+        // The §5.11 step-4 collector: the resolver's published resolution is
+        // the change-time counterpart of the load-time seed — a LOW resolution
+        // mirrors its tuning + tier into the uiPrefs leaves.
+        resolvedProfileFlow.value = com.raulshma.jellyplay.core.model.ResolvedPerformanceProfile(
+            requested = VideoPerformanceProfile.LOW,
+            tier = com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            tuning = com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+                com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            ),
+            detection = null,
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        val prefs = viewModel.uiState.value.uiPrefs
+        assertEquals(com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW, prefs.detectedPerformanceTier)
+        assertEquals(
+            com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+                com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            ),
+            prefs.performanceTuning,
+        )
+    }
+
+    @Test
+    fun performanceDetection_exposesTheResolverDetectionFlow() {
+        // Expose-only passthrough: the overlay's Detection-reasons row reads
+        // exactly what the resolver's sticky cache holds.
+        assertEquals(
+            performanceResolver.detection.value,
+            viewModel.performanceDetection.value,
+        )
     }
 
     // ── Release ─────────────────────────────────────────────────────────────

@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 internal fun testVideoPerformanceResolver(
     tier: DevicePerformanceTier = DevicePerformanceTier.HIGH,
     requested: VideoPerformanceProfile = VideoPerformanceProfile.HIGH,
+    resolvedFlow: MutableStateFlow<ResolvedPerformanceProfile>? = null,
 ): VideoPerformanceResolver {
     val profile = ResolvedPerformanceProfile(
         requested = requested,
@@ -44,7 +45,10 @@ internal fun testVideoPerformanceResolver(
         detection = null,
     )
     return mockk {
-        every { resolved } returns MutableStateFlow(profile)
+        // An injected flow lets a suite seed and re-publish resolutions (the
+        // §5.11 step-4 collector's driver); the default builds a private one
+        // seeded with [profile].
+        every { resolved } returns (resolvedFlow ?: MutableStateFlow(profile))
         every { detection } returns MutableStateFlow(null)
         coEvery { resolve(any()) } returns profile
         coEvery { warm() } returns Unit

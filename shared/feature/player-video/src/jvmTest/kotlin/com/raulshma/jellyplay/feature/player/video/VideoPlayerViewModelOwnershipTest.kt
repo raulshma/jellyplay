@@ -57,14 +57,16 @@ import kotlin.test.assertTrue
  * 23 through the 2026-10-25 tagged-artwork sweep, then 25 — the two item-based
  * artwork accessors the sweep added (`posterUrl` / `personPortraitUrl`, the
  * injected ArtworkUrls resolver's slots the player surfaces need; the raw-id
- * `getImageUrl` stays beside them).
+ * `getImageUrl` stays beside them). 26 (2026-11-03) — the issue-#186 §5.12
+ * `performanceDetection` passthrough (the stats overlay's Detection-reasons
+ * row reads the resolver's sticky cache; expose-only, no new state).
  * Lower the ceiling when a slice moves out and deletes members; never raise
- * it to admit new ones.
+ * it to admit new ones without the same expose-only justification.
  */
 class VideoPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 25
+    private val maxPublicInternalMembers = 26
 
     /**
      * A class-body declaration line at the ViewModel's single level of

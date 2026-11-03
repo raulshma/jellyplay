@@ -33,7 +33,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.feature.player.video.components.CapsBypassSource
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.VideoStatsOverlay
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
@@ -128,6 +130,24 @@ internal fun BoxScope.PlayerStatusOverlayTier(
             playerType = uiState.preferredPlayerType.name,
             decoderMode = inputs.decoderMode.displayName,
             transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
+            // The §5.12 performance block (issue #186): the uiPrefs mirror
+            // (kept fresh by the resolver collector) + the §5.13 bypass fold
+            // over session state — forced direct play, the downloaded badge,
+            // the current source's live-stream id — and the resolver's
+            // sticky detection for the reasons row.
+            performanceProfile = uiState.uiPrefs.videoPerformanceProfile,
+            detectedPerformanceTier = uiState.uiPrefs.detectedPerformanceTier,
+            performanceTuning = uiState.uiPrefs.performanceTuning,
+            capsBypassed = buildList {
+                if (uiState.uiPrefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY) {
+                    add(CapsBypassSource.FORCE_DIRECT_PLAY)
+                }
+                if (uiState.media.showDownloadedBadge) add(CapsBypassSource.DOWNLOAD)
+                if (uiState.media.currentMediaSource?.liveStreamId != null) {
+                    add(CapsBypassSource.LIVE_TV)
+                }
+            },
+            detectionFlow = viewModel.performanceDetection,
             // Engines expose a real audio session id (ExoPlayer: live
             // session; mpv: generated id; VLC: 0 — capabilities gate the
             // row). Read the collected engine so a swap refreshes it.

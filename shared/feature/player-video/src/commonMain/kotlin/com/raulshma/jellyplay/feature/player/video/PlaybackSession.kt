@@ -1393,6 +1393,9 @@ internal class PlaybackSession(
                 engineSpecific = sessionRender.effectiveMpvConfig(cachedAggregate.engine.mpvConfig),
                 // the session-scoped deinterlace cycle.
                 deinterlace = sessionRender.deinterlace,
+                // the §5.8 tuning fold (issue #186) — mirrored into uiPrefs by
+                // the §5.11 step-4 collector.
+                performanceTuning = uiState.value.uiPrefs.performanceTuning,
             )
         },
         getEngine = { playerSessionManager.engine },

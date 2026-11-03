@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 
 /**
@@ -255,6 +256,15 @@ sealed interface VideoPlayerUiEvent {
 
     /** Changes the streaming-quality tier and reloads. */
     data class SetStreamingQuality(val quality: StreamingQuality) : VideoPlayerUiEvent
+
+    /**
+     * Changes the playback performance profile (issue #186 §5.11 — the
+     * Playback Options sheet's Performance section): persists the pref and
+     * reloads the running session at the current position with the existing
+     * mode/quality (the v1 full-reload semantics, the quality-change path),
+     * so both the server request caps and the engine tuning re-resolve.
+     */
+    data class SetPerformanceProfile(val profile: VideoPerformanceProfile) : VideoPlayerUiEvent
 
     /** Toggles adaptive bitrate (the AUTO-mode network cap). */
     data class SetAdaptiveBitrateEnabled(val enabled: Boolean) : VideoPlayerUiEvent

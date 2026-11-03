@@ -220,6 +220,16 @@ internal expect fun rememberIsPortraitOrientation(): Boolean
 internal expect fun grabsKeyboardFocusWithControlsVisible(): Boolean
 
 /**
+ * Whether the playback performance-profile surface (issue #186 §5.11) exists
+ * on this platform. Android-only in v1: the AUTO detector's probe/classifier
+ * reads Android signals, so only Android can resolve a real tier; desktop
+ * resolves HIGH (no caps) and hides the sheet section entirely. Static
+ * platform fact — no remember needed (the
+ * [grabsKeyboardFocusWithControlsVisible] shape).
+ */
+internal expect fun performanceProfileAvailable(): Boolean
+
+/**
  * The desktop keyboard-focus grab: whenever [layerComposed] flips true (the
  * hardware-keyboard layer entered composition — screen entry, or a sheet
  * closing and the layer re-composing), grabs focus onto [focusRequester] with

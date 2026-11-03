@@ -358,6 +358,15 @@ internal object PlaybackModeSheetModule : PlayerSheetModule {
             currentEngineName = engine?.displayName,
             availablePlayers = switchableEngines,
             onPlayerSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SwitchPlayerEngine(it)) },
+            // §5.11 (issue #186): the Performance section — Android-only in
+            // v1 (the platform seam) with the cast/SyncPlay hide folded in,
+            // exactly the engine section's verdict shape. The receiver owns
+            // playback while casting (§5.13's cast row), so the profile
+            // section hides like the engine section does.
+            currentPerformanceProfile = uiState.uiPrefs.videoPerformanceProfile,
+            detectedPerformanceTier = uiState.uiPrefs.detectedPerformanceTier,
+            performanceAvailable = performanceProfileAvailable() && !localControlBlocked,
+            onPerformanceSelect = { scope.viewModel.onEvent(VideoPlayerUiEvent.SetPerformanceProfile(it)) },
         )
     }
 }

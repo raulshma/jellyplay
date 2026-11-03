@@ -223,6 +223,14 @@ class VideoPlayerViewModel(
     val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
     /**
+     * The AUTO detector's sticky detection run (issue #186 §5.12) — the stats
+     * overlay's Detection-reasons row reads it. Expose-only passthrough (the
+     * resolver owns the cache; this adds no state).
+     */
+    val performanceDetection: StateFlow<com.raulshma.jellyplay.core.model.PerformanceDetection?>
+        get() = stores.performanceResolver.detection
+
+    /**
      * Low-frequency view of the segment / up-next overlays, derived by folding
      * the high-frequency [currentPositionMs] / [durationMs] into [uiState] only
      * to compute the active segment. The result is `distinctUntilChanged` via
@@ -382,6 +390,28 @@ class VideoPlayerViewModel(
         // the full teardown ([PlaybackSession.performRelease]).
         castManager.acquireConsumer()
         playbackSession.arm()
+        // The §5.11 step-4 mirror (issue #186): the resolver's resolution is
+        // the change-time counterpart of the load-time seed — a profile
+        // change's reload re-resolves, this collector mirrors tuning + tier
+        // into the uiPrefs leaves, and a TUNING change marks the engine config
+        // dirty so the §5.8 fold reaches the running engine even when the
+        // server caps did not change (a tier-only flip is display state).
+        launch {
+            stores.performanceResolver.resolved.collect { resolved ->
+                val prefs = _uiState.value.uiPrefs
+                if (prefs.performanceTuning == resolved.tuning &&
+                    prefs.detectedPerformanceTier == resolved.tier
+                ) return@collect
+                val tuningChanged = prefs.performanceTuning != resolved.tuning
+                _uiState.update {
+                    it.copy(uiPrefs = it.uiPrefs.copy(
+                        performanceTuning = resolved.tuning,
+                        detectedPerformanceTier = resolved.tier,
+                    ))
+                }
+                if (tuningChanged) playbackSession.markEngineConfigDirty()
+            }
+        }
         // Warm-resolve the Up Next card's item while the card counts down:
         // its detail/segments land in the repository caches and the PlaybackInfo
         // resolution is stored for the advance to consume (PlayerSessionManager).
@@ -531,6 +561,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetPlaybackMode -> playbackSession.uiCommands.setPlaybackMode(event.mode)
             is VideoPlayerUiEvent.SetStreamingQuality -> playbackSession.uiCommands.setStreamingQuality(event.quality)
             is VideoPlayerUiEvent.SetAdaptiveBitrateEnabled -> playbackSession.uiCommands.setAdaptiveBitrateEnabled(event.enabled)
+            is VideoPlayerUiEvent.SetPerformanceProfile -> playbackSession.uiCommands.setPerformanceProfile(event.profile)
             is VideoPlayerUiEvent.SetVideoEffects -> playbackSession.uiCommands.setVideoEffects(event.effects)
             is VideoPlayerUiEvent.SetVideoEffectsSettled -> playbackSession.uiCommands.setVideoEffectsSettled(event.effects)
             is VideoPlayerUiEvent.SetRenderShaderPack -> setRenderShaderPack(event.pack, event.persist)

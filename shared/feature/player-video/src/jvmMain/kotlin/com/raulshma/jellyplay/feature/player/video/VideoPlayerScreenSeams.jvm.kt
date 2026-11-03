@@ -52,6 +52,16 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean = true
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = true
 
 /**
+ * Desktop hides the performance-profile section (issue #186 §5.11/§5.13):
+ * the probe/classifier reads Android signals, so AUTO would only ever resolve
+ * HIGH there — the §5.13 desktop row ("Android-only UI in v1; AUTO resolves
+ * HIGH"). An explicit profile restored from a phone backup still applies its
+ * mpv/libVLC tuning through the engine config; the sheet just offers no
+ * picker.
+ */
+internal actual fun performanceProfileAvailable(): Boolean = false
+
+/**
  *  focus diagnostic: stdout only while the desktop session harness is
  * armed (`jellyplay.harness.enabled=true` — DesktopSessionHarness's zero-cost
  * gate); silent on every normal desktop boot.

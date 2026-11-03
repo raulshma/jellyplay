@@ -311,6 +311,13 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean {
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
 
 /**
+ * The performance-profile surface (issue #186 §5.11) is Android-only in v1 —
+ * the AUTO detector probes Android signals (the classifier's SoC/RAM/decoder
+ * inputs); every Android host (phone + TV) offers the sheet section.
+ */
+internal actual fun performanceProfileAvailable(): Boolean = true
+
+/**
  * Focus diagnostic: logcat under `JellyPlayFocus` while the harness gate is
  * armed (`jellyplay.harness.enabled=true` — the desktop actual's zero-cost
  * gate, same property, so one flag speaks on both platforms), silent on every
