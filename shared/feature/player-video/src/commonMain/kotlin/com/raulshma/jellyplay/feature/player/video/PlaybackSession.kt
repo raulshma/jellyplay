@@ -371,6 +371,9 @@ internal class PlaybackSession(
             aggregateStore = stores.aggregateStore,
             playerLifecycleManager = sessionStack.playerLifecycleManager,
             adaptiveBitrateManager = adaptiveBitrateManager,
+            // #186 §5.7: the performance pair rides the wholesale-forwarded stores bundle.
+            videoPerformanceResolver = stores.performanceResolver,
+            playbackCapResolver = stores.playbackCapResolver,
             playerEngineFactory = sessionStack.playerEngineFactory,
             pipController = pipController,
             playbackSourceResolver = playbackSourceResolver,
@@ -951,6 +954,8 @@ internal class PlaybackSession(
     private val sessionLoadPipeline: SessionLoadPipeline = sessionLoadPipelineOverride
         ?: SessionLoadPipeline(
             sessionManager = playerSessionManager,
+            // #186 §5.8: the seed stage's bounded per-load profile resolve (same transit).
+            videoPerformanceResolver = stores.performanceResolver,
             libraryApiClient = itemContent.libraryApiClient,
             aggregateStore = stores.aggregateStore,
             networkOfflineStore = stores.networkOffline,

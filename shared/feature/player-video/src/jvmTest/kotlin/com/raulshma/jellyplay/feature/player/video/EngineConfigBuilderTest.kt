@@ -457,7 +457,11 @@ class EngineConfigBuilderTest {
         )
 
         val vlcBuilt = EngineConfigBuilder.buildFromPreferences(VideoPlayerAggregate(), emptyList(), null, vlcConfig)
-        assertSame(vlcConfig, vlcBuilt.engineSpecific)
+        // Since issue #186 §5.8 the VLC payload is COPIED too — the
+        // performance-profile tuning folds into it (identity under the
+        // default NONE tuning: every fold is the value's own no-op). The
+        // mpv-payload convention above, extended to the libVLC arm.
+        assertEquals(vlcConfig, vlcBuilt.engineSpecific)
         assertNotNull(vlcBuilt.engineSpecific as LibVlcEngineConfig)
     }
 
@@ -531,5 +535,185 @@ class EngineConfigBuilderTest {
         val config = EngineConfigBuilder.buildFromPreferences(agg, emptyList(), "item-42", null)
         assertEquals(-750L, config.subtitleDelayMs)
         assertEquals(-750L, config.subtitleStyle.offsetMs)
+    }
+
+    // ── The §5.14 EngineConfigBuilderProfileTest bullets (issue #186 §5.8) ──
+
+    /** A user who armed every performance-sensitive mpv knob to the hilt. */
+    private fun heavyMpvAgg() = VideoPlayerAggregate(
+        videoPlayer = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice(
+            mpvToneMappingCurve = com.raulshma.jellyplay.core.model.MpvToneMappingCurve.BT_2390,
+            mpvDebandMode = com.raulshma.jellyplay.core.model.MpvDebandMode.HEAVY,
+            mpvMotionInterpolation = true,
+            bitmapSubtitleScaleMode = com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.COVER,
+        ),
+    )
+
+    private fun heavyMpvConfig() = MpvEngineConfig(
+        renderQuality = com.raulshma.jellyplay.core.model.MpvRenderQuality.HIGH,
+        scaler = com.raulshma.jellyplay.core.model.MpvScaler.EWA_LANCZOS_SHARP,
+        deband = true,
+        interpolation = true,
+        shaderPack = com.raulshma.jellyplay.core.model.MpvShaderPack.ANIME4K_A,
+    )
+
+    private val lowTuning =
+        com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+            com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+        )
+    private val mediumTuning =
+        com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+            com.raulshma.jellyplay.core.model.DevicePerformanceTier.MEDIUM,
+        )
+    private val noTuning = com.raulshma.jellyplay.core.model.VideoPerformanceTuning.NONE
+
+    @Test
+    fun lowMpv_overridesThePerformanceKnobsAndPreservesTheRest() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = heavyMpvAgg(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = heavyMpvConfig(),
+            performanceTuning = lowTuning,
+        )
+        val mpv = config.engineSpecific as MpvEngineConfig
+        // §5.8's matrix row: PERFORMANCE render, bilinear scaler, deband and
+        // interpolation off — LOW wins over the user's armed knobs.
+        assertEquals(com.raulshma.jellyplay.core.model.MpvRenderQuality.PERFORMANCE, mpv.renderQuality)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvScaler.BILINEAR, mpv.scaler)
+        assertFalse(mpv.deband)
+        assertFalse(mpv.interpolation)
+        // The force-offs pin BOTH surfaces of each knob (the persisted render
+        // prefs would otherwise override the structured rows by MpvConfigMapping
+        // pair order).
+        assertEquals(com.raulshma.jellyplay.core.model.MpvDebandMode.OFF, mpv.debandMode)
+        assertEquals(false, mpv.motionInterpolation)
+        // Unrelated fields preserved: the user's tone-mapping curve, bitmap
+        // scaling and shader pack are quality decisions, not performance taxes.
+        assertEquals(com.raulshma.jellyplay.core.model.MpvToneMappingCurve.BT_2390, mpv.toneMappingCurve)
+        assertEquals(com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode.COVER, mpv.bitmapSubtitleScaleMode)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvShaderPack.ANIME4K_A, mpv.shaderPack)
+    }
+
+    @Test
+    fun highMpv_preservesTheUserValuesExactly() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = heavyMpvAgg(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = heavyMpvConfig(),
+            performanceTuning = noTuning,
+        )
+        val mpv = config.engineSpecific as MpvEngineConfig
+        assertEquals(com.raulshma.jellyplay.core.model.MpvRenderQuality.HIGH, mpv.renderQuality)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvScaler.EWA_LANCZOS_SHARP, mpv.scaler)
+        assertTrue(mpv.deband)
+        assertTrue(mpv.interpolation)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvDebandMode.HEAVY, mpv.debandMode)
+        assertEquals(true, mpv.motionInterpolation)
+    }
+
+    @Test
+    fun mediumMpv_appliesNoOverrides() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = heavyMpvAgg(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = heavyMpvConfig(),
+            performanceTuning = mediumTuning,
+        )
+        val mpv = config.engineSpecific as MpvEngineConfig
+        assertEquals(com.raulshma.jellyplay.core.model.MpvRenderQuality.HIGH, mpv.renderQuality)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvScaler.EWA_LANCZOS_SHARP, mpv.scaler)
+        assertTrue(mpv.deband)
+        assertTrue(mpv.interpolation)
+    }
+
+    /** A user with a small libVLC cache and the quality-forward decoder posture. */
+    private fun qualityLibVlcConfig() = LibVlcEngineConfig(
+        networkCaching = 500,
+        skipLoopFilter = 2,
+        decoderThreads = 0,
+        dropLateFrames = false,
+        skipFrames = false,
+    )
+
+    @Test
+    fun lowLibVlc_appliesTheDecoderPostureAndRaisesTheJitterBuffer() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = VideoPlayerAggregate(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = qualityLibVlcConfig(),
+            performanceTuning = lowTuning,
+        )
+        val vlc = config.engineSpecific as LibVlcEngineConfig
+        // §5.8's matrix row: caching takes the MAX (a jitter buffer is not a
+        // quality tax — 500 ms raised to LOW's 1500 ms floor), decoder threads
+        // pinned to 2, loop filter skipped at 1, late/frame dropping on.
+        assertEquals(1_500, vlc.networkCaching)
+        assertEquals(2, vlc.decoderThreads)
+        assertEquals(1, vlc.skipLoopFilter)
+        assertTrue(vlc.dropLateFrames)
+        assertTrue(vlc.skipFrames)
+    }
+
+    @Test
+    fun lowLibVlc_keepsTheUserLargerNetworkCache() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = VideoPlayerAggregate(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = LibVlcEngineConfig(networkCaching = 3_000),
+            performanceTuning = lowTuning,
+        )
+        assertEquals(3_000, (config.engineSpecific as LibVlcEngineConfig).networkCaching)
+    }
+
+    @Test
+    fun highLibVlc_preservesTheUserValues() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = VideoPlayerAggregate(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = qualityLibVlcConfig(),
+            performanceTuning = noTuning,
+        )
+        assertEquals(qualityLibVlcConfig(), config.engineSpecific)
+    }
+
+    @Test
+    fun mediumLibVlc_isUnchanged() {
+        val config = EngineConfigBuilder.buildFromPreferences(
+            agg = VideoPlayerAggregate(),
+            mediaStreams = emptyList(),
+            itemId = null,
+            engineSpecific = qualityLibVlcConfig(),
+            performanceTuning = mediumTuning,
+        )
+        assertEquals(qualityLibVlcConfig(), config.engineSpecific)
+    }
+
+    @Test
+    fun buildFromSlices_foldsTheTuningIdentically() {
+        // The two build paths cannot drift: the slices entry folds the same
+        // tuning (the runtime path the later-wave VM passes uiPrefs from).
+        val fromSlices = EngineConfigBuilder.buildFromSlices(
+            subtitleStyle = SubtitleStyle(),
+            videoEffects = VideoEffectsConfig(),
+            dialogueBoostEnabled = false,
+            dialogueBoostStrength = EffectStrength.MODERATE,
+            mediaStreams = emptyList(),
+            effects = baselineEffects(),
+            equalizerEnabled = false,
+            agg = heavyMpvAgg(),
+            engineSpecific = heavyMpvConfig(),
+            performanceTuning = lowTuning,
+        )
+        val mpv = fromSlices.engineSpecific as MpvEngineConfig
+        assertEquals(com.raulshma.jellyplay.core.model.MpvRenderQuality.PERFORMANCE, mpv.renderQuality)
+        assertEquals(com.raulshma.jellyplay.core.model.MpvScaler.BILINEAR, mpv.scaler)
+        assertFalse(mpv.deband)
+        assertFalse(mpv.interpolation)
     }
 }

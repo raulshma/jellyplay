@@ -161,6 +161,16 @@ open class VideoPlayerViewModelHarness {
 
         val imageUrlProviderMock = mockk<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>(relaxed = true)
 
+        // Issue #186: the HIGH default is the no-caps no-op — the resolve
+        // requests and engine configs these suites pin keep their pre-profile
+        // values; the LOW/MEDIUM folds are pinned in the §5.14 suites.
+        val performanceResolver = testVideoPerformanceResolver()
+        val playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+            adaptiveBitrateManager = mockk(relaxed = true),
+            performanceResolver = performanceResolver,
+            playbackStore = playbackStore,
+        )
+
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
             stores = PlayerStores(
@@ -177,6 +187,8 @@ open class VideoPlayerViewModelHarness {
                 appearance = appearanceStore,
                 networkOffline = networkOfflineStore,
                 volumeProfile = volumeProfileStore,
+                performanceResolver = performanceResolver,
+                playbackCapResolver = playbackCapResolver,
             ),
             subtitleSources = PlayerSubtitleSources(
                 subtitleProviderRepository = mockk(relaxed = true),
@@ -214,6 +226,8 @@ open class VideoPlayerViewModelHarness {
                 itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
                 jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
                 adaptiveBitrateManager = mockk(relaxed = true),
+                performanceResolver = performanceResolver,
+                playbackCapResolver = playbackCapResolver,
                 networkMonitor = networkMonitor,
                 userDataMutator = userDataMutator,
                 nowPlayingReporter = mockk(relaxed = true),

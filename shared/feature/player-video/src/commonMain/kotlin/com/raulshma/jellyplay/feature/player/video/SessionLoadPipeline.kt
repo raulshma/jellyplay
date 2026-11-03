@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -18,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The arguments of one session load. Mirrors [PlaybackSession.initialize]'s
@@ -182,6 +184,15 @@ class SessionLoadHooks(
 internal class SessionLoadPipeline(
     private val sessionManager: PlayerSessionManager,
     /**
+     * The performance-profile resolver (issue #186 §5.8): the prefs-seed
+     * stage resolves the effective profile ONCE per load — bounded (see
+     * [PERFORMANCE_SEED_RESOLVE_TIMEOUT_MS]) so a pathological probe cannot
+     * wedge the load — and hands it to [PlayerPrefsSeed] for the
+     * detected-tier / tuning leaves. The manager's own §5.7 resolve calls
+     * re-resolve through the sticky cache, so the two see the same tier.
+     */
+    private val videoPerformanceResolver: VideoPerformanceResolver,
+    /**
      * The item-attached extras seam — the pipeline's one repository read is the
      * Cinema Mode intros lookup, which left the wide union for
      * [LibraryApiClient] (uncached forward, no cache state).
@@ -241,11 +252,19 @@ internal class SessionLoadPipeline(
         // Prefs → uiState seed. The field-by-field mapping (which pref feeds
         // which leaf) lives in [PlayerPrefsSeed]; this spine only owns WHEN the
         // seed runs — before session-pref application, remembered-muted restore
-        // and the cinema gate.
+        // and the cinema gate. The performance profile resolves here (§5.8),
+        // with the same bounded wait the manager's §5.7 resolve uses and from
+        // the same aggregate snapshot the seed reads: on a timeout the
+        // resolver's warmed value (the AUTO/MEDIUM seed) seeds the leaves —
+        // the load proceeds, never wedged on a pathological probe.
+        val performance = withTimeoutOrNull(PERFORMANCE_SEED_RESOLVE_TIMEOUT_MS) {
+            videoPerformanceResolver.resolve(agg.playback.videoPerformanceProfile)
+        } ?: videoPerformanceResolver.resolved.value
         outputs.onPrefsProjected(
             PlayerPrefsSeed.seededProjection(
                 agg = agg,
                 adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
+                performance = performance,
             ),
         )
         hooks.onSessionPrefsApplied(agg)
@@ -415,5 +434,16 @@ internal class SessionLoadPipeline(
             setMutedMirror(true)
             sessionManager.engine?.setMuted(true)
         }
+    }
+
+    private companion object {
+        /**
+         * The §5.7/§5.8 budget for the prefs-seed's profile resolve (~1 s):
+         * a pathological device probe must never wedge the load spine — on
+         * timeout the resolver's warmed `resolved.value` (the AUTO/MEDIUM
+         * seed) seeds the leaves instead. Mirrors the session manager's
+         * bounded resolve.
+         */
+        const val PERFORMANCE_SEED_RESOLVE_TIMEOUT_MS = 1_000L
     }
 }

@@ -71,7 +71,12 @@ class SessionLoadPipelineTest {
     private val stages = mutableListOf<String>()
 
     private class RecordingOutputs(val stages: MutableList<String>) : SessionLoadOutputs {
+        /** The last prefs-projection transform — the §5.8 seed pin's probe. */
+        var lastProjected: (VideoPlayerUiState.() -> VideoPlayerUiState)? = null
+            private set
+
         override fun onPrefsProjected(ui: VideoPlayerUiState.() -> VideoPlayerUiState) {
+            lastProjected = ui
             stages += "onPrefsProjected"
         }
 
@@ -143,6 +148,10 @@ class SessionLoadPipelineTest {
         inSyncPlay: Boolean = false,
         detailHolder: MediaDetail? = null,
         loadMediaBlock: CompletableDeferred<Unit>? = null,
+        // Issue #186 §5.8: the resolver whose tier the prefs-seed stage
+        // resolves and hands to [PlayerPrefsSeed]; null = the HIGH no-op.
+        performanceResolver: com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver? = null,
+        outputs: SessionLoadOutputs? = null,
     ): Fixture {
         val sessionManager = mockk<PlayerSessionManager>(relaxed = true)
         every { sessionManager.sessionState } returns MutableStateFlow(sessionState)
@@ -180,6 +189,10 @@ class SessionLoadPipelineTest {
 
         val pipeline = SessionLoadPipeline(
             sessionManager = sessionManager,
+            // Issue #186 §5.8: the HIGH default keeps the seed identity for
+            // the pre-profile pins; the performance-seed pin below passes its
+            // own tier through `performanceResolver`.
+            videoPerformanceResolver = performanceResolver ?: testVideoPerformanceResolver(),
             libraryApiClient = libraryApiClient,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
@@ -193,7 +206,7 @@ class SessionLoadPipelineTest {
             onSegmentsFetched = { segments ->
                 stages += "onSegmentsFetched(${segments.size})"
             },
-            outputs = RecordingOutputs(stages),
+            outputs = outputs ?: RecordingOutputs(stages),
             hooks = hooks,
         )
         return Fixture(pipeline, offlinePlaybackFacade, playbackRepository, sessionManager)
@@ -552,6 +565,7 @@ class SessionLoadPipelineTest {
 
         val pipeline = SessionLoadPipeline(
             sessionManager = sessionManager,
+            videoPerformanceResolver = testVideoPerformanceResolver(),
             libraryApiClient = libraryApiClient,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
@@ -604,5 +618,42 @@ class SessionLoadPipelineTest {
         assertFalse("failed load is not Completed", stages.any { it.startsWith("onOutcome") })
         // finally guarantee: the loading veil still lifts.
         assertEquals("onInitializing(false)", stages.last())
+    }
+
+    /**
+     * Issue #186 §5.8: the prefs-seed stage resolves the effective profile
+     * ONCE per load (bounded) and hands it to [PlayerPrefsSeed] — the
+     * detected-tier / tuning leaves carry the resolver's tier, not the
+     * no-op defaults.
+     */
+    @Test
+    fun prefsSeed_resolvesThePerformanceProfileAndSeedsTheRuntimeLeaves() = runTest {
+        val outs = RecordingOutputs(stages)
+        val pipeline = pipeline(
+            stages = stages,
+            hooks = recordingHooks(stages),
+            performanceResolver = testVideoPerformanceResolver(
+                tier = com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+                requested = com.raulshma.jellyplay.core.model.VideoPerformanceProfile.LOW,
+            ),
+            outputs = outs,
+        )
+
+        pipeline.start(this, request()).join()
+        runCurrent()
+
+        val transform = outs.lastProjected
+        assertTrue("the seed transform must have run", transform != null)
+        val seeded = transform!!.invoke(VideoPlayerUiState())
+        assertEquals(
+            com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            seeded.uiPrefs.detectedPerformanceTier,
+        )
+        assertEquals(
+            com.raulshma.jellyplay.core.model.VideoPerformanceMatrix.forTier(
+                com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+            ),
+            seeded.uiPrefs.performanceTuning,
+        )
     }
 }

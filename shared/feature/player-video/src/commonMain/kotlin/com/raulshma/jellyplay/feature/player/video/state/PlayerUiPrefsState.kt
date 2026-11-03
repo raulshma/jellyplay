@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.BitmapSubtitleScaleMode
 import com.raulshma.jellyplay.core.model.BufferingVeil
 import com.raulshma.jellyplay.core.model.ControlLayout
+import com.raulshma.jellyplay.core.model.DevicePerformanceTier
 import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
@@ -19,6 +20,8 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.model.TrickplayMode
 import com.raulshma.jellyplay.core.model.TvTimeoutScale
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 
 /**
  * Player UI / system preferences: control visibility, orientation, trickplay,
@@ -149,6 +152,28 @@ data class PlayerUiPrefsState(
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val adaptiveBitrateEnabled: Boolean = true,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
+    /**
+     * The playback performance profile (issue #186): AUTO detects the device
+     * tier once; LOW/MEDIUM/HIGH pin it. A persisted preference — seeded from
+     * the aggregate's playback slice (the `videoPerformanceProfile` leaf row)
+     * and written by the settings/sheet rows of the profile waves.
+     */
+    val videoPerformanceProfile: VideoPerformanceProfile = VideoPerformanceProfile.AUTO,
+    /**
+     * The AUTO detector's sticky tier, straight from the resolver's detection
+     * cache — runtime state, never a preference. Kept beside the profile so
+     * the settings row can subtitle an explicit selection with what AUTO
+     * would have picked. `null` until a detection lands.
+     */
+    val detectedPerformanceTier: DevicePerformanceTier? = null,
+    /**
+     * The RESOLVED tuning the engine config and request plan consume (§5.8 /
+     * §5.9). Derived state — never user-written: seeded per session load from
+     * the resolver, and the tuning the engine-config rebuild passes into
+     * `EngineConfigBuilder.buildFromSlices`. [VideoPerformanceTuning.NONE]
+     * (the HIGH no-op) until a resolution lands.
+     */
+    val performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
     // ── The second QoL wave: transport/HUD cadence + preset mirrors. ──
     /** The TV controls-auto-hide timeout multiplier. Default X2 (the long-standing doubling). */
     val tvTimeoutScale: TvTimeoutScale = TvTimeoutScale.X2,

@@ -148,6 +148,19 @@ internal class PlayerPrefsFanout(
             rebuildEngineConfigIfRunning()
         }
 
+        // The performance-profile pref (issue #186 §5.8): a profile change
+        // must rebuild the engine config even when the server caps did not
+        // change — the §5.8 fold (render quality / scaler / deband /
+        // interpolation / libVLC decoder posture) rides the config, and the
+        // resolved tuning the rebuild consumes is re-resolved by the §5.11
+        // reload path. Hand-written beside the HDR posture (not a
+        // rebuild-flagged leaf row) because the trigger is a reaction to the
+        // pref write, while the leaf row stays the pure projection the
+        // settings sheet reads.
+        if (old.playback.videoPerformanceProfile != new.playback.videoPerformanceProfile) {
+            rebuildEngineConfigIfRunning()
+        }
+
         // Video focus policy (the video focus slice): folded into this single
         // preferences collector, pushed on EVERY emission — the module-side
         // setter is idempotent. The OS seat runs when EITHER pref wants

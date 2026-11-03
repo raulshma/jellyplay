@@ -236,9 +236,13 @@ class ControllerOwnershipTest {
         // snapshot and the engine/warm aliases. Lowered to 3_012 (2026-10-30)
         // when the segment-skip composition (the facts snapshot + the policy
         // dispatch + the effect execution + the Skipped-segment notice
-        // lifecycle) moved out to session/SegmentSkipDispatcher.kt. Lower the
+        // lifecycle) moved out to session/SegmentSkipDispatcher.kt. Raised to
+        // 3_016 (2026-11-03) for the issue-#186 performance-profile pair's
+        // construction forwarding (the stores bundle's resolver + cap resolver
+        // into the session manager and the load pipeline — the same
+        // construction-wiring raise shape as the 2026-10-28 entry). Lower the
         // ceiling when a cluster moves out; never raise it to admit growth.
-        val maxPlaybackSessionLines = 3_012
+        val maxPlaybackSessionLines = 3_016
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

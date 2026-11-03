@@ -183,6 +183,15 @@ internal class PlaybackSessionTestGraph private constructor(
         appearance = appearanceStore,
         networkOffline = networkOfflineStore,
         volumeProfile = volumeProfileStore,
+        // Issue #186: the HIGH default keeps the §5.7 fold identity — these
+        // suites pin pre-profile behavior; the caps/buffer folds carry their
+        // own §5.14 suites.
+        performanceResolver = testVideoPerformanceResolver(),
+        playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            performanceResolver = testVideoPerformanceResolver(),
+            playbackStore = playbackStore,
+        ),
     )
 
     private val networkMonitor = mockk<com.raulshma.jellyplay.core.data.network.NetworkMonitor>(relaxed = true).apply {

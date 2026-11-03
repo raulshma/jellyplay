@@ -139,6 +139,19 @@ internal val PLAYER_PREF_LEAVES: List<PlayerPrefLeaf> = listOf(
     ),
     prefLeaf("streamingQuality", { it.playback.streamingQuality }, write = { v -> copy(uiPrefs = uiPrefs.copy(streamingQuality = v)) }),
     prefLeaf("playbackMode", { it.playback.playbackMode }, write = { v -> copy(uiPrefs = uiPrefs.copy(playbackMode = v)) }),
+    // The performance-profile PREF (issue #186): the one performance leaf
+    // that is aggregate-sourced, so it rides the table like its streaming-
+    // quality/mode neighbors (seed + guarded change-time projection). The
+    // resolver-sourced siblings (detectedPerformanceTier /
+    // performanceTuning) are hand-written in the seed — the aggregate never
+    // carries runtime detection state — and the profile-change engine-config
+    // rebuild trigger is hand-written in the fanout beside the HDR posture.
+    prefLeaf(
+        "videoPerformanceProfile",
+        readAggregate = { it.playback.videoPerformanceProfile },
+        readState = { s -> s.uiPrefs.videoPerformanceProfile },
+        write = { v -> copy(uiPrefs = uiPrefs.copy(videoPerformanceProfile = v)) },
+    ),
     prefLeaf(
         "trickplayMode",
         readAggregate = { it.videoPlayer.trickplayMode },

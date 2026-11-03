@@ -93,6 +93,7 @@ class PlayerSessionManagerTest {
     private lateinit var aggregateStore: VideoPlayerAggregateStore
     private lateinit var playerLifecycleManager: PlayerLifecycleManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
+    private lateinit var playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
     private lateinit var messageBus: RecordingMessageBus
     private lateinit var sessionManager: PlayerSessionManager
@@ -132,6 +133,12 @@ class PlayerSessionManagerTest {
             playbackRepository.resolvePlayable(any())
         } returns PlaybackResolution.StaticFallback("")
 
+        // Issue #186 §5.7: the HIGH-default resolver keeps the profile fold
+        // identity for the pre-profile pins below; the LOW-pinning §5.14
+        // tests swap their own manager in (see lowTierSessionManager).
+        playbackStore = mockk(relaxed = true)
+        every { playbackStore.playback } returns MutableStateFlow(PlaybackSlice())
+
         sessionManager = PlayerSessionManager(
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
             nowPlayingReporter = NowPlayingReporter(),
@@ -144,6 +151,12 @@ class PlayerSessionManagerTest {
             playerLifecycleManager = playerLifecycleManager,
             pipController = pipController,
             adaptiveBitrateManager = adaptiveBitrateManager,
+            videoPerformanceResolver = testVideoPerformanceResolver(),
+            playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+                adaptiveBitrateManager = adaptiveBitrateManager,
+                performanceResolver = testVideoPerformanceResolver(),
+                playbackStore = playbackStore,
+            ),
             // EXTERNAL short-circuits before any engine is built, so the
             // factory is never invoked on these paths.
             playerEngineFactory = mockk(relaxed = true),
@@ -385,6 +398,12 @@ class PlayerSessionManagerTest {
             playerLifecycleManager = playerLifecycleManager,
             pipController = mockk(relaxed = true),
             adaptiveBitrateManager = adaptiveBitrateManager,
+            videoPerformanceResolver = testVideoPerformanceResolver(),
+            playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+                adaptiveBitrateManager = adaptiveBitrateManager,
+                performanceResolver = testVideoPerformanceResolver(),
+                playbackStore = playbackStore,
+            ),
             playerEngineFactory = factory,
             playbackSourceResolver = playbackSourceResolver,
             sessionSubtitleSources = sessionSubtitleSources(),
@@ -472,6 +491,122 @@ class PlayerSessionManagerTest {
         assertEquals(0, messageBus.infos.size)
         assertEquals(1, loaded.size)
         assertEquals(activeTls, loaded.single().requestSpecific?.tls)
+    }
+
+    // ── §5.14: the LOW profile's caps reach every §5.7 path ─────────────
+
+    /**
+     * A manager pinned to the LOW tier (the §5.7/§5.8 seam under test):
+     * AUTO playback mode, a HIGH preload-buffer preference (the §5.9 clamp
+     * has room to bite) and a 20 Mbps network cap the LOW ceiling (8 Mbps /
+     * 1080p / Medium buffer) must fold under. Everything else mirrors
+     * [clientCertSessionManager].
+     */
+    private fun lowTierSessionManager(
+        engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
+        loadedRequests: MutableList<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>,
+    ): PlayerSessionManager {
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(preferredPlayer = PlayerType.MPV, playbackMode = PlaybackMode.AUTO),
+            videoPlayer = VideoPlayerAggregate().videoPlayer.copy(
+                videoPreloadBufferSize = com.raulshma.jellyplay.core.model.PreloadBufferSize.HIGH,
+            ),
+        )
+        every { aggregateStore.aggregate } returns MutableStateFlow(agg)
+        every { aggregateStore.aggregateRaw } returns flowOf(agg)
+        // The network/user ladder above the profile ceiling: an AUTO quality
+        // (no height cap) and a 20 Mbps effective cap — both stricter-folded
+        // by LOW's 1080p / 8 Mbps.
+        every { adaptiveBitrateManager.resolveEffectiveMaxBitrate(any()) } returns 20_000_000L
+        every { adaptiveBitrateManager.effectiveQuality(any(), any()) } returns StreamingQuality.AUTO
+        every { adaptiveBitrateManager.resolveMaxBitrate(any()) } returns 20_000_000L
+
+        every { engine.load(any()) } answers {
+            loadedRequests += firstArg<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        }
+        val factory = io.mockk.mockk<com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory> {
+            coEvery { create(PlayerType.MPV) } returns engine
+        }
+        val lowResolver = testVideoPerformanceResolver(
+            tier = com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW,
+        )
+
+        return PlayerSessionManager(
+            scope = CoroutineScope(testDispatcher + SupervisorJob()),
+            nowPlayingReporter = NowPlayingReporter(),
+            detailFeed = detailFeed,
+            playbackRepository = playbackRepository,
+            imageUrlProvider = mockk(relaxed = true),
+            playbackIdentity = mockk(relaxed = true),
+            offlineRepository = offlineRepository,
+            aggregateStore = aggregateStore,
+            playerLifecycleManager = playerLifecycleManager,
+            pipController = mockk(relaxed = true),
+            adaptiveBitrateManager = adaptiveBitrateManager,
+            videoPerformanceResolver = lowResolver,
+            playbackCapResolver = com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver(
+                adaptiveBitrateManager = adaptiveBitrateManager,
+                performanceResolver = lowResolver,
+                playbackStore = playbackStore,
+            ),
+            playerEngineFactory = factory,
+            playbackSourceResolver = playbackSourceResolver,
+            sessionSubtitleSources = sessionSubtitleSources(),
+            offlineMediaProbe = mockk(relaxed = true),
+            offlineModeManager = offlineModeManager,
+            userMessageBus = messageBus,
+        )
+    }
+
+    @Test
+    fun `LOW profile caps the resolve request and the engine load request identically`() = runTest(testDispatcher) {
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val resolveRequests = mutableListOf<com.raulshma.jellyplay.core.model.PlaybackResolveRequest>()
+        coEvery { playbackRepository.resolvePlayable(any()) } coAnswers {
+            resolveRequests += firstArg<com.raulshma.jellyplay.core.model.PlaybackResolveRequest>()
+            PlaybackResolution.StaticFallback("https://stream/low")
+        }
+        val manager = lowTierSessionManager(engine = mockk(relaxed = true), loadedRequests = loaded)
+
+        loadOneOnlineSession(manager)
+
+        // The §5.7 resolve request: the profile ceiling min-folds the network
+        // cap (20 Mbps → 8 Mbps) and the AUTO quality height (none → 1080p).
+        val resolve = resolveRequests.single()
+        assertEquals(8_000_000L, resolve.maxStreamingBitrateBits)
+        assertEquals(1_080, resolve.maxVideoHeight)
+
+        // §5.14's "external handoff uses the same capped values": the engine
+        // load request applies the SAME capped bitrate (AUTO mode) and the
+        // §5.9 buffer ceiling (user HIGH 50/120 s → the LOW profile's Medium
+        // 25/50 s).
+        val request = loaded.single()
+        assertEquals(8_000_000, request.maxVideoBitrate)
+        assertEquals(25_000, request.minBufferMs)
+        assertEquals(50_000, request.maxBufferMs)
+    }
+
+    @Test
+    fun `LOW profile caps the user-quality reload bitrate`() = runTest(testDispatcher) {
+        val loaded = mutableListOf<com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest>()
+        val resolveRequests = mutableListOf<com.raulshma.jellyplay.core.model.PlaybackResolveRequest>()
+        coEvery { playbackRepository.resolvePlayable(any()) } coAnswers {
+            resolveRequests += firstArg<com.raulshma.jellyplay.core.model.PlaybackResolveRequest>()
+            PlaybackResolution.StaticFallback("https://stream/low")
+        }
+        val manager = lowTierSessionManager(engine = mockk(relaxed = true), loadedRequests = loaded)
+        loadOneOnlineSession(manager)
+        resolveRequests.clear()
+
+        // The user picks 4K in the in-player sheet: the quality's own ladder
+        // (no cap) under the LOW ceiling → 8 Mbps.
+        manager.reloadPlayback(
+            PlaybackMode.AUTO,
+            com.raulshma.jellyplay.core.model.StreamingQuality.UHD_4K,
+            5_000L,
+        )
+
+        assertEquals(8_000_000L, resolveRequests.single().maxStreamingBitrateBits)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────

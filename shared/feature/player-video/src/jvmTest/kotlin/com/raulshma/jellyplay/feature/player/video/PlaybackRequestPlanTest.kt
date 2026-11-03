@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.core.model.PlaybackTls
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SubtitleTrackMode
 import com.raulshma.jellyplay.core.model.TrackSelectionPreset
+import com.raulshma.jellyplay.core.model.VideoPerformanceMatrix
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -23,7 +25,7 @@ import kotlin.test.assertTrue
  * Pure-JVM pins for [PlaybackRequestPlan] — the engine load request's
  * decision fold extracted from `PlayerSessionManager.initializeEngine`
  * (the TrackResolutionEngineTest pattern: plain data in, plain data out,
- * recording lambdas instead of mocks). Pins the five behaviors the former
+ * recording lambdas instead of mocks). Pins the behaviors the former
  * inline 20-field construction carried with zero coverage:
  *
  *  - the header/token resolution (blank/absent token contributes no header;
@@ -31,27 +33,21 @@ import kotlin.test.assertTrue
  *  - the subtitle-disabled fallback arm (a rule-driven OFF keeps the
  *    engine's native subtitle preference unset) and the rule → global
  *    language precedence;
- *  - the AUTO-mode bitrate cap (forced modes never consult the resolver;
- *    the cap resolves against the server host — the #19 split);
- *  - buffer sizing from the preload-buffer preference;
+ *  - the AUTO-mode bitrate cap (issue #186 §5.7: the caller-resolved
+ *    profile-capped value; forced modes deliberately bypass it);
+ *  - buffer sizing from the preload-buffer preference clamped by the
+ *    §5.9 profile ceiling (the user's stricter tier is never raised);
  *  - the engineSpecific payload assembly.
  */
 class PlaybackRequestPlanTest {
 
-    /** Records the identity/bitrate reads the fold drives — the test's probe. */
+    /** Records the identity reads the fold drives — the test's probe. */
     private class RecordingProjections {
         val headerTokens = mutableListOf<String>()
-        val bitrateHosts = mutableListOf<String?>()
-        var bitrateCap: Long? = 8_000_000L
 
         fun authorizationHeader(token: String): Pair<String, String> {
             headerTokens += token
             return "Authorization" to "MediaBrowser Token=\"$token\""
-        }
-
-        fun resolveServerBitrate(host: String?): Long? {
-            bitrateHosts += host
-            return bitrateCap
         }
     }
 
@@ -66,12 +62,11 @@ class PlaybackRequestPlanTest {
         startPositionTicks: Long = 0L,
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
-        // Ported URL: serverHostOf's host projection is exact for host:port forms
-        // (the un-portable shape's path-carrying fallback is the core helper's
-        // pre-existing behavior, not this plan's).
         serverUrl: String? = "https://example.com:8096/jelly/web/index.html",
         token: String? = null,
         clientTls: PlaybackTls? = null,
+        resolvedMaxBitrate: Long? = 8_000_000L,
+        performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
     ) = PlaybackRequestPlan.Inputs(
         url = url,
         startPositionTicks = startPositionTicks,
@@ -86,7 +81,8 @@ class PlaybackRequestPlanTest {
         token = token,
         clientTls = clientTls,
         authorizationHeader = projections::authorizationHeader,
-        resolveServerBitrate = projections::resolveServerBitrate,
+        resolvedMaxBitrate = resolvedMaxBitrate,
+        performanceTuning = performanceTuning,
     )
 
     /** An episode detail — the rule engine's episode content type. */
@@ -188,31 +184,28 @@ class PlaybackRequestPlanTest {
         assertEquals("jpn", request.preferredAudioLanguage)
     }
 
-    // ── The AUTO-mode bitrate cap ────────────────────────────────────────────
+    // ── The AUTO-mode bitrate cap (§5.7) ─────────────────────────────────────
 
     @Test
-    fun `AUTO mode resolves the cap against the server host`() {
+    fun `AUTO mode applies the caller-resolved profile-capped bitrate`() {
         val agg = VideoPlayerAggregate().copy(
             playback = PlaybackSlice(playbackMode = PlaybackMode.AUTO),
         )
 
-        val request = PlaybackRequestPlan.of(inputs(agg = agg))
+        val request = PlaybackRequestPlan.of(inputs(agg = agg, resolvedMaxBitrate = 8_000_000L))
 
-        // The #19 split: the host projection of the server URL, not the URL.
-        assertEquals(listOf<String?>("example.com"), projections.bitrateHosts)
         assertEquals(8_000_000, request.maxVideoBitrate)
     }
 
     @Test
-    fun `a forced mode never consults the bitrate resolver`() {
+    fun `a forced mode bypasses the profile-capped bitrate`() {
         val agg = VideoPlayerAggregate().copy(
             playback = PlaybackSlice(playbackMode = PlaybackMode.FORCE_DIRECT_PLAY),
         )
 
-        val request = PlaybackRequestPlan.of(inputs(agg = agg))
+        val request = PlaybackRequestPlan.of(inputs(agg = agg, resolvedMaxBitrate = 8_000_000L))
 
-        assertTrue(projections.bitrateHosts.isEmpty(), "the resolver lambda must stay untouched on a forced mode")
-        assertNull(request.maxVideoBitrate)
+        assertNull(request.maxVideoBitrate, "the forced-mode bypass is deliberate — even a LOW profile cannot cap it")
     }
 
     @Test
@@ -220,14 +213,13 @@ class PlaybackRequestPlanTest {
         val agg = VideoPlayerAggregate().copy(
             playback = PlaybackSlice(playbackMode = PlaybackMode.AUTO),
         )
-        projections.bitrateCap = null
 
-        val request = PlaybackRequestPlan.of(inputs(agg = agg))
+        val request = PlaybackRequestPlan.of(inputs(agg = agg, resolvedMaxBitrate = null))
 
         assertNull(request.maxVideoBitrate)
     }
 
-    // ── Buffer sizing ────────────────────────────────────────────────────────
+    // ── Buffer sizing + the §5.9 profile ceiling ─────────────────────────────
 
     @Test
     fun `buffer sizes ride the preload-buffer preference`() {
@@ -244,6 +236,57 @@ class PlaybackRequestPlanTest {
         val lowRequest = PlaybackRequestPlan.of(inputs(agg = low))
         assertEquals(10_000, lowRequest.minBufferMs)
         assertEquals(25_000, lowRequest.maxBufferMs)
+    }
+
+    // ── The §5.14 profile bullets ────────────────────────────────────────────
+
+    /** The LOW tier's tuning — `maxPreloadBuffer = MEDIUM` (25 s / 50 s). */
+    private val lowTuning = VideoPerformanceMatrix.forTier(com.raulshma.jellyplay.core.model.DevicePerformanceTier.LOW)
+
+    @Test
+    fun `LOW buffer cap clamps HIGH and UNLIMITED to Medium`() {
+        val high = VideoPlayerAggregate().copy(
+            videoPlayer = VideoPlayerAggregate().videoPlayer.copy(videoPreloadBufferSize = PreloadBufferSize.HIGH),
+        )
+        val highRequest = PlaybackRequestPlan.of(
+            inputs(agg = high, performanceTuning = lowTuning),
+        )
+        assertEquals(25_000, highRequest.minBufferMs, "HIGH (50/120 s) clamps to the LOW profile's Medium ceiling")
+        assertEquals(50_000, highRequest.maxBufferMs)
+
+        val unlimited = VideoPlayerAggregate().copy(
+            videoPlayer = VideoPlayerAggregate().videoPlayer.copy(videoPreloadBufferSize = PreloadBufferSize.UNLIMITED),
+        )
+        val unlimitedRequest = PlaybackRequestPlan.of(
+            inputs(agg = unlimited, performanceTuning = lowTuning),
+        )
+        assertEquals(25_000, unlimitedRequest.minBufferMs, "UNLIMITED (50/500 s) clamps to Medium too")
+        assertEquals(50_000, unlimitedRequest.maxBufferMs)
+    }
+
+    @Test
+    fun `user LOW buffer is not raised to the profile's Medium ceiling`() {
+        val low = VideoPlayerAggregate().copy(
+            videoPlayer = VideoPlayerAggregate().videoPlayer.copy(videoPreloadBufferSize = PreloadBufferSize.LOW),
+        )
+        val request = PlaybackRequestPlan.of(inputs(agg = low, performanceTuning = lowTuning))
+
+        assertEquals(10_000, request.minBufferMs, "the ceiling never raises the user's stricter tier")
+        assertEquals(25_000, request.maxBufferMs)
+    }
+
+    @Test
+    fun `a no-cap tuning leaves the preload preference untouched`() {
+        val high = VideoPlayerAggregate().copy(
+            videoPlayer = VideoPlayerAggregate().videoPlayer.copy(videoPreloadBufferSize = PreloadBufferSize.HIGH),
+        )
+        // HIGH/NONE carries no maxPreloadBuffer — §5.5's strict no-op.
+        val request = PlaybackRequestPlan.of(
+            inputs(agg = high, performanceTuning = VideoPerformanceTuning.NONE),
+        )
+
+        assertEquals(50_000, request.minBufferMs)
+        assertEquals(120_000, request.maxBufferMs)
     }
 
     // ── The engineSpecific payload ───────────────────────────────────────────

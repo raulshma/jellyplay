@@ -7,8 +7,8 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import com.raulshma.jellyplay.core.model.PlaybackTls
+import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
-import com.raulshma.jellyplay.core.model.serverHostOf
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 
@@ -31,13 +31,17 @@ import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
  *   the helper's rung and outrank both). A rule-driven OFF keeps the
  *   engine's native subtitle preference unset — the helper's ladder
  *   enforces the Off itself.
- * - **The AUTO-mode bitrate cap**: only `PlaybackMode.AUTO` resolves the
- *   server-host cap (the resolve lambda is consulted lazily — a
- *   forced/pinned mode never touches it). Same server, same split (#19):
+ * - **The AUTO-mode bitrate cap**: only `PlaybackMode.AUTO` applies the
+ *   caller-resolved profile-capped bitrate ([Inputs.resolvedMaxBitrate] —
+ *   issue #186 §5.7 folded the former resolve lambda into the
+ *   [PlaybackCapResolver] value the manager captures per request; a
+ *   forced/pinned mode never applies it). Same server, same split (#19):
  *   the external hand-off honours the home tier on a LOCAL server like the
- *   in-app paths do.
- * - **Buffer sizing** from the preload-buffer preference, the server
- *   duration projection (ticks → ms), and the **engineSpecific payload**
+ *   in-app paths do, then the performance-profile ceiling on top.
+ * - **Buffer sizing** from the preload-buffer preference clamped by the
+ *   profile's [VideoPerformanceTuning.maxPreloadBuffer] ceiling (§5.9 —
+ *   the user's stricter tier is never raised), the server duration
+ *   projection (ticks → ms), and the **engineSpecific payload**
  *   (Exo unpacks the ReplayGain + MIME hint; the mpv engines unpack the
  *   app-level client-certificate paths).
  *
@@ -71,8 +75,21 @@ internal object PlaybackRequestPlan {
         val token: String?,
         val clientTls: PlaybackTls?,
         val authorizationHeader: (token: String) -> Pair<String, String>,
-        /** The effective server-host bitrate cap (the AUTO-mode arm's source). */
-        val resolveServerBitrate: (serverHost: String?) -> Long?,
+        /**
+         * The profile-capped effective server bitrate (issue #186 §5.7): the
+         * caller resolves `min(network/user cap, performance-profile cap)` via
+         * [com.raulshma.jellyplay.core.data.playback.PlaybackCapResolver] and
+         * passes the folded VALUE — the plan keeps no resolve lambda. Only
+         * `PlaybackMode.AUTO` consumes it (the forced-mode bypass is
+         * deliberate); `null` = uncapped.
+         */
+        val resolvedMaxBitrate: Long? = null,
+        /**
+         * The resolved performance tuning (§5.9): its `maxPreloadBuffer`
+         * ceiling clamps the preload-buffer preference (the user's stricter
+         * tier is never raised). Defaults to the no-profile no-op.
+         */
+        val performanceTuning: VideoPerformanceTuning = VideoPerformanceTuning.NONE,
     )
 
     fun of(inputs: Inputs): PlaybackRequest {
@@ -100,6 +117,16 @@ internal object PlaybackRequestPlan {
             ),
         )
 
+        // §5.9: the profile's preload-buffer ceiling — the plan's exact fold.
+        // The cap only ever LOWERS the user's tier (a user who already picked
+        // LOW keeps it); `null` (HIGH / no profile) leaves the preference
+        // alone. Compared on maxBufferMs, which is monotonic across
+        // LOW < MEDIUM < HIGH < UNLIMITED.
+        val userPreloadBuffer = inputs.agg.videoPlayer.videoPreloadBufferSize
+        val preloadBuffer = inputs.performanceTuning.maxPreloadBuffer?.let { cap ->
+            if (userPreloadBuffer.maxBufferMs > cap.maxBufferMs) cap else userPreloadBuffer
+        } ?: userPreloadBuffer
+
         return PlaybackRequest(
             uri = inputs.url,
             title = inputs.detail.item.name,
@@ -118,15 +145,17 @@ internal object PlaybackRequestPlan {
                 ruleResolution?.subtitleLanguage ?: inputs.agg.subtitle.preferredSubtitleLanguage
             },
             maxVideoBitrate = if (inputs.agg.playback.playbackMode == PlaybackMode.AUTO)
-                // Same server, same split (#19): the external hand-off honours
-                // the home tier on a LOCAL server like the in-app paths do.
-                inputs.resolveServerBitrate(serverHostOf(inputs.serverUrl))?.toInt()
+                // The caller-resolved profile-capped bitrate (#186 §5.7: same
+                // server, same split — the home tier on a LOCAL server folds
+                // in before the profile ceiling, exactly like the in-app
+                // paths). Forced/pinned modes deliberately bypass the cap.
+                inputs.resolvedMaxBitrate?.toInt()
                 else null,
             serverUrl = inputs.serverUrl,
             authToken = inputs.token,
             playMethod = inputs.playMethod,
-            minBufferMs = inputs.agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
-            maxBufferMs = inputs.agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
+            minBufferMs = preloadBuffer.minBufferMs,
+            maxBufferMs = preloadBuffer.maxBufferMs,
             serverDurationMs = (inputs.detail.item.runTimeTicks ?: 0L) / 10_000,
             // The per-engine request payload (core:model's
             // PlaybackRequestSpecific behind the contract's engineSpecific
