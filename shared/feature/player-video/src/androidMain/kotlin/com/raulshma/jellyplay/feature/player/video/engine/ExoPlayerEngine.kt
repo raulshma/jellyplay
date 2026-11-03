@@ -553,7 +553,31 @@ class ExoPlayerEngine(
         // engineScope (terminal semantics unchanged); BasePlayerEngine's
         // self-healing engineScope hands positionFlow's ticker a fresh live
         // generation on its next read, so no paired revive is needed here.
+        //
+        // EXCEPT the UI-owned surface wiring must survive this reset:
+        // createReplacementEngine publishes the engine object BEFORE this
+        // load() builds the player (the desktop mpv wid contract needs the
+        // embed target mounted first), so the screen's PlayerView factory can
+        // run inside any suspension window between publication and here —
+        // createSurfaceView assigns playerView, and the release() below
+        // discards it. A view created that way never receives the rebuilt
+        // player (the factory runs once per engine instance, key(currentEngine)
+        // never re-runs it), PlayerView keeps player=null for the engine's
+        // lifetime, media3 routes the decoded frames to a dummy surface, and
+        // playback looks fine while the video is black — position advancing,
+        // audio playing, zero frames composited. Snapshot the UI-owned triple
+        // and restore it when the teardown dropped it and no newer view took
+        // its place; the rebuilt player re-attaches further down.
+        val preservedView = playerView
+        val preservedListener = frameSizeListener
+        val preservedSubtitleHost = externalSubtitleHost
         release()
+        if (preservedView != null && playerView == null) {
+            playerView = preservedView
+            frameSizeListener = preservedListener
+            externalSubtitleHost = preservedSubtitleHost
+            preservedListener?.let { preservedView.addOnLayoutChangeListener(it) }
+        }
         lastRebuildInputs = inputs
 
         // The rebuild's ordered build decisions, folded once (the plan owns
@@ -793,6 +817,14 @@ class ExoPlayerEngine(
         exo.addListener(listener)
         exo.addAnalyticsListener(decoderCountersListener)
         player = exo
+        // The view must mirror the engine's player under any ordering: a
+        // PlayerView created before this point (factory ran while player was
+        // still null — see the preserved view in the teardown above) holds
+        // player=null until this re-attach. When the ordering is the usual
+        // one — player built before the factory ran — this is a no-op.
+        playerView?.let { pv ->
+            if (pv.player !== exo) pv.player = exo
+        }
 
         // Engage the GL video-graph path for HDR→SDR tone mapping. Media3
         // 1.11.1 has no force-tone-map lever (`setRequestOpenGlToneMapping` is
