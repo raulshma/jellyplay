@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
+import android.opengl.EGL14
 import android.opengl.GLES10
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +57,7 @@ class AndroidDevicePerformanceProbe(private val context: Context) : DevicePerfor
             hardwareHevcDecode = hardwareHevc,
             maxHardwareDecodeBitrate = hardwareBitrate,
             socFamily = socFamily(),
-            gpuRenderer = runCatching { GLES10.glGetString(GLES10.GL_RENDERER) }.getOrNull(),
+            gpuRenderer = glRendererOrNull(),
             isEmulator = isEmulator(),
             manufacturer = Build.MANUFACTURER?.takeIf { it.isNotBlank() },
             model = Build.MODEL?.takeIf { it.isNotBlank() },
@@ -80,6 +81,22 @@ class AndroidDevicePerformanceProbe(private val context: Context) : DevicePerfor
         Build.BOARD?.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) },
         Build.DEVICE?.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) },
     ).firstOrNull { it != null }
+
+    /**
+     * The GL renderer string — only when a GL context is current on the
+     * calling thread. The probe runs on [Dispatchers.Default], which has
+     * none, so this reads null in practice; that degradation is the point:
+     * `glGetString` without a current context is undefined behavior, and on
+     * some vendor GLES drivers (POCO F1 / beryllium, LineageOS 22.2 observed)
+     * it is a native SIGSEGV inside `glGetString` that no `runCatching` can
+     * catch — it killed the process at playback start during issue-#186
+     * device validation. Diagnostics-only either way: the classifier and the
+     * detection fingerprint exclude this field.
+     */
+    private fun glRendererOrNull(): String? {
+        if (EGL14.eglGetCurrentContext() == EGL14.EGL_NO_CONTEXT) return null
+        return runCatching { GLES10.glGetString(GLES10.GL_RENDERER) }.getOrNull()
+    }
 
     /**
      * The hardware video-decoder scan. Returns null when the codec list

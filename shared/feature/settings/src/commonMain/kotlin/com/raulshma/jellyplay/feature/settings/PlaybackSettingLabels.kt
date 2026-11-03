@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
-import com.raulshma.jellyplay.core.ui.components.formatting.formatRelativeAge
+import com.raulshma.jellyplay.core.ui.components.formatRelativeAge
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PerformanceDetection
 import com.raulshma.jellyplay.core.model.PerformanceReason
