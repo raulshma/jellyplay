@@ -206,6 +206,7 @@ internal object NoOpPlayerVideoMessageBus : PlayerVideoMessageBus {
     override fun info(message: String) {}
     override fun error(message: String) {}
     override fun info(message: PlayerVideoMessage) {}
+    override fun error(message: PlayerVideoMessage) {}
 }
 
 internal object NoOpTrickplayController : TrickplayController {

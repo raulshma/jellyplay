@@ -76,6 +76,9 @@ class SubtitleManagerTest {
         override fun info(message: PlayerVideoMessage) {
             infos += message.toString()
         }
+        override fun error(message: PlayerVideoMessage) {
+            errors += message.toString()
+        }
     }
 
     private val contentGateway = object : SubtitleContentGateway {

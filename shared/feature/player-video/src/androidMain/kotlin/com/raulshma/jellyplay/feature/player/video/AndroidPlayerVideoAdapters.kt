@@ -10,7 +10,9 @@ import com.raulshma.jellyplay.core.ui.generated.resources.msg_smart_download_del
 import com.raulshma.jellyplay.core.ui.message.uiTextOf
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res as PlayerVideoRes
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_delete_offer_failed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_direct_play_unavailable
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_transcode_switched
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_vlc_client_cert_unsupported
 import kotlinx.coroutines.flow.StateFlow
@@ -122,6 +124,23 @@ internal class AndroidUserMessageBridge(
             PlayerVideoMessage.VlcClientCertUnsupported -> delegate.info(
                 uiTextOf(PlayerVideoRes.string.player_video_vlc_client_cert_unsupported),
             )
+            PlayerVideoMessage.NextEpisodeLoadFailed -> {}
+            is PlayerVideoMessage.DeleteOfferFailed -> {}
+        }
+    }
+
+    override fun error(message: PlayerVideoMessage) {
+        when (message) {
+            PlayerVideoMessage.NextEpisodeLoadFailed -> delegate.error(
+                uiTextOf(PlayerVideoRes.string.player_video_error_next_episode_load),
+            )
+            is PlayerVideoMessage.DeleteOfferFailed -> delegate.error(
+                uiTextOf(PlayerVideoRes.string.player_video_delete_offer_failed, message.title),
+            )
+            PlayerVideoMessage.SmartDownloadDeleted -> {}
+            PlayerVideoMessage.TranscodeSwitched -> {}
+            PlayerVideoMessage.DirectPlayUnavailable -> {}
+            PlayerVideoMessage.VlcClientCertUnsupported -> {}
         }
     }
 }

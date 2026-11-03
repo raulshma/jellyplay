@@ -83,6 +83,9 @@ class PlayerSessionManagerTest {
         override fun info(message: PlayerVideoMessage) {
             typedInfos += message
         }
+        override fun error(message: PlayerVideoMessage) {
+            typedInfos += message
+        }
     }
 
     private lateinit var detailFeed: DetailFeed
