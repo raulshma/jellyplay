@@ -38,11 +38,14 @@ internal fun resumeSkipTargetMs(currentPositionMs: Long, skipMs: Long): Long =
  * `delay(400)` race guard (the timing shell stays in the LaunchedEffect).
  */
 internal sealed interface OrientationLockDecision {
+    /** The lock both variants carry; only the settle timing differs. */
+    val lock: PlayerOrientationLock
+
     /** Lock now — no settle delay. */
-    data class Immediate(val lock: PlayerOrientationLock) : OrientationLockDecision
+    data class Immediate(override val lock: PlayerOrientationLock) : OrientationLockDecision
 
     /** Lock only after the screen's settle delay elapses. */
-    data class SettleFirst(val lock: PlayerOrientationLock) : OrientationLockDecision
+    data class SettleFirst(override val lock: PlayerOrientationLock) : OrientationLockDecision
 }
 
 /**

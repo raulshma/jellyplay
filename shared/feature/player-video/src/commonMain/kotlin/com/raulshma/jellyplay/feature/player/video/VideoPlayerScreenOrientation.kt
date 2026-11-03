@@ -54,10 +54,7 @@ internal fun PlayerOrientationLockEffect(
             isCastConnected = isCastConnected,
             preference = defaultOrientation,
         )
-        val lock = when (decision) {
-            is OrientationLockDecision.Immediate -> decision.lock
-            is OrientationLockDecision.SettleFirst -> decision.lock
-        }
+        val lock = decision.lock
         // Record intent BEFORE the settle so a fast PiP entry cannot lose it:
         // the host's dock/restore stash starts from this semantic intent, and
         // an entry landing inside the 400 ms window would otherwise stash the

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.HdrFormatPreference
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
+import com.raulshma.jellyplay.core.ui.components.formatting.formatRelativeAge
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
 import com.raulshma.jellyplay.core.model.PerformanceDetection
 import com.raulshma.jellyplay.core.model.PerformanceReason
@@ -267,18 +268,8 @@ internal fun performanceReasonsSummary(reasons: List<PerformanceReason>): String
 
 /**
  * The detection timestamp as a compact relative label (`2h ago`), mirroring
- * core:ui's `formatRelativeTime` buckets — that helper takes an ISO string,
- * while [PerformanceDetection.detectedAtEpochMs] is already epoch millis.
+ * core:ui's [formatRelativeAge] epoch-millis fold (the same buckets
+ * `formatRelativeTime` delegates to) — the ONE relative-time seam.
  */
-internal fun performanceDetectedAgo(detectedAtEpochMs: Long, nowEpochMs: Long = wallNowMillis()): String {
-    val deltaMillis = nowEpochMs - detectedAtEpochMs
-    if (deltaMillis < 60_000L) return "just now"
-    val minutes = deltaMillis / 60_000
-    val hours = minutes / 60
-    val days = hours / 24
-    return when {
-        days >= 1 -> "${days}d ago"
-        hours >= 1 -> "${hours}h ago"
-        else -> "${minutes}m ago"
-    }
-}
+internal fun performanceDetectedAgo(detectedAtEpochMs: Long, nowEpochMs: Long = wallNowMillis()): String =
+    formatRelativeAge(nowEpochMs - detectedAtEpochMs)

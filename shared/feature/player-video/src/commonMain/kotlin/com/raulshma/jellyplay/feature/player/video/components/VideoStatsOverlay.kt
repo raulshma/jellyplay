@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.DevicePerformanceTier
+import com.raulshma.jellyplay.core.model.PerformanceDetection
 import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 import com.raulshma.jellyplay.feature.player.video.PlatformTranscodeReason
@@ -149,7 +150,7 @@ fun VideoStatsOverlay(
     capsBypassed: List<CapsBypassSource> = emptyList(),
     /** The AUTO detector's sticky run — the Detection-reasons row's source,
      *  collected here so only the visible overlay ticks with it. */
-    detectionFlow: StateFlow<com.raulshma.jellyplay.core.model.PerformanceDetection?> = MutableStateFlow(null),
+    detectionFlow: StateFlow<PerformanceDetection?> = MutableStateFlow(null),
     modifier: Modifier = Modifier,
 ) {
     val stats by statsFlow.collectAsStateWithLifecycle()

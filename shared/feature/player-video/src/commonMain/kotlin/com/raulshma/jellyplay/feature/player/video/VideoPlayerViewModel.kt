@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.PerformanceDetection
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -227,7 +228,7 @@ class VideoPlayerViewModel(
      * overlay's Detection-reasons row reads it. Expose-only passthrough (the
      * resolver owns the cache; this adds no state).
      */
-    val performanceDetection: StateFlow<com.raulshma.jellyplay.core.model.PerformanceDetection?>
+    val performanceDetection: StateFlow<PerformanceDetection?>
         get() = stores.performanceResolver.detection
 
     /**
