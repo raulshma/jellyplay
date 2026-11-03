@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
 import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
@@ -104,6 +105,9 @@ class AppStartupPrewarmsTest {
     private val videoStreamCache: VideoStreamCache = mockk(relaxed = true) {
         every { prewarm() } answers { tag("stream.prewarm") }
     }
+    private val performanceResolver: VideoPerformanceResolver = mockk(relaxed = true) {
+        coEvery { warm() } coAnswers { tag("performance.warm") }
+    }
     private val audioPlaybackManager: AudioPlaybackManager = mockk(relaxed = true) {
         every { start() } answers { tag("audio.start") }
     }
@@ -180,6 +184,7 @@ class AppStartupPrewarmsTest {
         securityStore = lazy { securityStore },
         fontProvider = lazy { fontProvider },
         videoStreamCache = lazy { videoStreamCache },
+        performanceResolver = lazy { performanceResolver },
         audioPlaybackManager = lazy { audioPlaybackManager },
         nowPlayingWidgetUpdater = lazy { nowPlayingWidgetUpdater },
         widgetWorkScheduler = lazy { widgetWorkScheduler },
@@ -244,6 +249,11 @@ class AppStartupPrewarmsTest {
         // ── group order: recovery + sweep begin after group 1's head ──
         assertTrue(indexOf("networkOffline.first") < indexOf("recovery.recover"))
         assertTrue(indexOf("recovery.recover") < indexOf("update.sweep"))
+
+        // The §5.5 performance warm rides the critical block, after the
+        // DataStore prewarms (it shares their DataStore file) — still at t=0,
+        // long before any playback can probe-adjacently initialize a codec.
+        assertTrue(indexOf("security.firstPersistedSecurity") < indexOf("performance.warm"))
 
         // ── the 2 s deferral: audio/widget + schedulers all land at 2_000 ──
         assertEquals(0L, timeOf("recovery.recover"))

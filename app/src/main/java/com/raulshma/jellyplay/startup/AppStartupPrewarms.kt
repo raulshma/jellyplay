@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
 import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
@@ -77,6 +78,7 @@ private const val BACKGROUND_START_DEFERRAL_MS = 2_000L
  *
  * Group order (pinned by [com.raulshma.jellyplay.startup.AppStartupPrewarmsTest]):
  *  1. critical DataStore prewarms + font/stream cache prewarms + the
+ *     performance-profile detection warm + the
  *     off-main construction warmups (OkHttp/AuthRepository/coordinators, below),
  *  2. the audio + widget updaters (after the 2 s deferral),
  *  3. the background schedulers in two async subgroups (after the same deferral),
@@ -125,6 +127,14 @@ class AppStartupPrewarms(
     // cold-start critical path.)
     private val fontProvider: Lazy<FontProvider>,
     private val videoStreamCache: Lazy<VideoStreamCache>,
+    // Issue #186 §5.5: AUTO performance-profile detection. warm() must run at
+    // LAUNCH — the Android probe's MediaCodecList enumeration poisons codec
+    // initialization on some devices, so the cold-cache detect may only ever
+    // happen while no playback codec exists; every §5.7 playback-path resolve
+    // is cache-first (VideoPerformanceResolver.resolve's playback-path KDoc).
+    // A usable cache makes warm() a cheap DataStore read; a cold one probes
+    // here, off the player's critical path.
+    private val performanceResolver: Lazy<VideoPerformanceResolver>,
     // Lazy defers construction of AudioPlaybackManager (and its transitive
     // 14-dep graph: AudioLibraryBrowser, AudioProgressReporter,
     // AudioCrossfader, QueueUndoStack, LruCache(25), …) off the main thread
@@ -286,6 +296,10 @@ class AppStartupPrewarms(
                 async { runCatchingRethrowingCancellation { fontProvider.value.prewarm() } }
                 async { runCatching { videoStreamCache.value.prewarm() } }
             }
+            // The performance resolver's own runCatching already swallows a
+            // broken probe; this outer wrap only keeps a cancellation from
+            // tearing down the rest of the critical block.
+            runCatchingRethrowingCancellation { performanceResolver.value.warm() }
             // Plain CONSTRUCTION of the audio manager at t=0, off main: the
             // authenticated composition forces
             // `audioPlaybackManagerLazy.value` (JellyPlayApp.kt), and the

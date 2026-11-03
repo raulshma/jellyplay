@@ -377,4 +377,48 @@ class DevicePerformanceClassifierTest {
             "bumping the detector version must force a re-detect on every device",
         )
     }
+
+    // ── the cheap drift fingerprint ────────────────────────────────────────
+
+    @Test
+    fun `cheap fingerprint is stable and differs from the full fingerprint`() {
+        val cheap = DevicePerformanceClassifier.fingerprintCheap(signals())
+        assertEquals(cheap, DevicePerformanceClassifier.fingerprintCheap(signals()))
+        assertEquals(64, cheap.length)
+        assertNotEquals(
+            DevicePerformanceClassifier.fingerprint(signals()),
+            cheap,
+            "the two identities hash different field sets",
+        )
+    }
+
+    @Test
+    fun `cheap fingerprint ignores the codec-scan fields`() {
+        // The property the playback-path split exists for: a ROM update that
+        // changes decode capability does not trip the per-resolve drift check
+        // (it cannot — the cheap path never reads the codec list); the safe
+        // identity signals still do.
+        val base = DevicePerformanceClassifier.fingerprintCheap(signals())
+        assertEquals(
+            base,
+            DevicePerformanceClassifier.fingerprintCheap(signals(maxHardwareDecodeHeight = 1080)),
+            "decode height is a codec-scan field the cheap path never gathers",
+        )
+        assertEquals(
+            base,
+            DevicePerformanceClassifier.fingerprintCheap(signals(hardwareHevcDecode = false)),
+            "the HEVC flag is a codec-scan field the cheap path never gathers",
+        )
+    }
+
+    @Test
+    fun `cheap fingerprint still tracks the safe identity signals`() {
+        val base = DevicePerformanceClassifier.fingerprintCheap(signals())
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(socFamily = "qcom sm8350")))
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(totalRamMb = 7_200)))
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(cpuCores = 6)))
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(isEmulator = true)))
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(model = "Galaxy S21")))
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(), detectorVersion = 2))
+    }
 }

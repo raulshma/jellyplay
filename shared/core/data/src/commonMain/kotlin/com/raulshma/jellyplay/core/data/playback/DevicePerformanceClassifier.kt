@@ -42,8 +42,9 @@ import com.raulshma.jellyplay.core.model.PerformanceReason
  * resolves HIGH"). The desktop probe still gathers signals for the settings
  * diagnostics display; only the scoring is skipped.
  *
- * ## Fingerprint
+ * ## Fingerprints
  *
+ * [fingerprint] — the sticky-cache identity — is
  * `sha256(detectorVersion|manufacturer|model|device|board|socFamily|
  * ramBucket(totalRamMb)|cpuCores|maxHardwareDecodeHeight|hardwareHevcDecode|
  * isEmulator)`. Deliberately excluded (so the tier does not churn): free
@@ -52,6 +53,15 @@ import com.raulshma.jellyplay.core.model.PerformanceReason
  * [DevicePerformanceSignals.gpuRenderer] (jittery values that do not change
  * what the tier means). RAM is bucketed (2/3/4/6/8/12/16/32 GB) so a small
  * reported-value jitter does not invalidate the sticky cache.
+ *
+ * [fingerprintCheap] — the drift-check identity — hashes the same inputs
+ * minus the two codec-scan fields (`maxHardwareDecodeHeight`,
+ * `hardwareHevcDecode`). It exists because the codec scan is the only probe
+ * read that must stay off the playback path (the `MediaCodecList`
+ * enumeration poisons codec initialization on OMX-generation devices —
+ * issue #186 device validation); every other field is readable any time.
+ * The resolver recomputes it per AUTO resolve to detect ROM/device drift
+ * cheaply, and defers the full re-detect to the next launch.
  */
 object DevicePerformanceClassifier {
 
@@ -168,6 +178,22 @@ object DevicePerformanceClassifier {
     fun fingerprint(
         signals: DevicePerformanceSignals,
         detectorVersion: Int = DETECTOR_VERSION,
+    ): String = sha256Hex(fingerprintFields(signals, detectorVersion).joinToString(SEPARATOR))
+
+    /**
+     * The playback-path-safe drift fingerprint over
+     * `detectorVersion|manufacturer|model|device|board|socFamily|ramBucket|
+     * cpuCores|isEmulator` — [fingerprint] minus the two codec-scan fields,
+     * i.e. exactly the inputs a probe can gather without touching
+     * `MediaCodecList` (see the class KDoc's fingerprints section for why
+     * that split exists). A cheap-fingerprint change between the stored
+     * detection and the live device means the ROM/device moved and the codec
+     * signals cannot be trusted either; the resolver defers the full
+     * re-detect that follows to the next launch's warm-up.
+     */
+    fun fingerprintCheap(
+        signals: DevicePerformanceSignals,
+        detectorVersion: Int = DETECTOR_VERSION,
     ): String = sha256Hex(
         listOf(
             detectorVersion.toString(),
@@ -178,10 +204,26 @@ object DevicePerformanceClassifier {
             signals.socFamily.orEmpty(),
             ramBucketGb(signals.totalRamMb).toString(),
             signals.cpuCores.toString(),
-            signals.maxHardwareDecodeHeight?.toString().orEmpty(),
-            signals.hardwareHevcDecode.toString(),
             signals.isEmulator.toString(),
         ).joinToString(SEPARATOR),
+    )
+
+    /** The shared hash input, in both fingerprints' documented order. */
+    private fun fingerprintFields(
+        signals: DevicePerformanceSignals,
+        detectorVersion: Int,
+    ): List<String> = listOf(
+        detectorVersion.toString(),
+        signals.manufacturer.orEmpty(),
+        signals.model.orEmpty(),
+        signals.device.orEmpty(),
+        signals.board.orEmpty(),
+        signals.socFamily.orEmpty(),
+        ramBucketGb(signals.totalRamMb).toString(),
+        signals.cpuCores.toString(),
+        signals.maxHardwareDecodeHeight?.toString().orEmpty(),
+        signals.hardwareHevcDecode.toString(),
+        signals.isEmulator.toString(),
     )
 
     /** The §5.5 table applied — exclusive first-match bands, one reason per group. */

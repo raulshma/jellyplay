@@ -59,6 +59,15 @@ data class PerformanceDetection(
     val fingerprint: String,
     val detectorVersion: Int,
     val detectedAtEpochMs: Long,
+    /**
+     * The drift-check fingerprint over the playback-path-safe signals only
+     * (`DevicePerformanceClassifier.fingerprintCheap` — no codec-scan inputs).
+     * Empty on detections persisted before the field existed (the default
+     * keeps old JSON decodable); an empty value reads as "cheap identity
+     * unknown", which the resolver treats as drift and refreshes at the next
+     * launch — a one-time, launch-time re-probe that repopulates the field.
+     */
+    val cheapFingerprint: String = "",
 )
 
 /**

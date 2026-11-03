@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
 import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
@@ -174,6 +175,7 @@ fun androidAppModule(context: Context): Module = module {
             securityStore = lazy { get<SecurityStore>() },
             fontProvider = lazy { get<FontProvider>() },
             videoStreamCache = lazy { get<VideoStreamCache>() },
+            performanceResolver = lazy { get<VideoPerformanceResolver>() },
             audioPlaybackManager = lazy { get<AudioPlaybackManager>() },
             nowPlayingWidgetUpdater = lazy { get<NowPlayingWidgetUpdater>() },
             widgetWorkScheduler = lazy { get<WidgetWorkScheduler>() },

@@ -34,6 +34,14 @@ import kotlinx.coroutines.withContext
  * basic RAM/cores reads makes [probe] return null (→ MEDIUM + PROBE_FAILED).
  * The probe hops to [Dispatchers.Default] itself so callers never have to
  * dispatch off the main thread.
+ *
+ * The playback-path split (see [DevicePerformanceProbe]): [probe] runs the
+ * codec scan — the read that must stay away from a starting codec — while
+ * [cheapFingerprint] gathers only the always-safe signals ([Build.*],
+ * ActivityManager, core count) and hashes them with the classifier's cheap
+ * fingerprint. The cheap path deliberately skips the GL renderer too: it is
+ * diagnostics-only, hashed by neither fingerprint, and the context-guarded
+ * read is not worth running per resolve.
  */
 class AndroidDevicePerformanceProbe(private val context: Context) : DevicePerformanceProbe {
 
@@ -41,23 +49,46 @@ class AndroidDevicePerformanceProbe(private val context: Context) : DevicePerfor
         runCatching { gatherSignals() }.getOrNull()
     }
 
+    override suspend fun cheapFingerprint(): String? = withContext(Dispatchers.Default) {
+        runCatching {
+            DevicePerformanceClassifier.fingerprintCheap(gatherBaseSignals())
+        }.getOrNull()
+    }
+
+    /** [probe]'s gather: the safe base plus the codec scan and GL renderer. */
     private fun gatherSignals(): DevicePerformanceSignals {
+        val (hardwareHeight, hardwareBitrate, hardwareHevc) =
+            scanHardwareVideoDecoders() ?: Triple(null, null, false)
+        return gatherBaseSignals().copy(
+            maxHardwareDecodeHeight = hardwareHeight,
+            hardwareHevcDecode = hardwareHevc,
+            maxHardwareDecodeBitrate = hardwareBitrate,
+            gpuRenderer = glRendererOrNull(),
+        )
+    }
+
+    /**
+     * The playback-path-safe reads only. The codec fields carry placeholder
+     * values — they are consumed solely by [DevicePerformanceClassifier.fingerprintCheap]
+     * (which does not hash them); the signals never reach the classifier's
+     * scoring or the full fingerprint, because they never leave this class on
+     * the cheap path.
+     */
+    private fun gatherBaseSignals(): DevicePerformanceSignals {
         val activityManager =
             context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
                 ?: error("ActivityManager unavailable")
         val memoryInfo = ActivityManager.MemoryInfo().also { activityManager.getMemoryInfo(it) }
-        val (hardwareHeight, hardwareBitrate, hardwareHevc) =
-            scanHardwareVideoDecoders() ?: Triple(null, null, false)
         return DevicePerformanceSignals(
             isAndroid = true,
             isLowRamDevice = runCatching { activityManager.isLowRamDevice }.getOrDefault(false),
             totalRamMb = (memoryInfo.totalMem / BYTES_PER_MB).toInt(),
             cpuCores = Runtime.getRuntime().availableProcessors(),
-            maxHardwareDecodeHeight = hardwareHeight,
-            hardwareHevcDecode = hardwareHevc,
-            maxHardwareDecodeBitrate = hardwareBitrate,
+            maxHardwareDecodeHeight = null,
+            hardwareHevcDecode = false,
+            maxHardwareDecodeBitrate = null,
             socFamily = socFamily(),
-            gpuRenderer = glRendererOrNull(),
+            gpuRenderer = null,
             isEmulator = isEmulator(),
             manufacturer = Build.MANUFACTURER?.takeIf { it.isNotBlank() },
             model = Build.MODEL?.takeIf { it.isNotBlank() },

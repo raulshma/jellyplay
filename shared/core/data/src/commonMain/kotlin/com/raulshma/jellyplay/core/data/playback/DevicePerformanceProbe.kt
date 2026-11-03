@@ -54,10 +54,26 @@ data class DevicePerformanceSignals(
  * wrap every platform read in `runCatching`-style guards — a failed sub-read
  * degrades that field, never crashes.
  *
- * Returns null only when the probe could not gather even the basic signals
- * (RAM/cores) — the resolver classifies that as MEDIUM + `PROBE_FAILED`
- * (§5.5 "probe failure → MEDIUM safe middle").
+ * [probe] returns null only when the probe could not gather even the basic
+ * signals (RAM/cores) — the resolver classifies that as MEDIUM +
+ * `PROBE_FAILED` (§5.5 "probe failure → MEDIUM safe middle").
+ *
+ * The two methods are split by playback-path safety: [probe] gathers the
+ * codec scan (`MediaCodecList`), which poisons codec initialization on
+ * OMX-generation devices and therefore must run only at app start ([warm])
+ * or from Settings (Re-detect); [cheapFingerprint] gathers only the always-
+ * safe signals so the resolver can check device drift on every AUTO resolve.
  */
 interface DevicePerformanceProbe {
     suspend fun probe(): DevicePerformanceSignals?
+
+    /**
+     * The drift-check fingerprint ([DevicePerformanceClassifier.fingerprintCheap])
+     * over a fresh gather of the playback-path-safe signals — everything
+     * [probe] reads except the codec scan. Null when the cheap gather fails:
+     * no drift information, the resolver keeps the cache. The default null
+     * opts platforms out (desktop: AUTO is pinned HIGH, drift is meaningless
+     * there).
+     */
+    suspend fun cheapFingerprint(): String? = null
 }
