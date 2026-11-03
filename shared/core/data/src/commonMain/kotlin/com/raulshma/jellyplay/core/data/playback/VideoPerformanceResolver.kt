@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.DevicePerformanceStore
@@ -108,7 +109,7 @@ class VideoPerformanceResolver(
      * retries).
      */
     suspend fun warm() {
-        runCatching {
+        runCatchingRethrowingCancellation {
             val requested = playbackStore.playback.value.videoPerformanceProfile
             val coldDetected = requested == VideoPerformanceProfile.AUTO &&
                 store.read()?.isUsable() != true

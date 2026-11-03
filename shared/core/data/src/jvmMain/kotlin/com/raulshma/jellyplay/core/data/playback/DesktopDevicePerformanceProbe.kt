@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,7 +19,7 @@ import kotlinx.coroutines.withContext
 class DesktopDevicePerformanceProbe : DevicePerformanceProbe {
 
     override suspend fun probe(): DevicePerformanceSignals? = withContext(Dispatchers.Default) {
-        runCatching {
+        runCatchingRethrowingCancellation {
             val osName = System.getProperty("os.name") ?: "unknown"
             val osVersion = System.getProperty("os.version") ?: "unknown"
             DevicePerformanceSignals(

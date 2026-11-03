@@ -7,6 +7,7 @@ import android.media.MediaCodecList
 import android.opengl.EGL14
 import android.opengl.GLES10
 import android.os.Build
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -46,11 +47,11 @@ import kotlinx.coroutines.withContext
 class AndroidDevicePerformanceProbe(private val context: Context) : DevicePerformanceProbe {
 
     override suspend fun probe(): DevicePerformanceSignals? = withContext(Dispatchers.Default) {
-        runCatching { gatherSignals() }.getOrNull()
+        runCatchingRethrowingCancellation { gatherSignals() }.getOrNull()
     }
 
     override suspend fun cheapFingerprint(): String? = withContext(Dispatchers.Default) {
-        runCatching {
+        runCatchingRethrowingCancellation {
             DevicePerformanceClassifier.fingerprintCheap(gatherBaseSignals())
         }.getOrNull()
     }

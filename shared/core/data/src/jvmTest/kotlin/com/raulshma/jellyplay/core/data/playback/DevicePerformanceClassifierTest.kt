@@ -415,7 +415,9 @@ class DevicePerformanceClassifierTest {
     fun `cheap fingerprint still tracks the safe identity signals`() {
         val base = DevicePerformanceClassifier.fingerprintCheap(signals())
         assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(socFamily = "qcom sm8350")))
-        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(totalRamMb = 7_200)))
+        // 7_100 MB lands in the 6 GB bucket (the 8 GB band starts at 7_168 MB);
+        // the cheap fingerprint hashes the bucket, so the band must be crossed.
+        assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(totalRamMb = 7_100)))
         assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(cpuCores = 6)))
         assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(isEmulator = true)))
         assertNotEquals(base, DevicePerformanceClassifier.fingerprintCheap(signals(model = "Galaxy S21")))
