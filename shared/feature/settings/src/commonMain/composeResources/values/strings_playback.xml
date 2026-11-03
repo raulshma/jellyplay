@@ -350,6 +350,30 @@
     <string name="settings_speed_test_running">Testing…</string>
     <string name="settings_speed_test_failed">Speed test failed</string>
     <string name="settings_speed_test_result">%1$s Mbps · suggests %2$s</string>
+    <!-- The playback performance profiles (issue #186 §5.10): the ceiling row
+         beside Streaming Quality, its picker faces, and the Re-detect action
+         row that rides the AUTO profile. -->
+    <string name="settings_performance_profile">Performance profile</string>
+    <string name="settings_performance_profile_ceiling_note">Adds a cap on top of your saved quality — the lower value wins, your settings never change. Force Direct Play and downloaded files can bypass the resolution cap. Pairs with the Performance mode row in Appearance.</string>
+    <string name="settings_performance_profile_auto_detected">Auto · Detected: %1$s</string>
+    <string name="settings_performance_profile_auto_detecting">Auto · Detecting…</string>
+    <string name="settings_performance_profile_low">Smooth playback · up to 1080p / 8 Mbps</string>
+    <string name="settings_performance_profile_medium">Balanced · up to 1440p / 20 Mbps</string>
+    <string name="settings_performance_profile_high">Maximum quality · no profile caps</string>
+    <string name="settings_performance_profile_short_auto">Auto</string>
+    <string name="settings_performance_profile_short_low">Low</string>
+    <string name="settings_performance_profile_short_medium">Medium</string>
+    <string name="settings_performance_profile_short_high">High</string>
+    <string name="settings_performance_profile_desc_auto">Follows the detected device tier; run Re-detect below to refresh it</string>
+    <string name="settings_performance_profile_desc_low">Caps streaming at 1080p / 8 Mbps and tunes the player for smooth playback</string>
+    <string name="settings_performance_profile_desc_medium">Caps streaming at 1440p / 20 Mbps; the balanced middle</string>
+    <string name="settings_performance_profile_desc_high">The app\'s normal maximum — your quality settings apply unchanged</string>
+    <string name="settings_redetect_performance">Re-detect device performance</string>
+    <string name="settings_redetect_performance_subtitle">Detection runs automatically</string>
+    <string name="settings_redetect_running">Detecting…</string>
+    <string name="settings_redetect_detected_summary">Detected: %1$s · %2$s · %3$s</string>
+    <string name="settings_redetect_done">Detected: %1$s</string>
+    <string name="settings_redetect_failed">Detection failed — kept the previous tier</string>
     <string name="settings_next_up_preroll">Next Up Button Preroll</string>
     <string name="settings_next_up_preroll_subtitle">Seconds before the end the Next Up button appears</string>
     <string name="settings_mpv_tone_mapping_curve">Tone Mapping Curve</string>

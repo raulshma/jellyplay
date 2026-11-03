@@ -1026,10 +1026,11 @@ class SettingsCatalogScreenContractTest {
         // toggle (its declared Advanced base — the flags carry that toggle);
         // the dialogue-boost strength row, the five per-codec passthrough
         // rows AND the spatial headphones sub-knob additionally ride their
-        // parent toggles (their declared All gates) — with no parents on,
-        // those seven drop.
+        // parent toggles (their declared All gates), and the issue #186
+        // Re-detect action row rides the profile row's AUTO state — with no
+        // parents on, those eight drop.
         assertEquals(
-            SettingsScreenGroups.playbackAdvancedVideo.items.size - 7,
+            SettingsScreenGroups.playbackAdvancedVideo.items.size - 8,
             rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
         )
         val boostOn = RowAdmissionFlags(
@@ -1038,6 +1039,8 @@ class SettingsCatalogScreenContractTest {
                 PlaybackRows.DialogueBoost.id to true,
                 PlaybackRows.AudioPassthrough.id to true,
                 PlaybackRows.SpatialAudio.id to true,
+                // The Re-detect row's parent: the profile being AUTO.
+                PlaybackRows.VideoPerformanceProfile.id to true,
             ),
         )
         assertEquals(

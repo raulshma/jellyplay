@@ -7,11 +7,15 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MpvDebandMode
 import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
+import com.raulshma.jellyplay.core.model.PerformanceDetection
+import com.raulshma.jellyplay.core.model.PerformanceReason
 import com.raulshma.jellyplay.core.model.SessionRestoreMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
 import com.raulshma.jellyplay.core.model.TrickplayMode
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import org.jetbrains.compose.resources.StringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_b_frames_all_aggressive
@@ -42,6 +46,19 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_paus
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver_fade_to_black
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver_logo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pause_screensaver_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_auto_detected
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_auto_detecting
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_desc_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_desc_high
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_desc_low
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_desc_medium
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_high
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_low
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_medium
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_short_auto
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_short_high
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_short_low
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_short_medium
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_360p
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_360p_low
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_480p
@@ -201,4 +218,67 @@ internal fun homeHeroStyleLabelRes(style: HomeHeroStyle): StringResource = when 
     HomeHeroStyle.SLIDESHOW -> Res.string.settings_home_hero_style_slideshow
     HomeHeroStyle.DETAILED -> Res.string.settings_home_hero_style_detailed
     HomeHeroStyle.TV_SLIDER -> Res.string.settings_home_hero_style_tv_slider
+}
+
+// The playback performance-profile faces (issue #186 §5.10): the ceiling
+// row's per-profile summary (AUTO folds the detected tier in — the arg is
+// the tier displayName), the short trailing/picker labels, and the picker
+// entry descriptions. `internal` so the advanced-video group composable
+// consumes them like the streaming-quality mappings above.
+
+internal fun videoPerformanceProfileSummaryRes(
+    profile: VideoPerformanceProfile,
+    detection: PerformanceDetection?,
+): StringResource = when (profile) {
+    VideoPerformanceProfile.AUTO ->
+        if (detection != null) Res.string.settings_performance_profile_auto_detected
+        else Res.string.settings_performance_profile_auto_detecting
+    VideoPerformanceProfile.LOW -> Res.string.settings_performance_profile_low
+    VideoPerformanceProfile.MEDIUM -> Res.string.settings_performance_profile_medium
+    VideoPerformanceProfile.HIGH -> Res.string.settings_performance_profile_high
+}
+
+internal fun videoPerformanceProfileShortRes(profile: VideoPerformanceProfile): StringResource = when (profile) {
+    VideoPerformanceProfile.AUTO -> Res.string.settings_performance_profile_short_auto
+    VideoPerformanceProfile.LOW -> Res.string.settings_performance_profile_short_low
+    VideoPerformanceProfile.MEDIUM -> Res.string.settings_performance_profile_short_medium
+    VideoPerformanceProfile.HIGH -> Res.string.settings_performance_profile_short_high
+}
+
+internal fun videoPerformanceProfileDescRes(profile: VideoPerformanceProfile): StringResource = when (profile) {
+    VideoPerformanceProfile.AUTO -> Res.string.settings_performance_profile_desc_auto
+    VideoPerformanceProfile.LOW -> Res.string.settings_performance_profile_desc_low
+    VideoPerformanceProfile.MEDIUM -> Res.string.settings_performance_profile_desc_medium
+    VideoPerformanceProfile.HIGH -> Res.string.settings_performance_profile_desc_high
+}
+
+/**
+ * The detection reasons as display text for the Re-detect row's subtitle
+ * (`LOW_RAM, ENTRY_SOC` → `Low RAM, Entry Soc`) — the same prettify fallback
+ * the reset-review diff formatters use for enum residue; the reasons are
+ * diagnostics, not localized UX copy.
+ */
+internal fun performanceReasonsSummary(reasons: List<PerformanceReason>): String =
+    reasons.joinToString(", ") { reason ->
+        reason.name.split('_').joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { it.titlecase() }
+        }
+    }
+
+/**
+ * The detection timestamp as a compact relative label (`2h ago`), mirroring
+ * core:ui's `formatRelativeTime` buckets — that helper takes an ISO string,
+ * while [PerformanceDetection.detectedAtEpochMs] is already epoch millis.
+ */
+internal fun performanceDetectedAgo(detectedAtEpochMs: Long, nowEpochMs: Long = wallNowMillis()): String {
+    val deltaMillis = nowEpochMs - detectedAtEpochMs
+    if (deltaMillis < 60_000L) return "just now"
+    val minutes = deltaMillis / 60_000
+    val hours = minutes / 60
+    val days = hours / 24
+    return when {
+        days >= 1 -> "${days}d ago"
+        hours >= 1 -> "${hours}h ago"
+        else -> "${minutes}m ago"
+    }
 }

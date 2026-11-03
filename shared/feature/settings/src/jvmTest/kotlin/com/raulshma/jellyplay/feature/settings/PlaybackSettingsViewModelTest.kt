@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.data.playback.VideoPerformanceResolver
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
@@ -10,24 +11,32 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.CastingStrategy
+import com.raulshma.jellyplay.core.model.DevicePerformanceTier
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.PerformanceDetection
+import com.raulshma.jellyplay.core.model.PerformanceReason
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -37,7 +46,9 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /**
  * Pins the Playback settings preference-mirror wiring: the screen's state is
@@ -110,11 +121,14 @@ class PlaybackSettingsViewModelTest {
         every { editor.edit(capture(captured)) } returns mockk<Job>()
     }
 
-    private fun viewModel() = PlaybackSettingsViewModel(
+    private fun viewModel(
+        videoPerformanceResolver: VideoPerformanceResolver? = null,
+    ) = PlaybackSettingsViewModel(
         projections,
         AdvancedSettingsGate(appearanceStore, editor),
         editor,
         watchNextRefresher,
+        videoPerformanceResolver = videoPerformanceResolver,
     )
 
     @Test
@@ -244,5 +258,130 @@ class PlaybackSettingsViewModelTest {
         advanceUntilIdle()
 
         verify(exactly = 1) { editor.resetCategory(PreferenceResetCategory.PLAYBACK) }
+    }
+
+    // ------------------------------------------- performance profile (issue #186 §5.14)
+
+    /** A resolver mock exposing [detection] and a controllable [VideoPerformanceResolver.redetect]. */
+    private fun resolver(
+        detection: PerformanceDetection? = null,
+        redetect: suspend () -> PerformanceDetection = { detection!! },
+    ): VideoPerformanceResolver {
+        val mock = mockk<VideoPerformanceResolver>()
+        every { mock.detection } returns MutableStateFlow(detection)
+        coEvery { mock.redetect() } coAnswers { redetect() }
+        return mock
+    }
+
+    private fun detection(
+        tier: DevicePerformanceTier,
+        vararg reasons: PerformanceReason,
+    ) = PerformanceDetection(
+        tier = tier,
+        score = 0,
+        reasons = reasons.toList(),
+        fingerprint = "fingerprint",
+        detectorVersion = 1,
+        detectedAtEpochMs = 0L,
+    )
+
+    @Test
+    fun `performance detection re-exposes the resolver's sticky cache flow`() = runTest {
+        val cached = MutableStateFlow<PerformanceDetection?>(detection(DevicePerformanceTier.LOW, PerformanceReason.LOW_RAM))
+        val mock = mockk<VideoPerformanceResolver>()
+        every { mock.detection } returns cached
+
+        val viewModel = viewModel(videoPerformanceResolver = mock)
+
+        assertSame(cached, viewModel.performanceDetection)
+        assertEquals(DevicePerformanceTier.LOW, viewModel.performanceDetection.value?.tier)
+    }
+
+    @Test
+    fun `performance detection falls back to a null flow without a resolver`() = runTest {
+        val viewModel = viewModel()
+
+        assertEquals(null, viewModel.performanceDetection.value)
+    }
+
+    @Test
+    fun `redetect flips the loading state around the resolver call`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val mock = resolver(
+            detection = detection(DevicePerformanceTier.LOW),
+            redetect = { gate.await(); detection(DevicePerformanceTier.HIGH) },
+        )
+        val viewModel = viewModel(videoPerformanceResolver = mock)
+
+        assertFalse(viewModel.isRedetecting.value, "sanity: idle before the tap")
+        viewModel.redetectPerformance()
+        advanceUntilIdle()
+        assertTrue(viewModel.isRedetecting.value, "the loading state holds while the probe runs")
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(viewModel.isRedetecting.value, "the loading state clears when the probe lands")
+    }
+
+    @Test
+    fun `redetect emits the snackbar message with the new tier`() = runTest {
+        val fresh = detection(DevicePerformanceTier.HIGH, PerformanceReason.MODERATE_RAM)
+        val mock = resolver(redetect = { fresh })
+        val viewModel = viewModel(videoPerformanceResolver = mock)
+        val messages = mutableListOf<PerformanceRedetectMessage>()
+        val collector = launch { viewModel.redetectMessages.toList(messages) }
+
+        viewModel.redetectPerformance()
+        advanceUntilIdle()
+        collector.cancel()
+
+        // The snackbar payload carries the fresh tier (the screen resolves
+        // "Detected: High" from it) and the loading state has settled.
+        val expected: List<PerformanceRedetectMessage> = listOf(PerformanceRedetectMessage.Detected(DevicePerformanceTier.HIGH))
+        assertEquals(expected, messages)
+        assertFalse(viewModel.isRedetecting.value)
+    }
+
+    @Test
+    fun `a second redetect tap while one runs is swallowed`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val mock = resolver(redetect = { gate.await(); detection(DevicePerformanceTier.MEDIUM) })
+        val viewModel = viewModel(videoPerformanceResolver = mock)
+
+        viewModel.redetectPerformance()
+        advanceUntilIdle()
+        viewModel.redetectPerformance()
+        advanceUntilIdle()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mock.redetect() }
+    }
+
+    @Test
+    fun `an unexpected redetect failure clears loading and emits Failed`() = runTest {
+        val mock = resolver(redetect = { error("probe exploded") })
+        val viewModel = viewModel(videoPerformanceResolver = mock)
+        val messages = mutableListOf<PerformanceRedetectMessage>()
+        val collector = launch { viewModel.redetectMessages.toList(messages) }
+
+        viewModel.redetectPerformance()
+        advanceUntilIdle()
+        collector.cancel()
+
+        val expected: List<PerformanceRedetectMessage> = listOf(PerformanceRedetectMessage.Failed)
+        assertEquals(expected, messages)
+        assertFalse(viewModel.isRedetecting.value)
+    }
+
+    @Test
+    fun `performance profile picker persists through the playback store`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.edit { it.playback.setVideoPerformanceProfile(VideoPerformanceProfile.LOW) }
+        advanceUntilIdle()
+        replayAllEdits()
+
+        coVerify(exactly = 1) { playbackStore.setVideoPerformanceProfile(VideoPerformanceProfile.LOW) }
     }
 }

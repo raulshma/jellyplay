@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -18,6 +20,7 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.TranscodeAudioCodecPreference
 import com.raulshma.jellyplay.core.model.TranscodeVideoCodecPreference
+import com.raulshma.jellyplay.core.model.VideoPerformanceProfile
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
@@ -29,6 +32,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_device_profile_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_device_profile_placeholder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile_ceiling_note
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_detected_summary
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_running
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resolution_switching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_video
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_summary
@@ -333,6 +339,73 @@ internal fun PlaybackAdvancedVideoGroup(
                             )
                         },
                     )
+                    // The performance-profile ceiling (issue #186 §5.10),
+                    // beside [StreamingQuality] — the cap the profile layers
+                    // over the quality rows above. The AUTO subtitle folds in
+                    // the sticky detection (null = the resolver still loading
+                    // → "Detecting…"); the supporting copy states the ceiling
+                    // rule (a cap, never a rewrite; the lower value wins;
+                    // Force Direct Play / downloads can bypass) and points at
+                    // the complementary Appearance performance-mode row.
+                    val detection = viewModel.performanceDetection.collectAsStateWithLifecycle().value
+                    val profileSummaries = VideoPerformanceProfile.entries.associateWith { profile ->
+                        val summaryRes = videoPerformanceProfileSummaryRes(profile, detection)
+                        if (profile == VideoPerformanceProfile.AUTO && detection != null) {
+                            stringResource(summaryRes, detection.tier.displayName)
+                        } else {
+                            stringResource(summaryRes)
+                        }
+                    }
+                    val profileShorts = VideoPerformanceProfile.entries.associateWith { stringResource(videoPerformanceProfileShortRes(it)) }
+                    val profileDescs = VideoPerformanceProfile.entries.associateWith { stringResource(videoPerformanceProfileDescRes(it)) }
+                    val performanceCeilingNote = stringResource(Res.string.settings_performance_profile_ceiling_note)
+                    val performanceProfileTitle = rowTitle(PlaybackRows.VideoPerformanceProfile)
+                    SettingListItem(
+                        icon = rowIcon(PlaybackRows.VideoPerformanceProfile),
+                        title = performanceProfileTitle,
+                        subtitle = profileSummaries[preferences.videoPerformanceProfile]
+                            ?.plus(" — $performanceCeilingNote"),
+                        trailingText = profileShorts[preferences.videoPerformanceProfile] ?: preferences.videoPerformanceProfile.displayName,
+                        highlighted = highlightSettingId == PlaybackRows.VideoPerformanceProfile.id,
+                        onClick = {
+                            activePicker.value = PickerState.List(
+                                title = performanceProfileTitle,
+                                items = VideoPerformanceProfile.entries,
+                                label = { profileShorts[it] ?: it.displayName },
+                                subtitle = { profileDescs[it] ?: it.displayName },
+                                isSelected = { it == preferences.videoPerformanceProfile },
+                                onSelect = { viewModel.edit { scope -> scope.playback.setVideoPerformanceProfile(it) } },
+                            )
+                        },
+                    )
+                    // The Re-detect action row (§5.10) — admitted only while
+                    // the profile above is AUTO (the WhenOn gate the row
+                    // declares; playbackRowAdmissionFlags feeds it). The
+                    // subtitle is the last detection summary (tier + reasons
+                    // + time) or the static "Detection runs automatically."
+                    // fallback; the tap runs the resolver's redetect and the
+                    // screen surfaces the outcome as a snackbar.
+                    if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackRows.RedetectPerformance.id, rowFlags)) {
+                        val isRedetecting by viewModel.isRedetecting.collectAsStateWithLifecycle()
+                        val redetectRunningLabel = stringResource(Res.string.settings_redetect_running)
+                        SettingListItem(
+                            icon = rowIcon(PlaybackRows.RedetectPerformance),
+                            title = rowTitle(PlaybackRows.RedetectPerformance),
+                            subtitle = when {
+                                isRedetecting -> redetectRunningLabel
+                                detection != null -> stringResource(
+                                    Res.string.settings_redetect_detected_summary,
+                                    detection.tier.displayName,
+                                    performanceReasonsSummary(detection.reasons),
+                                    performanceDetectedAgo(detection.detectedAtEpochMs),
+                                )
+                                else -> rowSubtitle(PlaybackRows.RedetectPerformance)
+                            },
+                            trailingText = if (isRedetecting) redetectRunningLabel else "",
+                            highlighted = highlightSettingId == PlaybackRows.RedetectPerformance.id,
+                            onClick = { viewModel.redetectPerformance() },
+                        )
+                    }
                     // The transcode-decision cluster — renders beside
                     // [StreamingQuality], the knobs that steer the same
                     // direct-play-vs-transcode choice.

@@ -72,9 +72,9 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `advanced video list keeps its 26-row order with the residuals in place`() {
+    fun `advanced video list keeps its 28-row order with the residuals in place`() {
         val items = PlaybackAdvancedVideoSearchItems
-        assertEquals(26, items.size)
+        assertEquals(28, items.size)
         assertEquals(
             listOf(
                 PlaybackRows.DialogueBoost.id,
@@ -94,6 +94,11 @@ class SpecDerivedSearchItemsTest {
                 PlaybackRows.OfflinePlayback.id,
                 PlaybackRows.PlaybackMode.id,
                 PlaybackRows.StreamingQuality.id,
+                // The issue #186 pair: the spec-backed performance-profile
+                // ceiling beside Streaming Quality, then its residual
+                // Re-detect action row.
+                PlaybackRows.VideoPerformanceProfile.id,
+                PlaybackRows.RedetectPerformance.id,
                 PlaybackRows.HdrFormatPreference.id,
                 PlaybackRows.ForceTranscodeAboveHeight.id,
                 PlaybackRows.PreferredTranscodeVideoCodec.id,
@@ -112,6 +117,15 @@ class SpecDerivedSearchItemsTest {
         // The per-codec rows restate their screen titles (the fold).
         assertEquals("settings_passthrough_codec_ac3", items.single { it.id == PlaybackRows.PassthroughCodecAc3.id }.titleRes.key)
         assertEquals("ss_passthrough_codec_subtitle", items.single { it.id == PlaybackRows.PassthroughCodecAc3.id }.subtitleRes.key)
+        // The issue #186 binding: the profile row carries the spec-declared
+        // ss_* faces; the residual Re-detect row carries its hand faces.
+        val profile = items.single { it.id == PlaybackRows.VideoPerformanceProfile.id }
+        assertEquals("ss_performance_profile_title", profile.titleRes.key)
+        assertEquals("ss_performance_profile_subtitle", profile.subtitleRes.key)
+        assertEquals(listOf("performance", "low end", "medium", "high end", "smooth", "stutter", "profile", "auto", "1080p", "bitrate", "device"), profile.keywords)
+        val redetect = items.single { it.id == PlaybackRows.RedetectPerformance.id }
+        assertEquals("settings_redetect_performance", redetect.titleRes.key)
+        assertEquals("settings_redetect_performance_subtitle", redetect.subtitleRes.key)
     }
 
     @Test

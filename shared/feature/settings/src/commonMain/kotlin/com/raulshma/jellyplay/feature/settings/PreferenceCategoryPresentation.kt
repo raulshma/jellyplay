@@ -472,6 +472,10 @@ private val playbackDiffFields: List<DiffField<*>> = diffRows(
 ) {
     spec("ss_player_engine_title", { it.playback.preferredPlayer }, { v -> v.enumDisplay() })
     spec("ss_streaming_quality_title", { it.playback.streamingQuality }, { v -> v.enumDisplay() })
+    // The performance-profile ceiling (issue #186): the knob's spec row rides
+    // the PLAYBACK category — the diff shows the pinned profile (the detected
+    // tier is per-device runtime state with no row).
+    spec("ss_performance_profile_title", { it.playback.videoPerformanceProfile }, { v -> v.enumDisplay() })
     hand(DiffField(Res.string.ss_cellular_streaming_quality_title, { it.playback.cellularStreamingQuality }, { v -> v.enumDisplay() }))
     spec("ss_playback_mode_title", { it.playback.playbackMode }, { v -> v.enumDisplay() })
     spec("ss_decoder_title", { it.playback.decoderMode }, { v -> v.enumDisplay() })

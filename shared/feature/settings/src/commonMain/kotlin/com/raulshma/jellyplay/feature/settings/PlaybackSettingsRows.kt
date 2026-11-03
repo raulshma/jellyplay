@@ -118,12 +118,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_trailer_before_movie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_profile
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_codecs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_raw_mpv_options
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_performance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redetect_performance_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_match
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_render_quality
@@ -288,6 +291,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_m
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_mode_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_profile_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_subtitle
@@ -1228,6 +1233,40 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_streaming_quality,
         searchTitleRes = Res.string.ss_streaming_quality_title,
         searchSubtitleRes = Res.string.ss_streaming_quality_subtitle,
+    )
+
+    // The performance-profile ceiling (issue #186 §5.10): a cap layered over
+    // the quality rows above, never a rewrite of them — AUTO resolves to the
+    // detected device tier, LOW/MEDIUM/HIGH pin it. The knob's semantics
+    // (keywords, advanced flag, route) live on the spec row declared beside
+    // PlaybackStore; the subtitle is a dynamic per-profile read (the group
+    // emission composes it from the preference + detection state).
+    val VideoPerformanceProfile = SettingsRow(
+        id = "video_performance_profile",
+        icon = Tabler.Outline.Cpu,
+        titleRes = Res.string.settings_performance_profile,
+        searchTitleRes = Res.string.ss_performance_profile_title,
+        searchSubtitleRes = Res.string.ss_performance_profile_subtitle,
+    )
+
+    // ── RESIDUAL action row (issue #186 §5.10): the explicit Re-detect
+    // escape hatch — the sticky AUTO cache's manual refresh. Admitted only
+    // while the profile row above is AUTO (an explicit profile pins the
+    // tier, so re-detecting changes nothing) — the WhenOn parent is the
+    // profile row's id, fed by playbackRowAdmissionFlags from the AUTO
+    // state. Searchable like every residual (the fused projection requires
+    // hand search faces); §5.10's "search-less unless product asks" lands
+    // as the minimal keyword face here.
+    val RedetectPerformance = SettingsRow(
+        id = "redetect_performance",
+        icon = Tabler.Outline.Refresh,
+        titleRes = Res.string.settings_redetect_performance,
+        subtitleRes = Res.string.settings_redetect_performance_subtitle,
+        searchSubtitleRes = Res.string.settings_redetect_performance_subtitle,
+        keywords = listOf("detect", "redetect", "performance", "device", "tier", "auto", "benchmark"),
+        route = Route.PlaybackSettings(),
+        isAdvanced = true,
+        gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.VideoPerformanceProfile.id)),
     )
 
     // The streaming-quality/transcode cluster: the HDR format preference and
@@ -2405,6 +2444,8 @@ internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.OfflinePlayback,
     PlaybackRows.PlaybackMode,
     PlaybackRows.StreamingQuality,
+    PlaybackRows.VideoPerformanceProfile,
+    PlaybackRows.RedetectPerformance,
     PlaybackRows.HdrFormatPreference,
     PlaybackRows.ForceTranscodeAboveHeight,
     PlaybackRows.PreferredTranscodeVideoCodec,
