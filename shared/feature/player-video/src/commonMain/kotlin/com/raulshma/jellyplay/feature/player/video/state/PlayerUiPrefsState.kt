@@ -32,7 +32,7 @@ import com.raulshma.jellyplay.core.model.VideoPerformanceTuning
 @Immutable
 data class PlayerUiPrefsState(
     val controlsTimeoutMs: Long = 5_000L,
-    /** The skip-intro/segment invitation countdown length (3–30 s). */
+    /** The skip-intro/segment invitation countdown length (3–30 s); `0` = whole segment (no countdown). */
     val skipPromptDurationMs: Long = 10_000L,
     /**
      * When on, PAUSING must not summon the

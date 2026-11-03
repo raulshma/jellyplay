@@ -100,6 +100,28 @@ internal fun isSkipSegmentButtonVisible(
         !isCinemaIntroVisible &&
         !(activeSegment.type == MediaSegmentType.OUTRO && shouldShowUpNext)
 
+/**
+ * Skip-prompt SHOWING precedence: the timed pipeline's verdict
+ * ([timedVisible]) normally rules, but the `skip_prompt_duration_ms`
+ * whole-segment sentinel bypasses it — the invitation stays up for the entire
+ * segment (the pre-timed-prompt behavior), with no countdown, no
+ * controls-visibility gate and no interaction requirement. Both modes share
+ * the hard suppression arms (sheet / lock / PiP via [canShow]); in
+ * whole-segment mode a cinema-intro pre-roll counts as "something to skip"
+ * on its own, since the segment button itself is suppressed while it plays.
+ */
+internal fun isSkipPromptShown(
+    wholeSegmentMode: Boolean,
+    cinemaIntroActive: Boolean,
+    segmentAvailable: Boolean,
+    canShow: Boolean,
+    timedVisible: Boolean,
+): Boolean = canShow && if (wholeSegmentMode) {
+    cinemaIntroActive || segmentAvailable
+} else {
+    timedVisible
+}
+
 // The player-chrome policies shared with the live player's screen moved to
 // the shared player-contract home
 // (com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromePolicies)

@@ -247,6 +247,86 @@ class SkipSegmentButtonVisibilityTest {
     }
 }
 
+class SkipPromptShownTest {
+
+    @Test
+    fun wholeSegment_showsWhileSegmentAvailable_withoutControlsOrInteraction() {
+        assertTrue(
+            isSkipPromptShown(
+                wholeSegmentMode = true,
+                cinemaIntroActive = false,
+                segmentAvailable = true,
+                canShow = true,
+                timedVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wholeSegment_showsForCinemaIntro_alone() {
+        assertTrue(
+            isSkipPromptShown(
+                wholeSegmentMode = true,
+                cinemaIntroActive = true,
+                segmentAvailable = false,
+                canShow = true,
+                timedVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wholeSegment_withoutSegmentOrIntro_staysHidden() {
+        assertFalse(
+            isSkipPromptShown(
+                wholeSegmentMode = true,
+                cinemaIntroActive = false,
+                segmentAvailable = false,
+                canShow = true,
+                timedVisible = false,
+            ),
+        )
+    }
+
+    @Test
+    fun canShowFalse_suppressesBothModes() {
+        for (wholeSegmentMode in listOf(true, false)) {
+            assertFalse(
+                isSkipPromptShown(
+                    wholeSegmentMode = wholeSegmentMode,
+                    cinemaIntroActive = true,
+                    segmentAvailable = true,
+                    canShow = false,
+                    timedVisible = true,
+                ),
+                "canShow=false must suppress wholeSegmentMode=$wholeSegmentMode",
+            )
+        }
+    }
+
+    @Test
+    fun timedMode_defersToTheTimedPipeline() {
+        assertTrue(
+            isSkipPromptShown(
+                wholeSegmentMode = false,
+                cinemaIntroActive = false,
+                segmentAvailable = false,
+                canShow = true,
+                timedVisible = true,
+            ),
+        )
+        assertFalse(
+            isSkipPromptShown(
+                wholeSegmentMode = false,
+                cinemaIntroActive = false,
+                segmentAvailable = true,
+                canShow = true,
+                timedVisible = false,
+            ),
+        )
+    }
+}
+
 // The auto-hide gate's pins (`ControlsAutoHidePolicyTest`) moved with the
 // predicate itself to player-contract's PlayerChromePoliciesTest — the gate is
 // now shared with the live player's screen and pinned at its new home (the

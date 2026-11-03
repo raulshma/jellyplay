@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_segm
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_duration
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_duration_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prompt_whole_segment
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_syncplay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_syncplay_join_summary
@@ -90,11 +91,19 @@ internal fun PlaybackMediaSegmentsGroup(
                         onCheckedChange = { viewModel.edit { scope -> scope.videoPlayer.setSkipSegmentsOnSeek(it) } },
                     )
                     // The skip button's countdown length (the timed invitation
-                    // bar); 3–30 s, clamped by the store on both ends.
+                    // bar); 3–30 s, clamped by the store on both ends — or the
+                    // whole-segment sentinel (button stays up while the
+                    // segment plays, no countdown).
                     val durationTitle = stringResource(Res.string.settings_skip_prompt_duration)
-                    val durationChoices = listOf(3_000L, 5_000L, 10_000L, 15_000L, 20_000L, 30_000L)
+                    val wholeSegmentLabel = stringResource(Res.string.settings_skip_prompt_whole_segment)
+                    val durationChoices =
+                        listOf(PlaybackPreferences.SKIP_PROMPT_WHOLE_SEGMENT_MS, 3_000L, 5_000L, 10_000L, 15_000L, 20_000L, 30_000L)
                     val durationLabels = durationChoices.associateWith { seconds ->
-                        stringResource(Res.string.settings_segment_skip_delay_seconds, (seconds / 1000).toInt())
+                        if (seconds == PlaybackPreferences.SKIP_PROMPT_WHOLE_SEGMENT_MS) {
+                            wholeSegmentLabel
+                        } else {
+                            stringResource(Res.string.settings_segment_skip_delay_seconds, (seconds / 1000).toInt())
+                        }
                     }
                     val currentDurationMs = preferences.skipPromptDurationMs
                     SettingListItem(

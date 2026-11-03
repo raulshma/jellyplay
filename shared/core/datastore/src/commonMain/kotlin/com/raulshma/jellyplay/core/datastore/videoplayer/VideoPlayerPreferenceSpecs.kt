@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.MpvToneMappingCurve
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PauseFadeStyle
 import com.raulshma.jellyplay.core.model.PauseScreensaverMode
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
 import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
 import com.raulshma.jellyplay.core.model.PlayerHoldSpeedPillStyle
@@ -184,7 +185,7 @@ object VideoPlayerPreferenceSpecs {
                 titleKey = "settings_skip_prompt_duration",
                 subtitleKey = "settings_skip_prompt_duration_subtitle",
                 categoryKey = "ss_cat_playback",
-                keywords = listOf("skip", "intro", "outro", "button", "duration", "seconds"),
+                keywords = listOf("skip", "intro", "outro", "button", "duration", "seconds", "whole", "always"),
                 routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
                 isAdvanced = true,
             ),
@@ -1952,6 +1953,19 @@ object VideoPlayerPreferenceSpecs {
 
     /** The clamp every [SKIP_PROMPT_DURATION_MS] read/write shares. */
     val SKIP_PROMPT_DURATION_MS_BOUNDS: ClosedRange<Long> = 3_000L..30_000L
+
+    /**
+     * The clamp for every [SKIP_PROMPT_DURATION_MS] read/write, sentinel-aware:
+     * [PlaybackPreferences.SKIP_PROMPT_WHOLE_SEGMENT_MS] (whole-segment mode)
+     * passes through untouched; anything else lands inside
+     * [SKIP_PROMPT_DURATION_MS_BOUNDS].
+     */
+    fun clampSkipPromptDurationMs(ms: Long): Long =
+        if (ms == PlaybackPreferences.SKIP_PROMPT_WHOLE_SEGMENT_MS) {
+            ms
+        } else {
+            ms.coerceIn(SKIP_PROMPT_DURATION_MS_BOUNDS)
+        }
 
     val VIDEO_HIDE_OSD_ON_PAUSE: PreferenceSpec<Boolean> get() = row("video_hide_osd_on_pause")
 

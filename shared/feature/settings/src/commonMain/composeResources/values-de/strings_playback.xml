@@ -202,6 +202,7 @@
     <string name="settings_media_segments_summary">%1$d Auto-Skip, %2$d Button zeigen</string>
         <string name="settings_skip_prompt_duration">Skip-Button-Dauer</string>
     <string name="settings_skip_prompt_duration_subtitle">Wie lange der Intro-/Segment-Skip-Button sichtbar bleibt</string>
+    <string name="settings_skip_prompt_whole_segment">Ganzes Segment</string>
 <string name="settings_skip_segments_on_seek">Segmente beim Spulen überspringen</string>
     <string name="settings_skip_segments_on_seek_on">Vorwärtssprünge überspringen Auto-Skip-Segmente</string>
     <string name="settings_segment_skip_delay">Auto-Skip-Verzögerung</string>

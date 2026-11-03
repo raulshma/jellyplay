@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.MaxZoom
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PauseFadeStyle
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.PlayerCenterDoubleTapAction
 import com.raulshma.jellyplay.core.model.PlayerDoubleTapZoneBias
 import com.raulshma.jellyplay.core.model.PlayerHoldSpeedPillStyle
@@ -461,6 +462,15 @@ class VideoPlayerStoreTest {
         store.setVideoSleepConfirmMinutes(99)
         assertEquals(30, store.videoPlayer.first().videoSleepConfirmMinutes)
 
+        // The skip-prompt duration clamps at both ends of its bounds — except
+        // the whole-segment sentinel (`0`), which passes through untouched.
+        store.setSkipPromptDurationMs(PlaybackPreferences.SKIP_PROMPT_WHOLE_SEGMENT_MS)
+        assertEquals(0L, store.videoPlayer.first().skipPromptDurationMs)
+        store.setSkipPromptDurationMs(1_000L)
+        assertEquals(3_000L, store.videoPlayer.first().skipPromptDurationMs)
+        store.setSkipPromptDurationMs(99_000L)
+        assertEquals(30_000L, store.videoPlayer.first().skipPromptDurationMs)
+
         // ── reset → defaults ──
         store.setVideoOverlayAnimations(true)
         store.setVideoResumeChipMs(3_000L)
@@ -487,6 +497,7 @@ class VideoPlayerStoreTest {
         store.setVideoMaxZoom(MaxZoom.X3)
         store.setVideoPollCadence(PollCadence.DEFAULT)
         store.setVideoSleepConfirmMinutes(5)
+        store.setSkipPromptDurationMs(10_000L)
         store.setVideoAmbientUnderFill(false)
         store.setVideoBufferingVeil(BufferingVeil.DEFAULT)
         store.setVideoSpeedPresetSet(SpeedPresetSet.DEFAULT)

@@ -202,6 +202,7 @@
     <string name="settings_media_segments_summary">%1$d 自动跳过，%2$d 显示按钮</string>
         <string name="settings_skip_prompt_duration">跳过按钮显示时长</string>
     <string name="settings_skip_prompt_duration_subtitle">跳过片头/片段按钮在屏幕上停留的时间</string>
+    <string name="settings_skip_prompt_whole_segment">整个片段</string>
 <string name="settings_skip_segments_on_seek">跳转时跳过片段</string>
     <string name="settings_skip_segments_on_seek_on">向前跳转落在自动跳过片段内时自动跳过</string>
     <string name="settings_segment_skip_delay">自动跳过延迟</string>

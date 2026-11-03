@@ -243,7 +243,11 @@ data class PlaybackPreferences(
     val videoAutoplayWifiOnly: Boolean = false,
     /** The first BACK shows an in-player exit confirmation. Default off. */
     val videoConfirmExit: Boolean = false,
-    /** The skip-intro/segment invitation countdown length (3–30 s). */
+    /**
+     * The skip-intro/segment invitation countdown length (3–30 s), or
+     * [SKIP_PROMPT_WHOLE_SEGMENT_MS] to keep the button up for the whole
+     * segment (no countdown — the pre-timed-prompt behavior).
+     */
     val skipPromptDurationMs: Long = 10_000L,
     val videoEpisodeBrowserEnabled: Boolean = true,
     val videoShowPlaybackMetadata: Boolean = true,
@@ -358,4 +362,12 @@ data class PlaybackPreferences(
      * whose video volume is the system stream's.
      */
     val rememberVolumePerContentType: Boolean = true,
-)
+) {
+    companion object {
+        /**
+         * The [skipPromptDurationMs] sentinel that keeps the skip button
+         * visible for the entire segment instead of a timed countdown.
+         */
+        const val SKIP_PROMPT_WHOLE_SEGMENT_MS = 0L
+    }
+}
