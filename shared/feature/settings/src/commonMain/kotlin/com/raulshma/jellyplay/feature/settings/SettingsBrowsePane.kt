@@ -95,6 +95,17 @@ internal fun SettingsBrowsePane(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
         CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
+            // The root-screen reveal scroll — the sub-screens'
+            // HighlightScrollEffect idiom (see resolveRootRevealItemIndex): a
+            // search-reveal tap must scroll the pane to the target section's
+            // lazy item, or the item never composes and the highlighted row's
+            // own focus choreography (its 400ms-delayed focus grab +
+            // bring-into-view) can never fire — the missing "focus animation
+            // after navigation" on below-fold groups.
+            HighlightScrollEffect(
+                scrollState = lazyListState,
+                scrollIndex = resolveRootRevealItemIndex(lastClickedSettingId, isTv, settingsCapabilities),
+            )
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()

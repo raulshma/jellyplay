@@ -9,10 +9,17 @@ import org.jetbrains.compose.resources.StringResource
  * group (the screensaver group) — it occupies a slot in the phone numbering
  * that no phone section ever reads, exactly like the hand-typed literal it
  * replaced (`settingsSection("group_screensaver", 16)` inside `if (isTv)`).
+ *
+ * [revealGroup] marks the section that hosts a search-reveal group — a
+ * `SettingsScreenGroups` group whose rows are bare-`Route.Settings` catalog
+ * targets (the NoOp arm of `settingsResultClickAction`): the section's card
+ * expands for its ids and the pane scrolls here on a search-reveal tap
+ * ([resolveRootRevealItemIndex]). Null for sections with no reveal rows.
  */
 internal data class SettingsEntranceSection(
     val key: String,
     val tvOnly: Boolean = false,
+    val revealGroup: SettingsSearchItemGroup? = null,
 )
 
 /**
@@ -77,7 +84,7 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("account"),
     SettingsEntranceSection("activity"),
     SettingsEntranceSection("system"),
-    SettingsEntranceSection("group_jellyplay"),
+    SettingsEntranceSection("group_jellyplay", revealGroup = SettingsScreenGroups.jellyplayFeatures),
     HomeEntrance.section,
     AppearanceEntrance.section,
     PerformanceEntrance.section,
@@ -89,10 +96,10 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SecurityEntrance.section,
     SettingsEntranceSection("item_privacy_data"),
     BackupEntrance.section,
-    SettingsEntranceSection("group_screensaver", tvOnly = true),
-    SettingsEntranceSection("group_idle_ambient"),
-    SettingsEntranceSection("group_discord_presence"),
-    SettingsEntranceSection("group_shell_hooks"),
+    SettingsEntranceSection("group_screensaver", tvOnly = true, revealGroup = SettingsScreenGroups.systemScreensaver),
+    SettingsEntranceSection("group_idle_ambient", revealGroup = SettingsScreenGroups.systemIdleAmbient),
+    SettingsEntranceSection("group_discord_presence", revealGroup = SettingsScreenGroups.systemDiscordPresence),
+    SettingsEntranceSection("group_shell_hooks", revealGroup = SettingsScreenGroups.systemHooks),
     SettingsEntranceSection("item_experimental"),
     IntegrationsEntrance.section,
     AboutEntrance.section,
@@ -118,4 +125,63 @@ internal fun settingsEntranceStep(key: String): SettingsEntranceSteps? {
     if (index < 0) return null
     val phone = SETTINGS_ENTRANCE_SECTIONS.take(index).count { !it.tvOnly }
     return SettingsEntranceSteps(phone = phone, tv = index)
+}
+
+/**
+ * The root browse pane's reveal-scroll resolution — the sub-screens'
+ * `resolveHighlightScrollIndex` idiom over this declaration. A search-reveal
+ * tap (the `settingsResultClickAction` NoOp arm) marks `lastClickedSettingId`,
+ * and the pane must SCROLL to the section hosting that id: the highlighted
+ * row's own focus choreography (SettingListItem's 400ms-delayed focus grab +
+ * bring-into-view) can only fire once its lazy slot composes, and an
+ * off-screen section never composes — so before this scroll existed, a
+ * search-reveal into a below-fold group landed on a screen that never moved:
+ * no reveal, no focus animation.
+ *
+ * Returns the browse pane's LazyColumn ITEM index for the section hosting
+ * [revealId] on THIS platform: the declaration index minus every gated
+ * section before it whose gate is closed here (the pane's `if` skips those
+ * lazy items entirely — the stagger numbering tolerates the hole, the item
+ * index must not). `-1` when the id is null or no reveal group hosts it —
+ * navigation ids (the entrance/account rows) navigate away and must not
+ * scroll the pane on back. Pure, so the contract tests pin it directly.
+ */
+internal fun resolveRootRevealItemIndex(
+    revealId: String?,
+    isTv: Boolean,
+    capabilities: SettingsCapabilities,
+): Int {
+    if (revealId == null) return -1
+    val hostIndex = SETTINGS_ENTRANCE_SECTIONS.indexOfFirst { section ->
+        section.revealGroup != null && revealId in section.revealGroup.itemIdSet
+    }
+    if (hostIndex < 0) return -1
+    val host = SETTINGS_ENTRANCE_SECTIONS[hostIndex]
+    // A host whose own gate is closed here renders no section at all (a TV
+    // group on a phone; a desktop-backed group on Android) — nothing to
+    // scroll to; the catalog's platform filter should not have offered the
+    // id in the first place.
+    if (!sectionGateOpen(host, isTv, capabilities)) return -1
+    val gatedOff = SETTINGS_ENTRANCE_SECTIONS.take(hostIndex).count { !sectionGateOpen(it, isTv, capabilities) }
+    return hostIndex - gatedOff
+}
+
+/**
+ * The pane's per-section presence gates, mirrored from SettingsBrowsePane's
+ * emission `if`s (the declaration's [SettingsEntranceSection.tvOnly] plus the
+ * four capability flags). `SettingsRootRevealScrollTest` pins this mirror
+ * against the pane source — the same textual pin
+ * SettingsSectionKeysGuardTest runs for the keys themselves.
+ */
+private fun sectionGateOpen(
+    section: SettingsEntranceSection,
+    isTv: Boolean,
+    capabilities: SettingsCapabilities,
+): Boolean = when (section.key) {
+    "group_screensaver" -> isTv
+    NotificationEntrance.key -> capabilities.supportsNotifications
+    "group_idle_ambient" -> capabilities.supportsIdleAmbientScreen
+    "group_discord_presence" -> capabilities.supportsDiscordPresence
+    "group_shell_hooks" -> capabilities.supportsShellHooks
+    else -> true
 }

@@ -77,8 +77,14 @@ internal fun PlaybackMediaSegmentsGroup(
                         stringResource(Res.string.settings_media_segments_summary, autoCount, buttonCount)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = highlightSettingId?.startsWith("media_segment_") == true ||
-                        highlightSettingId == PlaybackRows.SkipSegmentsOnSeek.id,
+                    // The declaration-derived reveal check (the sibling
+                    // groups' idiom): every id in the group — the six
+                    // `media_segment_*` rows, skip-on-seek, skip-prompt
+                    // duration and the Next Up preroll — expands the card on
+                    // its deep-link highlight. The hand prefix/id checks this
+                    // replaces drifted the moment a residual row joined the
+                    // declaration (skip_prompt_duration never expanded).
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.playbackMediaSegments.itemIdSet,
                 ) {
                     val skipOnSeekOn = stringResource(Res.string.settings_skip_segments_on_seek_on)
                     val skipOnSeekOff = stringResource(Res.string.settings_skip_segments_on_seek_off)

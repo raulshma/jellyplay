@@ -329,4 +329,28 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every shell-hook id in the system declaration. */
     internal const val HOOKS_ID_PREFIX = "hooks_"
+
+    /**
+     * The root settings screen's ON-SCREEN reveal groups: every group whose
+     * rows are search-reveal targets (catalog `route == Route.Settings`, the
+     * NoOp arm of `settingsResultClickAction`) — the row is revealed by the
+     * pending highlight alone, so the group MUST auto-expand for it. Each
+     * member's rendering site derives its `SettingsGroup` expansion from
+     * `lastClickedSettingId in <group>.itemIdSet` (the four system groups in
+     * SettingsSections.kt, the plugin section in
+     * JellyPlayPluginSettingsSection.kt). The destructive account actions
+     * (`logout`, `sign_out_from_server`) route bare-Settings too but resolve
+     * to confirm dialogs before the reveal arm, so their group correctly
+     * stays manual. Pinned by `SettingsCatalogScreenContractTest`'s
+     * reveal-coverage tests: a new `Route.Settings` row landing in a group
+     * outside this declaration (or a group here whose ids stop routing
+     * bare-Settings) fails the build.
+     */
+    val rootRevealGroups: List<SettingsSearchItemGroup> = listOf(
+        systemScreensaver,
+        systemIdleAmbient,
+        systemDiscordPresence,
+        systemHooks,
+        jellyplayFeatures,
+    )
 }

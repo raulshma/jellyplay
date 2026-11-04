@@ -53,15 +53,25 @@ class SpecDerivedSearchItemsTest {
                 val item = items.single { it.id == id }
                 assertEquals(setOf(PlatformKind.ANDROID), item.platforms, "$id must stay Android-tagged")
             }
-        // The capability-derived rows keep the runtime seam's tag (desktop
-        // JVM: no orientation / touch gestures → Android-only).
+        // The capability-derived rows keep the runtime seam's tag: a
+        // capability the running actual supports tags the row for every
+        // platform (`platformsForCapability(true)`), a missing one collapses
+        // to Android-only. The expectation derives from the same
+        // `settingsCapabilities` actual the derivation reads — the desktop
+        // JVM actual has no orientation/touch (Android-only tag), the Android
+        // actual does (all-platform tag) — so the test is platform-portable
+        // across the jvmTest and androidHostTest lanes.
         listOf(
-            PlaybackRows.Orientation.id,
-            PlaybackRows.Gestures.id,
-            PlaybackRows.GestureIndicatorSide.id,
-            PlaybackRows.DoubleTapHoldSeek.id,
-        ).forEach { id ->
-            assertEquals(setOf(PlatformKind.ANDROID), items.single { it.id == id }.platforms, "$id must follow the capability seam")
+            PlaybackRows.Orientation.id to settingsCapabilities.supportsScreenOrientation,
+            PlaybackRows.Gestures.id to settingsCapabilities.supportsTouchGestures,
+            PlaybackRows.GestureIndicatorSide.id to settingsCapabilities.supportsTouchGestures,
+            PlaybackRows.DoubleTapHoldSeek.id to settingsCapabilities.supportsTouchGestures,
+        ).forEach { (id, supported) ->
+            assertEquals(
+                platformsForCapability(supported),
+                items.single { it.id == id }.platforms,
+                "$id must follow the capability seam",
+            )
         }
         // The residual volume-memory row keeps its hand desktop tag (it no
         // longer closes the list — the player QoL wave appended after it).

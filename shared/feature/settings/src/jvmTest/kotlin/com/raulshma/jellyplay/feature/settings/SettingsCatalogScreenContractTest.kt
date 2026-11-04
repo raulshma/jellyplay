@@ -1748,5 +1748,49 @@ class SettingsCatalogScreenContractTest {
         val on = settingsResultClickAction(AudioRows.Equalizer.id, Route.AudioSettings(), isAdvanced = true, showAdvancedSettings = true)
         assertFalse(on.enableAdvanced)
     }
+
+    // ── 9. The root screen's on-screen reveal contract ──────────────────
+
+    /**
+     * The catalog ids routed bare-`Route.Settings` resolve (minus the two
+     * destructive actions) to the NoOp reveal arm: the pending highlight is
+     * the row's ONLY reveal, which surfaces solely when the row's
+     * [SettingsScreenGroups.rootRevealGroups] group auto-expands from
+     * `lastClickedSettingId`. A reveal id parked in a group outside the
+     * declaration renders its highlight inside a collapsed card — the
+     * `jellyplay_feature_*` class of bug — so the coverage must be total.
+     */
+    @Test
+    fun `every on-screen reveal id belongs to a root-screen reveal group`() {
+        val revealIds = SettingsSearchCatalog.items
+            .filter { it.route == Route.Settings }
+            .map { it.id } - setOf(AccountRows.Logout.id, AccountRows.SignOutFromServer.id)
+        assertTrue(revealIds.isNotEmpty(), "no bare-Settings reveal ids found — the route scan is broken")
+        val covered = SettingsScreenGroups.rootRevealGroups.flatMap { it.itemIdSet }.toSet()
+        val uncovered = revealIds.filterNot { it in covered }
+        assertEquals(
+            emptyList(),
+            uncovered,
+            "reveal ids whose root-screen group does not auto-expand for them — wire the group's " +
+                "initiallyExpanded to lastClickedSettingId ∈ itemIdSet and declare it in rootRevealGroups",
+        )
+    }
+
+    /** The reverse pin: a group in the reveal declaration whose ids stopped routing bare-Settings is stale. */
+    @Test
+    fun `every reveal-group id is itself a bare-Settings reveal id`() {
+        val revealIds = SettingsSearchCatalog.items
+            .filter { it.route == Route.Settings }
+            .map { it.id }
+            .toSet()
+        val stray = SettingsScreenGroups.rootRevealGroups
+            .flatMap { it.itemIdSet }
+            .filterNot { it in revealIds }
+        assertEquals(
+            emptyList(),
+            stray,
+            "groups parked in rootRevealGroups that no longer target the root screen — drop them from the declaration",
+        )
+    }
 }
 
